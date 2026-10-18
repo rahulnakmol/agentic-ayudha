@@ -603,6 +603,13 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Hook = nil
 	delete(g.Refs, "heads/dev")
+	// A newer cached run on the unchanged head pushes the fresh judgement to
+	// the next page: ship reads every page for it.
+	g.RunsPerPage = 1
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 5000, Path: g.Runs[gate].Path, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", PullRequests: g.Runs[gate].PullRequests})
+	g.Artifacts[g.Runs[gate].ID+5000] = g.Artifacts[g.Runs[gate].ID]
+	g.RunJobs[g.Runs[gate].ID+5000] = []fake.CheckRun{{ID: 7788, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.JobLogs[7788] = strings.Replace(strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1), "same-family review (C): codex (openai)", "different-family review (A): claude (anthropic)", 1)
 	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)

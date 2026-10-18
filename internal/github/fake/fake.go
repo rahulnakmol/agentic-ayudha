@@ -272,6 +272,7 @@ type GitHub struct {
 	RequiredChecks   []string
 	RulesPerPage     int
 	CheckRunsPerPage int
+	RunsPerPage      int // workflow runs a page, whatever per_page asks (0: per_page)
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -845,9 +846,18 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		slices.SortStableFunc(out, func(a, b WorkflowRun) int { return cmp.Compare(b.ID, a.ID) }) // newest first, as GitHub lists them
-		total := len(out)
-		if per := atoi(q.Get("per_page")); per > 0 && len(out) > per { // one page, as GitHub serves it
-			out = out[:per]
+		total, per := len(out), atoi(q.Get("per_page"))
+		if g.RunsPerPage > 0 {
+			per = g.RunsPerPage
+		}
+		if per > 0 { // a page at a time, as GitHub serves them
+			page := max(atoi(q.Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				q.Set("page", strconv.Itoa(page+1))
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?%s>; rel="next"`, g.Server.URL, p, q.Encode()))
+			}
+			out = out[lo:hi]
 		}
 		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
 	case m == "GET" && strings.HasPrefix(p, repo+"/actions/workflows/") && !strings.Contains(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/"):

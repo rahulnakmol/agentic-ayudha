@@ -42,13 +42,17 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 // pull request into a branch with an edited gate cannot stand in.
 func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n int, head, base string) (rung string, fresh bool) {
 	path := ".github/workflows/" + MergeGateWorkflow
-	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
+	// Every page: cached runs on an unchanged head can push the fresh one past the first.
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
+		rs, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: o})
+		return rs.GetWorkflowRuns(), resp, err
+	})
 	if err != nil {
 		return "", false
 	}
-	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
+	slices.SortFunc(runs, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
 	cached := false
-	for _, r := range runs.WorkflowRuns {
+	for _, r := range runs {
 		if r.GetPath() != path || r.GetEvent() != "pull_request_target" || r.GetHeadSHA() != head || r.GetStatus() != "completed" ||
 			base != "" && !RunFor(r, n, base) {
 			continue
