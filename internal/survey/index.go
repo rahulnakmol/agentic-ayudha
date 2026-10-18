@@ -146,6 +146,10 @@ type Options struct {
 	// as text: each is indexed as a document (manual:<name>), cited by line
 	// like a file, so a claim a manual states is traced to it.
 	Manuals map[string]string
+	// Out is the survey's output directory relative to the checkout (slash
+	// separated), when it is inside it: its files are never indexed, so a
+	// re-index of an unchanged checkout gives the same index and digest.
+	Out string
 }
 
 var (
@@ -248,6 +252,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	paths, err := listFiles(ctx, root, opt.Git)
 	if err != nil {
 		return nil, err
+	}
+	if opt.Out != "" { // the survey's own output, when it sits in the checkout
+		paths = slices.DeleteFunc(paths, func(p string) bool { return p == opt.Out || strings.HasPrefix(p, opt.Out+"/") })
 	}
 	ix := &Index{Version: Version, byPath: map[string]int{}}
 	ix.Commit = strings.TrimSpace(opt.Git(ctx, root, "rev-parse", "HEAD"))

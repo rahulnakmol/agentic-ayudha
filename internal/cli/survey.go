@@ -103,7 +103,11 @@ func runSurvey(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	ix, err := survey.Build(ctx, root, survey.Options{Budget: in.Int("budget"), Manuals: manuals})
+	opt := survey.Options{Budget: in.Int("budget"), Manuals: manuals}
+	if rel, err := filepath.Rel(absPath(root), absPath(out)); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+		opt.Out = filepath.ToSlash(rel)
+	}
+	ix, err := survey.Build(ctx, root, opt)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -439,4 +443,11 @@ func sameFile(a, b string) (bool, error) {
 		return false, err
 	}
 	return os.SameFile(ia, ib), nil
+}
+
+func absPath(p string) string {
+	if a, err := filepath.Abs(p); err == nil {
+		return a
+	}
+	return p
 }
