@@ -5,7 +5,7 @@ title: Approve from any device
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #488", "PR #467", "PR #501"]
 up: "[[Decisions]]"
@@ -39,3 +39,9 @@ Decision #488 records it, accepted on 2026-10-17.
 The counsel in Decision #488 says agents lose the person's admin token.
 PR #467 adds approval through GitHub's device flow.
 PR #501 adds batched approval by comment.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #488 Decision: Decision: approve agents' human-only steps from any device, as a group, by a comment from a separate human identity, with the device code as fallback.
+<!-- END aayudha:brain:record -->

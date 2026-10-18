@@ -5,7 +5,7 @@ title: Work items and Ready
 owner: product-strategist
 people: [rahulnakmol]
 status: live
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Feature #31", "file GLOSSARY.md", "file docs/guide/adopt.md", "file docs/guide/journey-3-ready.md"]
 up: "[[Capabilities]]"
@@ -34,3 +34,15 @@ The Ready guard notices when a Ready body drifts.
 It serves anyone who files or picks up work, from Level 1 of adoption.
 Level 1 needs no keys and no CI changes.
 See [[Ready (term)]] and [[Completion Goal (term)]].
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+
+<!-- END aayudha:brain:history -->
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #31 Feature: M2 Work items.
+<!-- END aayudha:brain:record -->

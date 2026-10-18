@@ -16,5 +16,12 @@ tags:
 The durable reasons behind each decision. The Decision issue stays the record.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[A person's attention by exception]]
+- [[A seat for production engineering]]
+- [[Approve from any device]]
+- [[Inspect's review converges]]
+- [[Merge on proof into dev]]
+- [[Proof floors by layer footprint, revised]]
+- [[Proof floors by layer footprint]]
+- [[The review ladder]]
 <!-- END aayudha:brain:notes -->

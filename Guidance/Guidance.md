@@ -16,5 +16,6 @@ tags:
 Guidance for the people and twins that do the work.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[How to write a note]]
+- [[Link issues, do not copy them]]
 <!-- END aayudha:brain:notes -->

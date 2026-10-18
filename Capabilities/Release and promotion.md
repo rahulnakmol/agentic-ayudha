@@ -5,7 +5,7 @@ title: Release and promotion
 owner: product-strategist
 people: [rahulnakmol]
 status: live
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Feature #35", "file GLOSSARY.md", "file docs/guide/how-releases.md", "tag v0.2.0", "PR #443", "file AGENTS.md"]
 up: "[[Capabilities]]"
@@ -32,3 +32,15 @@ See [[Small, reversible steps]].
 
 It serves people who install aayu, and the DevOps & DevEx Tinkerer seat that owns release.
 See [[v0.1.0]] and [[v0.2.0]].
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #62, #63, #64, #65, #66, #67, #68, #69.
+<!-- END aayudha:brain:history -->
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #35 Feature: M7 Loops and explain.
+<!-- END aayudha:brain:record -->

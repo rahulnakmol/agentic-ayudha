@@ -5,7 +5,7 @@ title: A person's attention by exception
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #572", "Decision #544"]
 up: "[[Decisions]]"
@@ -40,3 +40,9 @@ Decision #572 records it, accepted on 2026-10-18.
 
 A person's time goes to intent before work, and to a sample after merge.
 [[Merge on proof into dev]] later removed the intent pass for dev.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #572 Decision: Decision: a person's attention to agent PRs by exception: approve intent per Story, a narrow always-a-person set, sampled audit after merge, and one batched inbox.
+<!-- END aayudha:brain:record -->

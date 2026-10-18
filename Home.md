@@ -35,13 +35,15 @@ Every note names its sources. `aayu brain check` finds broken links, missing sou
 ## Workstreams
 
 <!-- BEGIN aayudha:brain:workstreams -->
-
+- [[benefits-qa Index]]
 <!-- END aayudha:brain:workstreams -->
 
 ## Releases
 
 <!-- BEGIN aayudha:brain:releases -->
-
+- [[v0.3.0]]
+- [[v0.2.0]]
+- [[v0.1.0]]
 <!-- END aayudha:brain:releases -->
 
 ## Needs review

@@ -16,5 +16,7 @@ tags:
 The people the product serves.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[A person paired with a seat]]
+- [[The engineer]]
+- [[The solo founder]]
 <!-- END aayudha:brain:notes -->

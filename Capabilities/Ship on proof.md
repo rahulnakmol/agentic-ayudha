@@ -5,7 +5,7 @@ title: Ship on proof
 owner: product-strategist
 people: [rahulnakmol]
 status: live
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Feature #32", "Feature #37", "Decision #593", "PR #617", "file AGENTS.md", "file docs/guide/journey-6-ship.md"]
 up: "[[Capabilities]]"
@@ -32,3 +32,16 @@ Feature #37 tracks the first run of the whole loop on one real Story.
 
 It serves teams that run many agent pull requests a day.
 See [[Merge on proof into dev]].
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #41, #42, #43, #44, #45, #46, #47, #48, #49, #50, #91.
+<!-- END aayudha:brain:history -->
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #32 Feature: M4 Proof.
+- Recorded in #37 Feature: M4.5 Thin slice run.
+<!-- END aayudha:brain:record -->

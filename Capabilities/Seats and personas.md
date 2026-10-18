@@ -5,7 +5,7 @@ title: Seats and personas
 owner: product-strategist
 people: [rahulnakmol]
 status: live
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Feature #33", "file docs/guide/concepts-team.md", "file GLOSSARY.md", "Decision #324"]
 up: "[[Capabilities]]"
@@ -32,3 +32,15 @@ A seat outlives the person who fills it.
 
 It serves a solo founder first, then a team that grows.
 See [[Seat (term)]], [[Twin (term)]], and [[A seat for production engineering]].
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #53, #54, #55, #56, #112.
+<!-- END aayudha:brain:history -->
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #33 Feature: M5 Seats.
+<!-- END aayudha:brain:record -->

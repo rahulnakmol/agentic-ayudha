@@ -16,5 +16,5 @@ tags:
 Concerns and cases against a direction, principle, objective, or decision. We keep them after they are answered.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[Keep review apps as an option]]
 <!-- END aayudha:brain:notes -->

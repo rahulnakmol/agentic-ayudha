@@ -16,5 +16,7 @@ tags:
 The problems worth solving, with evidence.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[Agent work without proof]]
+- [[One person cannot hold every role]]
+- [[Review attention does not scale per pull request]]
 <!-- END aayudha:brain:notes -->

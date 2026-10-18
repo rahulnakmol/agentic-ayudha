@@ -16,5 +16,7 @@ tags:
 Where the product goes next, and what it will not do.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[Build aayu with aayu]]
+- [[Merge on proof, people by exception]]
+- [[Review inside the delivery loop]]
 <!-- END aayudha:brain:notes -->

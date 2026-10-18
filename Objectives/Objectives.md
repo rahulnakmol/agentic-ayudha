@@ -16,5 +16,6 @@ tags:
 What we try to achieve, and how we measure it. Each note links its Goal and Initiative issues.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[Prove every Story of aayu itself]]
+- [[Ship aayudha 0.1]]
 <!-- END aayudha:brain:notes -->

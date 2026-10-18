@@ -5,7 +5,7 @@ title: A seat for production engineering
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #324", "PR #337", "file LAYERS.md", "file seats/production-engineer/persona.toml"]
 up: "[[Decisions]]"
@@ -40,3 +40,9 @@ Decision #324 records it, accepted on 2026-10-17.
 The error budget becomes a deterministic gate, not an opinion.
 No new path lets an agent change production.
 See [[Production engineering]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #324 Decision: Decision: the Production Engineer seat (Atlas): persona, layers, verbs, telemetry access, and gates.
+<!-- END aayudha:brain:record -->

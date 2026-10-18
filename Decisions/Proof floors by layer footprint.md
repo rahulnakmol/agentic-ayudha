@@ -5,7 +5,7 @@ title: Proof floors by layer footprint
 owner: founder
 people: [rahulnakmol]
 status: superseded
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #480", "Decision #485"]
 up: "[[Decisions]]"
@@ -41,3 +41,9 @@ A security workflow scans every push to dev, rolling, and main, and runs nightly
 Decision #480 was accepted on 2026-10-17.
 Decision #485 then superseded it to add guardrails for DAST.
 See [[Proof floors by layer footprint, revised]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #480 Decision: Decision: proof floors by layer footprint (code quality, UX, API and CLI developer experience, DAST on by default) and a push-and-nightly security workflow.
+<!-- END aayudha:brain:record -->

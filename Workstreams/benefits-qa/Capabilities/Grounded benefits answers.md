@@ -6,7 +6,7 @@ owner: product-strategist
 people: [rahulnakmol]
 status: live
 workstream: benefits-qa
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Feature #127", "Feature #128", "Feature #129", "Release #144", "file examples/benefits-qa/README.md"]
 up: "[[benefits-qa MOC]]"
@@ -35,3 +35,17 @@ Most questions have an answer, word for word, in the plan documents.
 It serves the synthetic employees of Example Co.
 Feature #127 is the answers API, Feature #128 the analytics, and Feature #129 the Ask page.
 Release #144 shipped it on a rolling snapshot.
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in rolling-2026-10-12.4 by #130, #131, #132, #133, #134.
+<!-- END aayudha:brain:history -->
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #127 Feature: Grounded answers API (benefits-qa).
+- Recorded in #128 Feature: Answer analytics (benefits-qa).
+- Recorded in #129 Feature: Ask page (benefits-qa).
+<!-- END aayudha:brain:record -->

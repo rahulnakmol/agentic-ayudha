@@ -16,5 +16,6 @@ tags:
 The vision and the mission of the product.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[The mission]]
+- [[The vision]]
 <!-- END aayudha:brain:notes -->

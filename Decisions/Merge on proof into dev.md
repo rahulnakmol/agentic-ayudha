@@ -5,7 +5,7 @@ title: Merge on proof into dev
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #593", "Decision #572", "PR #617", "PR #621", "file .github/CODEOWNERS"]
 up: "[[Decisions]]"
@@ -42,3 +42,9 @@ They become a sampled audit after merge.
 The narrow set lives in protected configuration, so only a person can move it.
 It replaces the per-pull-request passes of [[A person's attention by exception]] for dev.
 PR #617 and PR #621 build it.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #593 Decision: Agent PRs into dev merge on proof through aayu ship; which narrow set still needs a person (supersedes #572 for dev).
+<!-- END aayudha:brain:record -->

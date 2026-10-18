@@ -5,7 +5,7 @@ title: The review ladder
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #469", "PR #483", "PR #510", "PR #550"]
 up: "[[Decisions]]"
@@ -41,3 +41,9 @@ Decision #469 records it, accepted on 2026-10-17.
 Each pull request records the builder's family and the rung used.
 The streak counts only merges with a different-family or a person's review.
 PR #483, PR #510, and PR #550 build it.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #469 Decision: Decision: the review ladder: a labelled same-family review by default, a different family when a host includes one, a paid key only when added.
+<!-- END aayudha:brain:record -->

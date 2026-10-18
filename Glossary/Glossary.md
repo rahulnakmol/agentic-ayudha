@@ -16,5 +16,15 @@ tags:
 The terms of the product, one note for each term.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[Completion Goal (term)]]: Completion Goal
+- [[Floor (term)]]: Floor
+- [[Footprint (term)]]: Footprint
+- [[Layer (term)]]: Layer
+- [[Ledger (term)]]: Ledger
+- [[Proof pack (term)]]: Proof pack
+- [[Ready (term)]]: Ready
+- [[Seat (term)]]: Seat
+- [[Twin (term)]]: Twin
+- [[Verb (term)]]: Verb
+- [[Waiver (term)]]: Waiver
 <!-- END aayudha:brain:notes -->

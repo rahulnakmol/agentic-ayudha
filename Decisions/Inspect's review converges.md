@@ -5,7 +5,7 @@ title: Inspect's review converges
 owner: founder
 people: [rahulnakmol]
 status: accepted
-updated: 2026-10-18
+updated: "2026-10-18"
 reviewed: 2026-10-18
 sources: ["Decision #544", "PR #583"]
 up: "[[Decisions]]"
@@ -40,3 +40,9 @@ PR #583 builds the first part.
 Later work adds responses for each finding, REVIEW.md files, an escapes eval, and risk tiers.
 A merge queue waits for a trigger.
 No reviewer disposition overrides a floor.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #544 Decision: Decision: inspect's review converges, and the review practices it adopts from Anthropic's code review article.
+<!-- END aayudha:brain:record -->

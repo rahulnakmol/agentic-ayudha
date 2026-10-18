@@ -16,5 +16,7 @@ tags:
 One note for each release: the plan, the changes since the baseline, and what shipped.
 
 <!-- BEGIN aayudha:brain:notes -->
-
+- [[v0.1.0]]
+- [[v0.2.0]]
+- [[v0.3.0]]
 <!-- END aayudha:brain:notes -->
