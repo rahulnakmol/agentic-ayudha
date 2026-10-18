@@ -221,7 +221,9 @@ prefixes = ["survey/"]
 # section (survey-sections-2026-10.md), projected at about 6.8 USD a case of five runs. Measured on run 39101367105
 # (946065d), one completed run of tinyjs-rust cost 7.86 USD (each section drafted, judged, self-checked, judged again;
 # output and thinking are most of it), so five runs are about 40 USD and 14 stops a case after its first runs.
-max_usd = 14.0
+# Stage 2 (the founder's call of 2026-10-18: no fixed survey budget, spend cautiously) reruns one case per dispatch,
+# tinyjs-rust and then minpack-manual, so the breaker is 40: one case of five runs, stopped before a second.
+max_usd = 40.0
 gate = "advisory"
 events = ["workflow_dispatch"]
 # A survey draft of tiny-js is about 6000 tokens of JSON before any thinking; at the first cap of 24000, three of five
