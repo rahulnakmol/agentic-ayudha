@@ -39,8 +39,14 @@ Three rules shape this table:
 The `review` default also names an escalation: GPT-6 Astra at high reasoning effort, used when a caller marks a
 review as heavy. The `ui-review` default on Cursor, Claude Code, and Codex is Gemini 3.8 Flash at high reasoning
 effort (`gemini-3.8-flash`, `google` family), so it is never in the family of an anthropic or OpenAI builder. Every
-model judgement of a UI goes through this lane: `aayu review`'s lane A, and so `polish`, which re-runs it. It is
+model judgement of a UI goes through this lane: `aayu review`'s lane A, `polish`, which re-runs it, and `aayu verify`'s
+advisory look at its screenshots, which never decides whether a floor holds. It is
 interim until the AI gateway routes the target, `gemini-4-argon-high`, which needs a paid Google plan.
+
+> **Needs setup:** the ui-review lane needs a model key: the AI gateway's (`[models.gateway]`) or Google's. Without
+> one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
+> instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`. Verify sends only
+> screenshots that its redaction pass read with OCR, so it also needs `tesseract` installed.
 
 ## How `aayu models` resolves a lane
 
@@ -77,7 +83,9 @@ family equals the builder's, and a reviewer with no concrete family at all.
 
 `RouteFor` in `internal/models/client.go` decides where a call goes. When `[models.gateway] base_url` is set, every
 model goes to that one AI gateway, with the key from the secret that `[models.gateway] secret` names, sent as a Bearer
-token. Otherwise each family goes to its own provider, with a key in a secret named after the family.
+token. Otherwise each family goes to its own provider, with a key in a secret named after the family. `base_url` and
+`secret` are read only from the user config, `AAYU_MODELS__GATEWAY__*` variables, or `--set`, never from the checkout:
+a PR's `.aayudha/config.toml` cannot choose where your keys are sent (`Load` in `internal/config/load.go`).
 
 The client speaks three wire formats:
 

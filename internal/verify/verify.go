@@ -58,6 +58,9 @@ type Evidence struct {
 	Kind     string
 	Data     []byte
 	Criteria []int
+	// OCRScanned marks a screenshot whose pixels the redaction pass read
+	// (tesseract) and found free of personal data; only those leave the run.
+	OCRScanned bool
 }
 
 // Result is a floor's outcome.
