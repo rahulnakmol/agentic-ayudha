@@ -12,11 +12,11 @@ import (
 // by where it was found and whose it is. The same token found in two places
 // is asked about once and listed with both sources; values that are not
 // GitHub user tokens, sources that fail, and tokens that do not authenticate
-// are left out; and no value appears in the result.
+// are left out; WTW variables are never read; and no value appears in the result.
 func TestReachable(t *testing.T) {
 	legacy, other := strings.Repeat("ab12", 10), strings.Repeat("cd34", 10) // 40-hex: a legacy GitHub token, or another service's key
 	environ := []string{"GH_TOKEN=ghu_same", "GH_PAT=ghp_other", "HOME=/home/user", "AAYU_BOT_TOKEN=ghs_install", "OLD=github_pat_revoked",
-		"FLAKY=gho_flaky", "MY_GITHUB_TOKEN=" + legacy, "SENTRY_TOKEN=" + other}
+		"FLAKY=gho_flaky", "MY_GITHUB_TOKEN=" + legacy, "SENTRY_TOKEN=" + other, "GH_WTW_PAT=ghp_wtw", "WTW_TOKEN=github_pat_wtw"}
 	sources := map[string]func(context.Context) (string, error){
 		"gh auth token":         func(context.Context) (string, error) { return "ghu_same\n", nil },
 		"git credential helper": func(context.Context) (string, error) { return "", errors.New("no helper") },
@@ -37,7 +37,7 @@ func TestReachable(t *testing.T) {
 	})
 	// A rejected token is left out; one GitHub could not identify just now stays, with no login.
 	want := "[{secrets store (unreadable now) } {GH_TOKEN, gh auth token founder} {GH_PAT machine} {FLAKY } {MY_GITHUB_TOKEN founder2}]"
-	if fmt.Sprint(got) != want || asked["ghu_same"] != 1 || asked["ghs_install"] != 0 || asked[other] != 0 {
+	if fmt.Sprint(got) != want || asked["ghu_same"] != 1 || asked["ghs_install"] != 0 || asked["ghp_wtw"]+asked["github_pat_wtw"] != 0 || asked[other] != 0 {
 		t.Fatalf("Reachable = %v (asked %v), want %s", got, asked, want)
 	}
 	if ex := Exposed(got, []string{"@Founder"}); len(ex) != 3 || ex[0].Source != "secrets store (unreadable now)" || ex[1].Login != "founder" || ex[2].Source != "FLAKY" {

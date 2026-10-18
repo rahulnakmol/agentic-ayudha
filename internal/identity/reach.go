@@ -30,6 +30,13 @@ var ErrUnreadable = errors.New("credential source unreadable")
 // variable named for GitHub so another service's secret is never sent to it.
 var legacyToken = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
+// offLimits reports a variable with a WTW name segment (WTW_*, GH_WTW_*): it
+// belongs to another organisation, and aayudha never reads or sends it, not
+// even to ask GitHub whose it is.
+func offLimits(name string) bool {
+	return slices.Contains(strings.Split(strings.ToUpper(name), "_"), "WTW")
+}
+
 func githubNamed(name string) bool {
 	for _, part := range strings.Split(strings.ToUpper(name), "_") {
 		if part == "GH" || part == "GITHUB" || part == "PAT" {
@@ -40,7 +47,8 @@ func githubNamed(name string) bool {
 }
 
 // Reachable lists the accounts behind every GitHub credential this process
-// can reach: token-shaped environment values (any variable name), the gh
+// can reach: token-shaped environment values (any variable name except the
+// off-limits WTW ones), the gh
 // CLI's token, and the git credential helper's answer for github.com. Each
 // distinct credential is asked who it is once; one GitHub rejects (401) is
 // left out, and one it cannot identify now is kept with no login. Values never leave this function.
@@ -65,7 +73,7 @@ func Reachable(ctx context.Context, environ []string, sources map[string]func(co
 	}
 	for _, kv := range environ {
 		name, value, ok := strings.Cut(kv, "=")
-		if ok && (slices.ContainsFunc(tokenPrefixes, func(p string) bool { return strings.HasPrefix(value, p) }) || githubNamed(name) && legacyToken.MatchString(value)) {
+		if ok && !offLimits(name) && (slices.ContainsFunc(tokenPrefixes, func(p string) bool { return strings.HasPrefix(value, p) }) || githubNamed(name) && legacyToken.MatchString(value)) {
 			add(name, value)
 		}
 	}
