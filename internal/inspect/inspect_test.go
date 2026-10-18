@@ -759,7 +759,7 @@ func TestReviewLadder(t *testing.T) {
 
 // Story #568: a P0 or P1 stays open while its file's patch is unchanged,
 // on a file the manifest skips (a deletion) too, and a later reply that
-// repeats it at a lower severity neither clears nor downgrades it.
+// repeats it at a lower severity, P1 or P2, neither clears nor downgrades it.
 func TestRunCarriesOpenBlockers(t *testing.T) {
 	const gone = `diff --git a/internal/auth/check.go b/internal/auth/check.go
 deleted file mode 100644
@@ -772,9 +772,10 @@ deleted file mode 100644
 `
 	zero := "return float64(covered) / float64(total) * 100"
 	a, _ := scripted("grok-4.7",
-		reply("fix", finding("P1", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9),
+		reply("fix", finding("P0", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9),
 			finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
-		reply("merge", finding("P2", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)))
+		reply("merge", finding("P2", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9),
+			finding("P1", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9)))
 	r := Runner{Reviewers: []Reviewer{a}}
 	in := testInput("")
 	in.Diff, in.Head = pkgDiff+gone, strings.Repeat("a", 40)
@@ -792,7 +793,29 @@ deleted file mode 100644
 		}
 	}
 	slices.Sort(open)
-	if res.Disposition != Fix || !slices.Equal(open, []string{"P1 internal/auth/check.go", "P1 internal/report/percent.go"}) {
+	if res.Disposition != Fix || !slices.Contains(open, "P0 internal/auth/check.go") || !slices.Contains(open, "P1 internal/report/percent.go") {
 		t.Fatalf("round 2: %s, open %v, findings %+v", res.Disposition, open, res.Findings)
+	}
+}
+
+// Story #568: a blocker found on a head before a reopen still carries when
+// the branch returns to that head and patch after the reopen; only this
+// head's round in the current window is replaced by the new reply.
+func TestRunCarriesAcrossReopen(t *testing.T) {
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7", reply("fix", finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	in := testInput("")
+	x := in.Diff
+	in.Head, in.At = strings.Repeat("a", 40), at
+	_, st, _ := r.Run(context.Background(), in, State{})
+	in.Head, in.At, in.Diff = strings.Repeat("b", 40), at.Add(time.Hour), strings.Replace(x, "return 0", "return -1", 1)
+	_, st, _ = r.Run(context.Background(), in, st)
+	in.Head, in.At, in.Diff, in.Reopened = strings.Repeat("a", 40), at.Add(3*time.Hour), x, at.Add(2*time.Hour)
+	res, _, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("back to H1's patch after a reopen: %s %+v", res.Disposition, res.Findings)
 	}
 }

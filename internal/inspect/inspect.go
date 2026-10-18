@@ -503,21 +503,20 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 	return res, st, nil
 }
 
-// carryForward adds back each P0 or P1 a round on another head kept whose
-// file's patch is byte for byte what it was then, newest round first and a
-// patch restored after a change included, when no P0 or P1 in the new
-// reply raises it again: no reviewer text removes or downgrades a P0 or P1 (rule 7),
-// and an unchanged patch cannot have fixed it. Each carries its round, so it
+// carryForward adds back each P0 or P1 an earlier round kept, on another head
+// or before the reopen, whose file's patch is byte for byte what it was then
+// (a patch restored after a change included), when nothing at its severity or
+// higher already raises it: no reviewer text removes or downgrades a P0 or P1
+// (rule 7), and an unchanged patch cannot have fixed it. Each carries its round, so it
 // blocks without being posted inline again.
-func carryForward(fs []Finding, rounds []Round, head string, hashes map[string]string) []Finding {
+func carryForward(fs []Finding, rounds []Round, head string, reopened time.Time, hashes map[string]string) []Finding {
 	for i := len(rounds) - 1; i >= 0; i-- {
-		rd := rounds[i]
-		if rd.Head == head {
-			continue
+		if rounds[i].Head == head && rounds[i].after(reopened) {
+			continue // this head's round in this window: the new reply replaces it
 		}
-		for _, e := range rd.Findings {
+		for _, e := range rounds[i].Findings {
 			if e.Severity != "P0" && e.Severity != "P1" || e.Hash == "" || e.Hash != hashes[e.File] ||
-				slices.ContainsFunc(fs, func(f Finding) bool { return (f.Severity == "P0" || f.Severity == "P1") && repeats(f, e) }) {
+				slices.ContainsFunc(fs, func(f Finding) bool { return f.Severity <= e.Severity && repeats(f, e) }) {
 				continue
 			}
 			fs = append(fs, Finding{ID: e.ID, Severity: e.Severity, Category: e.Category, File: e.File, Line: e.Line, Title: e.Title, Class: e.Class,
@@ -536,7 +535,7 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 		hashes[f.Path] = FileHash(f)
 	}
 	// Carried before suppression, so a finding a person dismissed stays dismissed.
-	res.Findings = carryForward(res.Findings, prev.Rounds, in.Head, hashes)
+	res.Findings = carryForward(res.Findings, prev.Rounds, in.Head, in.Reopened, hashes)
 	var sup, rep []Dropped
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Findings, rep = Repeats(res.Findings, prev.Rounds, in.Head, in.Reopened)
