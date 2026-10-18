@@ -157,10 +157,13 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	switch {
 	case !v.DAST:
 		status = Warn
-		lines = append(lines, "target: none ([verify] dast = false), so a web or api story records a blocking skipped: dast. "+verify.DASTFix)
+		lines = append(lines, "target: none ([verify] dast = false), so a web or api story records skipped: dast, which blocks its ship from [verify] new_floors_blocking_from unless waived. "+verify.DASTFix)
 	case target == "":
 		status = Warn
-		lines = append(lines, "target: none ([verify.environments."+env+"] url is unset), so a web or api story records a blocking skipped: dast. "+verify.DASTFix)
+		lines = append(lines, "target: none ([verify.environments."+env+"] url is unset), so a web or api story records skipped: dast, which blocks its ship from [verify] new_floors_blocking_from unless waived. "+verify.DASTFix)
+	case hostname(target) == "":
+		status = Fail
+		lines = append(lines, "target: "+target+" is not an absolute URL ([verify.environments."+env+"] url), so verify blocks the dast floor: write it as http://host:port")
 	case v.Environments[env].ActiveScan:
 		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
 	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):

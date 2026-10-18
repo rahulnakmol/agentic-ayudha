@@ -207,7 +207,7 @@ PASS  dast  the dast floor runs here
               container runtime: docker 29.9.0
 ## dast fail
 WARN  dast  the dast floor cannot run here as configured
-              target: none ([verify.environments.local] url is unset), so a web or api story records a blocking skipped: dast. Give verify a start command ([verify] seed, e.g. ["./scripts/serve.sh"]) and its URL ([verify.environments.local] url = "http://127.0.0.1:8080"), or waive: aayu decide <story> --waiver dast
+              target: none ([verify.environments.local] url is unset), so a web or api story records skipped: dast, which blocks its ship from [verify] new_floors_blocking_from unless waived. Give verify a start command ([verify] seed, e.g. ["./scripts/serve.sh"]) and its URL ([verify.environments.local] url = "http://127.0.0.1:8080"), or waive: aayu decide <story> --waiver dast
               container runtime: none; install Docker or Podman to scan locally (the merge gate and aayudha-security.yml run it in CI)
 ## loops pass
 PASS  loops  no loops/*.toml
