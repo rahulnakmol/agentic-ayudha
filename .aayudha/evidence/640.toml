@@ -1,0 +1,14 @@
+# Which tests prove Bug #640's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # .aayudha/config.json cannot set solo_provisional_after_hours or allow_pii, in any key case
+tests = ["internal/config:TestProtectedOnlyKeysFromTOML", "internal/config:TestCaseVariantKeysRefused"]
+
+[[criterion]]
+id = 2 # in CI (GITHUB_ACTIONS=true or --ci) a committed local file is ignored with a notice, and the target stays refused
+tests = ["internal/config:TestLocalConfigIgnoredInCI", "internal/cli:TestLocalConfigIgnoredInCI"]
+
+[[criterion]]
+id = 3 # outside CI the local layer still applies
+tests = ["internal/config:TestLocalConfigIgnoredInCI", "internal/cli:TestLocalConfigIgnoredInCI"]
