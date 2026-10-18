@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -175,6 +176,9 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 			x.ManifestCode = e.AppManifestCode
 		}
 		runErr = it.RunExtras(ctx, x)
+		if errors.Is(runErr, initrepo.ErrAppNotConverted) {
+			runErr = WithNext(Wrap(ExitBlocked, runErr), "aayu init --identity")
+		}
 	}
 	if err := e.reportInit("init", it, runErr == nil); err != nil {
 		return err

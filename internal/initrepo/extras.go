@@ -3,9 +3,16 @@ package initrepo
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -19,7 +26,9 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
+	gh "github.com/google/go-github/v90/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/crypto/nacl/box"
 
@@ -290,6 +299,16 @@ func (in *Init) projects(ctx context.Context, x Extras) error {
 	return nil
 }
 
+// AppPermissions are the permissions agent lanes and CI need: what the
+// manifest asks for, and what the created App must hold before its key is
+// stored.
+var AppPermissions = map[string]string{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+
+// ErrAppNotConverted is a manifest code GitHub would not convert (404 or 422):
+// someone else may have converted it first and holds the key, so the App must
+// be deleted, never installed.
+var ErrAppNotConverted = errors.New("GitHub did not turn the code into the App's key")
+
 // AppManifest is the GitHub App manifest init --identity registers: the
 // permissions agent lanes and CI need, no webhook.
 func AppManifest(r Repo, redirect string) string {
@@ -297,9 +316,72 @@ func AppManifest(r Repo, redirect string) string {
 	if len(name) > 34 {
 		name = name[:34]
 	}
+	perms, _ := json.Marshal(AppPermissions)
 	return fmt.Sprintf(`{"name":%q,"url":"https://github.com/rahulnakmol/agentic-ayudha","redirect_url":%q,"public":false,`+
-		`"hook_attributes":{"url":"https://example.invalid/aayudha-no-webhook","active":false},`+
-		`"default_permissions":{"contents":"write","issues":"write","pull_requests":"write","actions":"read","checks":"read","metadata":"read"}}`, name, redirect)
+		`"hook_attributes":{"url":"`+noWebhook+`","active":false},`+
+		`"default_permissions":%s}`, name, redirect, perms)
+}
+
+// noWebhook is the manifest's webhook URL: a reserved name nothing answers,
+// with the hook off and no events, so the App sends nothing anywhere.
+const noWebhook = "https://example.invalid/aayudha-no-webhook"
+
+// appHookURL asks GitHub, as the new App (a JWT signed with its key), where
+// its webhook points. Whatever page posted the manifest could have changed it
+// to add a webhook and events, so the key is stored only for an App that
+// sends nothing (Codex security review of #603).
+func appHookURL(ctx context.Context, base string, appID int64, pemKey string) (string, error) {
+	blk, _ := pem.Decode([]byte(pemKey))
+	if blk == nil {
+		return "", errors.New("the App's key is not a PEM key")
+	}
+	var key *rsa.PrivateKey
+	if k, err := x509.ParsePKCS1PrivateKey(blk.Bytes); err == nil {
+		key = k
+	} else if k, err := x509.ParsePKCS8PrivateKey(blk.Bytes); err == nil {
+		key, _ = k.(*rsa.PrivateKey)
+	}
+	if key == nil {
+		return "", errors.New("the App's key is not an RSA key")
+	}
+	enc := base64.RawURLEncoding
+	now := time.Now().Unix()
+	claims, _ := json.Marshal(map[string]any{"iat": now - 60, "exp": now + 300, "iss": strconv.FormatInt(appID, 10)})
+	signing := enc.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`)) + "." + enc.EncodeToString(claims)
+	sum := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(base, "/")+"/app/hook/config", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+signing+"."+enc.EncodeToString(sig))
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET /app/hook/config: HTTP %d", resp.StatusCode)
+	}
+	var cfg struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
+		return "", err
+	}
+	return cfg.URL, nil
+}
+
+// appSettings is where the person deletes an App on r's owner.
+func appSettings(r Repo) string {
+	if r.Org {
+		return "https://github.com/organizations/" + r.Owner + "/settings/apps"
+	}
+	return "https://github.com/settings/apps"
 }
 
 func (in *Init) app(ctx context.Context, x Extras) error {
@@ -335,15 +417,63 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		ClientID string `json:"client_id"`
 		PEM      string `json:"pem"`
 		HTMLURL  string `json:"html_url"`
+		Owner    struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Permissions map[string]string `json:"permissions"`
+		Events      []string          `json:"events"`
 	}
-	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app"),
-		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/" + code + "/conversions"}},
+	// One action per one-time code: a rerun after a refused App converts its
+	// new code instead of reusing the refused one's record. The log keeps a
+	// hash of the code, never the code.
+	sum := sha256.Sum256([]byte(code))
+	status := 0 // GitHub's answer to a failed conversion; 0 when none arrived
+	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app", hex.EncodeToString(sum[:6])),
+		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/{code}/conversions"}},
 		func(ctx context.Context) (any, error) {
-			err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv)
-			return map[string]any{"id": conv.ID, "slug": conv.Slug}, err // the PEM is never logged
+			// The error names the conversion URL, which carries the one-time
+			// code, and the actions log records the error: return only
+			// GitHub's status, never the error itself.
+			if err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv); err != nil {
+				var er *gh.ErrorResponse
+				if errors.As(err, &er) && er.Response != nil {
+					status = er.Response.StatusCode
+					return nil, fmt.Errorf("the conversion failed: GitHub answered %d", status)
+				}
+				return nil, errors.New("the conversion failed: the request did not complete")
+			}
+			return map[string]any{"id": conv.ID, "slug": conv.Slug}, nil // the PEM is never logged
 		})
+	if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("GitHub answered %d: the code may already have been used by someone else, who would then hold the App's key. Do not install the App: delete it at %s, then run aayu init --identity again", status, appSettings(r)))
+		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, status, appSettings(r))
+	}
 	if err != nil {
-		return err
+		// A 5xx or a lost connection: GitHub created the App when it
+		// redirected, and may have converted the code, so the App is not
+		// one aayu holds the key of.
+		why := "the request did not complete"
+		if status != 0 {
+			why = fmt.Sprintf("GitHub answered %d", status)
+		}
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%s). Do not install the App: delete it at %s, then run aayu init --identity again", why, appSettings(r)))
+		return fmt.Errorf("%w (%s); do not install the App: delete it at %s", ErrAppNotConverted, why, appSettings(r))
+	}
+	// Store the key only for the App aayu asked for, with exactly the
+	// permissions asked for: the browser that posted the manifest is outside
+	// aayu's control, and a narrower App leaves the agent lanes unable to work.
+	other := !maps.Equal(conv.Permissions, AppPermissions)
+	hook := noWebhook
+	if !other && len(conv.Events) == 0 && strings.EqualFold(conv.Owner.Login, r.Owner) {
+		var herr error
+		if hook, herr = appHookURL(ctx, in.GH.REST.BaseURL(), conv.ID, conv.PEM); herr != nil {
+			hook = "unknown (" + herr.Error() + ")"
+		}
+	}
+	if !strings.EqualFold(conv.Owner.Login, r.Owner) || other || len(conv.Events) > 0 || hook != noWebhook {
+		conv.PEM = ""
+		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", permissions other than those aayu asked for, events, or webhook "+hook+"). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
+		return fmt.Errorf("%w: the created App %s is not the one aayu asked for; do not install it: delete it at %s", ErrAppNotConverted, conv.Slug, appSettings(r))
 	}
 	in.State.Put(Object{Kind: "app", Name: "bot", ID: strconv.FormatInt(conv.ID, 10), External: true})
 	in.State.Identity = identity.KindApp

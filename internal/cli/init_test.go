@@ -1,19 +1,32 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/nacl/box"
 
@@ -365,7 +378,8 @@ func TestInitExtras(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
@@ -472,7 +486,7 @@ func TestInitExtras(t *testing.T) {
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
 		t.Errorf("manifest: %s", manifest)
 	}
-	for _, leak := range []string{"MIIEsecret"} {
+	for _, leak := range []string{"PRIVATE KEY", strings.Split(appKey(), "\n")[1]} {
 		for p, body := range snapshot(t, dir) {
 			if strings.Contains(body, leak) {
 				t.Errorf("private key in %s", p)
@@ -648,5 +662,223 @@ func TestInitVerifySkillMaintainer(t *testing.T) {
 		if got := strings.Contains(string(cfg), "[verify]\nmaintainer = \"amp\""); got != (want != "") || strings.Contains(string(cfg), "codex") {
 			t.Errorf("%q: config:\n%s", answer, cfg)
 		}
+	}
+}
+
+// appKey is a real RSA key for the fake App: init --identity signs a JWT with
+// it to read the App's webhook before it stores the key.
+var appKey = sync.OnceValue(func() string {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}))
+})
+
+// noHook is GitHub's webhook config of an App created from aayu's manifest.
+var noHook = map[string]any{"url": "https://example.invalid/aayudha-no-webhook", "content_type": "form"}
+
+// runIdentity runs `aayu init --yes --identity` against api in a shell whose
+// environment is env. With code set, the manifest flow is the test's browser,
+// which returns that one-time code; without it the real flow runs.
+func runIdentity(t *testing.T, api, code string, env map[string]string) (int, string) {
+	t.Helper()
+	return runIdentityIn(t, checkout(t), t.TempDir(), api, code, env)
+}
+
+// runIdentityIn is runIdentity in a given checkout and home, for a rerun.
+func runIdentityIn(t *testing.T, dir, home, api, code string, env map[string]string) (int, string) {
+	t.Helper()
+	e := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": home}
+	maps.Copy(e, env)
+	var out, errOut bytes.Buffer
+	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
+		IsTerminal: func(any) bool { return true },
+		Getenv:     func(k string) string { return e[k] },
+		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
+		GHAccounts: func(context.Context) (map[string]string, error) { return nil, nil },
+		GitCredential: func(context.Context, string) (string, error) {
+			return "", errors.New("git credentials disabled in tests")
+		}}
+	if code != "" {
+		opts.AppManifestCode = func(context.Context, string, func(string) string) (string, error) { return code, nil }
+	}
+	rc := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: strings.NewReader(""), Out: &out, Err: &errOut}, opts)
+	return rc, out.String() + errOut.String()
+}
+
+// identityGitHub is a fake GitHub whose manifest conversion gives an App
+// owned by owner ("org" for an organization's) with perms.
+func identityGitHub(t *testing.T, owner string, perms map[string]any) *fake.GitHub {
+	kind := "User"
+	if owner == "org" {
+		kind, owner = "Organization", "o"
+	}
+	g := fake.New(t, "o/r", kind)
+	pub, _, _ := box.GenerateKey(rand.Reader)
+	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+	if perms == nil {
+		perms = map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+	}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
+	return g
+}
+
+// #578: from a shell whose browser is on another device, init --identity
+// refuses at once with exit 4 and a next step, starts no manifest flow, and
+// sends the code to no page; a desktop browser that never redirects back
+// exits 4 too, never as an internal error. The phone setup itself moved to
+// the owner's token exchange (#594), after Codex's security review of #603.
+func TestInitIdentityRemoteShell(t *testing.T) {
+	defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
+	loopbackWait = 50 * time.Millisecond
+	for _, env := range []map[string]string{
+		{"AMP_ORB": "1", "DISPLAY": ":0"}, // an orb's Terminal tab
+		{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22", "DISPLAY": ":0"},
+		{"CLAUDE_CODE_REMOTE": "true"},
+		{}, // a Linux server or container: no desktop
+	} {
+		if len(env) == 0 && runtime.GOOS != "linux" {
+			continue // darwin and windows count as a desktop: localBrowser's table below covers them
+		}
+		g := identityGitHub(t, "o", nil)
+		code, printed := runIdentity(t, g.URL(), "", env)
+		if code != ExitBlocked || !strings.Contains(printed, "init --identity needs a browser on this machine") || !strings.Contains(printed, "no App was created") ||
+			!strings.Contains(printed, "run `aayu init --identity` in a terminal on the computer whose browser you use") ||
+			strings.Contains(printed, "http://127.0.0.1") || strings.Contains(printed, "https://") && strings.Contains(printed, "manifest") || strings.Contains(printed, "internal error") || len(g.Secrets) != 0 {
+			t.Errorf("%v: exit %d, secrets %v:\n%s", env, code, g.Secrets, printed)
+		}
+		for _, r := range g.Requests {
+			if strings.HasPrefix(r.Path, "/app-manifests/") {
+				t.Errorf("%v: a conversion was attempted: %s", env, r.Path)
+			}
+		}
+	}
+	g := identityGitHub(t, "o", nil)
+	code, printed := runIdentity(t, g.URL(), "", map[string]string{"DISPLAY": ":0"})
+	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "If you created the App on GitHub, aayu never received its key: delete it at https://github.com/settings/apps, then run this again") ||
+		!strings.Contains(printed, "aayu init --identity") || strings.Contains(printed, "internal error") {
+		t.Fatalf("a desktop browser that never redirects back: exit %d:\n%s", code, printed)
+	}
+	for _, tt := range []struct {
+		env  map[string]string
+		goos string
+		want bool
+	}{
+		{map[string]string{}, "darwin", true},
+		{map[string]string{}, "windows", true},
+		{map[string]string{"DISPLAY": ":0"}, "linux", true},
+		{map[string]string{}, "linux", false},
+		{map[string]string{"SSH_TTY": "/dev/pts/0"}, "darwin", false},
+		{map[string]string{"AMP_THREAD_ID": "T-1"}, "darwin", false}, // an agent's shell
+		{map[string]string{"AAYU_REMOTE_BROWSER": "1"}, "darwin", false},
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1"}, "linux", true}, // WSL2 without WSLg
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1", "SSH_TTY": "/dev/pts/0"}, "linux", false},
+	} {
+		if got := localBrowser(func(k string) string { return tt.env[k] }, tt.goos); got != tt.want {
+			t.Errorf("localBrowser(%v, %s) = %v, want %v", tt.env, tt.goos, got, tt.want)
+		}
+	}
+}
+
+// #578: a code GitHub will not convert, or an App other than the one aayu
+// asked for, writes no secret, prints no Install link, and exits 4 saying to
+// delete the App rather than install it.
+func TestInitIdentityRefusesTheApp(t *testing.T) {
+	g := identityGitHub(t, "o", nil)
+	target, _ := url.Parse(g.URL())
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	convStatus := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(convStatus)
+			_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadGateway} {
+		convStatus = status
+		dir := checkout(t)
+		code, printed := runIdentityIn(t, dir, t.TempDir(), srv.URL, "c0de1234c0de5678", nil)
+		// A code GitHub did not consume is still live: the failed action's
+		// record must not hold it.
+		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); len(b) == 0 || strings.Contains(string(b), "c0de1234c0de5678") {
+			t.Errorf("a %d conversion: the actions log is empty or holds the one-time code:\n%s", status, b)
+		}
+		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
+			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
+			t.Fatalf("a %d conversion: exit %d, secrets %v:\n%s", status, code, g.Secrets, printed)
+		}
+		if strings.Contains(printed, "c0de1234c0de5678") {
+			t.Fatalf("a %d conversion printed the one-time code:\n%s", status, printed)
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		g    *fake.GitHub
+		want string
+	}{
+		{"another owner's App", identityGitHub(t, "mallory", map[string]any{"contents": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"wider permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "administration": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"fewer permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "metadata": "read"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"an App with events", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.App["events"] = []string{"push", "issues"}
+			return g
+		}(), "permissions other than those aayu asked for, events"},
+		{"an App with a webhook", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.Static["/app/hook/config"] = map[string]any{"url": "https://attacker.example/hook"}
+			return g
+		}(), "webhook https://attacker.example/hook"},
+		{"an App whose webhook GitHub will not show", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.Static = nil
+			return g
+		}(), "webhook unknown ("},
+		{"an organization's App with wider permissions", identityGitHub(t, "org", map[string]any{"workflows": "write"}), "delete it at https://github.com/organizations/o/settings/apps"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, printed := runIdentity(t, tt.g.URL(), "c0de1234c0de5678", nil)
+			if code != ExitBlocked || !strings.Contains(printed, tt.want) || len(tt.g.Secrets) != 0 || strings.Contains(printed, "installations/new") {
+				t.Fatalf("exit %d, secrets %v:\n%s", code, tt.g.Secrets, printed)
+			}
+		})
+	}
+	// After a refused App, the person deletes it and reruns: the new App's
+	// code is converted, not answered from the refused run's record, and the
+	// actions log never holds a code.
+	g = identityGitHub(t, "mallory", nil)
+	dir, home := checkout(t), t.TempDir()
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "c0de1234c0de5678", nil); code != ExitBlocked {
+		t.Fatalf("the refused App: exit %d:\n%s", code, printed)
+	}
+	g.App["owner"] = map[string]any{"login": "o"}
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "n3wc0de9n3wc0de9", nil); code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" {
+		t.Fatalf("the rerun after a refused App: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+	}
+	var convs []string
+	for _, r := range g.Requests {
+		if strings.HasPrefix(r.Path, "/app-manifests/") {
+			convs = append(convs, r.Path)
+		}
+	}
+	if !slices.Equal(convs, []string{"/app-manifests/c0de1234c0de5678/conversions", "/app-manifests/n3wc0de9n3wc0de9/conversions"}) {
+		t.Errorf("conversions = %v", convs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), "c0de1234c0de5678") || strings.Contains(string(b), "n3wc0de9n3wc0de9") {
+		t.Error("a one-time code is in the actions log")
+	}
+
+	// The App aayu asked for is stored, and only then is the Install link printed.
+	g = identityGitHub(t, "o", nil)
+	code, printed := runIdentity(t, g.URL(), "c0de1234c0de5678", nil)
+	if code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
+		t.Fatalf("the App aayu asked for: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
 	}
 }
