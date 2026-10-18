@@ -16,7 +16,17 @@ name: copilot-live
 on:
   push:
     branches: [dev]
-    paths: ["internal/hosts/copilot*.go", "internal/hosts/install.go", "internal/hosts/hook.go", ".github/workflows/copilot-live.yml"]
+    # What the live run exercises: the Copilot install, the hook entry point (internal/cli/install.go), and the MCP
+    # server's doctor tool. Not every Go file, since each run costs a premium request.
+    paths:
+      - "internal/hosts/copilot*.go"
+      - "internal/hosts/install.go"
+      - "internal/hosts/hook.go"
+      - "internal/cli/install.go"
+      - "internal/cli/mcp.go"
+      - "internal/mcp/server.go"
+      - "cmd/aayudha/main.go"
+      - ".github/workflows/copilot-live.yml"
   workflow_dispatch:
 
 permissions:
