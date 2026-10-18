@@ -176,7 +176,8 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
 ## The build-ready loop (`--next`)
 
 The `build-ready` loop (`loops/build-ready.toml`) builds Ready work on a schedule. Its definition in the repository is
-the person's standing ask, so its pick passes the asked gate of step 1. The binary picks; you never choose the story.
+the person's standing ask (a narrow-set file, so only a person adds or changes it), and its pick passes the asked gate
+of step 1. The binary picks; you never choose the story.
 
 1. `aayu build --next ship` lists the loop's open pull requests, oldest first, and changes nothing. Run
    `aayu ship <pr>` once on each and report what ship did. Never pass `--solo-bypass` or `--admin`, and never merge

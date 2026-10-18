@@ -422,8 +422,10 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
 		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh", "go.mod", "go.sum",
 		// The config's other files load into the same layers, so they can change the policy too.
-		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
-	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}) {
+		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json",
+		// The build-ready loop's definition is the standing ask build --next acts on.
+		"loops/build-ready.toml"}
+	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"}) {
 		t.Fatalf("default narrow set: %v", def.Config.Autonomy.AlwaysPerson)
 	}
 	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||

@@ -103,7 +103,8 @@ agent loop, and the binary decides everything except the code:
    `aayu build <n> --stop "<why>"` blocks the item with that reason and pages its owner; the loop never retries it.
 
 The loop's definition in the repository is the person's standing ask: `--next` runs only where
-`loops/build-ready.toml` exists, and each pick goes to the actions log as build's ask (`build.asked`). It sets no
+`loops/build-ready.toml` exists; the file is in the narrow set (`[autonomy] always_person`), so only a person adds or
+changes it, and each pick goes to the actions log as build's ask (`build.asked`). It sets no
 `bot = true`: build and ship write under the bot when one is set up, and otherwise under the person's own token,
 tagged as a human fallback, so the loop runs today without the bot App.
 
