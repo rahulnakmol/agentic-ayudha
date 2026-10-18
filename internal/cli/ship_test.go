@@ -362,7 +362,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
 	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{} // the trees: no symbolic links
 	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
-	conf := "version = 1\n\n[notify]\nchannel = \"file\"\n\n[autonomy]\napprover = \"\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\n" +
+	conf := "version = 1\n\n[ui]\ntheme = \"auto\"\n\n[autonomy]\napprover = \"\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\n" +
 		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
 	g.RefFiles = map[string]map[string]string{
 		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
@@ -494,22 +494,22 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
-	refused("no merge on proof: it changes [approvals] in .aayudha/config.toml, which decides who may approve or bypass, or how a PR is verified, reviewed and proven")
+	refused("no merge on proof: it changes [approvals] in .aayudha/config.toml, which decides who may approve or bypass, how a PR is verified, reviewed and proven, or where a credential is sent")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"C"]`, `]`, 1)
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1) // another table: no person needed
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1) // another table: no person needed
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
 	g.Mu.Unlock()
 	refused("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)")
 	// The integration branch is the base revision's too, not the checkout's.
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf + "\n[branches]\ndev = \"trunk\"\n"
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1)
 	g.Mu.Unlock()
 	refused("no merge on proof: it merges into dev, not the integration branch trunk")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
 	// protected-paths is red only for the CODEOWNERS paths a PR touches.
@@ -561,7 +561,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.JobLogs[7701] = strings.Replace(g.JobLogs[7701], ": merge (cached) (reviewed by codex)", ": merge (reviewed by codex)", 1)
 	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `proof_rungs = ["A", "B", "C"]`, `proof_rungs = ["A"]`, 1)
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1)
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9999, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
 		PullRequests: []fake.RunPR{{Number: 99, Base: fake.Branch{Ref: "evil"}}}})
 	g.RunJobs[9999] = []fake.CheckRun{{ID: 7799, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
@@ -580,7 +580,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Runs = g.Runs[:len(g.Runs)-1]
 	g.RefFiles[base][".aayudha/config.toml"] = conf
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	prs := g.Runs[gate].PullRequests
 	g.Runs[gate].PullRequests = nil
 	g.Mu.Unlock()
@@ -635,8 +635,22 @@ func TestShipOnProof(t *testing.T) {
 		}
 		refused("no merge on proof: it changes [" + want + "] in .aayudha/config.toml")
 	}
+	// [delegate] names where a credential is sent.
 	g.Mu.Lock()
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = conf + "[delegate]\ncursor_api = \"https://attacker\"\n"
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes [delegate] in .aayudha/config.toml")
+	// A base whose policy is split across config.json is not judged on proof.
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
+	g.RefFiles[base][".aayudha/config.json"] = `{"autonomy": {"always_person": ["skills/"]}}`
+	g.Mu.Unlock()
+	refused("no merge on proof: dev holds .aayudha/config.json, which ship does not judge the policy from")
+	g.Mu.Lock()
+	delete(g.RefFiles[base], ".aayudha/config.json")
+	g.Mu.Unlock()
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	// A symbolic link can point a policy file elsewhere.
 	g.Trees[head] = []map[string]any{{"path": "skills/build/SKILL.md", "mode": "120000", "type": "blob", "sha": "l1"}}
 	g.Mu.Unlock()

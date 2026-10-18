@@ -176,6 +176,14 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if !a.Proof {
 		return nil, "", false, nil
 	}
+	// The loader merges config.json and config.local.* into the same layers;
+	// ship judges only config.toml, so a base whose policy is split across
+	// them is not judged on proof.
+	for _, f := range []string{".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"} {
+		if read(f, policy) != "" {
+			return nil, fmt.Sprintf("%s holds %s, which ship does not judge the policy from", pr.GetBase().GetRef(), f), true, nil
+		}
+	}
 	// The files are the comparison of the captured base and head, never the
 	// live PR's listing, which a push or a base change during ship could
 	// swap for another diff and back. Its first page lists every file, up
@@ -199,7 +207,7 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 				return nil, fmt.Sprintf("it touches %s, in the narrow set that always needs a person ([autonomy] always_person: %s)", p, alwaysPerson(a.AlwaysPerson, p)), true, nil
 			case slices.Contains(a.AlwaysPersonConfig, p):
 				if s := changedSections(read(p, base), read(p, head), a.AlwaysPersonSections); len(s) > 0 {
-					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass, or how a PR is verified, reviewed and proven", strings.Join(s, "], ["), p), true, nil
+					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass, how a PR is verified, reviewed and proven, or where a credential is sent", strings.Join(s, "], ["), p), true, nil
 				}
 			case strings.HasPrefix(p, ".github/workflows/") && (holdsCredentials(read(p, base)) || holdsCredentials(read(p, head))):
 				return nil, fmt.Sprintf("it touches %s, a workflow that holds a credential (a secret, the workflow token, an action it calls, an environment, or a write permission)", p), true, nil
