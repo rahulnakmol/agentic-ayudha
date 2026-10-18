@@ -549,7 +549,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				continue
 			}
 		}
-		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev {
+		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev && !p.GetDraft() {
 			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
 				Evidence: p.GetHTMLURL(), f: inboxFacts{head: head},
 				Why: fmt.Sprintf("inspect's merge gate waits at the human rung for `%s`: no reviewer app or paid model could review it, so only the [autonomy] approver's recorded review clears it.", short(head)),

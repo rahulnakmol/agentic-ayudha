@@ -1010,6 +1010,17 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 	if !slices.Equal(listed, []int{prA, prB.Number}) {
 		t.Fatalf("human-review items %v, want #%d and #%d:\n%s", listed, prA, prB.Number, out)
 	}
+	// A draft is not ready for review, so it is no card even with the wait
+	// recorded (Codex's P2 on #678).
+	g.Mu.Lock()
+	prB.Draft = true
+	g.Mu.Unlock()
+	if _, out, _ := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r"); strings.Contains(out, `"number": `+strconv.Itoa(prB.Number)+`,`) {
+		t.Fatalf("a draft PR is listed:\n%s", out)
+	}
+	g.Mu.Lock()
+	prB.Draft = false
+	g.Mu.Unlock()
 	// Once the review lane's model reviews a head that waited on a person, the
 	// state no longer offers it (Codex's P2 on #678); the gate at the human
 	// rung records the wait again.
