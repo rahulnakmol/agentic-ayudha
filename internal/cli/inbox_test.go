@@ -345,6 +345,10 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 		}
 	}
 	g.Mu.Lock()
+	// PR B had hit inspect's cycle cap before its gate went green: ship's
+	// Ready to ship on the current head stands over the cap.
+	capped, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Disposition: "fix"}})
+	g.Issues[prB].Comments = append(g.Issues[prB].Comments, &fake.Comment{ID: 502, Body: inspect.Marker + "\n### inspect: fix\n\n<!-- aayudha:inspect-state " + string(capped) + " -->\n"})
 	if forged.Body != ReadyToShipMarker+" head="+headA+" -->\n**Ready to ship.**" {
 		t.Errorf("ship edited someone else's marker: %q", forged.Body)
 	}

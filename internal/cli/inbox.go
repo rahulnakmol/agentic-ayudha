@@ -208,16 +208,19 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 				marked = append(marked, cm.GetUser().GetLogin())
 			}
 		}
-		if st.Cycles < inspect.MaxCycles {
-			if len(marked) > 0 && p.GetBase().GetRef() == dev {
-				it, err := readyItem(ctx, c, owner, name, p, marked)
-				if err != nil {
-					return nil, err
-				}
-				if it != nil {
-					out = append(out, *it)
-				}
+		// A Ready to ship marker on the current head stands over the cycle
+		// cap: ship found everything but the human pass.
+		if len(marked) > 0 && p.GetBase().GetRef() == dev {
+			it, err := readyItem(ctx, c, owner, name, p, marked)
+			if err != nil {
+				return nil, err
 			}
+			if it != nil {
+				out = append(out, *it)
+				continue
+			}
+		}
+		if st.Cycles < inspect.MaxCycles {
 			continue
 		}
 		disp := "none recorded"

@@ -173,8 +173,8 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 }
 
 var (
-	hostTrailerLine  = regexp.MustCompile(`(?m)^` + HostTrailer + `[ \t]*(\S*)[ \t]*$`)
-	modelTrailerLine = regexp.MustCompile(`(?m)^` + ModelTrailer + `[ \t]*(\S*)[ \t]*$`)
+	hostTrailerLine  = regexp.MustCompile(`(?m)^` + HostTrailer + `(.*)$`)
+	modelTrailerLine = regexp.MustCompile(`(?m)^` + ModelTrailer + `(.*)$`)
 	// Amp writes this trailer on the commits of a thread.
 	ampThreadLine = regexp.MustCompile(`(?m)^Amp-Thread-ID: https://ampcode\.com/threads/T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ \t]*$`)
 	trailerLine   = regexp.MustCompile(`^[A-Za-z0-9-]+:( |$)`)
@@ -213,18 +213,26 @@ func agentCommit(msg string) bool {
 	case len(h) > 1:
 		return false
 	case len(h) == 1:
-		if _, ok := verbs.FindHost(verbs.HostID(h[0][1])); !ok {
+		if _, ok := verbs.FindHost(verbs.HostID(oneToken(h[0][1]))); !ok {
 			return false
 		}
 	case !ampThreadLine.MatchString(msg):
 		return false
 	}
 	for _, m := range modelTrailerLine.FindAllStringSubmatch(msg, -1) {
-		if verbs.FamilyOf(m[1]) == "" {
+		if id := oneToken(m[1]); id == "" || verbs.FamilyOf(id) == "" {
 			return false
 		}
 	}
 	return true
+}
+
+// oneToken is a trailer's value when it is a single word, else "".
+func oneToken(v string) string {
+	if f := strings.Fields(v); len(f) == 1 {
+		return f[0]
+	}
+	return ""
 }
 
 func short(sha string) string {

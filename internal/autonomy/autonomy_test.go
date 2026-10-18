@@ -176,6 +176,8 @@ func TestAgentCommitTrailers(t *testing.T) {
 		"fix: a\n\nAayudha-Host:":                                        true,
 		"fix: a\n\nAmp-Thread-ID: see the thread":                        true,
 		"fix: a\n\nAayudha-Host: amp\nAayudha-Host: codex":               true,
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Model: mystery model":      true,
+		"fix: a\n\nAayudha-Host: amp extra":                              true,
 		// A body that quotes a trailer is not a trailer block.
 		"fix: a\n\nAayudha-Host: amp\nwas wrong, so I fixed it by hand":                    true,
 		"fix: a\n\nAayudha-Host: amp\n\nSigned-off-by: R <r@example.com>":                  true,
