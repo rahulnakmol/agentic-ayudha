@@ -1,14 +1,8 @@
 {
   "story": 481,
   "branch": "story/481-approve-agents-human-only-steps-as-one-b",
-  "started_at": "2026-10-17T22:46:04Z",
-  "failed_attempts": 2,
-  "failures_by_layer": {
-    "L02": 2,
-    "L06": 1,
-    "L07": 2,
-    "L09": 1
-  },
+  "started_at": "2026-10-18T00:26:52Z",
+  "failed_attempts": 0,
   "checkpoints": [
     {
       "k": 1,
@@ -37,7 +31,22 @@
       "verify": "miss",
       "detail": "coverage fail",
       "at": "2026-10-18T00:17:45Z"
+    },
+    {
+      "k": 1,
+      "n": 4,
+      "attempt": 3,
+      "commit": "513a3f6349150e20a8881c64e7ed7805118a9209",
+      "layers": [
+        "L02",
+        "L07"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T00:26:52Z"
     }
   ],
-  "blocked": "second verify failure on never layer L07 (checkpoint 1/4: coverage fail)"
+  "unblocked": [
+    "2026-10-18T00:26:52Z after: second verify failure on never layer L07 (checkpoint 1/4: coverage fail)"
+  ]
 }
