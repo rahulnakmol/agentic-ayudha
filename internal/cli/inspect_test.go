@@ -1414,13 +1414,63 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a read-only author's PR: exit %d rung %q, %d model calls", code, res.Rung, len(model.Requests))
 	}
 
+	// Outside CI the code-review key is out of reach: the local run defers to
+	// the gate's CI review. It asks no app, and an app request an earlier run
+	// posted, unanswered past inspect.ReplyWait, does not make it ask a person.
 	g, env, opts, prN, model = setup(`"claude"`, "")
-	code, res, _ = inspectApp(t, env, opts, prN)
+	env["AAYU_AUTONOMY__APPROVER"] = "founder"
+	head = g.Pulls[prN].Head.SHA
+	addComment(g, prN, "founder", "User", "@claude review\n\n"+inspect.RequestMarker+`{"head":"`+head+`","reviewer":"claude"} -->`)
 	g.Mu.Lock()
-	cs := slices.Clone(g.Issues[prN].Comments)
+	g.Issues[prN].Comments[0].CreatedAt, g.Issues[prN].Comments[0].UpdatedAt = opts.Now().Add(-time.Hour), opts.Now().Add(-time.Hour)
 	g.Mu.Unlock()
-	if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@claude review\n") {
-		t.Fatalf("no key: exit %d %s, %d model calls, comments %+v", code, res.Disposition, len(model.Requests), cs)
+	for range 2 {
+		code, res, errOut = inspectApp(t, env, opts, prN)
+		g.Mu.Lock()
+		cs := slices.Clone(g.Issues[prN].Comments)
+		g.Mu.Unlock()
+		if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || len(cs) != 1 || !strings.Contains(res.Summary, "asks no one") {
+			t.Fatalf("no key, outside CI: exit %d %s, %d model calls, %d comments %s", code, res.Disposition, len(model.Requests), len(cs), errOut)
+		}
+	}
+	// It reports the gate's judgement of the head once the gate has one, and files the gate's pre-existing findings (Codex's P2 on #691).
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"result\":{\"pr\":"+strconv.Itoa(prN)+",\"head\":\""+head+"\",\"disposition\":\"merge\",\"summary\":\"the CI review\",\"findings\":[],\"criteria\":[],"+
+		"\"dropped\":[{\"id\":\"pe1\",\"severity\":\"P1\",\"category\":\"bug\",\"file\":\"internal/report/percent.go\",\"line\":1,\"title\":\"Old division\",\"why\":\"pre-existing\"}]}} -->\n")
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 0 ||
+		!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "pre-existing findings") }) {
+		t.Fatalf("no key, outside CI, the gate's merge: exit %d %s cached %v, notes %q %s", code, res.Disposition, res.Cached, res.Notes, errOut)
+	}
+	// An edited title or body re-runs the gate on the same head: while its inspect check runs, the old verdict does not count.
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "in_progress"}}
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("no key, outside CI, the gate re-running: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	// A recorded merge does not count once the gate's newest inspect check on the head failed.
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{{ID: 2, Name: "aayudha/inspect", Status: "completed", Conclusion: "failure"}}
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("no key, outside CI, the gate's check failed after its merge: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	// A queued re-run (no start time yet) after a passing run: the merge does not count until it finishes.
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{{ID: 3, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {ID: 4, Name: "aayudha/inspect", Status: "queued"}}
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("no key, outside CI, a queued re-run: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	// Once the gate records that the CI review failed on this head, the local run asks the app, as the gate's fallback needs.
+	g, env, opts, prN, model = setup(`"claude"`, "")
+	head = g.Pulls[prN].Head.SHA
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"paid_failed\":\""+head+"\"} -->\n")
+	code, _, errOut = inspectApp(t, env, opts, prN)
+	g.Mu.Lock()
+	asked := slices.ContainsFunc(g.Issues[prN].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, "@claude review\n") })
+	g.Mu.Unlock()
+	if code != ExitBlocked || !asked || len(model.Requests) != 0 {
+		t.Fatalf("no key, outside CI, the CI review failed: exit %d, asked claude %v %s", code, asked, errOut)
 	}
 
 	// A chosen app is the only reviewer while it answers: no paid call.
@@ -1428,7 +1478,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 	env["AAYU_INSPECT__REVIEWER"] = "codex"
 	code, _, _ = inspectApp(t, env, opts, prN)
 	g.Mu.Lock()
-	cs = slices.Clone(g.Issues[prN].Comments)
+	cs := slices.Clone(g.Issues[prN].Comments)
 	g.Mu.Unlock()
 	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") {
 		t.Fatalf("the chosen app must review, not the paid reviewer: exit %d, %d model calls, comments %+v", code, len(model.Requests), cs)

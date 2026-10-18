@@ -71,12 +71,13 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	if !strings.Contains(pr.Body, "Refs #2") || pr.Base.Ref != "dev" {
 		t.Fatalf("PR: %+v", pr)
 	}
-	// The push asked for a review of the head (a human one: no reviewer app is configured).
+	// Under the CI review, the default, the merge gate reviews the head: the
+	// push asks no app and no person.
 	g.Mu.Lock()
 	asked := slices.ContainsFunc(g.Issues[res.PR].Comments, func(c *fake.Comment) bool { return strings.Contains(c.Body, inspect.RequestMarker) })
 	g.Mu.Unlock()
-	if !asked || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "requested") }) {
-		t.Fatalf("build did not ask for a review after the push: notes %v", res.Notes)
+	if asked || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "CI review reviews") }) {
+		t.Fatalf("build asked for a review under the CI review: notes %v", res.Notes)
 	}
 	return g, env, opts, dir, bare, res.PR, head
 }

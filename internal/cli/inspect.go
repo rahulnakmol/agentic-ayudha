@@ -488,6 +488,50 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				n, inspect.ReviewEnvironment, strings.Join(miss, " and "), inspect.ReviewEnvironment)
 		}
 	}
+	// Outside CI the CI review's key is out of reach: the run reports the
+	// gate's judgement of this head and asks no app and no person. Once the
+	// gate records that the CI review failed on this head, the run asks the
+	// reviewer app (then a person) as the gate's fallback needs.
+	gate := inspectState(comments, "", l.Config.Identity) // the gate's comment only
+	if head := pr.GetHead().GetSHA(); !e.CI && !ins.Draft && cfg.Reviewer == inspect.ReviewerCI && gate.PaidFailed != head && len(missingReviewModel(gw, &l.Config)) > 0 {
+		res := inspect.Result{PR: n, Head: head, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder, Disposition: NoReply,
+			Summary: fmt.Sprintf("[inspect] reviewer = \"ci\": the merge gate's inspect job reviews `%s` with the model the %s environment names; this run cannot reach its key, so it asks no one", short(head), inspect.ReviewEnvironment),
+			Next:    "the merge gate's inspect check reviews this head; run `aayu inspect` again after it finishes"}
+		// An edited title or body re-runs the gate on the same head: its
+		// earlier verdict counts only when the newest inspect check has
+		// finished, and a merge only when that check passed.
+		checks, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		var latest *gh.CheckRun
+		for _, r := range checks.CheckRuns {
+			// The newest run by ID: a queued run has no start time yet.
+			if r.GetName() == "aayudha/inspect" && (latest == nil || r.GetID() > latest.GetID()) {
+				latest = r
+			}
+		}
+		stale := latest != nil && gate.Result != nil &&
+			(latest.GetStatus() != "completed" || (gate.Result.Disposition == inspect.Merge && latest.GetConclusion() != "success"))
+		if gate.Result != nil && gate.Result.Head == head && !stale {
+			res = *gate.Result
+			res.Cached = true
+			// The gate's findings on lines the PR leaves unchanged are filed
+			// here, under the person's account, as every local run does.
+			if note, err := e.preExistingBug(ctx, repo, n, head, &res); err != nil {
+				res.Notes = append(res.Notes, "pre-existing findings not filed: "+oneLineErr(err))
+			} else if note != "" {
+				res.Notes = append(res.Notes, note)
+			}
+		}
+		if err := e.emitInspect(res, nil); err != nil {
+			return err
+		}
+		if res.Disposition != inspect.Merge && res.Disposition != inspect.Skipped {
+			return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
+		}
+		return nil
+	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
 	// A head whose rung B failed says why on every later run, whichever
 	// reviewer comes first.
