@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Schema | work items v1, decision |
-| Body hash | `543a8fabb199221bbbeea591e355f76737512fde9d552fc3151ef9bedaf6a943` |
+| Body hash | `7fc3253afc43a1d4e5b713f0a857134dcfbb71604b01e98efd3fce2bfb8cd0e0` |
 | Completion Goal hash | n/a (no Completion Goal on this type) |
 | Technical Owner | the Code Architect twin |
 | Written by | rahulnakmol (`identity:human-fallback`) |
@@ -31,6 +31,11 @@ Unchanged under every option:
 - V1: agents and CI write as a bot, never as the person (docs/BUILD-PLAN.md, V1);
 - the human pass and the human-only actions;
 - Decision #488: no approver credential is reachable from an agent session.
+
+Required under every option: the one-time setup works from a phone and from a cloud agent's terminal. That terminal can be an Amp orb's Terminal tab, Claude Code or Codex on the web, or SSH.
+- Every step is either a GitHub or Azure web page a phone can open, or a command that prints an HTTPS link and takes a pasted code.
+- No step uses a loopback callback, a local file, or a desktop browser.
+- Today's App creation fails this: the founder ran `aayu init --identity` in an orb's Terminal tab from a phone on 2026-10-18. The manifest flow's start page and its `redirect_url` are `http://127.0.0.1:<port>` (`internal/cli/manifest.go`), so nothing could reach them, and no App was created. Bug #578 fixes the flow: HTTPS start and redirect pages, and a pasted code checked against the state. That fix is needed by options 1 to 3.
 
 ### Options
 
@@ -102,6 +107,16 @@ Unchanged under every option:
 - Option 3 removes even the first setup, but only for other users.
 - Option 4 removes the App and adds a password, two-factor authentication, and a PAT to rotate.
 - Under every option, an orb still holds the person's token until Amp is connected to a non-approver account, because Amp has one GitHub connection per user. That founder step stays, but only once.
+
+**From a phone and a cloud terminal, per option.**
+- **Options 1 to 3:** creating the App needs Bug #578. The Install click is a github.com page a phone can open.
+- **Option 2 also needs:**
+  - the Key Vault and its access, which `az` sets up with a device-code login (a phone can complete it);
+  - the App key imported from the code conversion straight into Key Vault, never written to disk;
+  - the hostname, which is a Cloudflare dashboard page.
+  
+  So option 2's one-time setup is a terminal plus a phone, with no desktop step. Unverified: whether the aigateway VM is reachable for this setup from a cloud terminal; the Azure portal and Cloud Shell are the fallback.
+- **Option 4:** creating the machine account and its two-factor authentication works in a phone browser. The classic PAT is a github.com page.
 
 **Public Octo-STS instead of self-hosting.**
 - Setup would be about 5 minutes.
