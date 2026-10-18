@@ -203,7 +203,7 @@ PASS  security-workflow  installed; every scanned tip is green
 FAIL  security-workflow  not installed: no scan of pushes to dev, rolling, and main, and none nightly; run `aayu init --gates` and commit .github/workflows/aayudha-security.yml through a pull request
 ## dast pass
 PASS  dast  the dast floor runs here
-              target: http://127.0.0.1:8080, started by [verify] seed: active scan
+              target: http://127.0.0.1:8080, active scan if [verify] seed starts it (an app already answering there gets the passive scan only)
               container runtime: docker 29.9.0
 ## dast fail
 WARN  dast  the dast floor cannot run here as configured

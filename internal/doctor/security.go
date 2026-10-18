@@ -164,7 +164,7 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	case v.Environments[env].ActiveScan:
 		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
 	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):
-		lines = append(lines, "target: "+target+", started by [verify] seed: active scan")
+		lines = append(lines, "target: "+target+", active scan if [verify] seed starts it (an app already answering there gets the passive scan only)")
 	default:
 		lines = append(lines, "target: "+target+", not started by [verify] seed on a loopback host: passive scan only")
 	}
