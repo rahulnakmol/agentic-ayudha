@@ -54,7 +54,7 @@ type Hosts struct {
 
 // CursorHost is [hosts.cursor].
 type CursorHost struct {
-	Plan string `koanf:"plan" jsonschema:"enum=,enum=x,enum=legacy" jsonschema_description:"x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini."`
+	Plan string `koanf:"plan" jsonschema:"enum=,enum=x,enum=legacy" jsonschema_description:"x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini. Read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout."`
 }
 
 // Delegate is [delegate] (WP5.5b).

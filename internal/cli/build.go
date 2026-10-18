@@ -853,14 +853,18 @@ func (e *Env) copilotModels(root string) (hosts.CopilotModels, bool) {
 }
 
 // builderModel is the model the building agent runs on, when known: the
-// AAYU_MODEL variable a host sets, else [models.build.<host>].
+// AAYU_MODEL variable a host sets, else the host's build lane as resolved now
+// ([models.build.<host>], else the default for the host's plan), so a later
+// plan change cannot rewrite who built the commits. A host-managed lane names
+// no model.
 func (e *Env) builderModel() string {
 	if m := e.Getenv("AAYU_MODEL"); m != "" {
 		return m
 	}
 	if l, err := e.Config(); err == nil && e.Host != "" {
-		if mc, ok := l.Config.Models.Lanes["build"][e.Host]; ok {
-			return mc.Model
+		r, err := (models.Resolver{Models: l.Config.Models, Hosts: l.Config.Hosts}).Resolve(verbs.LaneBuild, verbs.HostID(e.Host))
+		if err == nil && r.Family != verbs.FamilyHostManaged {
+			return r.Model
 		}
 	}
 	return ""

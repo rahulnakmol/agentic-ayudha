@@ -867,3 +867,29 @@ func TestBuildRecordsCopilotModels(t *testing.T) {
 		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }
+
+// A checkpoint records the build model the host's plan picks when the build
+// runs, so a later plan change cannot relabel who built it (Decision #469).
+func TestBuilderModelRecordsThePlanDefault(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ host, set, want string }{
+		{"cursor", "", "grok-4.7"},
+		{"cursor", "hosts.cursor.plan=legacy", "claude-opus-5-5"},
+		{"amp", "", ""}, // host-managed: Amp picks the model
+	} {
+		e, err := newEnv(IO{}, Options{Dir: repo, Getenv: func(string) string { return "" }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.set != "" {
+			e.Set = []string{c.set}
+		}
+		e.Host = c.host
+		if got := e.builderModel(); got != c.want {
+			t.Errorf("%s %q: builder model %q, want %q", c.host, c.set, got, c.want)
+		}
+	}
+}

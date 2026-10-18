@@ -29,7 +29,8 @@ Cursor's column follows `[hosts.cursor] plan` (the review-ladder decision of 202
 default, include only Cursor's own models (Grok 4.7, 4.6, 4.5, and Composer 2.5); Claude, GPT, and Gemini are
 list-price pay-as-you-go there. aayu cannot tell the plans apart, so it defaults to the one that never spends
 list-price money by surprise. Set `plan = "legacy"` for a legacy Pro, Pro+, or Ultra plan, which still includes Claude
-and Gemini. On `x` every lane is one family, so `review` and `ui-review` use another Grok tier and their reviews are
+and Gemini, in your user config (or `AAYU_HOSTS__CURSOR__PLAN`); the plan is yours, so a checkout's config cannot set
+it. A checkpoint records the build model the plan picked, so a later plan change does not relabel past builds. On `x` every lane is one family, so `review` and `ui-review` use another Grok tier and their reviews are
 labelled same-family; the merge gate's reviewer app can still be of another family. Composer's base model is
 unpublished, so its family is unknown, and a review between it and any build is same-family.
 
