@@ -1,0 +1,39 @@
+{
+  "story": 578,
+  "body_hash": "e982d0280b45a5a376e884ca33690797bc55428afc20da74caf3c8eda787d184",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "init --identity works from a remote shell or a phone: an HTTPS start page, a github.com redirect page, a pasted address checked against the state, install only after a successful conversion, and a timeout that exits 4",
+      "contracts": [
+        "Env.manifestCode: loopback flow only where the browser is on this machine; otherwise the paste flow",
+        "initrepo.AppManifest: redirect_url is the given page",
+        "initrepo.ErrAppNotConverted: a failed conversion writes no secret and prints no Install link",
+        "the site writes app-manifest.html, which posts the manifest from its fragment to github.com only"
+      ],
+      "tests": [
+        "internal/cli:TestInitIdentityFromAPhone",
+        "internal/cli:TestInitExtras",
+        "internal/tell:TestAppManifestPage"
+      ],
+      "instrumentation": [
+        "the init report names the identity step's result: created, not converted (delete the App), or waiting for the person"
+      ],
+      "rollback": "revert the PR; init --identity falls back to the loopback flow",
+      "criteria": [
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-18T07:32:22Z",
+  "planned_by": "human-fallback"
+}
