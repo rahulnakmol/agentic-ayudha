@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -374,7 +377,8 @@ func TestInitExtras(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
@@ -660,6 +664,19 @@ func TestInitVerifySkillMaintainer(t *testing.T) {
 	}
 }
 
+// appKey is a real RSA key for the fake App: init --identity signs a JWT with
+// it to read the App's webhook before it stores the key.
+var appKey = sync.OnceValue(func() string {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}))
+})
+
+// noHook is GitHub's webhook config of an App created from aayu's manifest.
+var noHook = map[string]any{"url": "https://example.invalid/aayudha-no-webhook", "content_type": "form"}
+
 // pasteTerminal is a person at a terminal for init --identity's paste flow
 // (#578): when aayu asks for the address, answer reads what aayu printed and
 // returns the next line to paste ("" closes the terminal).
@@ -742,7 +759,8 @@ func TestInitIdentityFromAPhone(t *testing.T) {
 		pub, _, _ := box.GenerateKey(rand.Reader)
 		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
 		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"},
-			"permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": "pem-never-printed"}
+			"permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": appKey()}
+		g.Static = map[string]any{"/app/hook/config": noHook}
 		return g
 	}
 	conversions := func(g *fake.GitHub) []string {
@@ -783,7 +801,7 @@ func TestInitIdentityFromAPhone(t *testing.T) {
 		if got := conversions(g); !slices.Equal(got, []string{"POST /app-manifests/c0de1234c0de5678/conversions"}) {
 			t.Errorf("conversions = %v", got)
 		}
-		if g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "pem-never-printed") {
+		if g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
 			t.Errorf("secret %v, variables %v, output:\n%s", g.Secrets, g.Variables, printed)
 		}
 		if strings.Contains(printed, "127.0.0.1") {
@@ -873,7 +891,8 @@ func TestInitIdentityFromAPhoneEnds(t *testing.T) {
 		g := fake.New(t, "o/r", kind)
 		pub, _, _ := box.GenerateKey(rand.Reader)
 		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": "pem"}
+		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
+		g.Static = map[string]any{"/app/hook/config": noHook}
 		return g
 	}
 	paste := func(p string) string {
@@ -888,6 +907,21 @@ func TestInitIdentityFromAPhoneEnds(t *testing.T) {
 	}{
 		{"another owner's App", app("mallory", map[string]any{"contents": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
 		{"wider permissions", app("o", map[string]any{"contents": "write", "administration": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"an App with events", func() *fake.GitHub {
+			g := app("o", nil)
+			g.App["events"] = []string{"push", "issues"}
+			return g
+		}(), paste, nil, "permissions or events aayu did not ask for"},
+		{"an App with a webhook", func() *fake.GitHub {
+			g := app("o", nil)
+			g.Static["/app/hook/config"] = map[string]any{"url": "https://attacker.example/hook"}
+			return g
+		}(), paste, nil, "webhook https://attacker.example/hook"},
+		{"an App whose webhook GitHub will not show", func() *fake.GitHub {
+			g := app("o", nil)
+			g.Static = nil
+			return g
+		}(), paste, nil, "webhook unknown ("},
 		{"an organization's App with wider permissions", app("org", map[string]any{"workflows": "write"}), paste, nil, "delete it at https://github.com/organizations/o/settings/apps"},
 		{"the terminal closes", app("o", nil), func(string) string { return "" }, nil, "no address was pasted, so no App was created"},
 		{"no terminal", app("o", nil), paste, []string{"NO_TERMINAL", "1"}, "init --identity asks you to paste an address from your browser, so it needs a terminal"},

@@ -3,9 +3,15 @@ package initrepo
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -19,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	gh "github.com/google/go-github/v90/github"
 	"github.com/shurcooL/githubv4"
@@ -315,8 +322,62 @@ func AppManifest(r Repo, redirect string) string {
 	}
 	perms, _ := json.Marshal(AppPermissions)
 	return fmt.Sprintf(`{"name":%q,"url":"https://github.com/rahulnakmol/agentic-ayudha","redirect_url":%q,"public":false,`+
-		`"hook_attributes":{"url":"https://example.invalid/aayudha-no-webhook","active":false},`+
+		`"hook_attributes":{"url":"`+noWebhook+`","active":false},`+
 		`"default_permissions":%s}`, name, redirect, perms)
+}
+
+// noWebhook is the manifest's webhook URL: a reserved name nothing answers,
+// with the hook off and no events, so the App sends nothing anywhere.
+const noWebhook = "https://example.invalid/aayudha-no-webhook"
+
+// appHookURL asks GitHub, as the new App (a JWT signed with its key), where
+// its webhook points. The start page posted the manifest and could have been
+// changed to add a webhook and events, so the key is stored only for an App
+// that sends nothing (Codex security review of #603).
+func appHookURL(ctx context.Context, base string, appID int64, pemKey string) (string, error) {
+	blk, _ := pem.Decode([]byte(pemKey))
+	if blk == nil {
+		return "", errors.New("the App's key is not a PEM key")
+	}
+	var key *rsa.PrivateKey
+	if k, err := x509.ParsePKCS1PrivateKey(blk.Bytes); err == nil {
+		key = k
+	} else if k, err := x509.ParsePKCS8PrivateKey(blk.Bytes); err == nil {
+		key, _ = k.(*rsa.PrivateKey)
+	}
+	if key == nil {
+		return "", errors.New("the App's key is not an RSA key")
+	}
+	enc := base64.RawURLEncoding
+	now := time.Now().Unix()
+	claims, _ := json.Marshal(map[string]any{"iat": now - 60, "exp": now + 300, "iss": strconv.FormatInt(appID, 10)})
+	signing := enc.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`)) + "." + enc.EncodeToString(claims)
+	sum := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(base, "/")+"/app/hook/config", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+signing+"."+enc.EncodeToString(sig))
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET /app/hook/config: HTTP %d", resp.StatusCode)
+	}
+	var cfg struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
+		return "", err
+	}
+	return cfg.URL, nil
 }
 
 // appSettings is where the person deletes an App on r's owner.
@@ -364,6 +425,7 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 			Login string `json:"login"`
 		} `json:"owner"`
 		Permissions map[string]string `json:"permissions"`
+		Events      []string          `json:"events"`
 	}
 	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app"),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/" + code + "/conversions"}},
@@ -386,9 +448,16 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 	for k, v := range conv.Permissions {
 		wider = wider || AppPermissions[k] != v
 	}
-	if !strings.EqualFold(conv.Owner.Login, r.Owner) || wider {
+	hook := noWebhook
+	if !wider && len(conv.Events) == 0 && strings.EqualFold(conv.Owner.Login, r.Owner) {
+		var herr error
+		if hook, herr = appHookURL(ctx, in.GH.REST.BaseURL(), conv.ID, conv.PEM); herr != nil {
+			hook = "unknown (" + herr.Error() + ")"
+		}
+	}
+	if !strings.EqualFold(conv.Owner.Login, r.Owner) || wider || len(conv.Events) > 0 || hook != noWebhook {
 		conv.PEM = ""
-		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", or permissions aayu did not ask for). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
+		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", permissions or events aayu did not ask for, or webhook "+hook+"). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
 		return fmt.Errorf("%w: the created App %s is not the one aayu asked for; do not install it: delete it at %s", ErrAppNotConverted, conv.Slug, appSettings(r))
 	}
 	in.State.Put(Object{Kind: "app", Name: "bot", ID: strconv.FormatInt(conv.ID, 10), External: true})
