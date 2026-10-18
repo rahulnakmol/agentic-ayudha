@@ -31,6 +31,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -173,13 +174,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	rec.GateRun, rec.Artifact, rec.PackSHA256 = gp.run.GetID(), gp.artifact, gp.sha256
 
 	// 2. The merge gate's checks are green on the head.
-	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}})
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
+		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
+		return r.GetCheckRuns(), resp, err
+	})
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	for _, want := range gateChecks {
 		concl := "missing"
-		for _, r := range runs.CheckRuns {
+		for _, r := range runs {
 			if r.GetName() == want {
 				concl = r.GetStatus()
 				if r.GetStatus() == "completed" {
@@ -228,15 +232,20 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// Every required check of the base branch is green too, whoever passes it.
-	required, gateState, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs.CheckRuns)
+	required, gateState, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs)
 	if err != nil {
 		return err
 	}
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
-	var fresh bool
-	rec.Review, fresh = autonomy.GateRungFresh(ctx, c, owner, name, n, head)
-	proofRung := rec.Review
-	if !fresh && proofRung != "" { // a cached rung (C) a branch workflow could have forged grants no proof
+	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
+	// For proof, the rung must be a fresh judgement from a run GitHub lists as
+	// for this PR into its base, and so must the pack's run: a cached rung, or
+	// a helper PR into a branch with an edited gate, proves nothing.
+	proofRung, fresh := autonomy.GateRungFresh(ctx, c, owner, name, n, head, pr.GetBase().GetRef())
+	switch {
+	case !autonomy.RunFor(gp.run, n, pr.GetBase().GetRef()):
+		proofRung = fmt.Sprintf("unproven: the pack's run %d is not listed as for PR #%d into %s", gp.run.GetID(), n, pr.GetBase().GetRef())
+	case !fresh && proofRung != "":
 		proofRung = "cached " + proofRung
 	}
 	// Merge on proof (Decision #593): with it, no human pass is needed.
@@ -319,6 +328,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// agent merge without a person; a same-family review or none refuses.
 	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && rec.Review != inspect.RungA && rec.Review != inspect.RungB {
 		why = append(why, "the merge gate's inspect job at this head did not record a different-family review (a same-family review, or none), which never lets an agent merge without a person")
+	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && (gateState != "" && gateState != "success") {
+		why = append(why, fmt.Sprintf("required check %s is %s, and only a person's pass merges past it", seats.GateCheck, gateState))
 	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && !needsPerson { // the narrow set: a person, whatever the streak
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}

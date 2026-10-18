@@ -200,9 +200,10 @@ func alwaysPerson(patterns []string, p string) string {
 
 // credentialRef is, in a workflow's canonical JSON, any mention of the
 // secrets context (secrets.X, secrets['X'], toJSON(secrets), secrets: inherit;
-// the expression language ignores case), the workflow token, an environment
+// the expression language ignores case), the workflow token (github.token,
+// github['token'], GITHUB_TOKEN), an environment
 // key, or a write permission.
-var credentialRef = regexp.MustCompile(`(?i)\bsecrets\b|github\.token|\bgithub_token\b|"environment":|"write(-all)?"`)
+var credentialRef = regexp.MustCompile(`(?i)\bsecrets\b|github\.token|github\s*\[\s*['"]token['"]\s*\]|\bgithub_token\b|"environment":|"write(-all)?"`)
 
 // holdsCredentials reports whether a workflow holds a credential: it reads a
 // secret or the workflow token, names an environment (which holds secrets

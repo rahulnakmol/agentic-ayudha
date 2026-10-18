@@ -31,14 +31,16 @@ const MergeGateWorkflow = "aayudha-merge-gate.yml"
 // the review line are all unknown. A run whose judgement was cached is
 // skipped for the newest fresh one.
 func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, head string) string {
-	rung, _ := GateRungFresh(ctx, c, owner, name, n, head)
+	rung, _ := GateRungFresh(ctx, c, owner, name, n, head, "")
 	return rung
 }
 
 // GateRungFresh is GateRung, and whether that rung is a fresh judgement:
 // false for a cached C, which stands because it only lowers, but which a
-// workflow on a branch could also have written, so it grants nothing.
-func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n int, head string) (rung string, fresh bool) {
+// workflow on a branch could also have written, so it grants nothing. With
+// base set, it reads only runs GitHub lists as for PR n into base: a helper
+// pull request into a branch with an edited gate cannot stand in.
+func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n int, head, base string) (rung string, fresh bool) {
 	path := ".github/workflows/" + MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
 	if err != nil {
@@ -47,7 +49,8 @@ func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n 
 	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
 	cached := false
 	for _, r := range runs.WorkflowRuns {
-		if r.GetPath() != path || r.GetEvent() != "pull_request_target" || r.GetHeadSHA() != head || r.GetStatus() != "completed" {
+		if r.GetPath() != path || r.GetEvent() != "pull_request_target" || r.GetHeadSHA() != head || r.GetStatus() != "completed" ||
+			base != "" && !RunFor(r, n, base) {
 			continue
 		}
 		jobs, _, err := c.REST.Actions.ListWorkflowJobs(ctx, owner, name, r.GetID(), &gh.ListWorkflowJobsOptions{Filter: "latest"})
@@ -84,6 +87,11 @@ func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n 
 		return "", false
 	}
 	return "", false
+}
+
+// RunFor reports whether GitHub lists workflow run r as for PR n into base.
+func RunFor(r *gh.WorkflowRun, n int, base string) bool {
+	return slices.ContainsFunc(r.PullRequests, func(p *gh.PullRequest) bool { return p.GetNumber() == n && p.GetBase().GetRef() == base })
 }
 
 // Proven reports whether a review at rung counts toward the streak and the

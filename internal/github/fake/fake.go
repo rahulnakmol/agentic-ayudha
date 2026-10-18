@@ -166,6 +166,15 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 	Attempt    int    `json:"run_attempt,omitempty"`
 	HTMLURL    string `json:"html_url,omitempty"`
+	// PullRequests are the pull requests the run is for, with their bases,
+	// as GitHub lists them for a same-repository pull request.
+	PullRequests []RunPR `json:"pull_requests,omitempty"`
+}
+
+// RunPR is a pull request a workflow run is for.
+type RunPR struct {
+	Number int    `json:"number"`
+	Base   Branch `json:"base"`
 }
 
 // Release is a GitHub Release, keyed by its tag.
@@ -216,7 +225,7 @@ type GitHub struct {
 	Commits     map[string]map[string]any   // sha -> commit
 	Issues      map[int]*Issue
 	Pulls       map[int]*PR
-	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first
+	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
 	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
 	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
 	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
@@ -259,6 +268,7 @@ type GitHub struct {
 	RequiredChecks    []string
 	RequiredCheckApps map[string]int64
 	RulesPerPage      int
+	CheckRunsPerPage  int
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -783,7 +793,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		if runs == nil {
 			runs = []CheckRun{}
 		}
-		reply(200, map[string]any{"total_count": len(runs), "check_runs": runs})
+		total := len(runs)
+		if per := g.CheckRunsPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, total), min(page*per, total)
+			if hi < total {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			runs = runs[lo:hi]
+		}
+		reply(200, map[string]any{"total_count": total, "check_runs": runs})
 	case m == "GET" && reStatuses.MatchString(p):
 		out := g.Statuses[reStatuses.FindStringSubmatch(p)[1]]
 		if out == nil {
