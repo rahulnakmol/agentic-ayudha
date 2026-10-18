@@ -55,7 +55,7 @@ func crossCheck(ctx context.Context, r Reviewer, in Input, fs []Finding) (map[st
 		list.WriteString("\n")
 	}
 	msg := "## Findings to check\n\n" + triage.Untrusted("other-reviewer", list.String()) + "\n\n" + reviewMaterial(in)
-	req := models.Request{System: VerifySystem, MaxTokens: 3000, Messages: []models.Message{{Role: "user", Content: msg}}}
+	req := models.Request{System: VerifySystem, MaxTokens: 3000, Messages: []models.Message{{Role: "user", Content: msg}}, Stream: true}
 	var v verdicts
 	var spent float64
 	err := models.Structured(ctx, func(ctx context.Context, q models.Request) (models.Response, error) {

@@ -88,10 +88,10 @@ type Request struct {
 	// CacheKey groups calls that share a prompt prefix for OpenAI Responses
 	// (prompt_cache_key), so they reach the same cache; others ignore it.
 	CacheKey string
-	// Stream asks an Anthropic Messages endpoint to stream the reply, so a long
-	// generation keeps bytes flowing past a proxy's idle timeout (a gateway
-	// behind Cloudflare answers 524 after 100 seconds of silence). Other wire
-	// formats ignore it, and a reply that arrives as plain JSON still decodes.
+	// Stream asks the endpoint to stream the reply (all three wire formats),
+	// so a long generation keeps bytes flowing past a proxy's idle timeout (a
+	// gateway behind Cloudflare answers 524 after 100 seconds of silence,
+	// Bug #608). A reply that arrives as plain JSON still decodes.
 	Stream bool
 }
 
@@ -124,7 +124,19 @@ type Response struct {
 	// finish_reason. Truncated is set when it stopped at the token cap.
 	StopReason string
 	Truncated  bool
+	// ServiceTier is the tier the endpoint served the reply at (Responses and
+	// Chat service_tier, e.g. "priority"), when it says.
+	ServiceTier string
 }
+
+// CallTimeout bounds one call, a stream included, when the client has no
+// HTTP client of its own. A streamed high-effort review keeps delivering
+// events for many minutes (a gateway measured 10 minutes of grok-4.7
+// reasoning, Bug #608), so it is well above a proxy's cut of an unstreamed
+// reply (about 125 seconds) and under the merge gate's 15-minute inspect job,
+// leaving that job time to fall back to the reviewer app. Nothing retries a
+// call that timed out.
+var CallTimeout = 12 * time.Minute
 
 // Client is one way of calling a model.
 type Client interface {
@@ -194,6 +206,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.CacheKey != "" {
 			b["prompt_cache_key"] = r.CacheKey
 		}
+		if r.Stream {
+			b["stream"] = true
+		}
 		body = b
 	case StyleChat:
 		path = "/chat/completions"
@@ -207,6 +222,10 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		}
 		if f := r.Format; f != nil {
 			b["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": f.Name, "schema": f.Schema, "strict": f.Strict}}
+		}
+		if r.Stream {
+			b["stream"] = true
+			b["stream_options"] = map[string]bool{"include_usage": true}
 		}
 		body = b
 	default:
@@ -231,15 +250,23 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 	hc := c.HTTP
 	if hc == nil {
-		hc = &http.Client{Timeout: 10 * time.Minute}
+		hc = &http.Client{Timeout: CallTimeout}
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
 		return Response{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 == 2 && c.Style == StyleMessages && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return decodeMessagesStream(io.LimitReader(resp.Body, 32<<20))
+	if resp.StatusCode/100 == 2 && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+		body := io.LimitReader(resp.Body, 32<<20)
+		switch c.Style {
+		case StyleMessages:
+			return decodeMessagesStream(body)
+		case StyleResponses:
+			return decodeResponsesStream(body)
+		case StyleChat:
+			return decodeChatStream(body)
+		}
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
@@ -341,6 +368,152 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 	return r, nil
 }
 
+// sseData calls f with each event's data line of a server-sent event stream
+// until f says stop. A data line that is not JSON with no line after it is
+// the stream cut inside an event: the read error (or an unexpected EOF) comes
+// back, so the caller retries a dropped connection.
+func sseData(body io.Reader, what string, f func(data string) (stop bool, err error)) error {
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 64<<10), 8<<20)
+	for sc.Scan() {
+		data, ok := strings.CutPrefix(sc.Text(), "data:")
+		if !ok {
+			continue
+		}
+		data = strings.TrimSpace(data)
+		if data != "[DONE]" && !json.Valid([]byte(data)) {
+			if !sc.Scan() {
+				return fmt.Errorf("read %s stream: %w", what, cmp.Or(sc.Err(), io.ErrUnexpectedEOF))
+			}
+			return fmt.Errorf("decode %s stream: not JSON: %s", what, truncate(data, 100))
+		}
+		stop, err := f(data)
+		if err != nil || stop {
+			return err
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return fmt.Errorf("read %s stream: %w", what, err)
+	}
+	return nil
+}
+
+// decodeResponsesStream reads an OpenAI Responses event stream. The final
+// response.completed (or response.incomplete) event carries the whole
+// response, which decodes exactly as a non-streamed reply does. A
+// response.failed event's response carries the usage, which comes back with
+// the error: the attempt may be billed.
+func decodeResponsesStream(body io.Reader) (Response, error) {
+	var final json.RawMessage
+	var r Response
+	err := sseData(body, "responses", func(data string) (bool, error) {
+		var ev struct {
+			Type     string          `json:"type"`
+			Response json.RawMessage `json:"response"`
+			Message  string          `json:"message"`
+			Code     string          `json:"code"`
+		}
+		_ = json.Unmarshal([]byte(data), &ev)
+		switch ev.Type {
+		case "response.completed", "response.incomplete":
+			final = ev.Response
+			return true, nil
+		case "response.failed", "error":
+			var v struct {
+				Model string `json:"model"`
+				Usage usage  `json:"usage"`
+				Error struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			_ = json.Unmarshal(ev.Response, &v)
+			r.Model = v.Model
+			r.setUsage(v.Usage)
+			return false, &StreamError{Type: cmp.Or(ev.Code, v.Error.Code, ev.Type), Message: truncate(cmp.Or(ev.Message, v.Error.Message), 300)}
+		}
+		return false, nil
+	})
+	if err != nil {
+		return r, err
+	}
+	if final == nil {
+		return r, fmt.Errorf("read responses stream: no response.completed: %w", io.ErrUnexpectedEOF)
+	}
+	return decode(StyleResponses, final)
+}
+
+// decodeChatStream reads a Chat Completions stream: the content deltas of
+// the first choice, its finish reason, and the usage chunk that
+// stream_options.include_usage adds, rebuilt into the non-streamed reply so
+// it decodes the same way. The stream is complete at [DONE] or the usage
+// chunk; an error chunk, or a stream cut off before either, comes back with
+// the usage seen so far.
+func decodeChatStream(body io.Reader) (Response, error) {
+	var r Response
+	var finish string
+	var u json.RawMessage
+	var sb strings.Builder
+	complete := false
+	err := sseData(body, "chat", func(data string) (bool, error) {
+		if data == "[DONE]" {
+			complete = true
+			return true, nil
+		}
+		var ch struct {
+			Model       string          `json:"model"`
+			ServiceTier string          `json:"service_tier"`
+			Usage       json.RawMessage `json:"usage"`
+			Choices     []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+				FinishReason string `json:"finish_reason"`
+			} `json:"choices"`
+			Error *struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal([]byte(data), &ch)
+		r.Model, r.ServiceTier = cmp.Or(ch.Model, r.Model), cmp.Or(ch.ServiceTier, r.ServiceTier)
+		if len(ch.Usage) > 0 && string(ch.Usage) != "null" {
+			var uu usage
+			_ = json.Unmarshal(ch.Usage, &uu)
+			r.setUsage(uu)
+			u, complete = ch.Usage, true
+		}
+		if ch.Error != nil {
+			return false, &StreamError{Type: cmp.Or(ch.Error.Type, "error"), Message: truncate(ch.Error.Message, 300)}
+		}
+		if len(ch.Choices) > 0 {
+			sb.WriteString(ch.Choices[0].Delta.Content)
+			finish = cmp.Or(ch.Choices[0].FinishReason, finish)
+		}
+		return false, nil
+	})
+	if err != nil {
+		return r, err
+	}
+	if !complete {
+		return r, fmt.Errorf("read chat stream: no [DONE] or usage: %w", io.ErrUnexpectedEOF)
+	}
+	type msg struct {
+		Content string `json:"content"`
+	}
+	type choice struct {
+		Message      msg    `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	}
+	raw, _ := json.Marshal(struct {
+		Model       string          `json:"model"`
+		ServiceTier string          `json:"service_tier,omitempty"`
+		Usage       json.RawMessage `json:"usage,omitempty"`
+		Choices     []choice        `json:"choices"`
+	}{r.Model, r.ServiceTier, u, []choice{{msg{sb.String()}, finish}}})
+	return decode(StyleChat, raw)
+}
+
 // noText is the error for a reply without text. One that stopped at its token
 // cap spent the cap before writing (on thinking): it is a truncated reply, so a
 // caller that reruns those at a larger cap reruns this one too.
@@ -351,7 +524,7 @@ func noText(r Response, err error) error {
 	return err
 }
 
-// StreamError is an error event inside a streamed Messages reply, after the
+// StreamError is an error event inside a streamed reply, after the
 // endpoint answered 200: its Type is the provider's (api_error, overloaded_error,
 // invalid_request_error, ...).
 type StreamError struct {
@@ -360,7 +533,7 @@ type StreamError struct {
 }
 
 func (e *StreamError) Error() string {
-	return fmt.Sprintf("messages stream error: %s: %s", e.Type, e.Message)
+	return fmt.Sprintf("stream error: %s: %s", e.Type, e.Message)
 }
 
 // StatusError is a non-2xx reply.
@@ -387,6 +560,12 @@ func retryAfter(v string, now time.Time) time.Duration {
 }
 
 func (e *StatusError) Error() string {
+	switch e.Code {
+	case http.StatusGatewayTimeout, 524:
+		// A proxy in front of the endpoint gave up waiting for the reply
+		// (Cloudflare's 524 after 100 seconds without a byte).
+		return fmt.Sprintf("model endpoint returned %d, a timeout waiting for the reply (rerun; if it recurs, check that the route streams): %s", e.Code, e.Body)
+	}
 	return fmt.Sprintf("model endpoint returned %d: %s", e.Code, e.Body)
 }
 
@@ -444,8 +623,9 @@ func decode(style string, raw []byte) (Response, error) {
 				Text string `json:"text"`
 			} `json:"content"`
 		} `json:"output"` // responses
-		OutputText string `json:"output_text"`
-		Choices    []struct {
+		OutputText  string `json:"output_text"`
+		ServiceTier string `json:"service_tier"` // responses, chat
+		Choices     []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
@@ -455,19 +635,8 @@ func decode(style string, raw []byte) (Response, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return Response{}, fmt.Errorf("decode %s reply: %w", style, err)
 	}
-	u := v.Usage
-	r := Response{Model: v.Model, TokensIn: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens,
-		TokensOut:    u.OutputTokens + u.CompletionTokens,
-		CachedIn:     u.CacheReadInputTokens + u.InputTokensDetails.CachedTokens + u.PromptTokensDetails.CachedTokens,
-		CacheWriteIn: u.CacheCreationInputTokens + u.InputTokensDetails.CacheWriteTokens, CacheWrite1hIn: u.CacheCreation.Ephemeral1hInputTokens}
-	// Some chat endpoints (xAI) leave reasoning tokens out of completion_tokens
-	// but in total_tokens; they bill as output, so the difference counts.
-	if extra := u.TotalTokens - r.TokensIn - r.TokensOut; u.TotalTokens > 0 && extra > 0 {
-		r.TokensOut += extra
-	}
-	if v.Usage.Cost != nil {
-		r.CostUSD = *v.Usage.Cost
-	}
+	r := Response{Model: v.Model, ServiceTier: v.ServiceTier}
+	r.setUsage(v.Usage)
 	var sb strings.Builder
 	switch style {
 	case StyleMessages:
@@ -504,6 +673,22 @@ func decode(style string, raw []byte) (Response, error) {
 		return r, noText(r, fmt.Errorf("%s reply has no text: %s", style, truncate(string(raw), 300)))
 	}
 	return r, nil
+}
+
+// setUsage sets the tokens and cost of a usage object of any wire format.
+func (r *Response) setUsage(u usage) {
+	r.TokensIn = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens
+	r.TokensOut = u.OutputTokens + u.CompletionTokens
+	r.CachedIn = u.CacheReadInputTokens + u.InputTokensDetails.CachedTokens + u.PromptTokensDetails.CachedTokens
+	r.CacheWriteIn, r.CacheWrite1hIn = u.CacheCreationInputTokens+u.InputTokensDetails.CacheWriteTokens, u.CacheCreation.Ephemeral1hInputTokens
+	// Some chat endpoints (xAI) leave reasoning tokens out of completion_tokens
+	// but in total_tokens; they bill as output, so the difference counts.
+	if extra := u.TotalTokens - r.TokensIn - r.TokensOut; u.TotalTokens > 0 && extra > 0 {
+		r.TokensOut += extra
+	}
+	if u.Cost != nil {
+		r.CostUSD = *u.Cost
+	}
 }
 
 // Direct provider endpoints, the fallback when [models.gateway] is unset. Each

@@ -828,7 +828,9 @@ func TestInspectPaidReviewer(t *testing.T) {
 		}
 		env = maps.Clone(env)
 		env["AAYU_SECRET_GOOGLE"] = key
-		model := &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}
+		reply := inspectReply("merge", "")
+		reply.ServiceTier, reply.TokensIn, reply.TokensOut = "priority", 1200, 300
+		model := &models.Fake{Replies: []models.Response{reply}}
 		opts.ModelClient = func(models.Route, string) models.Client { return model }
 		return g, env, opts, prN, model
 	}
@@ -841,6 +843,10 @@ func TestInspectPaidReviewer(t *testing.T) {
 	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
 	if code != 0 || res.Rung != inspect.RungB || !strings.Contains(res.Review, "(B, paid): gemini-3.8-flash (google)") || len(model.Requests) != 1 || model.Requests[0].Model != "gemini-3.8-flash" || model.Requests[0].Effort != "high" {
 		t.Fatalf("paid reviewer: exit %d rung %q %q, %d model calls %s", code, res.Rung, res.Review, len(model.Requests), errOut)
+	}
+	// The gate's log shows the tier and the usage of the review (Bug #608).
+	if !strings.Contains(errOut, "(service tier priority): 1200 tokens in, 300 out") {
+		t.Errorf("the gate's log does not show the review's tier and usage: %s", errOut)
 	}
 
 	// A paid review that fails (here the gateway's 524, as a large diff gave
