@@ -86,6 +86,10 @@ Sometimes a team must ship with a miss. The only way is a recorded human decisio
 3. On the next run, `verify` looks for accepted waivers under the story: closed as completed, by a non-bot, with
    `waive, accepted by @<login>` in the Decision section, linking `waives` the story and naming the floor. It turns
    the matching check into `waived` and stores the Decision number in the check's `waiver` field.
+   When the floor-waiver authority resolves to a login (`[decisions.authority]`, a seat's paired human, or
+   `[autonomy] approver`), that login must have closed the Decision and be the one it names; `verify` lists any other
+   closed waiver as `waiver ignored`, with the authority it lacked. With no login configured, any person's acceptance
+   counts. The coverage ratchet and its eval-bar check apply the same rule to their waivers.
 
 A filed but unaccepted waiver waives nothing. `ship` copies every waiver into its ship record, and `aayu audit` counts
 waivers and lists them per pack in its "Floors and waivers" table.

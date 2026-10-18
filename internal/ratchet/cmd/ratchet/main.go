@@ -17,9 +17,11 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ratchet"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func main() {
@@ -113,7 +115,9 @@ func baseRatchet(sha string) (*ratchet.Ratchet, error) {
 	return &r.Coverage, nil
 }
 
-// checkWaiver reads a floor-waiver Decision for floor from GitHub with the job's token.
+// checkWaiver reads a floor-waiver Decision for floor from GitHub with the
+// job's token, and the waived item's type, so the checkout's config resolves
+// the floor-waiver authority.
 func checkWaiver(n int, floor string) error {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	owner, name, err := github.SplitRepo(repo)
@@ -124,9 +128,21 @@ func checkWaiver(n int, floor string) error {
 	if err != nil {
 		return err
 	}
-	is, _, err := c.REST.Issues.Get(context.Background(), owner, name, n)
+	ctx := context.Background()
+	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
 	if err != nil {
 		return err
 	}
-	return ratchet.AcceptedWaiver(is, floor, nil)
+	var parentType string
+	switch parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n)); {
+	case err == nil:
+		parentType, _ = workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
+	case !github.NotFound(err):
+		return err
+	}
+	l, err := config.Load(config.DefaultSources(os.Getenv, ".", os.Environ(), nil))
+	if err != nil {
+		return err
+	}
+	return ratchet.AcceptedWaiver(is, floor, &l.Config, parentType)
 }

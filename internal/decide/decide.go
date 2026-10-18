@@ -223,6 +223,30 @@ func Login(c *config.Config, value string) string {
 	return strings.TrimPrefix(strings.TrimSpace(c.Autonomy.Approver), "@")
 }
 
+// WaiverAcceptedBy checks a closed floor-waiver Decision's acceptance against
+// the floor-waiver authority, as `decide --accept` enforces it: when the
+// authority resolves to a login, closer must be that login and decision (the
+// Decision section) must name it. With no login (the day-one path) any person
+// may accept, so it returns nil. parentType is the waived item's work-item
+// type (Bug #599).
+func WaiverAcceptedBy(c *config.Config, parentType, closer, decision string) error {
+	key, value := Authority(c, Decision{Labels: []string{LabelWaiver}, ParentType: parentType})
+	want := Login(c, value)
+	if want == "" {
+		return nil
+	}
+	if !strings.EqualFold(closer, want) {
+		return fmt.Errorf("closed by @%s, not the floor-waiver authority @%s (%s = %s)", closer, want, key, value)
+	}
+	if m := waiveAcceptedBy.FindStringSubmatch(decision); m == nil || !strings.EqualFold(m[1], want) {
+		return fmt.Errorf("its Decision section does not name the floor-waiver authority @%s (%s = %s)", want, key, value)
+	}
+	return nil
+}
+
+// waiveAcceptedBy is the login in "waive, accepted by @<login>" (Accepted).
+var waiveAcceptedBy = regexp.MustCompile(`(?i)^\s*waive, accepted by @([a-z0-9-]+)`)
+
 // EscalationComment is the comment posted when the SLA lapses. It is stable
 // for a given Decision, so a rerun of the sweep changes nothing.
 func EscalationComment(d Decision, p Policy, authority, login string) string {
