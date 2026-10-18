@@ -599,7 +599,7 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
 			// A function defined in a C or C++ header (inline int parse(…) {…}) is
 			// part of the API every includer calls, as a method is.
-			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type") {
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
