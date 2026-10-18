@@ -302,14 +302,8 @@ func MatchOption(options, option string) bool {
 func Options(it workitems.Item) ([]workitems.Option, int) {
 	os, _ := workitems.ParseOptions(it.Fields["options"])
 	rec := slices.IndexFunc(os, func(o workitems.Option) bool { return o.Recommended })
-	r := strings.TrimSpace(it.Fields["recommendation"])
-	if m := workitems.OptionRef.FindStringSubmatch(r); rec < 0 && m != nil {
-		if i, _ := strconv.Atoi(m[1] + m[2]); i >= 1 && i <= len(os) {
-			rec = i - 1
-		}
-	}
-	if rec < 0 {
-		rec = workitems.NamedOption(os, r) // -1 when it names none, or more than one
+	if n := workitems.RecommendedOption(os, it.Fields["recommendation"]); rec < 0 && n >= 1 && n <= len(os) {
+		rec = n - 1
 	}
 	for i := range os { // one recommendation, even where a draft marks two
 		os[i].Recommended = i == rec

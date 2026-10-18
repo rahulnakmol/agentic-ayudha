@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // MinOptions is the fewest options a Decision offers at Ready, so the person
@@ -31,9 +32,7 @@ var (
 	optionLine  = regexp.MustCompile(`^([0-9]+)[.)]\s+(.*)$`)
 	optionBold  = regexp.MustCompile(`^\*\*(.+?)\*\*[.:,]?(?:\s+(.*))?$`) // a ** inside a code span, as in ops/**, does not end it
 	optionPlain = regexp.MustCompile(`^(.+?)(?:: |\. | — | - )(.*)$`)
-	// OptionRef finds an option named by its number in a Recommendation:
-	// "Option 2", or a leading "2." or "2".
-	OptionRef   = regexp.MustCompile(`(?i)^\s*([0-9]+)(?:[.):,]|\s*$)|\boption\s+([0-9]+)\b`)
+	openingRef  = regexp.MustCompile(`(?i)^(?:option\s+([0-9]+)\b|([0-9]+)(?:[.):,\s]|$))`)
 	fenceRun    = regexp.MustCompile("^(?:`{3,}|~{3,})")
 	recommended = regexp.MustCompile(`(?i)\s*\(recommended\b[^)]*\)`) // "(recommended)" or "(recommended, because …)"
 )
@@ -131,4 +130,27 @@ func optionOf(n int, rest string) Option {
 		name, text = m[1], m[2]
 	}
 	return Option{N: n, Name: strings.TrimRight(name, ".:"), Text: text, Recommended: marked}
+}
+
+// RecommendedOption is the number of the option a Recommendation opens with,
+// "Option 2, because …", "2.", or the option's name, or 0 when it opens with
+// none. Only the opening counts, since a Recommendation often goes on to name
+// the options it rejects.
+func RecommendedOption(os []Option, rec string) int {
+	r := strings.TrimLeft(strings.TrimSpace(rec), "*_ ")
+	if m := openingRef.FindStringSubmatch(r); m != nil {
+		n, _ := strconv.Atoi(m[1] + m[2])
+		return n
+	}
+	best := Option{}
+	for _, o := range os {
+		name := strings.ToLower(o.Name)
+		if name == "" || !strings.HasPrefix(strings.ToLower(r), name) || len(o.Name) <= len(best.Name) {
+			continue
+		}
+		if rest := r[len(o.Name):]; rest == "" || !unicode.IsLetter(rune(rest[0])) && !unicode.IsDigit(rune(rest[0])) {
+			best = o
+		}
+	}
+	return best.N
 }
