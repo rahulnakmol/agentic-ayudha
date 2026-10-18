@@ -151,6 +151,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitUsage, "ship #%d: the PR is %s", n, map[bool]string{true: "already merged", false: "closed"}[pr.GetMerged()])
 	}
 	head := pr.GetHead().GetSHA()
+	if want := in.String(shipExpectHead); want != "" && want != head {
+		return headMoved(n, want, head)
+	}
 	story := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
 	if story == 0 {
 		return Errorf(ExitBlocked, "ship #%d: no story (Refs #n in the PR body); ship proves a story", n)
@@ -585,6 +588,15 @@ func soloModeComment(ctx context.Context, c *github.Client, owner, name string, 
 		return "", Errorf(ExitBlocked, "%s: post %s starting %q that says why, from your own account, first", cmd, where, SoloBypassPrefix)
 	}
 	return comments[i].GetHTMLURL(), nil
+}
+
+// shipExpectHead pins ship to the head a person chose in the inbox; it is not
+// a flag, so only the inbox sets it.
+const shipExpectHead = "expect-head"
+
+// headMoved refuses a ship whose PR was pushed after the person chose it.
+func headMoved(n int, chose, now string) error {
+	return WithNext(Errorf(ExitBlocked, "ship #%d: the head moved to %s after you chose to ship %s; nothing was merged", n, short(now), short(chose)), "aayu inbox")
 }
 
 // upsertOwnComment replaces login's own comment on issue or PR n that carries

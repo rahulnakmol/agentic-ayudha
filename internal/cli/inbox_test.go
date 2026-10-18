@@ -352,10 +352,26 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	if forged.Body != ReadyToShipMarker+" head="+headA+" -->\n**Ready to ship.**" {
 		t.Errorf("ship edited someone else's marker: %q", forged.Body)
 	}
+	// A push to PR A after the inbox listed it: the pick was for the head
+	// the person saw, so nothing merges or is commented.
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/pulls/"+strconv.Itoa(prA) {
+			g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
+		}
+	}
 	g.Mu.Unlock()
 	opts.DevicePoll = time.Millisecond
 	opts.IsTerminal = func(any) bool { return true }
+	_, out, _ = runIn(t, agent, opts, "s a q", "inbox", "--repo", "o/r")
+	g.Mu.Lock()
+	moved := !g.Pulls[prA].Merged && !slices.ContainsFunc(g.Issues[prA].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, SoloBypassPrefix) })
+	g.Pulls[prA].Head.SHA, g.Hook = headA, nil
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if !moved || !strings.Contains(out, "the head moved to eeeeeee after you chose to ship "+short(headA)+"; nothing was merged") {
+		t.Fatalf("ship after a push to the chosen PR:\n%s", out)
+	}
 	code, out, errOut = runIn(t, agent, opts, "s a a", "inbox", "--repo", "o/r")
 	if code != 0 {
 		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)

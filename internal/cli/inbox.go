@@ -74,6 +74,7 @@ type InboxItem struct {
 	ReplacedBy  int           `json:"replaced_by,omitempty"` // the replacing issue
 	labels      []string
 	mergeSHA    string
+	head        string // a ready PR's head as the inbox showed it
 }
 
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
@@ -274,7 +275,7 @@ func readyItem(ctx context.Context, c *github.Client, owner, name string, p *gh.
 		}
 	}
 	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
-	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(),
+	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), head: p.GetHead().GetSHA(),
 		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
 		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
 			{N: 2, Label: "open it and review it", Command: "open"}}}, nil
@@ -573,18 +574,26 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 // inbox posts their "Solo-mode bypass:" comment (once) and ships with
 // --solo-bypass; otherwise ship needs a person's approving review of the head.
 func (e *Env) shipReady(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem) error {
-	v := Values{"pr": strconv.Itoa(it.Number)}
+	// The person chose the head the inbox showed: ship only that one.
+	v := Values{"pr": strconv.Itoa(it.Number), shipExpectHead: it.head}
+	owner, name, _ := github.SplitRepo(repo)
+	p, _, err := c.REST.PullRequests.Get(ctx, owner, name, it.Number)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if p.GetHead().GetSHA() != it.head {
+		return headMoved(it.Number, it.head, p.GetHead().GetSHA())
+	}
 	if soloMode(cfg, login, "inbox") == nil {
-		owner, name, _ := github.SplitRepo(repo)
 		if _, err := soloModeComment(ctx, c, owner, name, it.Number, login, cfg, "inbox", "a PR comment"); err != nil {
-			note := fmt.Sprintf("%s @%s ships this from `aayu inbox`: one human and no bot App, so no second person can review it; the merge gate is green on the head.", SoloBypassPrefix, login)
+			note := fmt.Sprintf("%s @%s ships this from `aayu inbox`: one human and no bot App, so no second person can review it; the merge gate is green on the head `%s`.", SoloBypassPrefix, login, short(it.head))
 			if err := postComment(ctx, c, repo, it.Number, "github.comment.solo-bypass", note); err != nil {
 				return Wrap(ExitExternal, err)
 			}
 		}
 		v["solo-bypass"] = true
 	}
-	err := handlers["ship"](ctx, e, v)
+	err = handlers["ship"](ctx, e, v)
 	if err != nil && v["solo-bypass"] == nil {
 		// Not solo: ship needs a person's approving review of the head,
 		// which only GitHub records.
