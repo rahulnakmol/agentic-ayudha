@@ -151,6 +151,7 @@ var (
 	csUsing    = regexp.MustCompile(`(?m)^[ \t]*using[ \t]+([\w.]+)[ \t]*;`)
 	pyMain     = regexp.MustCompile(`(?m)^if[ \t]+__name__[ \t]*==[ \t]*['"]__main__['"]`)
 	shebang    = regexp.MustCompile(`^#!`)
+	goMainPkg  = regexp.MustCompile(`(?m)^package[ \t]+main\b`)
 )
 
 // surfaceRules find a file's I/O surfaces in its stripped code (string
@@ -598,7 +599,7 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
 			// A function defined in a C or C++ header (inline int parse(…) {…}) is
 			// part of the API every includer calls, as a method is.
-			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
@@ -611,6 +612,21 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
 		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
 	}
+}
+
+// exportsFuncs reports whether a file's public top-level functions are an API
+// its importers call: a Go package other than main (exported names), or a
+// Python module that is not a script (no shebang, no main guard; names without
+// a leading underscore). Elsewhere a top-level function's Public means only
+// that it is not static, and a script's functions are its own helpers.
+func exportsFuncs(lang, raw string) bool {
+	switch lang {
+	case "go":
+		return !goMainPkg.MatchString(raw)
+	case "python":
+		return !shebang.MatchString(raw) && !pyMain.MatchString(raw)
+	}
+	return false
 }
 
 // headerEntries adds the functions a header declares without a body

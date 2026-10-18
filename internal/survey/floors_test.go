@@ -107,6 +107,48 @@ func TestFloorCapabilityMapNamespaces(t *testing.T) {
 	})
 }
 
+// A library's public top-level functions are entry points (a Go package other
+// than main, a Python module that is not a script); a program's are its own
+// helpers. A symbol covers the same-line entry it names, not its neighbour.
+func TestFloorCapabilityMapFunctions(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"parse/parse.go":   "package parse\n\nfunc Parse(s string) int { return len(s) }\n\nfunc helper() {}\n",
+		"cmd/tool/main.go": "package main\n\nfunc main() {}\n\nfunc Run() {}\n",
+		"fmtlib.py":        "def render(x):\n    return x\n\n\ndef _private(x):\n    return x\n",
+		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
+		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
+		"util.hxx":         "class LineA {}; class LineB {};\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ix, err := Build(context.Background(), dir, Options{Git: noGit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := []string{"sym:parse/parse.go#Parse", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB"}
+	base := func() Draft {
+		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
+	}
+	without := func(c string) func(d *Draft) {
+		return func(d *Draft) {
+			d.Capabilities[0].Cites = slices.DeleteFunc(d.Capabilities[0].Cites, func(x string) bool { return x == c })
+		}
+	}
+	runFloorCases(t, ix, base, []floorCase{
+		{"negated", "each library function, program, and class cited; no helper, private name, or script function asked for", func(*Draft) {}, "no capability covers", false},
+		{"match", "a Go package's exported function left out", without("sym:parse/parse.go#Parse"), "parse/parse.go:3 (function Parse)", true},
+		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
+		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
+		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},
+	})
+}
+
 // A draft holds at most one interview round of open questions.
 func TestFloorQuestionCap(t *testing.T) {
 	ix := buildFixture(t, 0)
@@ -258,6 +300,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	write("tests/test_render.py", "import helpers\n\n\ndef test_render():\n    assert helpers.check(1)\n\n\ndef test_probe(env):\n    env.register('probe', helpers.check)\n")
 	write("tests/helpers.py", "import lib\n\n\ndef check(x):\n    return lib.render(x) == str(x)\n")
 	write("tests/make_data.py", "def make():\n    return [1, 2]\n")
+	write("tests/test_idle.py", "import idle\n\n\ndef test_idle():\n    assert idle.ok()\n")
+	write("tests/idle.py", "def ok():\n    return True\n\n\ndef never():\n    import lib\n    return lib.render(1)\n")
 	write("spec/render_spec.py", "import lib\n\nassert lib.render(3) == \"3\"\n")
 	build := func() *Index {
 		ix, err := Build(context.Background(), dir, Options{Git: noGit})
@@ -281,6 +325,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			"cases/quiet.js:1 calls whisper, which runner entry:tool.py:1 does not register", true},
 		{"match", "a test file that calls no program function", set(func(g *CaseSet) { g.Runners = []string{"test:tests/make_data.py"} }),
 			"runner test:tests/make_data.py is a test file that calls no function and loads no file outside the tests", true},
+		{"match", "a test whose helper imports the program only inside a function nothing calls", set(func(g *CaseSet) { g.Runners = []string{"test:tests/test_idle.py"} }),
+			"runner test:tests/test_idle.py is a test file that calls no function and loads no file outside the tests", true},
 		{"near miss", "a test that drives the program through a helper", set(func(g *CaseSet) { g.Runners = []string{"test:tests/test_render.py"} }), "case set G1", false},
 		{"near miss", "a spec that calls the program only at file scope, after importing it", set(func(g *CaseSet) { g.Runners = []string{"test:spec/render_spec.py"} }), "case set G1", false},
 	})
