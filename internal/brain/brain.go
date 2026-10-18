@@ -121,7 +121,8 @@ var fenceOpenRE = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
 
 // maskFences blanks out fenced code (same length, newlines kept, so indexes
 // hold): markers and links inside a fence are text. A fence closes on a line
-// of the same character at least as long as the one that opened it.
+// of the same character at least as long as the one that opened it, indented
+// at most three spaces (CommonMark).
 func maskFences(body string) string {
 	masked := []byte(body)
 	start, open := -1, ""
@@ -136,7 +137,8 @@ func maskFences(body string) string {
 			if m := fenceOpenRE.FindStringSubmatch(line); m != nil {
 				start, open = i, m[1]
 			}
-		} else if t := strings.TrimSpace(line); len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
+		} else if t := strings.TrimSpace(line); len(line)-len(strings.TrimLeft(line, " ")) <= 3 &&
+			len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
 			blank(masked, start, end)
 			start, open = -1, ""
 		}

@@ -56,7 +56,23 @@ aayu brain <action>
 
 ## What you get back
 
-vault, check-report.
+`init` writes the vault to the `brain` branch. `checkpoint` writes one commit with the notes it changed. `check`
+writes nothing and reports each problem. `open` prints the steps to open the vault.
+
+**You should see**, for each action:
+
+- `init`: `brain: created (brain <sha>)`. On a second run you see `exists`. With `--workstream` you see
+  `workstream added` or `workstream exists`.
+- `checkpoint`: `brain checkpoint: N notes changed (brain <sha>)`, then one `needs review: <note>` line for each
+  note whose facts changed after its last review.
+- `check`: one `error:` or `warning:` line for each problem, then a summary such as
+  `brain check brain@<sha>: N notes, 0 errors, W warnings`, and exit 0. With errors it exits 3: fix each note it
+  names.
+- `open`: numbered steps: `git fetch origin brain`, then `git worktree add ../<repo>-brain brain`, then open that
+  folder as a vault in Obsidian.
+
+Exit 4 means that the branch is missing or that it is not an aayudha vault. The message names the next step. See
+[exit codes](../troubleshooting.md) and [everything else](../troubleshooting.md#everything-else).
 
 ## Gates
 

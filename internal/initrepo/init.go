@@ -428,12 +428,22 @@ func (d rulesetDetail) protectsLedger() bool {
 
 // brainAdvice tells the person how to protect the brain branch with an
 // adopted ruleset that does not cover it yet; aayudha never edits the team's
-// own ruleset. It is empty when the ruleset already includes the branch.
+// own ruleset. It is empty when the ruleset includes the branch and no
+// exclusion (which beats an inclusion) exempts it.
 func (d rulesetDetail) brainAdvice() string {
-	if slices.Contains(d.Conditions.RefName.Include, brainRef) {
+	var advice []string
+	if !slices.Contains(d.Conditions.RefName.Include, brainRef) {
+		advice = append(advice, fmt.Sprintf("add %q to ruleset %q (id %d) conditions.ref_name.include", brainRef, d.Name, d.ID))
+	}
+	for _, x := range d.Conditions.RefName.Exclude {
+		if ok, _ := pathpkg.Match(x, brainRef); ok || x == brainRef {
+			advice = append(advice, fmt.Sprintf("remove the exclusion %q from ruleset %q (id %d) conditions.ref_name.exclude", x, d.Name, d.ID))
+		}
+	}
+	if advice == nil {
 		return ""
 	}
-	return fmt.Sprintf("; it does not protect %s: add %q to ruleset %q (id %d) conditions.ref_name.include so the brain branch cannot be force-pushed or deleted either", brainRef, brainRef, d.Name, d.ID)
+	return fmt.Sprintf("; it does not protect %s: %s so the brain branch cannot be force-pushed or deleted either", brainRef, strings.Join(advice, ", and "))
 }
 
 func (in *Init) rest(ctx context.Context, method, path string, body, out any) error {

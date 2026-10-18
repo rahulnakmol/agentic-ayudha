@@ -146,31 +146,41 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 	if errors.Is(err, ledger.ErrExists) {
 		outcome = "exists"
 		err = nil
-		existing, _, rerr := brainFiles(ctx, w)
-		if rerr != nil {
-			return rerr
-		}
-		if err := notVault(existing); err != nil {
-			return err
-		}
-		if ws != "" {
+		// The index rewrites whole notes, so a workstream lands only on the tip it
+		// read: when a person pushes in between, it reads their change and runs again.
+		for attempt := 0; ; attempt++ {
+			existing, tip, rerr := brainFiles(ctx, w)
+			if rerr != nil {
+				return rerr
+			}
+			if err := notVault(existing); err != nil {
+				return err
+			}
+			if ws == "" {
+				break
+			}
 			add := map[string][]byte{}
 			for p, b := range brain.Workstream(repo, ws, today) {
 				if _, ok := existing[p]; !ok {
 					add[p] = b
 				}
 			}
-			if len(add) > 0 { // the root Workstreams map and Home list it in the same commit
-				merged := maps.Clone(existing)
-				maps.Copy(merged, add)
-				maps.Copy(add, brain.Index(merged, today))
-			}
-			outcome = "workstream added"
+			outcome = "workstream exists"
 			if len(add) == 0 {
-				outcome = "workstream exists"
-			} else if sha, err = w.Write(ctx, ledger.Commit{Message: "brain: add the " + ws + " workstream (aayu brain init)", Files: add}); err != nil {
+				break
+			}
+			merged := maps.Clone(existing) // the root Workstreams map and Home list it in the same commit
+			maps.Copy(merged, add)
+			maps.Copy(add, brain.Index(merged, today))
+			outcome = "workstream added"
+			sha, err = w.Write(ctx, ledger.Commit{Message: "brain: add the " + ws + " workstream (aayu brain init)", Files: add, Base: tip})
+			if errors.Is(err, ledger.ErrMoved) && attempt < 4 {
+				continue
+			}
+			if err != nil {
 				return Wrap(ExitExternal, err)
 			}
+			break
 		}
 	}
 	if err != nil {

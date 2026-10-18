@@ -60,7 +60,7 @@ tags: [type/capability]
 
 func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	files := skeleton(t)
-	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n````md\n```\n<!-- BEGIN aayudha:brain:record -->\n````\n\n## Why it exists\n\nA claim without evidence does not count.\n"
+	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n````md\n```\n<!-- BEGIN aayudha:brain:record -->\n````\n\n```text\n    ```\n<!-- BEGIN aayudha:brain:history -->\nan example\n<!-- END aayudha:brain:history -->\n```\n\n## Why it exists\n\nA claim without evidence does not count.\n"
 	files["Capabilities/Proof.md"] = note(capFM, human+"\n"+Block("history", "- stale line")+"\n\nA closing line a person wrote.\n")
 	files["Decisions/Decisions.md"] = []byte("---\n# A person's comment: keep this map.\n" + strings.TrimPrefix(string(files["Decisions/Decisions.md"]), "---\n"))
 	r := Records{

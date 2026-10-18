@@ -413,6 +413,17 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.HasPrefix(notes[0], "ledger-writers unchanged: ") || !strings.Contains(notes[0], advice) {
 		t.Errorf("rerun notes %q, want one unchanged note saying %q", notes, advice)
 	}
+	// An exclusion beats an inclusion: a matching pattern still leaves brain unprotected.
+	g.Mu.Lock()
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/brain"}, "exclude": []any{"refs/heads/b*"}}}
+	g.Mu.Unlock()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun with a matching exclusion: exit %d: %s", code, errOut)
+	}
+	exclusion := `it does not protect refs/heads/brain: remove the exclusion "refs/heads/b*" from ruleset "ledger-writers" (id 99) conditions.ref_name.exclude`
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.Contains(notes[0], exclusion) || strings.Contains(notes[0], "include") {
+		t.Errorf("notes with an exclusion that matches brain: %q, want %q", notes, exclusion)
+	}
 	g.Mu.Lock()
 	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/brain"}}}
 	g.Mu.Unlock()
