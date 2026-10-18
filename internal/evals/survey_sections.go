@@ -97,6 +97,7 @@ func (h *Harness) runSurveySections(ctx context.Context, c Case, lane verbs.Lane
 	system := body + "\n\nYou have indexed the repository and read every module's pack and the files that follow. Reply with the section asked for only: one JSON object, nothing before or after it."
 	grounding := "## The person's request\n\n" + input + "\n\n## What the host saw (`aayu survey`, every module pack)\n\n" + w.printed + "\n\n## Files the host read\n\n" + w.read
 	parts := map[string]json.RawMessage{}
+	var earlier []CallLog // every section's calls so far, resumed ones included
 	score := 5
 	var reasons []string
 	for _, sec := range survey.Sections {
@@ -118,8 +119,14 @@ func (h *Harness) runSurveySections(ctx context.Context, c Case, lane verbs.Lane
 		judgeInput := grounding + priorJudged(parts) + "## Task\n\n" + task + " This is the " + name + " section (" + keys + ").\n\n## Checks\n\n" +
 			"Deterministic checks passed (`aayu survey --draft` on the sections so far): every citation resolves to an index fact or a line range inside the file; every claim has a basis its evidence allows; no product claim is observed; every unknown has a question; no question was answered without a person."
 		st, err := h.step(ctx, c, "draft/"+name, stepKey(req, string(rubric)), func(prev *Step, calls *[]CallLog) (Step, error) {
-			return h.surveySection(ctx, c, w, lane, name, req, prev, parts, judgeInput, string(rubric), calls)
+			// The section logs after the earlier sections' calls, so their
+			// provider retries count toward the sample's ProviderRetries.
+			log := slices.Clone(earlier)
+			st, err := h.surveySection(ctx, c, w, lane, name, req, prev, parts, judgeInput, string(rubric), &log)
+			*calls = append(*calls, log[len(earlier):]...)
+			return st, err
 		})
+		earlier = append(earlier, st.Calls...)
 		if !st.Resumed {
 			run.Calls = append(run.Calls, st.Calls...)
 		}

@@ -353,4 +353,20 @@ func TestTier2SurveySections(t *testing.T) {
 	if r2 := res.Cases[0].Runs[0]; len(again.Requests) != 0 || r2.Score != 3 || !r2.Sections[4].Resumed || len(r2.Calls) != 0 {
 		t.Errorf("resume: %d calls, score %d, sections %+v", len(again.Requests), r2.Score, r2.Sections)
 	}
+	// ProviderRetries is the sample's, not each section's: two 429s spent in
+	// engineering leave none for capabilities, whose next fault errors the run.
+	noPause(t)
+	limited := &models.StatusError{Code: 429, Body: "rate limited"}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: limited, 2: limited, 8: limited, 9: limited, 10: limited}}
+	h3 := harness(t, nil, "gpt-6.1-sol")
+	h3.Config.K = 1
+	h3.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err = h3.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r3 := res.Cases[0].Runs[0]
+	if r3.Status != RunError || runRetries(r3.Calls) != ProviderRetries {
+		t.Errorf("retries across sections: status %s, %d retries (want %d for the whole sample), error %q", r3.Status, runRetries(r3.Calls), ProviderRetries, r3.Error)
+	}
 }
