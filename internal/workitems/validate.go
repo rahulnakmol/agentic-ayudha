@@ -89,14 +89,7 @@ func Validate(it Item, stage Stage) []Problem {
 			if f.RequiredAt.index() <= stage.index() {
 				os, ops := ParseOptions(v)
 				ps = append(ps, ops...)
-				// A marked option and a Recommendation that names another by number disagree.
-				if m := OptionRef.FindStringSubmatch(it.Fields["recommendation"]); m != nil {
-					for _, o := range os {
-						if n, _ := strconv.Atoi(m[1] + m[2]); o.Recommended && o.N != n {
-							add(f.ID, "option %d is marked \"(recommended)\" but the Recommendation names option %d; make them agree", o.N, n)
-						}
-					}
-				}
+				ps = append(ps, checkRecommendation(os, it.Fields["recommendation"])...)
 			}
 		case KindLinks:
 			ps = append(ps, checkLinks(t, it, v)...)
@@ -276,4 +269,39 @@ func checkLinks(t Type, it Item, v string) []Problem {
 		}
 	}
 	return ps
+}
+
+// checkRecommendation checks that a Decision's Recommendation resolves to one
+// of its options: one marked "(recommended)", one it names by number, or one
+// it names by name; and that a marked option and a number agree.
+func checkRecommendation(os []Option, rec string) []Problem {
+	if len(os) == 0 || Empty(rec) {
+		return nil
+	}
+	marked := slices.IndexFunc(os, func(o Option) bool { return o.Recommended })
+	if m := OptionRef.FindStringSubmatch(rec); m != nil {
+		n, _ := strconv.Atoi(m[1] + m[2])
+		switch {
+		case n < 1 || n > len(os):
+			return []Problem{{"recommendation", fmt.Sprintf("names option %d, but the Decision has options 1-%d", n, len(os))}}
+		case marked >= 0 && os[marked].N != n:
+			return []Problem{{"options", fmt.Sprintf("option %d is marked \"(recommended)\" but the Recommendation names option %d; make them agree", os[marked].N, n)}}
+		}
+		return nil
+	}
+	if marked >= 0 || slices.ContainsFunc(os, func(o Option) bool { return MentionsOption(rec, o.Name) }) {
+		return nil
+	}
+	return []Problem{{"recommendation", "names none of the options: name one by its number (\"Option 2, because ...\") or its name"}}
+}
+
+// MentionsOption reports whether text names option as a whole word or
+// phrase, case-insensitively.
+func MentionsOption(text, option string) bool {
+	o := strings.TrimSpace(option)
+	if o == "" {
+		return false
+	}
+	re, err := regexp.Compile(`(?i)(^|[^\pL\pN])` + regexp.QuoteMeta(o) + `($|[^\pL\pN])`)
+	return err == nil && re.MatchString(text)
 }

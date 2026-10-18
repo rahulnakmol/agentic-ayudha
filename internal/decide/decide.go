@@ -290,12 +290,7 @@ func Accepted(option, login string, at time.Time, provisional bool) string {
 // MatchOption reports whether option names one of the Decision's options: a
 // case-insensitive whole-word match in the Options field.
 func MatchOption(options, option string) bool {
-	o := strings.TrimSpace(option)
-	if o == "" {
-		return false
-	}
-	re, err := regexp.Compile(`(?i)(^|[^\pL\pN])` + regexp.QuoteMeta(o) + `($|[^\pL\pN])`)
-	return err == nil && re.MatchString(options)
+	return workitems.MentionsOption(options, option)
 }
 
 // Options are a Decision's numbered options, each under the Decision's own

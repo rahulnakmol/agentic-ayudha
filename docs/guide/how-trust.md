@@ -179,10 +179,13 @@ A solo founder should not be the bottleneck on human-only steps, but no switch t
 agent could flip such a switch through the admin bypass. Instead `aayu inbox` lists every human-only step that waits
 for you, each with the twin's recommendation, and you act on each with one keypress. Under every step a line says in
 words what each key does, for example "a or Enter = accept the recommendation (option 2) · 1-3 = accept that option ·
-s = skip for now · o = open on GitHub · q = quit". A Decision lists every option under its own number, the recommended
-one marked "(recommended)", so pressing 3 accepts the Decision's option 3. A pick that is not the recommendation, or
-that is a one-way door, first shows one line saying exactly what it will do, and applies only on `y`. A step that is
-not a Decision shows its action and "skip for now", so no step is a forced choice. It lists:
+s = skip for now · o = open on GitHub · q = quit".
+
+A Decision lists every option under its own number, the recommended one marked "(recommended)", so pressing 3 accepts
+the Decision's option 3. A pick that is not the recommendation, or that is a one-way door, first shows one line saying
+exactly what it will do, and applies only on `y`.
+
+A step that is not a Decision shows its action and "skip for now", so no step is a forced choice. The inbox lists:
 
 | Step | What the record shows | The recommendation | What accepting does |
 |---|---|---|---|
