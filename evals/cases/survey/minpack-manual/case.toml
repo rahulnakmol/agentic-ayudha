@@ -1,0 +1,59 @@
+# survey (survey-sections-2026-10.md): the MINPACK checkout of survey/minpack-traps (repos/minpack, README.rst its only
+# doc) with the original MINPACK-1 User Guide beside it: More, Garbow, Hillstrom, "User Guide for MINPACK-1", Argonne
+# National Laboratory report ANL-80-74, August 1980, DOI 10.2172/6997568, OSTI ID 6997568. The guide is never committed,
+# neither the PDF nor its text: tier 2 fetches it once by the URL the DOI resolves to (one download per CI cache miss,
+# evals.yml), checks the file and pdftotext's text against the SHA-256s below, and gives `aayu survey --docs` a copy in
+# a temporary directory, so the host cites it as manual:anl-80-74.pdf.txt:<line>. A fetch that fails or a hash that
+# differs makes the case not run: no score, no spend, no failure. Tier 1 never downloads: without the cached file it
+# is n/a (go test on a machine whose eval docs cache, AAYU_EVAL_DOCS, holds it runs it).
+# Terms (OSTI.GOV FAQ and Website Policies, read 2026-10-18): users may read, download, and analyse the material under
+# the Federal Government's reserved rights; the Acceptable Use Policy forbids excessive automated requests, which one
+# cached download is not; the report carries no "U.S. Government Work" notice, so it is treated as copyrighted and
+# not redistributed. The FAQ's AI/ML/LLM note concerns using OSTI.GOV records and data as a dataset, which one report
+# read in an eval is not (the founder's decision of 2026-10-18).
+# The person asks what it does and for whom, where the guide and the code disagree, the traps, what not to carry over,
+# and a move to modern Fortran with the same results. The host has run `aayu survey --docs`, every `--module`, the six
+# drivers under `--golden --probe` (minpack-traps' probes), and read the files and guide lines below; no person is in
+# the session, so every question stays open. Floors: `aayu survey --draft` (citations resolve, the guide's by line;
+# bases; trap rules; contract shape), no answered question, and the scope rule. output/survey.json is minpack-traps'
+# pilot draft with the guide's evidence added: the guide-versus-code findings (E8, E14), the guide's descriptions on
+# the capabilities and the contract, and the guide's product statements (P2, P5-P7, Q6).
+skill = "survey"
+description = "Survey legacy Fortran with its 1980 user guide: product claims from the guide, the guide checked against the code, and a parity-proving port."
+input = "request.txt"
+repo = "../repos/minpack"
+artifacts = ["output/survey.json"]
+
+[survey]
+kind = "draft"
+draft = "output/survey.json"
+probes = ["../minpack-traps/probes/release-flags.json", "../minpack-traps/probes/sanitisers.json"]
+rubrics = "rubric"
+read = [
+  "README.rst", "CMakeLists.txt", "cmake/UserOverride.cmake", "src/CMakeLists.txt", "fpm.toml:1-21",
+  "src/minpack.f90", "src/lmder1.f", "src/dpmpar.f", "src/enorm.f:1-60", "src/hybrd1.f:1-30", "src/hybipt.f:1-20",
+  "src/lmdipt.f:1-20", "src/covar.f:1-20", "ex/lmddrv.f", "ex/file22", "examples/example_lmder1.f90:40-75",
+  "manual:anl-80-74.pdf.txt:430-475", "manual:anl-80-74.pdf.txt:554-870", "manual:anl-80-74.pdf.txt:4112-4320",
+  "manual:anl-80-74.pdf.txt:6898-6920",
+]
+
+[survey.docs]
+name = "anl-80-74.pdf"
+doi = "10.2172/6997568"
+url = "https://www.osti.gov/servlets/purl/6997568"
+sha256 = "edce33ecb3ea3b5a96935604793359ca6c8046390b16e43b8d3478194feae7d0"
+# pdftotext -layout, poppler 22.12 and 24.02 alike (Debian 12, Ubuntu 24.04)
+text_sha256 = "0e736417de73e78b9b7c282fbf3827c14e6f2c81ec826bcc3f4f7de683e15109"
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "traps.md", "compatibility.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true

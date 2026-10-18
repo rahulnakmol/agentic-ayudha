@@ -42,6 +42,10 @@ type SurveySpec struct {
 	// (<section>.md): a draft case with it runs section by section
 	// (runSurveySections) and is judged per section.
 	Rubrics string `toml:"rubrics"`
+	// Docs is a manual the case fetches at run time instead of carrying it
+	// (survey_docs.go): the host surveys it with `--docs` and cites it as
+	// manual:<name>:<line>, and Read may name its lines the same way.
+	Docs *SurveyDocs `toml:"docs"`
 }
 
 func (s *SurveySpec) check() error {
@@ -56,6 +60,8 @@ func (s *SurveySpec) check() error {
 		return errors.New("[survey] kind draft needs read, the files the host read")
 	case s.Kind == "backlog" && s.Rubrics != "":
 		return errors.New("[survey] rubrics: a backlog is written in one call and judged whole")
+	case s.Docs != nil:
+		return s.Docs.check()
 	}
 	return nil
 }
@@ -104,9 +110,23 @@ func surveySetup(ctx context.Context, c Case, assets fs.FS) (surveyWorld, error)
 		return o.String(), nil
 	}
 	var p strings.Builder
-	sum, err := aayu("survey", repo)
+	args, docs := []string{"survey", repo}, ""
+	if d := c.Survey.Docs; d != nil {
+		if docs, err = d.dir(); err != nil {
+			return w, err
+		}
+		defer func() { _ = os.RemoveAll(docs) }()
+		args = append(args, "--docs", docs)
+	}
+	sum, err := aayu(args...)
 	if err != nil {
 		return w, err
+	}
+	if d := c.Survey.Docs; d != nil {
+		if err := d.checkText(filepath.Join(out, "manuals")); err != nil {
+			return w, err
+		}
+		sum = strings.ReplaceAll(sum, docs, "<docs>")
 	}
 	// The temporary paths mean nothing to the model; name them as a host would see them.
 	sum = strings.ReplaceAll(strings.ReplaceAll(sum, filepath.Join(out, "index.json"), ".aayudha/survey/index.json"), repo, ".")
@@ -155,7 +175,7 @@ func surveySetup(ctx context.Context, c Case, assets fs.FS) (surveyWorld, error)
 	w.printed = p.String()
 	var r strings.Builder
 	for _, f := range c.Survey.Read {
-		text, err := readNumbered(repo, f)
+		text, err := readNumbered(repo, filepath.Join(out, "manuals"), f)
 		if err != nil {
 			return w, fmt.Errorf("read %s: %w", f, err)
 		}
@@ -180,7 +200,8 @@ func surveySetup(ctx context.Context, c Case, assets fs.FS) (surveyWorld, error)
 
 // readNumbered reads a file under repo, or a path:start-end range of it, with
 // each line numbered as an editor shows it, so the model can cite path:line.
-func readNumbered(repo, spec string) (string, error) {
+// A manual:<name> path is the manual of that name in manuals, as indexed.
+func readNumbered(repo, manuals, spec string) (string, error) {
 	path, start, end := spec, 1, 0
 	if i := strings.LastIndex(spec, ":"); i > 0 {
 		a, b, ok := strings.Cut(spec[i+1:], "-")
@@ -190,7 +211,11 @@ func readNumbered(repo, spec string) (string, error) {
 			path, start, end = spec[:i], s, e
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(path)))
+	file := filepath.Join(repo, filepath.FromSlash(path))
+	if name, ok := strings.CutPrefix(path, "manual:"); ok {
+		file = filepath.Join(manuals, filepath.FromSlash(name))
+	}
+	b, err := os.ReadFile(file)
 	if err != nil {
 		return "", err
 	}
@@ -291,17 +316,37 @@ func withoutDecisionOptions(reply string) string {
 	return b.String()
 }
 
-// tier1Survey checks the recorded reply.
-func tier1Survey(ctx context.Context, c Case, assets fs.FS) []string {
+// tier1Survey checks the recorded reply. A case whose manual is not cached
+// here is n/a: tier 1 never downloads (survey_docs.go).
+func tier1Survey(ctx context.Context, c Case, assets fs.FS) (problems []string, na bool) {
 	w, err := surveySetup(ctx, c, assets)
+	if nr := (*NotRunError)(nil); errors.As(err, &nr) {
+		return nil, true
+	}
 	if err != nil {
-		return []string{err.Error()}
+		return []string{err.Error()}, false
 	}
 	b, err := os.ReadFile(filepath.Join(c.Dir, filepath.FromSlash(c.Survey.Draft)))
 	if err != nil {
-		return []string{err.Error()}
+		return []string{err.Error()}, false
 	}
-	return checkSurvey(c, w, string(b))
+	return checkSurvey(c, w, string(b)), false
+}
+
+// surveyNotRun fetches a survey case's manual, once, and sets it up as a run
+// would, before any model call: why it cannot run, or "".
+func (h *Harness) surveyNotRun(ctx context.Context, c Case) (string, error) {
+	if c.Survey == nil || c.Survey.Docs == nil {
+		return "", nil
+	}
+	err := c.Survey.Docs.fetch(ctx)
+	if err == nil {
+		_, err = surveySetup(ctx, c, h.Assets)
+	}
+	if nr := (*NotRunError)(nil); errors.As(err, &nr) {
+		return nr.Why, nil
+	}
+	return "", err
 }
 
 // runSurvey is one tier-2 run of a survey case. The skill writes the JSON

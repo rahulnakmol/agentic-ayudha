@@ -129,6 +129,10 @@ type CaseResult struct {
 	Errors   int          `json:"errors"` // runs with status error, excluded from pass^k and the mean
 	PassK    float64      `json:"pass_k"` // over completed runs: 1 when all of them pass, else 0
 	Mean     float64      `json:"mean"`   // over completed runs
+	// NotRun is why the case did not run here (NotRunError), such as a
+	// fetched manual that did not match its pin: it has no runs, no score,
+	// and no spend, and the bars skip it.
+	NotRun string `json:"not_run,omitempty"`
 }
 
 // Results is evals/results/<sha>.json.
@@ -545,6 +549,12 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		// One prompt-cache key per case: its runs share their prompt prefixes.
 		ctx := context.WithValue(ctx, cacheKey{}, "aayu-eval-"+c.ID)
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
+		if cr.NotRun, err = h.surveyNotRun(ctx, c); err != nil {
+			return nil, err
+		} else if cr.NotRun != "" {
+			res.Cases = append(res.Cases, cr)
+			continue
+		}
 		for i := 0; i < h.Config.K; i++ {
 			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
@@ -605,8 +615,9 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		res.Errors += cr.Errors
 		res.Cases = append(res.Cases, cr)
 	}
-	for _, cr := range res.Cases {
-		res.PassK += cr.PassK / float64(len(res.Cases))
+	ran := ranCases(res.Cases)
+	for _, cr := range ran {
+		res.PassK += cr.PassK / float64(len(ran))
 	}
 	res.Mean = mean(scores)
 	res.CostUSD = h.spentUSD()
@@ -768,12 +779,70 @@ func Advisories(cur, base *Results, cfg Config) []string {
 	return notes
 }
 
+// Scored reports whether any case ran. A run in which none did (every case
+// not run) is no evidence for its group: eval writes no results file for it,
+// so a release or the evals gate finds the group's results missing rather
+// than passing, and an earlier run's results for the commit stay the newest.
+func (r *Results) Scored() bool {
+	return len(r.Cases) == 0 || len(ranCases(r.Cases)) > 0
+}
+
+// commonMeans is the baseline's and the current run's mean score over the
+// cases both scored: each case's mean, weighted by its completed runs. When
+// both scored the same cases it is their recorded means.
+func commonMeans(base *Results, cur *Results, ran []CaseResult) (baseMean, curMean float64) {
+	weight := func(c CaseResult) float64 {
+		if n := len(c.Runs) - c.Errors; n > 0 {
+			return float64(n)
+		}
+		return 1
+	}
+	curCase := map[string]CaseResult{}
+	for _, c := range ran {
+		curCase[c.Case] = c
+	}
+	baseRan := ranCases(base.Cases)
+	same := len(baseRan) == len(ran)
+	var bs, cs, bw, cw float64
+	for _, b := range baseRan {
+		c, ok := curCase[b.Case]
+		if !ok {
+			same = false
+			continue
+		}
+		bs, bw = bs+b.Mean*weight(b), bw+weight(b)
+		cs, cw = cs+c.Mean*weight(c), cw+weight(c)
+	}
+	switch {
+	case same:
+		return base.Mean, cur.Mean
+	case bw == 0:
+		return 0, 0 // no case in common: nothing to compare
+	}
+	return bs / bw, cs / cw
+}
+
+// ranCases drops the cases that did not run (CaseResult.NotRun).
+func ranCases(cs []CaseResult) []CaseResult {
+	var out []CaseResult
+	for _, c := range cs {
+		if c.NotRun == "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 	passK := &reasons
 	if g, ok := cfg.Group(cur.Group); ok && g.PassK == PassKAdvisory {
 		passK = &advisory
 	}
-	for _, c := range cur.Cases {
+	ran := ranCases(cur.Cases)
+	if len(ran) == 0 && len(cur.Cases) > 0 {
+		return nil, nil // nothing ran, so nothing is scored: not run is never a failure
+	}
+	for _, c := range ran {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
@@ -794,15 +863,19 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
 	}
 	if base != nil {
-		if drop := base.Mean - cur.Mean; drop > cfg.MaxDrop+1e-9 {
-			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s); at most %.2f allowed", cur.Mean, drop, base.Mean, short(base.SHA), cfg.MaxDrop))
+		// The drop is measured over the cases both runs scored: a case new
+		// since the baseline, or not run in either, is held to the per-case
+		// bar above, never mixed into one side's mean.
+		baseMean, curMean := commonMeans(base, cur, ran)
+		if drop := baseMean - curMean; drop > cfg.MaxDrop+1e-9 {
+			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s) over the cases both scored; at most %.2f allowed", curMean, drop, baseMean, short(base.SHA), cfg.MaxDrop))
 		}
 		baseCase := map[string]CaseResult{}
 		for _, c := range base.Cases {
 			baseCase[c.Case] = c
 		}
-		for _, c := range cur.Cases {
-			if b, ok := baseCase[c.Case]; ok && c.PassK < b.PassK {
+		for _, c := range ran {
+			if b, ok := baseCase[c.Case]; ok && b.NotRun == "" && c.PassK < b.PassK {
 				*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
 			}
 		}
