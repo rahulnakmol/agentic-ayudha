@@ -213,7 +213,10 @@ Architect's, so you report it and never bend it.
   window, and arithmetic 80 words; the answer to each ask 30 words; the open points (baseline, skipped rows, cause)
   120; the next step with its owner and date 40. State the verdict once: when someone asks for wording to use in a
   meeting, the opening verdict is that wording (write it to be read aloud and say it is the line to use), with no
-  separate "short answer" and no second version later. When the check
+  separate "short answer" and no second version later. Put the counts and their arithmetic in a table (cohort,
+  activated, acquired, rate, with the sum row), not in the verdict's prose. The open points are at most four, one
+  line of about 25 words each: the baseline with its comparability, the skipped rows with their tolerance, the
+  source fix with its owner and date, and the cause. When the check
   reports too many words, cut well below the bound (to about 320), not just to it: first delete prose that restates
   a table, the verdict, or the grounding, then put the counts and dates in a table.
 
