@@ -15,6 +15,16 @@
       {
         "command": "aayu hook pre-tool --host cursor --skills 0.0.0"
       }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "aayu hook post-tool --host cursor --skills 0.0.0"
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": "aayu hook post-tool --host cursor --skills 0.0.0"
+      }
     ]
   }
 }

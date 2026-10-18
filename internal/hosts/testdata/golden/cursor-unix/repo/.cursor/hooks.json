@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "afterMCPExecution": [
+      {
+        "command": "\"/opt/aayudha/bin/aayu\" hook post-tool --host cursor"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "\"/opt/aayudha/bin/aayu\" hook post-tool --host cursor"
+      }
+    ],
     "beforeMCPExecution": [
       {
         "command": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host cursor"

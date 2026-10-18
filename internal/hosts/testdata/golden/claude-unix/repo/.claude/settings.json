@@ -6,6 +6,17 @@
     "aayudha@aayudha": false
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"/opt/aayudha/bin/aayu\" hook post-tool --host claude",
+            "type": "command"
+          }
+        ],
+        "matcher": "mcp__.*|Bash"
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [

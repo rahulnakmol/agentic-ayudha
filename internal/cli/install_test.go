@@ -307,3 +307,42 @@ func TestHookProviderCalls(t *testing.T) {
 		t.Fatalf("allow_pii = true: exit %d %s", code, errs)
 	}
 }
+
+// TestHookLogsProviderCalls (Decision #449): the post-tool hook logs each
+// PostHog or Sentry call a host ran, with its window and row limit, under
+// .aayudha/state/calls; it never fails the host, and logs nothing else.
+func TestHookLogsProviderCalls(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	opts.IsTerminal = nil
+	env := map[string]string{"HOME": home}
+	calls := []string{
+		`{"session_id":"s-42","tool_name":"mcp__sentry__find_dropped_events","tool_input":{"statsPeriod":"7d"},"tool_response":[{"outcome":"rate_limited"}]}`,
+		`{"session_id":"s-42","tool_name":"Bash","tool_input":{"command":"posthog-cli exp query run \"SELECT count() FROM events WHERE timestamp > now() - INTERVAL 1 DAY LIMIT 1\""},"tool_response":{"stdout":"[[42]]"}}`,
+		`{"session_id":"s-42","tool_name":"mcp__github__list_issues","tool_input":{},"tool_response":[]}`,
+		`{"session_id":"s-42","tool_name":"Bash","tool_input":{"command":"go test ./..."},"tool_response":{"stdout":"ok"}}`,
+	}
+	for _, c := range calls {
+		if code, out, errs := runIn(t, env, opts, c, "hook", "post-tool", "--host", "claude"); code != 0 || out != "" || errs != "" {
+			t.Fatalf("post-tool: exit %d %q %q", code, out, errs)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(repo, ".aayudha", "state", "calls", "s-42.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], `"id":"c1"`) || !strings.Contains(lines[0], `"call":"find_dropped_events"`) ||
+		!strings.Contains(lines[0], `"why_not_citable":"it names no row limit"`) ||
+		!strings.Contains(lines[1], `"id":"c2"`) || !strings.Contains(lines[1], `"channel":"cli"`) || !strings.Contains(lines[1], `"citable":true`) {
+		t.Fatalf("call log:\n%s", b)
+	}
+	// A log that cannot be written never fails the host: the call has run.
+	broken := filepath.Join(repo, ".aayudha", "state", "calls", "s-43.jsonl")
+	if err := os.MkdirAll(broken, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errs := runIn(t, env, opts, strings.Replace(calls[0], "s-42", "s-43", 1), "hook", "post-tool", "--host", "claude")
+	if code != 0 || out != "" || !strings.Contains(errs, "could not log the sentry call") {
+		t.Fatalf("unwritable log: exit %d %q %q; want exit 0 and the failure on stderr", code, out, errs)
+	}
+}

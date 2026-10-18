@@ -254,6 +254,8 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 		switch {
 		case name == "pre-tool":
 			r = hosts.Deny(verbs.HostID(e.Host), "")
+		case name == "post-tool" && e.Host != string(verbs.HostCursor):
+			// silent: the repository's own post-tool hook logs the call
 		case e.Host == string(verbs.HostCursor):
 			r.Stdout = "{}\n"
 		default:
@@ -285,6 +287,9 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 			}
 		}
 	}
+	if name == "post-tool" && !standAside {
+		e.logHostCall(event)
+	}
 	// A marketplace plugin calls aayu from PATH and passes the skills version it
 	// carries; session-start says so when this binary carries another.
 	if v := in.String("skills"); name == "session-start" && v != "" && v != verbs.SkillVersion && e.Host != string(verbs.HostCursor) {
@@ -307,6 +312,24 @@ func (e *Env) hostcallOptions() hostcall.Options {
 		}
 	}
 	return o
+}
+
+// logHostCall appends a PostHog or Sentry call the host ran to the session's
+// call log (.aayudha/state/calls). A failure to log is reported on stderr and
+// never fails the hook: the call has already run.
+func (e *Env) logHostCall(event []byte) {
+	ev, res, session, ok := hostcall.FromPostHook(event)
+	if !ok {
+		return
+	}
+	v := hostcall.Decide(ev, e.hostcallOptions())
+	if v.Provider == "" || !v.Allow {
+		return
+	}
+	en := hostcall.NewEntry(ev, v, res, e.Host, session, e.Now())
+	if _, err := hostcall.Append(filepath.Join(e.stateDir(), "state", "calls"), en); err != nil {
+		fmt.Fprintf(e.Err, "aayudha: could not log the %s call: %v\n", v.Provider, err)
+	}
 }
 
 // statusLine is one line of journey state from the last home screen, for a
