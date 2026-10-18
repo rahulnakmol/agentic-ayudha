@@ -59,6 +59,10 @@ type scope struct {
 	kind string // the symbol kind, "block" for any other brace
 	name string
 	sym  int // index into the symbols of this file, -1 for a block
+	// public is a C or C++ class's current access section (a struct's
+	// members are public until a label says otherwise), and false when the
+	// class itself is not public.
+	public bool
 }
 
 // braceSymbols finds definitions in a C-family file from its stripped code: at
@@ -88,6 +92,21 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 		}
 		return strings.Join(names, "::")
 	}
+	cfam := lang == "c" || lang == "cpp"
+	classTop := func() *scope {
+		if n := len(stack); cfam && n > 0 && (stack[n-1].kind == "class" || stack[n-1].kind == "struct" || stack[n-1].kind == "union") {
+			return &stack[n-1]
+		}
+		return nil
+	}
+	// labels applies the access labels in a chunk of the innermost class.
+	labels := func(chunk string) {
+		if t := classTop(); t != nil {
+			for _, m := range accessLabel.FindAllStringSubmatch(chunk, -1) {
+				t.public = m[1] == "public" && syms[t.sym].Public
+			}
+		}
+	}
 	for i := 0; i < len(code); i++ {
 		c := code[i]
 		switch c {
@@ -101,11 +120,18 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 			}
 		case ';':
 			if parens == 0 {
+				labels(code[hdrStart:i])
 				hdrStart, hdrLine = i+1, line
 			}
 		case '{':
 			header := code[hdrStart:i]
+			if parens == 0 {
+				labels(header)
+			}
 			kind, name, public := classifyHeader(header, lang, parens, inFunc() >= 0)
+			if t := classTop(); t != nil && !t.public {
+				public = false // a member of a private section, or of a class no caller sees
+			}
 			startLine := hdrLine + leadingNewlines(header)
 			if name != "" {
 				// The definition's line is its name's line, not the header's first
@@ -135,6 +161,7 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 				}
 				syms = append(syms, Symbol{Kind: kind, Name: q, At: file + ":" + itoa(startLine), file: file, line: startLine, Public: public})
 				sc.sym = len(syms) - 1
+				sc.public = public && (kind == "struct" || kind == "union")
 			}
 			stack = append(stack, sc)
 			hdrStart, hdrLine, parens = i+1, line, 0

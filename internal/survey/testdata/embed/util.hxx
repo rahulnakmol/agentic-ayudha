@@ -13,3 +13,11 @@ public:
 };
 inline int twice(int x) { return 2 * x; }
 void over(int a); void over(double b); void over(char c);
+class LineA {}; class LineB {};
+class Api {
+  class Impl {};
+public:
+  struct Out {};
+private:
+  struct Hidden { int x; };
+};

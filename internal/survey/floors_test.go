@@ -150,6 +150,16 @@ func TestFloorRunners(t *testing.T) {
 			t.Errorf("entries = %v; want %s at %s", ix.Entries, name, at)
 		}
 	}
+	// Two classes defined on one line are two entry points; a class's private
+	// nested types are none.
+	for _, id := range []string{"entry:util.hxx:16", "entry:util.hxx:16#LineB", "entry:util.hxx:20"} {
+		if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == id }) {
+			t.Errorf("entries = %v; want %s", ix.Entries, id)
+		}
+	}
+	if slices.ContainsFunc(ix.Entries, func(e Fact) bool { return strings.Contains(e.Detail, "Impl") || strings.Contains(e.Detail, "Hidden") }) {
+		t.Errorf("entries = %v; a private nested type is not an entry point", ix.Entries)
+	}
 	// Three overloads on one line are three entry points.
 	if n := len(slices.DeleteFunc(slices.Clone(ix.Entries), func(e Fact) bool { return e.At != "util.hxx:15" })); n != 3 {
 		t.Errorf("entries = %v; want the three overloads of over on util.hxx:15", ix.Entries)
@@ -222,9 +232,10 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
-	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n")
+	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\nlib.early(lib.Env())\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
+	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef early(env):\n    env.register('early', shout)\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n")
 	write("cases/dot.js", "dot(1);\n")
+	write("cases/early.js", "early(1);\n")
 	write("cases/probe.js", "probe(1);\n")
 	write("cases/hum.js", "hum(1);\n")
 	write("examples/case.py", "shout(\"x\")\n")
@@ -272,6 +283,9 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
 		{"match", "an input in the host's own language", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"examples/case.py"} }),
 			"examples/case.py:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"negated", "module-scope setup before the main guard, from the guard's runner", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/early.js"} }), "case set G1", false},
+		{"match", "that setup, from a program that never runs it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/early.js"} }),
+			"cases/early.js:1 calls early, which runner entry:other.py:1 does not register", true},
 		{"negated", "a registration whose callback is dotted (lib.dotf), from the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/dot.js"} }), "case set G1", false},
 		{"match", "the dotted registration, from a runner that never makes it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/dot.js"} }),
 			"cases/dot.js:1 calls dot, which runner entry:other.py:1 does not register", true},
