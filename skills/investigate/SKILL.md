@@ -18,9 +18,17 @@ aayu:
       description: "Incident issue."
     - name: telemetry
       type: path
-      required: true
+      required: false
       positional: false
-      description: "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network."
+      description: "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source."
+    - name: source
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "sentry"
+        - "posthog"
+      description: "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter)."
     - name: service
       type: string
       required: false
@@ -40,12 +48,12 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "Window start (RFC 3339, UTC); default an hour before the incident started. The window is at most 7 days."
+      description: "Window start (RFC 3339, UTC); default an hour before the incident started, or with --source and no start, 24 hours before --to. The window is at most 7 days."
     - name: to
       type: string
       required: false
       positional: false
-      description: "Window end, exclusive (RFC 3339, UTC); default the export's last record."
+      description: "Window end, exclusive (RFC 3339, UTC); default the export's last record, or now for --source."
     - name: query
       type: string
       required: false

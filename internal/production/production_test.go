@@ -93,6 +93,18 @@ func TestRun(t *testing.T) {
 	if r := runQuery(t, "deploys where service=app", nil); len(r.Rows) != 2 || r.Rows[1][4] != "aaaaaaa1" {
 		t.Errorf("deploys: %v", r.Rows)
 	}
+	// Deploys come oldest first, and a cut keeps the newest, so the last row
+	// is the deploy serving the window's end however the source ordered them.
+	e := &Export{Deploys: []Deploy{
+		{Time: t0.Add(30 * time.Minute), Service: "app", Revision: "c3"},
+		{Time: t0.Add(10 * time.Minute), Service: "app", Revision: "a1"},
+		{Time: t0.Add(50 * time.Minute), Service: "app", Revision: "d4"},
+		{Time: t0.Add(20 * time.Minute), Service: "app", Revision: "b2"},
+	}}
+	q, _ := ParseQuery("deploys where service=app limit 2", t0, t0.Add(time.Hour))
+	if r, err := Run(e, q, nil); err != nil || len(r.Rows) != 2 || r.Rows[0][3] != "c3" || r.Rows[1][3] != "d4" || r.Matched != 4 || !r.Truncated {
+		t.Errorf("deploys cut: %+v, %v; want c3 then d4 of 4", r, err)
+	}
 	if d, ok := exportFixture().Deployed("app", "production", t0.Add(5*time.Minute)); !ok || d.Revision != "aaaaaaa1" {
 		t.Errorf("deployed at 09:05 = %v", d)
 	}

@@ -51,12 +51,13 @@ aayu investigate <incident>
 | Input | Required | What it does |
 |---|---|---|
 | `<incident>` | yes | Incident issue. |
-| `--telemetry` | yes | Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. |
+| `--telemetry` | no | Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source. |
+| `--source` | no | Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter). One of: `sentry`, `posthog`. |
 | `--service` | no | Service to scope every query to; default the only service in the export. |
 | `--environment` | no | Deployment environment to scope to; default the deploy marker's. |
 | `--revision` | no | Deployed revision; default the deploy marker serving the window, else service.version on the spans. |
-| `--from` | no | Window start (RFC 3339, UTC); default an hour before the incident started. The window is at most 7 days. |
-| `--to` | no | Window end, exclusive (RFC 3339, UTC); default the export's last record. |
+| `--from` | no | Window start (RFC 3339, UTC); default an hour before the incident started, or with --source and no start, 24 hours before --to. The window is at most 7 days. |
+| `--to` | no | Window end, exclusive (RFC 3339, UTC); default the export's last record, or now for --source. |
 | `--query` | no | Run one more bounded query and log it as qN: \<kind> [by f,…] [where k=v …] [limit N] [bucket 5m]. |
 | `--draft` | no | Investigation note (Markdown) to check: every part, the stage's artefact, cited evidence, two hypotheses, bounded queries, and a mitigation only proposed from the catalog. |
 | `--create` | no | Post the checked note on the incident, replaced in place, and add a timeline line (through the actions log); needs --draft. |

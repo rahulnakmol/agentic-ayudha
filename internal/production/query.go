@@ -397,13 +397,23 @@ func (q Query) logs(e *Export) Result {
 
 func (q Query) deploys(e *Export) Result {
 	r := Result{Columns: []string{"time", "service", "environment", "revision", "previous", "actor"}}
+	var ds []Deploy
 	for _, d := range e.Deploys {
-		if !q.inWindow(d.Time) || (q.Where["service"] != d.Service) || (q.Where["environment"] != "" && q.Where["environment"] != d.Environment) {
-			continue
+		if q.inWindow(d.Time) && q.Where["service"] == d.Service && (q.Where["environment"] == "" || q.Where["environment"] == d.Environment) {
+			ds = append(ds, d)
 		}
+	}
+	// Oldest first, and a cut keeps the newest: the last row is the deploy
+	// serving the end of the window, which investigate reads as deployed.
+	sort.SliceStable(ds, func(i, j int) bool { return ds[i].Time.Before(ds[j].Time) })
+	r.Matched = len(ds)
+	if len(ds) > q.Limit {
+		ds, r.Truncated = ds[len(ds)-q.Limit:], true
+	}
+	for _, d := range ds {
 		r.Rows = append(r.Rows, []string{d.Time.Format(time.RFC3339), d.Service, d.Environment, d.Revision, d.Previous, d.Actor})
 	}
-	return limit(r, q.Limit)
+	return r
 }
 
 func (q Query) trace(e *Export) Result {

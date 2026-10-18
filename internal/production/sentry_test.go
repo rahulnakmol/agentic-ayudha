@@ -2,7 +2,10 @@ package production
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -126,6 +129,61 @@ func TestSentrySource(t *testing.T) {
 			t.Error("an 8-day window ran; want the 7-day bound to refuse it")
 		}
 	})
+	t.Run("rollback to an old release", func(t *testing.T) {
+		// Twelve releases, newest created first; the oldest was redeployed
+		// in the window (a rollback). Its deploy is the newest, the release
+		// live when the window opened is the previous, and no other release's
+		// deploys are read.
+		var list []string
+		for i := range 11 {
+			list = append(list, fmt.Sprintf(`{"version":"web@3.%d","lastDeploy":{"environment":"production","dateFinished":"2026-10-16T%02d:00:00Z"}}`, 10-i, 20-i))
+		}
+		list = append(list, `{"version":"web@1.0","lastDeploy":{"environment":"production","dateFinished":"2026-10-17T08:30:00Z"}}`)
+		api := scripted{project: "4507", answers: map[string][]byte{
+			"/releases/":                  []byte("[" + strings.Join(list, ",") + "]"),
+			"/releases/web@1.0/deploys/":  []byte(`[{"environment":"production","dateFinished":"2026-10-17T08:30:00Z"},{"environment":"production","dateFinished":"2026-10-01T09:00:00Z"}]`),
+			"/releases/web@3.10/deploys/": []byte(`[{"environment":"production","dateFinished":"2026-10-16T20:00:00Z"}]`),
+		}}
+		q, _ := ParseQuery("deploys where service=web", from, to)
+		r, pv, err := (Sentry{API: &api}).Run(context.Background(), q, nil)
+		if err != nil || len(pv.Requests) != 3 || len(r.Rows) != 1 || r.Rows[0][3] != "web@1.0" || r.Rows[0][4] != "web@3.10" {
+			t.Errorf("rows %v, requests %v, err %v; want web@1.0 after web@3.10 from three reads", r.Rows, pv.Requests, err)
+		}
+	})
+	t.Run("failed lookup before a good one", func(t *testing.T) {
+		// Issue 1's latest event fails and issue 2's answers: the digest
+		// pairs each request with its own answer, the failed one with none.
+		rec := fixture.Load(t, filepath.Join("testdata", "sentry", "exceptions.json")).Interactions
+		events, latest := rec[0].Response, rec[1].Response
+		api := scripted{project: "4507", answers: map[string][]byte{"/events/": events, "/issues/2/events/latest/": latest}}
+		q, _ := ParseQuery("exceptions where service=web", from, to)
+		_, pv, err := (Sentry{API: &api}).Run(context.Background(), q, resolve)
+		if err != nil || len(pv.Requests) != 3 {
+			t.Fatalf("err %v, requests %v; want three", err, pv.Requests)
+		}
+		want := sha256.Sum256([]byte(pv.Requests[0] + "\n" + string(events) + "\n" + pv.Requests[1] + "\n\n" + pv.Requests[2] + "\n" + string(latest) + "\n"))
+		if !strings.HasSuffix(pv.Requests[1], "/issues/1/events/latest/") || pv.Digest != hex.EncodeToString(want[:]) {
+			t.Errorf("requests %v digest %s; want the failed issue 1 read paired with no answer", pv.Requests, pv.Digest)
+		}
+	})
+}
+
+// scripted answers a Sentry read by its path's suffix; any other path fails.
+type scripted struct {
+	project string
+	answers map[string][]byte
+}
+
+func (s *scripted) Project() string { return s.project }
+
+func (s *scripted) Get(_ context.Context, path string, _ url.Values) ([]byte, string, error) {
+	req := "GET " + path
+	for suffix, b := range s.answers {
+		if strings.HasSuffix(path, suffix) && (suffix != "/events/" || !strings.Contains(path, "/issues/")) {
+			return b, req, nil
+		}
+	}
+	return nil, req, errors.New("not found")
 }
 
 // sentrySource is a Sentry source on the real adapter, answered from a recording.

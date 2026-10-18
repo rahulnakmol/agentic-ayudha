@@ -1,9 +1,9 @@
 {
-  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationReleases and listOrganizationReleaseDeploys: the release bodies are the spec's release example with the version changed; the deploy bodies follow the deploy schema (the spec has no example). Not live-proven: no Sentry account recorded this.",
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationReleases and listOrganizationReleaseDeploys: the release bodies are the spec's release example with the version and lastDeploy changed; the deploy bodies follow the deploy schema (the spec has no example). Not live-proven: no Sentry account recorded this.",
   "interactions": [
     {
       "method": "GET",
-      "url": "https://sentry.io/api/0/organizations/acme/releases/?per_page=10&project=4507",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/?per_page=100&project=4507",
       "status": 200,
       "response": [
         {
@@ -34,8 +34,8 @@
           "owner": null,
           "commitCount": 0,
           "lastCommit": null,
-          "deployCount": 0,
-          "lastDeploy": null,
+          "deployCount": 2,
+          "lastDeploy": {"id": "12", "environment": "production", "dateStarted": "2026-10-17T08:04:00Z", "dateFinished": "2026-10-17T08:05:30Z", "name": null, "url": null},
           "authors": [],
           "projects": [
             {
@@ -83,8 +83,8 @@
           "owner": null,
           "commitCount": 0,
           "lastCommit": null,
-          "deployCount": 0,
-          "lastDeploy": null,
+          "deployCount": 1,
+          "lastDeploy": {"id": "9", "environment": "production", "dateStarted": "2026-10-16T15:00:00Z", "dateFinished": "2026-10-16T15:02:10Z", "name": null, "url": null},
           "authors": [],
           "projects": [
             {

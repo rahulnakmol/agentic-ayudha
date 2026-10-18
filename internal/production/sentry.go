@@ -57,6 +57,10 @@ var sentryFields = map[string]map[string]string{
 
 var errSource = errors.New("live source")
 
+// Unanswerable reports whether err is a query a source cannot answer as
+// asked, or one that is not bounded: the asker's to fix, not the provider's.
+func Unanswerable(err error) bool { return errors.Is(err, errSource) || errors.Is(err, errQuery) }
+
 // Run evaluates the query against the Sentry project.
 func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Provenance, error) {
 	pv := Provenance{Source: "sentry project " + s.API.Project()}
@@ -68,6 +72,9 @@ func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Pro
 		b, req, err := s.API.Get(ctx, path, v)
 		pv.Requests = append(pv.Requests, req)
 		if err != nil {
+			// A failed read keeps its place with no answer, so every body
+			// stays paired with the request that fetched it.
+			bodies = append(bodies, nil)
 			return nil, err
 		}
 		bodies = append(bodies, b)
@@ -81,7 +88,7 @@ func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Pro
 	case "logs":
 		r, err = s.logs(q, get)
 	case "deploys":
-		r, err = s.deploys(q, get)
+		r, err = s.deploys(q, get, &pv)
 	case "trace":
 		r, err = s.trace(q, get)
 	default:
@@ -318,26 +325,69 @@ func (s Sentry) logs(q Query, get func(string, url.Values) ([]byte, error)) (Res
 	return limit(r, q.Limit), nil
 }
 
-// sentryReleases is how many of the project's latest releases deploys reads.
-const sentryReleases = 10
+// sentryReleases is how many of the project's latest releases deploys reads:
+// Sentry's largest page. Sentry lists releases newest created first, so a
+// redeploy of an older release (a rollback) is found among these.
+const sentryReleases = 100
 
-// deploys reads the project's latest releases and each one's deploys: a
-// release is a build, a deploy says where and when it went live. A release
-// with no deploy record yields no row.
-func (s Sentry) deploys(q Query, get func(string, url.Values) ([]byte, error)) (Result, error) {
+// deploys reads the project's latest releases and the deploys of each one
+// that can matter to the window: a release is a build, a deploy says where
+// and when it went live. Each release's last deploy picks them: every release
+// last deployed in or after the window, and per environment the one last
+// deployed before it, which was live when the window opened (the previous
+// revision). A release with no deploy record yields no row.
+func (s Sentry) deploys(q Query, get func(string, url.Values) ([]byte, error), pv *Provenance) (Result, error) {
 	b, err := get("/releases/", url.Values{"project": {s.API.Project()}, "per_page": {strconv.Itoa(sentryReleases)}})
 	if err != nil {
 		return Result{}, err
 	}
-	var releases []struct {
-		Version string `json:"version"`
+	var listed []struct {
+		Version    string `json:"version"`
+		LastDeploy *struct {
+			Environment  string `json:"environment"`
+			DateFinished string `json:"dateFinished"`
+		} `json:"lastDeploy"`
 	}
-	if err := json.Unmarshal(b, &releases); err != nil {
+	if err := json.Unmarshal(b, &listed); err != nil {
 		return Result{}, fmt.Errorf("%w: undecodable releases answer: %w", errSource, err)
+	}
+	if len(listed) == sentryReleases {
+		pv.Source += fmt.Sprintf(" (deploys of the %d most recently created releases only)", sentryReleases)
+	}
+	var releases []string
+	before := map[string]struct {
+		version string
+		at      time.Time
+	}{}
+	for _, rel := range listed {
+		if rel.LastDeploy == nil {
+			continue // never deployed
+		}
+		t, err := time.Parse(time.RFC3339, rel.LastDeploy.DateFinished)
+		if err == nil && t.Before(q.From) {
+			if b, ok := before[rel.LastDeploy.Environment]; !ok || t.After(b.at) {
+				before[rel.LastDeploy.Environment] = struct {
+					version string
+					at      time.Time
+				}{rel.Version, t}
+			}
+			continue
+		}
+		releases = append(releases, rel.Version)
+	}
+	envs := make([]string, 0, len(before))
+	for env := range before {
+		envs = append(envs, env)
+	}
+	slices.Sort(envs)
+	for _, env := range envs {
+		if v := before[env].version; !slices.Contains(releases, v) {
+			releases = append(releases, v)
+		}
 	}
 	var all []Deploy
 	for _, rel := range releases {
-		b, err := get("/releases/"+url.PathEscape(rel.Version)+"/deploys/", nil)
+		b, err := get("/releases/"+url.PathEscape(rel)+"/deploys/", nil)
 		if err != nil {
 			return Result{}, err
 		}
@@ -346,14 +396,14 @@ func (s Sentry) deploys(q Query, get func(string, url.Values) ([]byte, error)) (
 			DateFinished string `json:"dateFinished"`
 		}
 		if err := json.Unmarshal(b, &ds); err != nil {
-			return Result{}, fmt.Errorf("%w: undecodable deploys answer for %s: %w", errSource, rel.Version, err)
+			return Result{}, fmt.Errorf("%w: undecodable deploys answer for %s: %w", errSource, rel, err)
 		}
 		for _, d := range ds {
 			t, err := time.Parse(time.RFC3339, d.DateFinished)
 			if err != nil {
 				continue // a deploy with no finish time did not go live
 			}
-			all = append(all, Deploy{Time: t.UTC(), Service: q.Where["service"], Environment: d.Environment, Revision: rel.Version})
+			all = append(all, Deploy{Time: t.UTC(), Service: q.Where["service"], Environment: d.Environment, Revision: rel})
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].Time.Before(all[j].Time) })
