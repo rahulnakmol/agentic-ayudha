@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/counsel"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
@@ -208,7 +209,13 @@ Is the zero case the behaviour you want?
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("good.md", good)); len(r.Findings) != 0 {
 		t.Fatalf("good counsel: %v", r.Findings)
 	}
+	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 39091188074, Path: ".github/workflows/ci.yml", Status: "completed", Conclusion: "success", HeadSHA: head})
+	g.Mu.Unlock()
 	headSHA := git(t, opts.Dir, "rev-parse", "--short", "HEAD")
+	if r := counselRun(env, 0, "--pr", pr, "--draft", write("run.md", strings.Replace(good, "(LAYERS.md)", "(run 39091188074)", 1))); len(r.Findings) != 0 {
+		t.Errorf("a real run citation: %v", r.Findings)
+	}
 	for _, sym := range []string{headSHA, "report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows", "report.Source.Rows", "aayudha.Assets"} {
 		if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`"+sym+"`)", 1))); len(r.Findings) != 0 {
 			t.Errorf("a real symbol citation %s: %v", sym, r.Findings)
@@ -229,6 +236,7 @@ Is the zero case the behaviour you want?
 		"path with a suffix":   {"(LAYERS.md)", "(internal/report/old.go)", "cites internal/report/old.go,"},
 		"double punctuation":   {"(LAYERS.md)", "(internal/report/new.go)", "cites internal/report/new.go,"},
 		"unknown commit":       {"(LAYERS.md)", "(`deadbee`)", "cites deadbee,"},
+		"unknown run":          {"(LAYERS.md)", "(run 12345678901)", "cites 12345678901,"},
 		"outside the checkout": {"(LAYERS.md)", "(../claims.md)", "cites ../claims.md,"},
 		"unknown symbol":       {"(LAYERS.md)", "(`report.Missing`)", "cites report.Missing,"},
 		"invented member":      {"(LAYERS.md)", "(`report.Table.Missing`)", "cites report.Table.Missing,"},

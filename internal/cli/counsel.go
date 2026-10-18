@@ -212,6 +212,13 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if hasCite(facts.String(), cite) {
 			return true
 		}
+		if counselRunCite.MatchString(cite) {
+			// A CI run (cited "run N") is evidence when this repository's Actions has it.
+			id, _ := strconv.ParseInt(cite, 10, 64)
+			if _, _, err := c.REST.Actions.GetWorkflowRunByID(ctx, owner, name, id); err == nil {
+				return true
+			}
+		}
 		if commitCite.MatchString(cite) {
 			// A commit the twin read is evidence when this checkout's Git has it.
 			_, err := gitIn(ctx, root, "cat-file", "-e", cite+"^{commit}")
@@ -562,6 +569,10 @@ func inRoot(root, rel string) bool {
 	inside, err := filepath.Rel(base, real)
 	return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
 }
+
+// counselRunCite is a cited CI run ("run 39091188074"), which the evidence rule's parser gives as the bare ID: all
+// digits, eight or more. A hash of only digits that long is checked as a run first, then as a commit.
+var counselRunCite = regexp.MustCompile(`^[0-9]{8,}$`)
 
 // commitCite is a cited commit hash (seats' evidence rule: `abc1234`).
 var commitCite = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
