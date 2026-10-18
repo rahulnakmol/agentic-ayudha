@@ -609,6 +609,11 @@ func TestCopilotTrustRow(t *testing.T) {
 	if r := checkCopilot(context.Background(), p); r.Status != Pass {
 		t.Errorf("trusted through USERPROFILE: %s %s %v", r.Status, r.Detail, r.Lines)
 	}
+	env["TERM_PROGRAM"] = "vscode" // VS Code's own trust is out of reach
+	if r := checkCopilot(context.Background(), p); r.Status != Warn {
+		t.Errorf("in VS Code's terminal: %s %s", r.Status, r.Detail)
+	}
+	delete(env, "TERM_PROGRAM")
 	exec := p.Exec
 	overlay(p, map[string]string{"/usr/bin/x --version": "ERR"})
 	if r := checkCopilot(context.Background(), p); r.Status != Warn {

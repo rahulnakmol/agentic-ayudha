@@ -74,22 +74,22 @@ func TestCopilotSessionLog(t *testing.T) {
 	if got := CopilotSessionLog(root, home, time.Hour, now); got != "" {
 		t.Errorf("no record: %q", got)
 	}
-	recordCopilotSession(root, []byte(`{"sessionId":"abc-1","cwd":"/r"}`), "aayu build 4")
+	RecordCopilotSession(root, []byte(`{"sessionId":"abc-1","cwd":"/r","toolName":"bash","toolArgs":{"command":"aayu build 4"}}`))
 	if got, want := CopilotSessionLog(root, home, time.Hour, now), filepath.Join(home, "session-state", "abc-1", "events.jsonl"); got != want {
 		t.Errorf("log %q, want %q", got, want)
 	}
 	if got := CopilotSessionLog(root, home, time.Hour, now); got != "" {
 		t.Errorf("a second build took the same note: %q", got)
 	}
-	recordCopilotSession(root, []byte(`{"sessionId":"abc-1","cwd":"/r"}`), "aayu build 4")
+	RecordCopilotSession(root, []byte(`{"sessionId":"abc-1","cwd":"/r","toolName":"bash","toolArgs":{"command":"aayu build 4"}}`))
 	if got := CopilotSessionLog(root, home, time.Hour, now.Add(2*time.Hour)); got != "" {
 		t.Errorf("stale record: %q", got)
 	}
-	recordCopilotSession(root, []byte(`{"sessionId":"abc-2","toolName":"aayudha-build","toolArgs":{"issue":4}}`), "")
+	RecordCopilotSession(root, []byte(`{"sessionId":"abc-2","toolName":"aayudha-build","toolArgs":{"issue":4}}`))
 	if got := CopilotSessionLog(root, home, time.Hour, now); !strings.HasSuffix(got, filepath.Join("abc-2", "events.jsonl")) {
 		t.Errorf("the MCP build tool's session: %q", got)
 	}
-	recordCopilotSession(root, []byte(`{"sessionId":"abc-3","toolName":"aayudha-status"}`), "")
+	RecordCopilotSession(root, []byte(`{"sessionId":"abc-3","toolName":"aayudha-status"}`))
 	if got := CopilotSessionLog(root, home, time.Hour, now); got != "" {
 		t.Errorf("a status call noted a build: %q", got)
 	}

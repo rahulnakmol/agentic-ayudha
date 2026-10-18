@@ -690,6 +690,10 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(home, p.Getenv)) {
 			steps = append(steps, "trust this folder in Copilot CLI: start `copilot` here once and answer yes; until then it loads neither the aayudha MCP server nor the hooks")
 		}
+		if p.Getenv("TERM_PROGRAM") == "vscode" {
+			// VS Code keeps its own Workspace Trust, which aayu cannot read.
+			steps = append(steps, "this is VS Code's terminal: VS Code keeps its own Workspace Trust, which aayu cannot read; trust this folder there, or VS Code's agent mode loads neither the aayudha MCP server nor the hooks")
+		}
 	} else {
 		// VS Code keeps Workspace Trust where aayu cannot read it.
 		steps = append(steps, "Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks")

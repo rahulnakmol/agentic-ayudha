@@ -8,6 +8,7 @@
       "env": {
         "AAYU_GITHUB_TOKEN": "${AAYU_GITHUB_TOKEN:-}",
         "APPDATA": "${APPDATA:-}",
+        "COPILOT_AGENT_SESSION_ID": "${COPILOT_AGENT_SESSION_ID:-}",
         "COPILOT_HOME": "${COPILOT_HOME:-}",
         "GH_CONFIG_DIR": "${GH_CONFIG_DIR:-}",
         "GH_TOKEN": "${GH_TOKEN:-}",

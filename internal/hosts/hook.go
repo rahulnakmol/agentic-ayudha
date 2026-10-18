@@ -59,9 +59,6 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 			msg = "aayudha: a stable-release request is the person's own words on the Release issue; an agent never writes one. Ask the person to comment `Stable release: <version>` there themselves."
 			next = "a person comments `Stable release: <version>` on the Release issue"
 		}
-		if msg == "" && host == verbs.HostCopilot {
-			recordCopilotSession(root, event, shellCommand(event))
-		}
 		r := Deny(host, msg)
 		r.Next = next
 		return r, nil

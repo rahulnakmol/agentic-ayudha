@@ -87,6 +87,7 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 		if r, _ := RunHook("pre-tool", verbs.HostCopilot, root, filepath.Join(t.TempDir(), "none"), ev); r.Code != 0 || r.Stdout != "" {
 			t.Errorf("copilot %s: %+v", tt.cmd, r)
 		}
+		RecordCopilotSession(root, ev) // what the CLI does once every check passed
 		got, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(CopilotSession)))
 		if strings.TrimSpace(string(got)) != tt.want {
 			t.Errorf("copilot %s recorded %q, want %q", tt.cmd, got, tt.want)

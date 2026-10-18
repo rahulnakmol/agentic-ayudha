@@ -24,7 +24,7 @@ import (
 //     wins (docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills,
 //     code.visualstudio.com/docs/agent-customization/agent-skills);
 //   - MCP: the project's .mcp.json, mcpServers, read once the person trusts
-//     the folder; a stdio server inherits only PATH
+//     the folder; a stdio server inherits only PATH (and, seen in 1.0.98, COPILOT_*)
 //     (docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers);
 //   - hooks: .github/hooks/*.json, version 1, camelCase events
 //     (docs.github.com/en/copilot/reference/hooks-reference);
@@ -42,12 +42,14 @@ const (
 const CopilotProven = "live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills, the aayudha MCP tool, the hooks, each Auto tier, a HydraFusion Critique turn); VS Code agent mode is not live-proven"
 
 // CopilotMCPEnv are the variables the aayudha MCP server needs under Copilot,
-// which passes a stdio server only PATH: the home and config folders aayu and
-// gh read on Unix and Windows, the places aayu finds a GitHub token, and
-// COPILOT_HOME, where the MCP build tool finds the session's log. Each
+// which documents passing a stdio server only PATH (Copilot CLI 1.0.98 also
+// passed its own COPILOT_* variables): the home and config folders aayu and gh
+// read on Unix and Windows, the places aayu finds a GitHub token,
+// COPILOT_HOME, where the MCP build tool finds the session's log, and
+// COPILOT_AGENT_SESSION_ID, which ties a grill and a build to one session. Each
 // is written as ${NAME:-}, so an unset one is empty, which aayu and gh treat as
 // unset.
-var CopilotMCPEnv = []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot", "XDG_CONFIG_HOME", "AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "COPILOT_HOME"}
+var CopilotMCPEnv = []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot", "XDG_CONFIG_HOME", "AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "COPILOT_HOME", "COPILOT_AGENT_SESSION_ID"}
 
 func copilotMCPEnv() map[string]any {
 	env := map[string]any{}
@@ -134,11 +136,13 @@ func CopilotGuarded(root string) bool {
 
 var sessionID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
-// recordCopilotSession notes, in root's local state, the Copilot session whose
+// RecordCopilotSession notes, in root's local state, the Copilot session whose
 // agent is about to run aayu build, in shell or through the aayudha MCP
 // server's build tool: build reads that session's log for the models Copilot
-// reported (ReadCopilotSession).
-func recordCopilotSession(root string, event []byte, shell string) {
+// reported (ReadCopilotSession). The caller runs it only once every pre-tool
+// check has let the call through, so a denied build is never credited.
+func RecordCopilotSession(root string, event []byte) {
+	shell := shellCommand(event)
 	var e copilotEvent
 	if root == "" || json.Unmarshal(event, &e) != nil || !sessionID.MatchString(e.SessionID) || e.SessionID == "." || e.SessionID == ".." {
 		return

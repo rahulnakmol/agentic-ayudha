@@ -47,7 +47,8 @@ copilot skill list
 
 Copilot loads a repository's MCP server and hooks only after you trust the folder. Start `copilot` in the repository
 once and answer yes. `copilot -p` never asks, so do this before you run it from a script. VS Code asks through
-Workspace Trust, which aayu cannot read, so without Copilot CLI `aayu doctor` keeps asking you to check it.
+Workspace Trust, which aayu cannot read, so `aayu doctor` asks you to check it when Copilot CLI is missing or when you
+run doctor in VS Code's terminal.
 
 Trust covers the folder, not each file: a trusted folder's `.mcp.json` and `.github/hooks` run with your environment,
 including your GitHub token. Read changes to them before you check out someone else's branch in a trusted folder.

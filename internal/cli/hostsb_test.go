@@ -172,3 +172,29 @@ func TestCursorMCPToken(t *testing.T) {
 type roundTrip func(*http.Request) (*http.Response, error)
 
 func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// Copilot's pre-tool hook credits a build to its session only when the hook
+// lets the call through: a build refused because the repository is halted
+// leaves no note for a later build to read.
+func TestCopilotPreToolRecordsOnlyAllowedBuilds(t *testing.T) {
+	repo := gitInit(t, "dev", map[string]string{".aayudha/config.toml": "version = 1\n"})
+	hook := func(env map[string]string) int {
+		var out, errb bytes.Buffer
+		opts := Options{Dir: repo, Getenv: func(k string) string { return env[k] }}
+		ev := `{"sessionId":"s-1","cwd":"/r","toolName":"bash","toolArgs":{"command":"aayu build 4"}}`
+		return Run(context.Background(), []string{"hook", "pre-tool", "--host", "copilot"}, IO{In: strings.NewReader(ev), Out: &out, Err: &errb}, opts)
+	}
+	note := filepath.Join(repo, ".aayudha", "state", "copilot-session.json")
+	if code := hook(map[string]string{HaltVariable: "incident 7"}); code != 2 {
+		t.Fatalf("halted pre-tool: exit %d", code)
+	}
+	if _, err := os.Stat(note); err == nil {
+		t.Fatal("a refused build was credited to the Copilot session")
+	}
+	if code := hook(map[string]string{}); code != 0 {
+		t.Fatalf("pre-tool: exit %d", code)
+	}
+	if _, err := os.Stat(note); err != nil {
+		t.Fatalf("an allowed build left no note: %v", err)
+	}
+}
