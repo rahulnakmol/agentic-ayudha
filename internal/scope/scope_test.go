@@ -42,6 +42,11 @@ func TestMeasure(t *testing.T) {
 	if edge.DriftPct != 20 || edge.Over() {
 		t.Fatalf("one of five points = %v, over %v", edge.DriftPct, edge.Over())
 	}
+	// A type change is drift: a baselined L Story retyped as an Initiative loses its 5 points.
+	if d := Measure(Baseline{BudgetPct: 20, Items: []Item{story(2, "L", 0), story(3, "M", 0)}},
+		[]Item{{Number: 2, Type: "initiative", Effort: "L"}, story(3, "M", 0)}, table); d.ChangedPoints != 5 || len(d.Resized) != 1 || d.Resized[0].FromType != "story" || !d.Over() {
+		t.Fatalf("a retyped Story: %+v", d)
+	}
 	// The budget compares the exact ratio: 20.01% rounds to 20.0% for people, yet is over a 20.0% budget.
 	if d := (Drift{BudgetPct: 20, BaselinePoints: 10000, ChangedPoints: 2001, DriftPct: 20}); !d.Over() {
 		t.Fatal("20.01% is within a 20.0% budget")

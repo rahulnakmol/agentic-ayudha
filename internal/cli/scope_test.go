@@ -40,6 +40,7 @@ func TestScope(t *testing.T) {
 	for _, s := range []*fake.Issue{m, l, xs} {
 		feature.Subs, s.Parent = append(feature.Subs, s.Number), feature.Number
 	}
+	g.Milestones = []*fake.Milestone{{Number: 1, Title: "v0.3.0", Description: "made by hand", State: "open"}} // no owner yet
 	dir, bare := ledgerCheckout(t)
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": filepath.Join(dir, "state")}
 	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": filepath.Join(dir, "state")} // a terminal with no agent marker
@@ -78,8 +79,11 @@ func TestScope(t *testing.T) {
 			t.Fatalf("--add %s: exit %d: %s", n, code, out)
 		}
 	}
-	if milestone(3) != "v0.3.0" || milestone(5) != "" {
-		t.Fatalf("milestones: #3 %q, #5 %q", milestone(3), milestone(5))
+	g.Mu.Lock()
+	claimed := g.Milestones[0].Description
+	g.Mu.Unlock()
+	if milestone(3) != "v0.3.0" || milestone(5) != "" || !strings.HasPrefix(claimed, "Release #1:") {
+		t.Fatalf("milestones: #3 %q, #5 %q, the hand-made milestone not claimed: %q", milestone(3), milestone(5), claimed)
 	}
 	code, rep, out := scopeRun(agent, "--draft")
 	if code != 0 || rep.Points != 8 || len(rep.Items) != 3 || rep.Request == nil || rep.Request.Kind != "baseline" {
@@ -152,6 +156,16 @@ func TestScope(t *testing.T) {
 	if code != 0 || !strings.Contains(list, `"kind": "scope"`) || !strings.Contains(list, "aayu scope 1 --accept") {
 		t.Fatalf("inbox --list: exit %d:\n%s", code, list)
 	}
+	// A change by hand while the request waits: the person accepts only the plan the request showed.
+	g.Mu.Lock()
+	l.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:XL"}}
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "plan changed since the request") || milestone(3) != "v0.3.0" {
+		t.Fatalf("--accept after a change by hand: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	l.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
+	g.Mu.Unlock()
 	approve()
 	if code, _, out := scopeRun(person, "--accept"); code != 0 || milestone(3) != "" || started() != 1 {
 		t.Fatalf("person accepts the drop: exit %d: %s", code, out)

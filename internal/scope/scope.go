@@ -91,6 +91,9 @@ type Resize struct {
 	Title  string `json:"title"`
 	From   string `json:"from"`
 	To     string `json:"to"`
+	// FromType is the type at the baseline when the item changed type, so a
+	// retyped Story (5 points to an Initiative's 0) is drift, not invisible.
+	FromType string `json:"from_type,omitempty"`
 }
 
 // Drift is the plan measured against the newest baseline.
@@ -262,8 +265,12 @@ func Measure(b Baseline, items []Item, table []int) Drift {
 		case !ok:
 			d.Added = append(d.Added, it)
 			d.ChangedPoints += it.Points
-		case old.Effort != it.Effort:
-			d.Resized = append(d.Resized, Resize{Number: it.Number, Type: it.Type, Title: it.Title, From: old.Effort, To: it.Effort})
+		case old.Effort != it.Effort || old.Type != it.Type:
+			z := Resize{Number: it.Number, Type: it.Type, Title: it.Title, From: old.Effort, To: it.Effort}
+			if old.Type != it.Type {
+				z.FromType = old.Type
+			}
+			d.Resized = append(d.Resized, z)
 			d.ChangedPoints += abs(it.Points - old.Points)
 		}
 	}

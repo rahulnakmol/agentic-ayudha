@@ -512,7 +512,7 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	}
 	cur, d := r.measure(r.items), r.measure(next)
 	if d != nil && d.Over() && d.ChangedPoints > cur.ChangedPoints {
-		q := scopeRequest{Kind: op, Item: n, DriftPct: d.DriftPct, Over: true, Decision: decision}
+		q := scopeRequest{Kind: op, Item: n, Hash: scope.Hash(r.intent, next), DriftPct: d.DriftPct, Over: true, Decision: decision}
 		if decision == 0 {
 			return WithNext(Errorf(ExitBlocked, "scope: %s #%d takes %s to %.1f%% drift from baseline %d, over the %.1f%% budget; a person decides",
 				op, n, r.version, d.DriftPct, d.Baseline, d.BudgetPct),
@@ -561,11 +561,27 @@ func (r *scopeRun) apply(ctx context.Context, op string, it scope.Item) error {
 
 // milestone is the milestone titled version, created when missing.
 func (r *scopeRun) milestone(ctx context.Context, version string) (*gh.Milestone, error) {
-	if r.ms != nil && r.ms.GetTitle() == version {
-		return r.ms, nil
-	}
 	owner, name, _ := github.SplitRepo(r.repo)
 	desc := fmt.Sprintf("Release #%d: planned with aayu scope; the plan of record is the newest baseline on the ledger (releases/%s/). A plan, not a promise.", r.n, version)
+	if r.ms != nil && r.ms.GetTitle() == version {
+		if milestoneOwnerRE.MatchString(r.ms.GetDescription()) { // load checked it names this Release
+			return r.ms, nil
+		}
+		// A milestone made by hand: claim it before planning into it, so a
+		// second Release for the same version is refused from now on.
+		claimed := strings.TrimSpace(desc + "\n\n" + r.ms.GetDescription())
+		_, err := r.c.Write(ctx, actions.Action{Kind: "github.milestone.claim", Target: r.repo,
+			Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/milestones/%d", r.repo, r.ms.GetNumber())}, Payload: map[string]any{"release": r.n}},
+			func(ctx context.Context) (any, error) {
+				_, _, err := r.c.REST.Issues.EditMilestone(ctx, owner, name, r.ms.GetNumber(), &gh.Milestone{Description: gh.Ptr(claimed)})
+				return nil, err
+			})
+		if err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+		r.ms.Description = gh.Ptr(claimed)
+		return r.ms, nil
+	}
 	var ms *gh.Milestone
 	_, err := r.c.Write(ctx, actions.Action{Kind: "github.milestone.create", Target: r.repo,
 		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/milestones", r.repo)}, Payload: map[string]any{"title": version}},
@@ -942,6 +958,12 @@ func (r *scopeRun) accept(ctx context.Context) error {
 			if q.Kind == "add" {
 				next = append(next, it)
 			}
+		}
+		// The person accepts the plan the request showed: any other change since
+		// (a milestone or an effort label set by hand) needs its own request.
+		if scope.Hash(r.intent, next) != q.Hash {
+			return WithNext(Errorf(ExitBlocked, "scope: the plan changed since the request to %s #%d; a person accepts only the change they see", q.Kind, q.Item),
+				fmt.Sprintf("aayu scope %d --%s %d --decision %d", r.n, q.Kind, q.Item, q.Decision))
 		}
 		d := r.measure(next)
 		effect = fmt.Sprintf("Lets %s #%d %s %s, taking drift from baseline %d to %.1f%% against a %.1f%% budget, on Decision #%d.",

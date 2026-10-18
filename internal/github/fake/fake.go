@@ -819,6 +819,17 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		ms := &Milestone{Number: len(g.Milestones) + 1, Title: str("title"), Description: str("description"), State: "open"}
 		g.Milestones = append(g.Milestones, ms)
 		reply(201, ms)
+	case m == "PATCH" && strings.HasPrefix(p, repo+"/milestones/"):
+		n, _ := strconv.Atoi(strings.TrimPrefix(p, repo+"/milestones/"))
+		i := slices.IndexFunc(g.Milestones, func(ms *Milestone) bool { return ms.Number == n })
+		if i < 0 {
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		}
+		if v, ok := body["description"].(string); ok {
+			g.Milestones[i].Description = v
+		}
+		reply(200, g.Milestones[i])
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
