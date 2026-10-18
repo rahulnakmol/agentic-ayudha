@@ -135,7 +135,8 @@ func CopilotGuarded(root string) bool {
 }
 
 // CopilotOtherHooks lists, as "<file>: <event>: <command>", every hook command
-// in root's .github/hooks/*.json that is not one aayu install wrote. Copilot
+// in root's .github/hooks/*.json that is not one aayu install wrote (in its
+// own file, run by an aayu binary outside the repository). Copilot
 // runs them all, with the person's environment, in a trusted folder, and a
 // branch can change them, so doctor shows them for the person to check.
 func CopilotOtherHooks(root string) []string {
@@ -159,7 +160,7 @@ func CopilotOtherHooks(root string) []string {
 		for _, ev := range events {
 			for _, h := range f.Hooks[ev] {
 				for _, k := range []string{"bash", "powershell", "command"} {
-					if c, _ := h[k].(string); c != "" && !ourHook.MatchString(c) {
+					if c, _ := h[k].(string); c != "" && (filepath.Base(path) != filepath.Base(CopilotHooks) || !installedHook(root, c)) {
 						out = append(out, name+": "+ev+": "+c)
 					}
 				}
@@ -167,6 +168,19 @@ func CopilotOtherHooks(root string) []string {
 		}
 	}
 	return out
+}
+
+// installedHook reports whether c is a hook command install writes: aayu's
+// hook shape, run by an absolute aayu binary outside the repository.
+func installedHook(root, c string) bool {
+	if !ourHook.MatchString(c) {
+		return false
+	}
+	bin := strings.TrimPrefix(c, "& ")
+	bin = bin[1 : strings.Index(bin[1:], `"`)+1]
+	base := strings.TrimSuffix(strings.ToLower(filepath.Base(bin)), ".exe")
+	rel, err := filepath.Rel(root, bin)
+	return filepath.IsAbs(bin) && base == "aayu" && (err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 var sessionID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

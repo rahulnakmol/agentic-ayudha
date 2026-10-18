@@ -630,6 +630,12 @@ func TestCopilotTrustRow(t *testing.T) {
 		t.Errorf("another hook command: %s %s %v", r.Status, r.Detail, r.Lines)
 	}
 	_ = os.Remove(filepath.Join(p.Root, ".github", "hooks", "lint.json"))
+	// The hook's shape is not enough: in another file, or run by another binary, it is shown.
+	_ = os.WriteFile(filepath.Join(p.Root, ".github", "hooks", "lint.json"), []byte(`{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"\"/bin/bash\" hook pre-tool --host copilot"}]}}`), 0o644)
+	if r := checkCopilot(context.Background(), p); r.Status != Warn || !strings.Contains(strings.Join(r.Lines, "\n"), `lint.json: preToolUse: "/bin/bash" hook pre-tool --host copilot`) {
+		t.Errorf("a hook-shaped command run by bash: %s %s %v", r.Status, r.Detail, r.Lines)
+	}
+	_ = os.Remove(filepath.Join(p.Root, ".github", "hooks", "lint.json"))
 	// A file that only mentions the hook guards nothing.
 	_ = os.WriteFile(filepath.Join(p.Root, ".github", "hooks", "aayudha.json"), []byte(`{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"echo aayu hook pre-tool --host copilot"}]}}`), 0o644)
 	if r := checkCopilot(context.Background(), p); r.Status != Fail {
