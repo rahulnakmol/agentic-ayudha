@@ -62,20 +62,14 @@ func (p PassRule) allows(login string) error {
 	return nil
 }
 
-// neverOwners fills in the never-layer paths of a PR and the logins that are
-// CODEOWNERS of all of them, by the base branch's layers and CODEOWNERS at
-// the policy's tip.
-func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, pol *shipPolicy) error {
-	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
-		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
-	})
-	if err != nil {
-		return err
-	}
+// neverOwners fills in the never-layer paths of a PR's files and the logins
+// that are CODEOWNERS of all of them, by the base branch's layers and
+// CODEOWNERS at the policy's tip.
+func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, name string, files []string, pol *shipPolicy) error {
 	for _, f := range files {
-		for _, l := range pol.Layers.Footprint([]string{f.GetFilename()}) {
+		for _, l := range pol.Layers.Footprint([]string{f}) {
 			if slices.Contains(p.Never, l) {
-				p.NeverPath = append(p.NeverPath, f.GetFilename())
+				p.NeverPath = append(p.NeverPath, f)
 				break
 			}
 		}
@@ -121,8 +115,8 @@ func (e *Env) shipStreak(ctx context.Context, c *github.Client, repo string, pol
 // loosens lists how this run's pass policy is looser than base's (#645),
 // counting only what a layer above the defaults set (the checkout, the user
 // config, AAYU_* variables, --set): a bot login, never layer or paired seat it
-// drops, another approver, a cleared bot identity, or a shorter streak or
-// correction window. A tighter run is no loosening; ship still judges by base.
+// drops, another approver, a cleared bot identity, a shorter streak or
+// correction window, or proof turned on, widened, or with a smaller narrow set. A tighter run is no loosening; ship still judges by base.
 func loosens(run *config.Loaded, base *config.Config) []string {
 	set := func(keys ...string) bool {
 		for _, k := range keys {
@@ -160,6 +154,21 @@ func loosens(run *config.Loaded, base *config.Config) []string {
 	}
 	if x, b := r.Autonomy.CorrectionDays, base.Autonomy.CorrectionDays; x < b && set("autonomy.correction_days") {
 		out = append(out, fmt.Sprintf("[autonomy] correction_days is %d, below %d", x, b))
+	}
+	if r.Autonomy.Proof && !base.Autonomy.Proof && set("autonomy.proof") {
+		out = append(out, "[autonomy] proof is on")
+	}
+	if m := missing(base.Autonomy.ProofRungs, r.Autonomy.ProofRungs); len(m) > 0 && set("autonomy.proof_rungs") {
+		out = append(out, "[autonomy] proof_rungs adds "+strings.Join(m, ", "))
+	}
+	for _, k := range []struct {
+		key        string
+		run, based []string
+	}{{"always_person", r.Autonomy.AlwaysPerson, base.Autonomy.AlwaysPerson}, {"always_person_config", r.Autonomy.AlwaysPersonConfig, base.Autonomy.AlwaysPersonConfig},
+		{"always_person_sections", r.Autonomy.AlwaysPersonSections, base.Autonomy.AlwaysPersonSections}} {
+		if m := missing(k.run, k.based); len(m) > 0 && set("autonomy."+k.key) {
+			out = append(out, fmt.Sprintf("[autonomy] %s drops %s", k.key, strings.Join(m, ", ")))
+		}
 	}
 	for _, slug := range slices.Sorted(maps.Keys(base.Seats)) {
 		if b, x := base.Seats[slug], r.Seats[slug]; b.Mode == "paired" && b.Human != "" &&

@@ -346,6 +346,18 @@ func TestShipAutonomousFootprint(t *testing.T) {
 		t.Fatalf("ship --dry-run merged: %t %v", dry, g.LabelNames(2))
 	}
 
+	// The footprint is also the base layers' over the PR's files: a file in
+	// a never layer that the pack's footprint left out still needs a person.
+	g.Mu.Lock()
+	files := g.Pulls[prN].Files
+	g.Pulls[prN].Files = append(slices.Clone(files), "internal/ledger/x.go")
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitBlocked || !strings.Contains(out, "the footprint touches never layer(s) L07") {
+		t.Fatalf("ship with a never-layer file the pack left out: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files = files
+	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN, autonomous...)
 	if code != 0 || !strings.Contains(out, "human pass: autonomous by founder — every layer of footprint L02 has a streak of at least 0 correction-free agent merges and none is a never layer") {
 		t.Fatalf("ship of an autonomous footprint: %d %s", code, out)
@@ -383,10 +395,11 @@ func TestShipOnProof(t *testing.T) {
 	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	gateRun(t, g, dir, prN, head, coverageHolds, "L07")
 	base := strings.Repeat("b", 40)
-	// The checkout (the PR's own config) turns proof off and empties the
-	// narrow set; the base revision's config is the policy, so it is ignored.
+	// The checkout (the PR's own config) turns proof off; the base
+	// revision's config is the policy, so a tighter checkout is ignored (and
+	// a looser one refused, below).
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\nalways_person = []\nalways_person_config = []\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\n"), 0o644)
 	// docs was skipped by its path filter, and release-snapshot is neutral:
 	// GitHub counts both as passing.
 	g.Mu.Lock()
@@ -463,6 +476,7 @@ func TestShipOnProof(t *testing.T) {
 		g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = b, h
 		g.Mu.Unlock()
 	}
+	refused("would loosen it: [autonomy] always_person drops .github/CODEOWNERS, internal/identity/", "--set", "autonomy.always_person=")
 	refused("required check build is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
 	g.CheckRuns[head][slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.App == actions })].Conclusion = "success" // the rerun
@@ -829,8 +843,8 @@ func TestShipOnProof(t *testing.T) {
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
 	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs", "release-snapshot", "security"}) ||
-		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
-		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
+		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L03", "L07", "L09"}) {
+		t.Fatalf("ship record: %+v %+v footprint %v", sr.HumanPass, sr.Proof, sr.Footprint)
 	}
 	g.Mu.Lock()
 	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
@@ -844,7 +858,7 @@ func TestShipOnProof(t *testing.T) {
 	// as an audit entry on the ledger and the audit label on the PR.
 	var entry AuditEntry
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+AuditLedgerPath(prN))), &entry)
-	if entry.PR != prN || entry.Story != 2 || entry.Head != head || entry.Merge == "" || entry.Pass != "proof" || !slices.Equal(entry.Footprint, []string{"L07"}) {
+	if entry.PR != prN || entry.Story != 2 || entry.Head != head || entry.Merge == "" || entry.Pass != "proof" || !slices.Equal(entry.Footprint, []string{"L03", "L07", "L09"}) {
 		t.Fatalf("audit entry: %+v", entry)
 	}
 	if !slices.Contains(g.LabelNames(prN), AuditLabel) {
@@ -898,6 +912,18 @@ func TestShipOnProof(t *testing.T) {
 	if git(t, bare, "show", "ledger:"+AuditLedgerPath(prN)) == "" || n != pulls || slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
 		t.Fatalf("an agent lane wrote: audit entry gone, %d PRs (was %d), labels %v", n, pulls, g.LabelNames(prN))
 	}
+	// A labelled merge into another branch still waits for its look.
+	g.Mu.Lock()
+	g.Pulls[prN].Base.Ref = "rolling"
+	g.Mu.Unlock()
+	var listed inboxList
+	if code, out, errOut := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &listed) != nil ||
+		!slices.ContainsFunc(listed.Items, func(it InboxItem) bool { return it.Kind == InboxAudit && it.Number == prN }) {
+		t.Fatalf("no audit card for a merge into rolling: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Base.Ref = "dev"
+	g.Mu.Unlock()
 	// Looks right: a clean sample, and the entry and the label are gone. A
 	// look whose label removal failed is finished by the next look.
 	g.Mu.Lock()
@@ -933,30 +959,63 @@ func TestShipOnProof(t *testing.T) {
 	if s := samples(); len(s) != 2 || s[1].PR != prN || !s[1].Correction || !slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
 		t.Fatalf("correction: %+v, labels %v\n%s", s, g.LabelNames(prN), out)
 	}
-	// An interrupted correction run again reuses its revert PR.
-	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "audit again",
-		Files: map[string][]byte{AuditLedgerPath(prN): entryJSON}}); err != nil {
-		t.Fatal(err)
-	}
 	g.Mu.Lock()
-	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
-	before := len(g.Pulls)
-	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0 // the correction label fails first
+	rev := g.Pulls[len(g.Issues)]
+	g.Mu.Unlock()
+	if rev == nil || rev.Title != "revert: "+g.Pulls[prN].Title+" (#"+strconv.Itoa(prN)+")" || !strings.Contains(rev.Body, "Refs #2") || rev.Base.Ref != "dev" ||
+		!strings.Contains(out, "revert PR: "+rev.URL) {
+		t.Fatalf("revert PR: %+v\n%s", rev, out)
+	}
+	audit := func(entry []byte) int {
+		t.Helper()
+		if entry != nil {
+			if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "audit again", Files: map[string][]byte{AuditLedgerPath(prN): entry}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
+		return len(g.Pulls)
+	}
+	// A correction run again after it recorded its revert PR on the entry
+	// reuses that PR; a failed correction label records nothing.
+	var recorded AuditEntry
+	_ = json.Unmarshal(entryJSON, &recorded)
+	recorded.Revert = rev.URL
+	rb, _ := json.Marshal(recorded)
+	before := audit(rb)
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0
 	g.Mu.Unlock()
 	if failed := inbox(env, "2 y"); strings.Contains(failed, "done: sample") {
 		t.Fatalf("a correction whose label failed was recorded:\n%s", failed)
 	}
-	again := inbox(env, "2 y")
+	if again := inbox(env, "2 y"); pullCount(g) != before || !strings.Contains(again, "revert PR: "+rev.URL) {
+		t.Fatalf("a correction run again opened another revert PR (%d, was %d):\n%s", pullCount(g), before, again)
+	}
+	// Another PR whose body says it reverts this one stands in for nothing:
+	// with no revert recorded on the entry, a correction opens its own.
+	before = audit(entryJSON)
+	if third := inbox(env, "2 y"); pullCount(g) != before+1 || strings.Contains(third, "revert PR: "+rev.URL) {
+		t.Fatalf("a correction reused a PR it did not record (%d, was %d):\n%s", pullCount(g), before, third)
+	}
+	// Ship merged and labelled the PR but wrote no entry: the label is
+	// enough, and the look is recorded from the PR.
+	audit(nil)
+	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) {
+		t.Fatalf("a look with no audit entry:\n%s", out)
+	}
+	if s := samples(); s[len(s)-1].Correction || slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("a look with no audit entry: %+v, labels %v", s[len(s)-1], g.LabelNames(prN))
+	}
+}
+
+// pullCount is how many pull requests g holds.
+func pullCount(g *fake.GitHub) int {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
-	rev := g.Pulls[len(g.Issues)]
-	if len(g.Pulls) != before || rev == nil || !strings.Contains(again, "revert PR: https://github.com/o/r/pull/"+strconv.Itoa(rev.Number)) {
-		t.Fatalf("a second correction opened another revert PR (%d, was %d):\n%s", len(g.Pulls), before, again)
-	}
-	if rev == nil || rev.Title != "revert: "+g.Pulls[prN].Title+" (#"+strconv.Itoa(prN)+")" || !strings.Contains(rev.Body, "Refs #2") || rev.Base.Ref != "dev" ||
-		!strings.Contains(out, "revert PR: https://github.com/o/r/pull/"+strconv.Itoa(rev.Number)) {
-		t.Fatalf("revert PR: %+v\n%s", rev, out)
-	}
+	return len(g.Pulls)
 }
 
 // WP5.5: when the Engineering Manager seat is paired with a human, that
@@ -1086,7 +1145,7 @@ func TestShipLoosens(t *testing.T) {
 		return l
 	}
 	base := load(t, config.Sources{RepoTOML: []byte("version = 1\n[identity]\nbot_logins = [\"Agent-Alt\"]\napp_id = 42\napp_slug = \"aayudha-bot\"\n" +
-		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\n" +
+		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nalways_person = [\"internal/identity/\"]\n" +
 		"[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"), RepoSource: "base"}).Config
 	for _, c := range []struct {
 		why  string
@@ -1097,9 +1156,10 @@ func TestShipLoosens(t *testing.T) {
 		{"the same values, in another case", []string{"identity.bot_logins=agent-alt", "autonomy.approver=lead", "seats.engineering-manager.human=EM-Lead"}, nil},
 		{"tighter values", []string{"autonomy.streak=40", "autonomy.correction_days=30", "autonomy.never=L04,L07,L09"}, nil},
 		{"every loosening", []string{"identity.bot_logins=", "identity.app_id=0", "identity.app_slug=", "autonomy.approver=agent-alt", "autonomy.never=L04",
-			"autonomy.streak=0", "autonomy.correction_days=1", "seats.engineering-manager.mode=solo"},
+			"autonomy.streak=0", "autonomy.correction_days=1", "autonomy.proof=true", "autonomy.proof_rungs=A,B,C", "autonomy.always_person=", "seats.engineering-manager.mode=solo"},
 			[]string{"[identity] bot_logins drops Agent-Alt", "[identity] has no bot identity", `[autonomy] approver is "agent-alt", not "Lead"`, "[autonomy] never drops L07",
-				"[autonomy] streak is 0, below 20", "[autonomy] correction_days is 1, below 14", "[seats.engineering-manager] is not paired with em-lead"}},
+				"[autonomy] streak is 0, below 20", "[autonomy] correction_days is 1, below 14", "[autonomy] proof is on", "[autonomy] proof_rungs adds C",
+				"[autonomy] always_person drops internal/identity/", "[seats.engineering-manager] is not paired with em-lead"}},
 	} {
 		if got := loosens(load(t, config.Sources{Sets: c.sets}), &base); !slices.Equal(got, c.want) {
 			t.Errorf("%s: loosens = %q, want %q", c.why, got, c.want)

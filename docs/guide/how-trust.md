@@ -97,6 +97,13 @@ default L04, L07, and L09) also needs a CODEOWNER of every changed path in that 
 footprint whose layers all have a long enough correction-free streak needs no review; `ship` records it as
 `autonomous`.
 
+`ship` reads this policy from the base branch's committed `.aayudha/config.toml` and `LAYERS.md` at its tip:
+the bot logins, the approver, the never layers, the paired seats, the streak, and the CODEOWNERS of never-layer
+paths. Your checkout, your user config, `AAYU_*` variables, and `--set` do not change it. When one of them sets a
+looser value, `ship` stops and names it; change the policy through a reviewed pull request instead. The footprint
+is the merge gate's and the base layers' over the pull request's files, so a pull request cannot drop a never layer
+by editing its own `LAYERS.md`.
+
 With `[autonomy] proof` on, `ship` merges a pull request into the integration branch on proof, with no review. Every
 required check of the base branch must be green, the pack must verify with its floors holding, and inspect must be at
 `merge` with a fresh judgement at a rung in `proof_rungs`, and both from merge gate runs GitHub lists as for this

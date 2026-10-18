@@ -473,12 +473,16 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		switch {
 		case p.GetState() == "open":
 			open = append(open, p)
-		case p.GetBase().GetRef() == dev && (p.MergedAt != nil || p.GetMerged()):
-			ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA(), MergedAt: p.GetMergedAt().Time}
-			ap.LinkStories()
-			merged = append(merged, ap)
+		case p.MergedAt != nil || p.GetMerged():
+			// An audit label waits for a look whatever branch the PR merged
+			// into, and whatever this checkout calls the integration branch.
 			if prLabelled(p, AuditLabel) {
 				audits = append(audits, auditItem(p))
+			}
+			if p.GetBase().GetRef() == dev {
+				ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA(), MergedAt: p.GetMergedAt().Time}
+				ap.LinkStories()
+				merged = append(merged, ap)
 			}
 		}
 	}

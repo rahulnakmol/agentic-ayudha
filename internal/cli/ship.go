@@ -276,14 +276,21 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// layer also needs a CODEOWNER's approval, whatever the streak, and the
 	// EM's plan-time review. A footprint the streak makes autonomous needs no
 	// review.
-	rec.Footprint = gp.pack.Footprint
+	// The footprint is the gate pack's and the base layers' over the PR's
+	// files: the pack's was computed from the PR's own LAYERS.md, which the
+	// PR could edit to leave a never layer out.
+	files, err := shipFiles(ctx, c, owner, name, pr)
+	if err != nil {
+		return err
+	}
+	rec.Footprint = slices.Compact(slices.Sorted(slices.Values(append(slices.Clone(gp.pack.Footprint), pol.Layers.Footprint(files)...))))
 	if rec.Footprint == nil {
 		rec.Footprint = []string{}
 	}
 	rec.Pass = passRule(pol.Config)
 	rec.Pass.Never = intersect(rec.Footprint, pol.Config.Autonomy.Never)
 	if len(rec.Pass.Never) > 0 && proofOK == nil {
-		if err := rec.Pass.neverOwners(ctx, c, owner, name, pr, pol); err != nil {
+		if err := rec.Pass.neverOwners(ctx, c, owner, name, files, pol); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		var plan PlanRecord
@@ -392,6 +399,19 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.Pack = landed.Path
 		rec.PackLanded = fmt.Sprintf("artifact %d of run %d of the base branch's %s (%s), checked and landed by %s through aayu ship", gp.artifact, gp.run.GetID(), MergeGateWorkflow, gp.run.GetHTMLURL(), me.Login)
 	}
+	// A merge with no person's pass (on proof, or an autonomous footprint)
+	// waits for a person's look after merge: every one is audited, so the
+	// paths that judge later PRs (internal/models, inspect, verify, proof,
+	// evals) never go unseen (founder, 2026-10-18). The inbox finds the look
+	// by its label, so the label goes on before the merge, and before
+	// ship's last reads of the PR and the base: a merge the inbox would miss
+	// never happens.
+	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
+	if audited && !c.DryRun() {
+		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: the %s label, by which the inbox finds the look after merge, was not added: %v", n, AuditLabel, err)
+		}
+	}
 	// A merge on proof was judged by the base branch's policy at its tip
 	// then; GitHub's merge guards only the head, so a base that moved since
 	// (a tightened narrow set, say) stops it.
@@ -411,18 +431,6 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	if tip != pol.Tip {
 		return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(pol.Tip), short(tip))
-	}
-	// A merge with no person's pass (on proof, or an autonomous footprint)
-	// waits for a person's look after merge: every one is audited, so the
-	// paths that judge later PRs (internal/models, inspect, verify, proof,
-	// evals) never go unseen (founder, 2026-10-18). The inbox finds the look
-	// by its label, so the label goes on before the merge: a merge the inbox
-	// would miss never happens.
-	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
-	if audited && !c.DryRun() {
-		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
-			return Errorf(ExitExternal, "ship #%d: not merged: the %s label, by which the inbox finds the look after merge, was not added: %v", n, AuditLabel, err)
-		}
 	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
@@ -452,12 +460,12 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
-	files := map[string][]byte{res.Record: append(b, '\n')}
+	written := map[string][]byte{res.Record: append(b, '\n')}
 	if audited {
 		ab, _ := json.MarshalIndent(AuditEntry{PR: n, Story: story, Head: head, Merge: rec.MergeCommit, Footprint: rec.Footprint, Pass: rec.HumanPass.Kind, MergedAt: rec.ShippedAt}, "", "  ")
-		files[AuditLedgerPath(n)] = append(ab, '\n')
+		written[AuditLedgerPath(n)] = append(ab, '\n')
 	}
-	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: files}); err != nil {
+	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: written}); err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	if !audited && prLabelled(now, AuditLabel) { // an earlier ship labelled it, then did not merge

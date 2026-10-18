@@ -100,6 +100,33 @@ func basePolicy(ctx context.Context, c *github.Client, owner, name, branch strin
 	return &shipPolicy{Tip: tip, Config: &l.Config, Layers: autonomy.LayersFrom(layers)}, nil
 }
 
+// shipFiles lists the paths PR pr changes, with each rename's old path: by
+// GitHub's comparison of its captured base and head, which a push while ship
+// runs cannot swap, or by the PR's own listing (every page) when the
+// comparison is cut short (it lists at most 300 files).
+func shipFiles(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest) ([]string, error) {
+	cmp, _, err := c.REST.Repositories.CompareCommits(ctx, owner, name, pr.GetBase().GetSHA(), pr.GetHead().GetSHA(), &gh.ListOptions{PerPage: 1})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	files := cmp.Files
+	if len(files) != pr.GetChangedFiles() {
+		if files, err = github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
+			return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
+		}); err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+	}
+	var out []string
+	for _, f := range files {
+		out = append(out, f.GetFilename())
+		if old := f.GetPreviousFilename(); old != "" {
+			out = append(out, old)
+		}
+	}
+	return out, nil
+}
+
 // requiredChecks checks that every required status check of the base
 // branch's rules (every page of them), other than the CODEOWNERS check
 // (seats.GateCheck), is green on the head: its check run, from the app the
