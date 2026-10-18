@@ -3,7 +3,8 @@
 An agent wrote the change; something other than that agent must read it before it merges. By default the merge gate
 does this itself: its inspect job sends the diff, the story's promises, and the floors' results to a review model of
 another vendor, and turns the reply into the inspect check. No review app, no subscription quota, and no second tool
-to manage. You choose the model and pay for its calls; a pull request's review costs cents, capped per pull request.
+to manage. You choose the model and pay for its calls. The cost depends on the model and the diff, and `[budget]
+per_pr_inspect_max` caps it for each pull request.
 
 This page sets the review up for one repository. [The merge gate](how-merge-gate.md) explains what the inspect check
 decides with the review.

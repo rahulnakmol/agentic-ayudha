@@ -8,7 +8,7 @@ reads the review as `merge`, `fix`, or `rebuild`.
 
 | Field | Value |
 |---|---|
-| In plain words | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
+| In plain words | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
 | Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`review`](../how-models.md) model lane, with the seat's paired human when it has one |
