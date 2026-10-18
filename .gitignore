@@ -14,3 +14,4 @@ storybook-static/
 .aayudha/state/
 .aayudha/config.local.toml
 coverage.out
+evals/.docs-cache/

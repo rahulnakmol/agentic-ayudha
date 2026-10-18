@@ -271,6 +271,10 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 	}
 	fmt.Printf("tier 2 %s: pass^%d %.2f, mean %.2f (%s): %s\n", cur.SHA, cur.K, cur.PassK, cur.Mean, against, v)
 	for _, c := range cur.Cases {
+		if c.NotRun != "" {
+			fmt.Printf("  %s: not run: %s\n", c.Case, c.NotRun)
+			continue
+		}
 		fmt.Printf("  %s on %s (%s): pass^%d %.0f, mean %.2f over %d completed run(s), %d error(s)\n", c.Case, c.Model, c.Family, cur.K, c.PassK, c.Mean, len(c.Runs)-c.Errors, c.Errors)
 		for i, r := range c.Runs {
 			var calls []string

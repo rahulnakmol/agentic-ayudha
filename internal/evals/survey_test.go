@@ -3,6 +3,8 @@ package evals
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,9 +250,15 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 // rubric, so splitting the judgement never drops a bar; and every section
 // rubric keeps the fabrication rule.
 func TestSurveySectionRubricsKeepEveryCriterion(t *testing.T) {
-	c, _ := surveyCase(t, "survey/tinyjs-rust")
+	for _, id := range []string{"survey/tinyjs-rust", "survey/minpack-manual"} {
+		t.Run(id, func(t *testing.T) { sectionRubricsKeepEveryCriterion(t, id) })
+	}
+}
+
+func sectionRubricsKeepEveryCriterion(t *testing.T, id string) {
+	c, _ := surveyCase(t, id)
 	if c.Survey.Rubrics == "" {
-		t.Fatal("survey/tinyjs-rust is not judged by section")
+		t.Fatalf("%s is not judged by section", id)
 	}
 	whole, err := os.ReadFile(filepath.Join(c.Dir, c.Tier2.Rubric))
 	if err != nil {
@@ -368,5 +376,81 @@ func TestTier2SurveySections(t *testing.T) {
 	r3 := res.Cases[0].Runs[0]
 	if r3.Status != RunError || runRetries(r3.Calls) != ProviderRetries {
 		t.Errorf("retries across sections: status %s, %d retries (want %d for the whole sample), error %q", r3.Status, runRetries(r3.Calls), ProviderRetries, r3.Error)
+	}
+}
+
+// A case whose manual is fetched at run time (survey_docs.go) does not run
+// when the fetch fails or the file differs from its pin: no model call, no
+// score, no spend, and no failure of the group. Tier 1 never downloads and is
+// n/a without the cached file; a file that matches its pin is downloaded once
+// and then read from the cache; text that differs from its pin does not run.
+func TestSurveyDocsNotRun(t *testing.T) {
+	ctx := context.Background()
+	c, _ := surveyCase(t, "survey/minpack-manual")
+	pdf := []byte("%PDF-1.4 not the guide\n")
+	gets := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gets++
+		if r.URL.Path == "/missing" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(pdf)
+	}))
+	defer srv.Close()
+	t.Setenv(DocsCacheEnv, t.TempDir())
+	if r := Tier1(ctx, root, c, aayudha.Assets); status(r, "survey") != NA || gets != 0 {
+		t.Fatalf("tier 1 with an empty cache: survey %s, %d downloads; want n/a and none", status(r, "survey"), gets)
+	}
+	with := func(url, sum string) Case {
+		d := *c.Survey.Docs
+		d.URL = url
+		if sum != "" {
+			d.SHA256 = sum
+		}
+		s := *c.Survey
+		s.Docs = &d
+		cc := c
+		cc.Survey = &s
+		return cc
+	}
+	for _, tc := range []struct{ path, want string }{{"/missing", "HTTP 404"}, {"/guide.pdf", "the case pins " + c.Survey.Docs.SHA256}} {
+		fake := &models.Fake{}
+		h := harness(t, fake, "gpt-6.1-sol")
+		h.Config.K = 1
+		res, err := h.Tier2(ctx, []Case{with(srv.URL+tc.path, "")}, "abc", "dev", time.Unix(0, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cr := res.Cases[0]
+		if !strings.Contains(cr.NotRun, tc.want) || len(cr.Runs) != 0 || len(fake.Requests) != 0 || res.CostUSD != 0 {
+			t.Errorf("%s: not run %q (want %q), %d runs, %d model calls, %.2f USD", tc.path, cr.NotRun, tc.want, len(cr.Runs), len(fake.Requests), res.CostUSD)
+		}
+		if v, reasons := Compare(res, nil, h.Config); v != Pass {
+			t.Errorf("%s: a group with only a case that did not run fails: %v", tc.path, reasons)
+		}
+		// Beside a case that ran, the one that did not is not scored.
+		res.Cases = append(res.Cases, CaseResult{Case: "survey/other", PassK: 1, Mean: 5, Runs: []Run{{Status: RunPass, Score: 5, Pass: true}}})
+		res.PassK, res.Mean = 1, 5
+		if v, reasons := Compare(res, nil, h.Config); v != Pass {
+			t.Errorf("%s: a case that did not run counts against the group: %v", tc.path, reasons)
+		}
+	}
+	matching := with(srv.URL+"/guide.pdf", sumHex(pdf)).Survey.Docs
+	gets = 0
+	for range 2 {
+		if err := matching.fetch(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if gets != 1 {
+		t.Errorf("%d downloads of a cached manual, want 1", gets)
+	}
+	manuals := t.TempDir()
+	if err := os.WriteFile(filepath.Join(manuals, matching.Name+".txt"), []byte("other text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := matching.checkText(manuals); !strings.Contains(fmt.Sprint(err), "not run: pdftotext's text") {
+		t.Errorf("text that differs from its pin: %v", err)
 	}
 }

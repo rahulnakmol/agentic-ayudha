@@ -146,6 +146,27 @@ jobs:
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
+      # A survey case may survey a manual fetched at run time and never committed ([survey.docs] in its case.toml,
+      # internal/evals/survey_docs.go; survey/minpack-manual's MINPACK-1 User Guide). pdftotext converts it, and the file
+      # is cached under its pinned SHA-256, so a cache miss is its only download. Without pdftotext, or when the fetch or a
+      # hash fails, the case reports not run (no score, no spend, no failure).
+      - name: Fetched manuals (pdftotext, and the cache key from their pinned SHA-256s)
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'survey'
+        id: docs
+        run: |
+          set -euo pipefail
+          if ! { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils; }; then
+            echo "::warning::poppler-utils did not install; survey cases with a fetched manual will not run."
+          fi
+          shas="$(sed -n 's/^sha256 = "\([0-9a-f]\{64\}\)"$/\1/p' evals/cases/survey/*/case.toml | sort -u | paste -sd- -)"
+          echo "key=eval-docs-${shas:-none}" >> "$GITHUB_OUTPUT"
+          echo "AAYU_EVAL_DOCS=$GITHUB_WORKSPACE/evals/.docs-cache" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'survey'
+        id: docs-cache
+        with:
+          path: evals/.docs-cache
+          key: ${{ steps.docs.outputs.key }}
       # The ux group's mockup and polish floors render pages in Chromium and run lane B (impeccable, axe, the focus and
       # 44 px probes), pinned in packages/floors and pnpm-lock.yaml. The group runs on dispatch only (evals/eval.toml).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -215,6 +236,12 @@ jobs:
             exit 0
           fi
           go run ./internal/evals/cmd/eval -tier 2 -group "$GROUP" -sha "$SHA" -ref "$REF" -out "evals/results/$SHA-$GROUP.json" -baseline "$BASELINE" -cases "$CASES" -steps "evals/results/steps/$GROUP"
+      # Saved even when the group fails, so the next run does not download the manual again.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.docs-cache.outcome == 'success' && steps.docs-cache.outputs.cache-hit != 'true' && hashFiles('evals/.docs-cache/*') != ''
+        with:
+          path: evals/.docs-cache
+          key: ${{ steps.docs.outputs.key }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

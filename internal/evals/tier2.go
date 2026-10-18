@@ -129,6 +129,10 @@ type CaseResult struct {
 	Errors   int          `json:"errors"` // runs with status error, excluded from pass^k and the mean
 	PassK    float64      `json:"pass_k"` // over completed runs: 1 when all of them pass, else 0
 	Mean     float64      `json:"mean"`   // over completed runs
+	// NotRun is why the case did not run here (NotRunError), such as a
+	// fetched manual that did not match its pin: it has no runs, no score,
+	// and no spend, and the bars skip it.
+	NotRun string `json:"not_run,omitempty"`
 }
 
 // Results is evals/results/<sha>.json.
@@ -545,6 +549,12 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		// One prompt-cache key per case: its runs share their prompt prefixes.
 		ctx := context.WithValue(ctx, cacheKey{}, "aayu-eval-"+c.ID)
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
+		if cr.NotRun, err = h.surveyNotRun(ctx, c); err != nil {
+			return nil, err
+		} else if cr.NotRun != "" {
+			res.Cases = append(res.Cases, cr)
+			continue
+		}
 		for i := 0; i < h.Config.K; i++ {
 			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
@@ -605,8 +615,9 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		res.Errors += cr.Errors
 		res.Cases = append(res.Cases, cr)
 	}
-	for _, cr := range res.Cases {
-		res.PassK += cr.PassK / float64(len(res.Cases))
+	ran := ranCases(res.Cases)
+	for _, cr := range ran {
+		res.PassK += cr.PassK / float64(len(ran))
 	}
 	res.Mean = mean(scores)
 	res.CostUSD = h.spentUSD()
@@ -768,12 +779,27 @@ func Advisories(cur, base *Results, cfg Config) []string {
 	return notes
 }
 
+// ranCases drops the cases that did not run (CaseResult.NotRun).
+func ranCases(cs []CaseResult) []CaseResult {
+	var out []CaseResult
+	for _, c := range cs {
+		if c.NotRun == "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 	passK := &reasons
 	if g, ok := cfg.Group(cur.Group); ok && g.PassK == PassKAdvisory {
 		passK = &advisory
 	}
-	for _, c := range cur.Cases {
+	ran := ranCases(cur.Cases)
+	if len(ran) == 0 && len(cur.Cases) > 0 {
+		return nil, nil // nothing ran, so nothing is scored: not run is never a failure
+	}
+	for _, c := range ran {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
@@ -801,8 +827,8 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		for _, c := range base.Cases {
 			baseCase[c.Case] = c
 		}
-		for _, c := range cur.Cases {
-			if b, ok := baseCase[c.Case]; ok && c.PassK < b.PassK {
+		for _, c := range ran {
+			if b, ok := baseCase[c.Case]; ok && b.NotRun == "" && c.PassK < b.PassK {
 				*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
 			}
 		}
