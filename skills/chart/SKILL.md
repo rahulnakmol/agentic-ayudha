@@ -183,9 +183,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
   total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
   aggregates only, no free text, the shortest retention the decision needs; when that default leaves the decision
-  unable to act, as when a large share of items has no category, the design also proposes the smallest path that
-  serves it under the default, such as better classification or a named reviewer reading redacted text in a
-  restricted view, as a requirement pending the human's yes), who may read each copy (the export,
+  unable to act, as when a large share of items has no category, the design proposes the smallest remedy that keeps
+  the default, such as better classification, and may name a wider-access exception (a named reviewer reading
+  redacted text in a restricted view) as an open question that stays off until a human accepts it), who may read each copy (the export,
   the snapshot, the view) and what enforces it (an access rule the grounding shows; else a proposed restriction,
   such as only the pipeline's identity and the named owners, written as a requirement with its check, and nothing
   is built on that copy until the check passes), how long each copy is kept (export, snapshot, aggregate), and how a deletion
