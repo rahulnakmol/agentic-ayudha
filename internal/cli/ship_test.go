@@ -342,14 +342,16 @@ func TestShipOnProof(t *testing.T) {
 	// narrow set; the base revision's config is the policy, so it is ignored.
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\nalways_person = []\nalways_person_config = []\n"), 0o644)
+	// docs was skipped by its path filter: GitHub counts that as passing.
 	g.Mu.Lock()
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
 	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
-	g.RequiredChecks = []string{"build", "lint", "protected-paths"}
+	g.RequiredChecks = []string{"build", "lint", "docs", "protected-paths"}
 	// build was rerun green: its newest run counts, not the stale failure.
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
 		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
+		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"},
 		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
 	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
@@ -392,9 +394,21 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
 	g.Mu.Unlock()
 	refused("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)")
+	// The integration branch is the base revision's too, not the checkout's.
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf + "\n[branches]\ndev = \"trunk\"\n"
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: it merges into dev, not the integration branch trunk")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1)
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
+	g.Mu.Unlock()
+	// protected-paths is red only for the CODEOWNERS paths a PR touches.
+	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
 	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)
@@ -403,14 +417,14 @@ func TestShipOnProof(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint"}) ||
+	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs"}) ||
 		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
 		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
 	}
 	g.Mu.Lock()
 	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
 	g.Mu.Unlock()
-	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint green") ||
+	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs green") ||
 		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
 		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}

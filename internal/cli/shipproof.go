@@ -37,48 +37,59 @@ type ProofPass struct {
 
 // requiredChecks checks that every required status check of the base
 // branch's rules, other than the CODEOWNERS check (seats.GateCheck), is green
-// on the head. It returns the checks it read.
-func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) ([]string, error) {
+// on the head. It returns the checks it read, and the CODEOWNERS check's state
+// ("" when it is not required), which only proofPass may accept red.
+func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
 	rules, _, err := c.REST.Repositories.ListRulesForBranch(ctx, owner, name, base, nil)
 	if err != nil && !github.NotFound(err) {
-		return nil, Wrap(ExitExternal, err)
+		return nil, "", Wrap(ExitExternal, err)
 	}
-	var want []string
 	for _, r := range rules.GetRequiredStatusChecks() {
 		for _, sc := range r.Parameters.RequiredStatusChecks {
-			if ctxName := sc.Context; ctxName != seats.GateCheck && !slices.Contains(want, ctxName) {
+			switch ctxName := sc.Context; {
+			case ctxName == seats.GateCheck:
+				gate = checkState(runs, ctxName)
+			case !slices.Contains(want, ctxName):
 				want = append(want, ctxName)
 			}
 		}
 	}
 	for _, w := range want {
-		state := "missing"
-		for _, r := range runs {
-			if r.GetName() != w {
-				continue
-			}
-			concl := r.GetStatus()
-			if concl == "completed" {
-				concl = r.GetConclusion()
-			}
-			if concl == "skipped" {
-				continue
-			}
-			state = concl
-			break // the API lists the newest run of a name first; a rerun's success replaces a failure
-		}
-		if state != "success" {
-			return nil, Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, w, state, short(head))
+		if state := checkState(runs, w); state != "success" {
+			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, w, state, short(head))
 		}
 	}
-	return want, nil
+	return want, gate, nil
+}
+
+// checkState is the state of the newest run named name ("missing" when none),
+// with skipped counted as success, as GitHub counts it for a required check.
+func checkState(runs []*gh.CheckRun, name string) string {
+	for _, r := range runs { // the API lists the newest run of a name first; a rerun's success replaces a failure
+		if r.GetName() != name {
+			continue
+		}
+		switch {
+		case r.GetStatus() != "completed":
+			return r.GetStatus()
+		case r.GetConclusion() == "skipped":
+			return "success"
+		default:
+			return r.GetConclusion()
+		}
+	}
+	return "missing"
 }
 
 // proofPass says whether PR pr may merge on proof at rung, or why not ("" when
 // proof is off). The gate, the pack, and the required checks are checked
-// before it. The policy is the base revision's [autonomy], never the PR's own
-// or the checkout's: a PR could otherwise empty the narrow set it is judged by.
-func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung string) (*ProofPass, string, error) {
+// before it; gate is the CODEOWNERS check's state, which may be red only for
+// the CODEOWNERS paths the PR touches (Decision #593: those merge under the
+// founder's recorded bypass). The policy and the integration branch are the
+// base revision's config, never the PR's own or the checkout's: a PR could
+// otherwise empty the narrow set it is judged by, or call main the
+// integration branch.
+func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung, gate string) (*ProofPass, string, error) {
 	base, head := pr.GetBase().GetSHA(), pr.GetHead().GetSHA()
 	var readErr error
 	read := func(p, ref string) string { // "" when absent at ref
@@ -96,15 +107,16 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if readErr != nil {
 		return nil, "", Wrap(ExitExternal, readErr)
 	}
-	a, err := protectedAutonomy(baseConfig)
+	cfg, err := protectedConfig(baseConfig)
 	if err != nil {
 		return nil, "", err
 	}
+	a, dev := cfg.Autonomy, or(cfg.Branches.Dev, "dev")
 	switch {
 	case !a.Proof:
 		return nil, "", nil
-	case pr.GetBase().GetRef() != e.devBranch():
-		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), e.devBranch()), nil
+	case pr.GetBase().GetRef() != dev:
+		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), nil
 	case !slices.Contains(a.ProofRungs, rung):
 		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), nil
 	}
@@ -140,30 +152,33 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if readErr != nil { // a file the narrow set judges could not be read
 		return nil, "", Wrap(ExitExternal, readErr)
 	}
+	if gate != "" && gate != "success" && len(pp.Protected) == 0 {
+		return nil, fmt.Sprintf("required check %s is %s, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck, gate), nil
+	}
 	return pp, "", nil
 }
 
-// protectedAutonomy is [autonomy] as a revision's .aayudha/config.toml (text,
-// "" when absent) sets it over the defaults.
-func protectedAutonomy(text string) (config.Autonomy, error) {
+// protectedConfig is the config a revision's .aayudha/config.toml (text, ""
+// when absent) sets over the defaults, with no user, local, env, or flag layer.
+func protectedConfig(text string) (*config.Config, error) {
 	dir, err := os.MkdirTemp("", "aayu-base-config-")
 	if err != nil {
-		return config.Autonomy{}, Wrap(ExitExternal, err)
+		return nil, Wrap(ExitExternal, err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	if text != "" {
 		if err := os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755); err != nil {
-			return config.Autonomy{}, Wrap(ExitExternal, err)
+			return nil, Wrap(ExitExternal, err)
 		}
 		if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(text), 0o644); err != nil {
-			return config.Autonomy{}, Wrap(ExitExternal, err)
+			return nil, Wrap(ExitExternal, err)
 		}
 	}
 	l, err := config.Load(config.Sources{RepoDir: dir})
 	if err != nil {
-		return config.Autonomy{}, Errorf(ExitBlocked, "the base revision's .aayudha/config.toml does not load, so no merge on proof: %v", err)
+		return nil, Errorf(ExitBlocked, "the base revision's .aayudha/config.toml does not load, so no merge on proof: %v", err)
 	}
-	return l.Config.Autonomy, nil
+	return &l.Config, nil
 }
 
 // alwaysPerson matches p against the narrow set: a pattern ending in "/"

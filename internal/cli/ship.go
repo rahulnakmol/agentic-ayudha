@@ -228,14 +228,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// Every required check of the base branch is green too, whoever passes it.
-	required, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs.CheckRuns)
+	required, gateState, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs.CheckRuns)
 	if err != nil {
 		return err
 	}
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
 	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
 	// Merge on proof (Decision #593): with it, no human pass is needed.
-	proofOK, proofWhy, err := e.proofPass(ctx, c, owner, name, pr, rec.Review)
+	proofOK, proofWhy, err := e.proofPass(ctx, c, owner, name, pr, rec.Review, gateState)
 	if err != nil {
 		return err
 	}
