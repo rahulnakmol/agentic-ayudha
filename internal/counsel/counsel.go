@@ -75,6 +75,10 @@ var (
 	// exists, not that it records a review, so counsel reports a review as what a record shows ("the record shows
 	// @lead's review (#12)").
 	passive = regexp.MustCompile(`(?i)\b(?:is|are|was|were|has been|have been|had been)\s+(?:approved|reviewed|signed off)\b`)
+	// granted is the claim as a noun ("approval was granted", "review complete", "sign-off given") or a ruling ("I
+	// rule", "it is decided", "ruling:").
+	granted = regexp.MustCompile(`(?i)\b(?:approval|sign-?off|review)s?\s+(?:(?:is|are|was|were|has been|have been|had been)\s+)?` +
+		`(?:granted|given|done|complete[d]?|received|passed|obtained|in place)\b|\b(?:I|we)\s+rule\b|\bit\s+is\s+(?:decided|ruled)\b|\bruling\s*:`)
 	// fence opens or closes a code block: a counsel is prose, and a fenced part would escape the checks.
 	fence = regexp.MustCompile("(?m)^\\s{0,3}(?:```|~~~)")
 )
@@ -181,6 +185,7 @@ func CheckStructure(md string) []string {
 	for _, line := range units {
 		ms := append(claimed.FindAllString(line, -1), asserted.FindAllString(line, -1)...)
 		ms = append(ms, passive.FindAllString(line, -1)...)
+		ms = append(ms, granted.FindAllString(line, -1)...)
 		for _, m := range ms {
 			out = append(out, fmt.Sprintf("claims a review, an approval, or a ruling (%q): counsel is advice and never one", m))
 		}
