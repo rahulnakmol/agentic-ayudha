@@ -2,6 +2,22 @@
   "story": 497,
   "branch": "story/497-investigate-s-bounded-queries-can-be-ans",
   "started_at": "2026-10-18T02:07:40Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L06": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "86c3a158f6e2642c38cbf30532c187140d7c1ed6",
+      "layers": [
+        "L06"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T02:09:43Z"
+    }
+  ]
 }
