@@ -92,6 +92,9 @@ agent loop, and the binary decides everything except the code:
    live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and
    `status:in-progress`, and the loop's name on `build/<n>/state.json` on the ledger. It cuts the worktree as
    `aayu build <n>` does. A local lock (`.aayudha/state/build-next.lock`) lets one pick at a time run on a machine.
+   Across machines, each pick appends a line to `build/loop-claims.jsonl` on the ledger before it claims; the ledger's
+   one history orders concurrent picks, and a pick that comes after another for the same item or the last slot claims
+   nothing.
 3. The queue: when an open Release has an accepted baseline from `aayu scope` (`releases/<vX.Y.Z>/baseline-<n>.json`
    on the ledger), the loop builds only the Stories and Bugs of the newest baseline of the lowest such version, in the
    baseline's order, and nothing outside it. Without one, every `status:ready` Story and Bug by priority (P0 first,

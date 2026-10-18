@@ -114,6 +114,9 @@ type BuildState struct {
 	// Loop names the loop that claimed the story (BuildLoop, `build --next
 	// pick`): its claim and its pull request count toward [build] in_flight.
 	Loop string `json:"loop,omitempty"`
+	// Claim is the loop pick's line in LoopClaimsPath: once a state carries
+	// it, the line no longer holds a slot of its own.
+	Claim string `json:"claim,omitempty"`
 }
 
 // CheckpointRecord is one checkpoint commit and what verify said of it.
@@ -283,7 +286,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 	st.Story, st.Branch = n, res.Branch
 	if pick != nil {
-		st.Loop = BuildLoop
+		st.Loop, st.Claim = BuildLoop, pick.Claim
 	}
 	b := l.Config.Autonomy.Budget
 	// A story's spend is capped by the lower of the build budget and the

@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,16 +37,18 @@ const BuildLoop = "build-ready"
 // open pull requests to ship, what it has in flight against [build]
 // in_flight, the stale claims it blocked, and the queue it picked from.
 type BuildPick struct {
-	Mode     string         `json:"mode"` // ship or pick
-	Limit    int            `json:"in_flight_limit"`
-	InFlight []LoopItem     `json:"in_flight"`
-	Ship     []LoopItem     `json:"ship"`              // the loop's open PRs, oldest first
-	Order    string         `json:"order,omitempty"`   // what ordered the queue
-	Release  *PickedRelease `json:"release,omitempty"` // the current release's baseline, when one is accepted
-	Stale    []string       `json:"stale,omitempty"`   // claims blocked because their lease ran out with no PR
-	Skipped  []string       `json:"skipped,omitempty"` // queue items passed over, each with why
-	Picked   int            `json:"picked,omitempty"`
-	Reason   string         `json:"reason"`
+	Mode     string          `json:"mode"` // ship or pick
+	Limit    int             `json:"in_flight_limit"`
+	InFlight []LoopItem      `json:"in_flight"`
+	Ship     []LoopItem      `json:"ship"`              // the loop's open PRs, oldest first
+	Order    string          `json:"order,omitempty"`   // what ordered the queue
+	Release  *PickedRelease  `json:"release,omitempty"` // the current release's baseline, when one is accepted
+	Stale    []string        `json:"stale,omitempty"`   // claims blocked because their lease ran out with no PR
+	Skipped  []string        `json:"skipped,omitempty"` // queue items passed over, each with why
+	Picked   int             `json:"picked,omitempty"`
+	Claim    string          `json:"claim,omitempty"` // the pick's line in LoopClaimsPath, kept on the build state
+	claimed  map[string]bool // claim tokens already on a loop build state
+	Reason   string          `json:"reason"`
 }
 
 // LoopItem is a story or bug the loop claimed: its PR, or its live claim.
@@ -235,6 +241,94 @@ func (e *Env) lockPick() (func(), error) {
 	return func() { _ = os.Remove(p) }, nil
 }
 
+// LoopClaimsPath is the ledger file that orders the loop's claims across
+// machines: each pick appends a line before it claims, and the ledger's
+// single history decides which of two concurrent picks came first.
+const LoopClaimsPath = "build/loop-claims.jsonl"
+
+type loopClaim struct {
+	Story   int    `json:"story"`
+	Token   string `json:"token"`
+	At      string `json:"at"`
+	Release bool   `json:"release,omitempty"`
+}
+
+// admitClaim reserves a slot for story n on the ledger. It appends this
+// pick's line, then reads the file back: the recent unreleased lines before
+// it that no build state carries yet are picks still claiming. When one of them is for n, or they and what is
+// in flight fill [build] in_flight, this pick lost; it releases its line and
+// says why. A line older than pickLockTTL no longer holds a slot.
+func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n int) (string, error) {
+	tok := make([]byte, 8)
+	_, _ = rand.Read(tok)
+	me := loopClaim{Story: n, Token: hex.EncodeToString(tok), At: e.Now().UTC().Format(time.RFC3339)}
+	write := func(c loopClaim) error {
+		b, _ := json.Marshal(c)
+		_, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("build: loop claim of #%d", c.Story), Append: map[string][]byte{LoopClaimsPath: append(b, '\n')}})
+		return err
+	}
+	if err := write(me); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	raw, err := t.File(ctx, LoopClaimsPath)
+	t.Close()
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	var lines []loopClaim
+	released := map[string]bool{}
+	sc := bufio.NewScanner(bytes.NewReader(raw))
+	for sc.Scan() {
+		var c loopClaim
+		if json.Unmarshal(sc.Bytes(), &c) != nil {
+			continue
+		}
+		if c.Release {
+			released[c.Token] = true
+			continue
+		}
+		lines = append(lines, c)
+	}
+	counted := map[int]bool{}
+	for _, it := range p.InFlight {
+		counted[it.Story] = true
+	}
+	ahead := 0
+	for _, c := range lines {
+		if c.Token == me.Token {
+			break
+		}
+		at, err := time.Parse(time.RFC3339, c.At)
+		if err != nil || released[c.Token] || p.claimed[c.Token] || e.Now().Sub(at) > pickLockTTL {
+			continue
+		}
+		why := ""
+		switch {
+		case c.Story == n:
+			why = fmt.Sprintf("another pick claimed #%d first (ledger %s)", n, LoopClaimsPath)
+		case !counted[c.Story]:
+			counted[c.Story] = true
+			ahead++
+			if len(p.InFlight)+ahead >= p.Limit {
+				why = fmt.Sprintf("another pick took the last of %d slot(s) first (#%d, ledger %s)", p.Limit, c.Story, LoopClaimsPath)
+			}
+		}
+		if why != "" {
+			me.Release = true
+			if err := write(me); err != nil {
+				return "", Wrap(ExitExternal, err)
+			}
+			return why + ": nothing claimed", nil
+		}
+	}
+	p.Claim = me.Token
+	return "", nil
+}
+
 // priorityRank orders P0 first and an item with no priority last.
 func priorityRank(labels []string) int {
 	for _, l := range labels {
@@ -279,6 +373,12 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	states, err := loopStates(ctx, w)
 	if err != nil {
 		return nil, 0, Wrap(ExitExternal, err)
+	}
+	p.claimed = map[string]bool{}
+	for _, st := range states {
+		if st.Claim != "" {
+			p.claimed[st.Claim] = true
+		}
 	}
 	now := e.Now()
 	for _, st := range states {
@@ -443,6 +543,12 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		if why != "" {
 			skip(n, why)
 			continue
+		}
+		if why, err := e.admitClaim(ctx, w, p, n); err != nil {
+			return nil, 0, err
+		} else if why != "" {
+			p.Reason = why
+			return p, 0, nil
 		}
 		p.Picked = n
 		p.Reason = fmt.Sprintf("picked #%d: %s", n, p.Order)

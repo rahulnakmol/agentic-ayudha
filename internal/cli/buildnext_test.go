@@ -122,6 +122,24 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	claimed.Labels = slices.DeleteFunc(claimed.Labels, func(l fake.Label) bool { return l.Name == "status:ready" })
 	claimed.Labels = append(claimed.Labels, fake.Label{Name: labelInProgress}) // its builder took it
 	g.Mu.Unlock()
+	// The ledger orders picks across machines: a recent claim line of another
+	// pick holds the one slot, and one for the same story was first.
+	claimLine := func(story int, at time.Time) string {
+		return `{"story":` + strconv.Itoa(story) + `,"token":"elsewhere","at":"` + at.UTC().Format(time.RFC3339) + `"}` + "\n"
+	}
+	for _, tc := range []struct {
+		story int
+		want  string
+	}{{99, "another pick took the last of 1 slot(s) first (#99"}, {older.Number, "another pick claimed #9 first"}} {
+		putLedger(t, bare, LoopClaimsPath, claimLine(tc.story, time.Now()))
+		if code, res, pick, out := next(nil, "--next", "pick"); code != 0 || res.Issue != 0 || !strings.HasPrefix(pick.Reason, tc.want) || contains(g.LabelNames(older.Number), LeaseLabel) {
+			t.Fatalf("a pick ordered after another's claim: %d %s", code, out)
+		}
+		if lines := git(t, bare, "show", "ledger:"+LoopClaimsPath); !strings.Contains(lines, `"release":true`) {
+			t.Fatalf("the losing pick did not release its line:\n%s", lines)
+		}
+	}
+	putLedger(t, bare, LoopClaimsPath, claimLine(99, time.Now().Add(-time.Hour))) // a pick that died long ago holds nothing
 	code, res, pick, out := next(nil, "--next", "pick")
 	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
 		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
