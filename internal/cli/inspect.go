@@ -390,9 +390,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	ins.Head, ins.At = pr.GetHead().GetSHA(), e.Now()
 	ins.Reopened = reopenedAt(posts, mayReopen(ctx, c, repo, bots), prev)
 
-	if err := e.useReviewModel(&l.Config); err != nil {
-		return Wrap(ExitUsage, err)
-	}
+	// A bad review setting is reported after the docs-only exit, which needs no review.
+	reviewErr := e.useReviewModel(&l.Config)
 	gw, err := e.Gateway()
 	if err != nil {
 		return err
@@ -469,6 +468,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
+	}
+	if reviewErr != nil {
+		return Wrap(ExitUsage, reviewErr)
 	}
 	perm := func() string {
 		p, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, pr.GetUser().GetLogin())

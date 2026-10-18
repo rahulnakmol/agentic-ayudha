@@ -1241,6 +1241,12 @@ func TestInspectWithoutStory(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
 		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
 	}
+	// It needs no review, so a broken CI review setting does not fail it (Codex's P2 on #657).
+	bad := maps.Clone(env)
+	bad["AAYU_INSPECT__REVIEWER"], bad[inspect.ReviewModelURLVar] = "ci", "http://gw.example/v1"
+	if code, res, errOut = inspectApp(t, bad, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped {
+		t.Fatalf("docs-only PR, bad %s: exit %d %+v %s", inspect.ReviewModelURLVar, code, res, errOut)
+	}
 
 	// A PR that names its story in the head commit's Aayudha-Story trailer is
 	// that story's PR, as verify finds it (the trailer before a story-shaped
