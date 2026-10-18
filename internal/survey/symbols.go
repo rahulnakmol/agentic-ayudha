@@ -63,6 +63,8 @@ type scope struct {
 	// members are public until a label says otherwise), and false when the
 	// class itself is not public.
 	public bool
+	// hidden is an anonymous namespace: nothing inside is visible to callers.
+	hidden bool
 }
 
 // braceSymbols finds definitions in a C-family file from its stripped code: at
@@ -129,8 +131,8 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 				labels(header)
 			}
 			kind, name, public := classifyHeader(header, lang, parens, inFunc() >= 0)
-			if t := classTop(); t != nil && !t.public {
-				public = false // a member of a private section, or of a class no caller sees
+			if t := classTop(); t != nil && !t.public || slices.ContainsFunc(stack, func(s scope) bool { return s.hidden }) {
+				public = false // a member of a private section, of a class no caller sees, or of an anonymous namespace
 			}
 			startLine := hdrLine + leadingNewlines(header)
 			if name != "" {
@@ -143,7 +145,7 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 					}
 				}
 			}
-			sc := scope{kind: kind, name: name, sym: -1}
+			sc := scope{kind: kind, name: name, sym: -1, hidden: cfam && strings.Join(strings.Fields(header), " ") == "namespace"}
 			if kind != "block" {
 				q := name
 				if o := owner(); o != "" && !strings.Contains(name, "::") && (kind == "function" || kind == "method" || kind != "namespace") {

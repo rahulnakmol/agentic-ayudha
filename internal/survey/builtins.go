@@ -75,17 +75,25 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 	}
 	sort.Strings(pats)
 	use := regexp.MustCompile(`(?:^|[^\w$.])(` + strings.Join(pats, "|") + `)\s*\(`)
+	// A command language calls without parentheses: a command starts a line,
+	// or follows ; or [ (Tcl: cmd arg; shell: cmd arg).
+	command := regexp.MustCompile(`(?m)(?:^|[;\[])[ \t]*(` + strings.Join(pats, "|") + `)(?:[ \t;\]]|$)`)
 	for _, p := range sortedKeys(files) {
 		s := files[p]
-		if _, ok := ix.byPath[p]; !ok {
+		k, ok := ix.byPath[p]
+		if !ok {
 			continue
+		}
+		re := use
+		if l := ix.Files[k].Lang; l == "tcl" || l == "shell" {
+			re = command
 		}
 		text := s.code // literals and comments blanked: a name in a string or a comment is not a call
 		if text == "" {
 			text = s.raw
 		}
 		seen := map[string]bool{}
-		for _, m := range use.FindAllStringSubmatchIndex(text, -1) {
+		for _, m := range re.FindAllStringSubmatchIndex(text, -1) {
 			n := text[m[2]:m[3]]
 			if seen[n] {
 				continue

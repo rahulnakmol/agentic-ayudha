@@ -32,15 +32,11 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, c := range d.Capabilities {
 		cites = append(cites, c.Cites...)
 	}
-	// A definition's symbol covers the declaration of its name. When several
-	// definitions share the name (overloads), each cited one covers one
-	// declaration, so every overload needs its own cite.
-	defs, cited := map[string]int{}, map[string]map[string]bool{}
-	for _, sy := range ix.Symbols {
-		if isDefKind(sy.Kind) {
-			defs[sy.Name]++
-		}
-	}
+	// A definition's symbol covers the declaration of its name: each cited
+	// definition covers one declaration of the name in each header, so every
+	// overload a header declares needs its own cite, and a function declared
+	// in two headers is covered by citing its one definition.
+	cited := map[string]map[string]bool{}
 	for _, c := range cites {
 		if sy, ok := syms[strings.TrimSpace(c)]; ok && isDefKind(sy.Kind) {
 			if cited[sy.Name] == nil {
@@ -49,12 +45,13 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 			cited[sy.Name][sy.ID] = true
 		}
 	}
-	used := map[string]int{}
+	used := map[string]int{} // per header and name: each cited definition covers one declaration
 	missing := map[string][]string{}
 	for _, e := range ix.Entries {
 		direct := slices.ContainsFunc(cites, func(c string) bool { return coversEntry(ix, syms, strings.TrimSpace(c), e) })
-		if n := entryName(ix, e); !direct && n != "" && len(cited[n]) > 0 && (defs[n] <= 1 || used[n] < len(cited[n])) {
-			used[n]++
+		f, _ := splitAt(e.At)
+		if n := entryName(ix, e); !direct && n != "" && used[f+" "+n] < len(cited[n]) {
+			used[f+" "+n]++
 			direct = true
 		}
 		if direct {
@@ -279,12 +276,16 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 	}
 	// loads reports whether a runner loads a file: the runner's own file, or a
 	// file defining a function the runner reaches.
-	loaded := map[string][]string{} // file → the checkout files it imports or includes
+	// load is an import or include: the file it loads, and the function that
+	// holds it ("" at file scope), which must run for the load to happen.
+	type load struct{ file, in string }
+	loaded := map[string][]load{} // file → the checkout files it imports or includes
 	for _, e := range ix.Edges {
 		if e.Kind != "call" && strings.HasPrefix(e.From, "file:") {
 			for _, to := range e.To {
 				if f, ok := strings.CutPrefix(to, "file:"); ok {
-					loaded[strings.TrimPrefix(e.From, "file:")] = append(loaded[strings.TrimPrefix(e.From, "file:")], f)
+					from := strings.TrimPrefix(e.From, "file:")
+					loaded[from] = append(loaded[from], load{f, enclosing(e.At)})
 				}
 			}
 		}
@@ -320,10 +321,10 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 			}
 		}
 		for ; len(queue) > 0; queue = queue[1:] {
-			for _, to := range loaded[queue[0]] {
-				if !m[to] {
-					m[to] = true
-					queue = append(queue, to)
+			for _, l := range loaded[queue[0]] {
+				if !m[l.file] && (l.in == "" || reached(r)[l.in]) { // an import inside a function loads only when it runs
+					m[l.file] = true
+					queue = append(queue, l.file)
 				}
 			}
 		}
@@ -357,13 +358,13 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 		f, _ := splitAt(r.At)
 		seen := map[string]bool{f: true}
 		for queue := []string{f}; len(queue) > 0; queue = queue[1:] {
-			for _, to := range loaded[queue[0]] {
-				if _, ok := test[to]; ok && !test[to] {
+			for _, l := range loaded[queue[0]] {
+				if _, ok := test[l.file]; ok && !test[l.file] {
 					return true
 				}
-				if !seen[to] {
-					seen[to] = true
-					queue = append(queue, to)
+				if !seen[l.file] {
+					seen[l.file] = true
+					queue = append(queue, l.file)
 				}
 			}
 		}
