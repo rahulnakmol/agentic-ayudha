@@ -179,6 +179,12 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 - No superlatives ("best", "fastest", "most powerful") and no comparison with other products or with before, unless a
   Result's baseline shows the change.
 - A release's copy covers what that release shipped. A Feature from an earlier release is not new in this one.
+- Never claim an absence the sources do not state: "nothing breaks", "no action needed", or "fully compatible" is a
+  claim about every change, and no pack proves it. When no source names a break or a step, leave that part out.
+- `aayu tell` does not check code blocks or diagram labels, so you check them: a code block shows only a command,
+  setting, or value a criterion names, and a diagram's labels trace like prose.
+- Name a person only when a source names them, by GitHub login (`@login`) next to their work, never as "the founder"
+  or by a display name. A bot or a review app is not a person to thank.
 - A Feature without authoritative packs is not in the copy at all: not named, linked, described, or hinted at
   ("coming soon", "next for teams"). Release notes and changelogs count what they cannot describe, bugs without a
   Feature included: "Two more changes shipped in this release. They are not described here, because their proof is
@@ -202,9 +208,34 @@ the Release note (what changed, who it helps, the proof), a guide is one Doc pag
 Positioning line; keep it to one page. Never write the artefact's name into the copy: no "Positioning line",
 "Release note", or "Doc page" heading or label. Readers see the copy, not your method.
 
-- `release` and `changelog`: `# <product> <version>`, then the date and a one-sentence summary. For each proven
-  Feature that shipped, a `##` heading with its link, what changed (one short sentence or bullet per criterion), and
-  who it helps, as a need. Then the count of the changes you cannot describe. No marketing.
+- `release` and `changelog`: the same skeleton every release, so readers learn it once; the parts that have no source
+  are left out, never written empty. [references/release-notes.md](references/release-notes.md) has each part's rules
+  and a check to run before you hand over.
+  1. `# <product> <version>`, then the date and a one-sentence summary that names the headline Features and, when
+     the grounding gives the earlier release, the version this one follows ("v1.5.0 follows v1.4.0 and adds …").
+  2. A short "Read this if you are…" block when readers need different sections (a step that needs an admin or the
+     team's agreement, or a change that a source shows means something different on your own and in a team): one
+     line each for a reader on their own, in a small team, and in a medium team, pointing to the sections that reader
+     needs. A line is a pointer, not a promise: any reason it gives traces like any other claim.
+  3. `## Upgrade first`, only when a criterion or an inspect judgement names a step the reader must take: numbered
+     steps, one action each, the exact command or setting, how the reader sees that it worked, and who can do it:
+     one person alone, an admin, or the team's agreement (a review or an approval). Take who from the source; when no
+     source says, leave it off and tell the human in your reply.
+  4. `## Breaking changes`, only when a criterion or the Feature's scope names a change to what the reader already
+     uses: for each, what changed, what replaces it, who it affects, and what they do, each cell from a source.
+  5. For each proven Feature that shipped, a `##` heading with its link, then, in this order: what changed (one short
+     sentence or bullet per criterion, verb first), who it helps (as a need), what it means on your own and in a team
+     when a source shows they differ (a criterion with a second person, a setting a person must approve), how to
+     start (the control or command the criterion names), and a limit from the scope when the reader would expect
+     more.
+  6. The count of the changes you cannot describe, as the last line of the changes.
+  7. Thanks, only when a source names a person: by GitHub login, next to their work.
+
+  No marketing. A `changelog` entry is `## <version>` and the date, the summary sentence, then the same parts as
+  bullets, without the reader block. The team stage sets the depth, never the evidence. The reader the request names
+  comes first. Otherwise, at a startup the reader on their own comes first, the block is at most three short lines,
+  and the page is at most 400 words; at a scaleup or an enterprise the team reader comes first, and each step's who
+  and each solo-or-team difference gets its own sentence.
 - `guide` and `docs`: one page of one kind: a how-to (one task), a tutorial (learning by doing), a reference, or an
   explanation. A how-to has a title that names the task; one paragraph on when to use it, with the Feature's link;
   "Before you start", linking existing docs pages by path; numbered steps, one action each, naming the control; what
