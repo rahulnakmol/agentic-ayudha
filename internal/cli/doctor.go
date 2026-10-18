@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,8 +60,18 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
 	}
 	if p.Root != "" {
-		if _, ok, err := hosts.ReadLock(p.Root); err == nil && ok {
+		_, ok, err := hosts.ReadLock(p.Root)
+		switch found := hosts.AayudhaConfig(p.Root); {
+		case err == nil && ok:
 			p.HostConfig = e.hostConfigDrift
+		case len(found) > 0:
+			// The lock says what install wrote; without it, aayudha's entries cannot be checked.
+			if err == nil {
+				err = errors.New(hosts.LockPath + " is missing")
+			}
+			p.HostConfig = func(context.Context) ([]string, error) {
+				return nil, fmt.Errorf("%s carry aayudha's hooks or MCP server, but %w: run `aayu install --apply` to rewrite them", strings.Join(found, ", "), err)
+			}
 		}
 	}
 	p.Latest = func(ctx context.Context) (string, error) {

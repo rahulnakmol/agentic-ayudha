@@ -57,6 +57,20 @@ var ExecutableConfig = []string{ClaudeMCP, ClaudeSettings, CursorMCP, CursorHook
 // ExecutableConfig, and .agents/, whose setup script the hosts' clouds run.
 var HostConfigOwners = []string{"/.mcp.json", "/.claude/", "/.cursor/", "/.codex/", "/.amp/plugins/", "/.github/hooks/", "/.agents/"}
 
+// AayudhaConfig names the ExecutableConfig files under root that carry an
+// aayudha hook, MCP server, or plugin. Without a readable lock.toml doctor
+// cannot plan, so these are what it cannot vouch for.
+func AayudhaConfig(root string) []string {
+	var out []string
+	for _, f := range ExecutableConfig {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
+		if err == nil && (f == AmpPlugin || aayuHookLike.Match(b) || bytes.Contains(b, []byte(`"`+ServerName+`"`)) || bytes.Contains(b, []byte("mcp_servers."+ServerName))) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // ConfigDrift names the ExecutableConfig files among a plan's repository
 // edits whose content would change in meaning: a JSON file is compared parsed,
 // so key order and spacing alone are no drift.
@@ -750,7 +764,7 @@ var ourHook = regexp.MustCompile(`^(& )?"[^"]+" hook [a-z][a-z0-9-]* --host (amp
 // as one of ours with something appended. Install replaces it like its own,
 // so an altered aayudha hook is drift that a repair removes, never a
 // product hook it keeps next to the real one.
-var aayuHookLike = regexp.MustCompile(`(^|[\s"'/\\&;|])aayu(\.exe)?"?\s+hook\b`)
+var aayuHookLike = regexp.MustCompile(`(^|[\s"'/\\&;|])aayu(\.exe)?(\\?")?\s+hook\b`)
 
 func aayuHook(c string) bool { return ourHook.MatchString(c) || aayuHookLike.MatchString(c) }
 

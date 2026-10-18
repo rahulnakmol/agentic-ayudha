@@ -493,6 +493,9 @@ func TestInitExtras(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
 		t.Fatalf("uninit: %d %s", code, errOut)
 	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".github", "CODEOWNERS")); err == nil {
+		t.Errorf("uninit left the CODEOWNERS that init created for the host-config block: %q", b)
+	}
 	code, out, _ = run(t, env, opts, "uninit", "--external", "--json")
 	var ext struct {
 		External []initrepo.Object `json:"external"`

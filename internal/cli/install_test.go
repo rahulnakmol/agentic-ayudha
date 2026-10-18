@@ -160,6 +160,14 @@ func TestInstall(t *testing.T) {
 	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
 		t.Fatalf("doctor after the repair:\n%s", out)
 	}
+	// Without lock.toml doctor cannot plan, so aayudha's entries are unchecked: that fails too.
+	lockFile := filepath.Join(repo, filepath.FromSlash(hosts.LockPath))
+	lockBytes, _ := os.ReadFile(lockFile)
+	_ = os.Remove(lockFile)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, "lock.toml is missing") {
+		t.Fatalf("doctor without lock.toml: exit %d\n%s", code, out)
+	}
+	_ = os.WriteFile(lockFile, lockBytes, 0o644)
 }
 
 func TestHookCommand(t *testing.T) {
