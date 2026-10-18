@@ -168,6 +168,20 @@ func TestMissingAdapterNamesTheKey(t *testing.T) {
 	}
 }
 
+// TestSentryOpens (Decision #449, phase P1): Sentry opens the configured
+// project's client for the Production Engineer's live reads, sending nothing,
+// and an unconfigured Sentry names what to set.
+func TestSentryOpens(t *testing.T) {
+	rt := &refuse{t: t}
+	c, err := Sentry(deps(t, rt, keys, configured...))
+	if err != nil || c.Project() != "4507" || rt.n != 0 {
+		t.Fatalf("Sentry = %v, %v after %d requests; want the client for project 4507 and no request", c, err, rt.n)
+	}
+	if _, err := Sentry(deps(t, rt, keys)); !errors.Is(err, integrations.ErrNotConfigured) || !strings.Contains(err.Error(), "[integrations.sentry] is not set") {
+		t.Errorf("unconfigured: err %v; want ErrNotConfigured naming [integrations.sentry]", err)
+	}
+}
+
 // TestWriteScopedKeyRefusedBeforeAnyCall: scope = "write" is refused by the
 // WP1.3 check with zero requests, for baselines and for doctor's check alike.
 func TestWriteScopedKeyRefusedBeforeAnyCall(t *testing.T) {

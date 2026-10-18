@@ -444,3 +444,75 @@ func stamp(v any, layout string) string {
 	}
 	return s
 }
+
+// MeasureSentry measures a crash-free SLO from the Sentry project's release
+// health over the whole SLO window ending at to (Decision #449, phase P1).
+// An SLO window is longer than investigate's query bound, so this reads
+// aggregates only: one request for the hourly session counts by status, from
+// which the window's totals and the last hour's and six hours' burn come.
+// A good event is a session that did not crash.
+func MeasureSentry(ctx context.Context, api SentryAPI, o SLO, to time.Time) (Measured, Provenance, error) {
+	pv := Provenance{Source: "sentry project " + api.Project() + " sessions"}
+	if !o.FromSentry() {
+		return Measured{}, pv, fmt.Errorf("%w: SLO %q (sli %s) is measured from an export, not from Sentry", errSource, o.Name, o.SLI)
+	}
+	from := to.Add(-o.window)
+	v := url.Values{
+		"field":    {"sum(session)"},
+		"groupBy":  {"session.status"},
+		"project":  {api.Project()},
+		"start":    {from.UTC().Format(time.RFC3339)},
+		"end":      {to.UTC().Format(time.RFC3339)},
+		"interval": {"1h"},
+	}
+	b, req, err := api.Get(ctx, "/sessions/", v)
+	pv.Requests = append(pv.Requests, req)
+	if err != nil {
+		return Measured{}, pv, err
+	}
+	sum := sha256.Sum256([]byte(req + "\n" + string(b) + "\n"))
+	pv.Digest = hex.EncodeToString(sum[:])
+	var body struct {
+		Groups []struct {
+			By     map[string]any        `json:"by"`
+			Totals map[string]*float64   `json:"totals"`
+			Series map[string][]*float64 `json:"series"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(b, &body); err != nil {
+		return Measured{}, pv, fmt.Errorf("%w: undecodable sessions answer: %w", errSource, err)
+	}
+	var total, crashed, h1, h1bad, h6, h6bad int
+	for _, g := range body.Groups {
+		n := g.Totals["sum(session)"]
+		if n == nil {
+			continue
+		}
+		bad := g.By["session.status"] == "crashed"
+		total += int(*n)
+		if bad {
+			crashed += int(*n)
+		}
+		series := g.Series["sum(session)"]
+		for i := range series {
+			back := len(series) - i // 1 is the last hour
+			if series[i] == nil || back > 6 {
+				continue
+			}
+			c := int(*series[i])
+			h6 += c
+			if bad {
+				h6bad += c
+			}
+			if back == 1 {
+				h1 += c
+				if bad {
+					h1bad += c
+				}
+			}
+		}
+	}
+	m := measured(o, from, to, total-crashed, total, h1bad, h1, h6bad, h6)
+	m.Source, m.Digest = pv.Source, pv.Digest
+	return m, pv, nil
+}

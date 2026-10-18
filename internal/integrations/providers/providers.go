@@ -245,6 +245,16 @@ func PostHog(d Deps) (*posthog.Client, error) {
 	return s.(*posthog.Client), nil
 }
 
+// Sentry opens [integrations.sentry] for the Production Engineer's live
+// reads (Decision #449, phase P1).
+func Sentry(d Deps) (*sentry.Client, error) {
+	_, s, err := open(d, "sentry")
+	if err != nil {
+		return nil, err
+	}
+	return s.(*sentry.Client), nil
+}
+
 // GrowthBook opens [integrations.growthbook] for readout (WP6.7).
 func GrowthBook(d Deps) (*growthbook.Client, error) {
 	_, s, err := open(d, "growthbook")

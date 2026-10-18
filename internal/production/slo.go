@@ -29,7 +29,7 @@ type SLO struct {
 	Name      string  `toml:"name" json:"name"`
 	Service   string  `toml:"service" json:"service"`
 	Journey   string  `toml:"journey" json:"journey"`
-	SLI       string  `toml:"sli" json:"sli"`                         // availability | latency
+	SLI       string  `toml:"sli" json:"sli"`                         // availability | latency (request spans) | crash-free (Sentry sessions)
 	Route     string  `toml:"route,omitempty" json:"route,omitempty"` // optional: only spans of this route count
 	Objective float64 `toml:"objective" json:"objective"`             // percent of good events, e.g. 99.5
 	Window    string  `toml:"window" json:"window"`                   // the budget's rolling window, e.g. 28d
@@ -111,8 +111,12 @@ func ParseSLOs(data []byte) (*SLOs, error) {
 			if o.threshold, err = ParseDuration(o.Threshold); err != nil || o.threshold <= 0 {
 				bad(i, "a latency SLI needs a threshold such as 500ms")
 			}
+		case "crash-free":
+			if o.Threshold != "" || o.Route != "" {
+				bad(i, "a crash-free SLI counts the app's sessions in Sentry: it has no threshold and no route")
+			}
 		default:
-			bad(i, "sli %q: want availability or latency", o.SLI)
+			bad(i, "sli %q: want availability, latency, or crash-free", o.SLI)
 		}
 		if o.Runbook != "" && (!strings.HasPrefix(o.Runbook, RunbookDir+"/") || !strings.HasSuffix(o.Runbook, ".md")) {
 			bad(i, "runbook %q must be a file in %s/", o.Runbook, RunbookDir)
@@ -159,7 +163,16 @@ type Measured struct {
 	Burn1h          float64 `json:"burn_rate_1h"` // the bad share in the last hour over the allowed share
 	Burn6h          float64 `json:"burn_rate_6h"`
 	Spent           bool    `json:"spent"`
+	// Source and Digest name where a provider measure came from and a
+	// SHA-256 over its answer, so a recorded budget stays checkable; an
+	// export's measure leaves them empty (the status names the export).
+	Source string `json:"source,omitempty"`
+	Digest string `json:"source_sha256,omitempty"`
 }
+
+// FromSentry reports whether the SLO is measured from Sentry rather than
+// from an export's spans.
+func (o SLO) FromSentry() bool { return o.SLI == "crash-free" }
 
 // Measure computes the SLO over the export, from the start of its window (or
 // the export's first record, whichever is later) to `to`.
@@ -169,17 +182,15 @@ func Measure(e *Export, o SLO, to time.Time) Measured {
 	if first.After(from) {
 		from = first
 	}
-	m := Measured{Name: o.Name, SLI: o.SLI, Objective: o.Objective, From: from, To: to, Covered: days(to.Sub(from)) + " of " + o.Window}
-	allowed := 1 - o.Objective/100
-	var h1, h1bad, h6, h6bad int
+	var h1, h1bad, h6, h6bad, good, total int
 	for _, s := range e.Spans {
 		if s.Service != o.Service || (o.Route != "" && s.Route != o.Route) || s.Start.Before(from) || !s.Start.Before(to) {
 			continue
 		}
 		g := o.good(s)
-		m.Total++
+		total++
 		if g {
-			m.Good++
+			good++
 		}
 		if !s.Start.Before(to.Add(-time.Hour)) {
 			h1++
@@ -194,6 +205,15 @@ func Measure(e *Export, o SLO, to time.Time) Measured {
 			}
 		}
 	}
+	return measured(o, from, to, good, total, h1bad, h1, h6bad, h6)
+}
+
+// measured is an SLO's budget from its good and total events over the
+// window, and its bad and total events over the last hour and six hours.
+func measured(o SLO, from, to time.Time, good, total, h1bad, h1, h6bad, h6 int) Measured {
+	m := Measured{Name: o.Name, SLI: o.SLI, Objective: o.Objective, From: from, To: to, Covered: days(to.Sub(from)) + " of " + o.Window,
+		Good: good, Total: total}
+	allowed := 1 - o.Objective/100
 	m.Value, m.BudgetRemaining = 100, 1
 	if m.Total > 0 {
 		bad := float64(m.Total - m.Good)

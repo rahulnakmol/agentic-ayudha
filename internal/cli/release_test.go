@@ -679,6 +679,13 @@ journey = "Ask a question"
 sli = "availability"
 objective = 99.5
 window = "28d"
+[[slo]]
+name = "app-crash-free"
+service = "app"
+journey = "Open the app"
+sli = "crash-free"
+objective = 99.9
+window = "28d"
 `), 0o644)
 	_ = os.WriteFile(filepath.Join(f.dir, "ops", "actions.toml"), []byte(`version = 1
 [[action]]
@@ -705,12 +712,16 @@ blast_radius = "service"
 `), 0o644)
 	git(t, f.dir, "add", "ops")
 	f.commit(t, "feat(ops): SLOs and the catalog", 0, "", "")
-	status := func(at time.Time, remaining float64) {
+	// The crash-free SLO is measured from Sentry: its measure carries the
+	// source and a digest, and gates like the export's.
+	status := func(at time.Time, remaining float64, crashFree ...float64) {
 		t.Helper()
 		scratch := filepath.Join(t.TempDir(), "l")
 		git(t, filepath.Dir(scratch), "clone", "--quiet", "--branch", "ledger", f.bare, scratch)
 		_ = os.MkdirAll(filepath.Join(scratch, "slo"), 0o755)
-		b, _ := json.Marshal(map[string]any{"computed_at": at, "slos": []map[string]any{{"name": "ask-availability", "budget_remaining": remaining, "spent": remaining <= 0}}})
+		cf := append(crashFree, remaining)[0]
+		b, _ := json.Marshal(map[string]any{"computed_at": at, "slos": []map[string]any{{"name": "ask-availability", "budget_remaining": remaining, "spent": remaining <= 0},
+			{"name": "app-crash-free", "sli": "crash-free", "budget_remaining": cf, "spent": cf <= 0, "source": "sentry project 4507 sessions", "source_sha256": strings.Repeat("ab", 32)}}})
 		_ = os.WriteFile(filepath.Join(scratch, "slo", "status.json"), b, 0o644)
 		git(t, scratch, "add", ".")
 		git(t, scratch, "commit", "--quiet", "-m", "slo: status")
@@ -728,9 +739,13 @@ blast_radius = "service"
 		t.Fatalf("stale status: %d %s", code, errOut)
 	}
 	status(day.Add(-time.Hour), -0.4)
-	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of ask-availability is spent") ||
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of ask-availability, app-crash-free is spent") ||
 		!strings.Contains(errOut, fmt.Sprintf("#2 (story), #%d (story) would ship", f.other)) {
 		t.Fatalf("spent budget: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), 0.3, -0.1)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of app-crash-free is spent") {
+		t.Fatalf("spent crash-free budget: %d %s", code, errOut)
 	}
 	status(day.Add(-time.Hour), 0.3)
 	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "rollback action(s) rollback-app") {
