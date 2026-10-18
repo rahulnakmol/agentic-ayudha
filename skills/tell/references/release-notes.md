@@ -167,7 +167,7 @@ because the binary does not check these:
    read.
 3. Every step comes before the changes, with its check, and with who can do it where a source names who (else your
    reply tells the human it is missing). Every break is in the table (in a changelog, a "Breaking:" bullet), with
-   what replaces it.
+   what replaces it where a source names it (else a dash, and your reply says so).
 4. Each Feature section has what changed, then who it helps, what it means on your own and in a team, how to
    start, and a limit, in the skeleton's order, each only where a source gives it.
 5. The sections are in the skeleton's order, and none is empty.
