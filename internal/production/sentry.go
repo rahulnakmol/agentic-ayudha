@@ -55,7 +55,7 @@ var sentryFields = map[string]map[string]string{
 	"logs":   {"version": "release", "trace": "trace"},
 }
 
-var errSentry = errors.New("sentry source")
+var errSource = errors.New("live source")
 
 // Run evaluates the query against the Sentry project.
 func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Provenance, error) {
@@ -85,7 +85,7 @@ func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Pro
 	case "trace":
 		r, err = s.trace(q, get)
 	default:
-		err = fmt.Errorf("%w: %s is not answered from Sentry; ask requests by version (counts per release) instead", errSentry, q.Kind)
+		err = fmt.Errorf("%w: %s is not answered from Sentry; ask requests by version (counts per release) instead", errSource, q.Kind)
 	}
 	h := sha256.New()
 	for i, b := range bodies {
@@ -133,7 +133,7 @@ func (s Sentry) events(q Query, dataset string, fields []string, sortBy string, 
 		}
 		f, ok := sentryFields[dataset][k]
 		if !ok {
-			return nil, fmt.Errorf("%w: where %s is not a field of Sentry's %s dataset", errSentry, k, dataset)
+			return nil, fmt.Errorf("%w: where %s is not a field of Sentry's %s dataset", errSource, k, dataset)
 		}
 		if k == "version" {
 			val += "*" // a revision may be abbreviated, as in the export
@@ -177,7 +177,7 @@ func (s Sentry) aggregate(q Query, resolve Resolver, get func(string, url.Values
 	for _, f := range by {
 		sf, ok := sentryFields[dataset][f]
 		if !ok {
-			return Result{}, fmt.Errorf("%w: by %s is not a field of Sentry's %s dataset", errSentry, f, dataset)
+			return Result{}, fmt.Errorf("%w: by %s is not a field of Sentry's %s dataset", errSource, f, dataset)
 		}
 		fields = append(fields, sf)
 	}
@@ -204,7 +204,7 @@ func (s Sentry) aggregate(q Query, resolve Resolver, get func(string, url.Values
 	}
 	var body eventsBody
 	if err := json.Unmarshal(b, &body); err != nil {
-		return Result{}, fmt.Errorf("%w: undecodable events answer: %w", errSentry, err)
+		return Result{}, fmt.Errorf("%w: undecodable events answer: %w", errSource, err)
 	}
 	frames := map[string]string{}
 	cols := slices.Clone(by)
@@ -309,7 +309,7 @@ func (s Sentry) logs(q Query, get func(string, url.Values) ([]byte, error)) (Res
 	}
 	var body eventsBody
 	if err := json.Unmarshal(b, &body); err != nil {
-		return Result{}, fmt.Errorf("%w: undecodable logs answer: %w", errSentry, err)
+		return Result{}, fmt.Errorf("%w: undecodable logs answer: %w", errSource, err)
 	}
 	r := Result{Columns: []string{"time", "level", "msg", "version", "trace_id", "attributes"}}
 	for _, d := range body.Data {
@@ -333,7 +333,7 @@ func (s Sentry) deploys(q Query, get func(string, url.Values) ([]byte, error)) (
 		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(b, &releases); err != nil {
-		return Result{}, fmt.Errorf("%w: undecodable releases answer: %w", errSentry, err)
+		return Result{}, fmt.Errorf("%w: undecodable releases answer: %w", errSource, err)
 	}
 	var all []Deploy
 	for _, rel := range releases {
@@ -346,7 +346,7 @@ func (s Sentry) deploys(q Query, get func(string, url.Values) ([]byte, error)) (
 			DateFinished string `json:"dateFinished"`
 		}
 		if err := json.Unmarshal(b, &ds); err != nil {
-			return Result{}, fmt.Errorf("%w: undecodable deploys answer for %s: %w", errSentry, rel.Version, err)
+			return Result{}, fmt.Errorf("%w: undecodable deploys answer for %s: %w", errSource, rel.Version, err)
 		}
 		for _, d := range ds {
 			t, err := time.Parse(time.RFC3339, d.DateFinished)
@@ -383,7 +383,7 @@ func (s Sentry) trace(q Query, get func(string, url.Values) ([]byte, error)) (Re
 	}
 	var roots []json.RawMessage
 	if err := json.Unmarshal(b, &roots); err != nil {
-		return Result{}, fmt.Errorf("%w: undecodable trace answer: %w", errSentry, err)
+		return Result{}, fmt.Errorf("%w: undecodable trace answer: %w", errSource, err)
 	}
 	r := Result{Columns: []string{"time", "kind", "name", "version", "status", "duration_ms", "detail"}}
 	var walk func([]json.RawMessage, int)
