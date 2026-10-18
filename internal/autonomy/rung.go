@@ -107,8 +107,9 @@ func RunFor(r *gh.WorkflowRun, n int, base string) bool {
 }
 
 // Proven reports whether a review at rung counts toward the streak and the
-// autonomous pass: a different-family review (A, or B through a paid key) or
-// a person's. A same-family review (C) or an unknown rung never does.
+// streak's autonomous pass: a different-family review (A, or B through a paid
+// key) or a person's. A same-family review (C) or an unknown rung never does;
+// merge on proof reads [autonomy] proof_rungs instead, which may list C.
 func Proven(rung string) bool {
 	return rung == inspect.RungA || rung == inspect.RungB || rung == inspect.RungHuman
 }

@@ -629,8 +629,9 @@ func AgentsSection(r Repo) hosts.AgentsSection {
 	b.WriteString("- The `ledger` branch holds snapshots, proof, and actions segments. Never commit code to it or merge it.\n")
 	b.WriteString("- Every GitHub write goes through `aayu`; agents never write with `gh` directly.\n")
 	b.WriteString("- Every pull request that is not docs-only gets a review by an agent app: of another model family when one is\n")
-	b.WriteString("  installed, else a labelled same-family review that never counts toward autonomy. `aayu build` asks for it\n")
-	b.WriteString("  after each push and writes `Aayudha-Host` and `Aayudha-Model` trailers. For a pull request `aayu build` did\n")
+	b.WriteString("  installed, else a labelled same-family review (rung C). Rung C never counts toward the streak; it counts for\n")
+	b.WriteString("  merge on proof only where `[autonomy] proof_rungs` lists C. `aayu build` asks for the review after each push\n")
+	b.WriteString("  and writes `Aayudha-Host` and `Aayudha-Model` trailers. For a pull request `aayu build` did\n")
 	b.WriteString("  not open, put `Aayudha-Host: <host>` and `Aayudha-Model: <model>` lines in its body, one per model used, and\n")
 	b.WriteString("  run `aayu inspect <pr>` after the last push.")
 	return hosts.AgentsSection{ID: AgentsSectionID, Body: b.String()}

@@ -766,7 +766,7 @@ func TestReviewLadder(t *testing.T) {
 	if anthropic.Rung(verbs.FamilyOf("gpt-6.1-sol")) != RungA || anthropic.Rung(verbs.FamilyOf("claude-sonnet-5-5")) != RungC || anthropic.Rung(verbs.FamilyOf("composer-2.5")) != RungC {
 		t.Error("the reported model's family does not settle the rung")
 	}
-	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward autonomy") {
+	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward the streak, and counts for merge on proof only where [autonomy] proof_rungs lists C") {
 		t.Errorf("C label: %q", l)
 	}
 	if l := unknown.RungLabel(RungC, "codex", verbs.FamilyOpenAI); !strings.Contains(l, "builder family unknown") {

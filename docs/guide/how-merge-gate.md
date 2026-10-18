@@ -138,12 +138,16 @@ apps, and names the apps that would move it up; it calls no model.
 
 The review the gate records, and shows as the first line of the inspect comment, is one of three:
 
-| Review | When | Counts toward autonomy |
-|---|---|---|
-| Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
-| Different-family, paid (rung B) | `reviewer = "ci"`, or no installed app can review the head, and the code-review environment names a model of another family | yes |
-| Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
-| Human | A person reviewed | a person's review |
+| Review | When | Counts toward the streak | Counts for merge on proof |
+|---|---|---|---|
+| Different-family (rung A) | The reviewer's model is of a family outside every family the builder may be | yes | where `proof_rungs` lists A (the default) |
+| Different-family, paid (rung B) | `reviewer = "ci"`, or no installed app can review the head, and the code-review environment names a model of another family | yes | where `proof_rungs` lists B (the default) |
+| Same-family (rung C) | The reviewer is of the builder's family, or the builder's family is unknown | never | where `proof_rungs` lists C (the default); otherwise never layers and protected paths still need a person |
+| Human | A person reviewed | a person's review | a person's review |
+
+Merge on proof is off until a repository sets `[autonomy] proof = true`. Then, with the default `proof_rungs`, a
+same-family review is enough: that includes a pull request whose builder's family is unknown. Set
+`proof_rungs = ["A", "B"]` to require a different-family review (@rahulnakmol, 2026-10-18).
 
 The reviewer's family is the app's family. Only an app whose family is host-managed (Cursor) takes it from the
 optional `model` field of its reply; an app of one family that reports another family's model gives a same-family
@@ -425,8 +429,8 @@ fixed head, returned `merge`, and the spend covers both calls.
    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
    missing evidence, Completion Goal drift, and a pull request with no story.
 4. A review is different-family only when the reviewer's reported family is outside every family the builder may
-   be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives an
-   autonomous pass. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
+   be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives the
+   streak's autonomous pass; it merges on proof only where `[autonomy] proof_rungs` lists C. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
    `inspect.ChooseReviewer`, `Builder.Rung`, and `inspect.ReadReply` in
    [internal/inspect/apps.go](../../internal/inspect/apps.go) and `inspect.BuilderOf` (`TestReviewLadder`,
    `TestInspectThroughApp`, `TestBuilderOf`, `TestShipAutonomousFootprint`).

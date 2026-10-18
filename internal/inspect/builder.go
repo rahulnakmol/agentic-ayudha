@@ -155,8 +155,10 @@ func (b Builder) Unknown() bool { return b.Family == "" && len(b.Candidates) == 
 // The review ladder's rungs (Decision #469). A counts: a reviewer of a family
 // outside every family the builder may be. B is A through a pay-as-you-go
 // key the user added. C is the default: the builder's own family, or any
-// review of an unknown builder; it is labelled everywhere and never counts
-// toward autonomy. Human is a person's review.
+// review of an unknown builder; it is labelled everywhere, never counts
+// toward the streak, and counts for merge on proof only where [autonomy]
+// proof_rungs lists it (the default, @rahulnakmol, 2026-10-18). Human is a
+// person's review.
 const (
 	RungA     = "A"
 	RungB     = "B"
@@ -201,7 +203,7 @@ func (b Builder) RungLabel(rung, reviewer string, f verbs.Family) string {
 		}
 		return fmt.Sprintf("different-family review (%s%s): %s (%s), %s", rung, paid, reviewer, of, builder)
 	case RungC:
-		return fmt.Sprintf("same-family review (C): %s (%s), %s; it never counts toward autonomy, and never-layers and protected paths still need a person", reviewer, of, builder)
+		return fmt.Sprintf("same-family review (C): %s (%s), %s; it never counts toward the streak, and counts for merge on proof only where [autonomy] proof_rungs lists C; otherwise never-layers and protected paths still need a person", reviewer, of, builder)
 	}
 	return "human review: " + reviewer
 }

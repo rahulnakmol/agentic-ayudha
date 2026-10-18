@@ -563,6 +563,10 @@ func TestCheckStates(t *testing.T) {
 			p.Getenv = func(string) string { return "" }
 			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex")
 		}, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
+		{"an unknown builder with merge on proof merges on rung C", checkReviewRung, func(p *Probe) {
+			p.Getenv = func(string) string { return "" }
+			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex", "autonomy.proof=true")
+		}, Pass, "proof is on and proof_rungs lists C, so a PR merges on proof after it (remove C to require A or B)"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
 		{"the default: the CI review", checkReviewRung, func(p *Probe) { p.Config = load(t) }, Pass, `ci  the merge gate calls the model the code-review environment names`},
 		{"a same-family app with a paid reviewer of another family", checkReviewRung, func(p *Probe) {

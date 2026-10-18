@@ -65,6 +65,16 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: %s (%s); its review counts as different-family only for a builder of another family (a review service always does), and is labelled same-family otherwise", c.App, c.Family), Lines: lines}
 }
 
+// rungCNote is what a same-family review (rung C) is worth under a's rules:
+// never the streak, and merge on proof only where proof is on and
+// proof_rungs lists C (@rahulnakmol, 2026-10-18: "#657 a").
+func rungCNote(a config.Autonomy) string {
+	if a.Proof && slices.Contains(a.ProofRungs, inspect.RungC) {
+		return "it never counts toward the streak, but [autonomy] proof is on and proof_rungs lists C, so a PR merges on proof after it (remove C to require A or B)"
+	}
+	return "it never counts toward the streak, so a person passes every PR"
+}
+
 // noReviewerChosen is doctor's failure, and its next step, when [inspect]
 // reviewer names no tool (founder, 2026-10-18: "auto cannot be an option").
 const noReviewerChosen = `no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (ci, the default; codex, coderabbit, greptile, claude, cursor, or human) in .aayudha/config.toml, or run aayu install`
@@ -118,7 +128,7 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	case inspect.ReviewerHuman:
 		return Result{Status: Pass, Detail: `human  a person reviews every PR ([inspect] reviewer = "human"); it counts toward autonomy`, Lines: lines}
 	case inspect.ReviewerModel:
-		return reviewModelRung(cfg.Models, b, lines)
+		return reviewModelRung(cfg.Models, cfg.Autonomy, b, lines)
 	case inspect.ReviewerCI:
 		// The model lives in the code-review environment, which doctor cannot
 		// read; [inspect] paid_reviewer is the local stand-in.
@@ -187,7 +197,7 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	case inspect.RungA:
 		return Result{Status: Pass, Detail: fmt.Sprintf("A  different-family review: %s (%s); it counts toward autonomy", c.App, c.Family), Lines: lines}
 	case inspect.RungC:
-		return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: %s (%s), no other family reachable; it never counts toward autonomy, so a person passes every PR", c.App, c.Family), Lines: lines}
+		return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: %s (%s), no other family reachable; %s", c.App, c.Family, rungCNote(cfg.Autonomy)), Lines: lines}
 	}
 	return Result{Status: Warn, Detail: "no reviewer app can review: a person reviews every PR", Lines: lines}
 }
@@ -196,7 +206,7 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 // lane's direct model, chosen as inspect chooses it (internal/cli
 // reviewerModels): a default of a family the builder may be gives way to the
 // first peer candidate outside them; a configured one blocks every PR.
-func reviewModelRung(cfg config.Models, b inspect.Builder, lines []string) Result {
+func reviewModelRung(cfg config.Models, a config.Autonomy, b inspect.Builder, lines []string) Result {
 	m, err := (models.Resolver{Models: cfg}).ResolveDirect(verbs.LaneReview, verbs.DirectHost, false)
 	if err != nil {
 		return Result{Status: Fail, Detail: "model  the review lane resolves no model: " + err.Error(), Lines: lines}
@@ -215,7 +225,7 @@ func reviewModelRung(cfg config.Models, b inspect.Builder, lines []string) Resul
 	if b.Rung(m.Family) == inspect.RungA {
 		return Result{Status: Pass, Detail: fmt.Sprintf("A  different-family review: the review lane's %s (%s), called through the AI gateway; it counts toward autonomy", m.Model, m.Family), Lines: lines}
 	}
-	return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: the review lane's %s (%s) cannot be shown to differ from the builder; it never counts toward autonomy, so a person passes every PR", m.Model, m.Family), Lines: lines}
+	return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: the review lane's %s (%s) cannot be shown to differ from the builder; %s", m.Model, m.Family, rungCNote(a)), Lines: lines}
 }
 
 // reviewEnvSetup says where the CI review's model is set.
