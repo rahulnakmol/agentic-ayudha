@@ -102,6 +102,7 @@ var Checks = []Check{
 	{"agent-env", checkAgentEnv},
 	{"agents", checkAgents},
 	{"reviewer-apps", checkReviewerApps},
+	{"review-rung", checkReviewRung},
 	{"retired-workflows", checkRetiredWorkflows},
 	{"loops", checkLoops},
 	{"leases", checkLeases},

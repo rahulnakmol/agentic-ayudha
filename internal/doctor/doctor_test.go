@@ -274,6 +274,10 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
 			})
 		},
+		// No reviewer app configured: a person reviews every PR.
+		"review-rung": func(p *Probe) {
+			p.Config = load(t)
+		},
 		// A 0.1 triage workflow, still installed; a product's own file of the same name would not count.
 		"retired-workflows": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".github/workflows/aayudha-triage.yml": "name: aayudha-triage\non:\n  issues:\njobs: {}\n"})
@@ -497,6 +501,29 @@ func TestCheckStates(t *testing.T) {
 		{"lease comment unreadable", checkLeases, func(p *Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}}})
 		}, Warn, "could not read #9's lease: 404 Not Found"},
+		// Decision #469: Cursor on Grok reviews an Amp build (anthropic or
+		// openai) from another family; Codex reviews a Claude Code build
+		// (Claude Opus) from another family; Claude reviewing it is only C.
+		{"rung A for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex,cursor", "inspect.app_families.cursor=xai") }, Pass, "A  different-family review: cursor (xai)"},
+		{"rung A for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude,codex") }, Pass, "A  different-family review: codex (openai)"},
+		{"rung C with Cursor of no family", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=cursor") }, Pass, "move up (free): cursor: set [inspect] app_families.cursor"},
+		{"a fixed same-family reviewer beside a listed other family", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude,codex", "inspect.reviewer=claude")
+		}, Pass, `codex (openai): already listed; set [inspect] reviewer = "auto" or "codex"`},
+		{"a fixed same-family reviewer, the other family not listed", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")
+		}, Pass, `codex (openai): install it and add it to [inspect] apps, and set [inspect] reviewer = "auto" or "codex"`},
+		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
+		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
+		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},
+		// reviewer "model" calls the review lane, not an app: Amp may be
+		// anthropic or openai, so inspect passes over both to Grok.
+		{"a model reviewer for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Pass, "A  different-family review: the review lane's grok-"},
+		{"a configured same-family model reviewer", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.reviewer=model", "models.review.claude.model=gpt-6.1-sol")
+		}, Fail, "the review lane's gpt-6.1-sol is of a family the builder may be"},
 		{"OTLP opted in", checkTelemetry, func(p *Probe) { p.Config = load(t, "telemetry.otlp_endpoint=https://otel.example.com") }, Pass, "and, opted in, OTLP https://otel.example.com"},
 		{"ledger without LFS", checkLedgerMedia, func(p *Probe) { overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": "README.md\n"}) }, Pass, "ledger stores no proof media in Git LFS"},
 		{"LFS ledger, no token", checkLedgerMedia, func(p *Probe) { overlay(p, lfsLedger); p.API = nil }, Warn, "repository visibility unknown (no GitHub token or repository)"},
@@ -546,8 +573,9 @@ func TestCheckStates(t *testing.T) {
 	for _, tt := range tests {
 		p := healthy(t)
 		tt.change(p)
-		if r := tt.check(context.Background(), p); r.Status != tt.status || !strings.Contains(r.Detail, tt.detail) {
-			t.Errorf("%s: %s %q, want %s %q", tt.name, r.Status, r.Detail, tt.status, tt.detail)
+		// The detail, or a line under it, says it.
+		if r := tt.check(context.Background(), p); r.Status != tt.status || !strings.Contains(strings.Join(append([]string{r.Detail}, r.Lines...), "\n"), tt.detail) {
+			t.Errorf("%s: %s %q %q, want %s %q", tt.name, r.Status, r.Detail, r.Lines, tt.status, tt.detail)
 		}
 	}
 
