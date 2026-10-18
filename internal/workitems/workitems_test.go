@@ -125,6 +125,8 @@ func TestReadyFailures(t *testing.T) {
 		{"decision with ten options", with(decision, func(c *Item) {
 			c.Fields["options"] = "1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j"
 		}), StageReady, []string{"options: 10 options; offer at most 9, so the person picks each with one key"}},
+		{"decision with two options of one name", with(decision, func(c *Item) { c.Fields["options"] = "1. **Roll out.** to 5%.\n2. **Roll out.** to 50%." }), StageReady,
+			[]string{"options: options 1 and 2 are both named \"Roll out\"; give each its own name, so accepting it by name is unambiguous"}},
 		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
@@ -325,7 +327,7 @@ func TestParseOptions(t *testing.T) {
 		"   - Trade-off: gains a; costs b.\n" +
 		"   1. not an option\n" +
 		"```\n2. not an option either\n```\n" +
-		"~~~\n2. nor this\n```\n2. nor this, inside the tilde fence\n~~~\n" +
+		"~~~\n2. nor this\n```\n2. nor this, inside the tilde fence\n~~~not-a-close\n2. nor this, still fenced\n~~~\n" +
 		"2. **Keep the hat** (L07 stays put).\n" +
 		"3. Do nothing: nothing changes.")
 	want := []Option{
@@ -335,6 +337,11 @@ func TestParseOptions(t *testing.T) {
 	}
 	if len(ps) != 0 || !slices.Equal(os, want) {
 		t.Errorf("ParseOptions = %+v %v\nwant %+v", os, ps, want)
+	}
+	// A plain option's name is kept whole, however long.
+	long := "Keep the current engine and revisit it next quarter once the volumes are known"
+	if os, _ := ParseOptions("1. " + long + "\n2. Swap it"); len(os) != 2 || os[0].Name != long {
+		t.Errorf("long plain option = %+v", os)
 	}
 	// Prose that names a number is not a second option.
 	if os, ps := ParseOptions("1. **Keep.** Complete phase 2. before launch."); len(os) != 1 || len(ps) != 1 {

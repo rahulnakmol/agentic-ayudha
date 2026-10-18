@@ -245,7 +245,7 @@ func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 	}
 	opts, _ := decide.Options(w)
 	for _, o := range opts {
-		it.Options = append(it.Options, InboxAction{N: o.N, Label: o.Name, Recommended: o.Recommended,
+		it.Options = append(it.Options, InboxAction{N: o.N, Label: clip(o.Name, 60), Recommended: o.Recommended,
 			Command: fmt.Sprintf("aayu decide %d --accept %d", it.Number, o.N)})
 	}
 	return it
