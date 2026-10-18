@@ -17,6 +17,7 @@ import (
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -149,6 +150,10 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	person := agent == "" && e.isTerminal(e.In) // a person at a terminal confirms below; nobody else is asked
 	n := issueNumber(in.String("release"))
 	to := in.String("to")
+	at := strings.TrimSpace(in.String("at"))
+	if at != "" && to != "rolling" {
+		return Errorf(ExitUsage, "release: --at picks the dev commit for --to rolling; --to main promotes rolling as it is")
+	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err
@@ -215,7 +220,17 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		return Errorf(ExitBlocked, "release: origin needs both %s and %s: %v", src, dst, err)
 	}
 	srcSHA, _, _ = strings.Cut(srcSHA, "\n")
-	revs, _ := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+"..origin/"+src) // both refs exist; an empty range refuses below
+	srcRef := "origin/" + src // what the candidate merges: dev's newest commit, or --at
+	if at != "" {
+		if srcSHA, err = gitOut(root, "rev-parse", "--verify", at+"^{commit}"); err != nil {
+			return Errorf(ExitUsage, "release: --at %s is not a commit: %v", at, err)
+		}
+		if _, err := gitOut(root, "merge-base", "--is-ancestor", srcSHA, "origin/"+src); err != nil {
+			return Errorf(ExitUsage, "release: --at %s is not on %s", short(srcSHA), src)
+		}
+		srcRef = srcSHA
+	}
+	revs, _ := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+".."+srcRef) // both refs exist; an empty range refuses below
 	now := e.Now().UTC()
 	ts := now.Format("20060102T1504Z")
 	p := Promotion{Repo: repo, Release: n, Version: version, Source: src, Target: dst, SourceSHA: srcSHA, PromotedBy: me.Login,
@@ -338,6 +353,14 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if !has[gateWorkflow] {
 		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
 	}
+	// The rolling gate's evals-gate needs tier-2 results for the commit it promotes; release never dispatches them.
+	if to == "rolling" && has[evalsWorkflow] {
+		if p.Evals, err = e.evaluated(ctx, c, gitOut, root, repo, n, src, dst, srcSHA, at != ""); err != nil {
+			return err
+		}
+	} else if to == "rolling" {
+		p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
+	}
 	// The TTY gate is gone for release (Story #430): a person at a terminal is still
 	// asked (or says --yes), and an agent, or a run without a terminal, goes on
 	// with no prompt: the gate decides, and main already holds a person's request.
@@ -355,7 +378,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if _, err := gitOut(root, "worktree", "add", "--quiet", "-b", p.Candidate, wt, "origin/"+dst); err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if _, err := gitOut(wt, "merge", "--quiet", "--no-ff", "--signoff", "-m", p.Message, "origin/"+src); err != nil {
+	if _, err := gitOut(wt, "merge", "--quiet", "--no-ff", "--signoff", "-m", p.Message, srcRef); err != nil {
 		return Errorf(ExitBlocked, "release: %s does not merge cleanly into %s: %v", src, dst, err)
 	}
 	if p.Commit, err = gitOut(wt, "rev-parse", "HEAD"); err != nil {
@@ -369,19 +392,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		_ = e.gitPush(ctx, g, root, repo, p.Candidate, ":refs/heads/"+p.Candidate)
 	}()
 
-	// 2. The gate: evals of the source tip (rolling), then ci.yml on the candidate.
-	if to == "rolling" {
-		if has[evalsWorkflow] {
-			if p.Evals, err = e.dispatchAndWait(ctx, c, repo, evalsWorkflow, src, srcSHA, nil, false); err != nil {
-				return err
-			}
-			if p.Evals.Conclusion != "success" {
-				return Errorf(ExitBlocked, "release: %s ended %s on %s (%s); nothing was promoted", evalsWorkflow, p.Evals.Conclusion, short(srcSHA), p.Evals.URL)
-			}
-		} else {
-			p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
-		}
-	}
+	// 2. The gate: ci.yml on the candidate.
 	if p.Gate, err = e.dispatchAndWait(ctx, c, repo, gateWorkflow, p.Candidate, p.Commit, map[string]any{"gate": gateFor(to)}, true); err != nil {
 		return err
 	}
@@ -804,6 +815,96 @@ func (e *Env) dispatchAndWait(ctx context.Context, c *github.Client, repo, workf
 		return nil, Errorf(ExitExternal, "release: dispatching %s returned no run ID", workflow)
 	}
 	return e.waitRun(ctx, c, repo, workflow, id, sha, retry)
+}
+
+// evaluated checks that sha, the dev commit a rolling promotion merges, has
+// tier-2 results for every gating group: an artifact eval-results-<sha>-<group>
+// on a completed evals.yml run of that commit, which is what the rolling
+// gate's evals-gate downloads. It never dispatches evals.yml. When sha has
+// none, it names the newest dev commit not yet on dst that has them, and the
+// two ways on: promote that commit with --at, or dispatch once on dev's
+// newest commit and run release again.
+func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(string, ...string) (string, error), root, repo string, n int,
+	src, dst, sha string, chosen bool) (*RunRef, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	var cfg struct {
+		Groups []struct {
+			Name string `toml:"name"`
+			Gate string `toml:"gate"`
+		} `toml:"groups"`
+	}
+	if b, err := gitOut(root, "show", sha+":evals/eval.toml"); err == nil {
+		if err := toml.Unmarshal([]byte(b), &cfg); err != nil {
+			return nil, Errorf(ExitBlocked, "release: evals/eval.toml at %s: %v", short(sha), err)
+		}
+	}
+	var gating []string
+	for _, g := range cfg.Groups {
+		if g.Gate != "advisory" { // as evals.Config.Gates
+			gating = append(gating, g.Name)
+		}
+	}
+	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
+		&gh.ListWorkflowRunsOptions{Branch: src, Status: "completed", ListOptions: gh.ListOptions{PerPage: 100}})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	// results reports the run of commit h with every gating group's results
+	// (the newest that has each), or the groups none of its runs has.
+	results := func(h string) (*RunRef, []string, error) {
+		have := map[string]bool{}
+		var ref *RunRef
+		for _, r := range runs.WorkflowRuns {
+			if r.GetHeadSHA() != h || r.GetStatus() != "completed" {
+				continue
+			}
+			arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, r.GetID(), &gh.ListOptions{PerPage: 100})
+			if err != nil {
+				return nil, nil, Wrap(ExitExternal, err)
+			}
+			for _, a := range arts.Artifacts {
+				if g, ok := strings.CutPrefix(a.GetName(), "eval-results-"+h+"-"); ok && !a.GetExpired() {
+					have[g] = true
+				}
+			}
+			if ref == nil {
+				ref = &RunRef{Workflow: evalsWorkflow, ID: r.GetID(), URL: r.GetHTMLURL(), Conclusion: r.GetConclusion(), Attempts: max(r.GetRunAttempt(), 1)}
+			}
+		}
+		var missing []string
+		for _, g := range gating {
+			if !have[g] {
+				missing = append(missing, g)
+			}
+		}
+		if ref == nil {
+			return nil, []string{"no completed run"}, nil
+		}
+		return ref, missing, nil
+	}
+	ref, missing, err := results(sha)
+	if err != nil || len(missing) == 0 {
+		return ref, err
+	}
+	why := fmt.Sprintf("release: %s %s has no completed %s run with results for every gating group (missing: %s); nothing was promoted",
+		map[bool]string{true: "--at", false: src + "'s newest commit"}[chosen], short(sha), evalsWorkflow, strings.Join(missing, ", "))
+	revs, _ := gitOut(root, "rev-list", "--first-parent", "origin/"+dst+"..origin/"+src)
+	for _, h := range strings.Fields(revs) {
+		if h == sha {
+			continue
+		}
+		r, m, err := results(h)
+		if err != nil {
+			return nil, err
+		}
+		if len(m) == 0 {
+			return nil, Errorf(ExitBlocked, "%s. Either promote %s, the newest %s commit that has them (run %s): `aayu release %d --to rolling --at %s`; "+
+				"or dispatch once on %s's newest commit: `gh workflow run %s --ref %s`, wait for it to finish, and run this again",
+				why, short(h), src, r.URL, n, short(h), src, evalsWorkflow, src)
+		}
+	}
+	return nil, Errorf(ExitBlocked, "%s. No %s commit since %s has them: dispatch once on %s's newest commit: `gh workflow run %s --ref %s`, wait for it to finish, and run this again",
+		why, src, dst, src, evalsWorkflow, src)
 }
 
 // waitPushRun waits for the run of workflow that a push of sha (a tag) started.

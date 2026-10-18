@@ -48,6 +48,7 @@ aayu release <release>
 |---|---|---|
 | `<release>` | yes | Release issue. |
 | `--to` | yes | Branch to promote to. One of: `rolling`, `main`. |
+| `--at` | no | With --to rolling: promote this dev commit instead of dev's newest, such as the newest one with tier-2 eval results for every gating group. |
 
 <!-- END GENERATED: skill-usage -->
 
