@@ -367,3 +367,22 @@ func TestBuildBudgetDefaults(t *testing.T) {
 		t.Errorf("[budget] per_story_usd %g is below [autonomy.budget] cost_usd %g", g.PerStoryUSD, b.CostUSD)
 	}
 }
+
+// The security workflow and doctor's row scan the branches role by role: a partial [branches] map keeps the other
+// defaults, and only a repository that maps dev (coexistence) can have no rolling.
+func TestBranchNames(t *testing.T) {
+	for _, tc := range []struct {
+		b    Branches
+		want [3]string
+	}{
+		{Branches{}, [3]string{"dev", "rolling", "main"}},
+		{Branches{Main: "prod"}, [3]string{"dev", "rolling", "prod"}},
+		{Branches{Rolling: "canary"}, [3]string{"dev", "canary", "main"}},
+		{Branches{Dev: "trunk", Main: "prod"}, [3]string{"trunk", "", "prod"}},
+		{Branches{Dev: "trunk", Rolling: "canary"}, [3]string{"trunk", "canary", "main"}},
+	} {
+		if got := tc.b.Names(); got != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.b, got, tc.want)
+		}
+	}
+}

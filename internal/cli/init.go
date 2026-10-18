@@ -165,6 +165,11 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 			if x.Loops, err = e.loopFiles(it); err != nil {
 				return err
 			}
+			// The security workflow's push triggers follow [branches], which init has just written.
+			if l, err := config.Load(config.DefaultSources(e.Getenv, it.Root, nil, nil)); err == nil {
+				n := l.Config.Branches.Names() // role by role: a partial map keeps the other defaults
+				x.Branches = n[:]
+			}
 		}
 		if e.AppManifestCode != nil {
 			x.ManifestCode = e.AppManifestCode

@@ -23,6 +23,7 @@ const (
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
 	LabelAgentAuthored = "agent-authored"          // PRs opened by an agent lane (evolve, WP7.7)
 	LabelScreenReader  = "aayudha:screen-reader"   // runs the screen-reader floor on a PR (macOS and Windows runners, WP4.7)
+	LabelSecurity      = "aayudha:security"        // a Bug aayudha-security.yml filed for a finding on dev, rolling, or main
 	LabelFixPrefix     = "fix:"                    // fix:<layer>, the highest layer that can fix a Feedback's correction for good (S-7.7d)
 )
 
@@ -83,6 +84,7 @@ func Labels() []LabelDef {
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
 		LabelDef{LabelAgentAuthored, "c5def5", "Opened by an agent lane"},
 		LabelDef{LabelScreenReader, "5319e7", "Run the VoiceOver and NVDA screen-reader floor on this PR"},
+		LabelDef{LabelSecurity, "b60205", "Filed by aayudha-security.yml for a finding on dev, rolling, or main"},
 		LabelDef{LabelFixPrefix + FixCodebase, "0e8a16", "Fix layer: a type, invariant, or boundary makes the mistake impossible"},
 		LabelDef{LabelFixPrefix + FixCheck, "1d76db", "Fix layer: a lint rule, test, or CI check catches the mistake"},
 		LabelDef{LabelFixPrefix + FixProse, "fbca04", "Fix layer: skill or AGENTS.md guidance, for what needs judgement"},

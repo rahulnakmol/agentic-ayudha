@@ -338,6 +338,12 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if err := e.productionGate(ctx, c, tok, gitOut, root, repo, srcRef, p.Stories, kind); err != nil {
 		return err
 	}
+	// Decision #480: an open security Bug seen on rolling or main holds the promotion, and each promotion takes
+	// only a source tip the security workflow scanned green.
+	guarded := []string{pick(l.Config.Branches.Rolling, "rolling"), pick(l.Config.Branches.Main, "main")}
+	if err := e.securityGate(ctx, c, repo, guarded, src, srcSHA); err != nil {
+		return err
+	}
 	notes, utm, err := e.releaseNotes(ctx, c, repo, &p, shipped)
 	if err != nil {
 		return err

@@ -81,6 +81,22 @@ ledger.
 SHA-256, workflows default to `contents: read`, and checkout never persists credentials. Releases are signed and
 attested; see [releases and the supply chain](how-releases.md).
 
+**A vulnerability that arrives without a pull request.** The merge gate scans pull requests only. A promotion
+merge, a direct or admin push, or a new advisory against a dependency that did not change reaches dev, rolling, or
+main without one. `aayu init --gates` therefore also installs `aayudha-security.yml`. It runs
+`aayudha verify --security --ci` on every push to those branches, as `[branches]` maps them, and nightly on each
+tip. That covers verify's sast, secrets, and deps floors with the merge gate's pinned tools; a push scans secrets
+in the pushed commits, the nightly run in the whole history. Each failing finding files one Bug labelled
+`aayudha:security`, keyed by floor, rule or advisory ID, and path; later runs comment on it instead of filing again.
+Only Bugs and comments written by the workflow token (`github-actions[bot]`) count, so a labelled issue or comment
+from anyone else neither holds nor releases a promotion. A sast scan that leaves a file unanalysed (a syntax error,
+timeout, or out of memory) is blocked, never green, so it marks nothing gone.
+An open one last seen on rolling or main holds `aayu release` until it is gone there, the source tip being promoted
+was scanned without it (so a fix travels dev to rolling to main as usual), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`), and each promotion takes only a source tip (dev for rolling, rolling for main) that the workflow scanned green.
+A floor whose every finding sits on a Bug with an accepted waiver naming it is `waived` in the scan, so a waived tip
+can still be scanned green. `aayu doctor` reports the workflow and each tip's last scan, and warns when a tip moved
+on with no scan of its own.
+
 **Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story goes over
 `per_story_usd` or spend for the day reaches `per_day_usd`. It pauses agent lanes (exit code 6) until a human runs
 `aayu resume`, and pages once per scope per day.

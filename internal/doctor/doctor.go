@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
@@ -78,7 +79,8 @@ type Probe struct {
 	// Reachable lists the GitHub credentials this process can reach, by
 	// source and account (Decision #488); nil skips the approvals row's check.
 	Reachable func(ctx context.Context) []identity.Reach
-	Agent     string // the agent marker this process runs under, or ""
+	Agent     string           // the agent marker this process runs under, or ""
+	Now       func() time.Time // nil: time.Now
 }
 
 // Check is one named check.
@@ -119,6 +121,7 @@ var Checks = []Check{
 	{"reviewer-apps", checkReviewerApps},
 	{"review-rung", checkReviewRung},
 	{"retired-workflows", checkRetiredWorkflows},
+	{"security-workflow", checkSecurityWorkflow},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
 	{"feedback-layers", checkFeedbackLayers},
