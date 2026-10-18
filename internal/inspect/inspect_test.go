@@ -176,9 +176,10 @@ func TestRunCapBeforeCache(t *testing.T) {
 	if capped.Result == nil || capped.Result.Disposition != StepBack || capped.Result.Head != in.Head {
 		t.Fatalf("the capped state's result: %+v", capped.Result)
 	}
-	// A repeated finding is hidden, not resolved: a reviewer's fix with only
-	// a repeated P2 behind it stays fix.
-	rep := Result{Disposition: Fix, Dropped: []Dropped{{Finding{Severity: "P2", Category: "security", Title: "token logged"}, DropRepeat}}}
+	// A repeated finding is hidden, not resolved: a reviewer's fix with a
+	// repeated P2 behind it stays fix, even beside a liftable drop.
+	rep := Result{Disposition: Fix, Dropped: []Dropped{{Finding{Severity: "P2", Category: "bug", Title: "old typo"}, DropPreExisting},
+		{Finding{Severity: "P2", Category: "security", Title: "token logged"}, DropRepeat}}}
 	if liftFix(&rep); rep.Disposition != Fix {
 		t.Fatalf("a repeat lifted the fix: %s", rep.Disposition)
 	}

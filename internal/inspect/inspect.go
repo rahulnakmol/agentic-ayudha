@@ -658,10 +658,12 @@ func liftFix(res *Result) {
 		switch d.Why {
 		case DropRefuted, DropDismissed, DropTestGap, DropTestValue, DropPreExisting:
 			shown++
-		case DropDuplicate, DropRepeat:
+		case DropDuplicate:
+		case DropRepeat:
 			// A repeat is the earlier round's finding raised again: hiding it
 			// from the comment shows nothing about whether it was fixed, so
-			// the reviewer's fix stands.
+			// the reviewer's fix stands, whatever else was dropped.
+			return
 		default:
 			return
 		}
