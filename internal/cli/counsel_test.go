@@ -48,7 +48,7 @@ func TestCounsel(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "report"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\nfunc Percent(c, t int) float64 { return 0 }\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Table struct {\n\tRows int\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{"internal/cli", "notes"} {
@@ -190,8 +190,10 @@ Is the zero case the behaviour you want?
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("good.md", good)); len(r.Findings) != 0 {
 		t.Fatalf("good counsel: %v", r.Findings)
 	}
-	if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`report.Percent`)", 1))); len(r.Findings) != 0 {
-		t.Errorf("a real symbol citation: %v", r.Findings)
+	for _, sym := range []string{"report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows"} {
+		if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`"+sym+"`)", 1))); len(r.Findings) != 0 {
+			t.Errorf("a real symbol citation %s: %v", sym, r.Findings)
+		}
 	}
 	for name, tt := range map[string]struct{ from, to, want string }{
 		"missing part":         {"## What not to do", "## Cautions", `missing part "## What not to do"`},
@@ -208,6 +210,7 @@ Is the zero case the behaviour you want?
 		"path with a suffix":   {"(LAYERS.md)", "(internal/report/old.go)", "cites internal/report/old.go,"},
 		"outside the checkout": {"(LAYERS.md)", "(../claims.md)", "cites ../claims.md,"},
 		"unknown symbol":       {"(LAYERS.md)", "(`report.Missing`)", "cites report.Missing,"},
+		"invented member":      {"(LAYERS.md)", "(`report.Table.Missing`)", "cites report.Table.Missing,"},
 		"symlink out":          {"(LAYERS.md)", "(claims.md)", "cites claims.md,"},
 		"part of a path":       {"(LAYERS.md)", "(percent.go)", "cites percent.go,"},
 	} {

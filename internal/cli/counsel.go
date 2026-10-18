@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -206,7 +209,7 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 			return true
 		}
 		if m := symbolCite.FindStringSubmatch(cite); m != nil {
-			return root != "" && declares(root, m[1], m[2])
+			return root != "" && declares(root, m[1], m[2], m[3])
 		}
 		// A path the twin read in this checkout is a fact too; a path that leaves the checkout is not.
 		rel := filepath.Clean(filepath.FromSlash(strings.TrimSuffix(cite, "/")))
@@ -532,13 +535,14 @@ func hasCite(text, cite string) bool {
 	}
 }
 
-// symbolCite is a cited Go symbol, pkg.Name or pkg.Type.Method: the package and its first exported name.
-var symbolCite = regexp.MustCompile(`^([a-z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)(?:\.[A-Za-z0-9_]+)*$`)
+// symbolCite is a cited Go symbol: pkg.Name, or pkg.Type.Member for a method or a struct field.
+var symbolCite = regexp.MustCompile(`^([a-z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)(?:\.([A-Za-z0-9_]+))?$`)
 
-// declares reports whether a Go package named pkg in the checkout declares name (a func, method receiver type, type,
-// var, or const), so a symbol citation resolves to code that exists. Vendored and dependency trees are skipped.
-func declares(root, pkg, name string) bool {
-	decl := regexp.MustCompile(`(?m)^(?:func\s+(?:\([^)]*\)\s*)?|type\s+|var\s+|const\s+|\s+)` + name + `\b`)
+// declares reports whether a Go package named pkg in the checkout declares the whole symbol: a package-level func,
+// type, var, or const name, or, with member, a method of that type or a field of that struct. It parses the files
+// (go/parser), so an indented identifier is not a declaration. Hidden, vendored, testdata, and node_modules trees
+// and symlinks are skipped.
+func declares(root, pkg, name, member string) bool {
 	found := false
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || found {
@@ -553,8 +557,50 @@ func declares(root, pkg, name string) bool {
 		if filepath.Base(filepath.Dir(path)) != pkg || !strings.HasSuffix(path, ".go") || d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		if b, err := os.ReadFile(path); err == nil && regexp.MustCompile(`(?m)^package `+pkg+`\b`).Match(b) && decl.Match(b) {
-			found = true
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil || f.Name.Name != pkg {
+			return nil
+		}
+		for _, dl := range f.Decls {
+			switch dl := dl.(type) {
+			case *ast.FuncDecl:
+				recv := ""
+				if dl.Recv != nil && len(dl.Recv.List) > 0 {
+					t := dl.Recv.List[0].Type
+					if st, ok := t.(*ast.StarExpr); ok {
+						t = st.X
+					}
+					if ix, ok := t.(*ast.IndexExpr); ok {
+						t = ix.X
+					}
+					if id, ok := t.(*ast.Ident); ok {
+						recv = id.Name
+					}
+				}
+				found = found || member == "" && recv == "" && dl.Name.Name == name || member != "" && recv == name && dl.Name.Name == member
+			case *ast.GenDecl:
+				for _, sp := range dl.Specs {
+					switch sp := sp.(type) {
+					case *ast.TypeSpec:
+						if sp.Name.Name != name {
+							continue
+						}
+						if member == "" {
+							found = true
+						} else if st, ok := sp.Type.(*ast.StructType); ok {
+							for _, fl := range st.Fields.List {
+								for _, n := range fl.Names {
+									found = found || n.Name == member
+								}
+							}
+						}
+					case *ast.ValueSpec:
+						for _, n := range sp.Names {
+							found = found || member == "" && n.Name == name
+						}
+					}
+				}
+			}
 		}
 		return nil
 	})
