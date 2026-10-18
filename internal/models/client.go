@@ -464,7 +464,7 @@ func decodeChatStream(body io.Reader) (Response, error) {
 			Model       string          `json:"model"`
 			ServiceTier string          `json:"service_tier"`
 			Usage       json.RawMessage `json:"usage"`
-			Choices []struct {
+			Choices     []struct {
 				Delta struct {
 					Content string `json:"content"`
 				} `json:"delta"`
@@ -625,7 +625,7 @@ func decode(style string, raw []byte) (Response, error) {
 		} `json:"output"` // responses
 		OutputText  string `json:"output_text"`
 		ServiceTier string `json:"service_tier"` // responses, chat
-		Choices    []struct {
+		Choices     []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
