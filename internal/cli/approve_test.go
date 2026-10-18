@@ -30,6 +30,7 @@ import (
 func TestDecideBatchApprovedByReply(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	g.Viewer = "founder"
+	g.Workflows = []string{"aayudha-approve.yml"} // the workflow that applies replies
 	g.TokenLogins = map[string]fake.Account{"bot-token": {Login: "aayudha-bot[bot]", Type: "Bot"}}
 	g.Permissions = map[string]string{"founder": "admin", "mallory": "write"}
 	d1 := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
@@ -455,6 +456,15 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	g.Viewer = "founder"
 	g.TokenLogins = map[string]fake.Account{"bot-token": {Login: "aayudha-bot[bot]", Type: "Bot"}}
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	// Without the aayudha-approve workflow no reply would ever be applied, so
+	// the batch asks for the code at once instead of waiting seven days.
+	d0 := g.AddIssue("Choose the build cache", decisionBody("true", ""), "type:decision", "status:ready")
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "someone-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"}, Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond},
+		"decide", strconv.Itoa(d0.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=someone"); code != ExitBlocked ||
+		len(g.Issues[d0.Number].Comments) == 0 || !strings.Contains(g.Issues[d0.Number].Comments[0].Body, "the aayudha-approve workflow is not on the default branch") {
+		t.Fatalf("no approve workflow: exit %d %s", code, errOut)
+	}
+	g.Workflows = []string{"aayudha-approve.yml"}
 	d := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1", "GH_TOKEN": "ghu_reachablefortest"}
 	code, _, errOut := run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond},
@@ -833,5 +843,40 @@ func TestReachableCountsAHelperThatDoesNotAnswer(t *testing.T) {
 		if got := fmt.Sprint(e.reachable(context.Background(), "")); got != tt.want {
 			t.Errorf("helper %q: reachable = %s, want %s", tt.helper, got, tt.want)
 		}
+	}
+}
+
+// GH_CONFIG_DIR points gh at a bot-only profile, but the default profile still
+// holds the founder's login: an agent can unset the variable, so it is listed.
+func TestGHAccountsListsTheDefaultProfile(t *testing.T) {
+	home, bot := t.TempDir(), t.TempDir()
+	def := filepath.Join(home, ".config", "gh")
+	_ = os.MkdirAll(def, 0o755)
+	_ = os.WriteFile(filepath.Join(def, "hosts.yml"), []byte("github.com:\n"), 0o644)
+	status := map[string]string{"": `{"hosts":{"github.com":[{"login":"aayudha-bot","active":true}]}}`, def: `{"hosts":{"github.com":[{"login":"founder","active":true}]}}`}
+	token := map[string]string{"": "ghu_bot", def: "ghu_founder"}
+	exec := func(_ context.Context, _, name string, args ...string) (string, error) {
+		dir := ""
+		if name == "env" {
+			dir, args = strings.TrimPrefix(args[0], "GH_CONFIG_DIR="), args[2:]
+		}
+		if args[1] == "status" {
+			return status[dir], nil
+		}
+		return token[dir], nil
+	}
+	env := map[string]string{"HOME": home, "GH_CONFIG_DIR": bot}
+	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: t.TempDir(), Getenv: func(k string) string { return env[k] },
+		Exec: exec, LookPath: func(string) (string, error) { return "/usr/bin/gh", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.ghAccounts(context.Background())
+	if err != nil || fmt.Sprint(got) != "map[aayudha-bot:ghu_bot founder:ghu_founder]" {
+		t.Fatalf("ghAccounts = %v, %v", got, err)
+	}
+	delete(env, "GH_CONFIG_DIR") // gh already reads the default profile: it is listed once
+	if got, _ := e.ghAccounts(context.Background()); fmt.Sprint(got) != "map[aayudha-bot:ghu_bot]" {
+		t.Fatalf("without GH_CONFIG_DIR: %v", got)
 	}
 }

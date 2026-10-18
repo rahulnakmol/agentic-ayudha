@@ -219,6 +219,7 @@ answers a refusal on the thread with the reason and the next step:
 
 | Check | Why |
 |---|---|
+| The `aayudha-approve` workflow is on the default branch and enabled (checked before the batch is posted; without it the batch uses the device code) | Otherwise no reply would ever be applied |
 | The repository has the aayudha GitHub App, so agents write as `aayudha[bot]`, not as you (a machine-user bot keeps batches on the device code: the workflow can act only as the App) | Otherwise an agent could write the reply in your name |
 | The author is in `[approvals] approvers`, has write access, and is not a bot | The workflow reads the default branch's `.aayudha/config.toml`, a protected path, so an agent cannot add itself |
 | The reply names the batch by its hash, was not edited, and came after the batch | An edited reply could have said something else when it was read |
@@ -234,7 +235,7 @@ reaction, a `workflow_dispatch`, an environment approval, or a Slack message mad
 not proof of a person: the agent could have made it. The device code works because it mints a fresh credential on
 your own device. A reply works only when agents never hold your GitHub credential, which is why aayu refuses replies,
 with that reason, whenever a session can reach it. `aayu doctor`'s approvals row lists every GitHub credential the
-session can reach (a token-shaped environment variable, every account `gh` stores, active or not, the git
+session can reach (a token-shaped environment variable, every account `gh` stores, active or not and in its default profile too when `GH_CONFIG_DIR` points elsewhere, the git
 credential helper, and the token aayu itself would use, including one in its secrets store) by source and account,
 never by value, and fails when one belongs to an approver or when GitHub cannot say whose it is just then (a
 timeout or a rate limit counts as exposed). A legacy 40-character token counts too, in a variable named for GitHub,

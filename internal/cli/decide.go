@@ -509,7 +509,7 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	if agentRun {
 		if berr == nil {
 			writer = bc
-			if why := e.commentApprovalsOff(ctx, cfg, bot, b.Items); why == "" {
+			if why := e.commentApprovalsOff(ctx, writer, cfg, bot, b.Items); why == "" {
 				return e.postCommentBatch(ctx, writer, cfg, b)
 			} else {
 				b.Why = why
@@ -559,7 +559,7 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 			return err
 		}
 		if via != "" {
-			line := fmt.Sprintf("#%d accepted: option %d (%s), by @%s through the device code", d.Number, b.Items[i].N, options[i], login)
+			line := fmt.Sprintf("#%d accepted: option %d (%s), by @%s through the device code", d.Number, b.Items[i].N, mdText(options[i]), login)
 			if _, err := writer.UpsertComment(ctx, repo, d.Number, fmt.Sprintf("<!-- aayudha:batch-accepted %s -->", b.hash()),
 				fmt.Sprintf("<!-- aayudha:batch-accepted %s -->\n%s (batch `%s`).\n", b.hash(), line, b.hash()), actions.Action{Kind: "github.comment.batch-result"}); err != nil {
 				return err

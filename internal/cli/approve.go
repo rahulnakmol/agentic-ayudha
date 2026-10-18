@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
@@ -291,7 +292,7 @@ func parseBatch(body string) (*batch, string, bool) {
 // "" when it can: the bot identity writes for agents, an approver is
 // recorded, this session reaches no approver's credential, and no item is a
 // door [approvals] device_for keeps on the device code.
-func (e *Env) commentApprovalsOff(ctx context.Context, cfg *config.Config, bot identity.Bot, items []batchItem) string {
+func (e *Env) commentApprovalsOff(ctx context.Context, c *github.Client, cfg *config.Config, bot identity.Bot, items []batchItem) string {
 	ap := cfg.Approvals
 	switch {
 	case slices.Contains(ap.DeviceFor, "all"):
@@ -311,6 +312,14 @@ func (e *Env) commentApprovalsOff(ctx context.Context, cfg *config.Config, bot i
 		}
 	}
 	repo, _ := e.RepoName(ctx)
+	// A reply is applied only by the aayudha-approve workflow on the default
+	// branch: without it, a batch would wait seven days for nothing.
+	owner, name, _ := github.SplitRepo(repo)
+	if wf, _, err := c.REST.Actions.GetWorkflowByFileName(ctx, owner, name, "aayudha-approve.yml"); err != nil {
+		return "the aayudha-approve workflow is not on the default branch (or cannot be read), so no reply would be applied; `aayu init --gates` installs it."
+	} else if st := wf.GetState(); st != "active" {
+		return fmt.Sprintf("the aayudha-approve workflow is %s, so no reply would be applied; enable it in the repository's Actions settings.", st)
+	}
 	if ex := identity.Exposed(e.reachable(ctx, repo), ap.Approvers); len(ex) > 0 {
 		if ex[0].Login == "" {
 			return fmt.Sprintf("this session can reach a GitHub credential (%s) whose account GitHub could not confirm just now, so it may be an approver's; `aayu doctor` shows it.", ex[0].Source)
@@ -423,25 +432,58 @@ func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
 		return nil, nil // no gh, no stored accounts
 	}
 	run := e.exec()
-	// gh exits 1 when any stored account fails its check; the list is still printed.
-	out, _ := run(ctx, e.Dir, "gh", "auth", "status", "--hostname", "github.com", "--json", "hosts")
-	var st struct {
-		Hosts map[string][]struct {
-			Login string `json:"login"`
-		} `json:"hosts"`
+	// GH_CONFIG_DIR picks one profile; an agent can unset it and reach the
+	// default one, so a default profile that holds logins is listed too.
+	dirs := []string{""}
+	if cur := e.Getenv("GH_CONFIG_DIR"); cur != "" {
+		for _, d := range ghDefaultDirs(e.Getenv) {
+			if _, err := os.Stat(filepath.Join(d, "hosts.yml")); err == nil && filepath.Clean(d) != filepath.Clean(cur) && !slices.Contains(dirs, d) {
+				dirs = append(dirs, d)
+			}
+		}
 	}
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
-		return nil, err
+	gh := func(dir string, args ...string) (string, error) {
+		if dir == "" {
+			return run(ctx, e.Dir, "gh", args...)
+		}
+		return run(ctx, e.Dir, "env", append([]string{"GH_CONFIG_DIR=" + dir, "gh"}, args...)...)
 	}
 	toks := map[string]string{}
-	for _, a := range st.Hosts["github.com"] {
-		if a.Login == "" { // gh's placeholder when nothing is logged in
-			continue
+	for _, dir := range dirs {
+		// gh exits 1 when any stored account fails its check; the list is still printed.
+		out, _ := gh(dir, "auth", "status", "--hostname", "github.com", "--json", "hosts")
+		var st struct {
+			Hosts map[string][]struct {
+				Login string `json:"login"`
+			} `json:"hosts"`
 		}
-		t, _ := run(ctx, e.Dir, "gh", "auth", "token", "--hostname", "github.com", "--user", a.Login)
-		toks[a.Login] = strings.TrimSpace(t) // "" when gh could not read it now: it still counts
+		if err := json.Unmarshal([]byte(out), &st); err != nil {
+			return nil, err
+		}
+		for _, a := range st.Hosts["github.com"] {
+			if a.Login == "" || toks[a.Login] != "" { // gh's placeholder when nothing is logged in, or already read
+				continue
+			}
+			t, _ := gh(dir, "auth", "token", "--hostname", "github.com", "--user", a.Login)
+			toks[a.Login] = strings.TrimSpace(t) // "" when gh could not read it now: it still counts
+		}
 	}
 	return toks, nil
+}
+
+// ghDefaultDirs are where gh keeps its profile when GH_CONFIG_DIR is unset.
+func ghDefaultDirs(getenv func(string) string) []string {
+	var out []string
+	if x := getenv("XDG_CONFIG_HOME"); x != "" {
+		out = append(out, filepath.Join(x, "gh"))
+	}
+	if h := getenv("HOME"); h != "" {
+		out = append(out, filepath.Join(h, ".config", "gh"))
+	}
+	if a := getenv("AppData"); a != "" {
+		out = append(out, filepath.Join(a, "GitHub CLI"))
+	}
+	return out
 }
 
 // openBatch is the open batch on issue n written by botLogin, with its

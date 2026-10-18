@@ -721,6 +721,13 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = out[:per]
 		}
 		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
+	case m == "GET" && strings.HasPrefix(p, repo+"/actions/workflows/") && !strings.Contains(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/"):
+		f := strings.TrimPrefix(p, repo+"/actions/workflows/")
+		if !slices.Contains(g.Workflows, f) {
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		}
+		reply(200, map[string]any{"id": slices.Index(g.Workflows, f) + 1, "path": ".github/workflows/" + f, "state": "active"})
 	case m == "GET" && p == repo+"/actions/workflows":
 		out := []map[string]any{}
 		for _, f := range g.Workflows {
