@@ -23,6 +23,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -343,6 +344,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 		case model != "":
 			msg += "\nAayudha-Model: " + model
+		}
+		// The host that built the checkpoint, so inspect can place a builder
+		// whose host picks the model (Decision #469); a delegated build names
+		// its receiver instead.
+		if host, _ := doctor.DetectHost(e.Host, e.Getenv); host != "" && dlg == nil {
+			msg += "\nAayudha-Host: " + host
 		}
 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
 			return Wrap(ExitExternal, err)

@@ -45,6 +45,19 @@ func failedRequired(ctx context.Context, c *github.Client, owner, name, head str
 // jobTail is the last tailLines lines of an Actions job's log (a check run's
 // ID is its job's), or "" when the log cannot be read.
 func jobTail(ctx context.Context, c *github.Client, owner, name string, job int64) string {
+	b := jobLog(ctx, c, owner, name, job)
+	if b == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(b, "\n"), "\n")
+	if len(lines) > tailLines {
+		lines = lines[len(lines)-tailLines:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// jobLog is an Actions job's log (up to 8 MiB), or "" when it cannot be read.
+func jobLog(ctx context.Context, c *github.Client, owner, name string, job int64) string {
 	u, _, err := c.REST.Actions.GetWorkflowJobLogs(ctx, owner, name, job, 2)
 	if err != nil {
 		return ""
@@ -62,9 +75,5 @@ func jobTail(ctx context.Context, c *github.Client, owner, name string, job int6
 		return ""
 	}
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	if len(lines) > tailLines {
-		lines = lines[len(lines)-tailLines:]
-	}
-	return strings.Join(lines, "\n")
+	return string(b)
 }

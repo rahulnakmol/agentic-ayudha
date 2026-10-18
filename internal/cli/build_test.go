@@ -400,7 +400,7 @@ func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
 		!strings.Contains(out, "note: verify could not run on the checkpoint: go: not found") || !strings.Contains(out, "#2: branch "+branch+" pushed; PR #") {
 		t.Fatalf("build with a verify error: %d %s", code, out)
 	}
-	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") {
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") || !strings.Contains(msg, "Aayudha-Host: amp") {
 		t.Fatalf("checkpoint commit:\n%s", msg)
 	}
 	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" || st.Checkpoints[0].Model != "claude-build-1" {

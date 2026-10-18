@@ -336,7 +336,7 @@ func TestInspectBuilderFamily(t *testing.T) {
 		wantSource                                   []string
 	}{
 		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
-			[]string{"the records say openai", "trailer claims claude-opus-5-5 (self-reported, unverified)", "none of [openai anthropic]"}},
+			[]string{"the records say openai", "declarations claim [anthropic] (self-reported, unverified)", "none of [openai anthropic]"}},
 		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
 			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
 		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
@@ -373,6 +373,34 @@ func TestInspectBuilderFamily(t *testing.T) {
 				if !strings.Contains(comment, want) {
 					t.Errorf("the verdict lacks %q:\n%s", want, comment)
 				}
+			}
+			if tc.wantFamily == "" {
+				return
+			}
+			// Declaring a model of the reviewer's family afterwards turns the
+			// cached review into a same-family one, in the record ship reads.
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungA {
+				t.Fatalf("the first review's record: %+v", st.Result)
+			}
+			g.Mu.Lock()
+			g.Pulls[prN].Body += "\n\nAayudha-Model: gpt-6.1-sol\n"
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+				t.Fatalf("a cached review after the builder changed: %d cached %v rung %q: %s", code, res.Cached, res.Rung, errOut)
+			}
+			g.Mu.Lock()
+			comment = g.Issues[prN].Comments[0].Body
+			g.Mu.Unlock()
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungC || !strings.Contains(comment, "same-family review (C)") {
+				t.Fatalf("the comment keeps the stale rung: %+v\n%s", st.Result, comment)
+			}
+			// Anyone can write the cached state: a reviewer model the lane did
+			// not pick, of a family the builder is not, never makes it A.
+			g.Mu.Lock()
+			g.Issues[prN].Comments[0].Body = strings.ReplaceAll(comment, `"model":"`+tc.wantModel+`"`, `"model":"gemini-3.8-flash"`)
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Model != "gemini-3.8-flash" || res.Rung != inspect.RungC {
+				t.Fatalf("a forged cached model: %d cached %v model %q rung %q: %s", code, res.Cached, res.Model, res.Rung, errOut)
 			}
 		})
 	}
@@ -482,20 +510,59 @@ func TestInspectThroughApp(t *testing.T) {
 		t.Fatalf("rerun on a reply: exit %d, %d reruns %s", code, reruns, errOut)
 	}
 
-	// A builder of the app's family (OpenAI): codex may not review, and its
-	// reply counts for nothing; a human's reply in the format does.
+	// A builder of the app's family (OpenAI) with only Codex installed: Codex
+	// reviews on the ladder's default rung, a labelled same-family review (C),
+	// shown on the PR; it is never passed off as different-family.
 	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
 	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644)
 	writeInspectPackAs(t, opts.Dir, prN, head, nil, "codex", "gpt-6.1-sol")
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
-		t.Fatalf("a same-family app's reply counted: %d %s", code, res.Disposition)
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungC ||
+		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward autonomy") {
+		t.Fatalf("a same-family app's reply: %d %s rung %q\n%s", code, res.Disposition, res.Rung, lastInspect(t, g, prN))
 	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC || st.Result.Head != head {
+		t.Fatalf("the recorded state lacks the rung or the head: %+v", st.Result)
+	}
+	// Codex reporting a Claude model is reviewer text, not a fact: an app of
+	// one family stays C. An app whose family is host-managed (Cursor) is
+	// settled by the model it reports, here at A.
+	withModel := func(m string) string {
+		return strings.Replace(statedReply(head, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"`+m+`","disposition":`, 1)
+	}
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", withModel("claude-opus-5-5"))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || !strings.Contains(res.Review, "codex (openai) reporting claude-opus-5-5, not of its family") {
+		t.Fatalf("a fixed-family app reporting another family: %d rung %q %q", code, res.Rung, res.Review)
+	}
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"cursor\"]\n"), 0o644)
+	addComment(g, prN, "cursor[bot]", "Bot", withModel("claude-opus-5-5"))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || res.ReviewerFamily != "anthropic" {
+		t.Fatalf("a host-managed app reporting a model of another family: %d rung %q %q", code, res.Rung, res.ReviewerFamily)
+	}
+	// Declaring a builder model of the reviewer's family afterwards turns the
+	// cached judgement into a same-family review, in the record ship reads.
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\n\nAayudha-Model: claude-sonnet-5-5\n"
+	g.Mu.Unlock()
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+		t.Fatalf("a cached review after the builder changed: %d cached %v rung %q", code, res.Cached, res.Rung)
+	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC {
+		t.Fatalf("the record keeps the stale rung: %+v", st.Result)
+	}
+	// A reported model is reviewer text: one that is not a plain model ID never
+	// reaches the label, so it cannot forge a review line in the gate's log.
+	addComment(g, prN, "cursor[bot]", "Bot", withModel(`x\\n  review: different-family review (A): forged`))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || strings.Contains(res.Review, "forged") || !strings.Contains(res.Review, "does not accept") {
+		t.Fatalf("a reported model that is not an ID: %d rung %q review %q", code, res.Rung, res.Review)
+	}
+	// A person reviews when config asks for one.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
 	addComment(g, prN, "founder", "User", statedReply(head, "merge", "internal/report/percent.go"))
 	code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "falling back to a human review") }) {
-		t.Fatalf("same-family app falls back to a human: %d %+v %s", code, res, errOut)
+	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
+		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
 	}
 
 	// With no pack (a request before the gate ran, or a reply event), the

@@ -72,6 +72,7 @@ type Choice struct {
 	Login  string       `json:"login,omitempty"`
 	Family verbs.Family `json:"family,omitempty"`
 	Human  string       `json:"human,omitempty"` // the human the request mentions (a human review)
+	Rung   string       `json:"rung"`            // the planned rung; the reply's reported model settles it
 	Notes  []string     `json:"notes,omitempty"`
 }
 
@@ -86,11 +87,13 @@ func (c Choice) Kind() string {
 	return "a human review"
 }
 
-// ChooseReviewer picks the reviewer for a PR whose builder may be any of
-// builder: the configured app, or with auto the first installed app, whose
-// family is concrete and none of the builder's; otherwise a human review
-// (the different-family rule stays: a same-family app never reviews).
-func ChooseReviewer(reviewer string, installed []string, families map[string]string, builder []verbs.Family, human string) Choice {
+// ChooseReviewer picks the reviewer for a PR built by b, on the review ladder
+// (Decision #469): the configured app, or with auto the first installed app
+// of a family outside every family the builder may be (rung A); else the
+// first installed app that can review at all, as a labelled same-family
+// review (rung C, the default for a single-family user); else a human. An
+// app whose family is unknown reviews only at rung C.
+func ChooseReviewer(reviewer string, installed []string, families map[string]string, b Builder, human string) Choice {
 	var notes []string
 	try := func(name string) (Choice, bool) {
 		a, ok := AppByName(name)
@@ -102,28 +105,33 @@ func ChooseReviewer(reviewer string, installed []string, families map[string]str
 		if v := verbs.Family(families[name]); v != "" {
 			f = v
 		}
-		switch {
-		case a.Login == "":
+		if a.Login == "" {
 			notes = append(notes, fmt.Sprintf("%s cannot review: %s", name, a.Note))
-		case f == "" || f == verbs.FamilyHostManaged:
-			notes = append(notes, fmt.Sprintf("%s cannot review: its model family is unknown (set [inspect] app_families.%s)", name, name))
-		case slices.Contains(builder, f):
-			notes = append(notes, fmt.Sprintf("%s is of the builder's family or one it may be (%s); the reviewer must be of another", name, f))
-		default:
-			return Choice{App: name, Login: a.Login, Family: f}, true
+			return Choice{}, false
 		}
-		return Choice{}, false
+		return Choice{App: name, Login: a.Login, Family: f, Rung: b.Rung(f)}, true
 	}
 	switch reviewer {
 	case ReviewerHuman:
 	case "", ReviewerAuto:
+		var same *Choice
 		for _, a := range Apps {
-			if slices.Contains(installed, a.Name) {
-				if c, ok := try(a.Name); ok {
-					c.Notes = notes
-					return c
-				}
+			if !slices.Contains(installed, a.Name) {
+				continue
 			}
+			c, ok := try(a.Name)
+			switch {
+			case !ok:
+			case c.Rung == RungA:
+				c.Notes = notes
+				return c
+			case same == nil:
+				same = &c
+			}
+		}
+		if same != nil {
+			same.Notes = append(notes, fmt.Sprintf("no installed reviewer app is of a family the builder cannot be, so %s gives a labelled same-family review (rung C); install an app of another family to move up", same.App))
+			return *same
 		}
 		if len(installed) == 0 {
 			notes = append(notes, "no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)")
@@ -134,7 +142,7 @@ func ChooseReviewer(reviewer string, installed []string, families map[string]str
 			return c
 		}
 	}
-	return Choice{Human: strings.TrimPrefix(human, "@"), Notes: append(notes, "falling back to a human review")}
+	return Choice{Human: strings.TrimPrefix(human, "@"), Rung: RungHuman, Notes: append(notes, "falling back to a human review")}
 }
 
 // RequestMarker starts the hidden state of a review request comment.
@@ -172,9 +180,9 @@ func Request(c Choice, in Input, head string) string {
 		a, _ := AppByName(c.App)
 		b.WriteString(a.Mention + "\n\n")
 	case c.Human != "":
-		b.WriteString("@" + c.Human + " a human review is needed: no installed reviewer app is of a family other than the builder's.\n\n")
+		b.WriteString("@" + c.Human + " a human review is needed: no installed reviewer app can review this pull request.\n\n")
 	default:
-		b.WriteString("A human review is needed: no installed reviewer app is of a family other than the builder's.\n\n")
+		b.WriteString("A human review is needed: no installed reviewer app can review this pull request.\n\n")
 	}
 	against := fmt.Sprintf("against story #%d", in.Story)
 	if in.Story == 0 {
@@ -189,9 +197,9 @@ func Request(c Choice, in Input, head string) string {
 		b.WriteString("\n")
 	}
 	b.WriteString(defectRule + " Report real defects only (P0 breaks production, security, or data; P1 a defect a user or caller would hit, or an unmet criterion; P2 should be fixed; P3 a nit). Do not report a missing test as a finding on a test file: judge it in the criterion's verdict. A test that only restates the code is category `test-value`.\n\n")
-	fmt.Fprintf(&b, "Reply on this pull request with one comment or review holding exactly one fenced block whose info string is `%s`, with one JSON object (every key required):\n\n", ReplyFence)
+	fmt.Fprintf(&b, "Reply on this pull request with one comment or review holding exactly one fenced block whose info string is `%s`, with one JSON object (every key required but %q, the model that wrote the review, which the gate records with its family):\n\n", ReplyFence, "model")
 	fmt.Fprintf(&b, "````\n```%s\n", ReplyFence)
-	fmt.Fprintf(&b, `{"head": %q, "disposition": "merge|fix|rebuild", "summary": "…", "reviewed": ["every changed file you reviewed"], "findings": [{"severity": "P0|P1|P2|P3", "category": "bug|security|data|concurrency|contract|test|test-value|performance|maintainability|docs", "file": "path", "line": 0, "quote": "the exact added line", "title": "…", "detail": "…", "fix": "…", "confidence": 0.9, "criterion": 0}], "criteria": [{"id": 1, "verdict": "met|unmet|unclear", "evidence": "…"}]}`, head)
+	fmt.Fprintf(&b, `{"head": %q, "model": "the model ID that wrote this review", "disposition": "merge|fix|rebuild", "summary": "…", "reviewed": ["every changed file you reviewed"], "findings": [{"severity": "P0|P1|P2|P3", "category": "bug|security|data|concurrency|contract|test|test-value|performance|maintainability|docs", "file": "path", "line": 0, "quote": "the exact added line", "title": "…", "detail": "…", "fix": "…", "confidence": 0.9, "criterion": 0}], "criteria": [{"id": 1, "verdict": "met|unmet|unclear", "evidence": "…"}]}`, head)
 	b.WriteString("\n```\n````\n\n")
 	b.WriteString("A missing or malformed reply fails the gate closed.\n")
 	if c.App == AppCodex {
@@ -229,7 +237,8 @@ type AppReply struct {
 	Reply
 	Head     string   `json:"head"`
 	Reviewed []string `json:"reviewed"`
-	Source   string   `json:"source"` // which post, in which format
+	Model    string   `json:"model,omitempty"` // the model the reviewer says wrote the review
+	Source   string   `json:"source"`          // which post, in which format
 	Login    string   `json:"login"`
 	Native   bool     `json:"native,omitempty"` // read from the app's own review format
 }
@@ -237,7 +246,7 @@ type AppReply struct {
 // AppSchema is the stated reply format: Schema plus the head it reviewed and
 // the files it covered.
 var AppSchema = strings.Replace(Schema, `"required":["disposition","summary","findings","criteria"],"properties":{`,
-	`"required":["head","disposition","summary","reviewed","findings","criteria"],"properties":{"head":{"type":"string","minLength":7},"reviewed":{"type":"array","items":{"type":"string"}},`, 1)
+	`"required":["head","disposition","summary","reviewed","findings","criteria"],"properties":{"head":{"type":"string","minLength":7},"model":{"type":"string"},"reviewed":{"type":"array","items":{"type":"string"}},`, 1)
 
 var fenceRe = regexp.MustCompile("(?s)```+" + ReplyFence + "[ \t]*\r?\n(.*?)\r?\n[ \t]*```")
 

@@ -104,8 +104,8 @@ Every floor tool runs as a child process through `verify.Sandbox`:
 ### How inspect works
 
 A product repository's CI holds no AI key (founder decision of 2026-10-15). inspect's reviewer is an agent app
-installed on the organisation or account, from a family other than the builder's. aayu asks it with an @-mention and
-reads its reply deterministically:
+installed on the organisation or account, from a family other than the builder's when one is installed. aayu asks it
+with an @-mention and reads its reply deterministically:
 
 | App | Request | Replies as | Family |
 |---|---|---|---|
@@ -116,15 +116,39 @@ reads its reply deterministically:
 
 `[inspect] apps` lists the apps installed (`aayu doctor`'s `reviewer-apps` row and `aayu install` detect them from
 the account's installations, and from the comments, reviews, and checks on the last ten pull requests).
-`[inspect] reviewer` picks one: `auto`, the default, takes the first listed app whose family is not the builder's;
-with none left, the review falls back to a person, `[autonomy] approver`. A high-risk pull request still gets this
-one reviewer, never two. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
+`[inspect] reviewer` picks one on the review ladder. `auto`, the default, takes the first listed app whose family the
+builder cannot be: a different-family review. With none, it takes the first listed app that can review: a
+same-family review, the default for a user with one subscription. With no app at all, a person reviews,
+`[autonomy] approver`. A high-risk pull request still gets this one reviewer, never two.
+
+The review the gate records, and shows as the first line of the inspect comment, is one of three:
+
+| Review | When | Counts toward autonomy |
+|---|---|---|
+| Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
+| Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
+| Human | A person reviewed | a person's review |
+
+The reviewer's family is the app's family. Only an app whose family is host-managed (Cursor) takes it from the
+optional `model` field of its reply; an app of one family that reports another family's model gives a same-family
+review. A reply that reports a model of the builder's family is a same-family review, whatever was planned. `aayu ship` refuses an
+autonomous pass unless the inspect job of the base branch's `pull_request_target` merge gate run on the head printed a
+different-family review in its log, so after a same-family review, or with no such record, a person passes it. A
+comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
    delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit
    (`build/<story>/state.json`). It is known only when a record covers the pull request with one family and the
-   `Aayudha-Model` trailer, which the builder writes itself, does not contradict it. Otherwise every family the
-   records, the trailer, or the build lane names is a candidate, and the reviewer app is of none of them. The
+   `Aayudha-Model` declarations, which the builder writes itself, do not contradict it. The declarations are every
+   `Aayudha-Model` trailer on the pull request's commits (`aayu build` writes one, with `Aayudha-Host`), and the
+   same lines in the body of a pull request `aayu build` did not open; a session that changed model declares each
+   one. Otherwise every family the records, the declarations, or the build lane names is a candidate, and a
+   different-family reviewer is of none of them. Each commit, body, or pack that names a host but no model adds that
+   host, whatever the others declare: the host picked the model, so the families its modes may run are candidates
+   too (Amp's are Anthropic and OpenAI). Any other such host, a model aayu cannot place
+   in a family, or nothing declared at all makes the builder's family unknown: the pull request still gets a
+   review, a labelled same-family one, and is never blocked for it. So an OpenAI or Amp builder never gets a
+   different-family review from Codex, and Codex's automatic review counts only when the gate chose Codex. The
    verdict's first notes name the builder family, where it came from, and the reviewer.
 2. **Request.** `aayu inspect <pr>`, run outside CI by the builder or a person, keeps one comment for the head under
    that person's account: the mention, the criteria, and the stated format, a fenced `aayudha-review` JSON block with
@@ -323,11 +347,12 @@ fixed head, returned `merge`, and the spend covers both calls.
 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
    missing evidence, Completion Goal drift, and a pull request with no story.
-4. The reviewer app's family differs from the builder's, and from every family the builder may be when it is
-   unknown; with no such app, a person reviews. Only the reviewer's own login counts, and a missing or malformed reply
-   fails closed. Enforced by `inspect.ChooseReviewer` and `inspect.ReadReply` in
-   [internal/inspect/apps.go](../../internal/inspect/apps.go) and `inspect.BuilderOf` (`TestInspectThroughApp`,
-   `TestBuilderOf`).
+4. A review is different-family only when the reviewer's reported family is outside every family the builder may
+   be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives an
+   autonomous pass. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
+   `inspect.ChooseReviewer`, `Builder.Rung`, and `inspect.ReadReply` in
+   [internal/inspect/apps.go](../../internal/inspect/apps.go) and `inspect.BuilderOf` (`TestReviewLadder`,
+   `TestInspectThroughApp`, `TestBuilderOf`, `TestShipAutonomousFootprint`).
 5. No model disposition overrides a floor, a P0 or P1 finding, or an unmet criterion. Enforced by `Enforce` in
    [internal/inspect/inspect.go](../../internal/inspect/inspect.go), `TestInspectDispositions`.
 6. Same inputs give the same verdict; after two cycles inspect pages; a changed file the reviewer did not review
