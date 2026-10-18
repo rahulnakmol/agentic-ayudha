@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -793,6 +796,93 @@ func TestShipOnProof(t *testing.T) {
 		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
 		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}
+
+	// Story #618: the merge on proof waits for a person's look after merge,
+	// as an audit entry on the ledger and the audit label on the PR.
+	var entry AuditEntry
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+AuditLedgerPath(prN))), &entry)
+	if entry.PR != prN || entry.Story != 2 || entry.Head != head || entry.Merge == "" || entry.Pass != "proof" || !slices.Equal(entry.Footprint, []string{"L07"}) {
+		t.Fatalf("audit entry: %+v", entry)
+	}
+	if !slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("PR labels: %v", g.LabelNames(prN))
+	}
+	samples := func() []Sample {
+		t.Helper()
+		var out []Sample
+		for _, l := range strings.Split(strings.TrimSpace(git(t, bare, "show", "ledger:"+SamplesLedgerPath)), "\n") {
+			var s Sample
+			if json.Unmarshal([]byte(l), &s) == nil {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	// inbox finds the audit card in the read-only list, skips the cards
+	// before it, and answers it with keys.
+	opts.DevicePoll = time.Millisecond
+	opts.IsTerminal = func(any) bool { return true }
+	inbox := func(env map[string]string, keys string) string {
+		t.Helper()
+		var l inboxList
+		if code, out, errOut := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &l) != nil {
+			t.Fatalf("inbox --list: %d %s %s", code, out, errOut)
+		}
+		at := slices.IndexFunc(l.Items, func(it InboxItem) bool { return it.Kind == InboxAudit && it.Number == prN })
+		if at < 0 || at >= l.NeedsYou || l.Items[at].Options[0].Label != "looks right (a clean sample)" || !strings.HasPrefix(l.Items[at].Options[1].Label, "correction: ") {
+			t.Fatalf("no audit card for #%d: %+v", prN, l.Items)
+		}
+		_, out, errOut := runIn(t, env, opts, strings.Repeat("s ", at)+keys+" q", "inbox", "--repo", "o/r")
+		if !strings.Contains(out, fmt.Sprintf("Merged on proof, to audit #%d", prN)) {
+			t.Fatalf("inbox lacks the audit card:\n%s%s", out, errOut)
+		}
+		return out
+	}
+	// An agent lane records, labels, and opens nothing.
+	agent := maps.Clone(env)
+	maps.Copy(agent, hostShells["amp"])
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	pulls := len(g.Pulls)
+	g.Mu.Unlock()
+	if code, out, errOut := runIn(t, agent, opts, "a a a a a a", "inbox", "--repo", "o/r"); code == 0 || strings.Contains(out, "done: sample") {
+		t.Fatalf("an agent lane audited: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	n := len(g.Pulls)
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if git(t, bare, "show", "ledger:"+AuditLedgerPath(prN)) == "" || n != pulls || slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
+		t.Fatalf("an agent lane wrote: audit entry gone, %d PRs (was %d), labels %v", n, pulls, g.LabelNames(prN))
+	}
+	// Looks right: a clean sample, and the entry and the label are gone.
+	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) {
+		t.Fatalf("looks right:\n%s", out)
+	}
+	if s := samples(); len(s) != 1 || s[0].PR != prN || s[0].Correction || s[0].By != "founder" || slices.Contains(g.LabelNames(prN), AuditLabel) ||
+		strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), AuditLedgerPath(prN)) {
+		t.Fatalf("clean sample: %+v, labels %v", s, g.LabelNames(prN))
+	}
+	// A correction: the correction label (the streak's reset) and a PR that
+	// reverts the merge into dev, Refs the story.
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "audit again",
+		Files: map[string][]byte{AuditLedgerPath(prN): []byte(git(t, bare, "show", "ledger~1:"+AuditLedgerPath(prN)))}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Mu.Lock()
+	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
+	g.Mu.Unlock()
+	out = inbox(env, "2 y")
+	if s := samples(); len(s) != 2 || s[1].PR != prN || !s[1].Correction || !slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
+		t.Fatalf("correction: %+v, labels %v\n%s", s, g.LabelNames(prN), out)
+	}
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	rev := g.Pulls[len(g.Issues)]
+	if rev == nil || rev.Title != "revert: "+g.Pulls[prN].Title+" (#"+strconv.Itoa(prN)+")" || !strings.Contains(rev.Body, "Refs #2") || rev.Base.Ref != "dev" ||
+		!strings.Contains(out, "revert PR: https://github.com/o/r/pull/"+strconv.Itoa(rev.Number)) {
+		t.Fatalf("revert PR: %+v\n%s", rev, out)
+	}
 }
 
 // WP5.5: when the Engineering Manager seat is paired with a human, that
@@ -836,6 +926,10 @@ func TestShipEMSeatApprover(t *testing.T) {
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
 	if sr.HumanPass.Login != "em-lead" || sr.Pass.As != "seat" || strings.Join(sr.Pass.Approvers, ",") != "em-lead" {
 		t.Fatalf("ship record: %+v", sr)
+	}
+	// A person's review passed it: no audit after merge (Story #618).
+	if strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "autonomy/audit/") || contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("a reviewed merge was sent to the audit: labels %v", g.LabelNames(prN))
 	}
 	if !contains(g.LabelNames(2), LeaseLabel) {
 		t.Fatalf("the unread lease was released: %v", g.LabelNames(2))

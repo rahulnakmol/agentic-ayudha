@@ -1,0 +1,21 @@
+# Which tests prove story #618's Completion Goal (the sampled audit after a merge on proof).
+
+[[criterion]]
+id = 1 # a merge on proof writes the audit entry and the label; a reviewed merge writes none
+tests = ["internal/cli:TestShipOnProof", "internal/cli:TestShipEMSeatApprover"]
+
+[[criterion]]
+id = 2 # the inbox's audit card: looks right recommended, correction the other choice
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 3 # looks right: a clean sample, the entry removed
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 4 # correction: the sample, the correction label (the streak's reset), and a revert PR into dev
+tests = ["internal/cli:TestShipOnProof", "internal/autonomy:TestStreakAtThreshold"]
+
+[[criterion]]
+id = 5 # an agent lane records, labels, and opens nothing
+tests = ["internal/cli:TestShipOnProof"]

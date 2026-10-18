@@ -430,8 +430,20 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
-	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: map[string][]byte{res.Record: append(b, '\n')}}); err != nil {
+	files := map[string][]byte{res.Record: append(b, '\n')}
+	// A merge on proof waits for a person's look after merge (the sampled audit).
+	audited := rec.HumanPass.Kind == "proof"
+	if audited {
+		ab, _ := json.MarshalIndent(AuditEntry{PR: n, Story: story, Head: head, Merge: rec.MergeCommit, Footprint: rec.Footprint, Pass: rec.HumanPass.Kind, MergedAt: rec.ShippedAt}, "", "  ")
+		files[AuditLedgerPath(n)] = append(ab, '\n')
+	}
+	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: files}); err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	if audited {
+		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			fmt.Fprintf(e.Err, "aayu: warning: PR #%d's audit entry is on the ledger, but the %s label was not added: %v\n", n, AuditLabel, err)
+		}
 	}
 	if ref := pr.GetHead().GetRef(); pr.GetHead().GetRepo().GetFullName() == repo || pr.GetHead().GetRepo() == nil {
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.ref.delete", Target: repo + "@" + ref,

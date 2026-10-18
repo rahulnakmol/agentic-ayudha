@@ -49,9 +49,10 @@ const (
 	InboxUnshipped   = "unshipped"    // a Story whose PR merged into dev without a ship record
 	InboxFixed       = "fixed"        // an open Bug whose fix merged into dev
 	InboxReplaced    = "replaced"     // an open Story or Bug that another issue replaces
+	InboxAudit       = "audit"        // a PR ship merged on proof, sampled for a person's look after merge
 )
 
-var inboxOrder = []string{InboxDecision, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced}
+var inboxOrder = []string{InboxDecision, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -113,6 +114,13 @@ var inboxKinds = map[string]inboxKind{
 			"Closing it as completed adds a note that links the fix, so the board shows the bug as solved. Nothing in the code changes. " +
 			"If you leave it, the bug keeps counting as open in every list and report.",
 		Terms: []string{"Work item"}},
+	InboxAudit: {Icon: "🔍", Word: "Merged on proof, to audit", Seat: verbs.EngineeringManager,
+		Line: "An agent's change merged on proof alone; a quick look after the fact keeps that honest.",
+		Explain: "aayu merged this pull request into dev without a person's review, because every check was green, the proof held, and " +
+			"the reviewer said merge. A sample of those merges comes to you afterwards. If it looks right, say so and it counts as a clean " +
+			"sample. If it is wrong, mark it a correction: that resets the streak of the layers it touched and opens a pull request that " +
+			"reverts it. If you leave it, nothing changes; the merge stays.",
+		Terms: []string{"Proof pack", "Streak"}},
 	InboxReplaced: {Icon: "🔁", Word: "Replaced, still open", Seat: verbs.ProductStrategist, Housekeeping: true,
 		Line: "A newer issue replaces this one, and this one is still open.",
 		Explain: "Someone filed a newer issue that says it replaces this one, usually because the old one was missing something. " +
@@ -459,6 +467,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 	// convention audit and ship use (a story/<n>- branch, or Refs #n).
 	var merged []audit.PR
 	var open []*gh.PullRequest
+	var audits []InboxItem
 	for _, n := range slices.Sorted(mapKeys(s.pulls)) {
 		p := s.pulls[n]
 		switch {
@@ -468,6 +477,9 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA(), MergedAt: p.GetMergedAt().Time}
 			ap.LinkStories()
 			merged = append(merged, ap)
+			if prLabelled(p, AuditLabel) {
+				audits = append(audits, auditItem(p))
+			}
 		}
 	}
 	slices.SortStableFunc(merged, func(a, b audit.PR) int { return a.MergedAt.Compare(b.MergedAt) })
@@ -495,7 +507,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		}
 		return issueURL
 	}
-	var out []InboxItem
+	out := audits
 	total, done := len(open), 0
 	for _, is := range s.issues {
 		if !is.IsPullRequest() && is.GetState() == "open" {
@@ -1428,6 +1440,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 			fmt.Fprintf(e.Out, "  done: approved #%d at %s as %s, recorded on the ledger; the merge gate runs again\n", ap.PR, short(ap.Head), ap.By)
 		}
 		return err
+	case InboxAudit:
+		return e.auditAct(ctx, c, repo, login, it, a.N == 2)
 	}
 	var note, status, reason string
 	switch it.Kind {
