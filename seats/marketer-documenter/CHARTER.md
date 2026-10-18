@@ -78,6 +78,7 @@ Layers owned: none.
 
 | Verb | Role |
 |---|---|
+| `brain` | Informed |
 | `ship` | Informed |
 | `release` | Informed |
 | `research` | Informed |

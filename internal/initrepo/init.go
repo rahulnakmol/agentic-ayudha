@@ -77,6 +77,15 @@ const (
 	LedgerHistoryRuleset = "aayudha-ledger-history"
 )
 
+// protectedRefs are the branches both ledger rulesets cover: the ledger and
+// the brain vault `aayu brain` writes, protected alike (same rules, same
+// bypass actors).
+var protectedRefs = []string{"refs/heads/ledger", "refs/heads/brain"}
+
+// brainRef is the brain branch; an adopted ruleset that lacks it is reported,
+// never edited.
+const brainRef = "refs/heads/brain"
+
 // writeRole is the repository's write role as a ruleset bypass actor; it
 // covers maintain and admin too (current_user_can_bypass is "always" for the
 // admin with only this actor listed, D-4.2b.h).
@@ -383,6 +392,7 @@ type rulesetDetail struct {
 	Conditions  struct {
 		RefName struct {
 			Include []string `json:"include"`
+			Exclude []string `json:"exclude"`
 		} `json:"ref_name"`
 	} `json:"conditions"`
 	Rules []struct {
@@ -415,6 +425,16 @@ func (d rulesetDetail) protectsLedger() bool {
 	return slices.Contains(types, "deletion") && slices.Contains(types, "non_fast_forward")
 }
 
+// brainAdvice tells the person how to protect the brain branch with an
+// adopted ruleset that does not cover it yet; aayudha never edits the team's
+// own ruleset. It is empty when the ruleset already includes the branch.
+func (d rulesetDetail) brainAdvice() string {
+	if slices.Contains(d.Conditions.RefName.Include, brainRef) {
+		return ""
+	}
+	return fmt.Sprintf("; it does not protect %s: add %q to ruleset %q (id %d) conditions.ref_name.include so the brain branch cannot be force-pushed or deleted either", brainRef, brainRef, d.Name, d.ID)
+}
+
 func (in *Init) rest(ctx context.Context, method, path string, body, out any) error {
 	req, err := in.GH.REST.NewRequest(ctx, method, strings.TrimPrefix(path, "/"), body)
 	if err != nil {
@@ -436,7 +456,7 @@ func (in *Init) ruleset(ctx context.Context) error {
 	if errors.As(err, &er) && er.Response != nil && er.Response.StatusCode == http.StatusForbidden && strings.Contains(er.Message, "Upgrade to GitHub") {
 		in.State.RulesetsUnapplied = "GitHub answered 403: " + er.Message
 		in.note("ruleset", "ruleset", LedgerRuleset, "not applied",
-			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger branch is unprotected: anyone with write access can force-push or delete it. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
+			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger and brain branches are unprotected: anyone with write access can force-push or delete them. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
 		return nil
 	}
 	if err == nil {
@@ -456,7 +476,13 @@ func (in *Init) applyRulesets(ctx context.Context) error {
 	}
 	o, recorded := in.State.Object("ruleset", LedgerRuleset)
 	if recorded && o.Adopted && listed(o.ID) {
-		in.note("ruleset", "ruleset", o.Name, "unchanged", "the team's own ruleset; aayudha leaves it as it is")
+		// The detail only adds the brain advice; failing to read it changes nothing.
+		d := rulesetDetail{Name: LedgerRuleset}
+		advice := ""
+		if err := in.rest(ctx, http.MethodGet, "/repos/"+r.FullName+"/rulesets/"+o.ID, nil, &d); err == nil {
+			advice = d.brainAdvice()
+		}
+		in.note("ruleset", "ruleset", d.Name, "unchanged", "the team's own ruleset; aayudha leaves it as it is"+advice)
 		return nil
 	}
 	if !recorded || o.Adopted {
@@ -467,7 +493,7 @@ func (in *Init) applyRulesets(ctx context.Context) error {
 			}
 			if d.protectsLedger() {
 				in.State.Put(Object{Kind: "ruleset", Name: LedgerRuleset, ID: strconv.FormatInt(d.ID, 10), Adopted: true})
-				in.note("ruleset", "ruleset", d.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it")
+				in.note("ruleset", "ruleset", d.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it"+d.brainAdvice())
 				return nil
 			}
 		}
@@ -487,7 +513,7 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 	r := in.Repo
 	body := map[string]any{
 		"name": name, "target": "branch", "enforcement": "active",
-		"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"refs/heads/ledger"}, "exclude": []string{}}},
+		"conditions":    map[string]any{"ref_name": map[string]any{"include": protectedRefs, "exclude": []string{}}},
 		"rules":         []map[string]any{},
 		"bypass_actors": []map[string]any{},
 	}
@@ -511,16 +537,28 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 			}
 			body["bypass_actors"] = append(body["bypass_actors"].([]map[string]any), map[string]any{"actor_id": a.ActorID, "actor_type": a.ActorType, "bypass_mode": a.BypassMode})
 		}
-		if has && slices.Equal(d.ruleTypes(), rules) {
+		// Keep any refs the ruleset already includes and add the missing ones
+		// (an older init covered refs/heads/ledger only). The include list is
+		// part of the update's idempotency key, so a run that already updated
+		// this ruleset (the 0.1 migration) still adds the brain branch.
+		include := slices.Clone(d.Conditions.RefName.Include)
+		for _, ref := range protectedRefs {
+			if !slices.Contains(include, ref) {
+				include = append(include, ref)
+			}
+		}
+		exclude := append([]string{}, d.Conditions.RefName.Exclude...)
+		body["conditions"] = map[string]any{"ref_name": map[string]any{"include": include, "exclude": exclude}}
+		if has && slices.Equal(d.ruleTypes(), rules) && len(include) == len(d.Conditions.RefName.Include) {
 			in.note("ruleset", "ruleset", name, "unchanged", "")
 			return nil
 		}
-		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name),
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name, strings.Join(include, ",")),
 			Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
 			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) }); err != nil {
 			return err
 		}
-		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger; force pushes and deletion stay blocked")
+		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger and brain branches; force pushes and deletion stay blocked")
 		return nil
 	}
 	var created rulesetDetail

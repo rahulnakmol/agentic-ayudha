@@ -35,6 +35,8 @@ var (
 	ErrNoLedger  = errors.New("no ledger branch on the remote; run `aayu init` to create it")
 	ErrContended = errors.New("ledger push kept losing the race to other writers")
 	ErrLocked    = errors.New("another aayudha process holds the ledger lock")
+	ErrMoved     = errors.New("the branch moved since the commit's base was read")
+	ErrExists    = errors.New("the branch already exists on the remote")
 )
 
 // Commit is one ledger write.
@@ -43,6 +45,10 @@ type Commit struct {
 	Files   map[string][]byte // path -> full content (replaced)
 	Append  map[string][]byte // path -> bytes appended to the file at the tip (created when absent)
 	Delete  []string          // paths removed at the tip (absent paths are ignored)
+	// Base, when set, is the tip the commit was computed from: the write fails
+	// with ErrMoved instead of landing on a tip that moved since, so a writer
+	// that rewrites whole files never overwrites a newer change.
+	Base string
 }
 
 // Writer writes commits to the ledger branch of the repository cloned at Dir.
@@ -152,12 +158,146 @@ func checkPath(p string) error {
 	return nil
 }
 
-func (w *Writer) write(ctx context.Context, c Commit) (string, error) {
-	common, err := w.git(ctx, w.Dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+// Create makes the branch on the remote with c as its root commit (no parent), when the branch does not exist yet.
+// It returns ErrExists (a new exported error) with the tip when the branch is already there, and writes nothing then.
+// Only c.Files and c.Append (appended to the same path's Files content) are used; c.Delete is ignored.
+// With a Log, the push is an action (dry-run plans it and writes nothing).
+func (w *Writer) Create(ctx context.Context, c Commit) (string, error) {
+	w.defaults()
+	files := make(map[string][]byte, len(c.Files)+len(c.Append))
+	for p, b := range c.Files {
+		files[p] = b
+	}
+	for p, b := range c.Append {
+		files[p] = append(slices.Clip(files[p]), b...)
+	}
+	paths := slices.Sorted(func(yield func(string) bool) {
+		for p := range files {
+			if !yield(p) {
+				return
+			}
+		}
+	})
+	for _, p := range paths {
+		if err := checkPath(p); err != nil {
+			return "", err
+		}
+	}
+	if w.Log == nil {
+		return w.create(ctx, c, files)
+	}
+	var sha string
+	rec, err := w.Log.Do(ctx, actions.Action{
+		Kind: "ledger.create", Target: w.Repo + "@" + w.Branch, Identity: w.Identity,
+		Payload: map[string]any{"paths": paths, "message": c.Message, "tag": w.Tag},
+	}, func(ctx context.Context) (actions.Outcome, error) {
+		var err error
+		sha, err = w.create(ctx, c, files)
+		return actions.Outcome{Result: map[string]any{"commit": sha}}, err
+	})
+	if rec.Status == actions.StatusPlanned {
+		return "", err
+	}
+	return sha, err
+}
+
+func (w *Writer) create(ctx context.Context, c Commit, files map[string][]byte) (string, error) {
+	unlock, err := w.lock(ctx)
 	if err != nil {
 		return "", err
 	}
-	unlock, err := lock(filepath.Join(common, "aayudha-ledger.lock"), w.LockTimeout, w.Sleep)
+	defer unlock()
+	if tip, err := w.remoteTip(ctx); err != nil || tip != "" {
+		if err == nil {
+			err = ErrExists
+		}
+		return tip, err
+	}
+	blobs := make(map[string]string, len(files))
+	for p, b := range files {
+		sha, err := w.gitIn(ctx, w.Dir, b, "hash-object", "-w", "--no-filters", "--stdin")
+		if err != nil {
+			return "", err
+		}
+		blobs[p] = strings.TrimSpace(string(sha))
+	}
+	tree, err := w.mktree(ctx, blobs)
+	if err != nil {
+		return "", err
+	}
+	sha, err := w.git(ctx, w.Dir, "commit-tree", tree, "-m", w.message(c))
+	if err != nil {
+		return "", err
+	}
+	_, err = w.git(ctx, w.Dir, "push", "--quiet", "--porcelain", w.Remote, sha+":refs/heads/"+w.Branch)
+	if err != nil && rejected(err) {
+		if tip, terr := w.remoteTip(ctx); terr == nil && tip != "" {
+			return tip, ErrExists // another creator won the race
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	return sha, nil
+}
+
+// remoteTip returns the remote branch's commit, or "" when the branch is absent.
+func (w *Writer) remoteTip(ctx context.Context) (string, error) {
+	out, err := w.git(ctx, w.Dir, "ls-remote", "--heads", w.Remote, "refs/heads/"+w.Branch)
+	if err != nil {
+		return "", err
+	}
+	sha, _, _ := strings.Cut(out, "\t")
+	return sha, nil
+}
+
+// mktree writes the tree holding blobs (path -> blob sha, mode 100644), nested
+// trees built from the leaves up, and returns its sha.
+func (w *Writer) mktree(ctx context.Context, blobs map[string]string) (string, error) {
+	sub := map[string]map[string]string{}
+	var in bytes.Buffer
+	for p, sha := range blobs {
+		if dir, rest, ok := strings.Cut(p, "/"); ok {
+			if sub[dir] == nil {
+				sub[dir] = map[string]string{}
+			}
+			sub[dir][rest] = sha
+			continue
+		}
+		fmt.Fprintf(&in, "100644 blob %s\t%s\x00", sha, p)
+	}
+	for dir, m := range sub {
+		if _, ok := blobs[dir]; ok {
+			return "", fmt.Errorf("ledger path %q is both a file and a directory", dir)
+		}
+		t, err := w.mktree(ctx, m)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&in, "040000 tree %s\t%s\x00", t, dir)
+	}
+	out, err := w.gitIn(ctx, w.Dir, in.Bytes(), "mktree", "-z")
+	return strings.TrimSpace(string(out)), err
+}
+
+func (w *Writer) message(c Commit) string {
+	if w.Tag != "" {
+		return c.Message + "\n\nAayudha-Identity: " + w.Tag
+	}
+	return c.Message
+}
+
+// lock takes the clone's ledger lock, shared by every writer of this clone.
+func (w *Writer) lock(ctx context.Context) (func(), error) {
+	common, err := w.git(ctx, w.Dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return nil, err
+	}
+	return lock(filepath.Join(common, "aayudha-ledger.lock"), w.LockTimeout, w.Sleep)
+}
+
+func (w *Writer) write(ctx context.Context, c Commit) (string, error) {
+	unlock, err := w.lock(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -194,6 +334,9 @@ func (w *Writer) write(ctx context.Context, c Commit) (string, error) {
 		if w.OnAttempt != nil {
 			w.OnAttempt(attempt, tip)
 		}
+		if c.Base != "" && tip != c.Base {
+			return "", ErrMoved
+		}
 		if attempt == 0 {
 			if _, err := w.git(ctx, w.Dir, "worktree", "add", "--detach", "--quiet", wt, tip); err != nil {
 				return "", err
@@ -210,11 +353,7 @@ func (w *Writer) write(ctx context.Context, c Commit) (string, error) {
 		if _, err := w.git(ctx, wt, "diff", "--cached", "--quiet"); err == nil {
 			return tip, nil // nothing to change
 		}
-		msg := c.Message
-		if w.Tag != "" {
-			msg += "\n\nAayudha-Identity: " + w.Tag
-		}
-		if _, err := w.git(ctx, wt, "commit", "--quiet", "--no-verify", "-m", msg); err != nil {
+		if _, err := w.git(ctx, wt, "commit", "--quiet", "--no-verify", "-m", w.message(c)); err != nil {
 			return "", err
 		}
 		sha, err := w.git(ctx, wt, "rev-parse", "HEAD")

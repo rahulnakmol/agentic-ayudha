@@ -28,6 +28,7 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Proof pack | `pack.json` plus artifacts that map every Completion Goal criterion to evidence and record floor results for one PR head SHA [WP4.1]. |
 | Authoritative pack | The pack the merge-gate workflow built in CI, kept as its `aayudha-pack` run artifact and landed on `ledger` by a human's `ship` after checking it came from that run. Packs pushed by an agent are **advisory** [WP4.8, S-4.2b]. |
 | `ledger` | An orphan branch holding Ready snapshots, proof packs, action segments, and audit reports. Not for code. |
+| `brain` | An orphan branch holding the product brain: an Obsidian vault of linked notes on the product's vision, principles, direction, objectives, objections, decisions, and capabilities. Notes link issues and never copy them. Written with `aayu brain` (v0.3.0). |
 | Merge gate | The base-branch workflow that re-runs `verify` on the PR head, keeps the authoritative pack as a run artifact, and comments on the PR [WP4.8, S-4.2b]. |
 | Disposition | The structured verdict of `inspect` (`merge`, `fix`, `rebuild`) or `review` (`recapture`, `rebuild`, `fix`, `ship`). It can downgrade a result, never override a floor. |
 | Human pass | An approving review from a human account (`type != Bot`, not a configured bot login) [WP1.4, WP5.5]. |

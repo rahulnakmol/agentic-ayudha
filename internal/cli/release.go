@@ -483,7 +483,8 @@ func (e *Env) afterLanding(ctx context.Context, c *github.Client, tok identity.T
 
 // bookkeep runs after the gated commit landed: it stamps the shipped stories
 // released, publishes the release notes, records the rung and the measure
-// due dates on the ledger, and writes the Release's Shipping evidence.
+// due dates on the ledger, writes the Release's Shipping evidence, and
+// refreshes the product brain when the repository has one.
 func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue, p *Promotion, notes tell.Draft, utm tell.UTM, now time.Time, final bool) error {
 	owner, name, _ := github.SplitRepo(repo)
 	for _, s := range p.Stories {
@@ -517,6 +518,7 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 	if _, err := lw.Write(ctx, ledger.Commit{Message: fmt.Sprintf("release: #%d %s %s (%s)", p.Release, p.Target, p.Tag, p.PromotedBy), Files: files}); err != nil {
 		return err
 	}
+	defer e.releaseCheckpoint(ctx, c, tok)
 	return e.shippingEvidence(ctx, c, repo, is, *p, final)
 }
 
