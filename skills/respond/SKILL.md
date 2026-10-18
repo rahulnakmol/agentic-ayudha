@@ -106,7 +106,7 @@ timestamped lines, one decision at a time, and every change to production is a p
    the value to expect) and what rolls it back.
 4. Re-run `aayu respond <incident>` to append finished runs, and who approved them, to the timeline. Verify recovery
    with the query from the note (`aayu investigate <incident> --telemetry <dir> --query "requests by version"`, or
-   the note's `--source`), cited as its `qN`, before you call the impact over; the person decides when it is.
+   the note's `--source` and `--service`), cited as its `qN`, before you call the impact over; the person decides when it is.
 5. **Postmortem.** Write it from the timeline and the investigation note, titled with the stage's artefact
    (`# Incident log: …` at a startup, `# Postmortem: …` at a scaleup, `# Incident review: …` at an enterprise), with
    the parts Summary, Impact, Timeline, Causes, What went well, and Actions as `##` headings. The Timeline cites the
