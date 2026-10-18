@@ -18,7 +18,7 @@ func TestIntegrationScopes(t *testing.T) {
 	if got, want := sentry.Scopes(), []string{"alerts:read", "event:read", "org:read", "project:read"}; !slices.Equal(got, want) {
 		t.Errorf("doctor checks Sentry scopes %v; want %v", got, want)
 	}
-	if got, want := posthog.Scopes(), []string{"query:read"}; !slices.Equal(got, want) {
+	if got, want := posthog.Scopes(), []string{"alert:read", "query:read"}; !slices.Equal(got, want) {
 		t.Errorf("doctor checks PostHog scopes %v; want %v", got, want)
 	}
 	listed := regexp.MustCompile(`\(([a-z_]+:read(?:, [a-z_]+:read)*)\)`)

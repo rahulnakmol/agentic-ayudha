@@ -98,3 +98,43 @@ func TestGet(t *testing.T) {
 	}
 	r.Done()
 }
+
+// TestAlertsCapability (Decision #449, phase P1): doctor proves the key may
+// read insight alerts with one GET of at most one alert; a refused or
+// undecodable answer is a failed check with a fix.
+func TestAlertsCapability(t *testing.T) {
+	const src = "Shaped from PostHog's OpenAPI spec (OpenAPI 3.1 v1.0.0, read 2026-10-17), operations personal_api_keys @current, query_create, and alerts_list. Not live-proven."
+	scope := fixture.Interaction{Method: "GET", URL: "https://us.posthog.com/api/personal_api_keys/@current/", Status: 200,
+		Response: []byte(`{"label":"aayudha","scopes":["query:read","alert:read"]}`)}
+	body, _ := json.Marshal(map[string]any{"query": map[string]string{"kind": "HogQLQuery", "query": "SELECT 1"}, "name": "aayudha doctor"})
+	query := fixture.Interaction{Method: "POST", URL: "https://us.posthog.com/api/projects/12345/query/", Body: body, Status: 200, Response: []byte(`{"results":[[1]]}`)}
+	for _, tt := range []struct {
+		name   string
+		status int
+		answer string
+		ok     bool
+		detail string
+	}{
+		{"listed", 200, `{"count":0,"results":[]}`, true, "project 12345 listed its insight alerts"},
+		{"refused", 403, `{"type":"authentication_error","code":"permission_denied","detail":"API key missing required scope 'alert:read'"}`, false, "alert:read"},
+		{"wrong shape", 200, `["not a page"]`, false, "undecodable alerts answer"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			alerts := fixture.Interaction{Method: "GET", URL: "https://us.posthog.com/api/projects/12345/alerts/?limit=1", Status: tt.status, Response: []byte(tt.answer)}
+			r := &fixture.Replayer{T: t, Rec: &fixture.Recording{Source: src, Interactions: []fixture.Interaction{scope, query, alerts}}, AuthHeader: "Authorization", AuthValue: "Bearer phx_test"}
+			c, err := New(integrations.Conn{Name: "posthog", Key: "phx_test", Integration: config.Integration{Project: "12345"}}, r, time.Now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := c.Capabilities(context.Background())
+			r.Done()
+			if len(got) != 2 || !got[0].OK {
+				t.Fatalf("checks %+v; want the query check to work and an alerts check", got)
+			}
+			a := got[1]
+			if a.Capability != "insight alerts" || a.OK != tt.ok || !strings.Contains(a.Detail, tt.detail) || (!a.OK && a.Fix == "") || a.Request != "GET https://us.posthog.com/api/projects/12345/alerts/?limit=1" {
+				t.Errorf("alerts check %+v; want ok=%v detail ~%q with its request", a, tt.ok, tt.detail)
+			}
+		})
+	}
+}

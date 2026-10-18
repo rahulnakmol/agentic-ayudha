@@ -113,7 +113,7 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 	if defs != nil {
 		rep.Uncovered = defs.Uncovered(rep.Runbooks)
 	}
-	found, facts := e.providerAlerts(ctx, repo, l.Config.Integrations)
+	found, unread, facts := e.providerAlerts(ctx, repo, l.Config.Integrations)
 	rep.Facts = append(rep.Facts, facts...)
 	grounding := rep.markdown()
 
@@ -148,8 +148,11 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 	checkOne := func(file, md string) []string {
 		fs := production.CheckRunbook(md, rep.Stage, pr, known, check, rollback, defs)
 		alerts := production.RunbookAlerts(md, defs, found)
-		for _, a := range alerts {
-			if a.State == production.AlertMissing {
+		for i, a := range alerts {
+			if a.State == production.AlertMissing && unread {
+				// A configured provider could not be read: the alert may be there.
+				alerts[i].State = production.AlertNotChecked
+			} else if a.State == production.AlertMissing {
 				fs = append(fs, fmt.Sprintf("the Symptom names alert `%s`, which is not an alert or monitor in %s", a.Name, strings.Join(slices.Sorted(maps.Keys(found)), " or ")))
 			}
 		}
@@ -265,10 +268,11 @@ func (r runbookReport) markdown() string {
 // PostHog project, for the check of the alerts a runbook names (Decision
 // #449, phase P1). A provider that is not configured, or cannot be read with
 // a read-only key, is left out, so its alerts are not checked rather than
-// missing; the facts say why, and where each list came from.
-func (e *Env) providerAlerts(ctx context.Context, repo string, configured map[string]config.Integration) (map[string][]string, []packFact) {
-	found := map[string][]string{}
-	var facts []packFact
+// missing; the facts say why, and where each list came from. unread reports
+// a configured provider that could not be read: an alert the others lack may
+// be in it, so no alert is missing until every configured provider answers.
+func (e *Env) providerAlerts(ctx context.Context, repo string, configured map[string]config.Integration) (found map[string][]string, unread bool, facts []packFact) {
+	found = map[string][]string{}
 	d := e.integrationDeps(repo)
 	for _, name := range []string{"sentry", "posthog"} {
 		if _, ok := configured[name]; !ok {
@@ -277,13 +281,14 @@ func (e *Env) providerAlerts(ctx context.Context, repo string, configured map[st
 		}
 		names, pv, err := listAlerts(ctx, d, name, configured[name].Project)
 		if err != nil {
+			unread = true
 			facts = append(facts, packFact{Text: fmt.Sprintf("The alerts runbooks name are not checked in %s: %v", name, err), Cite: production.RunbookDir})
 			continue
 		}
 		found[name] = names
 		facts = append(facts, packFact{Text: fmt.Sprintf("%d alerts and monitors in %s (%s; sha256 %s)", len(names), pv.Source, strings.Join(pv.Requests, ", "), pv.Digest), Cite: pv.Source})
 	}
-	return found, facts
+	return found, unread, facts
 }
 
 // listAlerts reads one provider's alert list after checking its key reads

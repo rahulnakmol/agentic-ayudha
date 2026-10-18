@@ -79,6 +79,17 @@ func TestRunbookAlertsLive(t *testing.T) {
 		t.Errorf("no provider:\n%s", out)
 	}
 
+	// Sentry answers but PostHog rejects its key: an alert Sentry lacks may be
+	// in PostHog, so it is not checked rather than missing.
+	rec = append([]fixture.Interaction{sentryScope(`["alerts:read","event:read","org:read","project:read"]`)},
+		fixture.Load(t, "../production/testdata/sentry/alerts.json").Interactions...)
+	rec = append(rec, fixture.Interaction{Method: "GET", URL: "https://eu.posthog.com/api/personal_api_keys/@current/", Status: 401, Response: []byte(`{"detail":"Invalid token"}`)})
+	out = aayu(0, rec, providerFlags...)
+	if !strings.Contains(out, "`error-monitor` found in sentry; `exceptions-spike` not checked; `disk-full` not checked.") ||
+		!strings.Contains(out, "not checked in posthog:") || strings.Contains(out, "not an alert or monitor") {
+		t.Errorf("one provider unread:\n%s", out)
+	}
+
 	// A Sentry token that can write and a PostHog key PostHog rejects: no list is read.
 	rec = []fixture.Interaction{sentryScope(`["event:admin","event:read","org:read","project:read"]`),
 		{Method: "GET", URL: "https://eu.posthog.com/api/personal_api_keys/@current/", Status: 401, Response: []byte(`{"detail":"Invalid token"}`)}}

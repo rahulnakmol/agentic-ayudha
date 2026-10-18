@@ -1,5 +1,5 @@
 {
-  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17) and its source at 8bb4013: posthog/api/personal_api_key.py (@current), posthog/permissions.py (\"API key missing required scope '\u2026'\", \"API key does not have access to the requested project: ID \u2026\"), posthog/auth.py (\"Personal API key found in request Authorization header is invalid.\"), and the {type, code, detail, attr} error shape of posthog/exceptions.py. Not live-proven: no PostHog account recorded this.",
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17) and its source at 8bb4013: posthog/api/personal_api_key.py (@current), posthog/permissions.py (\"API key missing required scope '…'\", \"API key does not have access to the requested project: ID …\"), posthog/auth.py (\"Personal API key found in request Authorization header is invalid.\"), and the {type, code, detail, attr} error shape of posthog/exceptions.py. The alerts list follows operation alerts_list (the spec has no example), which needs alert:read per PostHog's MCP tool definitions at 8bb4013 (services/mcp/schema/generated-tool-definitions.json). Not live-proven: no PostHog account recorded this.",
   "interactions": [
     {
       "method": "GET",
@@ -14,7 +14,8 @@
         "user_id": 101,
         "scopes": [
           "query:read",
-          "error_tracking:read"
+          "error_tracking:read",
+          "alert:read"
         ],
         "scoped_teams": [
           12345
@@ -49,6 +50,17 @@
           ]
         ],
         "is_cached": false
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://us.posthog.com/api/projects/12345/alerts/?limit=1",
+      "status": 200,
+      "response": {
+        "count": 0,
+        "next": null,
+        "previous": null,
+        "results": []
       }
     }
   ]

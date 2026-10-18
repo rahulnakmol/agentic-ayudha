@@ -25,10 +25,10 @@ is checked before any data call, and a key that could write is refused.
 
 ## Connect PostHog
 
-**1. Create a read-only key.** In PostHog, create a personal API key with only the `query:read` scope, limited to your
+**1. Create a read-only key.** In PostHog, create a personal API key with only the `query:read` and `alert:read` scopes, limited to your
 product's project. aayu asks PostHog which scopes the key has, and refuses it if any scope does not end in `:read`.
 
-**You should see** the new key in PostHog's personal API keys list, showing `query:read` and nothing else. Copy its
+**You should see** the new key in PostHog's personal API keys list, showing `query:read` and `alert:read` and nothing else. Copy its
 value now; PostHog shows it once. Stuck? See [integration problems](troubleshooting.md#integrations).
 
 **2. Add the config section and store the key.** In your own terminal:

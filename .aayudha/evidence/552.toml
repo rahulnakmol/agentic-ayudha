@@ -8,4 +8,4 @@ tests = ["./internal/cli:TestRunbookAlertsLive", "./internal/cli:TestSLOAndRunbo
 
 [[criterion]]
 id = 3
-tests = ["./internal/cli:TestRunbookAlertsLive"]
+tests = ["./internal/cli:TestRunbookAlertsLive", "./internal/integrations/posthog:TestAlertsCapability", "./internal/integrations/providers:TestCapabilities"]
