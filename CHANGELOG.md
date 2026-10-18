@@ -68,7 +68,7 @@ for this release.
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check is green, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
-- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default the tables that set identity, approvals, autonomy, seats, review, models, proof, and branches, and every table that names where a credential or data goes), and any workflow that holds a credential; a pull request in it waits for a person (#617).
+- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), and any workflow that holds a credential; a pull request in it waits for a person (#617).
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
 - `aayu ship` never merges with a red required check, whoever passes it (#617).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
@@ -236,7 +236,7 @@ example product the thin-slice run built:
 - `aayu build --delegate` hands a Ready story to Codex, Cursor, Claude Code, or Amp, and closes the review loop (#187).
 - `aayu gc` reclaims expired leases and says how to free a build worktree it keeps (#109, #113).
 - `aayu verify` runs floors: diff coverage, SAST, secrets, dependencies, web accessibility, performance, DAST, API, and a screen reader (#81, #84, #85).
-- `aayu proof` writes proof packs to the ledger, a branch that holds the record of the work, with large media in LFS or a bucket (#20, #78, #159).
+- `aayu proof` builds proof packs, and `aayu ship` lands each pack on the ledger, a branch that holds the record of the work; media stay in the merge gate's run artifact or an optional bucket, never in the ledger or Git LFS (#20, #78, #159, #206).
 - research, wireframe, mockup, and prototype work from pinned references behind a Figma diff gate (#94).
 - review, polish, and baseline check UI work in two lanes (#99).
 - A design system ships tokens, density modes, shadcn primitives, Storybook with axe, seven floorplans, and SwiftUI and Compose token parity (#9, #10).
