@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -773,5 +774,35 @@ func TestApprovals(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("%s:\n got %s\nwant %s", tt.name, got, tt.want)
 		}
+	}
+}
+
+// TestCopilotFamilies: the copilot row asks a person to act when aayu cannot
+// list Copilot's models or no other family can review, and otherwise only
+// reports what it found.
+func TestCopilotFamilies(t *testing.T) {
+	all := map[verbs.Family][]string{verbs.FamilyAnthropic: {verbs.CopilotClaudeOpus}, verbs.FamilyOpenAI: {verbs.CopilotGPTSol}, verbs.FamilyGoogle: {verbs.CopilotGeminiArgon}}
+	two := map[verbs.Family][]string{verbs.FamilyAnthropic: {"claude-sonnet-5"}, verbs.FamilyXAI: {"grok-4.7"}}
+	onlyOpus := map[verbs.Family][]string{verbs.FamilyAnthropic: {verbs.CopilotClaudeOpus, "claude-sonnet-5"}}
+	for name, c := range map[string]struct {
+		fams  map[verbs.Family][]string
+		err   error
+		steps bool
+		says  string
+	}{
+		"all three":    {fams: all, says: "Copilot can review a build in another family"},
+		"two others":   {fams: two, says: "a build that used all of them is labelled same-family"},
+		"defaults off": {fams: two, says: "claude-opus-5.5, gemini-4-argon, gpt-6.1-sol are not enabled"},
+		"one family":   {fams: onlyOpus, steps: true, says: "Copilot enables these model families"},
+		"list fails":   {err: errors.New("401 Unauthorized"), steps: true},
+	} {
+		p := &Probe{CopilotModels: func(context.Context) (map[verbs.Family][]string, error) { return c.fams, c.err }}
+		lines, steps := copilotFamilies(context.Background(), p)
+		if (len(steps) > 0) != c.steps || !strings.Contains(strings.Join(lines, "\n"), c.says) {
+			t.Errorf("%s: lines %q steps %q", name, lines, steps)
+		}
+	}
+	if lines, steps := copilotFamilies(context.Background(), &Probe{}); lines != nil || steps != nil {
+		t.Errorf("no CopilotModels: lines %q steps %q, want none", lines, steps)
 	}
 }

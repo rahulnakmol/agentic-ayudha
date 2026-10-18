@@ -337,3 +337,60 @@ func (m CopilotModels) Trailers() string {
 	}
 	return b.String()
 }
+
+// CopilotModelsURL lists the models a Copilot account may use, with each
+// one's policy (GitHub's own endpoint; read 2026-10-18).
+const CopilotModelsURL = "https://api.githubcopilot.com/models"
+
+// CopilotFamilies reads a CopilotModelsURL reply into the model IDs the
+// account may pick, by family: a model counts when it is in the model picker
+// and its policy is enabled or absent (a generally available model with no
+// policy of its own inherits the organisation's default). A model aayu cannot
+// place in a family is left out.
+func CopilotFamilies(r io.Reader) (map[verbs.Family][]string, error) {
+	var list struct {
+		Data []struct {
+			ID     string `json:"id"`
+			Picker bool   `json:"model_picker_enabled"`
+			Policy *struct {
+				State string `json:"state"`
+			} `json:"policy"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(r).Decode(&list); err != nil {
+		return nil, err
+	}
+	out := map[verbs.Family][]string{}
+	for _, m := range list.Data {
+		f := verbs.FamilyOf(m.ID)
+		if f == "" || !m.Picker || (m.Policy != nil && m.Policy.State != "enabled") || slices.Contains(out[f], m.ID) {
+			continue
+		}
+		out[f] = append(out[f], m.ID)
+	}
+	return out, nil
+}
+
+// CopilotOnGitHubCom reports whether Copilot CLI signs in to github.com, not
+// to a GitHub Enterprise Cloud data-residency tenant (COPILOT_GH_HOST, then
+// GH_HOST), whose models live behind its own endpoint.
+func CopilotOnGitHubCom(getenv func(string) string) bool {
+	for _, k := range []string{"COPILOT_GH_HOST", "GH_HOST"} {
+		if v := strings.TrimPrefix(strings.TrimPrefix(getenv(k), "https://"), "http://"); v != "" {
+			return strings.TrimSuffix(v, "/") == "github.com"
+		}
+	}
+	return true
+}
+
+// CopilotToken is the token Copilot CLI signs in with from the environment,
+// in its order; "" when it would use its stored login, which aayu cannot read.
+// aayu sends it only to Copilot's own endpoints, never for its GitHub writes.
+func CopilotToken(getenv func(string) string) string {
+	for _, k := range []string{"COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
+		if v := getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}

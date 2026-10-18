@@ -142,3 +142,33 @@ func TestCopilotInstallKeepsPersonsSkills(t *testing.T) {
 		t.Error("a command install wrote and no longer ships was kept")
 	}
 }
+
+// Copilot's models list (the shape GET api.githubcopilot.com/models returned
+// on 2026-10-18, trimmed): a model counts only when its policy is enabled and
+// it is in the picker, so Grok (no policy) and a picker-hidden model drop out.
+func TestCopilotFamilies(t *testing.T) {
+	reply := `{"data":[
+{"id":"claude-opus-5.5","vendor":"Anthropic","model_picker_enabled":true,"policy":{"state":"enabled"}},
+{"id":"gpt-6.1-sol","vendor":"OpenAI","model_picker_enabled":true,"policy":{"state":"enabled"}},
+{"id":"gpt-5.4-nano","vendor":"OpenAI","model_picker_enabled":false,"policy":{"state":"enabled"}},
+{"id":"gemini-4-argon","vendor":"Google","model_picker_enabled":true,"policy":{"state":"enabled"}},
+{"id":"grok-4.7","vendor":"xAI","model_picker_enabled":true},
+{"id":"gpt-5.3-codex","vendor":"OpenAI","model_picker_enabled":true},
+{"id":"claude-sonnet-5","vendor":"Anthropic","model_picker_enabled":true,"policy":{"state":"disabled"}},
+{"id":"mai-code-1.1-flash","vendor":"Microsoft","model_picker_enabled":true,"policy":{"state":"enabled"}}]}`
+	got, err := CopilotFamilies(strings.NewReader(reply))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No policy of its own inherits the default (grok-4.7, gpt-5.3-codex); a
+	// disabled one or one outside the picker does not count.
+	want := map[verbs.Family][]string{verbs.FamilyAnthropic: {"claude-opus-5.5"}, verbs.FamilyOpenAI: {"gpt-6.1-sol", "gpt-5.3-codex"}, verbs.FamilyGoogle: {"gemini-4-argon"}, verbs.FamilyXAI: {"grok-4.7"}}
+	if len(got) != len(want) {
+		t.Fatalf("families %v, want %v", got, want)
+	}
+	for f, ids := range want {
+		if !slices.Equal(got[f], ids) {
+			t.Errorf("%s: %v, want %v", f, got[f], ids)
+		}
+	}
+}

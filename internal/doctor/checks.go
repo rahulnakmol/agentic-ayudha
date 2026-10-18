@@ -729,8 +729,9 @@ func evalOr(p string) string {
 // hooks file, trust in the folder (Copilot CLI loads the project's MCP server
 // and hooks only then), and a sign-in kept apart from aayu's GitHub identity.
 // Copilot CLI signs in with COPILOT_GITHUB_TOKEN, then GH_TOKEN, then
-// GITHUB_TOKEN, before a stored copilot login; aayu never reads
-// COPILOT_GITHUB_TOKEN, so with it set each keeps its own account.
+// GITHUB_TOKEN, before a stored copilot login; aayu sends COPILOT_GITHUB_TOKEN
+// only to Copilot's own endpoint, never for its GitHub writes, so with it set
+// each keeps its own account.
 func checkCopilot(ctx context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}
@@ -783,6 +784,8 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 	default:
 		lines = append(lines, "Copilot signs in with its own login (copilot login, or VS Code's GitHub account)")
 	}
+	famLines, famSteps := copilotFamilies(ctx, p)
+	lines, steps = append(lines, famLines...), append(steps, famSteps...)
 	lines = append(lines, hosts.CopilotProven)
 	switch {
 	case len(problems) > 0:
@@ -811,6 +814,42 @@ func checkHostConfig(ctx context.Context, p *Probe) Result {
 			Lines: drift}
 	}
 	return Result{Status: Pass, Detail: "the hosts' hooks and MCP entries are what aayu install writes"}
+}
+
+// copilotFamilies says which model families Copilot enables for the account,
+// and so which builds its review lane can review in another family.
+func copilotFamilies(ctx context.Context, p *Probe) (lines, steps []string) {
+	if p.CopilotModels == nil {
+		return nil, nil
+	}
+	fams, err := p.CopilotModels(ctx)
+	if err != nil {
+		// No list is no proof a reviewer from another family is there.
+		return nil, []string{"cannot list Copilot's models, so aayu cannot say whether its review lane can review in another family: " + err.Error()}
+	}
+	var names []string
+	for f, ids := range fams {
+		names = append(names, fmt.Sprintf("%s (%s)", f, strings.Join(ids, ", ")))
+	}
+	slices.Sort(names)
+	lines = []string{"Copilot enables these model families for its account: " + strings.Join(names, "; ")}
+	// Copilot's builder is always from an enabled family, so another family is
+	// there to review it whenever at least two are enabled.
+	if len(fams) < 2 {
+		return lines, []string{"Copilot cannot review in another family: it enables fewer than two model families for this account; ask your Copilot admin to enable another family's models"}
+	}
+	lines = append(lines, "Copilot can review a build in another family when the build left one of these families unused; a build that used all of them is labelled same-family")
+	var off []string
+	for f, id := range map[verbs.Family]string{verbs.FamilyAnthropic: verbs.CopilotClaudeOpus, verbs.FamilyOpenAI: verbs.CopilotGPTSol, verbs.FamilyGoogle: verbs.CopilotGeminiArgon} {
+		if !slices.Contains(fams[f], id) {
+			off = append(off, id)
+		}
+	}
+	if len(off) > 0 {
+		slices.Sort(off)
+		lines = append(lines, "the review lane's default reviewers "+strings.Join(off, ", ")+" are not enabled here: pin an enabled model from another family with [models.review.copilot] model")
+	}
+	return lines, nil
 }
 
 // checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,

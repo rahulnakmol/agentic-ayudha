@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -21,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func init() { register("doctor", runDoctor) }
@@ -76,6 +78,12 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	}
 	p.Reachable = func(ctx context.Context) []identity.Reach { return e.reachable(ctx, p.Repo) }
 	p.Agent = e.agentSignal()
+	// Copilot's stored login is not readable, and a data-residency tenant has
+	// its own endpoint: then aayu does not ask, rather than send its token to
+	// the public one.
+	if hosts.CopilotToken(e.Getenv) != "" && hosts.CopilotOnGitHubCom(e.Getenv) {
+		p.CopilotModels = e.copilotEnabledModels
+	}
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
 			TagName string `json:"tag_name"`
@@ -259,4 +267,26 @@ func (e *Env) hostConfigDrift(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return append(hosts.ConfigDrift(res.Edits), res.Unmanaged...), nil
+}
+
+// copilotEnabledModels asks Copilot which models the account it signs in with may
+// pick. The token goes only to Copilot's own endpoint.
+func (e *Env) copilotEnabledModels(ctx context.Context) (map[verbs.Family][]string, error) {
+	tok := hosts.CopilotToken(e.Getenv)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hosts.CopilotModelsURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := e.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", hosts.CopilotModelsURL, resp.Status)
+	}
+	return hosts.CopilotFamilies(resp.Body)
 }

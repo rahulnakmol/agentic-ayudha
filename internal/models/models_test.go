@@ -27,7 +27,8 @@ import (
 func TestLaneResolution(t *testing.T) {
 	cfg := config.Models{Lanes: map[string]map[string]config.ModelChoice{
 		"build":  {"claude": {Model: verbs.ModelClaudeSonnet}},
-		"review": {"cursor": {Model: verbs.ModelGPTSol}, "claude": {Model: "my-model", Family: "xai"}},
+		"review": {"cursor": {Model: verbs.ModelGPTSol}, "claude": {Model: "my-model", Family: "xai"}, "copilot": {Model: "claude-haiku-5.5"}},
+		"chore":  {"copilot": {Model: "claude-haiku-5.5"}},
 	}}
 	var logged []string
 	r := Resolver{Models: cfg, Log: func(s string) { logged = append(logged, s) }}
@@ -56,6 +57,12 @@ func TestLaneResolution(t *testing.T) {
 		// The binary's own calls cannot use a host-managed mode.
 		{verbs.LaneChore, verbs.HostAmp, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
 		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, "high"},
+		// Copilot's rows, defaults and a person's, name models in Copilot's
+		// catalog, which the gateway does not route: direct calls use claude's row.
+		{verbs.LaneReview, verbs.HostCopilot, false, false, "claude-haiku-5.5", verbs.FamilyAnthropic, SourceConfig, ""},
+		{verbs.LaneReview, verbs.HostCopilot, true, false, "my-model", verbs.FamilyXAI, SourceDirect, ""},
+		{verbs.LaneChore, verbs.HostCopilot, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
+		{verbs.LaneUIReview, verbs.HostCopilot, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, "high"},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}

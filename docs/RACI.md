@@ -139,13 +139,13 @@ The reviewer model family must differ from the builder model family on every sto
 | `review` (adversarial) | Cursor (legacy plan) | Grok 4.7 | `grok-4.7` | xai | — |
 | `review` (adversarial) | Claude Code | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | OpenAI Codex | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Grok 4.7 (grok-4.7) |
-| `review` (adversarial) | GitHub Copilot | Copilot Auto (Intelligence) | `auto:intelligence` | host-managed | or a model from a family other than the builder's, picked in Copilot's model picker; or HydraFusion Critique, opt-in, which counts only when its recorded critic's family differs from the builder's |
+| `review` (adversarial) | GitHub Copilot | Claude Opus 5.5 | `claude-opus-5.5` | anthropic | or GPT-6.1 Sol (gpt-6.1-sol) when the builder is anthropic, Gemini 4 Argon (gemini-4-argon) when it used both anthropic and openai |
 | `ui-review` (adversarial) | Amp | Amp high | host-managed | host-managed | — |
 | `ui-review` (adversarial) | Cursor (x plan) | Grok 4.6 | `grok-4.6` | xai | — |
 | `ui-review` (adversarial) | Cursor (legacy plan) | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | Claude Code | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | OpenAI Codex | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
-| `ui-review` (adversarial) | GitHub Copilot | Copilot Auto (Intelligence) | `auto:intelligence` | host-managed | — |
+| `ui-review` (adversarial) | GitHub Copilot | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Gemini 4 Argon (gemini-4-argon), opt-in with [models.ui-review.copilot] model = "gemini-4-argon": about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed) |
 | `chore` | Amp | Amp low | host-managed | host-managed | — |
 | `chore` | Cursor (x plan) | Composer 2.5 | `composer-2.5` | unknown | note: family unknown: Cursor does not publish Composer's base model |
 | `chore` | Cursor (legacy plan) | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |

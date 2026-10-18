@@ -15,6 +15,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // Status of a check.
@@ -63,6 +64,10 @@ type Probe struct {
 	// executable host config files (hosts.ExecutableConfig) whose content
 	// differs from what it would write; nil outside an installed repository.
 	HostConfig func(ctx context.Context) ([]string, error)
+	// CopilotModels lists the model IDs the account Copilot signs in with may
+	// pick, by family (hosts.CopilotFamilies); nil when aayu cannot ask: no
+	// token it can read, or Copilot signs in to a host other than github.com.
+	CopilotModels func(ctx context.Context) (map[verbs.Family][]string, error)
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)
