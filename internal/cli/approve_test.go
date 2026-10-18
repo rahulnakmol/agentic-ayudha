@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -494,6 +495,28 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	g.Mu.Unlock()
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder (unreadable now))") {
 		t.Fatalf("unreadable gh account: exit %d %s\n%s", code, errOut, body)
+	}
+	// gh is there but will not list its accounts: any of them may be the founder's.
+	d8 := g.AddIssue("Choose the CDN again", decisionBody("true", ""), "type:decision", "status:ready")
+	unlisted := func(context.Context) (map[string]string, error) {
+		return nil, errors.New("gh auth status: unexpected output")
+	}
+	code, _, errOut = run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, GHAccounts: unlisted, GHToken: func(context.Context) (string, error) { return "ghu_otheractive", nil }},
+		"decide", strconv.Itoa(d8.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	g.Mu.Lock()
+	body = g.Issues[d8.Number].Comments[len(g.Issues[d8.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "could not list gh's accounts now") {
+		t.Fatalf("gh accounts unlisted: exit %d %s\n%s", code, errOut, body)
+	}
+	// A dry run neither posts a batch nor asks for a code.
+	n := len(g.Issues[d8.Number].Comments)
+	code, out, errOut := run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, GHToken: func(context.Context) (string, error) { return "ghu_otheractive", nil }},
+		"decide", strconv.Itoa(d8.Number), "--accept", "A", "--dry-run", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	if code != 0 || len(g.Issues[d8.Number].Comments) != n || !strings.Contains(out, "nothing was posted") || !strings.Contains(out, "1. Accepts option 1 (A) of Decision #"+strconv.Itoa(d8.Number)) {
+		t.Fatalf("dry run: exit %d %s %s", code, out, errOut)
 	}
 	// A token in aayu's own secrets store (`aayu auth set-secret github-token`) is reachable too.
 	d3 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")

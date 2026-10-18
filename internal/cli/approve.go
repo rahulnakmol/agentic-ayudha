@@ -325,8 +325,11 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 	sources := map[string]func(context.Context) (string, error){}
 	// gh stores several accounts and `gh auth token` gives only the active
 	// one; any of them, active or not, can write a reply.
-	accounts, _ := e.ghAccounts(ctx)
+	accounts, err := e.ghAccounts(ctx)
 	var unread []identity.Reach // gh names the account but would not give its token now: it is still reachable
+	if err != nil {             // gh is there but would not list its accounts: any of them may be an approver's
+		unread = append(unread, identity.Reach{Source: "gh auth status (could not list gh's accounts now)"})
+	}
 	for login, tok := range accounts {
 		if tok == "" {
 			unread = append(unread, identity.Reach{Source: "gh auth token --user " + login + " (unreadable now)", Login: login})
@@ -386,6 +389,9 @@ func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
 	if e.GHAccounts != nil {
 		return e.GHAccounts(ctx)
 	}
+	if _, err := e.lookPath()("gh"); err != nil {
+		return nil, nil // no gh, no stored accounts
+	}
 	run := e.exec()
 	// gh exits 1 when any stored account fails its check; the list is still printed.
 	out, _ := run(ctx, e.Dir, "gh", "auth", "status", "--hostname", "github.com", "--json", "hosts")
@@ -399,6 +405,9 @@ func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
 	}
 	toks := map[string]string{}
 	for _, a := range st.Hosts["github.com"] {
+		if a.Login == "" { // gh's placeholder when nothing is logged in
+			continue
+		}
 		t, _ := run(ctx, e.Dir, "gh", "auth", "token", "--hostname", "github.com", "--user", a.Login)
 		toks[a.Login] = strings.TrimSpace(t) // "" when gh could not read it now: it still counts
 	}

@@ -497,6 +497,13 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		}
 	}
 	via, writer := "", c
+	if agentRun && reader.DryRun() { // no batch, no code: a dry run only says what it would ask
+		fmt.Fprintf(e.Out, "dry run: batch %s on #%d would ask a person to approve, and nothing was posted:\n", b.hash(), b.Issue)
+		for i, it := range b.Items {
+			fmt.Fprintf(e.Out, "  %d. %s %s\n", i+1, it.Effect, it.Door)
+		}
+		return nil
+	}
 	if agentRun {
 		if berr == nil {
 			writer = bc
