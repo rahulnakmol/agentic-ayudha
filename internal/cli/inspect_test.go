@@ -1083,6 +1083,42 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, errOut := approve(env, person, "mallory"); code != ExitBlocked || !strings.Contains(errOut, "approver is lead, not mallory") {
 		t.Fatalf("approve by a non-approver: %d %s", code, errOut)
 	}
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", " ", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "--reason") {
+		t.Fatalf("approve without a reason: %d %s", code, errOut)
+	}
+	if code, errOut := approve(map[string]string{"PATH": env["PATH"]}, person, "lead"); code == 0 {
+		t.Fatalf("approve without the person's GitHub login: %d %s", code, errOut)
+	}
+	// A pull read that fails, or a head that moves while the person approves,
+	// records nothing: the approval names the head the person was shown. Reads
+	// of the pull: 1 the head shown, 2 the head after presence, 3 the diff.
+	pull := "/repos/o/r/pulls/" + strconv.Itoa(prN)
+	for _, tc := range []struct {
+		read int
+		move bool
+		want string
+	}{{1, false, "injected failure"}, {2, true, "head moved from " + head[:7]}, {3, false, "injected failure"}} {
+		reads := 0
+		g.Mu.Lock()
+		g.Hook = func(method, path string) {
+			if method != "GET" || path != pull {
+				return
+			}
+			if reads++; reads == tc.read && tc.move {
+				g.Pulls[prN].Head.SHA = strings.Repeat("e", 40)
+			} else if reads == tc.read {
+				g.Fail, g.FailAfter = "GET "+pull, 0
+			}
+		}
+		g.Mu.Unlock()
+		code, errOut := approve(env, person, "lead")
+		g.Mu.Lock()
+		g.Hook, g.Fail, g.Pulls[prN].Head.SHA = nil, "", head
+		g.Mu.Unlock()
+		if code == 0 || !strings.Contains(errOut, tc.want) {
+			t.Fatalf("approve with pull read %d failing (moved %v): %d %s", tc.read, tc.move, code, errOut)
+		}
+	}
 	if code, errOut := approve(env, person, "lead"); code != 0 {
 		t.Fatalf("approve: %d %s", code, errOut)
 	}
@@ -1109,6 +1145,26 @@ func TestInspectThroughApp(t *testing.T) {
 	}
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge {
 		t.Fatalf("the new head's recorded review: %d %+v %s", code, res, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/"+strconv.Itoa(prN)+"/comments", 0
+	g.Mu.Unlock()
+	if code, errOut := approve(env, person, "lead"); code != ExitExternal {
+		t.Fatalf("approve with the reply unwritable: %d %s", code, errOut)
+	}
+	// A ledger that cannot be read backs no review: the human fallback fails closed.
+	git(t, opts.Dir, "push", "--quiet", "origin", "--delete", "ledger")
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("a recorded review on an unreadable ledger: %d %+v %s", code, res, errOut)
+	}
+	// With no [autonomy] approver, or no readable config, nobody can approve.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\n"), 0o644)
+	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "no [autonomy] approver") {
+		t.Fatalf("approve with no approver: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy\n"), 0o644)
+	if code, errOut := approve(env, person, "lead"); code == 0 {
+		t.Fatalf("approve with an unreadable config: %d %s", code, errOut)
 	}
 
 	// With no pack (a request before the gate ran, or a reply event), the
