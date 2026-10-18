@@ -1,0 +1,30 @@
+# Which tests prove story #496's Completion Goal (DAST by default under Decision #485's guardrails): verify maps the
+# go test -json events of these tests, from the run it makes, to the criteria.
+
+[[criterion]]
+id = 1 # active rules only against an app verify started on loopback, or an opted-in URL; active_scan only from the repo config
+tests = ["internal/verify:TestDASTGuardrails/active_or_passive_by_target", "internal/config:TestActiveScanKey"]
+
+[[criterion]]
+id = 2 # n/a off the web and api platforms, never blocking
+tests = ["internal/verify:TestDASTGuardrails/n/a_off_web_and_api"]
+
+[[criterion]]
+id = 3 # no runnable target: a blocking skip with the fix, released by a waiver; doctor shows the same fix
+tests = ["internal/verify:TestDASTGuardrails/no_runnable_target_blocks_until_waived", "internal/cli:TestVerifyDASTWaiver", "internal/doctor:TestChecksGolden"]
+
+[[criterion]]
+id = 4 # docker first, then podman, by digest with --network host; no runtime skips locally and blocks in CI; doctor names it
+tests = ["internal/verify:TestContainerRuntime/linux", "internal/verify:TestContainerRuntime/no_runtime", "internal/doctor:TestContainerRuntimeRow"]
+
+[[criterion]]
+id = 5 # macOS and Windows reach the host by the runtime's name, with no host network
+tests = ["internal/verify:TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name"]
+
+[[criterion]]
+id = 6 # a high alert is advisory before verify.new_floors_blocking_from and fails on it
+tests = ["internal/verify:TestDASTGuardrails/high_alerts_are_advisory_until_the_date"]
+
+[[criterion]]
+id = 7 # verify --security runs sast, secrets, deps, and dast; the job summary shows a dast skip
+tests = [".:TestSecurityWorkflowSteps"]

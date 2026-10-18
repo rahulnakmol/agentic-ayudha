@@ -63,7 +63,7 @@ A few details matter in practice:
 - **Web target.** The a11y and perf floors capture the URL of `[verify.environments.<env>]`, where `<env>` is
   `AAYU_ENV` (default `local`). `verify` refuses a production target before it seeds or captures anything.
 - **Redaction** runs first. If a capture holds personal data, the pack is blocked and no capture is kept.
-- **DAST** (Decision #485) runs a spider and the passive rules, plus the active cross-site scripting and injection
+- **DAST** runs a spider and the passive rules, plus the active cross-site scripting and injection
   rules only against an app `[verify] seed` started in this run on a loopback host. Any other URL gets a passive
   scan, which cannot see a reflected XSS, unless its `[verify.environments.<env>]` sets `active_scan = true`; only
   `.aayudha/config.toml` can set that. A CLI or library is `n/a`. A web or api story with no target records a

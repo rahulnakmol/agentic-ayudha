@@ -152,6 +152,16 @@ func TestContainerRuntimeRow(t *testing.T) {
 		}
 	}
 	p := probe("docker")
+	p.Config.Config.Verify.DAST = false
+	if r := checkDAST(ctx, p); r.Status != Warn || !strings.Contains(strings.Join(r.Lines, "\n"), "[verify] dast = false") || !strings.Contains(strings.Join(r.Lines, "\n"), "aayu decide <story> --waiver dast") {
+		t.Errorf("dast off: %+v", r)
+	}
+	p = probe("docker")
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "https://staging.example.test", ActiveScan: true}}
+	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "active scan ([verify.environments.local] active_scan = true)") {
+		t.Errorf("opted-in URL: %+v", r)
+	}
+	p = probe("docker")
 	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "https://staging.example.test"}}
 	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "passive scan only") {
 		t.Errorf("a URL verify does not start: %+v", r)

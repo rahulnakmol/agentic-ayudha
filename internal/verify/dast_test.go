@@ -173,6 +173,25 @@ func TestDASTGuardrails(t *testing.T) {
 		}
 	})
 
+	t.Run("a target that is not an absolute URL is blocked", func(t *testing.T) {
+		bin := t.TempDir()
+		standInRuntime(t, bin, "docker", zapClean)
+		r := dastRun(t, bin, "127.0.0.1:8080", "web")
+		if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "not an absolute URL") {
+			t.Fatalf("%+v", c)
+		}
+	})
+
+	t.Run("with no blocking date a high alert stays advisory", func(t *testing.T) {
+		bin := t.TempDir()
+		standInRuntime(t, bin, "docker", zapHigh)
+		r := dastRun(t, bin, "http://127.0.0.1:8080", "web")
+		r.Verify.NewFloorsBlockingFrom = ""
+		if c, _ := dastCheck(t, r); c.Result != proof.Pass || !strings.HasPrefix(c.Detail, "advisory (no [verify] new_floors_blocking_from date)") {
+			t.Fatalf("%+v", c)
+		}
+	})
+
 	t.Run("high alerts are advisory until the date", func(t *testing.T) {
 		for _, tc := range []struct {
 			now  time.Time
@@ -253,6 +272,15 @@ func TestContainerRuntime(t *testing.T) {
 				plan, argv := read(t, filepath.Join(bin, rt+".plan")), read(t, filepath.Join(bin, rt+".argv"))
 				if !strings.Contains(plan, `urls: ["http://`+host+`:8080/"]`) || strings.Contains(argv, "--network") {
 					t.Fatalf("%s %s: plan %s argv %q", os, rt, plan, argv)
+				}
+				// A target with no port keeps none.
+				bin = t.TempDir()
+				standInRuntime(t, bin, rt, zapClean)
+				r := dastRun(t, bin, "http://localhost", "web")
+				withSeed(t, r, bin)
+				dastCheck(t, r)
+				if plan := read(t, filepath.Join(bin, rt+".plan")); !strings.Contains(plan, `urls: ["http://`+host+`/"]`) {
+					t.Fatalf("%s %s portless: %s", os, rt, plan)
 				}
 			}
 		}
