@@ -169,7 +169,9 @@ claude, cursor. After the apps comes the paid reviewer, with the same key, cap, 
 (`[autonomy] approver`). When `grok` is chosen and cannot review, the apps review in that order, then a person. The
 inspect comment's note names each step and why. A same-family app is labelled so at any step, and the paid reviewer
 is never of a family the builder may be. The gate notices the 30 minutes only when its inspect job runs again: a push,
-a re-run of the failed job, or a bot's comment or a review on the pull request.
+a re-run of the failed job, or a bot's comment or a review on the pull request. The 30 minutes run from that app's own
+request. CodeRabbit and Greptile review every head unasked, so for them they run from the head's first request; an app
+that reviews only when asked (Claude, Cursor) waits until `aayu inspect <pr>` outside CI asks it.
 
 When the gate uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
 reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by

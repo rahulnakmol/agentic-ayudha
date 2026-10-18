@@ -114,10 +114,12 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
 		floor = a.in.Reopened
 	}
-	// Each reviewer's wait starts from its own review request for the head;
-	// one with none of its own (a fallback the gate could not ask, since the
-	// apps answer only the people who connected them) starts from the head's
-	// first request.
+	// Each reviewer's wait starts from its own review request for the head. A
+	// review service with none of its own starts from the head's first
+	// request, since it reviews every head unasked; a mention-only app with
+	// none (a fallback the gate cannot ask, since the apps answer only the
+	// people who connected them) has no wait to run out until `aayu inspect`
+	// outside CI asks it (CodeRabbit's P1 on #641).
 	requested := func(c inspect.Choice) (own, first time.Time) {
 		for _, p := range posts {
 			rs, ok := inspect.ParseRequest(p.Body)
@@ -139,13 +141,16 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	switchTo := func(c inspect.Choice) error {
 		choice = c
 		own, first := requested(c)
-		since = cmp.Or(own, first)
+		since = own
+		if c.Family == inspect.FamilyService {
+			since = cmp.Or(own, first)
+		}
 		if !own.IsZero() {
 			return nil
 		}
 		if e.CI {
-			if !first.IsZero() {
-				notes = append(notes, fmt.Sprintf("%s has no review request of its own for this head; `aayu inspect %d` outside CI asks it", c.Kind(), n))
+			if !first.IsZero() && c.Family != inspect.FamilyService {
+				notes = append(notes, fmt.Sprintf("%s has no review request of its own for this head, so the gate waits for it; `aayu inspect %d` outside CI asks it", c.Kind(), n))
 			}
 			return nil
 		}
@@ -349,6 +354,8 @@ func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (stri
 	switch {
 	case rep.Model != "" && !modelID.MatchString(rep.Model):
 		f, who = "", c.App+" with a model ID aayu does not accept" // reviewer text never reaches the label
+	case rep.Model != "" && c.Family == inspect.FamilyService:
+		who = c.App + " with " + rep.Model // a service's review is rung A whatever model it names (inspect.FamilyService)
 	case rep.Model != "" && c.Family != "" && c.Family != verbs.FamilyHostManaged && verbs.FamilyOf(rep.Model) != c.Family:
 		// An app of one family cannot run another's model: the claim is
 		// reviewer text (a hallucination or injected PR content), not a fact.

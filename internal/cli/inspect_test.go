@@ -1405,6 +1405,18 @@ func TestInspectReviewerFallback(t *testing.T) {
 		!strings.Contains(lastInspect(t, g, prN), "claude has not replied in the 30 minutes since the review request") {
 		t.Fatalf("31 minutes after Claude's request: exit %d rung %q, %d model calls %s\n%s", code, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
 	}
+	// In CI alone nobody asks Claude, so Codex's hour-old request does not
+	// start Claude's wait: the gate waits for Claude instead of paying for
+	// rung B (CodeRabbit's P1 on #641).
+	g, env, opts, prN, model = setup()
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\", \"claude\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"), 0o644)
+	request(g, prN, opts.Now().Add(-time.Hour))
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	postedAt(g, prN, opts.Now().Add(-50*time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, "claude") ||
+		!strings.Contains(lastInspect(t, g, prN), "claude has no review request of its own for this head, so the gate waits for it") {
+		t.Fatalf("CI after Codex's limit, Claude never asked: exit %d %s %q, %d model calls %s\n%s", code, res.Disposition, res.Review, len(model.Requests), errOut, lastInspect(t, g, prN))
+	}
 
 	// No reply: within inspect.ReplyWait of the request the gate waits for
 	// Codex; past it, rung B reviews.
@@ -1504,5 +1516,13 @@ func TestInspectReviewTools(t *testing.T) {
 	if code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungA || len(res.Findings) != 1 || res.Findings[0].Severity != "P2" ||
 		res.Findings[0].Title != "Comment restates the code" || !strings.Contains(res.Review, "greptile (review-service), builder openai") {
 		t.Fatalf("greptile: exit %d %s rung %q %q findings %+v %s", code, res.Disposition, res.Rung, res.Review, res.Findings, errOut)
+	}
+	// A service's stated-format reply that names its model (here one of the
+	// builder's family) is still rung A (CodeRabbit's P1 on #641).
+	g, env, opts, prN, _ = setup("coderabbit")
+	writeInspectPackAs(t, opts.Dir, prN, g.Pulls[prN].Head.SHA, nil, "codex", "gpt-6.1-sol")
+	addComment(g, prN, "coderabbitai[bot]", "Bot", strings.Replace(statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"gpt-6.1-sol","disposition":`, 1))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || !strings.Contains(res.Review, "coderabbit with gpt-6.1-sol") {
+		t.Fatalf("coderabbit naming its model: exit %d rung %q %q %s", code, res.Rung, res.Review, errOut)
 	}
 }
