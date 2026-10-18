@@ -18,8 +18,9 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
-// The sampled audit after merge (Decision #593): a PR ship merged on proof
-// waits, as an audit entry on the ledger and the AuditLabel on its PR, for a
+// The sampled audit after merge (Decision #593): a PR ship merged with no
+// person's pass (on proof, or an autonomous footprint) waits, as an audit
+// entry on the ledger and the AuditLabel on its PR, for a
 // person to look at in `aayu inbox`. Their answer is a Sample in
 // SamplesLedgerPath; a correction also resets the streak of the layers the PR
 // touched and opens a PR that reverts it. The look never blocks the merge.
@@ -34,7 +35,7 @@ func AuditLedgerPath(pr int) string { return fmt.Sprintf("autonomy/audit/%d.json
 // JSON Sample per line.
 const SamplesLedgerPath = "autonomy/samples.jsonl"
 
-// Sample is one person's look at a PR merged on proof.
+// Sample is one person's look at a PR merged with no person's pass.
 type Sample struct {
 	PR         int    `json:"pr"`
 	Correction bool   `json:"correction"`
@@ -42,14 +43,14 @@ type Sample struct {
 	At         string `json:"at,omitempty"`
 }
 
-// AuditEntry is a PR merged on proof, waiting for a person's look.
+// AuditEntry is a PR merged with no person's pass, waiting for a person's look.
 type AuditEntry struct {
 	PR        int      `json:"pr"`
 	Story     int      `json:"story"`
 	Head      string   `json:"head"`
 	Merge     string   `json:"merge_commit"`
 	Footprint []string `json:"footprint"`
-	Pass      string   `json:"human_pass"` // how it merged: proof
+	Pass      string   `json:"human_pass"` // how it merged: proof or autonomous
 	MergedAt  string   `json:"merged_at"`
 }
 
@@ -61,7 +62,7 @@ func prLabelled(p *gh.PullRequest, label string) bool {
 // auditItem is the inbox item for a merged PR carrying AuditLabel.
 func auditItem(p *gh.PullRequest) InboxItem {
 	return InboxItem{Kind: InboxAudit, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), mergeSHA: p.GetMergeCommitSHA(),
-		Why: fmt.Sprintf("PR #%d merged on %s on proof, with no person's review; a look after merge keeps that honest, and a correction resets its layers' streak.", p.GetNumber(), short(p.GetMergeCommitSHA())),
+		Why: fmt.Sprintf("PR #%d merged on %s with no person's review; a look after merge keeps that honest, and a correction resets its layers' streak.", p.GetNumber(), short(p.GetMergeCommitSHA())),
 		Options: []InboxAction{{N: 1, Recommended: true, Label: "looks right (a clean sample)", Command: "inbox: audit looks right"},
 			{N: 2, Label: fmt.Sprintf("correction: reset the streak and open a PR that reverts #%d", p.GetNumber()), Command: "inbox: audit correction"}}}
 }

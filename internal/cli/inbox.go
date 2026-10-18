@@ -49,7 +49,7 @@ const (
 	InboxUnshipped   = "unshipped"    // a Story whose PR merged into dev without a ship record
 	InboxFixed       = "fixed"        // an open Bug whose fix merged into dev
 	InboxReplaced    = "replaced"     // an open Story or Bug that another issue replaces
-	InboxAudit       = "audit"        // a PR ship merged on proof, sampled for a person's look after merge
+	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
 )
 
 var inboxOrder = []string{InboxDecision, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
@@ -114,10 +114,10 @@ var inboxKinds = map[string]inboxKind{
 			"Closing it as completed adds a note that links the fix, so the board shows the bug as solved. Nothing in the code changes. " +
 			"If you leave it, the bug keeps counting as open in every list and report.",
 		Terms: []string{"Work item"}},
-	InboxAudit: {Icon: "🔍", Word: "Merged on proof, to audit", Seat: verbs.EngineeringManager,
-		Line: "An agent's change merged on proof alone; a quick look after the fact keeps that honest.",
+	InboxAudit: {Icon: "🔍", Word: "Merged unreviewed, to audit", Seat: verbs.EngineeringManager,
+		Line: "An agent's change merged with no person's review; a quick look after the fact keeps that honest.",
 		Explain: "aayu merged this pull request into dev without a person's review, because every check was green, the proof held, and " +
-			"the reviewer said merge. A sample of those merges comes to you afterwards. If it looks right, say so and it counts as a clean " +
+			"the reviewer said merge. Every such merge comes to you afterwards. If it looks right, say so and it counts as a clean " +
 			"sample. If it is wrong, mark it a correction: that resets the streak of the layers it touched and opens a pull request that " +
 			"reverts it. If you leave it, nothing changes; the merge stays.",
 		Terms: []string{"Proof pack", "Streak"}},

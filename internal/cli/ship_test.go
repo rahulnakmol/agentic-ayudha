@@ -353,6 +353,12 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	if sr.HumanPass.Kind != "autonomous" || !sr.Streak.Autonomous || sr.Streak.Threshold != 0 || len(sr.Pass.Never) != 0 || sr.Review != inspect.RungA {
 		t.Fatalf("ship record: %+v", sr)
 	}
+	// No person passed it, so it waits for the audit after merge, as a merge on proof does.
+	var entry AuditEntry
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+AuditLedgerPath(prN))), &entry)
+	if entry.PR != prN || entry.Pass != "autonomous" || !contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("an autonomous merge was not sent to the audit: %+v, labels %v", entry, g.LabelNames(prN))
+	}
 	if c := comment(g, 2, "<!-- aayudha:lease-released -->"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease not released:\n%s", c)
 	}
@@ -833,7 +839,7 @@ func TestShipOnProof(t *testing.T) {
 			t.Fatalf("no audit card for #%d: %+v", prN, l.Items)
 		}
 		_, out, errOut := runIn(t, env, opts, strings.Repeat("s ", at)+keys+" q", "inbox", "--repo", "o/r")
-		if !strings.Contains(out, fmt.Sprintf("Merged on proof, to audit #%d", prN)) {
+		if !strings.Contains(out, fmt.Sprintf("Merged unreviewed, to audit #%d", prN)) {
 			t.Fatalf("inbox lacks the audit card:\n%s%s", out, errOut)
 		}
 		return out

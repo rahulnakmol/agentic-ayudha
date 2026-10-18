@@ -431,8 +431,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
 	files := map[string][]byte{res.Record: append(b, '\n')}
-	// A merge on proof waits for a person's look after merge (the sampled audit).
-	audited := rec.HumanPass.Kind == "proof"
+	// A merge with no person's pass (on proof, or an autonomous footprint)
+	// waits for a person's look after merge: every one is audited, so the
+	// paths that judge later PRs (internal/models, inspect, verify, proof,
+	// evals) never go unseen (founder, 2026-10-18).
+	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
 	if audited {
 		ab, _ := json.MarshalIndent(AuditEntry{PR: n, Story: story, Head: head, Merge: rec.MergeCommit, Footprint: rec.Footprint, Pass: rec.HumanPass.Kind, MergedAt: rec.ShippedAt}, "", "  ")
 		files[AuditLedgerPath(n)] = append(ab, '\n')
