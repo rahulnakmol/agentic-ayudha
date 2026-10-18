@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 )
 
 // fakeCopilot writes a copilot executable into a new directory that records
@@ -122,18 +124,25 @@ func TestCopilotCLI(t *testing.T) {
 			t.Errorf("want ErrCopilot mentioning %q, got %v", tc.want, err)
 		}
 	}
-	// A reply with no usage report is charged an upper bound, not nothing. The
-	// request's 8k output cap does not bound it, since copilot never receives
-	// it: 128k output tokens at Argon's 10 USD per million is 1.28 USD alone.
+	// A reply with no usage report is charged upper-bound tokens, priced as any
+	// call. The request's 8k output cap does not bound it, since copilot never
+	// receives it: 128k output tokens at Argon's 10 USD per million is 1.28 USD.
 	req.MaxTokens = 8000
-	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req); resp.CostUSD < 1.28 {
-		t.Errorf("unmetered reply charged %v USD", resp.CostUSD)
+	resp, _ = (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req)
+	if usd, _ := Cost(nil, req.Model, resp); usd < 1.28 {
+		t.Errorf("unmetered reply charged %v USD", usd)
 	}
-	// Above a model's long-context threshold the bound uses the long rate: a
-	// 200k-character prompt is 100k + 25k = 125k input tokens, over Haiku 5.5's
-	// 100k, so 125k × 0.50 + 128k × 2.50 per million = 0.3825 USD (short: 0.0765).
+	// A configured price applies to it: at 100 USD per million both ways it is
+	// over 12.8 USD.
+	if usd, src := Cost([]config.Price{{Model: req.Model, InputPerMTok: 100, OutputPerMTok: 100}}, req.Model, resp); usd < 12.8 || src != CostPriceTable {
+		t.Errorf("unmetered reply with a configured price charged %v USD from %s", usd, src)
+	}
+	// So does a long-context rate: a 200k-character prompt is 100k + 25k = 125k
+	// input tokens, over Haiku 5.5's 100k, so 125k × 0.50 + 128k × 2.50 per
+	// million = 0.3825 USD (the short rate gives 0.0765).
 	big := Request{Model: "claude-haiku-5-5", System: strings.Repeat("x", 200000)}
-	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), big); math.Abs(resp.CostUSD-0.3825) > 1e-9 {
-		t.Errorf("long-context unmetered reply charged %v USD, want 0.3825", resp.CostUSD)
+	resp, _ = (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), big)
+	if usd, _ := Cost(nil, big.Model, resp); math.Abs(usd-0.3825) > 1e-9 {
+		t.Errorf("long-context unmetered reply charged %v USD, want 0.3825", usd)
 	}
 }

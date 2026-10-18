@@ -101,11 +101,13 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	u, _ := os.ReadFile(usage)
 	resp, err := parseCopilot(stdout.Bytes(), u)
 	if err == nil && resp.TokensIn == 0 {
-		// A reply with no usable usage report is not accounted: charge an upper
-		// bound so the breaker still sees the spend, and fail so the caller
-		// falls back rather than trusting a route it cannot meter.
-		resp.CostUSD = copilotUpperBound(r, n)
-		err = fmt.Errorf("%w: copilot returned no usage report; charged an upper bound of %.4f USD", ErrCopilot, resp.CostUSD)
+		// A reply with no usable usage report is not accounted: report upper-bound
+		// token counts, which the gateway prices as any other call (configured
+		// prices, long-context rates), so the breaker still sees the spend; and
+		// fail so the caller falls back rather than trusting a route it cannot
+		// meter.
+		resp.TokensIn, resp.TokensOut, resp.CachedIn = copilotMaxInput(r, n), copilotMaxOutput, 0
+		err = fmt.Errorf("%w: copilot returned no usage report; charged as %d input and %d output tokens", ErrCopilot, resp.TokensIn, resp.TokensOut)
 	}
 	if runErr != nil {
 		msg := strings.TrimSpace(stderr.String())
@@ -183,28 +185,17 @@ func parseCopilot(jsonl, usage []byte) (Response, error) {
 	return resp, nil
 }
 
-// copilotUpperBound is the most a call can have cost when Copilot reports no
-// usage: the prompt at one token per two characters, Copilot's own prompt
-// (about 15k tokens in the probes) rounded up to 25k, 2k per image, and
-// copilotMaxOutput output tokens, at the model's price (its long-context rate
-// above LongAbove, as Cost charges) or the fallback rate.
-// The request's MaxTokens does not bound it: Copilot CLI takes no output cap.
-func copilotUpperBound(r Request, images int) float64 {
-	p, _, ok := PriceOf(nil, r.Model)
-	if !ok {
-		p = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}
-	}
-	in := len(copilotPrompt(r))/2 + 25000 + 2000*images
-	rt := p.Short
-	if p.LongAbove > 0 && in > p.LongAbove {
-		rt = p.Long
-	}
-	return (float64(in)*rt.Input + float64(copilotMaxOutput)*rt.Output) / 1e6
+// copilotMaxInput is the most input a call can have used when Copilot reports
+// no usage: the prompt at one token per two characters, Copilot's own prompt
+// (about 15k tokens in the probes) rounded up to 25k, and 2k per image.
+func copilotMaxInput(r Request, images int) int {
+	return len(copilotPrompt(r))/2 + 25000 + 2000*images
 }
 
-// copilotMaxOutput is the output ceiling the upper bound charges: 128k
+// copilotMaxOutput is the output an unmetered call is charged: 128k
 // tokens, at or above the output limit of the Gemini, Claude and GPT models
-// Copilot lists.
+// Copilot lists. The request's MaxTokens does not bound it: Copilot CLI takes
+// no output cap.
 const copilotMaxOutput = 128000
 
 // RouteOf is the route a resolved model's direct call takes: the opt-in
