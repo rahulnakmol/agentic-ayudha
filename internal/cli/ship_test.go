@@ -1196,13 +1196,17 @@ func TestShipEMSeatApprover(t *testing.T) {
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 	g.Pulls[prN].Unlisted = 0
 	g.Mu.Unlock()
-	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitExternal || !strings.Contains(out, "not merged: a person passed it") || g.Pulls[prN].Merged {
+	code, out := shipCmd(t, env, opts, prN, seat...)
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != ExitExternal || !strings.Contains(out, "not merged: a person passed it") || merged {
 		t.Fatalf("ship when the stale audit label stays: %d %s", code, out)
 	}
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
 	g.Mu.Unlock()
-	code, out := shipCmd(t, env, opts, prN, seat...)
+	code, out = shipCmd(t, env, opts, prN, seat...)
 	if code != 0 || !strings.Contains(out, "human pass: review by em-lead") || !strings.Contains(out, "warning: the build lease on #2 was not released") {
 		t.Fatalf("ship by the EM's human: %d %s", code, out)
 	}
