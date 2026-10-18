@@ -106,6 +106,8 @@ type BuildState struct {
 	// ledger, which the PR cannot change, so a resumed build and the merge
 	// gate count it against [budget] per_pr_inspect_max.
 	ReviewUSD float64 `json:"session_review_usd,omitempty"`
+	// ReviewPR is the PR that spend belongs to; 0 before the PR is opened.
+	ReviewPR int `json:"session_review_pr,omitempty"`
 }
 
 // CheckpointRecord is one checkpoint commit and what verify said of it.
@@ -235,7 +237,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD}
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR}
 	}
 	if st.StartedAt == "" {
 		st.StartedAt = now.Format(time.RFC3339)
@@ -561,6 +563,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
+		if st.ReviewPR != 0 && pr.GetNumber() != st.ReviewPR {
+			// The PR the spend belongs to is closed: a new PR has its own cap.
+			st.ReviewUSD, st.ReviewPR, sr.State.SpentUSD = 0, 0, 0
+		}
 		var ciSpent float64
 		if pr != nil {
 			owner, name, _ := github.SplitRepo(repo)
@@ -573,7 +579,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			ciSpent = inspectState(comments, viewer(ctx, c), l.Config.Identity).SpentUSD
 		}
 		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, ciSpent: ciSpent, wt: res.Worktree, dev: dev, head: head, st: st})
+		spent := sr.State.SpentUSD > st.ReviewUSD
 		st.ReviewUSD = max(st.ReviewUSD, sr.State.SpentUSD)
+		if pr != nil {
+			st.ReviewPR = pr.GetNumber()
+		}
 		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
 			err = Wrap(ExitInternal, serr)
 		}
@@ -616,6 +626,13 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			})
 			return WithNext(Errorf(ExitBlocked, "build #%d: the session review left %d item(s) to fix or decline before the push", n, len(rep.Open)), fmt.Sprintf("aayu build %d", n))
 		}
+		// The spend reaches the ledger before the push starts the merge gate,
+		// which counts it against the same per-PR cap.
+		if spent {
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+		}
 	}
 	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
 	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res, sr.summary())
@@ -631,6 +648,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
 		}
 		return err
+	}
+	if st.ReviewUSD > 0 {
+		st.ReviewPR = res.PR
 	}
 	sr.Pushed, sr.PushedAt, sr.Pending = len(sr.Rounds), e.Now().UTC().Truncate(time.Second), ""
 	sr.PushedHead, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")

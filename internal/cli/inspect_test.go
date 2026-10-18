@@ -1428,6 +1428,13 @@ func TestInspectPaidReviewer(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || inspect.ParseState(lastInspect(t, g, prN)).SpentUSD != 1 {
 		t.Fatalf("a cap the session review shares: exit %d %s, %d model calls, state %+v %s", code, res.Disposition, len(model.Requests), inspect.ParseState(lastInspect(t, g, prN)), errOut)
 	}
+	// A closed PR's session spend is not this PR's: the paid review runs.
+	g, env, opts, prN, model = setup(`"claude"`, "google-key")
+	rec, _ = json.Marshal(BuildState{Story: 2, ReviewUSD: 5, ReviewPR: prN + 100})
+	putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(rec))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || len(model.Requests) != 1 {
+		t.Fatalf("another PR's session spend: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
+	}
 
 	// An author without write access gets no paid review, whatever GitHub's
 	// author association says (an organization member may only read).

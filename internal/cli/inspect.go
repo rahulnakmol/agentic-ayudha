@@ -355,7 +355,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 					for _, cp := range st.Checkpoints {
 						checkpoints[cp.Commit] = cp.Model
 					}
-					sessionUSD = st.ReviewUSD
+					if st.ReviewPR == 0 || st.ReviewPR == n {
+						sessionUSD = st.ReviewUSD // a closed PR's spend is not this one's
+					}
 				}
 				t.Close()
 			}
