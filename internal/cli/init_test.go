@@ -122,6 +122,10 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if rep.Counts["created"] != nLabels-1+3 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and two rulesets created
 		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and two rulesets", rep.Counts, nLabels-1)
 	}
+	// Story #487: the label aayudha-security.yml files its Bugs under, and finds them again by, exists from the start.
+	if !slices.ContainsFunc(g.Labels, func(l *fake.Label) bool { return l.Name == SecurityLabel }) {
+		t.Fatalf("init did not create %s", SecurityLabel)
+	}
 	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it.
 	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole]" {
 		t.Fatalf("ledger rulesets: %s", got)
@@ -386,10 +390,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-approve.yml", "aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-approve.yml", "aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-approve.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
+	for _, wf := range []string{"aayudha-approve.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -403,6 +407,10 @@ func TestInitExtras(t *testing.T) {
 	// aayudha runs its own streak workflow: the template as a development build installs it.
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
+	}
+	// It runs its own security workflow too (Decision #480), on dev, rolling, and main.
+	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", initrepo.SecurityWorkflow)); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.SecurityWorkflow]) {
+		t.Errorf(".github/workflows/%s is not the template rendered for dev", initrepo.SecurityWorkflow)
 	}
 	// D-7.1f: the no-agent digest renders only for Actions, the triage agent loop only for the agent tools.
 	if wf := files[".github/workflows/aayudha-loops.yml"]; !strings.Contains(wf, "aayudha@v0.4.0") || !strings.Contains(wf, "loop:digest") || strings.Contains(wf, "triage") ||

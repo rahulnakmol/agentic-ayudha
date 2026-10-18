@@ -78,6 +78,7 @@ type Issue struct {
 	PullRequest *struct {
 		URL string `json:"url"`
 	} `json:"pull_request,omitempty"`
+	User Account `json:"user"` // the author: the viewer
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
@@ -288,7 +289,7 @@ func (g *GitHub) addIssue(title, body string, labels []string) *Issue {
 	g.seq++
 	n := len(g.Issues) + 1
 	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z", UpdatedAt: "2026-10-12T09:00:00Z",
-		URL: fmt.Sprintf("https://github.com/%s/%s/issues/%d", g.Owner, g.Repo, n)}
+		URL: fmt.Sprintf("https://github.com/%s/%s/issues/%d", g.Owner, g.Repo, n), User: Account{Login: g.Viewer, Type: "User"}}
 	for _, l := range labels {
 		is.Labels = append(is.Labels, g.label(l))
 	}

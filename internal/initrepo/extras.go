@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -49,9 +50,18 @@ var opsTemplate string
 //go:embed aayudha-approve.yml
 var approveTemplate string
 
+// PythonTools is the hashed lock of the Python floor tools (semgrep, lizard,
+// and their dependencies): one CPython 3.12 manylinux x86_64 wheel each.
+//
+//go:embed python-tools.txt
+var PythonTools string
+
+//go:embed aayudha-security.yml
+var securityTemplate string
+
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
 // contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, the
-// WP5.7 streak, and the Story #481 approvals. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
+// WP5.7 streak, the Story #481 approvals, and the security workflow (Decision #480). None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
@@ -59,12 +69,35 @@ const (
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
 	OpsWorkflow        = "aayudha-ops.yml"
 	ApproveWorkflow    = "aayudha-approve.yml"
+	SecurityWorkflow   = doctor.SecurityWorkflow
 )
 
 // GateWorkflows renders the workflows init --gates installs, by file name.
-// version is the aayudha version the guard installs (a tag, or dev).
-func GateWorkflows(version string) map[string][]byte {
+// version is the aayudha version the guard installs (a tag, or dev);
+// branches are the repository's dev, rolling, and main as [branches] maps
+// them (empty ones are skipped; none given: dev, rolling, main).
+func GateWorkflows(version string, branches ...string) map[string][]byte {
+	var on []string
+	for _, b := range branches {
+		if b != "" && !slices.Contains(on, b) {
+			on = append(on, b)
+		}
+	}
+	if len(on) == 0 {
+		on = []string{"dev", "rolling", "main"}
+	}
+	quoted := make([]string, len(on))
+	for i, b := range on {
+		quoted[i] = strconv.Quote(b)
+	}
+	// Quoted, so a branch name with YAML flow syntax in it (release,2026) stays one pattern. The matrix list is JSON
+	// inside an expression's single-quoted literal, where an apostrophe is written twice.
+	list, _ := json.Marshal(on)
+	security := strings.NewReplacer("{{VERSION}}", GuardVersion(version), "{{BRANCHES}}", "["+strings.Join(quoted, ", ")+"]",
+		"{{BRANCHES_JSON}}", strings.ReplaceAll(string(list), "'", "''"), "{{BRANCH_LIST}}", strings.Join(on, ", "),
+		"{{PYTHON_TOOLS}}", pythonToolLines("          ")).Replace(securityTemplate)
 	return map[string][]byte{
+		SecurityWorkflow:   []byte(security),
 		TokenWorkflow:      identity.BrokerWorkflow,
 		ReadyGuardWorkflow: []byte(strings.ReplaceAll(readyGuardTemplate, "{{VERSION}}", GuardVersion(version))),
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
@@ -89,6 +122,9 @@ func GuardVersion(v string) string {
 type Extras struct {
 	Projects, Gates, Identity, Integrations, VerifySkill bool
 	Version                                              string
+	// Branches are the repository's dev, rolling, and main branches as its
+	// [branches] maps them: the security workflow's push triggers.
+	Branches []string
 	// Assets are the embedded asset trees (hosts/verify-skill/ for --verify-skill).
 	Assets fs.FS
 	// Maintainer is the agent the human chose to maintain the feature maps
@@ -159,7 +195,7 @@ func (in *Init) retired(x Extras) error {
 }
 
 func (in *Init) gates(_ context.Context, x Extras) error {
-	wfs := GateWorkflows(x.Version)
+	wfs := GateWorkflows(x.Version, x.Branches...)
 	for _, name := range slices.Sorted(func(y func(string) bool) {
 		for k := range wfs {
 			if !y(k) {
@@ -710,4 +746,16 @@ func RenderHostConfigOwners(existing, login string) string {
 		parts = append(parts, strings.Join(seatsBlock, "\n"))
 	}
 	return strings.Join(parts, "\n\n") + "\n"
+}
+
+// pythonToolLines is the lock's requirement lines (no comments), each after
+// the first indented for a workflow's run block.
+func pythonToolLines(indent string) string {
+	var lines []string
+	for _, l := range strings.Split(PythonTools, "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n"+indent)
 }

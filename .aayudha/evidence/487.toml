@@ -1,0 +1,26 @@
+# Which tests prove story #487's Completion Goal (the security workflow): verify maps the go test -json events of
+# these tests, from the run it makes, to the criteria.
+
+[[criterion]]
+id = 1 # init --gates writes aayudha-security.yml with push triggers on the mapped branches and a nightly schedule
+tests = ["internal/initrepo:TestSecurityWorkflowTriggers", "internal/cli:TestInitExtras"]
+
+[[criterion]]
+id = 2 # verify --security --ci files one aayudha:security Bug per finding, with the floor, finding, and commit
+tests = ["internal/cli:TestVerifySecurityBugs", "internal/cli:TestVerifySecurityCapsNewBugs"]
+
+[[criterion]]
+id = 3 # later runs comment instead of filing, per branch and commit, and mark a gone finding
+tests = ["internal/cli:TestVerifySecurityBugs"]
+
+[[criterion]]
+id = 4 # an open security Bug seen on rolling or main, or an unscanned or red tip, holds aayu release
+tests = ["internal/cli:TestReleaseSecurityBugsHold", "internal/cli:TestReleaseLadder"]
+
+[[criterion]]
+id = 5 # doctor's security-workflow row: missing, green, red, unscanned, and a stale or failed nightly run
+tests = ["internal/doctor:TestSecurityWorkflowRow"]
+
+[[criterion]]
+id = 6 # the installed steps run with stand-ins; a dropped trigger, a bad SHA-256, or unhashed semgrep fails
+tests = [".:TestSecurityWorkflowSteps", "internal/initrepo:TestSecurityWorkflowTriggers"]

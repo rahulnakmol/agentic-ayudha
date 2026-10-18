@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
@@ -172,6 +173,17 @@ type Branches struct {
 	Dev     string `koanf:"dev" jsonschema_description:"Integration branch; pull requests target it."`
 	Rolling string `koanf:"rolling" jsonschema_description:"Canary snapshot branch; empty when the product has none."`
 	Main    string `koanf:"main" jsonschema_description:"Stable release branch."`
+}
+
+// Names are the dev, rolling, and main branch names, role by role: an unset
+// role keeps its default name, except rolling in a repository that maps dev
+// (coexistence), where an unset rolling means the product has none ("").
+func (b Branches) Names() [3]string {
+	rolling := b.Rolling
+	if rolling == "" && b.Dev == "" {
+		rolling = "rolling"
+	}
+	return [3]string{cmp.Or(b.Dev, "dev"), rolling, cmp.Or(b.Main, "main")}
 }
 
 // Seat is [seats.<name>].

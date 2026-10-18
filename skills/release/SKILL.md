@@ -116,6 +116,8 @@ Before the candidate, the Production Engineer's gate reads the source branch. Wh
 (`ops/slos.toml`), the error budget recorded by `aayu slo --record` must be at most 8 days old, and while any budget
 is spent only Bugs ship: a Story needs an accepted `error-budget` waiver. When its catalog (`ops/actions.toml`) names
 rollback actions, each must have run successfully through `aayudha-ops.yml` once. Either refusal promotes nothing.
+An open `aayudha:security` Bug last seen on rolling or main also holds the rung until it is gone there or a person
+accepts a floor waiver on it, and main takes only a rolling tip that `aayudha-security.yml` scanned green.
 
 After landing, the rung:
 
