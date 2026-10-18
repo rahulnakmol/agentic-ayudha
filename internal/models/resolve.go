@@ -40,7 +40,19 @@ type Resolved struct {
 // per substitution.
 type Resolver struct {
 	Models config.Models
+	Hosts  config.Hosts // the host plans that pick a lane's default (Decision #469)
 	Log    func(string)
+}
+
+// plan is host's plan: [hosts.cursor] plan for Cursor, x when unset.
+func (r Resolver) plan(host verbs.HostID) string {
+	if host != verbs.HostCursor {
+		return ""
+	}
+	if r.Hosts.Cursor.Plan == verbs.PlanLegacy {
+		return verbs.PlanLegacy
+	}
+	return verbs.PlanX
 }
 
 func (r Resolver) logf(format string, args ...any) {
@@ -49,13 +61,13 @@ func (r Resolver) logf(format string, args ...any) {
 	}
 }
 
-func registryDefault(lane verbs.LaneID, host verbs.HostID) (verbs.ModelDefault, error) {
+func registryDefault(lane verbs.LaneID, host verbs.HostID, plan string) (verbs.ModelDefault, error) {
 	l, ok := verbs.FindLane(lane)
 	if !ok {
 		return verbs.ModelDefault{}, fmt.Errorf("unknown lane %q", lane)
 	}
 	for _, d := range l.Defaults {
-		if d.Host == host {
+		if d.Host == host && (d.Plan == "" || d.Plan == plan) {
 			return d, nil
 		}
 	}
@@ -69,7 +81,7 @@ func (r Resolver) Resolve(lane verbs.LaneID, host verbs.HostID) (Resolved, error
 	if !ok {
 		return Resolved{}, fmt.Errorf("unknown host %q", host)
 	}
-	d, err := registryDefault(lane, host)
+	d, err := registryDefault(lane, host, r.plan(host))
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -116,7 +128,7 @@ func (r Resolver) ResolveDirect(lane verbs.LaneID, host verbs.HostID, heavy bool
 		res = alt
 	}
 	if heavy && res.Source != SourceConfig {
-		if d, err := registryDefault(lane, res.Host); err == nil && d.EscalationID != "" {
+		if d, err := registryDefault(lane, res.Host, r.plan(res.Host)); err == nil && d.EscalationID != "" {
 			res.Model, res.Display, res.Effort = d.EscalationID, d.Escalation, d.EscalationEffort
 		}
 	}

@@ -191,7 +191,7 @@ func TestModelsShowAndActionsChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, errs := run(t, nil, Options{Dir: repo}, "models", "show", "--host", "cursor", "--set", "models.review.cursor.model=gpt-6.1-sol")
-	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.7\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
+	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.6\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
 		t.Fatalf("exit %d\n%s%s", code, out, errs)
 	}
 

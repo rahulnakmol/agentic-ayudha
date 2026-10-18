@@ -337,7 +337,7 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 	}
 	gw := &models.Gateway{
 		Models:   m,
-		Resolver: models.Resolver{Models: m, Log: func(s string) { fmt.Fprintln(os.Stderr, s) }},
+		Resolver: models.Resolver{Models: m, Hosts: l.Config.Hosts, Log: func(s string) { fmt.Fprintln(os.Stderr, s) }},
 		Actions:  log,
 		Breaker:  &models.Breaker{Budget: budget, Clock: clock, Now: time.Now, PauseFile: filepath.Join(tmp, "paused")},
 		Key: func(name string) (string, error) {

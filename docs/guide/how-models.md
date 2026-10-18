@@ -18,20 +18,29 @@ included.
 
 | Lane | What it does | Amp | Cursor | Claude Code |
 |---|---|---|---|---|
-| `build` | Writes code and artifacts | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `spec` | Specs, decisions, briefs, copy | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `plan` | Slices and plans work | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `review` | Adversarial code and spec review | GPT-6.1 Sol | Grok 4.7 | GPT-6.1 Sol |
-| `ui-review` | Visual and interaction critique | Amp high | Gemini 3.1 Pro | Gemini 3.1 Pro |
-| `chore` | Cheap mechanical work | Amp low | Haiku 5.5 | Haiku 5.5 |
+| `build` | Writes code and artifacts | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `spec` | Specs, decisions, briefs, copy | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `plan` | Slices and plans work | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `review` | Adversarial code and spec review | GPT-6.1 Sol | Grok 4.6 (legacy plan: Grok 4.7) | GPT-6.1 Sol |
+| `ui-review` | Visual and interaction critique | Amp high | Grok 4.6 (legacy plan: Gemini 3.8 Flash) | Gemini 3.8 Flash |
+| `chore` | Cheap mechanical work | Amp low | Composer 2.5 (legacy plan: Haiku 5.5) | Haiku 5.5 |
+
+Cursor's column follows `[hosts.cursor] plan` (Decision #469). Cursor's plans from 12 October 2026, `x` and the
+default, include only Cursor's own models (Grok 4.7, 4.6, 4.5, and Composer 2.5); Claude, GPT, and Gemini are
+list-price pay-as-you-go there. aayu cannot tell the plans apart, so it defaults to the one that never spends
+list-price money by surprise. Set `plan = "legacy"` for a legacy Pro, Pro+, or Ultra plan, which still includes Claude
+and Gemini. On `x` every lane is one family, so `review` and `ui-review` use another Grok tier and their reviews are
+labelled same-family; the merge gate's reviewer app can still be of another family. Composer's base model is
+unpublished, so its family is unknown, and a review between it and any build is same-family.
 
 Three rules shape this table:
 
 - **The family rule.** A reviewer must come from a different model family than the builder. A model that wrote the
   code is a poor judge of it, and two models from the same vendor tend to share blind spots. `review` and `ui-review`
-  are marked `Adversarial`, and their defaults are never in the builder's family.
+  are marked `Adversarial`, and their defaults are never in the builder's family, except on a host plan that includes
+  one family (Cursor's `x`), where the review is labelled same-family.
 - **Host exclusions.** A host lists the families it cannot run. Cursor excludes the `openai` family, so the `review`
-  lane on Cursor defaults to Grok 4.7 (`xai`) instead of GPT-6.1 Sol.
+  lane on Cursor defaults to Grok (`xai`) instead of GPT-6.1 Sol.
 - **Host-managed modes.** On Amp, the default is a mode (Amp low, medium, high) and the host picks the model behind
   it. The binary cannot call a mode, so a direct call from an Amp session uses the Claude Code default for that lane
   (`DirectHost`).
@@ -159,7 +168,8 @@ var Lanes = []Lane{
     {ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
     {ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
         reviewDefault(HostAmp),
-        {Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
+        {Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+        {Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanLegacy},
         reviewDefault(HostClaude),
     }},
     …

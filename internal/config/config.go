@@ -44,6 +44,17 @@ type Config struct {
 	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
 	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
 	Delegate      Delegate               `koanf:"delegate" jsonschema_description:"How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."`
+	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
+}
+
+// Hosts is [hosts] (Decision #469).
+type Hosts struct {
+	Cursor CursorHost `koanf:"cursor"`
+}
+
+// CursorHost is [hosts.cursor].
+type CursorHost struct {
+	Plan string `koanf:"plan" jsonschema:"enum=,enum=x,enum=legacy" jsonschema_description:"x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini."`
 }
 
 // Delegate is [delegate] (WP5.5b).
@@ -481,6 +492,9 @@ func (c *Config) Validate() error {
 		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
 			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
 		}
+	}
+	if pl := c.Hosts.Cursor.Plan; pl != "" && pl != verbs.PlanX && pl != verbs.PlanLegacy {
+		bad("[hosts.cursor] plan = %q: want %s or %s", pl, verbs.PlanX, verbs.PlanLegacy)
 	}
 	if st := c.Team.Stage; st != "" && !slices.Contains(TeamStages, st) {
 		bad("[team] stage = %q: want %s", st, strings.Join(TeamStages, ", "))
