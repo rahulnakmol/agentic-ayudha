@@ -434,6 +434,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	for _, name := range sortedKeys(opt.Manuals) {
 		text := opt.Manuals[name]
 		p := "manual:" + name
+		if _, ok := ix.byPath[p]; ok { // a checkout file of that name would shadow the manual's evidence and digest
+			return nil, fmt.Errorf("survey: manual %s collides with the checkout file %s", name, p)
+		}
 		lines := strings.Count(text, "\n")
 		if text != "" && !strings.HasSuffix(text, "\n") {
 			lines++

@@ -369,6 +369,17 @@ func TestSurveyDocs(t *testing.T) {
 	if _, err := os.Stat(missing); !os.IsNotExist(err) {
 		t.Fatalf("the missing checkout was created: %v", err)
 	}
+	// A checkout file named like a manual would shadow the manual's evidence and freshness.
+	shadow := t.TempDir()
+	if err := os.CopyFS(shadow, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shadow, "manual:operator-notes.md"), []byte("# Not the manual\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", shadow, "--out", filepath.Join(t.TempDir(), "s"), "--docs", docs); code != ExitUsage || !strings.Contains(stderr, "collides with the checkout file") {
+		t.Fatalf("a checkout file shadowing a manual: %d %s", code, stderr)
+	}
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
 		t.Fatalf("--out the checkout root: %d %s", code, stderr)
 	}
