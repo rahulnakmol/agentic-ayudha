@@ -74,6 +74,9 @@ always_person = [
   ".github/workflows/aayudha-token.yml",
   ".goreleaser.yaml",
   "install.sh",
+  # A dependency change can alter any code above, the config loader included (founder, 2026-10-18).
+  "go.mod",
+  "go.sum",
   ".aayudha/config.json",
   ".aayudha/config.local.toml",
   ".aayudha/config.local.json",

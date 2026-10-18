@@ -420,7 +420,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
 		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml",
 		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
-		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh",
+		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh", "go.mod", "go.sum",
 		// The config's other files load into the same layers, so they can change the policy too.
 		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
 	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}) {
