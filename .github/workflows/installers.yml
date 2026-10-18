@@ -73,6 +73,10 @@ jobs:
       - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           syft-version: v1.54.1
+      # As in ci.yml's release-snapshot: v* tags are only on main, and a rolling commit carries rolling-<date>;
+      # only the tags release.yml accepts count.
+      - name: Name the snapshot after the newest v* release
+        run: echo "GORELEASER_CURRENT_TAG=$(git -c versionsort.suffix=- for-each-ref --merged origin/main --sort=-v:refname --format='%(objecttype) %(refname:short)' 'refs/tags/v[0-9]*' | awk '$1 == "tag" {print $2}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' | head -n1)" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.18.3
@@ -319,9 +323,11 @@ jobs:
           set -euo pipefail
           aayu version | tee "$RUNNER_TEMP/version.txt"
           grep -qF "${RELEASE#v}" "$RUNNER_TEMP/version.txt"
+      # The release's own tree: dev's loops and config may use commands newer than the published binary.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.RELEASE }}
           path: fresh
       - name: aayu doctor passes in a fresh checkout
         working-directory: fresh
@@ -375,6 +381,7 @@ jobs:
         if: steps.bucket.outputs.published == 'true'
         with:
           persist-credentials: false
+          ref: ${{ env.RELEASE }}
           path: fresh
       - name: aayu doctor passes in a fresh checkout
         if: steps.bucket.outputs.published == 'true'
