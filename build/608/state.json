@@ -2,6 +2,22 @@
   "story": 608,
   "branch": "story/608-inspect-s-rung-b-fails-with-524-through",
   "started_at": "2026-10-18T08:41:12Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L05": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "4cbd3505d7eae12ee1ff1ef908854887cad880cf",
+      "layers": [
+        "L05"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T08:43:58Z"
+    }
+  ]
 }
