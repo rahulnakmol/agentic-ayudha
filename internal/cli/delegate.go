@@ -793,7 +793,9 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
 			// The story's lease is renewed before each stretch of the wait, so it
 			// never lapses to another builder while this one is paused.
-			for wait := resets.Sub(e.Now()) + time.Minute; wait > 0; {
+			// At least a minute, even for a reset already past, so a limit that
+			// has not lifted yet is not retried in a tight loop.
+			for wait := max(resets.Sub(e.Now())+time.Minute, time.Minute); wait > 0; {
 				step := min(wait, LeaseTTL/2)
 				l, err := e.takeLease(ctx, d.c, d.repo, d.story, leaseHolder(d.bot.Login), nil)
 				if err != nil {

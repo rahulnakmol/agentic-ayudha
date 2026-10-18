@@ -607,6 +607,26 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		t.Fatalf("no pause event: %+v", ds.Events)
 	}
 
+	// A reset already a few minutes past still waits a minute before the rerun.
+	_, env, opts, _, _ = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	now = opts.Now()
+	opts.Now = func() time.Time { return now }
+	slept = nil
+	opts.Sleep = func(_ context.Context, d time.Duration) error { slept = append(slept, d); now = now.Add(d); return nil }
+	runs = 0
+	past := now.Add(-2 * time.Minute)
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
+		runs++
+		if runs == 1 {
+			return limit(past), errors.New("codex: exit status 1")
+		}
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	if code, _, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local"); code != 0 || runs != 2 || len(slept) != 1 || slept[0] != time.Minute {
+		t.Fatalf("reset already past: %d runs %d slept %v %s", code, runs, slept, errOut)
+	}
+
 	// A receiver still running when the wall-time budget ends is stopped, and
 	// the story is blocked for the budget, not left in progress.
 	g, env, opts, _, _ = delegateFixture(t)
