@@ -25,6 +25,8 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
@@ -410,8 +412,9 @@ type Integration struct {
 // Integrations lists the external services init --integrations offers.
 var Integrations = []Integration{
 	{"bucket", "Proof media bucket (S3, R2, Azure Blob, or Cloud Storage; private): required on public repositories (V3). Storage and egress are billed by your provider; aayudha sets lifecycle rules from [proof] retention_days (WP4.2, WP7.2b.2)."},
-	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only project API key; usage-based pricing on PostHog's side."},
-	{"sentry", "Sentry: error and performance read for baselines and respond. Read-only auth token (event:read, project:read); no extra cost."},
+	// The scopes are the ones aayu doctor checks, so the two never disagree.
+	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only personal API key (" + strings.Join(posthog.Scopes(), ", ") + "); usage-based pricing on PostHog's side."},
+	{"sentry", "Sentry: error and performance read for baselines, investigate, slo, and runbook. Read-only auth token (" + strings.Join(sentry.Scopes(), ", ") + "); no extra cost."},
 	{"growthbook", "GrowthBook: experiment and flag read for experiment and readout. Read-only key; no extra cost on the open-source plan."},
 	{"azure", "Azure: Application Insights read (Log Analytics query API) for grill baselines and measure --live. A read-only app registration (Monitoring Reader, Log Analytics Reader) that GitHub Actions reaches through OIDC federation, no stored key; Log Analytics bills per GB scanned, usually cents per run (WP7.2b)."},
 	{"aws", "AWS: CloudWatch RUM read (Logs Insights and GetAppMonitorData) for grill baselines and measure --live. A read-only IAM role that GitHub Actions assumes through OIDC, no stored key; Logs Insights bills per GB scanned (WP7.2b)."},

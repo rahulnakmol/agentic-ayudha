@@ -62,7 +62,10 @@ type Probe struct {
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)
-	TracePath   string
+	// Capabilities tries each capability of a configured integration with a
+	// cheap read (providers.Capabilities); nil when unavailable.
+	Capabilities func(ctx context.Context, name string) ([]integrations.Check, error)
+	TracePath    string
 }
 
 // Check is one named check.
@@ -85,6 +88,7 @@ var Checks = []Check{
 	{"secrets", checkSecrets},
 	{"skills-copies", checkSkillCopies},
 	{"mcp", checkMCP},
+	{"provider-mcp", checkProviderMCP},
 	{"codex-hooks", checkCodexHooks},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},

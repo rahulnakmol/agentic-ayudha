@@ -1,0 +1,15 @@
+[[criterion]]
+id = 1
+tests = ["./internal/integrations/providers:TestCapabilities", "./internal/cli:TestDoctorIntegrations", "./internal/doctor:TestIntegrationCapabilities"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/integrations/providers:TestCapabilities", "./internal/doctor:TestIntegrationCapabilities"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/integrations/hostcall:TestAudit", "./internal/doctor:TestChecksGolden"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/integrations/providers:TestCapabilities"]
