@@ -798,14 +798,14 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("paid reviewer: exit %d rung %q %q, %d model calls %s", code, res.Rung, res.Review, len(model.Requests), errOut)
 	}
 
-	// An author without write access gets no paid review: an outsider's PRs
-	// cannot spend the key.
+	// An author without write access gets no paid review, whatever GitHub's
+	// author association says (an organization member may only read).
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
 	g.Mu.Lock()
-	g.Pulls[prN].AuthorAssociation = "CONTRIBUTOR"
+	g.Permissions = map[string]string{g.Pulls[prN].User.Login: "read"}
 	g.Mu.Unlock()
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); res.Rung == inspect.RungB || len(model.Requests) != 0 {
-		t.Fatalf("an outsider's PR: exit %d rung %q, %d model calls", code, res.Rung, len(model.Requests))
+		t.Fatalf("a read-only author's PR: exit %d rung %q, %d model calls", code, res.Rung, len(model.Requests))
 	}
 
 	g, env, opts, prN, model = setup(`"claude"`, "")

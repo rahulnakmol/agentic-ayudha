@@ -154,7 +154,8 @@ The gate tries the ladder in order: an app of another family first (free), then 
 app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
 reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by
 default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. Only a PR whose author has write access
-to the repository gets a paid review, so an outsider's PRs cannot spend the key. The review is labelled
+to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
+only read cannot open PRs to spend the key. The review is labelled
 `different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
 model is of a family the builder may be, or the cap is 0, the gate logs why and the app reviews. `aayu doctor`'s
 `review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
