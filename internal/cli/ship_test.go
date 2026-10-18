@@ -1236,7 +1236,7 @@ func TestShipLoosens(t *testing.T) {
 		return l
 	}
 	base := load(t, config.Sources{RepoTOML: []byte("version = 1\n[identity]\nbot_logins = [\"Agent-Alt\"]\napp_id = 42\napp_slug = \"aayudha-bot\"\n" +
-		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nalways_person = [\"internal/identity/\"]\n" +
+		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nproof_rungs = [\"A\", \"B\"]\nalways_person = [\"internal/identity/\"]\n" +
 		"[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"), RepoSource: "base"}).Config
 	for _, c := range []struct {
 		why  string
