@@ -1,0 +1,13 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationEvents: the error body is Sentry's permission answer (getsentry/sentry at 5218028). Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=spans&end=2026-10-17T09%3A00%3A00Z&field=release&field=count%28%29&field=failure_count%28%29&field=p50%28span.duration%29&field=p95%28span.duration%29&per_page=51&project=4507&query=is_transaction%3Atrue&sort=-count%28%29&start=2026-10-17T08%3A00%3A00Z",
+      "status": 403,
+      "response": {
+        "detail": "You do not have permission to perform this action."
+      }
+    }
+  ]
+}

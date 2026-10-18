@@ -1,0 +1,51 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationEvents: the body follows the response schema (data rows keyed by the requested fields, meta.fields and meta.units); the rows are invented for the test's project 4507. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=spans&end=2026-10-17T09%3A00%3A00Z&field=release&field=count%28%29&field=failure_count%28%29&field=p50%28span.duration%29&field=p95%28span.duration%29&per_page=3&project=4507&query=is_transaction%3Atrue&sort=-count%28%29&start=2026-10-17T08%3A00%3A00Z",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "release": "web@2.4.1",
+            "count()": 1840,
+            "failure_count()": 92,
+            "p50(span.duration)": 120.5,
+            "p95(span.duration)": 812.5
+          },
+          {
+            "release": "web@2.4.0",
+            "count()": 1215,
+            "failure_count()": 6,
+            "p50(span.duration)": 98,
+            "p95(span.duration)": 143
+          },
+          {
+            "release": "web@2.3.9",
+            "count()": 930,
+            "failure_count()": 3,
+            "p50(span.duration)": 90.25,
+            "p95(span.duration)": 96.25
+          }
+        ],
+        "meta": {
+          "fields": {
+            "release": "string",
+            "count()": "integer",
+            "failure_count()": "integer",
+            "p50(span.duration)": "duration",
+            "p95(span.duration)": "duration"
+          },
+          "units": {
+            "release": null,
+            "count()": null,
+            "failure_count()": null,
+            "p50(span.duration)": "millisecond",
+            "p95(span.duration)": "millisecond"
+          }
+        }
+      }
+    }
+  ]
+}
