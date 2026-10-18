@@ -1050,23 +1050,131 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || strings.Contains(res.Review, "forged") || !strings.Contains(res.Review, "does not accept") {
 		t.Fatalf("a reported model that is not an ID: %d rung %q review %q", code, res.Rung, res.Review)
 	}
-	// A person reviews when config asks for one.
-	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
-	addComment(g, prN, "founder", "User", statedReply(head, "merge", "internal/report/percent.go"))
-	code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
-		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
-	}
-	// With an [autonomy] approver only the approver's review counts: neither the
-	// PR's author (founder) nor another person clears the human fallback.
+	// A person reviews when config asks for one, and only the [autonomy]
+	// approver's review recorded through `aayu inspect --approve` counts (Story
+	// #639): a comment from the PR's author (founder), from another person, or
+	// even from the approver's own account does not clear the human fallback.
 	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[autonomy]\napprover = \"lead\"\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
-	addComment(g, prN, "mallory", "User", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition == inspect.Merge || res.Rung != inspect.RungHuman {
-		t.Fatalf("a review by the author or another person, not the approver: %d %+v %s", code, res, errOut)
+	for _, who := range []string{"founder", "mallory", "lead"} {
+		addComment(g, prN, who, "User", statedReply(head, "merge", "internal/report/percent.go"))
+		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || res.Rung != inspect.RungHuman ||
+			!strings.Contains(lastInspect(t, g, prN), "aayu inspect "+strconv.Itoa(prN)+" --approve") {
+			t.Fatalf("a comment by %s: %d %+v %s\n%s", who, code, res, errOut, lastInspect(t, g, prN))
+		}
 	}
-	addComment(g, prN, "lead", "User", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Model != "lead" {
-		t.Fatalf("the approver's review: %d %+v %s", code, res, errOut)
+	// --approve is a person's step: the approver enters GitHub's device code,
+	// even on a terminal with no agent marker (CodeRabbit's Major on #647). It
+	// is refused in an agent lane, for any account but the approver's, and
+	// when the person denies the code.
+	outcome := "approve"
+	approve := func(env map[string]string, opts Options, viewer string) (int, string) {
+		g.Mu.Lock()
+		g.Viewer = viewer
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: viewer, Outcome: outcome}
+		g.Mu.Unlock()
+		code, _, errOut := run(t, env, opts, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff and the pack", "--repo", "o/r")
+		return code, errOut
+	}
+	agent := map[string]string{"AAYU_AGENT": "1"}
+	for k, v := range env {
+		agent[k] = v
+	}
+	person := opts
+	person.IsTerminal = stdinTTY
+	person.DevicePoll = time.Millisecond
+	if code, errOut := approve(agent, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+		t.Fatalf("approve without presence: %d %s", code, errOut)
+	}
+	outcome = "deny"
+	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "the request was denied") {
+		t.Fatalf("approve on a terminal with the device code denied: %d %s", code, errOut)
+	}
+	outcome = "approve"
+	if code, errOut := approve(env, person, "mallory"); code != ExitBlocked || !strings.Contains(errOut, "approver is lead, not mallory") {
+		t.Fatalf("approve by a non-approver: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", " ", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "--reason") {
+		t.Fatalf("approve without a reason: %d %s", code, errOut)
+	}
+	if code, errOut := approve(map[string]string{"PATH": env["PATH"]}, person, "lead"); code == 0 {
+		t.Fatalf("approve without the person's GitHub login: %d %s", code, errOut)
+	}
+	// A pull read that fails, or a head that moves while the person approves,
+	// records nothing: the approval names the head the person was shown. Reads
+	// of the pull: 1 the head shown, 2 the head after presence, 3 the diff.
+	pull := "/repos/o/r/pulls/" + strconv.Itoa(prN)
+	for _, tc := range []struct {
+		read int
+		move bool
+		want string
+	}{{1, false, "injected failure"}, {2, true, "head moved from " + head[:7]}, {3, false, "injected failure"}} {
+		reads := 0
+		g.Mu.Lock()
+		g.Hook = func(method, path string) {
+			if method != "GET" || path != pull {
+				return
+			}
+			if reads++; reads == tc.read && tc.move {
+				g.Pulls[prN].Head.SHA = strings.Repeat("e", 40)
+			} else if reads == tc.read {
+				g.Fail, g.FailAfter = "GET "+pull, 0
+			}
+		}
+		g.Mu.Unlock()
+		code, errOut := approve(env, person, "lead")
+		g.Mu.Lock()
+		g.Hook, g.Fail, g.Pulls[prN].Head.SHA = nil, "", head
+		g.Mu.Unlock()
+		if code == 0 || !strings.Contains(errOut, tc.want) {
+			t.Fatalf("approve with pull read %d failing (moved %v): %d %s", tc.read, tc.move, code, errOut)
+		}
+	}
+	if code, errOut := approve(env, person, "lead"); code != 0 {
+		t.Fatalf("approve: %d %s", code, errOut)
+	}
+	if got := strings.TrimSpace(git(t, opts.Dir, "show", "origin/ledger:"+ApprovedPath)); strings.Count(got, "\n") != 0 || !strings.Contains(got, `"head":"`+head+`"`) || !strings.Contains(got, `"by":"lead"`) {
+		t.Fatalf("one approval on the ledger, for the head: %s", got)
+	}
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Model != "lead" || res.Rung != inspect.RungHuman ||
+		!strings.Contains(lastInspect(t, g, prN), "backed by lead's `aayu inspect --approve` of `ccccccc` at 2026-10-12T10:00:00Z, recorded on the ledger (`inspect/approved.jsonl`)") {
+		t.Fatalf("the approver's recorded review: %d %+v %s\n%s", code, res, errOut, lastInspect(t, g, prN))
+	}
+	// The approval is for its head only: after a push, the approver's comment on
+	// the new head does not count until they approve it again.
+	next := strings.Repeat("d", 40)
+	g.Mu.Lock()
+	g.Pulls[prN].Head.SHA = next
+	g.Mu.Unlock()
+	writeInspectPack(t, opts.Dir, prN, next, nil)
+	addComment(g, prN, "lead", "User", statedReply(next, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("an approval of an earlier head: %d %+v %s", code, res, errOut)
+	}
+	if code, errOut := approve(env, person, "lead"); code != 0 {
+		t.Fatalf("approve the new head: %d %s", code, errOut)
+	}
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge {
+		t.Fatalf("the new head's recorded review: %d %+v %s", code, res, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/"+strconv.Itoa(prN)+"/comments", 0
+	g.Mu.Unlock()
+	if code, errOut := approve(env, person, "lead"); code != ExitExternal {
+		t.Fatalf("approve with the reply unwritable: %d %s", code, errOut)
+	}
+	// A ledger that cannot be read backs no review: the human fallback fails closed.
+	git(t, opts.Dir, "push", "--quiet", "origin", "--delete", "ledger")
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("a recorded review on an unreadable ledger: %d %+v %s", code, res, errOut)
+	}
+	// With no [autonomy] approver, or no readable config, nobody can approve.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\n"), 0o644)
+	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "no [autonomy] approver") {
+		t.Fatalf("approve with no approver: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy\n"), 0o644)
+	if code, errOut := approve(env, person, "lead"); code == 0 {
+		t.Fatalf("approve with an unreadable config: %d %s", code, errOut)
 	}
 
 	// With no pack (a request before the gate ran, or a reply event), the
@@ -1304,7 +1412,7 @@ func TestInspectReviewerFallback(t *testing.T) {
 	setup := func() (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5: Codex is of another family (A)
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		cfg := "version = 1\n\n[autonomy]\napprover = \"founder\"\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -1357,12 +1465,21 @@ func TestInspectReviewerFallback(t *testing.T) {
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
 	postedAt(g, prN, opts.Now())
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || !strings.HasPrefix(res.Review, "requested: human review") ||
-		!strings.Contains(lastInspect(t, g, prN), "fallback to a human review: codex cannot review this head") {
+		!strings.Contains(lastInspect(t, g, prN), "fallback to @founder (a human review): codex cannot review this head") {
 		t.Fatalf("rung B failed as well: exit %d %s %q %s\n%s", code, res.Disposition, res.Review, errOut, lastInspect(t, g, prN))
 	}
-	addComment(g, prN, "founder", "User", statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"))
+	g.Mu.Lock()
+	g.Viewer = "founder"
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	person := opts
+	person.IsTerminal = stdinTTY
+	person.DevicePoll = time.Millisecond
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff", "--repo", "o/r"); code != 0 {
+		t.Fatalf("the approver's --approve: %d %s", code, errOut)
+	}
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman || len(model.Requests) != 1 {
-		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
+		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s\n%s", code, res.Disposition, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
 	}
 
 	// A fallback app that reviews only when asked (Claude): outside CI,
