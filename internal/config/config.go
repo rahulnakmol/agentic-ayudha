@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -448,6 +449,13 @@ var (
 func (c *Config) Validate() error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+
+	// Empty means advisory; a malformed date must not make the new floors advisory forever.
+	if d := c.Verify.NewFloorsBlockingFrom; d != "" {
+		if _, err := time.Parse(time.DateOnly, d); err != nil {
+			bad("[verify] new_floors_blocking_from = %q is not a YYYY-MM-DD date", d)
+		}
+	}
 
 	for name, s := range c.Seats {
 		if _, ok := verbs.FindSeat(verbs.SeatID(name)); !ok {

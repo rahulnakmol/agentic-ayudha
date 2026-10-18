@@ -491,4 +491,13 @@ func TestActiveScanKey(t *testing.T) {
 	if l.Config.Verify.DAST != true || l.Config.Verify.NewFloorsBlockingFrom != "2026-11-14" || !l.Config.Verify.Floors.DAST.SkippedBlocksShip {
 		t.Fatalf("defaults: %+v", l.Config.Verify)
 	}
+	// Empty means advisory; a typo must not make the new floors advisory forever (CodeRabbit on #509).
+	for _, d := range []string{"2026-11-31", "2026/11/14"} {
+		if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify]\nnew_floors_blocking_from = \"" + d + "\"\n"})); err == nil || !strings.Contains(err.Error(), "is not a YYYY-MM-DD date") {
+			t.Errorf("%s: err = %v", d, err)
+		}
+	}
+	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify]\nnew_floors_blocking_from = \"\"\n"})); err != nil {
+		t.Errorf("empty date: %v", err)
+	}
 }
