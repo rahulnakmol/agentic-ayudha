@@ -83,16 +83,19 @@ type Issue struct {
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
 type PR struct {
-	Number int     `json:"number"`
-	Title  string  `json:"title"`
-	Body   string  `json:"body"`
-	State  string  `json:"state"`
-	Draft  bool    `json:"draft"`
-	Merged bool    `json:"merged"`
-	URL    string  `json:"html_url"`
-	User   Account `json:"user"`
-	Head   Branch  `json:"head"`
-	Base   Branch  `json:"base"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	// MergedAt is set when the PR merges through the fake; the list
+	// endpoint carries it, not Merged.
+	MergedAt time.Time `json:"merged_at,omitzero"`
+	URL      string    `json:"html_url"`
+	User     Account   `json:"user"`
+	Head     Branch    `json:"head"`
+	Base     Branch    `json:"base"`
 	// Labels and NodeID are served from the PR's issue and number.
 	Labels []Label `json:"labels"`
 	NodeID string  `json:"node_id"`
@@ -1149,7 +1152,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
 				return
 			}
-			pr.Merged, pr.State = true, "closed"
+			pr.Merged, pr.State, pr.MergedAt = true, "closed", time.Now().UTC()
 			pr.MergeCommitSHA = g.nextSHA(body)
 			if is := g.Issues[pr.Number]; is != nil {
 				is.State = "closed"

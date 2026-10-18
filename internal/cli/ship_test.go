@@ -1018,6 +1018,18 @@ func TestShipOnProof(t *testing.T) {
 	if again := inbox(env, "2 y"); pullCount(g) != before || !strings.Contains(again, "revert PR: "+rev.URL) {
 		t.Fatalf("a correction run again opened another revert PR (%d, was %d):\n%s", pullCount(g), before, again)
 	}
+	// A revert PR closed unmerged reverts nothing: a correction run again
+	// opens a new one.
+	before = audit(entryJSON)
+	g.Mu.Lock()
+	rev.State = "closed"
+	g.Mu.Unlock()
+	if again := inbox(env, "2 y"); pullCount(g) != before+1 || strings.Contains(again, "revert PR: "+rev.URL) {
+		t.Fatalf("a correction reused a revert PR closed unmerged (%d, was %d):\n%s", pullCount(g), before, again)
+	}
+	g.Mu.Lock()
+	rev = g.Pulls[len(g.Issues)]
+	g.Mu.Unlock()
 	// A correction sample someone wrote to the ledger, with the entry gone,
 	// does not stand in for the correction: its label and revert PR still
 	// come, and no second sample is written.
@@ -1154,10 +1166,19 @@ func TestShipEMSeatApprover(t *testing.T) {
 	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitBlocked || !strings.Contains(out, "so ship cannot judge its footprint") {
 		t.Fatalf("ship with files GitHub does not list: %d %s", code, out)
 	}
+	// The stale label goes before the merge: one left on a reviewed merge
+	// would have the inbox offer to revert it, so a removal that fails stops
+	// ship unmerged.
 	g.Mu.Lock()
-	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
+	g.Fail, g.FailAfter = fmt.Sprintf("DELETE /repos/o/r/issues/%d/labels/%s", prN, AuditLabel), 0
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 	g.Pulls[prN].Unlisted = 0
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitExternal || !strings.Contains(out, "not merged: a person passed it") || g.Pulls[prN].Merged {
+		t.Fatalf("ship when the stale audit label stays: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
 	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN, seat...)
 	if code != 0 || !strings.Contains(out, "human pass: review by em-lead") || !strings.Contains(out, "warning: the build lease on #2 was not released") {

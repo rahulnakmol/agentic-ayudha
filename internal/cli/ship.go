@@ -406,10 +406,17 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// by its label, so the label goes on before the merge, and before
 	// ship's last reads of the PR and the base: a merge the inbox would miss
 	// never happens.
+	// A person's pass merges with no look, so the label an earlier ship
+	// added, then did not merge, goes first: left on a reviewed merge, the
+	// inbox would offer a correction that reverts it.
 	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
 	if audited && !c.DryRun() {
 		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
 			return Errorf(ExitExternal, "ship #%d: not merged: the %s label, by which the inbox finds the look after merge, was not added: %v", n, AuditLabel, err)
+		}
+	} else if !c.DryRun() && prLabelled(pr, AuditLabel) {
+		if err := removeLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: a person passed it, but the %s label an earlier ship added was not removed, and the inbox would offer to revert it: %v", n, AuditLabel, err)
 		}
 	}
 	// A merge on proof was judged by the base branch's policy at its tip
@@ -467,11 +474,6 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: written}); err != nil {
 		return Wrap(ExitExternal, err)
-	}
-	if !audited && prLabelled(now, AuditLabel) { // an earlier ship labelled it, then did not merge
-		if err := removeLabel(ctx, c, repo, n, AuditLabel); err != nil {
-			fmt.Fprintf(e.Err, "aayu: warning: a person passed PR #%d, but the %s label an earlier ship added was not removed: %v\n", n, AuditLabel, err)
-		}
 	}
 	if ref := pr.GetHead().GetRef(); pr.GetHead().GetRepo().GetFullName() == repo || pr.GetHead().GetRepo() == nil {
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.ref.delete", Target: repo + "@" + ref,

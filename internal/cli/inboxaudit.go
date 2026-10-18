@@ -29,8 +29,9 @@ import (
 // person's pass (on proof, or an autonomous footprint) waits, as an audit
 // entry on the ledger and the AuditLabel on its PR, for a
 // person to look at in `aayu inbox`. Their answer is a Sample in
-// SamplesLedgerPath; a correction also resets the streak of the layers the PR
-// touched and opens a PR that reverts it. The look never blocks the merge.
+// SamplesLedgerPath; a correction also labels it aayu:correction, which resets
+// the streak of the layers an agent's PR touched (a person's own PR has no
+// streak: autonomy.Rules.Agent), and opens a PR that reverts it. The look never blocks the merge.
 
 // AuditLabel marks a merged PR whose audit entry waits for a person.
 const AuditLabel = workitems.LabelAudit
@@ -104,9 +105,9 @@ func (e *Env) pendingAudits(ctx context.Context) ([]int, error) {
 // auditItem is the inbox item for a merged PR carrying AuditLabel.
 func auditItem(p *gh.PullRequest) InboxItem {
 	return InboxItem{Kind: InboxAudit, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Evidence: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), mergeSHA: p.GetMergeCommitSHA(),
-		Why: fmt.Sprintf("PR #%d merged on %s with no person's review; a look after merge keeps that honest, and a correction resets its layers' streak.", p.GetNumber(), short(p.GetMergeCommitSHA())),
+		Why: fmt.Sprintf("PR #%d merged on %s with no person's review; a look after merge keeps that honest, and a correction of an agent's PR resets its layers' streak.", p.GetNumber(), short(p.GetMergeCommitSHA())),
 		Options: []InboxAction{{N: 1, Recommended: true, Label: "looks right (a clean sample)", Command: "inbox: audit looks right"},
-			{N: 2, Label: fmt.Sprintf("correction: reset the streak and open a PR that reverts #%d", p.GetNumber()), Command: "inbox: audit correction"}}}
+			{N: 2, Label: fmt.Sprintf("correction: label it aayu:correction (an agent's PR loses its layers' streak) and open a PR that reverts #%d", p.GetNumber()), Command: "inbox: audit correction"}}}
 }
 
 // auditAct records the person's look at a merged PR: a sample in the ledger
@@ -197,8 +198,9 @@ func ledgerSample(ctx context.Context, w *ledger.Writer, n int) (*Sample, error)
 
 // revertPR opens a PR that reverts merged PR n (GitHub's revertPullRequest)
 // and returns its URL. A revert PR of n that this account already opened
-// into the same base is reused, so a look run again opens no second one; a
-// PR anyone else opened, whatever its text says, never stands in.
+// into the same base, still open or merged, is reused, so a look run again
+// opens no second one; one closed unmerged reverts nothing, so a new one
+// opens; a PR anyone else opened, whatever its text says, never stands in.
 func revertPR(ctx context.Context, c *github.Client, repo string, n, story int) (string, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	me, _, err := c.REST.Users.Get(ctx, "")
@@ -216,7 +218,7 @@ func revertPR(ctx context.Context, c *github.Client, repo string, n, story int) 
 		return "", err
 	}
 	for _, p := range prs {
-		if strings.EqualFold(p.GetUser().GetLogin(), me.GetLogin()) && p.GetBase().GetRef() == orig.GetBase().GetRef() && strings.HasPrefix(p.GetBody(), revertBody(n)) {
+		if (p.GetState() == "open" || p.MergedAt != nil) && strings.EqualFold(p.GetUser().GetLogin(), me.GetLogin()) && p.GetBase().GetRef() == orig.GetBase().GetRef() && strings.HasPrefix(p.GetBody(), revertBody(n)) {
 			return p.GetHTMLURL(), nil
 		}
 	}
