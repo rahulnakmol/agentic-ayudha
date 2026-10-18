@@ -98,8 +98,14 @@ Gather pinned design references (URLs and IDs only) and user research for a Feat
      phone's width) are research findings, never dropped.
    - **What the data does not say**, and the open questions that follow. No finding is claimed that nobody observed;
      where there is no usability evidence yet, the stage is a plan to get it.
+   - **Causes only where a source states them**: a quote or number supports exactly what it says. "Missed my
+     delivery twice" shows missed deliveries, not why they were missed; that a missed delivery came from the
+     interface (a lost choice, an unclear time) is claimed only where a quote or number says so. Anything you infer
+     is labelled as an inference ("we suspect …, untested") and becomes an open question, never written as what the
+     data shows.
    - **Implications per state**: for each Completion Goal state, by its ID, what the state must make clear to the
-     person and the finding behind it (not only that it needs testing), without designing the screens.
+     person and the finding behind it (not only that it needs testing), without designing the screens; an
+     implication that rests on an inference says so.
    - **How findings reach the backlog** (in a scaleup or enterprise plan, its own part; a startup's page names none
      of this): a finding that changes a story or its Completion
      Goal is filed as a Feedback issue (`aayu grill feedback`, the intake type) naming the story, for the story's owner to
