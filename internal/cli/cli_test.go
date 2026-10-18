@@ -47,6 +47,9 @@ func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args
 	if opts.GHToken == nil { // never pick up the developer's real gh login
 		opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }
 	}
+	if opts.GHAccounts == nil { // never pick up the developer's real gh accounts
+		opts.GHAccounts = func(context.Context) (map[string]string, error) { return nil, errors.New("gh disabled in tests") }
+	}
 	if opts.GitCredential == nil { // never pick up the developer's real git credential helper
 		opts.GitCredential = func(context.Context, string) (string, error) {
 			return "", errors.New("git credentials disabled in tests")

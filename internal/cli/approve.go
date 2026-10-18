@@ -114,6 +114,15 @@ func batchDecision(d decide.Decision, o workitems.Option) batchItem {
 		it.Effect += " This is not the recommendation."
 		it.Heading += " This is not the recommendation."
 	}
+	// Accepting also closes every Decision it supersedes (acceptDecision).
+	links, _ := workitems.ParseLinks(d.Item.Fields[workitems.FieldLinks])
+	for _, lk := range links {
+		if lk.Kind == "supersedes" {
+			also := fmt.Sprintf(" Also closes #%d as superseded.", lk.Number)
+			it.Effect += also
+			it.Heading += also
+		}
+	}
 	switch {
 	case d.Waiver():
 		it.Door = "One-way door: a floor waiver is never reversible."
@@ -290,7 +299,14 @@ func (e *Env) commentApprovalsOff(ctx context.Context, cfg *config.Config, bot i
 // and account, never by value (Decision #488).
 func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 	run := e.exec()
-	sources := map[string]func(context.Context) (string, error){
+	sources := map[string]func(context.Context) (string, error){}
+	// gh stores several accounts and `gh auth token` gives only the active
+	// one; any of them, active or not, can write a reply.
+	accounts, _ := e.ghAccounts(ctx)
+	for login, tok := range accounts {
+		sources["gh auth token --user "+login] = func(context.Context) (string, error) { return tok, nil }
+	}
+	for name, f := range map[string]func(context.Context) (string, error){
 		"gh auth token": func(ctx context.Context) (string, error) {
 			if e.GHToken != nil {
 				return e.GHToken(ctx)
@@ -329,10 +345,37 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 			}
 			return "", errors.New("no password")
 		},
+	} {
+		sources[name] = f
 	}
 	return identity.Reachable(ctx, e.Environ, sources, func(ctx context.Context, t identity.Token) (identity.User, error) {
 		return identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), t)
 	})
+}
+
+// ghAccounts is every account gh stores for github.com, login to token.
+func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
+	if e.GHAccounts != nil {
+		return e.GHAccounts(ctx)
+	}
+	run := e.exec()
+	// gh exits 1 when any stored account fails its check; the list is still printed.
+	out, _ := run(ctx, e.Dir, "gh", "auth", "status", "--hostname", "github.com", "--json", "hosts")
+	var st struct {
+		Hosts map[string][]struct {
+			Login string `json:"login"`
+		} `json:"hosts"`
+	}
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		return nil, err
+	}
+	toks := map[string]string{}
+	for _, a := range st.Hosts["github.com"] {
+		if t, err := run(ctx, e.Dir, "gh", "auth", "token", "--hostname", "github.com", "--user", a.Login); err == nil && strings.TrimSpace(t) != "" {
+			toks[a.Login] = strings.TrimSpace(t)
+		}
+	}
+	return toks, nil
 }
 
 // openBatch is the open batch on issue n written by botLogin, with its

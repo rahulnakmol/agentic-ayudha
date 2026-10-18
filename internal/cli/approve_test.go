@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -460,6 +461,24 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (GH_TOKEN)") || strings.Contains(body, "/aayu approve all") || strings.Contains(body, "ghu_") {
 		t.Fatalf("exit %d %s\n%s", code, errOut, body)
 	}
+	// gh stores the founder as an inactive account: `gh auth token` gives only
+	// the active one, but `--user founder` reaches the founder's token.
+	d6 := g.AddIssue("Choose the log store", decisionBody("true", ""), "type:decision", "status:ready")
+	g.Mu.Lock()
+	g.TokenLogins["ghu_otheractive"] = fake.Account{Login: "someone-else", Type: "User"}
+	g.Mu.Unlock()
+	accounts := func(context.Context) (map[string]string, error) {
+		return map[string]string{"someone-else": "ghu_otheractive", "founder": "ghu_inactivefounder"}, nil
+	}
+	code, _, errOut = run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, GHAccounts: accounts, GHToken: func(context.Context) (string, error) { return "ghu_otheractive", nil }},
+		"decide", strconv.Itoa(d6.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	g.Mu.Lock()
+	body = g.Issues[d6.Number].Comments[len(g.Issues[d6.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder)") || strings.Contains(body, "ghu_") || strings.Contains(body, "/aayu approve all") {
+		t.Fatalf("inactive gh account: exit %d %s\n%s", code, errOut, body)
+	}
 	// A token in aayu's own secrets store (`aayu auth set-secret github-token`) is reachable too.
 	d3 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
 	stored := map[string]string{"AAYU_SECRET_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"}
@@ -520,8 +539,13 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	g.Viewer = "founder"
 	var ds []*fake.Issue
+	old := g.AddIssue("Choose the queue (first try)", decisionBody("true", ""), "type:decision", "status:ready")
 	for _, title := range []string{"Choose the rules engine", "Choose the queue", "Choose the data store"} {
-		ds = append(ds, g.AddIssue(title, decisionBody(strconv.FormatBool(title != "Choose the data store"), ""), "type:decision", "status:ready"))
+		links := ""
+		if title == "Choose the queue" { // accepting it closes #old too, and the batch must say so
+			links = "supersedes #" + strconv.Itoa(old.Number)
+		}
+		ds = append(ds, g.AddIssue(title, decisionBody(strconv.FormatBool(title != "Choose the data store"), links), "type:decision", "status:ready"))
 	}
 	list := strconv.Itoa(ds[0].Number) + "," + strconv.Itoa(ds[1].Number) + "," + strconv.Itoa(ds[2].Number)
 	state := t.TempDir()
@@ -651,6 +675,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		t.Fatalf("approved: exit %d, %d closed: %s %s", code, closed(), out, errOut)
 	}
 	for _, want := range []string{"**3 human-only steps wait for your approval**", "1. **Accepts option 1 (A) of Decision #" + strconv.Itoa(ds[0].Number) + ": Choose the rules engine.** Two-way door",
+		"2. **Accepts option 1 (A) of Decision #" + strconv.Itoa(ds[1].Number) + ": Choose the queue. Also closes #" + strconv.Itoa(old.Number) + " as superseded.**",
 		"3. **Accepts option 2 (B) of Decision #" + strconv.Itoa(ds[2].Number) + ": Choose the data store. This is not the recommendation.** One-way door",
 		"Recommendation: A", "**To approve all of it, enter this code** at https://github.com/login/device before", "```text\nWDJB-MJHT\n```",
 		"Comment approval is off for this batch: agents here write as @founder (no bot identity), so a reply from that account could be an agent's."} {
