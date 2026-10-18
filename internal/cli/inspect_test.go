@@ -1503,6 +1503,10 @@ func TestInspectReviewerFallback(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman || len(model.Requests) != 1 {
 		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s\n%s", code, res.Disposition, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
 	}
+	// The human's merge, the record people read, still says why rung B failed (Codex's P2 on #689).
+	if body := lastInspect(t, g, prN); !strings.Contains(body, "fallback: rung B ([inspect] paid_reviewer grok-4.7) failed on") || !strings.Contains(body, "model endpoint returned 524") {
+		t.Errorf("the human's merge lost why rung B failed:\n%s", body)
+	}
 
 	// A fallback app that reviews only when asked (Claude): outside CI,
 	// inspect asks it under the person's account, beside Codex's request, and

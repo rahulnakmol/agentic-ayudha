@@ -489,7 +489,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
+	// A head whose rung B failed says why on every later run, whichever
+	// reviewer comes first.
 	fallback := ""
+	if prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA() {
+		fallback = fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on %s (%s); the reviewer app reviews, and the next push tries it again", l.Config.Inspect.PaidReviewer, short(prev.PaidFailed), cmp.Or(prev.PaidFailedWhy, "reason not recorded"))
+	}
 	switch {
 	case paid == nil:
 	case e.replyEvent():
@@ -498,7 +503,6 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: [inspect] paid_reviewer %s is not called on a reply event; the head's inspect job reviews", paid.Model)
 		paid = nil
 	case prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA():
-		fallback = fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on %s (%s); the reviewer app reviews, and the next push tries it again", paid.Model, short(prev.PaidFailed), cmp.Or(prev.PaidFailedWhy, "reason not recorded"))
 		e.Logf("inspect: %s", fallback)
 		paid = nil
 	}
