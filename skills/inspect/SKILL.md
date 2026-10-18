@@ -29,11 +29,16 @@ aayu:
       required: false
       positional: false
       description: "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it."
+    - name: approve
+      type: bool
+      required: false
+      positional: false
+      description: "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts."
     - name: reason
       type: string
       required: false
       positional: false
-      description: "Why the finding is dismissed (with --dismiss)."
+      description: "Why the finding is dismissed (with --dismiss), or what you checked (with --approve)."
   outputs:
     - "disposition (merge|fix|rebuild)"
     - "findings"

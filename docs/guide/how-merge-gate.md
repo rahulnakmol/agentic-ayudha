@@ -212,7 +212,12 @@ untrusted data.
 3. **Read.** Only posts by the reviewer's own login count. The newest `aayudha-review` block for the head is checked
    against the schema. Codex will not use a custom format, so its own review counts instead: a receipt naming the
    exact head commit, and its inline findings on that commit, each with a P0 to P3 badge. A person's review counts
-   only as an approval of the head by the approver.
+   only when the `[autonomy] approver` gave it with `aayu inspect <pr> --approve --reason "<what you checked>"` (Story
+   #639). That command is human-only: it runs through the presence check (the device flow) as the approver, records
+   the pull request, the head, the approver, the time, and the reason on the ledger (`inspect/approved.jsonl`), and
+   posts the review. The gate counts the approver's reply only when such a record names its exact head, so a new push
+   needs a new approval. A comment alone, even from the approver's account, does not count: an agent holding the
+   person's token could have written it.
 4. **Enforce.** A floor that does not hold, a P0 or P1 finding, or an unmet criterion turns `merge` into `fix`. A
    changed file the reviewer did not review fails it too: the sealed coverage manifest lists every changed file as
    reviewed, skipped with a reason (generated, or deleted), or unreviewed (left out of `reviewed`, or past the 120 kB

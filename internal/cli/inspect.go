@@ -166,6 +166,49 @@ func readDismissed(ctx context.Context, w *ledger.Writer) []inspect.Dismissal {
 	return out
 }
 
+// ApprovedPath is where the [autonomy] approver's reviews of PR heads, made
+// through `aayu inspect --approve`, live on the ledger (Story #639).
+const ApprovedPath = "inspect/approved.jsonl"
+
+// headApproval is one approver's review of one PR head (inspectApprove).
+type headApproval struct {
+	PR     int    `json:"pr"`
+	Head   string `json:"head"`
+	By     string `json:"by"`
+	At     string `json:"at"`
+	Reason string `json:"reason"`
+}
+
+// readApprovals reads the recorded head approvals; none when the ledger
+// cannot be read, so the human fallback fails closed.
+func (e *Env) readApprovals(ctx context.Context) []headApproval {
+	tok, err := e.Resolver().Human(ctx)
+	if err != nil {
+		return nil
+	}
+	w, err := e.Ledger(ctx, tok, "human", "")
+	if err != nil {
+		return nil
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return nil
+	}
+	defer t.Close()
+	b, err := t.File(ctx, ApprovedPath)
+	if err != nil {
+		return nil
+	}
+	var out []headApproval
+	for _, line := range strings.Split(string(b), "\n") {
+		var a headApproval
+		if json.Unmarshal([]byte(line), &a) == nil && a.Head != "" {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // reviewers picks inspect's reviewers: the review lane's model, then in peer
 // mode the configured peer model or the first registry candidate of another
 // family. A registry default whose family equals the builder's is replaced
@@ -243,6 +286,9 @@ func InspectVoice(assets fs.FS) string {
 func runInspect(ctx context.Context, e *Env, in Values) error {
 	if in.String("dismiss") != "" {
 		return e.inspectDismiss(ctx, in)
+	}
+	if in.Bool("approve") {
+		return e.inspectApprove(ctx, in)
 	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
@@ -706,6 +752,85 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 	}
 	return e.Emit(d, func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "dismissed %s (%s %s:%d %s): %s\n", d.ID, f.Severity, d.File, f.Line, d.Title, d.Reason)
+		return err
+	})
+}
+
+// inspectApprove records the [autonomy] approver's review of the PR's head on
+// the ledger and posts it as the human review the merge gate reads (Story
+// #639; founder, 2026-10-18: "agree"). It is human-only (presence) and runs
+// only as the approver. The gate's human fallback counts a reply only when
+// such a record names its exact head, because a comment alone may be an agent
+// holding the person's token (Codex's P2 on #634).
+func (e *Env) inspectApprove(ctx context.Context, in Values) error {
+	reason := strings.TrimSpace(in.String("reason"))
+	if reason == "" {
+		return Errorf(ExitUsage, "inspect --approve: say what you reviewed with --reason")
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return err
+	}
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	approver := strings.TrimPrefix(strings.TrimSpace(l.Config.Autonomy.Approver), "@")
+	if approver == "" {
+		return Errorf(ExitBlocked, "inspect --approve: no [autonomy] approver is set; name the person who approves in .aayudha/config.toml")
+	}
+	n := issueNumber(in.String("pr"))
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return err
+	}
+	if login := viewer(ctx, c); !strings.EqualFold(login, approver) {
+		return Errorf(ExitBlocked, "inspect --approve: the [autonomy] approver is %s, not %s", approver, cmp.Or(login, "an unknown account"))
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	headOf := func() (string, error) {
+		pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+		return pr.GetHead().GetSHA(), err
+	}
+	head, err := headOf()
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	// The person approves this head by name; a push after it voids the step.
+	if err := e.requireApproval(ctx, Pending{What: "inspect --approve", Effect: []string{fmt.Sprintf("Records your review of PR #%d at commit %s as the human review the merge gate reads.", n, short(head))}}, AccessWrite); err != nil {
+		return err
+	}
+	if now, err := headOf(); err != nil || now != head {
+		return Errorf(ExitBlocked, "inspect --approve: PR #%d's head moved from %s while you approved; review the new head and run it again", n, short(head))
+	}
+	diff, _, err := c.REST.PullRequests.GetRaw(ctx, owner, name, n, gh.RawOptions{Type: gh.Diff})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	reviewed := []string{} // every changed path, as the gate reads the diff
+	for _, f := range inspect.ParseDiff(diff) {
+		reviewed = append(reviewed, f.Path)
+	}
+	a := headApproval{PR: n, Head: head, By: approver, At: e.Now().UTC().Format(time.RFC3339), Reason: reason}
+	reply, _ := json.Marshal(map[string]any{"head": head, "disposition": inspect.Merge, "summary": reason, "reviewed": reviewed, "findings": []any{}, "criteria": []any{}})
+	marker := fmt.Sprintf("<!-- aayudha:inspect-approval %s -->", head)
+	body := fmt.Sprintf("%s\nHuman review of `%s` by @%s through `aayu inspect %d --approve`, recorded on the ledger (`%s`).\n\n```%s\n%s\n```\n",
+		marker, short(head), approver, n, ApprovedPath, inspect.ReplyFence, reply)
+	if !c.DryRun() {
+		w, err := e.Ledger(ctx, tok, "human", "")
+		if err != nil {
+			return err
+		}
+		b, _ := json.Marshal(a)
+		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("inspect: approve #%d at %s", n, short(head)), Append: map[string][]byte{ApprovedPath: append(b, '\n')}}); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+	}
+	if _, err := c.UpsertComment(ctx, repo, n, marker, body, actions.Action{Kind: "github.comment.inspect-approval", Payload: map[string]any{"head": head}}); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	return e.Emit(a, func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "approved #%d at %s as %s, recorded on the ledger; the merge gate's inspect check reads it\n", n, short(head), approver)
 		return err
 	})
 }

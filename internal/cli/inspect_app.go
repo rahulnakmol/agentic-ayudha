@@ -186,8 +186,34 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !floor.IsZero() {
 		replies = slices.DeleteFunc(slices.Clone(posts), func(p inspect.Post) bool { return !p.Updated.After(floor) })
 	}
+	// A person's review counts only when the [autonomy] approver recorded it
+	// for this exact head through `aayu inspect --approve` (presence-verified,
+	// on the ledger; Story #639): a comment alone, even from the approver's
+	// account, may be an agent holding the person's token.
+	approver := strings.TrimPrefix(strings.TrimSpace(a.cfg.Autonomy.Approver), "@")
+	var approvals []headApproval
+	loaded := false
+	backing := func(login string) (headApproval, bool) {
+		if !loaded {
+			approvals, loaded = e.readApprovals(ctx), true
+		}
+		i := slices.IndexFunc(approvals, func(ap headApproval) bool {
+			return ap.PR == n && ap.Head == head && strings.EqualFold(ap.By, approver)
+		})
+		if approver == "" || !strings.EqualFold(login, approver) || i < 0 {
+			return headApproval{}, false
+		}
+		return approvals[i], true
+	}
 	read := func(c inspect.Choice) (inspect.AppReply, error) {
 		rep, err := inspect.ReadReply(c, replies, head, since, human, a.in.Criteria, changed)
+		if err == nil && c.App == "" {
+			if ap, ok := backing(rep.Login); ok {
+				rep.Source += fmt.Sprintf("; backed by %s's `aayu inspect --approve` of `%s` at %s, recorded on the ledger (`%s`)", ap.By, short(head), ap.At, ApprovedPath)
+			} else {
+				err = fmt.Errorf("%w: %s is not backed by the [autonomy] approver's `aayu inspect %d --approve` for `%s` on the ledger", inspect.ErrNoReply, rep.Source, n, short(head))
+			}
+		}
 		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
 			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
 		}
@@ -245,6 +271,12 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res.Rung, res.ReviewerFamily = choice.Rung, choice.Family
 		res.Review = "requested: " + a.builder.RungLabel(choice.Rung, choice.Kind(), choice.Family)
 		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format (a review request: `aayu inspect %d`, run by the builder or a person under their own account); the reply re-runs this check", n)
+		if choice.App == "" {
+			res.Next = fmt.Sprintf("the [autonomy] approver reviews the PR and runs `aayu inspect %d --approve --reason \"<what you checked>\"` in their own terminal (a person-verified step that records the head on the ledger; a comment alone does not count); its reply re-runs this check", n)
+			if approver == "" {
+				res.Next = "set [autonomy] approver in .aayudha/config.toml; then " + res.Next
+			}
+		}
 		if since.IsZero() {
 			notes = append(notes, "no review request for this head on the PR yet")
 		}
