@@ -287,7 +287,7 @@ func FromPostHook(event []byte) (Event, Result, string, bool) {
 	r := Result{Failed: raw.Status == "error" || raw.Error != "" || raw.HookEvent == "PostToolUseFailure"}
 	switch c := raw.CopilotResult; {
 	case c != nil:
-		r.Output, r.Failed = []byte(c.Text), r.Failed || c.Type != "success"
+		r.Output, r.Failed = []byte(c.Text), r.Failed || c.Type != "success" || shellFailed(c.Text)
 	case len(raw.Response) > 0:
 		r.Output = raw.Response
 	case raw.ResultJSON != "":
@@ -312,6 +312,18 @@ func FromPostHook(event []byte) (Event, Result, string, bool) {
 		session = raw.Thread
 	}
 	return e, r, session, true
+}
+
+// copilotExit is the marker Copilot CLI ends a shell result with (seen live
+// with 1.0.98): it reports a command that exits non-zero as a success, so the
+// exit code here is the only sign the call failed.
+var copilotExit = regexp.MustCompile(`<shellId: \d+ completed with exit code (\d+)>\s*$`)
+
+// shellFailed reports whether a Copilot shell result ends with a non-zero
+// exit code.
+func shellFailed(text string) bool {
+	m := copilotExit.FindStringSubmatch(text)
+	return m != nil && m[1] != "0"
 }
 
 // copilotResult is Copilot's toolResult.
