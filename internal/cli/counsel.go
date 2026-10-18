@@ -172,6 +172,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 
+	if rep.PR == 0 && rep.Issue == 0 && rep.Path == "" {
+		rep.Untrusted = append([]chartUntrusted{{"question", rep.Topic}}, rep.Untrusted...)
+	}
 	rep.Facts, rep.Untrusted = untrustTitles(rep.Facts, rep.Untrusted)
 	personas, err := seats.LoadPersonas(e.Assets)
 	if err != nil {
@@ -480,10 +483,24 @@ func layerNames(ids []string) string {
 	return strings.Join(out, ", ")
 }
 
+// heading names the topic in the trusted heading: the PR, the issue, or the grounded path; a question in the
+// person's words is data, so it is shown in its own block (question), never as prompt structure.
+func (r counselReport) heading() string {
+	switch {
+	case r.PR > 0:
+		return fmt.Sprintf("PR #%d", r.PR)
+	case r.Issue > 0:
+		return fmt.Sprintf("#%d", r.Issue)
+	case r.Path != "":
+		return r.Path
+	}
+	return "the question below"
+}
+
 // markdown is the grounding the twin reads, and the text a draft's citations are checked against.
 func (r counselReport) markdown() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Counsel grounding: %s\n\n", r.Topic)
+	fmt.Fprintf(&b, "# Counsel grounding: %s\n\n", r.heading())
 	fmt.Fprintf(&b, "Twin: %s. Team stage: %s (%s), so the counsel's title is `# %s`.\n", r.Twin, r.Stage, r.StageWhy, r.Artefact)
 	b.WriteString("Counsel is advice: it never approves, accepts, merges, or counts as a review, and never says or implies that a\n" +
 		"review or an approval happened. The person decides. Read the code, packs, and runs you need through aayu and cite each;\n" +
@@ -569,11 +586,16 @@ func declares(root, pkg, name, member string) bool {
 			}
 			return nil
 		}
-		if filepath.Base(filepath.Dir(path)) != pkg || !strings.HasSuffix(path, ".go") || d.Type()&os.ModeSymlink != 0 {
+		if !strings.HasSuffix(path, ".go") || d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
-		if err != nil || f.Name.Name != pkg {
+		// The package is the one the file declares, not its directory's name (embed.go is package aayudha).
+		fs := token.NewFileSet()
+		if h, err := parser.ParseFile(fs, path, nil, parser.PackageClauseOnly); err != nil || h.Name.Name != pkg {
+			return nil
+		}
+		f, err := parser.ParseFile(fs, path, nil, parser.SkipObjectResolution)
+		if err != nil {
 			return nil
 		}
 		for _, dl := range f.Decls {

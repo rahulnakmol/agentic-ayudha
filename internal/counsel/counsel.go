@@ -55,7 +55,7 @@ var Sections = []Section{
 
 var (
 	h2RE     = regexp.MustCompile(`(?m)^##\s+(.+)$`)
-	listItem = regexp.MustCompile(`(?m)^(?:[-*+]|\d+[.)])\s+`)
+	listItem = regexp.MustCompile(`(?m)^ {0,3}(?:[-*+]|\d+[.)])\s+`)
 	// claimed is a first-person claim that a review, an approval, or a ruling happened, or an LGTM given as a
 	// statement of its own: counsel never is one and never says it is (Story #478). Negations ("this is not a
 	// review") and naming a request ("the body asks for an LGTM") do not match, because each pattern needs the
