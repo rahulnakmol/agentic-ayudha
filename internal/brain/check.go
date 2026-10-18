@@ -96,7 +96,6 @@ func (v *Vault) Resolve(target string) string {
 var (
 	wikilinkRE = regexp.MustCompile(`!?\[\[([^\[\]]+)\]\]`)
 	commentRE  = regexp.MustCompile(`(?s)<!--.*?-->`)
-	dateRE     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	// loginRE is a GitHub login: letters, digits, and single hyphens between them, at most 39 characters.
 	loginRE = regexp.MustCompile(`^@?[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
 	// sourceRE is the evidence rule's citation forms.
@@ -134,6 +133,12 @@ func IsVault(files map[string][]byte) bool {
 	}
 	n, err := Parse(HomePath, files[HomePath])
 	return err == nil && n.Str("type") == "home"
+}
+
+// isDate reports whether s is a real calendar date written YYYY-MM-DD.
+func isDate(s string) bool {
+	_, err := time.Parse(time.DateOnly, s)
+	return err == nil
 }
 
 // isNote reports whether a resolved path is a note of the vault, not "",
@@ -280,7 +285,7 @@ func Check(files map[string][]byte) Report {
 			fail(p, "frontmatter", "status %q is not one of %s", s, strings.Join(t.Statuses, ", "))
 		}
 		for _, k := range []string{"updated", "reviewed"} {
-			if d := n.Str(k); (k == "updated" || n.Has(k)) && !dateRE.MatchString(d) {
+			if d := n.Str(k); (k == "updated" || n.Has(k)) && !isDate(d) {
 				fail(p, "frontmatter", "%s %q is not a YYYY-MM-DD date", k, d)
 			}
 		}
@@ -311,7 +316,7 @@ func Check(files map[string][]byte) Report {
 			for _, val := range n.List(k) {
 				if lt := linkTarget(val); lt == "" {
 					fail(p, "link", "%s: %q is not a [[wikilink]]", k, val)
-				} else if !v.isNote(v.Resolve(lt)) { // a same-note anchor, a template, or an attachment links no note
+				} else if q := v.Resolve(lt); !v.isNote(q) || q == p { // the note itself, a template, or an attachment links no other note
 					fail(p, "link", "%s: [[%s]] does not resolve to another note", k, lt)
 				}
 			}

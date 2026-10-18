@@ -116,8 +116,9 @@ func Block(name, body string) string {
 var blockRE = regexp.MustCompile(`(?ms)^<!-- BEGIN aayudha:brain:([a-z0-9-]+) -->\n(.*?)^<!-- END aayudha:brain:([a-z0-9-]+) -->$`)
 
 // fenceOpenRE matches a line that opens a fenced code block (CommonMark: at
-// most three spaces, then three or more backticks or tildes).
-var fenceOpenRE = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
+// most three spaces, then three or more backticks or tildes; a backtick fence's
+// info string holds no backtick).
+var fenceOpenRE = regexp.MustCompile("^ {0,3}(?:(`{3,})[^`]*$|(~{3,}))")
 
 // maskFences blanks out fenced code (same length, newlines kept, so indexes
 // hold): markers and links inside a fence are text. A fence closes on a line
@@ -135,7 +136,7 @@ func maskFences(body string) string {
 		line := body[i:end]
 		if open == "" {
 			if m := fenceOpenRE.FindStringSubmatch(line); m != nil {
-				start, open = i, m[1]
+				start, open = i, m[1]+m[2]
 			}
 		} else if t := strings.TrimSpace(line); indent(line) <= 3 && len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
 			blank(masked, start, end)
