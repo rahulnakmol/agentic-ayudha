@@ -199,18 +199,18 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			return nil, err
 		}
 		var st inspect.State
-		ready := false
+		var marked []string // who left Ready to ship for the current head
 		for _, cm := range comments {
 			if strings.Contains(cm.GetBody(), inspect.Marker) {
 				st = inspect.ParseState(cm.GetBody())
 			}
-			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil {
-				ready = m[1] == p.GetHead().GetSHA()
+			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil && m[1] == p.GetHead().GetSHA() && !slices.Contains(marked, cm.GetUser().GetLogin()) {
+				marked = append(marked, cm.GetUser().GetLogin())
 			}
 		}
 		if st.Cycles < inspect.MaxCycles {
-			if ready && p.GetBase().GetRef() == dev {
-				it, err := readyItem(ctx, c, owner, name, p)
+			if len(marked) > 0 && p.GetBase().GetRef() == dev {
+				it, err := readyItem(ctx, c, owner, name, p, marked)
 				if err != nil {
 					return nil, err
 				}
@@ -240,8 +240,25 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 
 // readyItem is an open Story PR that ship left Ready to ship on its head, as
 // an inbox step when the merge gate's checks are still green there: ship it,
-// which keeps every gate of ship. It is nil when a check is not green.
-func readyItem(ctx context.Context, c *github.Client, owner, name string, p *gh.PullRequest) (*InboxItem, error) {
+// which keeps every gate of ship. It is nil when a check is not green, or
+// when no one in by, who wrote a marker for the head, has the write access
+// ship needs: anyone may comment, so a marker from any other account is text,
+// not ship's word.
+func readyItem(ctx context.Context, c *github.Client, owner, name string, p *gh.PullRequest, by []string) (*InboxItem, error) {
+	trusted := false
+	for _, login := range by {
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+		if err != nil {
+			return nil, err
+		}
+		if q := permissionOf(perm); q == "write" || q == "admin" {
+			trusted = true
+			break
+		}
+	}
+	if !trusted {
+		return nil, nil
+	}
 	head := p.GetHead().GetSHA()
 	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}})
 	if err != nil {

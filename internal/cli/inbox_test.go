@@ -322,6 +322,18 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	gateRunFor(t, g, dir, 2, prA, headA, floors)
 	gateRunFor(t, g, dir, 6, prB, headB, floors)
 
+	// Anyone may comment: a Ready to ship marker from an account without write
+	// access is not ship's word, so the inbox does not list the PR, and ship
+	// never edits that look-alike.
+	g.Mu.Lock()
+	forged := &fake.Comment{ID: 501, Body: ReadyToShipMarker + " head=" + headA + " -->\n**Ready to ship.**"}
+	forged.User.Login, forged.User.Type = "mallory", "User"
+	g.Issues[prA].Comments = append(g.Issues[prA].Comments, forged)
+	g.Mu.Unlock()
+	if _, out, _ := runIn(t, env, opts, "s s s", "inbox", "--repo", "o/r"); !strings.Contains(out, "1 human-only step(s)") || strings.Contains(out, "ready to ship") {
+		t.Fatalf("a forged marker listed the PR:\n%s", out)
+	}
+
 	// The agent ships from its own shell: the hook lets it, and ship's gates
 	// hold. The author is the founder, so no review can pass it: Ready to ship.
 	agent := maps.Clone(env)
@@ -333,6 +345,9 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 		}
 	}
 	g.Mu.Lock()
+	if forged.Body != ReadyToShipMarker+" head="+headA+" -->\n**Ready to ship.**" {
+		t.Errorf("ship edited someone else's marker: %q", forged.Body)
+	}
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
 	g.Mu.Unlock()
 	opts.DevicePoll = time.Millisecond

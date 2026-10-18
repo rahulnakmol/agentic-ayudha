@@ -73,8 +73,9 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 - **Every agent PR declares itself**, so `aayu status --streak` counts it: open it with the label
   `agent-authored` (`gh pr create --label agent-authored`), and put `Aayudha-Host: <host>` in its body, plus one
   `Aayudha-Model: <model>` line per model you know you used (none when the host picks the model and does not say).
-  Each commit carries the same lines as trailers, so the streak does not count the agent's own commits as a
-  person's corrections.
+  Each commit carries the same lines as trailers (one `Aayudha-Host:` naming a known host, or Amp's own
+  `Amp-Thread-ID:` trailer), so the streak does not count the agent's own commits as a person's corrections.
+  Never add them to a commit a person wrote: a person's follow-up commit is a correction.
 - **Protected paths** (`.github/CODEOWNERS`) fail `protected-paths` by design. Solo mode: only the founder's
   recorded admin bypass merges them. Use the bypass only when the founder has authorised it for the task, and
   only when every other check is green: first post a PR comment starting `Solo-mode bypass:` naming the

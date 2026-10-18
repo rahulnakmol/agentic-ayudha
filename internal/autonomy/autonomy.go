@@ -172,13 +172,39 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 	return out
 }
 
-var agentTrailer = regexp.MustCompile(`(?m)^(?:` + HostTrailer + `|` + ModelTrailer + `)`)
+var (
+	hostTrailerLine  = regexp.MustCompile(`(?m)^` + HostTrailer + `[ \t]*(\S*)[ \t]*$`)
+	modelTrailerLine = regexp.MustCompile(`(?m)^` + ModelTrailer + `[ \t]*(\S*)[ \t]*$`)
+	// Amp writes this trailer on the commits of a thread.
+	ampThreadLine = regexp.MustCompile(`(?m)^Amp-Thread-ID: https://ampcode\.com/threads/T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ \t]*$`)
+)
 
-// agentCommit reports whether a commit message carries a trailer only an
-// agent's commit has: a build checkpoint, or an Aayudha-Host or Aayudha-Model
-// line.
+// agentCommit reports whether a commit message says an agent made it: a build
+// checkpoint; or one Aayudha-Host trailer naming a known host, or an Amp
+// thread's Amp-Thread-ID trailer, with every Aayudha-Model trailer, if any,
+// naming a model of a known family. A person's follow-up commit carries none
+// of these, and a stray, empty, or unknown line counts as a person's, so it
+// stays a correction. Detect asks only of commits on agent PRs.
 func agentCommit(msg string) bool {
-	return strings.Contains(msg, CheckpointTrailer) || agentTrailer.MatchString(msg)
+	if strings.Contains(msg, CheckpointTrailer) {
+		return true
+	}
+	switch h := hostTrailerLine.FindAllStringSubmatch(msg, -1); {
+	case len(h) > 1:
+		return false
+	case len(h) == 1:
+		if _, ok := verbs.FindHost(verbs.HostID(h[0][1])); !ok {
+			return false
+		}
+	case !ampThreadLine.MatchString(msg):
+		return false
+	}
+	for _, m := range modelTrailerLine.FindAllStringSubmatch(msg, -1) {
+		if verbs.FamilyOf(m[1]) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func short(sha string) string {

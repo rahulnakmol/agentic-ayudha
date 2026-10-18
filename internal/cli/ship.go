@@ -296,7 +296,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			// Everything else holds, so the PR waits for a person in the inbox.
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green and its pack verifies on `%s`; `aayu ship` stopped only for the human pass: %s. "+
 				"A person ships it from `aayu inbox`, or with `aayu ship %d` once a person other than the author approves the head.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), n)
-			if _, err := c.UpsertComment(ctx, repo, n, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
+			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}
 			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in a person's `aayu inbox`", refusal), "aayu inbox (a person)")
@@ -585,6 +585,40 @@ func soloModeComment(ctx context.Context, c *github.Client, owner, name string, 
 		return "", Errorf(ExitBlocked, "%s: post %s starting %q that says why, from your own account, first", cmd, where, SoloBypassPrefix)
 	}
 	return comments[i].GetHTMLURL(), nil
+}
+
+// upsertOwnComment replaces login's own comment on issue or PR n that carries
+// marker, or posts one: a look-alike someone else wrote is never edited, so
+// the comment stays login's word.
+func upsertOwnComment(ctx context.Context, c *github.Client, repo string, n int, login, marker, body string, a actions.Action) error {
+	owner, name, _ := github.SplitRepo(repo)
+	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return err
+	}
+	a.Target = fmt.Sprintf("%s#%d", repo, n)
+	for _, cm := range comments {
+		if !strings.EqualFold(cm.GetUser().GetLogin(), login) || !strings.Contains(cm.GetBody(), marker) {
+			continue
+		}
+		if cm.GetBody() == body {
+			return nil
+		}
+		a.Request = &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", repo, cm.GetID())}
+		_, err := c.Write(ctx, a, func(ctx context.Context) (any, error) {
+			_, _, err := c.REST.Issues.EditComment(ctx, owner, name, cm.GetID(), &gh.IssueComment{Body: gh.Ptr(body)})
+			return cm.GetID(), err
+		})
+		return err
+	}
+	a.Request = &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)}
+	_, err = c.Write(ctx, a, func(ctx context.Context) (any, error) {
+		cm, _, err := c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: gh.Ptr(body)})
+		return cm.GetID(), err
+	})
+	return err
 }
 
 // soloMode checks that solo mode holds for login: no bot identity and no

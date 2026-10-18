@@ -158,3 +158,29 @@ func TestCorrectionKinds(t *testing.T) {
 		}
 	}
 }
+
+// An agent's commit outside aayu build, under a person's account, is not a
+// correction when it says so with a well-formed trailer; a person's commit,
+// or one with a stray, empty, or unknown line, still is.
+func TestAgentCommitTrailers(t *testing.T) {
+	thread := "Amp-Thread-ID: https://ampcode.com/threads/T-01a14215-cfcd-705d-a4b0-2b257ff86949"
+	for msg, correction := range map[string]bool{
+		"fix: a\n\nAayudha-Host: amp":                                    false,
+		"fix: a\n\nAayudha-Host: claude\nAayudha-Model: claude-opus-5-5": false,
+		"fix: a\n\n" + thread:                                            false,
+		"fix: a\n\nSigned-off-by: R <r@example.com>":                     true,
+		"fix: a\n\nAayudha-Model:":                                       true,
+		"fix: a\n\nAayudha-Model: claude-opus-5-5":                       true, // a model alone names no agent
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Model: mystery-1":          true,
+		"fix: a\n\nAayudha-Host: notepad":                                true,
+		"fix: a\n\nAayudha-Host:":                                        true,
+		"fix: a\n\nAmp-Thread-ID: see the thread":                        true,
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Host: codex":               true,
+	} {
+		p := PR{Number: 1, Author: "founder", Labels: []string{LabelAgentAuthored}, MergedAt: t0,
+			Commits: []Commit{{SHA: "c1", Login: "founder", Message: msg, Parents: 1}}}
+		if got := len((Rules{}).Detect([]PR{p}, nil)) == 1; got != correction {
+			t.Errorf("%q: correction %v, want %v", msg, got, correction)
+		}
+	}
+}
