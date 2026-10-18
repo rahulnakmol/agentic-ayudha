@@ -325,6 +325,9 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, n := range l.Notices {
+		fmt.Fprintln(os.Stderr, "eval:", n)
+	}
 	clock, err := l.Config.Clock()
 	if err != nil {
 		return nil, err

@@ -37,12 +37,16 @@ type Sources struct {
 	RepoSource string
 	Environ    []string // KEY=value pairs; AAYU_<SECTION>__<KEY> entries form the env layer
 	Sets       []string // --set key=value flags, in order
+	// CI ignores the local layer (.aayudha/config.local.*) with a notice per
+	// file: a PR can commit one (Bug #640), and in a workflow a committed
+	// file must never change policy. --ci or GITHUB_ACTIONS=true sets it.
+	CI bool
 }
 
 // DefaultSources resolves the user config directory from the environment
 // (XDG_CONFIG_HOME, then HOME or USERPROFILE) and the repo from dir.
 func DefaultSources(getenv func(string) string, dir string, environ, sets []string) Sources {
-	s := Sources{Environ: environ, Sets: sets, RepoDir: RepoRoot(dir)}
+	s := Sources{Environ: environ, Sets: sets, RepoDir: RepoRoot(dir), CI: InCI(getenv)}
 	switch {
 	case getenv("XDG_CONFIG_HOME") != "":
 		s.UserDir = filepath.Join(getenv("XDG_CONFIG_HOME"), "aayudha")
@@ -53,6 +57,10 @@ func DefaultSources(getenv func(string) string, dir string, environ, sets []stri
 	}
 	return s
 }
+
+// InCI reports whether the process runs in a GitHub Actions workflow
+// (GITHUB_ACTIONS=true), where Load ignores the local layer.
+func InCI(getenv func(string) string) bool { return getenv("GITHUB_ACTIONS") == "true" }
 
 // RepoRoot returns the nearest directory at or above dir that contains .git, or "".
 func RepoRoot(dir string) string {
@@ -78,7 +86,7 @@ type layer struct {
 // Loaded is a merged configuration with the layers it came from.
 type Loaded struct {
 	Config  Config
-	Notices []string // e.g. files migrated in memory from an older schema
+	Notices []string // e.g. files migrated in memory from an older schema, or local files ignored in CI
 	layers  []layer
 	merged  *koanf.Koanf
 }
@@ -139,13 +147,13 @@ func Load(src Sources) (*Loaded, error) {
 		}
 		// Like [autonomy], the solo window is the protected repository
 		// config's alone (Story #432): no person's or agent's own layer sets it.
-		if name != LayerDefault && name != LayerRepo && k.Exists("decisions.solo_provisional_after_hours") {
+		if !protectedSource(name, source) && k.Exists("decisions.solo_provisional_after_hours") {
 			errs = append(errs, fmt.Errorf("%s: [decisions] solo_provisional_after_hours is read only from .aayudha/config.toml, a protected path", source))
 			return
 		}
 		// Personal data from a host's PostHog or Sentry MCP is opt-in for the
 		// repository (Decision #449), so only its protected config turns it on.
-		if name != LayerDefault && name != LayerRepo {
+		if !protectedSource(name, source) {
 			for _, p := range []string{"posthog", "sentry"} {
 				if k.Exists("integrations." + p + ".allow_pii") {
 					errs = append(errs, fmt.Errorf("%s: [integrations.%s] allow_pii is read only from .aayudha/config.toml, a protected path", source, p))
@@ -199,8 +207,16 @@ func Load(src Sources) (*Loaded, error) {
 		for _, f := range readDir(dir, "config", &errs) {
 			add(LayerRepo, f.path, f.m)
 		}
-		for _, f := range readDir(dir, "config.local", &errs) {
-			add(LayerLocal, f.path, f.m)
+		if src.CI { // not even parsed: a committed local file has no effect in CI
+			for _, ext := range []string{".json", ".toml"} {
+				if p := filepath.Join(dir, "config.local"+ext); fileExists(p) {
+					l.Notices = append(l.Notices, fmt.Sprintf("%s ignored: in CI (--ci or GITHUB_ACTIONS=true) the local config layer never applies, so a committed local file cannot change policy", p))
+				}
+			}
+		} else {
+			for _, f := range readDir(dir, "config.local", &errs) {
+				add(LayerLocal, f.path, f.m)
+			}
 		}
 	}
 	if src.RepoTOML != nil {
@@ -249,6 +265,15 @@ func Load(src Sources) (*Loaded, error) {
 	return l, nil
 }
 
+// protectedSource reports whether a layer may set a protected-only key: the
+// embedded defaults, or the repository layer read from .aayudha/config.toml,
+// the code-owned file, or given as its text (Sources.RepoTOML, a base
+// revision's config.toml). .aayudha/config.json is also the repository layer but
+// is not code-owned, so a PR could set the key there (Bug #640).
+func protectedSource(name, source string) bool {
+	return name == LayerDefault || (name == LayerRepo && filepath.Ext(source) != ".json")
+}
+
 func decode(k *koanf.Koanf, out *Config) error {
 	return k.UnmarshalWithConf("", out, koanf.UnmarshalConf{
 		Tag: "koanf",
@@ -265,6 +290,11 @@ func decode(k *koanf.Koanf, out *Config) error {
 type file struct {
 	path string
 	m    map[string]any
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // readDir returns base.json then base.toml from dir, so TOML wins when both exist.

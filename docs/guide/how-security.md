@@ -110,7 +110,8 @@ definitions (`internal/integrations/hostcall`), and it refuses any tool it does 
 refused until the lists are regenerated. Tools that return personal data (persons, session replays, support
 tickets, raw LLM conversations) stay refused until the repository's `.aayudha/config.toml` sets
 `allow_pii = true` under `[integrations.posthog]` or `[integrations.sentry]`. aayudha reads that setting only from
-the committed repository config, where it is reviewed. Tools that spend paid AI credits, such as Sentry's Seer
+`.aayudha/config.toml`, the code-owned repository config, where it is reviewed; from `.aayudha/config.json` or any other
+layer the load fails. Tools that spend paid AI credits, such as Sentry's Seer
 analysis, stay refused. The post-tool hook logs each read it let through to
 `.aayudha/state/calls/<session>.jsonl`: the tool, its arguments with secrets redacted, the time window and row limit it
 asked for, the rows it returned, and a SHA-256 of the result, never the result itself. A call that names a window and a

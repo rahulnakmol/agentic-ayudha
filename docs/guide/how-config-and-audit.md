@@ -20,7 +20,7 @@ layers, lowest precedence first:
 | `default` | `internal/config/defaults.toml`, embedded in the binary |
 | `user` | `~/.config/aayudha/config.toml` (or under `XDG_CONFIG_HOME`) |
 | `repo` | `.aayudha/config.toml`, committed |
-| `local` | `.aayudha/config.local.toml`, ignored by Git |
+| `local` | `.aayudha/config.local.toml`, ignored by Git; skipped in CI |
 | `env` | `AAYU_<SECTION>__<KEY>` variables, with a double underscore between levels |
 | `flag` | `--set key=value` |
 
@@ -28,6 +28,12 @@ Each file layer may also be JSON; TOML wins when both exist. Every layer is chec
 an unknown key is an error that names the file, variable, or flag it came from, not a silent no-op. Files carry a
 schema `version`; an older file is migrated in memory with a notice, and a newer one is refused. `[fleet]` is accepted
 only in the user layer.
+
+In CI (`--ci`, or `GITHUB_ACTIONS=true`), the `local` layer never applies: config loading skips
+`.aayudha/config.local.toml` and `.aayudha/config.local.json` and warns, naming each file it skipped. Git ignores only
+the TOML file, and `git add -f` still commits it, so a pull request could otherwise commit a local file that changes
+policy in every workflow, for example clearing an environment's `production` flag. Outside CI the local file applies
+as before.
 
 `aayu config show --origin` prints every merged key with the layer and source that set it, for example
 `autonomy.streak = 20  # default: defaults.toml (embedded)`. `aayu config validate` loads and checks without printing.
@@ -39,12 +45,13 @@ files that hold them. `internal/config/defaults.toml` and `.aayudha/config.toml`
 change needs a human CODEOWNER's approval (see [trust model and identities](how-trust.md)). `CONSTRAINTS.md` is
 generated from `defaults.toml`, and the `generate-drift` check fails when the two disagree, so a default cannot be
 loosened quietly. The `local`, `env`, and `flag` layers can still change these keys on one machine; that changes what
-an agent on that machine does, but not what the protected files or CI's gate workflows say.
+an agent on that machine does, but not what the protected files or CI's gate workflows say, because CI skips the
+`local` layer.
 
 One key is stricter. `[decisions] solo_provisional_after_hours` (default 24) is read only from
-`.aayudha/config.toml` and the embedded defaults: a value in the user, `local`, `env`, or `flag` layer fails the load,
-and so does a value under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human
-configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
+`.aayudha/config.toml` and the embedded defaults: a value in `.aayudha/config.json` (the `repo` layer, but not
+code-owned), or in the user, `local`, `env`, or `flag` layer, fails the load, naming the file, and so does a value
+under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
 then applies provisionally after the shorter of it and `provisional_after_hours` (rule V8); `provisional_after_hours = 0`
 still turns provisional application off. No mode ever applies a waiver of any kind (by label, a `waives #N` link, or a
 title or question that says waive), a seat change, or a step the trust model keeps human-only (approving a PR,

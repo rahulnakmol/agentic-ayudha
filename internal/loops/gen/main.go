@@ -31,7 +31,7 @@ func main() {
 }
 
 func run(root string) error {
-	l, err := config.Load(config.Sources{RepoDir: root})
+	l, err := config.Load(config.Sources{RepoDir: root, CI: config.InCI(os.Getenv)})
 	if err != nil {
 		return err
 	}

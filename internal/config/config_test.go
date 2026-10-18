@@ -510,3 +510,30 @@ func TestActiveScanKey(t *testing.T) {
 		t.Errorf("empty date: %v", err)
 	}
 }
+
+// TestProtectedOnlyKeysFromTOML (Bug #640, criterion 1): .aayudha/config.json
+// loads as the repository layer but is not code-owned, so a protected-only
+// key set there is refused, naming the file; .aayudha/config.toml still sets it.
+func TestProtectedOnlyKeysFromTOML(t *testing.T) {
+	for key, body := range map[string]string{
+		"solo_provisional_after_hours": `{"version": 1, "decisions": {"solo_provisional_after_hours": 24}}`,
+		"allow_pii":                    `{"version": 1, "integrations": {"posthog": {"allow_pii": true, "secret": "posthog", "scope": "read", "project": "1"}}}`,
+	} {
+		src := fixture(t, map[string]string{"repo/.aayudha/config.json": body})
+		_, err := Load(src)
+		file := filepath.Join(src.RepoDir, ".aayudha", "config.json")
+		if err == nil || !strings.Contains(err.Error(), file+": ") || !strings.Contains(err.Error(), key+" is read only from .aayudha/config.toml") {
+			t.Errorf("%s from config.json: err = %v; want a refusal naming %s", key, err, file)
+		}
+	}
+	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[decisions]\nsolo_provisional_after_hours = 12\n" +
+		"[integrations.posthog]\nallow_pii = true\nsecret = \"posthog\"\nscope = \"read\"\nproject = \"1\"\n"}))
+	if err != nil || l.Config.Decisions.SoloProvisional != 12 || !l.Config.Integrations["posthog"].AllowPII {
+		t.Errorf("config.toml: %v; want both keys applied", err)
+	}
+	// A base revision's config.toml, given as text the way ship reads it, is the code-owned file too.
+	l, err = Load(Sources{RepoTOML: []byte("version = 1\n[decisions]\nsolo_provisional_after_hours = 12\n"), RepoSource: ".aayudha/config.toml at 1c978f1"})
+	if err != nil || l.Config.Decisions.SoloProvisional != 12 {
+		t.Errorf("base config.toml: %v; want the key applied", err)
+	}
+}
