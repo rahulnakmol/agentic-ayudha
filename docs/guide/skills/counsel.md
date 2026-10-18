@@ -33,6 +33,13 @@ Your agent can call it on its own, because it only reads and advises.
 
 ## Run it
 
+Ask your agent with the question, the issue, the path, or the pull request. It reads the grounding through `aayu`,
+writes Atri's counsel, and checks it before it shows you.
+
+```text
+Use the counsel skill on PR 520: should this go in as it is?
+```
+
 <!-- BEGIN GENERATED: skill-usage -->
 
 ```sh
@@ -51,7 +58,14 @@ aayu counsel [<topic>]
 
 ## What you get back
 
-counsel, grounding.
+Without `--draft`, the grounding: the cited facts (the issue and its links, a path's layer and owner seat, or a pull
+request's changed files by layer, its proof pack's floors, and its builder family), the open Decisions and floor
+waivers, the `CONSTRAINTS.md` floors, the outline, and Atri's persona. With `--draft`, either "complete" or the list
+of findings to fix. With `--post`, one comment on the pull request or issue.
+
+**You should see** a counsel titled with the team stage's artefact, such as `# Three-hat line: …` at a startup,
+with seven parts in order, ending with `## Your question`. A posted counsel opens with "Counsel from Atri, the
+Founder's Sage. Advice only: not a review, an approval, or a Decision" and says same-family or different-family.
 
 ## Gates
 

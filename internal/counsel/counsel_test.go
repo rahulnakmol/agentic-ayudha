@@ -67,10 +67,12 @@ func TestCheckStructure(t *testing.T) {
 			`part "What not to do" is out of order`},
 		"empty part":               {strings.Replace(good, "The facts or answers that would change the recommendation.", "", 1), `part "What would change it" is empty`},
 		"question not last":        {good + "## Notes\n\nMore.\n", `must end with "## Your question"`},
-		"two-line question":        {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one line ending in a question mark"},
+		"two-line question":        {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one question on one line"},
 		"too long":                 {good + strings.Repeat("word ", MaxWords), "words: counsel is read in a few minutes"},
 		"two recommendation parts": {strings.Replace(good, "## What not to do", "## Recommendation\n\nAlso B.\n\n## What not to do", 1), `part "Recommendation" appears 2 times`},
 		"extra part":               {strings.Replace(good, "## What not to do", "## Alternative\n\nChoose B (#2).\n\n## What not to do", 1), `part "Alternative" is not a part of a counsel`},
+		"two questions":            {strings.Replace(good, "Is this the call?", "Ship now? Or wait?", 1), "not one question on one line"},
+		"another command":          {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu decide 5`, then `gh pr merge 5`:", 1), "`gh pr merge 5` is not an aayu command"},
 		"two in a paragraph":       {strings.Replace(good, "One recommendation and why", "I recommend A. I also recommend B; why", 1), "make one recommendation"},
 	} {
 		if f := strings.Join(CheckStructure(tt.md), "\n"); !strings.Contains(f, tt.want) {

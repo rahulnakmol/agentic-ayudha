@@ -66,6 +66,9 @@ var (
 	// twin or this counsel named as approving or reviewing ("Atri approves this PR").
 	asserted = regexp.MustCompile(`(?i)(?:^|[.!?:;]\s+|[*_]+)(?:approved|reviewed|signed[ -]off)\b|` +
 		`\b(?:Atri|the sage|the founder's sage|the twin|this counsel|counsel)\s+(?:has\s+)?(?:approve[sd]?|review(?:s|ed)|signs?\s+off|signed\s+off)\b`)
+	// codeSpan is inline code; command is one that reads as a shell command (a word, a space, more), not a path.
+	codeSpan = regexp.MustCompile("`([^`]+)`")
+	command  = regexp.MustCompile(`^[a-z][\w.-]*\s+\S`)
 	// recommends counts recommendation statements: a counsel makes one.
 	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b|\balternatively\b`)
 	// passive is the same claim in the passive ("the PR has been reviewed"), cited or not: a citation shows a source
@@ -136,12 +139,19 @@ func CheckStructure(md string) []string {
 	if _, r := find("Recommendation"); r != "" && (listItem.MatchString(r) || strings.Contains(r, "\n\n") || len(recommends.FindAllString(r, -1)) > 1) {
 		out = append(out, "the recommendation is more than one paragraph or a list; make one recommendation")
 	}
+	if _, next := find("Next step"); next != "" {
+		for _, m := range codeSpan.FindAllStringSubmatch(next, -1) {
+			if command.MatchString(m[1]) && !strings.HasPrefix(m[1], "aayu ") {
+				out = append(out, fmt.Sprintf("part %q: `%s` is not an aayu command; the next step goes through aayu", "Next step", m[1]))
+			}
+		}
+	}
 	if i, q := find("Your question"); i >= 0 {
 		if i != len(parts)-1 {
 			out = append(out, `the counsel must end with "## Your question"`)
 		}
-		if q != "" && (strings.Contains(q, "\n") || !strings.HasSuffix(q, "?")) {
-			out = append(out, "the question to answer is not one line ending in a question mark")
+		if q != "" && (strings.Contains(q, "\n") || !strings.HasSuffix(q, "?") || strings.Count(q, "?") > 1) {
+			out = append(out, "the question to answer is not one question on one line ending in a question mark")
 		}
 	}
 	for _, line := range strings.Split(md, "\n") {
