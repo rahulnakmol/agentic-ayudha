@@ -7,7 +7,8 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
 - **Proof before merge.** A merge gate runs fixed checks in your CI and sends each change, other than a change to
   documents only, to a review model from another vendor. Its one key lives in your repository's `code-review`
-  environment ([code review in the merge gate](docs/guide/how-review.md)).
+  environment ([code review in the merge gate](docs/guide/how-review.md)). A change from an author without write
+  access goes to an installed review app or a person instead.
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
   by default, merges a story's pull request once its checks, proof, and review pass. A long correction-free streak on
   every layer it touches also lets it merge, when none of those layers is in `[autonomy] never`. With merge on
