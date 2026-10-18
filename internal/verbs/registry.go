@@ -416,6 +416,14 @@ const (
 	ModelGemini = "gemini-3.8-flash"
 )
 
+// Model IDs as GitHub Copilot lists them (GET https://api.githubcopilot.com/models,
+// read 2026-10-18): Copilot names Claude models with a dot, the gateway with a dash.
+const (
+	CopilotClaudeOpus  = "claude-opus-5.5"
+	CopilotGPTSol      = "gpt-6.1-sol"
+	CopilotGeminiArgon = "gemini-4-argon"
+)
+
 // PeerReviewCandidates are the review-lane models inspect's peer mode picks
 // its second reviewer from, in order: the first whose family differs from the
 // builder's and the first reviewer's (WP4.8b).
@@ -490,11 +498,14 @@ var Lanes = []Lane{
 		reviewDefault(HostClaude),
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
-		// Copilot reviews with a model the person picks from a family other
-		// than the builder's, or with HydraFusion Critique when they opt in
-		// ([models.review.copilot]); a preview, so never the default.
-		{Host: HostCopilot, Model: CopilotIntelligence, ID: CopilotAutoIntelligence, Family: FamilyHostManaged,
-			Alternative: "a model from a family other than the builder's, picked in Copilot's model picker; or HydraFusion Critique, opt-in, which counts only when its recorded critic's family differs from the builder's"},
+		// Copilot reviews with a concrete model (--model) from a family the
+		// builder was not: Claude Opus 5.5 on a build with no Anthropic
+		// response, GPT-6.1 Sol on one with Anthropic but no OpenAI, Gemini 4
+		// Argon on one that used both, read from its Aayudha-Model lines (Auto
+		// picks per response). A build that used all three is reviewed
+		// same-family. HydraFusion Critique stays opt-in ([models.review.copilot]).
+		{Host: HostCopilot, Model: "Claude Opus 5.5", ID: CopilotClaudeOpus, Family: FamilyAnthropic,
+			Alternative: "GPT-6.1 Sol (" + CopilotGPTSol + ") when the builder is anthropic, Gemini 4 Argon (" + CopilotGeminiArgon + ") when it used both anthropic and openai", AlternativeID: CopilotGPTSol},
 	}},
 	// Interim model gemini-3.8-flash; the target is gemini-4-argon-high once the
 	// gateway routes it (ModelGemini, D-6.6b).
@@ -504,7 +515,11 @@ var Lanes = []Lane{
 		withPlan(geminiDefault(HostCursor), PlanLegacy),
 		geminiDefault(HostClaude),
 		geminiDefault(HostCodex),
-		copilotAuto(CopilotIntelligence, ""),
+		// Copilot lists gemini-3.8-flash too, so the founder's default holds
+		// there. Gemini 4 Argon through Copilot is opt-in until an Argon gating
+		// pair passes and the founder agrees.
+		{Host: HostCopilot, Model: "Gemini 3.8 Flash (high)", ID: ModelGemini, Family: FamilyGoogle, Effort: "high",
+			Alternative: "Gemini 4 Argon (" + CopilotGeminiArgon + "), opt-in with [models.ui-review.copilot] model = \"" + CopilotGeminiArgon + "\": about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed)", AlternativeID: CopilotGeminiArgon},
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},

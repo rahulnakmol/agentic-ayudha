@@ -74,8 +74,9 @@ You should see `PASS  copilot  GitHub Copilot has the aayudha hooks and trusts t
 ## Keep Copilot's account apart from aayu's
 
 Copilot CLI signs in with `COPILOT_GITHUB_TOKEN` first, then `GH_TOKEN`, then `GITHUB_TOKEN`, and only then with the
-account from `copilot login`. aayu never reads `COPILOT_GITHUB_TOKEN`. So when Copilot runs on a different account
-from the one aayu writes with, set that account's token as `COPILOT_GITHUB_TOKEN` and nothing else. If your shell
+account from `copilot login`. aayu never writes to GitHub with `COPILOT_GITHUB_TOKEN`: `aayu doctor` sends it only to
+Copilot's own models endpoint, to list the models Copilot enables. So when Copilot runs on a different account from
+the one aayu writes with, set that account's token as `COPILOT_GITHUB_TOKEN` and nothing else. If your shell
 exports `GH_TOKEN`, Copilot uses it ahead of your `copilot login`.
 
 `aayu doctor` says which sign-in Copilot uses, and fails if aayu's token is Copilot's own. You should see the `token`
@@ -84,20 +85,37 @@ row name the account aayu writes with, and the `copilot` row say
 
 ## Lanes and Auto tiers
 
-aayu cannot choose the model inside Copilot. Each lane maps to an Auto tier instead. Select it with `/model` in
-Copilot CLI (choose `auto`), start it with `copilot --model auto --auto-tier <tier>`, or pick Auto in VS Code's model
-picker:
+Copilot's own sessions choose the model per request. The build, spec, plan, and chore lanes map to an Auto tier, and
+the two review lanes name a model, so a review is from a family you can prove. Select a tier with `/model` in Copilot
+CLI (choose `auto`), start it with `copilot --model auto --auto-tier <tier>`, or pick Auto in VS Code's model picker.
+Start a review with `copilot --model <id>`:
 
-| Lane | Auto tier | Why |
+| Lane | On Copilot | Why |
 |---|---|---|
-| chore (triage, status, checks) | Efficiency | Cost first |
-| build, spec, plan | Balance, then Intelligence when a step needs more | Cost, quality, and speed together |
-| review, ui-review | Intelligence | Quality first |
+| chore (triage, status, checks) | Auto, Efficiency | Cost first |
+| build, spec, plan | Auto, Balance, then Intelligence when a step needs more | Cost, quality, and speed together |
+| review | `claude-opus-5.5` on an OpenAI build, `gpt-6.1-sol` on an Anthropic one, `gemini-4-argon` on a build that used both | A different family from the builder's |
+| ui-review | `gemini-3.8-flash` at high effort, the same as every host | The founder's default for all UI review |
 
 `aayu models show --host copilot` lists them. Copilot's paid plans take 10 % off a request answered through Auto.
 
-> **Honest status:** on the account that proved this, Auto offered one model, `gpt-6-luna`, at every tier, so the
-> three tiers ran the same model. Which models Auto chooses from is your organisation's Copilot settings.
+Auto picks a model for each prompt from the models your organisation enables. On 18 October 2026, with a hard
+reasoning-and-code prompt, Efficiency chose `gpt-6-luna` (1 premium request, 0.21 AI credits). Balance and Intelligence
+both chose `claude-opus-5.5` (15 premium requests and about 20 AI credits, about 0.20 USD, each). An earlier, simpler
+prompt ran on `gpt-6-luna` at every tier: that was Auto's choice for the prompt, not a limit of the account. Each figure
+is from Copilot CLI's own usage report for that run.
+
+**Gemini 4 Argon for UI review, opt-in.** Copilot lists `gemini-4-argon`, so the UI-review lane can use it without a
+Google plan. It stays opt-in until a gating run on it passes and the founder agrees:
+
+```toml
+[models.ui-review.copilot]
+model = "gemini-4-argon"
+```
+
+One UI-review call on it cost about 0.043 USD: Copilot charges AI credits for input at 2 USD per million tokens and
+visible output at 10 USD per million, and does not bill reasoning tokens. About 15,000 of a call's 19,000 input tokens
+are Copilot CLI's own prompt. The figure is from Copilot CLI's usage report for two such calls on 18 October 2026.
 
 ## Which model built it
 
@@ -120,13 +138,18 @@ review counts as a same-family review, which never raises how much aayu does on 
 
 Copilot gives you two ways to review with a different model family from the builder's:
 
-1. **Pick the model.** In Copilot's model picker, choose a model from a family other than the builder's. If the builder
-   was `gpt-6-luna`, `claude-haiku-4.5` is a different family. To make it the default, add this to
-   `.aayudha/config.toml`:
+1. **Name the model.** The review lane picks a family the builder was not, from the builder's `Aayudha-Model` lines:
+   `gpt-6.1-sol` reviews an Anthropic build, `claude-opus-5.5` an OpenAI one, and `gemini-4-argon` a build that used
+   both. A build that used all three families has no other family left, so its review is labelled same-family. Run
+   the review with that model, for example `copilot --model claude-opus-5.5`. A single Copilot plan covers every
+   reviewer when your organisation enables all three models. `aayu doctor`'s `copilot` row lists the families Copilot
+   enables for you and says which builds it can review in another family. It asks Copilot only when Copilot signs in
+   to github.com with a token from the environment (`COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`). To pin
+   another reviewer, set it in `.aayudha/config.toml`:
 
    ```toml
    [models.review.copilot]
-   model = "claude-haiku-4.5"
+   model = "claude-haiku-5.5"
    ```
 
 2. **HydraFusion Critique.** HydraFusion is a research preview in Copilot's model picker. For each prompt it picks a
@@ -144,9 +167,11 @@ Copilot gives you two ways to review with a different model family from the buil
 `build` records a Critique turn's critic as `Aayudha-Critic-Model: <model>`. It counts as a different-family review only
 when the critic's family is outside every builder family on the pull request.
 
-> **Honest status:** today `[models.review.copilot]` sets the reviewer you pick inside Copilot, and
-> `aayu models show --host copilot` shows it. `aayu inspect` reads every `Aayudha-Model` line, but it still runs
-> its own reviewer and does not yet read `Aayudha-Critic-Model`, so a Critique review does not count towards autonomy.
+> **Honest status:** the review lane names its model on Copilot, and `aayu models show --host copilot` shows it. The
+> merge gate takes its review from a reviewer app or from a person who is not the author, so a review you run in
+> your own Copilot session does not count towards autonomy yet. `aayu inspect` reads every `Aayudha-Model` line,
+> but it still runs its own reviewer and does not yet read `Aayudha-Critic-Model`, so a Critique review does not
+> count either.
 >
 > One trivial Critique turn cost 16 premium requests, against 1 for an Auto call. HydraFusion is
 > billed at each model's standard rate, gets no Auto discount, and has no SLA. You cannot choose its models: on the
