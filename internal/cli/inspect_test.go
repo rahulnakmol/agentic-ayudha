@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1558,19 +1560,25 @@ func TestInspectReviewerFallback(t *testing.T) {
 
 	// A transient failure (a 503) is retried once, after a pause, within the
 	// same call budget; a deadline cut is not, since a retry would hit it again.
+	// A stream reset by the peer is retried too, and no retry spends past the PR's [budget] per_pr_inspect_max (Codex's P2s on #697).
 	for _, c := range []struct {
 		err   error
 		calls int
 		code  int
-	}{{&models.StatusError{Code: 503, Body: "upstream busy"}, 2, 0}, {context.DeadlineExceeded, 1, ExitBlocked}} {
+		spent string
+	}{{&models.StatusError{Code: 503, Body: "upstream busy"}, 2, 0, ""}, {context.DeadlineExceeded, 1, ExitBlocked, ""},
+		{fmt.Errorf("read chat stream: %w", syscall.ECONNRESET), 2, 0, ""}, {&models.StatusError{Code: 503, Body: "upstream busy"}, 1, ExitBlocked, "4.995"}} {
 		g, env, opts, prN, model = setup()
+		if c.spent != "" {
+			addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":"+c.spent+",\"hashes\":[]} -->\n")
+		}
 		addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
 		flaky := &flakyClient{err: c.err, next: model}
 		opts.ModelClient = func(models.Route, string) models.Client { return flaky }
 		var paused []time.Duration
 		opts.Sleep = func(_ context.Context, d time.Duration) error { paused = append(paused, d); return nil }
 		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != c.code || flaky.calls != c.calls || len(paused) != c.calls-1 ||
-			(c.code == 0 && (res.Rung != inspect.RungB || !strings.Contains(errOut, "failed (status 503); retrying once in 10s"))) {
+			(c.code == 0 && (res.Rung != inspect.RungB || !strings.Contains(errOut, "; retrying once in 10s"))) {
 			t.Fatalf("rung B after %v: exit %d rung %q, %d calls, pauses %v %s", c.err, code, res.Rung, flaky.calls, paused, errOut)
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -601,7 +602,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}}
 	var served []string // the service tier of each reply ("" when it states none)
 	for _, m := range picked {
-		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, &served)})
+		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, l.Config.Budget.PerPRInspectMax-prev.SpentUSD, &served)})
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
@@ -1010,7 +1011,7 @@ func reviewEffort(model string, ic config.Inspect) string {
 // charged at the priority rate whatever tier the reply states, so
 // per_pr_inspect_max holds. Each reply's tier is appended to *served, which
 // the caller turns into a note with tierNote.
-func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
+func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, left float64, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
 	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
 	// Every attempt of every call in this review shares one CallTimeout,
 	// so a retry never outlasts the merge gate's inspect step.
@@ -1033,9 +1034,11 @@ func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story st
 					cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
 				return resp, spent, nil
 			}
-			// One retry for a transient failure, when time is left for a review.
+			// One retry for a transient failure, when time is left for a review
+			// and the PR's budget ([budget] per_pr_inspect_max, left of it before
+			// this review) still covers a second attempt as costly as the first.
 			wait, why := transient(err)
-			if attempt > 1 || why == "" || time.Until(deadline) < wait+retryFloor {
+			if attempt > 1 || why == "" || time.Until(deadline) < wait+retryFloor || left-spent < max(spent, 0.01) {
 				return resp, spent, err
 			}
 			fmt.Fprintf(e.Err, "inspect: %s failed (%s); retrying once in %s\n", model, why, wait)
@@ -1051,13 +1054,16 @@ const retryFloor = 3 * time.Minute
 
 // transient says whether a failed model call is worth one retry: a 429 or
 // 5xx reply (a proxy's 524 included), after its Retry-After capped at 30
-// seconds, or a stream that ended early. why names it without the endpoint;
+// seconds, or a stream that ended early or was reset. why names it without the endpoint;
 // "" means no retry (a deadline cut would hit the same limit again).
 func transient(err error) (time.Duration, string) {
 	if se := (*models.StatusError)(nil); errors.As(err, &se) && (se.Code == http.StatusTooManyRequests || se.Code >= 500) {
 		return min(cmp.Or(se.RetryAfter, 10*time.Second), 30*time.Second), fmt.Sprintf("status %d", se.Code)
 	}
-	if errors.Is(err, io.ErrUnexpectedEOF) {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return 0, ""
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 		return 10 * time.Second, "the stream ended early"
 	}
 	return 0, ""
