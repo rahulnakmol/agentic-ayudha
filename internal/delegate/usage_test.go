@@ -31,6 +31,8 @@ func TestUsageLimit(t *testing.T) {
 		{"claude, a limit with an unknown reset shape", "You've hit your limit · resets Oct 20 (America/Los_Angeles)", true, time.Time{}},
 		{"an API rate limit is not a subscription window", `Error: 429 {"type":"rate_limit_error","message":"This request would exceed your account's rate limit. Please try again later."}`, false, time.Time{}},
 		{"an ordinary failure", "error: go test ./... failed", false, time.Time{}},
+		{"a limit message echoed mid-run is not the CLI's error", "You've hit your limit · resets 8:10pm (America/Los_Angeles)\nrunning tests\nok 1\nok 2\nerror: go test failed", false, time.Time{}},
+		{"a limit message quoted inside a line is not the CLI's error", "> the story says: You’ve hit your usage limit. try again at 11:30 PM.", false, time.Time{}},
 	}
 	for _, tt := range tests {
 		limited, resets := UsageLimit(tt.out, now, london)

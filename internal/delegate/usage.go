@@ -21,9 +21,11 @@ import (
 //     issues 52612, 42003, 55597, 9048). A limit with another reset shape,
 //     such as a weekly one with a day, is still a limit, with no reset time.
 var (
-	codexLimit   = regexp.MustCompile(`You[’']ve hit your usage limit`)
+	// Each must start the CLI's own error line, one of its last lines, so text
+	// a model echoes from the (untrusted) story in mid-run is not a limit.
+	codexLimit   = regexp.MustCompile(`^(?:ERROR: )?You[’']ve hit your usage limit`)
 	codexAt      = regexp.MustCompile(`(?i)try again at ((?:[A-Z][a-z]{2} \d{1,2}(?:st|nd|rd|th), \d{4} )?\d{1,2}:\d{2} [AP]M)\.`)
-	claudeLimit  = regexp.MustCompile(`You[’']ve hit your limit|Claude usage limit reached`)
+	claudeLimit  = regexp.MustCompile(`^(?:Error: )?(?:You[’']ve hit your limit|Claude usage limit reached)`)
 	claudeResets = regexp.MustCompile(`(?i)(?:\bresets|will reset at) (\d{1,2})(?::(\d{2}))?\s*([ap]m) \(([A-Za-z]+(?:/[A-Za-z0-9_+-]+)+|UTC)\)`)
 	ordinal      = regexp.MustCompile(`(\d)(?:st|nd|rd|th),`)
 )
@@ -33,6 +35,21 @@ var (
 // does not). now is the current time; loc is the zone Codex prints its local
 // times in (the machine's).
 func UsageLimit(out string, now time.Time, loc *time.Location) (bool, time.Time) {
+	// The message is the CLI's exit error: one of the last three non-empty lines.
+	var tail []string
+	lines := strings.Split(strings.ReplaceAll(out, "\r\n", "\n"), "\n")
+	for i := len(lines) - 1; i >= 0 && len(tail) < 3; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			tail = append(tail, l)
+		}
+	}
+	out = ""
+	for _, l := range tail {
+		if codexLimit.MatchString(l) || claudeLimit.MatchString(l) {
+			out = l
+			break
+		}
+	}
 	switch {
 	case codexLimit.MatchString(out):
 		m := codexAt.FindStringSubmatch(out)
