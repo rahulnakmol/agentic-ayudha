@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,6 +47,25 @@ func reviewOf(s inspect.State) *Review {
 		}
 	}
 	return r
+}
+
+// GateWriter is the account the merge gate writes its inspect comment as
+// with the workflow's token; Source.GateWriters adds the bot App and the
+// machine user a repository configures.
+const GateWriter = "github-actions[bot]"
+
+// roundsOf is how many judged review rounds the merge gate's inspect comment
+// on PR p records (Story #568): the comment is kept in place, so the newest
+// one created before the merge holds the state at merge. Only the gate's own
+// comment counts, since anyone can post the marker. 0 is none recorded.
+func roundsOf(p autonomy.PR, writers []string) int {
+	n := 0
+	for _, c := range p.Comments {
+		if slices.ContainsFunc(append([]string{GateWriter}, writers...), func(w string) bool { return strings.EqualFold(w, c.Login) }) && strings.Contains(c.Body, inspect.Marker) && !cmp.Or(c.Updated, c.At).After(p.MergedAt) {
+			n = len(inspect.ParseState(c.Body).Rounds)
+		}
+	}
+	return n
 }
 
 // Bug is a Bug issue and the issue and PR numbers its body links.

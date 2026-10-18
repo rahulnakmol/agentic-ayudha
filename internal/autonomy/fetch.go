@@ -93,7 +93,7 @@ func Fetch(ctx context.Context, c *github.Client, repo string, r Rules, limit in
 			return nil, nil, err
 		}
 		for _, cm := range comments {
-			p.Comments = append(p.Comments, Comment{Body: cm.GetBody(), At: cm.GetCreatedAt().UTC()})
+			p.Comments = append(p.Comments, Comment{Body: cm.GetBody(), At: cm.GetCreatedAt().UTC(), Login: cm.GetUser().GetLogin(), Updated: cm.GetUpdatedAt().UTC()})
 		}
 		p.Rung = GateRung(ctx, c, owner, name, p.Number, p.Head)
 	}

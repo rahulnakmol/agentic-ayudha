@@ -300,7 +300,7 @@ Every card offers its choices and `s` to skip, so no card is a forced choice. Th
 |---|---|---|---|
 | Decision | an open Decision, a floor waiver, or a provisional one (V8) | the Decision's own Recommendation (ratify, for a provisional one) | `aayu decide <n> --accept <number>` |
 | Story PR ready to ship | `aayu ship` stopped on an open Story PR only for the human pass and commented "Ready to ship", and the merge gate is still green on that head | ship it (another: open it and review it) | `aayu ship <pr>`; in solo mode it first posts your `Solo-mode bypass:` comment and ships with `--solo-bypass` |
-| PR at the cycle cap | inspect ran its 2 fix/rebuild cycles on an open PR and stopped | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
+| PR whose review stopped | inspect's review ran 3 rounds on distinct heads without converging and asked the builder to step back | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
 | Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |
 | Bug with its fix merged | a PR merged into dev that links the open Bug | close it as completed | `status:done`, a "Fixed in #PR" comment, closed |
 | Replaced | another issue's body says "Replaces #N", and #N is still open | close it as not planned | `status:cancelled`, a "Replaced by #M" comment, closed |

@@ -3,6 +3,7 @@ package audit
 import (
 	"fmt"
 
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -230,8 +231,39 @@ func TestAuditReviewRungs(t *testing.T) {
 	for i := range d.AgentPRs {
 		d.AgentPRs[i].Rung = ""
 	}
-	if md = string(Build(in, d).Markdown()); strings.Contains(md, "Review rungs") {
-		t.Errorf("a report with no rung on record shows the rung line:\n%s", md)
+	if md = string(Build(in, d).Markdown()); strings.Contains(md, "Review rungs") || strings.Contains(md, "Review rounds") {
+		t.Errorf("a report with no rung or rounds on record shows the line:\n%s", md)
+	}
+	// Story #568, criterion 9: the rounds each agent merge's review took to
+	// pass, only for merges in the window that have rounds on record.
+	// The rounds come from the gate's inspect comment's state at merge: a
+	// review that failed on round 1 and passed on round 2 is 2, and a state
+	// comment created after the merge (a later re-run) is not read.
+	st := inspect.State{Rounds: []inspect.Round{{Head: "h1", Disposition: inspect.Fix}, {Head: "h2", Disposition: inspect.Merge}}}
+	later := inspect.State{Rounds: append(st.Rounds, inspect.Round{Head: "h3", Disposition: inspect.Merge})}
+	res := inspect.Result{PR: 2, Head: "h2", Disposition: inspect.Merge}
+	// Another account's marker comment is never read, even a newer one.
+	gate := "github-actions[bot]"
+	pr := autonomy.PR{Number: 2, MergedAt: at(7), Comments: []autonomy.Comment{{Body: "lgtm", At: at(6), Login: "founder"},
+		{Body: inspect.Comment(res, st, 5), At: at(6), Login: gate}, {Body: inspect.Comment(res, later, 5), At: at(6), Login: "mallory"},
+		{Body: inspect.Comment(res, later, 5), At: at(8), Login: gate}}}
+	if n := roundsOf(pr, nil); n != 2 {
+		t.Errorf("rounds of a review that passed on round 2: %d", n)
+	}
+	// Nor is one created before the merge and edited in place after it.
+	edited := autonomy.PR{Number: 2, MergedAt: at(7), Comments: append(slices.Clone(pr.Comments), autonomy.Comment{Body: inspect.Comment(res, later, 5), At: at(6), Updated: at(8), Login: gate})}
+	if n := roundsOf(edited, nil); n != 2 {
+		t.Errorf("rounds of a state edited after the merge: %d", n)
+	}
+	// The gate writing as the configured bot App counts too.
+	app := slices.Clone(pr.Comments)
+	app[1].Login, app[3].Login = "aayu-gate[bot]", "aayu-gate[bot]"
+	if n := roundsOf(autonomy.PR{Number: 2, MergedAt: at(7), Comments: app}, []string{"aayu-gate[bot]"}); n != 2 {
+		t.Errorf("rounds of the App-written state: %d", n)
+	}
+	d.AgentPRs[1].Rounds, d.AgentPRs[3].Rounds, d.AgentPRs[5].Rounds = roundsOf(pr, nil), 1, 3
+	if md, want := string(Build(in, d).Markdown()), "- Review rounds to pass of agent merges (Story #568, from each PR's inspect state at merge): #2 2; #4 1\n"; !strings.Contains(md, want) {
+		t.Errorf("report lacks %q:\n%s", want, md)
 	}
 }
 

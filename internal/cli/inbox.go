@@ -43,7 +43,7 @@ func init() { register("inbox", runInbox) }
 const (
 	InboxDecision  = "decision"  // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxReady     = "ready"     // an open Story PR that ship refused only for the human pass, its gate green
-	InboxCapped    = "capped"    // a PR at inspect's cycle cap, waiting for a person
+	InboxCapped    = "capped"    // a PR whose review stopped at the round cap (step-back), waiting for a person
 	InboxUnshipped = "unshipped" // a Story whose PR merged into dev without a ship record
 	InboxFixed     = "fixed"     // an open Bug whose fix merged into dev
 	InboxReplaced  = "replaced"  // an open Story or Bug that another issue replaces
@@ -537,7 +537,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				continue
 			}
 		}
-		if st.Cycles < inspect.MaxCycles {
+		if st.Stopped == "" {
 			continue
 		}
 		disp := "none recorded"
@@ -545,8 +545,8 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			disp = st.Result.Disposition
 		}
 		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
-			Evidence: p.GetHTMLURL(), f: inboxFacts{cycles: st.Cycles, disp: termText(disp)},
-			Why: fmt.Sprintf("inspect ran %d of %d fix/rebuild cycles and stopped (last disposition: %s); a person reviews it before anything else runs.", st.Cycles, inspect.MaxCycles, disp),
+			Evidence: p.GetHTMLURL(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
+			Why: fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
 			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
 				{N: 2, Label: fmt.Sprintf("ship PR #%d now (ship's gates still apply)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())}}})
 	}
@@ -745,10 +745,10 @@ func inboxCounsel(it InboxItem) string {
 			"every gate again before it merges, so nothing is skipped. Otherwise the PR waits unmerged, and its checks may need to run again.",
 			f.story, short(f.head), n)
 	case InboxCapped:
-		return fmt.Sprintf("What this is really about: an agent fix loop that stopped by design. The evidence: inspect ran %d of %d fix-and-rebuild "+
-			"cycles on PR #%d, and its last disposition was %q. I recommend opening it and reading the review yourself, because more agent cycles "+
+		return fmt.Sprintf("What this is really about: an agent fix loop that stopped by design. The evidence: inspect's review ran %d of %d rounds "+
+			"on PR #%d without converging, and its last disposition was %q. I recommend opening it and reading the review yourself, because more agent rounds "+
 			"did not settle it. Shipping it now is possible and ship's gates still apply, but you would be overriding the reason the loop stopped.",
-			f.cycles, inspect.MaxCycles, n, f.disp)
+			f.cycles, inspect.MaxRounds, n, f.disp)
 	case InboxUnshipped:
 		return fmt.Sprintf("Criterion: a Story merges through aayu ship, which saves a ship record and a person's pass. Condition: PR #%d merged "+
 			"into %s as commit %s without either, and Story #%d still reads status:%s. Effect: the board shows finished work as unfinished. "+

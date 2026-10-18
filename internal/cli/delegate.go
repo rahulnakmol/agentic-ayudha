@@ -673,7 +673,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, e.saveDelegation(ctx, d)
 	}
 	switch {
-	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
+	case (r == nil || r.Head != head) && (st.Cycles >= inspect.MaxCycles || st.Stopped != "" && st.Stopped == head):
 		// inspect stops at its cap and will not review this head: a human takes over.
 		d.event(now, dlgCapped, fmt.Sprintf("%d fix cycles; inspect will not review %s", st.Cycles, short(head)))
 		page(fmt.Sprintf("%d fix cycles reached the cap", st.Cycles))

@@ -201,19 +201,30 @@ untrusted data.
 5. **Fail closed.** No reply for the head is disposition `no-reply`; a reply in neither format, or a block that fails
    the schema, is `malformed-reply`. Both exit 4, so the check stays red; neither counts as a fix cycle.
 6. **Comment.** inspect keeps one comment on the pull request, marked `<!-- aayudha:inspect -->`, and replaces it in
-   place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, and the coverage manifest.
-   Anyone can post the marker, so the state counts only from a comment by the merge gate's identity (the workflow
-   token, the bot App, or the machine user) or by the account the run writes as. That holds for inspect in and out
-   of the gate, `inspect --dismiss`, the inbox, a delegated build's follow-up, and `brief`.
+   place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, the review rounds, and the
+   coverage manifest. Anyone can post the marker, so the state counts only from a comment by the merge gate's identity
+   (the workflow token, the bot App, or the machine user) or by the account the run writes as. That holds for inspect
+   in and out of the gate, `inspect --dismiss`, the inbox, a delegated build's follow-up, and `brief`.
 
-State drives two limits:
+State drives three limits:
 
 - **Cache.** The input hash covers the diff, the pack's head, Completion Goal hash, and checks, the criteria, and
   the reply it read. Same inputs, same verdict.
-- **Cycle cap.** Each `fix` or `rebuild` on a new input counts one cycle. After two, the next run pages a human and
-  exits 4. A `delegate` sync shares the cap with failed required checks it sends back to the builder: when a required
-  check fails on a delegated pull request's head, the sync sends its log tail, redacted and quoted as data, to the
+- **Cycle cap.** Each `fix` or `rebuild` on a new input counts one cycle. A `delegate` sync sends inspect's findings
+  back to the receiver for two cycles, then pages a human and exits 4. It shares the cap with failed required checks it
+  sends back to the builder: when a required check fails on a delegated pull request's head, the sync sends its log tail, redacted and quoted as data, to the
   builder once per head (`protected-paths` and inspect are not sent). The merge gate still decides.
+- **Round cap.** A round is one judged review of a distinct head. After three rounds since the last reopen, the next
+  head gets no review request and no judged reply: the disposition is `step-back`, inspect exits 4, and the builder
+  reconsiders the approach. A comment whose first line is `/aayu review again`, from a person with write or admin
+  access to the repository, reopens review for three more rounds; a bot's or a read-only account's does not. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
+  lists the earlier findings under "do not repeat". A reply that repeats an earlier P2 or P3 in the same file and
+  class has it dropped as `repeat`; a repeated P0 or P1 still blocks but is not posted inline again. A finding that
+  names a `class` lists every instance and asks for all of them to be fixed.
+- **Pre-existing findings.** A finding whose quote is an unchanged context line of the diff is pre-existing, whether or
+  not it names a criterion: it never changes the disposition and is listed apart. Outside CI, inspect files them as
+  one Bug naming the commit `git blame` gives for each line (`priority:P1`, and a page for a P0 security finding), once.
+  `aayu audit` reports the rounds each agent merge's review took to pass.
 
 inspect exits 0 on `merge` and 4 on anything else, so its check stays red until the reviewer says `merge`.
 
@@ -391,8 +402,8 @@ fixed head, returned `merge`, and the spend covers both calls.
    `TestInspectThroughApp`, `TestBuilderOf`, `TestShipAutonomousFootprint`).
 5. No model disposition overrides a floor, a P0 or P1 finding, or an unmet criterion. Enforced by `Enforce` in
    [internal/inspect/inspect.go](../../internal/inspect/inspect.go), `TestInspectDispositions`.
-6. Same inputs give the same verdict; after two cycles inspect pages; a changed file the reviewer did not review
-   fails the gate. Enforced in [internal/inspect/inspect.go](../../internal/inspect/inspect.go) and
+6. Same inputs give the same verdict; after three review rounds inspect steps back and pages until a person reopens
+   review; a changed file the reviewer did not review fails the gate. Enforced in [internal/inspect/inspect.go](../../internal/inspect/inspect.go) and
    [internal/inspect/coverage.go](../../internal/inspect/coverage.go), `TestInspectDispositions` and
    `TestCoverageManifest`.
 7. `ship` merges only with the three gate checks green on the head and the pack from this workflow's own

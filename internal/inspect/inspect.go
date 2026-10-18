@@ -14,9 +14,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -31,11 +33,25 @@ const (
 	Fix     = "fix"
 	Rebuild = "rebuild"
 	Skipped = "skipped" // drafts are not inspected
+	// StepBack is a fix disposition for the merge gate: the review stopped
+	// after MaxRounds rounds, and the builder reconsiders the approach
+	// (Decision #544, point 1).
+	StepBack = "step-back"
 )
 
-// MaxCycles is how many fix/rebuild cycles inspect runs before it pages a
-// human instead of calling the model again.
+// MaxCycles is how many fix cycles a delegated build's follow-ups (inspect's
+// findings and failed required checks) run before a person takes over.
 const MaxCycles = 2
+
+// MaxRounds is how many rounds a review runs, a round being one judged
+// reply (or model review) on a distinct head. After it inspect requests no
+// review and gives step-back, until a person's ReopenCommand (Decision #544).
+const MaxRounds = 3
+
+// ReopenCommand, as the first line of a PR comment by a person with write
+// access to the repository, reopens a review
+// that stopped at MaxRounds for MaxRounds more rounds.
+const ReopenCommand = "/aayu review again"
 
 // Finding is one problem the reviewer found. The model gives the quote; aayu
 // resolves the line from it (WP4.8b), assigns the ID, and records which
@@ -54,6 +70,20 @@ type Finding struct {
 	Criterion  int      `json:"criterion"`          // 0 when not tied to a criterion
 	Sources    []string `json:"sources,omitempty"`  // reviewers that raised it: A, B
 	Disputed   string   `json:"disputed,omitempty"` // the peer's refutation of a protected P0 kept anyway
+	// Class names the kind of bug ("static methods treated as private") and
+	// Instances every place of that class in the PR, all of which the author
+	// fixes (a reviewer app's stated reply; Decision #544).
+	Class     string     `json:"class,omitempty"`
+	Instances []Instance `json:"instances,omitempty"`
+	// Repeat is the earlier round that reported this P0 or P1 finding: it
+	// still counts, but is not posted again.
+	Repeat int `json:"repeat,omitempty"`
+}
+
+// Instance is one place of a finding's class.
+type Instance struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
 }
 
 // Verdict judges one Completion Goal criterion against its evidence.
@@ -113,7 +143,7 @@ Report each real defect once:
 
 Test files: do not report a missing, thin, or weak test as a finding on a test file. Judge it in the criterion it concerns: "unclear" or "unmet", with the gap as the evidence.
 
-Precision matters more than volume: every wrong finding costs the author a fix cycle. Do not report what the deterministic floors and linters already check (formatting, naming, imports, typos, unused code, coverage numbers), problems in code the pull request does not change, or anything you cannot point at with a quoted line.
+Precision matters more than volume: every wrong finding costs the author a fix cycle. Do not report what the deterministic floors and linters already check (formatting, naming, imports, typos, unused code, coverage numbers), or anything you cannot point at with a quoted line. A real defect on a line the pull request does not change is pre-existing: report it, quoting that line, and it will be listed apart without changing the disposition.
 
 Disposition: "merge" when there is no P0 or P1 finding and every criterion is met; "fix" when the PR addresses the story but has defects or missing evidence that can be fixed in this PR; "rebuild" when the approach is wrong or the PR does not implement the story.
 
@@ -137,6 +167,11 @@ type Input struct {
 	Files      []DiffFile        // the parsed diff; ParseDiff(Diff) when nil
 	Areas      []Area            // the review plan and retrieved context (BuildContext)
 	Dismissed  []Dismissal       // this repository's dismissed findings
+	// Head is the PR head under review, At when this inspection runs, and
+	// Reopened the newest person's ReopenCommand (zero: none): the round cap.
+	Head     string
+	At       time.Time
+	Reopened time.Time
 	// Voice is the Accountable seat's persona for the summary (the Engineering
 	// Manager twin, WP5.1b) with the evidence rule; empty: no persona.
 	Voice string
@@ -181,6 +216,7 @@ type Result struct {
 	DiffHash    string    `json:"diff_hash"`
 	Cached      bool      `json:"cached,omitempty"`
 	Cycle       int       `json:"cycle"`
+	Round       int       `json:"round,omitempty"` // the review round this result is (rounds-to-pass on a merge)
 	CostUSD     float64   `json:"cost_usd"`
 	Next        string    `json:"next,omitempty"` // the re-entry step
 	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
@@ -203,17 +239,123 @@ type State struct {
 	Cycles   int      `json:"cycles"`    // fix/rebuild dispositions on distinct diffs
 	SpentUSD float64  `json:"spent_usd"` // model spend on this PR across cycles ([budget] per_pr_inspect_max)
 	Hashes   []string `json:"hashes"`
-	Posted   []string `json:"posted,omitempty"` // finding IDs already posted as inline review comments
+	Posted   []string `json:"posted,omitempty"`  // finding IDs already posted as inline review comments
+	Rounds   []Round  `json:"rounds,omitempty"`  // one per judged head, in order
+	Stopped  string   `json:"stopped,omitempty"` // the head the review stopped at (step-back)
 	// PaidFailed is the head whose paid review ([inspect] paid_reviewer)
 	// failed: later runs on that head leave it to the reviewer app rather
 	// than start another full paid run. A new head tries again.
 	PaidFailed string `json:"paid_failed,omitempty"`
+	// Reopened is the last reopen a judged round followed (RFC 3339): kept,
+	// so a later round that rewrites an older head's time cannot undo it.
+	Reopened string `json:"reopened,omitempty"`
+}
+
+// Round is one review round: a judged reply or model review on a distinct
+// head, with the findings it kept, which a later round must not repeat.
+type Round struct {
+	Head        string    `json:"head"`
+	At          string    `json:"at,omitempty"`
+	Disposition string    `json:"disposition"`
+	Findings    []Earlier `json:"findings,omitempty"`
+	// Covered is each file the round's manifest marks reviewed, with the
+	// hash of its patch in the PR diff (FileHash): a later diff-only round
+	// keeps it reviewed while its patch is unchanged.
+	Covered map[string]string `json:"covered,omitempty"`
+}
+
+// Earlier is a finding an earlier round kept, as later rounds compare it.
+type Earlier struct {
+	ID       string `json:"id"`
+	Severity string `json:"severity"`
+	Category string `json:"category"`
+	File     string `json:"file"`
+	Line     int    `json:"line,omitempty"`
+	Title    string `json:"title"`
+	Class    string `json:"class,omitempty"`
+}
+
+// Since is how many rounds ran after the person's reopen at t (all of them
+// when t is zero).
+func (st State) Since(t time.Time) int {
+	n := 0
+	for _, r := range st.Rounds {
+		if r.after(t) {
+			n++
+		}
+	}
+	return n
+}
+
+// after reports whether the round was judged after t (every round when t is
+// zero, and one whose time does not parse).
+func (r Round) after(t time.Time) bool {
+	at, err := time.Parse(time.RFC3339, r.At)
+	return t.IsZero() || err != nil || at.After(t)
+}
+
+// Reopen is when the review was last reopened: the newest of cmds (the times
+// of a person's reopen commands, any order) that found the review stopped,
+// with MaxRounds rounds judged between the previous reopen and the command.
+// A command before the cap reopens nothing, so it cannot stretch the limit.
+func (st State) Reopen(cmds []time.Time) time.Time {
+	cmds = slices.Clone(cmds)
+	slices.SortFunc(cmds, time.Time.Compare)
+	t, _ := time.Parse(time.RFC3339, st.Reopened)
+	for _, c := range cmds {
+		if !c.After(t) {
+			continue
+		}
+		n := 0
+		for _, r := range st.Rounds {
+			at, err := time.Parse(time.RFC3339, r.At)
+			if err != nil || (t.IsZero() || at.After(t)) && !at.After(c) {
+				n++
+			}
+		}
+		if n >= MaxRounds {
+			t = c
+		}
+	}
+	return t
+}
+
+// Capped reports whether a review of head would be a round past MaxRounds:
+// MaxRounds rounds ran since the last reopen and none of them was of head. A
+// head judged only before the reopen is a new round in this window.
+func (st State) Capped(head string, reopened time.Time) bool {
+	if head == "" || st.Since(reopened) < MaxRounds {
+		return false
+	}
+	return !st.Judged(head, reopened)
+}
+
+// Judged reports whether head has a round judged after the reopen at t.
+func (st State) Judged(head string, t time.Time) bool {
+	return slices.ContainsFunc(st.Rounds, func(r Round) bool { return r.Head == head && r.after(t) })
+}
+
+// LastHead is the head of the newest round that is not head ("" when none).
+func (st State) LastHead(head string) string {
+	for i := len(st.Rounds) - 1; i >= 0; i-- {
+		if st.Rounds[i].Head != head {
+			return st.Rounds[i].Head
+		}
+	}
+	return ""
+}
+
+// StepBackResult is the inspection of a head past the round cap: no review,
+// a fix disposition that asks the builder to reconsider the approach.
+func StepBackResult(pr int, head string, st State) Result {
+	return Result{PR: pr, Head: head, Disposition: StepBack, Findings: []Finding{}, Criteria: []Verdict{}, Round: len(st.Rounds),
+		Summary: fmt.Sprintf("The review ran %d rounds on distinct heads without converging, so inspect requests no further review of `%s`.", MaxRounds, short(head)),
+		Next:    fmt.Sprintf("step back: reconsider the approach rather than fixing the next finding (fix every instance of each finding's class, or rebuild); a person's `%s` comment reopens review for %d more rounds", ReopenCommand, MaxRounds)}
 }
 
 // Errors.
 var (
 	ErrBudget = errors.New("[budget] per_pr_inspect_max reached for this PR")
-	ErrCycles = fmt.Errorf("inspect ran %d fix/rebuild cycles on this PR; a human must look before it runs again", MaxCycles)
 	ErrNoPack = errors.New("no proof pack for the PR head: run the merge gate (or `aayu verify`) first")
 )
 
@@ -257,7 +399,7 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	// The Aayudha-Host and Aayudha-Model lines are aayu's own metadata: a
 	// changed declaration relabels the cached review's rung instead.
 	res, st, err := r.begin(ctx, &in, prev, "pr\x00"+in.Title+"\x00"+strings.Join(strings.Fields(declLine.ReplaceAllString(in.Body, "")), " "))
-	if err != nil || res.Disposition == Skipped || res.Cached {
+	if err != nil || res.Disposition == Skipped || res.Disposition == StepBack || res.Cached {
 		return res, st, err
 	}
 	if len(r.Reviewers) == 0 {
@@ -290,7 +432,7 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 // reviewed seal the manifest. No model is called.
 func (r Runner) Judge(ctx context.Context, in Input, prev State, rep AppReply) (Result, State, error) {
 	res, st, err := r.begin(ctx, &in, prev, rep.Source)
-	if err != nil || res.Disposition == Skipped || res.Cached {
+	if err != nil || res.Disposition == Skipped || res.Disposition == StepBack || res.Cached {
 		return res, st, err
 	}
 	res.Mode, res.Plan, res.Model, res.Reviewers = ModeGeneral, in.Areas, rep.Login, []string{rep.Login}
@@ -328,18 +470,26 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 		h := sha256.Sum256([]byte(res.DiffHash + "\x00" + salt))
 		res.DiffHash = hex.EncodeToString(h[:])
 	}
-	if prev.Result != nil && prev.DiffHash == res.DiffHash {
+	// The round cap comes before the cache: a new head past the cap steps
+	// back even when its diff matches the last review's (an empty commit).
+	st := prev
+	if prev.Capped(in.Head, in.Reopened) {
+		out, st := StepBackResult(in.PR, in.Head, prev), prev
+		// The stored result is the step-back, so nothing reading the state
+		// (delegate, brief, ship) sees an earlier round's merge on this head.
+		out.DiffHash, st.Stopped = res.DiffHash, in.Head
+		cp := out
+		st.Result = &cp
+		if r.Page != nil && prev.Stopped != in.Head {
+			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d stopped after %d review rounds", in.PR, MaxRounds),
+				fmt.Sprintf("%s#%d ran %d review rounds without converging; inspect asks the builder to step back. Reopen with a `%s` comment.", in.Repo, in.PR, MaxRounds, ReopenCommand))
+		}
+		return out, st, nil
+	}
+	if prev.Result != nil && prev.DiffHash == res.DiffHash && prev.Result.Disposition != StepBack {
 		out := *prev.Result
 		out.Cached, out.CostUSD = true, 0
 		return out, prev, nil
-	}
-	st := prev
-	if prev.Cycles >= MaxCycles {
-		if r.Page != nil {
-			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d hit the %d-cycle cap", in.PR, MaxCycles),
-				fmt.Sprintf("%s#%d had %d fix/rebuild cycles; inspect stops reviewing until a human reviews it.", in.Repo, in.PR, prev.Cycles))
-		}
-		return res, st, ErrCycles
 	}
 	if r.MaxUSD > 0 && prev.SpentUSD >= r.MaxUSD {
 		if r.Page != nil {
@@ -354,12 +504,34 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 // suppression, test-gap verdicts, the sealed coverage manifest, the fix lift,
 // rule 7, and the cycle count.
 func (r Runner) finish(in Input, prev, st State, res Result, covered func(string) bool) (Result, State, error) {
-	var sup []Dropped
+	var sup, rep []Dropped
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
-	res.Dropped = append(res.Dropped, sup...)
+	res.Findings, rep = Repeats(res.Findings, prev.Rounds, in.Head, in.Reopened)
+	res.Dropped = append(append(res.Dropped, sup...), rep...)
 	TestGapVerdicts(&res)
-	m := Seal(in.Files, in.Areas, r.Filter, in.Pack != nil && len(in.Pack.Criteria) > 0, covered)
+	// From round 2 the reviewer reads only the change since the last head,
+	// so a file an earlier round reviewed stays reviewed while its patch in
+	// the PR diff is byte for byte the same; any change to it, a rebase
+	// included, needs a review again.
+	hashes, before := map[string]string{}, map[string]string{}
+	for _, f := range in.Files {
+		hashes[f.Path] = FileHash(f)
+	}
+	for _, rd := range prev.Rounds {
+		if rd.Head != in.Head {
+			maps.Copy(before, rd.Covered)
+		}
+	}
+	m := Seal(in.Files, in.Areas, r.Filter, in.Pack != nil && len(in.Pack.Criteria) > 0, func(p string) bool {
+		return covered(p) || before[p] != "" && before[p] == hashes[p]
+	})
 	res.Coverage = &m
+	reviewed := map[string]string{}
+	for _, c := range m.Files {
+		if c.Status == Reviewed {
+			reviewed[c.Path] = hashes[c.Path]
+		}
+	}
 	liftFix(&res)
 	st.SpentUSD += res.CostUSD
 	if res.Findings == nil {
@@ -375,6 +547,23 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 		st.Cycles++
 	}
 	res.Cycle = st.Cycles
+	st.Stopped = ""
+	if r, _ := time.Parse(time.RFC3339, st.Reopened); in.Reopened.After(r) {
+		st.Reopened = in.Reopened.UTC().Format(time.RFC3339)
+	}
+	if in.Head != "" {
+		rd := Round{Head: in.Head, Disposition: res.Disposition, Findings: earlier(res.Findings), Covered: reviewed}
+		if !in.At.IsZero() {
+			rd.At = in.At.UTC().Format(time.RFC3339)
+		}
+		st.Rounds = slices.Clone(prev.Rounds)
+		// Another reply on a head already reviewed in this reopen window,
+		// even one a force-push returned to, is that head's round again, not
+		// a new one; it moves to the end, so the newest round is the last
+		// reviewed head. A round before the reopen stays: it was a round.
+		st.Rounds = append(slices.DeleteFunc(st.Rounds, func(r Round) bool { return r.Head == in.Head && r.after(in.Reopened) }), rd)
+		res.Round = len(st.Rounds)
+	}
 	switch res.Disposition {
 	case Fix:
 		res.Next = "fix in this PR (the builder, or the delegated agent through `build --delegate`); the merge gate re-runs inspect on the new head"
@@ -467,16 +656,19 @@ func liftFix(res *Result) {
 			continue
 		}
 		switch d.Why {
-		case DropRefuted, DropDismissed, DropTestGap, DropTestValue:
+		case DropRefuted, DropDismissed, DropTestGap, DropTestValue, DropPreExisting:
 			shown++
-		case DropDuplicate:
+		case DropDuplicate, DropRepeat:
+			// A repeat is the earlier round's finding raised again: hiding it
+			// from the comment shows nothing about whether it was fixed, so
+			// the reviewer's fix stands.
 		default:
 			return
 		}
 	}
 	if shown > 0 {
 		res.Disposition = Merge
-		res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: the %d finding(s) behind it were refuted by the peer reviewer, match human dismissals, or are test gaps and test-value counts judged elsewhere", shown))
+		res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: the %d finding(s) behind it were refuted by the peer reviewer, match human dismissals, are pre-existing, or are test gaps and test-value counts judged elsewhere", shown))
 	}
 }
 
@@ -729,7 +921,27 @@ func Comment(res Result, st State, maxUSD float64) string {
 			if f.Disputed != "" {
 				what += " **disputed:** " + cell(f.Disputed)
 			}
+			if f.Class != "" {
+				what += " **class:** " + cell(f.Class)
+				if len(f.Instances) > 0 {
+					var at []string
+					for _, x := range f.Instances {
+						at = append(at, fmt.Sprintf("`%s:%d`", cell(x.File), x.Line))
+					}
+					what += "; fix every instance: " + strings.Join(at, ", ")
+				}
+			}
+			if f.Repeat > 0 {
+				what += fmt.Sprintf(" (reported in round %d)", f.Repeat)
+			}
 			fmt.Fprintf(&b, "| `%s` | %s %s | `%s:%d` | %s | %s |\n", f.ID, f.Severity, f.Category, f.File, f.Line, what, cell(f.Fix))
+		}
+		b.WriteString("\n")
+	}
+	if pre := PreExisting(res); len(pre) > 0 {
+		b.WriteString("**Pre-existing** (on lines this PR does not change; they never block it, and `aayu inspect` files them as one Bug):\n\n| ID | Severity | Where | Finding |\n|---|---|---|---|\n")
+		for _, f := range pre {
+			fmt.Fprintf(&b, "| `%s` | %s %s | `%s:%d` | %s |\n", f.ID, f.Severity, f.Category, f.File, f.Line, cell(f.Title)+": "+cell(f.Detail))
 		}
 		b.WriteString("\n")
 	}
@@ -781,10 +993,21 @@ func Comment(res Result, st State, maxUSD float64) string {
 	if len(res.Reviewers) > 1 {
 		who = "Reviewers `" + strings.Join(res.Reviewers, "` and `") + "` (peer mode)"
 	}
-	fmt.Fprintf(&b, "%s · cycle %d of %d · spent %.2f of %.2f USD on this PR · inputs `%s`\n", who, st.Cycles, MaxCycles, st.SpentUSD, maxUSD, short(res.DiffHash))
+	fmt.Fprintf(&b, "%s · round %d of %d · spent %.2f of %.2f USD on this PR · inputs `%s`\n", who, len(st.Rounds), MaxRounds, st.SpentUSD, maxUSD, short(res.DiffHash))
 	j, _ := json.Marshal(st)
 	fmt.Fprintf(&b, "\n<!-- aayudha:inspect-state %s -->\n", strings.ReplaceAll(string(j), "-->", "--\\u003e"))
 	return b.String()
+}
+
+// PreExisting is the result's findings on lines the PR leaves unchanged.
+func PreExisting(res Result) []Finding {
+	var out []Finding
+	for _, d := range res.Dropped {
+		if d.Why == DropPreExisting {
+			out = append(out, d.Finding)
+		}
+	}
+	return out
 }
 
 // Inline is one review comment on a line of the PR's diff.
@@ -804,7 +1027,7 @@ const FindingMarker = "<!-- aayudha:finding id="
 func InlineComments(res Result, posted []string) []Inline {
 	var out []Inline
 	for _, f := range res.Findings {
-		if f.Line == 0 || f.Severity == "P3" || slices.Contains(posted, f.ID) {
+		if f.Line == 0 || f.Severity == "P3" || f.Repeat > 0 || slices.Contains(posted, f.ID) {
 			continue
 		}
 		var b strings.Builder

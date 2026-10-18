@@ -729,7 +729,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		for _, l := range ls {
 			labels = append(labels, l.(string))
 		}
-		reply(201, g.addIssue(str("title"), str("body"), labels))
+		is := g.addIssue(str("title"), str("body"), labels)
+		if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+			is.User = Account{Login: a.Login, Type: a.Type}
+		}
+		reply(201, is)
 	case m == "GET" && reCheckRuns.MatchString(p):
 		runs := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]]
 		if runs == nil {

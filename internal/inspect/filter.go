@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Finding categories. Style belongs to the linters and formatters; security,
@@ -35,6 +36,8 @@ const (
 	DropRefuted       = "refuted"        // the peer reviewer showed it is wrong (peer mode)
 	DropTestGap       = "test-gap"       // a missing or weak test noted on a test file: judged in the criterion's verdict instead
 	DropTestValue     = "test-value"     // a test that only restates the code: counted, never posted
+	DropPreExisting   = "pre-existing"   // its line is unchanged by the PR: listed, never blocks (Decision #544)
+	DropRepeat        = "repeat"         // a P2 or P3 an earlier round reported: counted, never posted
 )
 
 // Dropped is a finding that was not posted, and why.
@@ -157,7 +160,7 @@ func (fl Filter) Clean(fs []Finding, diff []DiffFile, areas []Area, reviewer str
 			drop = append(drop, Dropped{f, DropOutsideDiff})
 			continue
 		}
-		if n := df.Find(f.Quote); n > 0 {
+		if n := df.Find(f.Quote, f.Line); n > 0 {
 			f.Line = n
 		} else if !df.Has(f.Line) {
 			f.Line = 0 // unanchored: posted in the summary, never inline
@@ -176,12 +179,71 @@ func (fl Filter) Clean(fs []Finding, diff []DiffFile, areas []Area, reviewer str
 			drop = append(drop, Dropped{f, DropLowConfidence})
 		case f.Severity == "P3":
 			drop = append(drop, Dropped{f, DropNit})
+		case f.Line > 0 && !df.AddedAt(f.Line):
+			// The quoted line is a context line the PR leaves unchanged,
+			// whether or not the finding names a criterion (the criterion's
+			// own verdict still counts). It comes after the noise rules, so
+			// only a finding that would count on an added line is filed as a
+			// pre-existing defect. A quote found nowhere stays an unanchored
+			// finding of this PR, so a paraphrased quote never hides a defect
+			// the PR wrote.
+			drop = append(drop, Dropped{f, DropPreExisting})
 		default:
 			keep = append(keep, f)
 		}
 	}
 	keep, dups := Dedupe(keep)
 	return keep, append(drop, dups...)
+}
+
+// Repeats drops the findings that repeat a finding an earlier round kept
+// (one on another head than head, or on head before the reopen at reopened):
+// the same file and fingerprint, class, similar title, or category at a
+// nearby line. A repeated P2 or P3 is dropped as repeat; a repeated P0 or P1
+// still counts (rule 7: no reviewer text removes it), marked with its round
+// so it is not posted again.
+func Repeats(fs []Finding, rounds []Round, head string, reopened time.Time) (keep []Finding, drop []Dropped) {
+	for _, f := range fs {
+		round := 0
+		for i, r := range rounds {
+			if r.Head == head && r.after(reopened) {
+				continue
+			}
+			for _, e := range r.Findings {
+				if repeats(f, e) {
+					round = i + 1
+				}
+			}
+		}
+		switch {
+		case round == 0:
+			keep = append(keep, f)
+		case f.Severity == "P0" || f.Severity == "P1":
+			f.Repeat = round
+			keep = append(keep, f)
+		default:
+			drop = append(drop, Dropped{f, DropRepeat})
+		}
+	}
+	return keep, drop
+}
+
+func repeats(f Finding, e Earlier) bool {
+	if f.File != e.File {
+		return false
+	}
+	near := f.Line != 0 && e.Line != 0 && abs(f.Line-e.Line) <= 3
+	return f.ID == e.ID || (f.Class != "" && strings.EqualFold(f.Class, e.Class)) ||
+		jaccard(stems(f.Title), stems(e.Title)) >= 0.35 || (f.Category == e.Category && near)
+}
+
+// earlier is what a round keeps of its findings for later rounds.
+func earlier(fs []Finding) []Earlier {
+	var out []Earlier
+	for _, f := range fs {
+		out = append(out, Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200)})
+	}
+	return out
 }
 
 func (fl Filter) isGenerated(p string) bool {

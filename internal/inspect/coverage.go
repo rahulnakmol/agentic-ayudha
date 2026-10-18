@@ -73,6 +73,14 @@ func Seal(files []DiffFile, areas []Area, fl Filter, criteria bool, covered func
 	return m
 }
 
+// FileHash is the hash of one file's patch in a diff: its paths, whether it
+// is new or deleted, and every hunk.
+func FileHash(f DiffFile) string {
+	b, _ := json.Marshal(f)
+	s := sha256.Sum256(b)
+	return hex.EncodeToString(s[:8])
+}
+
 // Unreviewed lists the manifest's unreviewed files.
 func (m *Manifest) Unreviewed() []string {
 	if m == nil {

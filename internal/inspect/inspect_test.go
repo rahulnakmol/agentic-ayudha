@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -24,7 +25,8 @@ const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/perce
 +	if total < 0 {
 +		return 0
 +	}
- 	return float64(covered) / float64(total) * 100
+-	return float64(covered) / float64(total) * 100
++	return float64(covered) / float64(total) * 100
  }
 diff --git a/LAYERS.md b/LAYERS.md
 --- a/LAYERS.md
@@ -115,6 +117,14 @@ func TestGeneralModeFilters(t *testing.T) {
 	if len(InlineComments(res, []string{res.Findings[0].ID})) != 0 {
 		t.Fatal("a finding already posted is posted again")
 	}
+	// A reviewer's line where its quote is stands, even when the same text
+	// is also on an added line: the P1 on the unchanged closing brace (line
+	// 5) is pre-existing, not moved to the added one (line 4).
+	diff := ParseDiff("diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1,4 +1,6 @@\n func f() {\n \tif x {\n+\t\ty()\n+\t}\n }\n")
+	brace := Finding{Severity: "P1", Category: "bug", File: "a.go", Line: 5, Quote: "}", Title: "f never returns", Confidence: 0.9}
+	if keep, drop := (Filter{}).Clean([]Finding{brace}, diff, nil, ""); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropPreExisting || drop[0].Line != 5 {
+		t.Fatalf("an anchored context-line quote: kept %+v, dropped %+v", keep, drop)
+	}
 }
 
 // The model reads the PR's title and body, so an edit of either reaches it
@@ -139,6 +149,55 @@ func TestRunCacheKeyCoversPRText(t *testing.T) {
 	in.Title = "Add Percent; it now also rounds"
 	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 3 {
 		t.Fatalf("an edited title: cached %v, %d calls", res.Cached, *calls)
+	}
+}
+
+// Story #568: a new head past the round cap steps back even when its inputs
+// match the last review's, so an empty commit cannot reuse a cached merge.
+func TestRunCapBeforeCache(t *testing.T) {
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in, st := testInput(""), State{}
+	for _, h := range []string{"a", "b", "c"} {
+		in.Body += h // a new input each round
+		in.Head = strings.Repeat(h, 40)
+		var err error
+		if _, st, err = r.Run(context.Background(), in, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in.Head = strings.Repeat("d", 40) // the same inputs as round 3, a new head
+	res, capped, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != StepBack || res.Cached || *calls != 3 {
+		t.Fatalf("a fourth head with round 3's inputs: %s cached %v, %d calls", res.Disposition, res.Cached, *calls)
+	}
+	// The state records the step-back, not round 3's merge: delegate and
+	// brief read it as this head's result.
+	if capped.Result == nil || capped.Result.Disposition != StepBack || capped.Result.Head != in.Head {
+		t.Fatalf("the capped state's result: %+v", capped.Result)
+	}
+	// A repeated finding is hidden, not resolved: a reviewer's fix with only
+	// a repeated P2 behind it stays fix.
+	rep := Result{Disposition: Fix, Dropped: []Dropped{{Finding{Severity: "P2", Category: "security", Title: "token logged"}, DropRepeat}}}
+	if liftFix(&rep); rep.Disposition != Fix {
+		t.Fatalf("a repeat lifted the fix: %s", rep.Disposition)
+	}
+	// After a reopen and three more rounds, a head judged only before the
+	// reopen is a fourth round in the new window, not a re-review.
+	reopen := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	var w State
+	for i, h := range []string{"1", "2", "3", "4", "5", "6"} {
+		w.Rounds = append(w.Rounds, Round{Head: h, At: reopen.Add(time.Duration(i-3)*time.Hour + time.Minute).Format(time.RFC3339)})
+	}
+	if !w.Capped("1", reopen) || w.Capped("6", reopen) {
+		t.Fatalf("the reopened window: head 1 capped %v, head 6 capped %v", w.Capped("1", reopen), w.Capped("6", reopen))
+	}
+	// Back on head 1 after the reopen, a finding its old-window round kept is
+	// a repeat: only head 1's rounds in this window are its own.
+	w.Rounds[0].Findings = []Earlier{{ID: "x", Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}}
+	again := Finding{Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}
+	if keep, drop := Repeats([]Finding{again}, w.Rounds, "1", reopen); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropRepeat {
+		t.Fatalf("a repeat of head 1's old-window finding: kept %+v, dropped %+v", keep, drop)
 	}
 }
 
