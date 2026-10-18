@@ -81,9 +81,9 @@ var (
 	storyHeadRE = regexp.MustCompile(`^story/([0-9]+)-`)
 )
 
-// openStoryPRs maps each story to its oldest open pull request: one whose
-// body says Refs #n, or whose head is build's story/<n>- branch.
-func openStoryPRs(ctx context.Context, c *github.Client, owner, name string) (map[int]*gh.PullRequest, error) {
+// openStoryPRs maps each story to its open pull requests, oldest first: each
+// one whose body says Refs #n, or whose head is build's story/<n>- branch.
+func openStoryPRs(ctx context.Context, c *github.Client, owner, name string) (map[int][]*gh.PullRequest, error) {
 	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
 		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
 	})
@@ -91,7 +91,7 @@ func openStoryPRs(ctx context.Context, c *github.Client, owner, name string) (ma
 		return nil, err
 	}
 	slices.SortFunc(prs, func(a, b *gh.PullRequest) int { return a.GetNumber() - b.GetNumber() })
-	out := map[int]*gh.PullRequest{}
+	out := map[int][]*gh.PullRequest{}
 	for _, pr := range prs {
 		var stories []int
 		for _, m := range refsRE.FindAllStringSubmatch(pr.GetBody(), -1) {
@@ -102,10 +102,8 @@ func openStoryPRs(ctx context.Context, c *github.Client, owner, name string) (ma
 			n, _ := strconv.Atoi(m[1])
 			stories = append(stories, n)
 		}
-		for _, n := range stories {
-			if _, ok := out[n]; !ok {
-				out[n] = pr
-			}
+		for _, n := range slices.Compact(slices.Sorted(slices.Values(stories))) {
+			out[n] = append(out[n], pr)
 		}
 	}
 	return out, nil
@@ -264,7 +262,13 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		if is.GetState() != "open" {
 			continue
 		}
-		if pr := prs[st.Story]; pr != nil {
+		// The loop's own PR is the one on the branch it built, in this
+		// repository; any other PR that names the story is never shipped here.
+		i := slices.IndexFunc(prs[st.Story], func(pr *gh.PullRequest) bool {
+			return pr.GetHead().GetRef() == st.Branch && strings.EqualFold(pr.GetHead().GetRepo().GetFullName(), repo)
+		})
+		if i >= 0 {
+			pr := prs[st.Story][i]
 			it := LoopItem{Story: st.Story, PR: pr.GetNumber(), URL: pr.GetHTMLURL()}
 			p.InFlight, p.Ship = append(p.InFlight, it), append(p.Ship, it)
 			continue
@@ -368,8 +372,8 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			}
 			continue
 		}
-		if pr := prs[n]; pr != nil {
-			skip(n, fmt.Sprintf("open pull request #%d", pr.GetNumber()))
+		if open := prs[n]; len(open) > 0 {
+			skip(n, fmt.Sprintf("open pull request #%d", open[0].GetNumber()))
 			continue
 		}
 		lease, err := readLease(ctx, c, owner, name, n)

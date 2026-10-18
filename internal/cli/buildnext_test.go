@@ -128,9 +128,11 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if contains(g.LabelNames(newer.Number), LeaseLabel) {
 		t.Fatal("a pick at the limit claimed another item")
 	}
-	// ship lists the loop's open PRs only, and its PR still counts in flight.
+	// ship lists the loop's open PRs only, and its PR still counts in flight. An
+	// older PR that names the story from another branch is never the loop's.
+	g.AddPR("Someone else's", "Refs #9\n", "someone", "feat/other", strings.Repeat("c", 40), "dev")
 	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 0 {
-		t.Fatalf("ship with no PR: %d %s", code, out)
+		t.Fatalf("ship with no loop PR: %d %s", code, out)
 	}
 	pr := g.AddPR("P1 older", "Refs #9\n", "founder", "story/9-p1-older", strings.Repeat("b", 40), "dev")
 	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number || pick.Ship[0].Story != older.Number {

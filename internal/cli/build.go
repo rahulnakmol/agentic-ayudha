@@ -311,6 +311,13 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
 		res.Budget.WallHours = now.Sub(started).Hours()
 	}
+	if pick != nil {
+		// The loop's claim is on the ledger before anything below can fail,
+		// so in_flight and the stale-claim sweep see it.
+		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+			return err
+		}
+	}
 	block := func(why string) error { return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, why) }
 	switch {
 	case b.WallHours > 0 && res.Budget.WallHours > b.WallHours:
