@@ -301,6 +301,33 @@ func TestScannerFloorsFindingsOverBudget(t *testing.T) {
 	}
 }
 
+// Codex review of #500: a semgrep scan that left part of the tree unanalysed
+// never passes, since a finding there would go unreported; a partly parsed
+// file, as semgrep reports for scripts embedded in workflow YAML, still passes.
+func TestSASTUnanalysed(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	report := func(errs string) string { return `{"results":[],"errors":[` + errs + `]}` }
+	cases := []struct {
+		name, report string
+		code         int
+		want         string
+	}{
+		{"partial parsing", report(`{"level":"warn","type":["PartialParsing",[{"path":"ci.yml"}]],"path":"ci.yml"},{"level":"warn","type":"Internal matching error","path":"ci.yml"}`), 0, proof.Pass},
+		{"syntax error", report(`{"level":"warn","type":"Syntax error","path":"web.js"}`), 0, proof.Blocked},
+		{"timeout", report(`{"level":"warn","type":"Timeout","path":"big.go"}`), 0, proof.Blocked},
+		{"fatal level", report(`{"level":"error","type":"Some new error","path":""}`), 0, proof.Blocked},
+		{"exit 2", report(""), 2, proof.Blocked},
+	}
+	for _, c := range cases {
+		bin := t.TempDir()
+		fakeTool(t, bin, "semgrep", "--output", c.report, c.code)
+		r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if got := Execute(context.Background(), r, []Floor{SAST{}}).Checks[0]; got.Result != c.want {
+			t.Errorf("%s: %s (%s), want %s", c.name, got.Result, got.Detail, c.want)
+		}
+	}
+}
+
 // WP4.4 accept with the real tools (run by the CI security job, which
 // installs the pinned semgrep, gitleaks, and osv-scanner): planted findings
 // fail each floor; a clean fixture passes. The planted fixtures are written

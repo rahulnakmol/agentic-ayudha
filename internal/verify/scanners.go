@@ -183,10 +183,13 @@ func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 				} `json:"metadata"`
 			} `json:"extra"`
 		} `json:"results"`
-		Errors []json.RawMessage `json:"errors"`
+		Errors []semgrepError `json:"errors"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return res, fmt.Errorf("semgrep exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
+	}
+	if gap := semgrepGaps(o.Code, doc.Errors); gap != "" {
+		return res, fmt.Errorf("semgrep left part of the tree unanalysed (%s), so the floor cannot pass: fix the file or list it in .semgrepignore", gap)
 	}
 	var s Severity
 	for _, f := range doc.Results {
@@ -195,12 +198,6 @@ func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 	c := severityCheck(s, r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
 	c.Detail = strings.Join(packs, " ") + ": " + c.Detail
-	// A parse error, timeout, or out-of-memory leaves part of the tree unanalysed (semgrep's errors, or an exit of 2 or
-	// more): the findings are what it saw, and a finding it did not report is not shown to be gone.
-	if len(doc.Errors) > 0 || o.Code >= 2 {
-		res.Partial = true
-		c.Detail += fmt.Sprintf("; incomplete: semgrep exited %d with %d analysis errors (reports/semgrep.json)", o.Code, len(doc.Errors))
-	}
 	res.Check, res.Findings = c, s.over(r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/semgrep.json", Kind: "report", Data: b})
 	return res, nil
@@ -209,6 +206,45 @@ func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 // semgrepLevel maps a semgrep severity to the floor's levels: CRITICAL is
 // critical; ERROR and HIGH are high (ERROR is what semgrep --error blocks on);
 // WARNING and MEDIUM are medium; the rest low.
+// semgrepError is one entry of a semgrep report's errors.
+type semgrepError struct {
+	Level string          `json:"level"`
+	Type  json.RawMessage `json:"type"` // a name, or [name, details] (PartialParsing)
+	Path  string          `json:"path"`
+}
+
+// semgrepUnanalysed are the error types that leave a file, or a rule's run on
+// it, unfinished: a finding there would go unreported. A partly parsed file
+// (PartialParsing, common for scripts embedded in YAML) or a rule that failed
+// to match one construct (Internal matching error) is still analysed.
+var semgrepUnanalysed = []string{"Lexical error", "Syntax error", "Other syntax error", "AST builder error", "Timeout",
+	"Out of memory", "Stack overflow", "Timeout during interfile analysis", "OOM during interfile analysis", "Too many matches", "Fatal error"}
+
+// semgrepGaps says what a scan left unanalysed: an exit of 2 or more, an error
+// at level error, or an error of a semgrep Unanalysed type; "" when none.
+func semgrepGaps(code int, errs []semgrepError) string {
+	var gaps []string
+	if code >= 2 {
+		gaps = append(gaps, fmt.Sprintf("exit %d", code))
+	}
+	for _, e := range errs {
+		var name string
+		if json.Unmarshal(e.Type, &name) != nil {
+			var parts []json.RawMessage
+			if json.Unmarshal(e.Type, &parts) == nil && len(parts) > 0 {
+				_ = json.Unmarshal(parts[0], &name)
+			}
+		}
+		if e.Level == "error" || slices.Contains(semgrepUnanalysed, name) {
+			gaps = append(gaps, strings.TrimSpace(name+" "+e.Path))
+		}
+	}
+	if len(gaps) > 3 {
+		gaps = append(gaps[:3], fmt.Sprintf("%d more", len(gaps)-3))
+	}
+	return strings.Join(gaps, "; ")
+}
+
 func semgrepLevel(sev, impact string) string {
 	switch strings.ToUpper(sev) {
 	case "CRITICAL":

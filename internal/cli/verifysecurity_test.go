@@ -191,8 +191,10 @@ func TestVerifySecurityBugs(t *testing.T) {
 	// An incomplete semgrep scan (an analysis error, no results) proves nothing gone: the sast Bug stays seen on dev.
 	git(t, dir, "checkout", "--quiet", "dev")
 	writeReports(t, reports, map[string]string{"semgrep": `{"results":[],"errors":[{"code":3,"level":"warn","type":"Timeout","message":"timeout","path":"main.go"}]}`})
-	if _, res, errOut = verifySec(""); !slices.Equal(res.Partial, []string{"sast"}) || strings.Contains(sast.Comments[len(sast.Comments)-1].Body, "Not found on `dev`") {
-		t.Fatalf("an incomplete scan marked the sast Bug gone: %+v %+v %s", res.Partial, sast.Comments, errOut)
+	_, res, errOut = verifySec("")
+	if i := slices.IndexFunc(res.Checks, func(c proof.Check) bool { return c.Floor == "sast" }); res.Checks[i].Result != proof.Blocked ||
+		strings.Contains(sast.Comments[len(sast.Comments)-1].Body, "Not found on `dev`") {
+		t.Fatalf("an incomplete scan passed, or marked the sast Bug gone: %+v %+v %s", res.Checks, sast.Comments, errOut)
 	}
 	writeReports(t, reports, map[string]string{"semgrep": semgrepMedium})
 

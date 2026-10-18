@@ -89,8 +89,8 @@ tip. That covers verify's sast, secrets, and deps floors with the merge gate's p
 in the pushed commits, the nightly run in the whole history. Each failing finding files one Bug labelled
 `aayudha:security`, keyed by floor, rule or advisory ID, and path; later runs comment on it instead of filing again.
 Only Bugs and comments written by the workflow token (`github-actions[bot]`) count, so a labelled issue or comment
-from anyone else neither holds nor releases a promotion. A finding is marked gone only after a complete scan: when
-semgrep reports analysis errors, its sast findings stay as last seen.
+from anyone else neither holds nor releases a promotion. A sast scan that leaves a file unanalysed (a syntax error,
+timeout, or out of memory) is blocked, never green, so it marks nothing gone.
 An open one last seen on rolling or main holds `aayu release` until it is gone there, the source tip being promoted
 was scanned without it (so a fix travels dev to rolling to main as usual), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`), and each promotion takes only a source tip (dev for rolling, rolling for main) that the workflow scanned green.
 A floor whose every finding sits on a Bug with an accepted waiver naming it is `waived` in the scan, so a waived tip

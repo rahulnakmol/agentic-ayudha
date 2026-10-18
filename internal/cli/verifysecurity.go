@@ -55,7 +55,6 @@ type SecurityResult struct {
 	Checks   []proof.Check    `json:"checks"`
 	Hold     bool             `json:"floors_hold"`
 	Findings []verify.Finding `json:"findings"`
-	Partial  []string         `json:"partial,omitempty"` // floors whose scan was incomplete: none of their findings is marked gone
 	Bugs     []SecurityBug    `json:"bugs,omitempty"`
 	Unfiled  []string         `json:"unfiled,omitempty"` // fingerprints over MaxSecurityBugs
 }
@@ -89,7 +88,7 @@ func (e *Env) verifySecurity(ctx context.Context, root string, l *config.Loaded,
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Now: e.Now, Env: e.Getenv, CI: e.CI,
 		Sandbox: &verify.Sandbox{Getenv: e.Getenv, Home: home}, Work: work}
 	rep := verify.Execute(ctx, r, verify.SecurityFloors())
-	res.Checks, res.Hold, res.Partial = rep.Checks, rep.Hold, rep.Partial
+	res.Checks, res.Hold = rep.Checks, rep.Hold
 	if rep.Findings != nil {
 		res.Findings = rep.Findings
 	}
@@ -382,7 +381,7 @@ func securityBugs(ctx context.Context, c *github.Client, repo string, res Securi
 	}
 	ran := map[string]bool{}
 	for _, ch := range res.Checks {
-		ran[ch.Floor] = (ch.Result == proof.Pass || ch.Result == proof.Fail) && !slices.Contains(res.Partial, ch.Floor)
+		ran[ch.Floor] = (ch.Result == proof.Pass || ch.Result == proof.Fail)
 	}
 	for _, s := range open {
 		if seen[s.Fingerprint] || !ran[s.Floor] || !s.SeenOn(res.Branch) || (s.Floor == "secrets" && res.Base != "") {

@@ -36,7 +36,7 @@ Thresholds are the keys under `[verify.floors]` (and `[verify]`) with their defa
 | Floor | Tool and pinned version | Threshold key: default | Runs when |
 |---|---|---|---|
 | coverage | aayudha diff coverage over `go test -coverprofile` (or your command's lcov or Cobertura report); Go 1.25.x in CI | `coverage.min_diff_percent`: 90.0 | Always |
-| sast | semgrep 1.180.0, language rule packs such as `p/golang` | `sast.max_critical`: 0, `sast.max_high`: 0 | Always |
+| sast | semgrep 1.180.0, language rule packs such as `p/golang`; a scan that leaves a file unanalysed (a syntax error, timeout, or out of memory) is blocked | `sast.max_critical`: 0, `sast.max_high`: 0 | Always |
 | secrets | gitleaks 8.30.1 (SHA-256 checked), commits from base to head, `--redact` | `secrets.max_findings`: 0 | Always |
 | deps | osv-scanner 2.6.0 (SHA-256 checked), every lockfile git tracks | `deps.max_critical`: 0, `deps.max_high`: 0 | Always |
 | a11y | Playwright 1.64.0 and axe-core 4.14.0, tags WCAG 2.0 to 2.2 A and AA | `a11y.standard`: "WCAG 2.2 AA", `a11y.max_critical`: 0, `a11y.max_serious`: 0 | A web target URL and screenshot or recording criteria |
