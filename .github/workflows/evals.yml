@@ -82,7 +82,9 @@ jobs:
     environment: ai-gateway
     # nine tier-2 cases of five runs each took about 30 minutes (WP5.4); grill conversations add about 30 (WP5.3b). The ux
     # group's prototype runs take about 5 minutes each, and its first full run was cancelled at 90 with no results (D-6.5h).
-    timeout-minutes: ${{ matrix.group == 'ux' && 180 || 90 }}
+    # A survey run written in sections takes about 35 minutes (run 39106751006 finished two runs and three sections of
+    # tinyjs-rust in 90, then timed out), so a case of five runs needs about three hours; its steps save as they finish.
+    timeout-minutes: ${{ matrix.group == 'ux' && 180 || matrix.group == 'survey' && 240 || 90 }}
     env:
       AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
       AAYU_MODELS__GATEWAY__SECRET: ai-gateway
