@@ -552,3 +552,37 @@ func TestCheckStates(t *testing.T) {
 		}
 	}
 }
+
+// Story #481, criterion 5: the approvals row says when a reply can approve a
+// batch. Without approvers or a bot it warns that every batch needs the
+// device code; an agent session that can act as a person is named; and
+// device_for decides which doors stay on the code.
+func TestApprovals(t *testing.T) {
+	ctx := context.Background()
+	for _, tt := range []struct {
+		name  string
+		sets  []string
+		reach []identity.Reach
+		want  string
+	}{
+		{"no approvers", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot"}, nil, "warn approvals: no `[approvals] approvers`, so every batch needs the device code"},
+		{"no bot", []string{"approvals.approvers=rahulnakmol"}, nil, "warn approvals: no bot identity, so agents write as a person and every batch needs the device code"},
+		{"every batch on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol", "approvals.device_for=all"}, nil,
+			"pass approvals: a reply from rahulnakmol approves a batch; every batch needs the device code"},
+		{"agent acts as another person", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"},
+			[]identity.Reach{{Source: "GH_PAT", Login: "machine-user"}},
+			"pass approvals: a reply from rahulnakmol approves a batch; one-way doors need the device code | GH_PAT -> @machine-user | this agent session can act as @machine-user, which is not a bot identity"},
+	} {
+		p := healthy(t)
+		p.Config = load(t, tt.sets...)
+		p.Reachable = func(context.Context) []identity.Reach { return tt.reach }
+		r := checkApprovals(ctx, p)
+		got := fmt.Sprintf("%s %s", r.Status, r.Detail)
+		for _, l := range r.Lines {
+			got += " | " + l
+		}
+		if got != tt.want {
+			t.Errorf("%s:\n got %s\nwant %s", tt.name, got, tt.want)
+		}
+	}
+}

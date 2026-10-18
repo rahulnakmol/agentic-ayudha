@@ -35,16 +35,19 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		return append([]*fake.Comment{}, g.Issues[n].Comments...)
 	}
 	last := func(n int) string { cs := comments(n); return cs[len(cs)-1].Body }
+	thread := d1.Number // the issue the batch and the replies are on
+	nextID := int64(5000)
 	reply := func(login, body string, edited bool, at ...time.Time) int64 {
 		g.Mu.Lock()
 		defer g.Mu.Unlock()
-		is := g.Issues[d1.Number]
+		is := g.Issues[thread]
 		when := time.Now().UTC().Add(time.Second)
 		if len(at) > 0 {
 			when = at[0]
 		}
-		c := &fake.Comment{ID: int64(5000 + len(is.Comments)), Body: body, CreatedAt: when,
-			HTMLURL: "https://github.com/o/r/issues/" + strconv.Itoa(is.Number) + "#issuecomment-" + strconv.Itoa(5000+len(is.Comments))}
+		nextID++
+		c := &fake.Comment{ID: nextID, Body: body, CreatedAt: when,
+			HTMLURL: "https://github.com/o/r/issues/" + strconv.Itoa(is.Number) + "#issuecomment-" + strconv.FormatInt(nextID, 10)}
 		if edited {
 			c.UpdatedAt = c.CreatedAt.Add(time.Minute)
 		}
@@ -52,13 +55,22 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		is.Comments = append(is.Comments, c)
 		return c.ID
 	}
-	workflow := func(id int64) (int, string) {
+	// workflow runs the aayudha-approve job on reply id: event name and action
+	// as GitHub sends them unless given, and the repository's config.
+	workflow := func(id int64, over ...string) (int, string) {
 		t.Helper()
+		name, action, cfg := "issue_comment", "created", sets
+		switch {
+		case len(over) == 2:
+			name, action = over[0], over[1]
+		case len(over) > 2:
+			cfg = over
+		}
 		ev := filepath.Join(t.TempDir(), "event.json")
-		raw, _ := json.Marshal(map[string]any{"action": "created", "comment": map[string]any{"id": id}, "issue": map[string]any{"number": d1.Number}})
+		raw, _ := json.Marshal(map[string]any{"action": action, "comment": map[string]any{"id": id}, "issue": map[string]any{"number": thread}})
 		_ = os.WriteFile(ev, raw, 0o644)
-		ci := map[string]string{"AAYU_GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "GITHUB_EVENT_NAME": "issue_comment", "GITHUB_EVENT_PATH": ev}
-		code, out, errOut := run(t, ci, opts, append([]string{"inbox", "--ci"}, sets...)...)
+		ci := map[string]string{"AAYU_GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "GITHUB_EVENT_NAME": name, "GITHUB_EVENT_PATH": ev}
+		code, out, errOut := run(t, ci, opts, append([]string{"inbox", "--ci"}, cfg...)...)
 		return code, out + errOut
 	}
 	accepted := func(n int) bool {
@@ -79,6 +91,16 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	}
 	if cs := comments(d1.Number); cs[len(cs)-1].User.Login != "aayudha-bot[bot]" {
 		t.Fatalf("the batch was posted as @%s, not the bot", cs[len(cs)-1].User.Login)
+	}
+	// A batch is one option per Decision, each Decision once.
+	for args, want := range map[string]string{
+		list:                   "a list of Decisions is a batch for --accept",
+		list + " --accept A,A": "3 Decision(s) but 2 option(s)",
+		strconv.Itoa(d2.Number) + "," + strconv.Itoa(d2.Number) + " --accept A,A": "is in the batch twice",
+	} {
+		if code, _, errOut := run(t, agent, opts, append(append([]string{"decide"}, strings.Fields(args)...), sets...)...); code != ExitUsage || !strings.Contains(errOut, want) {
+			t.Fatalf("decide %s: %d %s", args, code, errOut)
+		}
 	}
 	// A second batch on the same issue waits for the first.
 	if code, _, errOut := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d1.Number), "--accept", "A"}, sets...)...); code != ExitBlocked || !strings.Contains(errOut, "is still open") {
@@ -121,6 +143,27 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 			t.Fatalf("%s %q: exit %d %s\n%s", tt.login, tt.body, code, out, last(d1.Number))
 		}
 	}
+	// The repository's own setup: no bot identity, or no approver recorded.
+	for cfg, want := range map[string]string{
+		"approvals.approvers=founder": "this repository has no bot identity",
+		"identity.app_id=42":          "no approver is recorded",
+	} {
+		args := []string{"--repo", "o/r", "--set", cfg}
+		if cfg == "identity.app_id=42" {
+			args = append(args, "--set", "identity.app_slug=aayudha-bot")
+		}
+		if code, out := workflow(reply("founder", "/aayu approve all", false), args...); code != ExitBlocked || !strings.Contains(last(d1.Number), want) || !none() {
+			t.Fatalf("%s: %d %s\n%s", cfg, code, out, last(d1.Number))
+		}
+	}
+	// Only a new reply on an issue counts: another event or an edit is not an approval.
+	id := reply("founder", "/aayu approve all", false)
+	if code, _ := workflow(id, "pull_request_review", "submitted"); code != ExitUsage || !none() {
+		t.Fatalf("another event: %d", code)
+	}
+	if code, out := workflow(id, "issue_comment", "edited"); code != 0 || !strings.Contains(out, "a edited comment is never an approval") || !none() {
+		t.Fatalf("an edit event: %d %s", code, out)
+	}
 	// A bot's reply, one without write access, and one that is not a command get no answer and change nothing.
 	g.Mu.Lock()
 	g.Permissions["visitor"] = "read"
@@ -138,7 +181,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 
 	// `/aayu approve 1 3` accepts exactly those items; the result names who
 	// approved and where.
-	id := reply("founder", "/aayu approve 1 3", false)
+	id = reply("founder", "/aayu approve 1 3", false)
 	if code, out := workflow(id); code != 0 || !accepted(d1.Number) || accepted(d2.Number) || !accepted(d4.Number) {
 		t.Fatalf("approve 1 3: %d %s", code, out)
 	}
@@ -154,6 +197,19 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	// The batch is answered: a later reply approves nothing more.
 	if code, _ := workflow(reply("founder", "/aayu approve 2", false)); code != ExitBlocked || !strings.Contains(last(d1.Number), "there is no open batch") || accepted(d2.Number) {
 		t.Fatalf("reply after the result: %d\n%s", code, last(d1.Number))
+	}
+
+	// An edited batch never counts: it may not say what was asked.
+	thread = d2.Number
+	if code, _, errOut := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d2.Number), "--accept", "A"}, sets...)...); code != ExitBlocked {
+		t.Fatalf("batch on #%d: %d %s", d2.Number, code, errOut)
+	}
+	g.Mu.Lock()
+	cs := g.Issues[d2.Number].Comments
+	cs[len(cs)-1].UpdatedAt = cs[len(cs)-1].CreatedAt.Add(time.Minute)
+	g.Mu.Unlock()
+	if code, _ := workflow(reply("founder", "/aayu approve all", false)); code != ExitBlocked || !strings.Contains(last(d2.Number), "the batch comment was edited") || accepted(d2.Number) {
+		t.Fatalf("edited batch: %d\n%s", code, last(d2.Number))
 	}
 
 	// A one-way door stays on the device code (device_for = ["one-way"] by

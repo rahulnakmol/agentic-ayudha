@@ -445,8 +445,9 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 	}
 	n := ev.Issue.Number
 	bc, bot, berr := e.BotGitHub(ctx, "")
+	noBot := berr != nil || bot.Kind == identity.KindHumanFallback || bot.Login == ""
 	writer := bc
-	if berr != nil || bot.Kind == identity.KindHumanFallback {
+	if noBot {
 		writer = hc
 	}
 	refuse := func(why, next string) error {
@@ -456,7 +457,7 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 		return Errorf(ExitBlocked, "%s", why)
 	}
 	switch {
-	case berr != nil || bot.Kind == identity.KindHumanFallback:
+	case noBot:
 		return refuse("this repository has no bot identity, so agents write as a person, and a reply cannot prove it was yours.",
 			"approve with the device code: ask the agent to run the command again; or set up the aayudha App (`aayu init --identity`) and point agents at it.")
 	case len(cfg.Approvals.Approvers) == 0:
@@ -504,9 +505,6 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 	var todo []ready
 	for _, i := range picked {
 		it := b.Items[i-1]
-		if it.Kind != "decision" {
-			return refuse(fmt.Sprintf("item %d is a %s step, which a reply cannot approve yet.", i, it.Kind), "approve it with the device code.")
-		}
 		if it.OneWay && (slices.Contains(cfg.Approvals.DeviceFor, "one-way") || slices.Contains(cfg.Approvals.DeviceFor, "all")) {
 			return refuse(fmt.Sprintf("item %d is a one-way door, and `[approvals] device_for` keeps one-way doors on the device code.", i), "approve it with the device code.")
 		}

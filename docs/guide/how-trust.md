@@ -214,7 +214,7 @@ answers a refusal on the thread with the reason and the next step:
 | Check | Why |
 |---|---|
 | The repository has the bot identity, so agents write as `aayudha[bot]`, not as you | Otherwise an agent could write the reply in your name |
-| The author is in `[approvals] approvers`, has write access, and is not a bot | `.aayudha/config.toml` is a protected path, so an agent cannot add itself |
+| The author is in `[approvals] approvers`, has write access, and is not a bot | The workflow reads the default branch's `.aayudha/config.toml`, a protected path, so an agent cannot add itself |
 | The reply was not edited, and it came after the batch | An edited reply could have said something else when it was read |
 | The batch was not edited, was posted by the bot, is still open, and its hash matches its record | The steps are exactly the ones you were shown |
 | Each Decision's body is unchanged since the batch, and the Decision's authority is the author | A later edit voids the approval |
