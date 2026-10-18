@@ -1094,7 +1094,8 @@ func TestShipEMSeatApprover(t *testing.T) {
 	for _, f := range []struct {
 		req   string
 		after int
-	}{{"GET /repos/o/r/git/ref/heads/dev", 0}, {"GET /repos/o/r/git/ref/heads/dev", 1}, {"GET /repos/o/r/contents/.aayudha/config.json", 0}, {"GET /repos/o/r/contents/LAYERS.md", 0}} {
+	}{{"GET /repos/o/r/git/ref/heads/dev", 0}, {"GET /repos/o/r/git/ref/heads/dev", 1}, {"GET /repos/o/r/contents/.aayudha/config.json", 0}, {"GET /repos/o/r/contents/LAYERS.md", 0},
+		{"GET /repos/o/r/compare/" + g.Pulls[prN].Base.SHA + "..." + head, 0}} {
 		g.Mu.Lock()
 		g.Fail, g.FailAfter = f.req, f.after
 		g.Mu.Unlock()
@@ -1111,9 +1112,12 @@ func TestShipEMSeatApprover(t *testing.T) {
 
 	// An earlier ship labelled the PR for the audit and then did not merge
 	// it; a person's pass merges it, and the label goes.
+	// A comparison cut short (past 300 files) falls back to the PR's own
+	// listing, every page.
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
+	g.Pulls[prN].Unlisted = 1
 	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN, seat...)
 	if code != 0 || !strings.Contains(out, "human pass: review by em-lead") || !strings.Contains(out, "warning: the build lease on #2 was not released") {
