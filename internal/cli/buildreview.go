@@ -194,7 +194,7 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	}
 	gw, err := e.Gateway()
 	if err != nil {
-		return false, rep, err
+		return skip("the model gateway could not start: " + oneLineErr(err))
 	}
 	gw.Models, gw.Resolver.Models = cfg.Models, cfg.Models
 	builder := e.sessionBuilder(ctx, gw, a)
