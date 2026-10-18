@@ -24,6 +24,11 @@ aayu:
         - "rolling"
         - "main"
       description: "Branch to promote to."
+    - name: at
+      type: string
+      required: false
+      positional: false
+      description: "With --to rolling: promote this dev commit instead of dev's newest, such as the newest one with tier-2 eval results for every gating group."
   outputs:
     - "tag"
     - "released-stories"
@@ -81,6 +86,7 @@ CONTRIBUTING.md's promotion procedure, run by the binary under a person's own ac
 ```sh
 aayu release 120 --to rolling --dry-run   # what would ship and which stories would be stamped
 aayu release 120 --to rolling             # dev → rolling: Rolling snapshot: <ts>, tag rolling-<date>[.n]
+aayu release 120 --to rolling --at 1a2b3c4  # dev → rolling from an older dev commit that has eval results
 aayu release 120 --to main                # rolling → main: Release: vX.Y.Z, annotated tag vX.Y.Z
 ```
 
@@ -95,9 +101,16 @@ Without it the rung refuses (exit 4) and promotes nothing. Never write that comm
 the person's decision, and the pre-tool hook refuses a shell command that would post it. A person running
 `release` at their own terminal is asked to confirm instead (or passes `--yes`), and that yes is the request.
 
-Each rung builds a `promote/…` candidate holding the exact merge commit, runs the evals (rolling) and the
-`ci.yml` gate on it, re-runs failed gate jobs once, pushes that commit as a fast-forward, and tags it. For main,
-it then watches `release.yml`. A failing gate promotes nothing.
+Each rung builds a `promote/…` candidate holding the exact merge commit, runs the `ci.yml` gate on it, re-runs
+failed gate jobs once, pushes that commit as a fast-forward, and tags it. For main, it then watches `release.yml`.
+A failing gate promotes nothing.
+
+A rolling rung merges a dev commit that already has tier-2 eval results for every gating group (an
+`eval-results-<sha>-<group>` artifact on a completed `evals.yml` run of that commit), because the gate's
+`evals-gate` reads them; `release` never dispatches `evals.yml`. When dev's newest commit has none, it exits 4 and
+names both ways on: promote the newest older commit that has them with `--at <sha>`, or dispatch once on dev
+(`gh workflow run evals.yml --ref dev`), wait for it, and run `release` again. Report the choice; do not dispatch
+again to get a better result.
 
 Before the candidate, the Production Engineer's gate reads the source branch. When it defines SLOs
 (`ops/slos.toml`), the error budget recorded by `aayu slo --record` must be at most 8 days old, and while any budget

@@ -6,6 +6,7 @@ package sentry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -196,3 +197,25 @@ func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integratio
 		FetchedAt:   c.now().UTC(),
 	}, nil
 }
+
+// Get reads one path under the organization's API with a GET and returns the
+// response body as Sentry sent it, with the request it made. The production
+// sources (investigate's live queries) parse the body; its digest lets a cited
+// query be checked later (Decision #449).
+func (c *Client) Get(ctx context.Context, path string, v url.Values) ([]byte, string, error) {
+	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") || strings.ContainsAny(path, "?#") {
+		return nil, "", fmt.Errorf("%w: sentry path %q: want /<resource>/ under the organization", integrations.ErrQuery, path)
+	}
+	u := c.base + "/api/0/organizations/" + c.org + path
+	if len(v) > 0 {
+		u += "?" + v.Encode()
+	}
+	var raw json.RawMessage
+	if err := c.get(ctx, u, &raw); err != nil {
+		return nil, "GET " + u, err
+	}
+	return raw, "GET " + u, nil
+}
+
+// Project is the numeric project ID every read is scoped to.
+func (c *Client) Project() string { return c.project }

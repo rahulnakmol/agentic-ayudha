@@ -61,7 +61,7 @@
 <line x1="212.0" y1="770" x2="212.0" y2="782" stroke="#1f5bd1" stroke-width="2"/>
 <rect x="46" y="782" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
 <text x="212.0" y="800" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Budget</text>
-<text x="212.0" y="818" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">default 8 hours, 25 USD, 3 failed attempts</text>
+<text x="212.0" y="818" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">default 8 hours, 3 attempts, 60 USD metered</text>
 <line x1="212.0" y1="826" x2="212.0" y2="844" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
 <rect x="16" y="848" width="392" height="282" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
 <circle cx="38" cy="870" r="12" fill="#1f5bd1"/>

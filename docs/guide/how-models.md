@@ -121,9 +121,10 @@ and where the cost came from. `Cost` in `internal/models/gateway.go` picks the f
 Cache reads and cache writes are charged at their own rates when the price has them, and a prompt past a model's
 long-context threshold is charged at its long-context rates.
 
-The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, or if the story or
-the local day has already reached its limit. After each call, `Add` adds the spend. When a story reaches
-`per_story_usd` or the day reaches `per_day_usd` (reaching the limit exactly counts), it writes the pause file
+The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, if the story has
+gone over its limit, or if the local day has reached its limit. After each call, `Add` adds the spend. When a story
+goes over `per_story_usd` (exactly the limit is still allowed, as it is for a build's `cost_usd`) or the day reaches
+`per_day_usd` (reaching it exactly counts), it writes the pause file
 `.aayudha/state/paused`, pages through `[notify]`, and returns `ErrBudget`. The CLI maps that error to exit code 6.
 Pages are keyed by scope, and `[notify]` sends each key at most once per local day, so a tripped breaker pages once.
 While the pause file exists, every direct call is refused, and the loop guard (`aayu hook loop:<name>`, the first step
@@ -132,7 +133,11 @@ of every scheduled loop) exits 6 too. `aayu resume` removes the pause file.
 The other `[budget]` keys are enforced elsewhere. `per_pr_inspect_max` caps `inspect` spend on one pull request across
 all its cycles. `ci_minutes_month` makes the loop guard exit 6 in GitHub Actions once the loops' runs this month have
 used that many minutes. `[autonomy.budget]` is a different budget: the wall time, spend, and failed attempts one `build` of a story may use.
-When `build` exceeds it, the story moves to `status:blocked`, the owner is paged, and `build` exits 4.
+Its `cost_usd` applies only when model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's
+key is configured, or a host reports its spend in `AAYU_COST_USD`. Otherwise there is no cost limit, because
+subscription use reports no cost. `per_story_usd` is at least `cost_usd`, so the breaker never stops a story before its
+build budget does. When `build` exceeds the budget, the story moves to `status:blocked`, the owner is paged, and
+`build` exits 4.
 
 ## Key data and file formats
 
@@ -179,14 +184,17 @@ type ModelDefault struct {
 The budget defaults, from `internal/config/defaults.toml`:
 
 ```toml
+# A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
+# direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
+# since subscription use reports no cost.
 [autonomy.budget]
 wall_hours = 8
-cost_usd = 25.0
+cost_usd = 60.0
 attempts = 3
 
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]
-per_story_usd = 25.0
+per_story_usd = 60.0 # at least autonomy.budget.cost_usd, so the breaker never stops a story before its build budget
 per_day_usd = 100.0
 per_pr_inspect_max = 5.0
 ci_minutes_month = 2000

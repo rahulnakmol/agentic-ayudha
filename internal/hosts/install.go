@@ -71,14 +71,16 @@ func SkillDir(h verbs.HostID) string {
 // keeps the first of each name. So Cursor and Amp share Claude Code's copies
 // when it is installed, and .agents/skills holds copies only for Codex or
 // when Claude Code is not installed. With Claude Code, Codex, and Cursor all
-// installed, Cursor reads both: Doubles reports it.
+// installed, Cursor reads both: Doubles reports it. Copilot reads all three
+// of .github/skills, .agents/skills, and .claude/skills and keeps the first of
+// each name, so it shares whichever copies are there.
 func (l Lock) SkillDirs() []string {
 	has := func(h verbs.HostID) bool { return slices.Contains(l.Hosts, string(h)) }
 	var dirs []string
 	if has(verbs.HostClaude) {
 		dirs = append(dirs, ClaudeSkills)
 	}
-	if has(verbs.HostCodex) || len(dirs) == 0 && (has(verbs.HostCursor) || has(verbs.HostAmp)) {
+	if has(verbs.HostCodex) || len(dirs) == 0 && (has(verbs.HostCursor) || has(verbs.HostAmp) || has(verbs.HostCopilot)) {
 		dirs = append(dirs, AgentsSkills)
 	}
 	sort.Strings(dirs)
@@ -640,6 +642,37 @@ func (p *planner) commands(hostList []string, src map[string][]skillFile, lock *
 			return err
 		}
 	}
+	if slices.Contains(hostList, string(verbs.HostCopilot)) {
+		// Copilot runs a skill as a slash command, and VS Code loads a skill
+		// only when its name is lowercase and hyphenated and matches its
+		// folder: /aayudha-<name>, as in Cursor. Only Copilot reads
+		// .github/skills, so no other host lists them.
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCopilot)
+		if err != nil {
+			return err
+		}
+		want := map[string][]skillFile{}
+		for _, c := range cmds {
+			id := ServerName + "-" + c.Name
+			desc, _ := json.Marshal(c.Description)
+			want[id] = []skillFile{{rel: "SKILL.md", data: fmt.Appendf(nil,
+				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, %s. Use this skill when the person runs it. -->\n\n%s\n",
+				id, desc, c.Name, copilotCommandMark, c.Body)}}
+		}
+		// A command aayu no longer ships is removed only when its SKILL.md
+		// carries the line install writes; a person's own skill is left alone.
+		previous := map[string]LockSkill{}
+		entries, _ := os.ReadDir(p.abs(CopilotSkills, false))
+		for _, e := range entries {
+			b, err := os.ReadFile(filepath.Join(p.abs(CopilotSkills, false), e.Name(), "SKILL.md"))
+			if strings.HasPrefix(e.Name(), ServerName+"-") && err == nil && strings.Contains(string(b), copilotCommandMark) {
+				previous[e.Name()] = LockSkill{}
+			}
+		}
+		if err := p.skillCopies(CopilotSkills, want, previous); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -676,7 +709,7 @@ func HookCommand(binary, name string, h verbs.HostID) string {
 var importsAgents = regexp.MustCompile(`(?m)^@AGENTS\.md\s*$`)
 
 // ourHook matches the commands HookCommand writes, for any binary path.
-var ourHook = regexp.MustCompile(`^"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex)$`)
+var ourHook = regexp.MustCompile(`^(& )?"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex|copilot)$`)
 
 func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 	existing, err := p.read(AgentsMD, false)
@@ -687,6 +720,20 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		return err
 	}
 	server := map[string]any{"command": p.o.Binary, "args": []any{"mcp"}}
+	if hosts[verbs.HostClaude] || hosts[verbs.HostCopilot] {
+		// Claude Code and Copilot both read the project's .mcp.json. Copilot
+		// passes a stdio server only PATH and wants its tools listed, so with
+		// Copilot the entry names the variables aayu needs (CopilotMCPEnv).
+		entry := maps.Clone(server)
+		if hosts[verbs.HostCopilot] {
+			entry["env"], entry["tools"] = copilotMCPEnv(), []any{"*"}
+		}
+		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
+			obj(m, "mcpServers")[ServerName] = entry
+		}); err != nil {
+			return err
+		}
+	}
 	if hosts[verbs.HostClaude] {
 		cm, err := p.read(ClaudeMD, false)
 		if err != nil {
@@ -699,11 +746,6 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			cm = append(bytes.TrimRight(lf(cm), "\n"), []byte("\n\n@AGENTS.md\n")...)
 		}
 		if err := p.write(ClaudeMD, false, p.o.text(cm)); err != nil {
-			return err
-		}
-		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
-			obj(m, "mcpServers")[ServerName] = server
-		}); err != nil {
 			return err
 		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
@@ -777,6 +819,28 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			return err
 		}
 		p.notes = append(p.notes, "Codex reads .codex/ only in a project you trust, and runs these hooks only after you trust them in /hooks; until then the aayudha plugin, if you have it, is not turned off here either (`aayu doctor` reports both)")
+	}
+	if hosts[verbs.HostCopilot] {
+		// The whole file is aayudha's. bash runs the quoted path as is;
+		// PowerShell needs the call operator to run a quoted path.
+		entry := func(name string) []any {
+			c := HookCommand(p.o.Binary, name, verbs.HostCopilot)
+			return []any{map[string]any{"type": "command", "bash": c, "powershell": "& " + c}}
+		}
+		hooks := map[string]any{"version": json.Number("1"), "hooks": map[string]any{
+			"sessionStart": entry("session-start"), "preToolUse": entry("pre-tool"),
+		}}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(hooks); err != nil {
+			return err
+		}
+		if err := p.write(CopilotHooks, false, p.o.text(buf.Bytes())); err != nil {
+			return err
+		}
+		p.notes = append(p.notes, copilotTrust)
 	}
 	if hosts[verbs.HostAmp] {
 		tmpl, err := fs.ReadFile(p.o.Assets, "hosts/amp/aayudha.ts")
@@ -860,6 +924,12 @@ func (p *planner) agentsSections(lock Lock) []AgentsSection {
 		dirs = append(dirs, "`"+d+"/`")
 	}
 	where := "The skill copies in " + strings.Join(dirs, " and ")
+	copilotGap := ""
+	if slices.Contains(lock.Hosts, string(verbs.HostCopilot)) {
+		// hostcall reads the snake_case event of Claude Code, Codex, and
+		// Cursor, not Copilot's toolName and toolArgs.
+		copilotGap = "\nUnder GitHub Copilot, `pre-tool` does not check PostHog or Sentry calls yet: call them only to read."
+	}
 	var names []string
 	for _, h := range lock.Hosts {
 		if hh, ok := verbs.FindHost(verbs.HostID(h)); ok {
@@ -881,9 +951,9 @@ Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
 `+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes, shell commands that run a
 human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
-allowlist, and `+"`status-line`"+` shows where the work stands.
+allowlist, and `+"`status-line`"+` shows where the work stands.%s
 
-%s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
+%s`, strings.Join(names, ", "), "`"+ServerName+"`", copilotGap, wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
 }
 
@@ -942,6 +1012,13 @@ func addString(v any, s string) []any {
 // PluginID is the aayudha plugin's ID in Claude Code and Codex: the plugin
 // from this repository's marketplace, which is also named aayudha.
 const PluginID = ServerName + "@" + ServerName
+
+// copilotCommandMark is in every command skill install writes for Copilot.
+const copilotCommandMark = "written by `aayu install`"
+
+// copilotTrust is the install note for Copilot, which reads a project's
+// .mcp.json and .github/hooks only once its person trusts the folder.
+const copilotTrust = "Copilot loads this repository's MCP server and hooks only after you trust the folder: Copilot CLI asks the first time you start it here (copilot -p never asks, so start copilot once first); VS Code asks through Workspace Trust. The GitHub Copilot host is " + CopilotProven
 
 // The install notes for Cursor, whose plugin aayu cannot turn off per
 // repository and which also reads .claude/skills (D-3.2b.g, D-3.2b.h).
@@ -1070,6 +1147,8 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 			rel, key = ClaudeMCP, "mcpServers"
 		case verbs.HostCursor:
 			rel, key = CursorMCP, "mcpServers"
+		case verbs.HostCopilot:
+			rel, key = ClaudeMCP, "mcpServers"
 		case verbs.HostAmp:
 			rel, key, isHome = AmpSettings, "amp.mcpServers", true
 		case verbs.HostCodex:
@@ -1089,7 +1168,10 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 		} else if err == nil {
 			var raw map[string]json.RawMessage
 			var servers map[string]struct {
-				Command string `json:"command"`
+				Command string            `json:"command"`
+				Args    []string          `json:"args"`
+				Env     map[string]string `json:"env"`
+				Tools   []string          `json:"tools"`
 			}
 			if err := json.Unmarshal(b, &raw); err != nil {
 				r.Err = err
@@ -1097,12 +1179,40 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 				if err := json.Unmarshal(v, &servers); err != nil {
 					r.Err = err
 				}
-				r.Command = servers[ServerName].Command
+				srv := servers[ServerName]
+				r.Command = srv.Command
+				switch {
+				case srv.Command == "" || r.Err != nil:
+				case !slices.Equal(srv.Args, []string{"mcp"}):
+					// Other arguments start the CLI, not the server.
+					r.Err = fmt.Errorf("the %q server runs %s with args %q, not [\"mcp\"]; run `aayu install --host %s --apply`", ServerName, srv.Command, srv.Args, h)
+				case h == string(verbs.HostCopilot):
+					r.Err = copilotServerGaps(srv.Env, srv.Tools)
+				}
 			}
 		}
 		out = append(out, r)
 	}
 	return out
+}
+
+// copilotServerGaps names what the aayudha server entry lacks for Copilot,
+// which starts a stdio server with only PATH and offers no tool the entry does
+// not list: each CopilotMCPEnv variable, and "tools": ["*"].
+func copilotServerGaps(env map[string]string, tools []string) error {
+	var gaps []string
+	for _, k := range CopilotMCPEnv {
+		if env[k] != "${"+k+":-}" {
+			gaps = append(gaps, "env "+k)
+		}
+	}
+	if !slices.Contains(tools, "*") {
+		gaps = append(gaps, `"tools": ["*"]`)
+	}
+	if len(gaps) > 0 {
+		return fmt.Errorf("the %q server lacks what Copilot needs (%s); run `aayu install --host copilot --apply`", ServerName, strings.Join(gaps, ", "))
+	}
+	return nil
 }
 
 // codexRegistration reads aayudha's server from the project's .codex/config.toml.

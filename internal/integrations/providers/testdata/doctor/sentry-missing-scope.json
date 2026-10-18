@@ -1,0 +1,20 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17): 200 bodies are the spec's response examples, with the slug and IDs changed to the test's org acme and project 4507; error bodies are Sentry's DRF answers (getsentry/sentry src/sentry/api/authentication.py at 5218028: {\"detail\": \"Invalid token\"}). Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/",
+      "status": 200,
+      "response": {
+        "version": "0",
+        "auth": {
+          "scopes": [
+            "project:read",
+            "event:read"
+          ]
+        },
+        "user": null
+      }
+    }
+  ]
+}

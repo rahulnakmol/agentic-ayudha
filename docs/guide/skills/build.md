@@ -78,8 +78,12 @@ It checks these before it acts, and stops when one fails:
 
 <!-- END GENERATED: skill-gates -->
 
-The default budget is 8 hours, 25 USD of model spend aayudha can see, and 3 failed attempts. Past it, the story
-moves to `status:blocked` and a person is paged.
+The default budget is 8 hours, 3 failed attempts, and 60 USD of metered spend. The spend limit applies only when
+aayudha's own model calls are pay-as-you-go (a gateway endpoint or a provider key); subscription use is not counted.
+Past the budget, the story moves to `status:blocked` and a person is paged. When a local receiver hits its
+subscription usage limit and says when it resets, the build waits for the reset and continues. With no reset time,
+it stops as paused (exit 4) and prints the command to run again; with a reset after the wall clock ends, the story is
+blocked for wall time, and `aayu ready` gives it a fresh budget. A pause is not a failed attempt, and the wall clock keeps running.
 
 ## What only a person does
 

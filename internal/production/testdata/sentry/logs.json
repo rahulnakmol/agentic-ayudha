@@ -1,0 +1,44 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationEvents: the body is the earlier logs recording (shaped from the schema) with release and trace added to each row. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=logs&end=2026-10-17T09%3A00%3A00Z&field=timestamp&field=severity&field=message&field=release&field=trace&per_page=51&project=4507&query=severity%3Aerror&sort=-timestamp&start=2026-10-17T08%3A00%3A00Z",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "timestamp": "2026-10-17T08:41:12+00:00",
+            "severity": "error",
+            "message": "payment provider timeout after 5000ms",
+            "release": "web@2.4.1",
+            "trace": "da6caabcd90e45fdb81f6655824a5f88"
+          },
+          {
+            "timestamp": "2026-10-17T08:39:57+00:00",
+            "severity": "error",
+            "message": "division by zero in compute_total",
+            "release": "web@2.4.1",
+            "trace": "da6caabcd90e45fdb81f6655824a5f88"
+          }
+        ],
+        "meta": {
+          "fields": {
+            "timestamp": "date",
+            "severity": "string",
+            "message": "string",
+            "release": "string",
+            "trace": "string"
+          },
+          "units": {
+            "timestamp": null,
+            "severity": null,
+            "message": null,
+            "release": null,
+            "trace": null
+          }
+        }
+      }
+    }
+  ]
+}

@@ -19,6 +19,7 @@ body:
     id: options
     attributes:
       label: "Options"
+      description: "At least two numbered options, three when you can, each a top-level line \"N. **Name.** what it does\"."
     validations:
       required: false
   - type: textarea

@@ -125,8 +125,8 @@ Start from the journey that matters most to the people who use the product, not 
 ## 3. The budget policy
 
 A spent budget changes what ships: `aayu release` lets only Bugs through while any SLO's budget is spent. A missing
-or stale recorded status (older than the gate allows, or without a measure of every SLO) is different: it blocks every
-release, Bugs included, and no waiver lifts it; only a fresh `aayu slo --telemetry <export> --record` does. A Story ships anyway only when a person accepts an `error-budget` waiver on it
+or stale recorded status is different: it blocks every release. State the gate as the grounding's release-gate fact
+gives it, adding no rule it does not hold. A Story ships anyway only when a person accepts an `error-budget` waiver on it
 (`aayu decide --waiver error-budget <story>`, then `aayu decide <n> --accept waive`). Write down who decides and how
 it escalates. Never lower an objective or edit a budget to let a release through.
 

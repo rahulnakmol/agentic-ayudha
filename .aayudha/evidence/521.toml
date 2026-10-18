@@ -1,0 +1,3 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestHookProviderCalls"]

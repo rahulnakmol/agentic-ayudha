@@ -70,7 +70,7 @@ func TestInstall(t *testing.T) {
 		t.Fatalf("home edit applied without confirmation: %v", err)
 	}
 	lock, ok, err := hosts.ReadLock(repo)
-	if err != nil || !ok || len(lock.Skills) != 36 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex" {
+	if err != nil || !ok || len(lock.Skills) != 36 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex,copilot" {
 		t.Fatalf("lock: %v %v %d skills, hosts %v", ok, err, len(lock.Skills), lock.Hosts)
 	}
 	// The installed copies pass the WP3.1 lint on disk, which includes the
@@ -297,14 +297,42 @@ func TestHookProviderCalls(t *testing.T) {
 			}
 		})
 	}
-	// The repository's protected config opts in to personal data.
+	// A Sentry MCP server registered under a name that does not say so is
+	// known by its package.
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(`{"mcpServers":{"errors":{"command":"npx","args":["-y","@sentry/mcp-server@latest"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__errors__update_issue","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(errs, "`update_issue`") {
+		t.Fatalf("a renamed Sentry server's write: exit %d %s; want it refused", code, errs)
+	}
+	// The repository's protected config opts in to personal data, and only
+	// as committed on the dev branch counts: an agent cannot opt itself in by
+	// editing the file, or by committing it on its own branch.
+	replay := func() int {
+		code, _, _ := runIn(t, env, opts, `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`, "hook", "pre-tool", "--host", "claude")
+		return code
+	}
+	base := git(t, repo, "rev-parse", "HEAD")
 	cfg := filepath.Join(repo, ".aayudha", "config.toml")
 	_ = os.MkdirAll(filepath.Dir(cfg), 0o755)
 	if err := os.WriteFile(cfg, []byte("version = 1\n[integrations.sentry]\nsecret = \"sentry\"\nscope = \"read\"\norg = \"acme\"\nproject = \"1\"\nallow_pii = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 0 {
-		t.Fatalf("allow_pii = true: exit %d %s", code, errs)
+	if code := replay(); code != 2 {
+		t.Fatalf("allow_pii = true in the working tree only: exit %d; want the read refused", code)
+	}
+	git(t, repo, "add", cfg)
+	git(t, repo, "commit", "-q", "-m", "allow personal data")
+	if code := replay(); code != 0 {
+		t.Fatalf("allow_pii = true committed, no dev branch to compare with: exit %d; want the read allowed", code)
+	}
+	git(t, repo, "update-ref", "refs/remotes/origin/dev", base)
+	if code := replay(); code != 2 {
+		t.Fatalf("allow_pii = true committed past origin/dev: exit %d; want the read refused", code)
+	}
+	git(t, repo, "update-ref", "refs/remotes/origin/dev", "HEAD")
+	if code := replay(); code != 0 {
+		t.Fatalf("allow_pii = true on origin/dev: exit %d; want the read allowed", code)
 	}
 }
 
@@ -344,5 +372,21 @@ func TestHookLogsProviderCalls(t *testing.T) {
 	code, out, errs := runIn(t, env, opts, strings.Replace(calls[0], "s-42", "s-43", 1), "hook", "post-tool", "--host", "claude")
 	if code != 0 || out != "" || !strings.Contains(errs, "could not log the sentry call") {
 		t.Fatalf("unwritable log: exit %d %q %q; want exit 0 and the failure on stderr", code, out, errs)
+	}
+}
+
+// Copilot gets the host files but no agent environment or loops yet, so
+// install says so instead of succeeding without doing anything for it.
+func TestInstallRefusesCopilotEnvAndLoops(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	env := map[string]string{"HOME": home}
+	before := treeHash(t, repo)
+	for _, args := range [][]string{{"install", "--env", "--host", "copilot"}, {"install", "--loops", "--host", "copilot", "--repo", "o/r"}} {
+		if code, _, errs := run(t, env, opts, args...); code != ExitUsage || !strings.Contains(errs, "copilot") {
+			t.Errorf("%v: exit %d %s", args, code, errs)
+		}
+	}
+	if treeHash(t, repo) != before {
+		t.Error("a refused install wrote to the repository")
 	}
 }

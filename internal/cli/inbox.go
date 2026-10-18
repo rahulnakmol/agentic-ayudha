@@ -47,11 +47,14 @@ var inboxOrder = []string{InboxDecision, InboxCapped, InboxUnshipped, InboxFixed
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
 
-// InboxAction is one thing the person can do with an item.
+// InboxAction is one thing the person can do with an item: one of its
+// options, under the number the person picks it by. A Decision's options keep
+// the Decision's own numbers (decide.Options), as the approval batch does.
 type InboxAction struct {
-	Label   string `json:"label"`
-	Command string `json:"command"` // what it does, as the verb or inbox step that does it
-	Option  string `json:"option,omitempty"`
+	N           int    `json:"n"`
+	Label       string `json:"label"`   // a Decision option's bold title, or the step's action
+	Command     string `json:"command"` // what it does, as the verb or inbox step that does it
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 // InboxItem is one human-only step.
@@ -62,8 +65,8 @@ type InboxItem struct {
 	URL         string        `json:"url"`
 	Seat        verbs.SeatID  `json:"seat"`
 	Why         string        `json:"why"`
-	Recommend   *InboxAction  `json:"recommend,omitempty"`
-	Others      []InboxAction `json:"others,omitempty"`
+	Options     []InboxAction `json:"options,omitempty"`
+	OneWay      bool          `json:"one_way,omitempty"` // an irreversible Decision: every pick is confirmed
 	Provisional bool          `json:"provisional,omitempty"`
 	PR          int           `json:"pr,omitempty"`          // the merged fix or delivery PR
 	ReplacedBy  int           `json:"replaced_by,omitempty"` // the replacing issue
@@ -71,47 +74,26 @@ type InboxItem struct {
 	mergeSHA    string
 }
 
-var (
-	replacesRE   = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
-	boldOption   = regexp.MustCompile(`^\s*(?:[-*]|[0-9]+[.)])\s+\*\*(.+?)\*\*`)
-	namedOption  = regexp.MustCompile(`(?:^|[.;]\s+)\s*(?:[-*]\s+|[0-9]+[.)]\s+)?\**([A-Za-z][A-Za-z0-9_-]{0,30})\**:\s`)
-	optionNumber = regexp.MustCompile(`(?i)\boption\s+([0-9]+)\b`)
-	recommended  = regexp.MustCompile(`(?i)\s*\(recommended\)\.?$`)
-)
+var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
 
-// decisionOptions are the option names of a Decision's Options field, and the
-// index of the one its Recommendation names (-1 when none).
-func decisionOptions(options, recommendation string) ([]string, int) {
-	var names []string
-	rec := -1
-	for _, line := range strings.Split(options, "\n") {
-		if m := boldOption.FindStringSubmatch(line); m != nil {
-			name := strings.TrimSuffix(strings.TrimSpace(recommended.ReplaceAllString(m[1], "")), ".")
-			if strings.Contains(strings.ToLower(line), "(recommended)") && rec < 0 {
-				rec = len(names)
-			}
-			names = append(names, name)
-			continue
-		}
-		for _, m := range namedOption.FindAllStringSubmatch(line, -1) {
-			if !slices.Contains(names, m[1]) {
-				names = append(names, m[1])
-			}
+// recommended is the option the item recommends, or nil.
+func (it InboxItem) recommended() *InboxAction {
+	for i := range it.Options {
+		if it.Options[i].Recommended {
+			return &it.Options[i]
 		}
 	}
-	if rec < 0 {
-		if m := optionNumber.FindStringSubmatch(recommendation); m != nil {
-			if i, _ := strconv.Atoi(m[1]); i >= 1 && i <= len(names) {
-				rec = i - 1
-			}
+	return nil
+}
+
+// option is the item's option numbered n, or nil.
+func (it InboxItem) option(n int) *InboxAction {
+	for i := range it.Options {
+		if it.Options[i].N == n {
+			return &it.Options[i]
 		}
 	}
-	for i, n := range names {
-		if rec < 0 && decide.MatchOption(recommendation, n) {
-			rec = i
-		}
-	}
-	return names, rec
+	return nil
 }
 
 // gatherInbox lists the human-only steps in repo, read with c. dev is the
@@ -182,7 +164,7 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			m := replacedBy[it.Number]
 			it.Kind, it.Seat, it.ReplacedBy = InboxReplaced, verbs.ProductStrategist, m
 			it.Why = fmt.Sprintf("#%d says it replaces #%d, and #%d is still open.", m, it.Number, it.Number)
-			it.Recommend = &InboxAction{Label: fmt.Sprintf("close #%d as not planned, replaced by #%d", it.Number, m), Command: "inbox: close as replaced"}
+			it.Options = []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("close #%d as not planned, replaced by #%d", it.Number, m), Command: "inbox: close as replaced"}}
 			out = append(out, it)
 		case typ == "story" && !slices.Contains([]string{"merged", "released", "measured", "done", "cancelled"}, status):
 			pr := delivered(it.Number)
@@ -191,7 +173,7 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			}
 			it.Kind, it.Seat, it.PR, it.mergeSHA = InboxUnshipped, verbs.Auditor, pr.Number, pr.MergeSHA
 			it.Why = fmt.Sprintf("PR #%d merged into %s (%s) without `aayu ship`, so no ship record or human pass exists; the Story is still status:%s.", pr.Number, dev, short(pr.MergeSHA), or(status, "unset"))
-			it.Recommend = &InboxAction{Label: fmt.Sprintf("mark #%d merged without proof (it stays uncovered)", it.Number), Command: fmt.Sprintf("aayu audit --mark-merged %d", it.Number)}
+			it.Options = []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("mark #%d merged without proof (it stays uncovered)", it.Number), Command: fmt.Sprintf("aayu audit --mark-merged %d", it.Number)}}
 			out = append(out, it)
 		case typ == "bug":
 			pr := delivered(it.Number)
@@ -200,7 +182,7 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			}
 			it.Kind, it.Seat, it.PR, it.mergeSHA = InboxFixed, verbs.EngineeringManager, pr.Number, pr.MergeSHA
 			it.Why = fmt.Sprintf("its fix, PR #%d, merged into %s (%s), and the Bug is still open.", pr.Number, dev, short(pr.MergeSHA))
-			it.Recommend = &InboxAction{Label: fmt.Sprintf("close #%d as completed, fixed in #%d", it.Number, pr.Number), Command: "inbox: close as fixed"}
+			it.Options = []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("close #%d as completed, fixed in #%d", it.Number, pr.Number), Command: "inbox: close as fixed"}}
 			out = append(out, it)
 		}
 	}
@@ -225,9 +207,9 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			disp = st.Result.Disposition
 		}
 		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
-			Why:       fmt.Sprintf("inspect ran %d of %d fix/rebuild cycles and stopped (last disposition: %s); a person reviews it before anything else runs.", st.Cycles, inspect.MaxCycles, disp),
-			Recommend: &InboxAction{Label: "open it and review it", Command: "open"},
-			Others:    []InboxAction{{Label: fmt.Sprintf("ship PR #%d now (ship's gates still apply)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())}}})
+			Why: fmt.Sprintf("inspect ran %d of %d fix/rebuild cycles and stopped (last disposition: %s); a person reviews it before anything else runs.", st.Cycles, inspect.MaxCycles, disp),
+			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
+				{N: 2, Label: fmt.Sprintf("ship PR #%d now (ship's gates still apply)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())}}})
 	}
 	slices.SortStableFunc(out, func(a, b InboxItem) int {
 		if d := slices.Index(inboxOrder, a.Kind) - slices.Index(inboxOrder, b.Kind); d != 0 {
@@ -238,8 +220,8 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 	return out, nil
 }
 
-// decisionItem is an open Decision as an inbox step: accept its
-// recommendation, or another of its options, through `decide --accept`.
+// decisionItem is an open Decision as an inbox step: accept one of its
+// options, by the Decision's own number, through `decide --accept`.
 func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 	w, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), labels)
 	it.Kind, it.Seat = InboxDecision, verbs.Founder
@@ -248,34 +230,70 @@ func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 		it.Why = fmt.Sprintf("not Decision-ready (%s): open it and complete it before it can be accepted.", ps[0].String())
 		return it
 	}
-	names, rec := decisionOptions(w.Fields["options"], w.Fields["recommendation"])
+	it.OneWay = strings.TrimSpace(w.Fields[workitems.FieldReversible]) != "true" || slices.Contains(labels, workitems.LabelWaiver)
 	switch {
 	case it.Provisional:
 		by := "no deadline recorded"
 		if t, ok := decide.RatifyBy(is.GetBody()); ok {
 			by = t.UTC().Format("2006-01-02 15:04 UTC")
 		}
-		it.Why = fmt.Sprintf("its recommendation applies provisionally (V8): ratify it, or revert to another option, by %s.", by)
+		it.Why = fmt.Sprintf("its recommendation applies provisionally (V8): ratify it by accepting it, or revert to another option, by %s.", by)
 	case slices.Contains(labels, workitems.LabelWaiver):
 		it.Why = "a floor waiver: only a person accepts it, and it is never applied provisionally (rule 7)."
 	default:
 		it.Why = "waiting for its authority to accept an option."
 	}
-	for i, n := range names {
-		a := InboxAction{Label: "accept " + clip(n, 90), Command: fmt.Sprintf("aayu decide %d --accept %q", it.Number, n), Option: n}
-		if it.Provisional && i != rec {
-			a.Label = "revert: accept " + clip(n, 82)
-		}
-		if i == rec {
-			if it.Provisional {
-				a.Label = "ratify: accept " + clip(n, 82)
-			}
-			it.Recommend = &a
-			continue
-		}
-		it.Others = append(it.Others, a)
+	opts, _ := decide.Options(w)
+	for _, o := range opts {
+		it.Options = append(it.Options, InboxAction{N: o.N, Label: clip(o.Name, 60), Recommended: o.Recommended,
+			Command: fmt.Sprintf("aayu decide %d --accept %d", it.Number, o.N)})
 	}
 	return it
+}
+
+// inboxChoices is the line under every step that says what each key does.
+func inboxChoices(it InboxItem) string {
+	verb := "accept"
+	if it.Kind != InboxDecision {
+		verb = "do"
+	}
+	var parts []string
+	switch r := it.recommended(); {
+	case r != nil && len(it.Options) > 1:
+		parts = append(parts, fmt.Sprintf("a or Enter = %s the recommendation (option %d)", verb, r.N))
+	case r != nil:
+		parts = append(parts, "a or Enter = "+r.Label)
+	}
+	if n := len(it.Options); n > 1 {
+		parts = append(parts, fmt.Sprintf("1-%d = %s that option", n, verb))
+	}
+	open := "o = open on GitHub"
+	if it.Kind == InboxDecision && len(it.Options) == 0 {
+		open = "o = open on GitHub to complete it"
+	}
+	return "  " + strings.Join(append(parts, "s = skip for now", open, "q = quit"), " · ")
+}
+
+// inboxConfirm is the one line that says exactly what a pick does, asked
+// before a pick that is not the recommendation or that is a one-way door.
+func inboxConfirm(it InboxItem, a InboxAction) string {
+	var s string
+	if it.Kind == InboxDecision {
+		s = fmt.Sprintf("This accepts option %d (%s) as the answer to Decision #%d and closes it", a.N, a.Label, it.Number)
+	} else {
+		s = "This will " + a.Label
+	}
+	switch r := it.recommended(); {
+	case a.Recommended:
+	case r != nil:
+		s += fmt.Sprintf(", instead of the recommendation (option %d, %s)", r.N, r.Label)
+	default:
+		s += "; it names no recommendation"
+	}
+	if it.OneWay {
+		s += "; it is a one-way door, so it is not undone later"
+	}
+	return "  " + s + ". Apply it? y = yes · n = no, go back"
 }
 
 // runInbox is `aayu inbox`.
@@ -309,68 +327,81 @@ func runInbox(ctx context.Context, e *Env, _ Values) error {
 		fmt.Fprintf(w, "%s: nothing waits for you.\n", repo)
 		return nil
 	}
-	fmt.Fprintf(w, "%s: %d human-only step(s) wait for you, @%s. Keys: a accept the recommendation, c choose another, s skip, o open, q quit.\n", repo, len(items), login)
+	fmt.Fprintf(w, "%s: %d human-only step(s) wait for you, @%s. Each step lists its choices.\n", repo, len(items), login)
 	done, skipped := 0, 0
 	for i, it := range items {
 		fmt.Fprintf(w, "\n[%d/%d] %s #%d: %s\n  %s\n", i+1, len(items), inboxNoun(it), it.Number, it.Title, it.Why)
+		r := it.recommended()
 		switch {
-		case it.Recommend != nil && it.Kind == InboxDecision:
-			fmt.Fprintf(w, "  the Decision recommends: %s\n", it.Recommend.Label)
-		case it.Recommend != nil:
-			fmt.Fprintf(w, "  %s recommends: %s\n", e.twin(it.Seat), it.Recommend.Label)
+		case len(it.Options) == 0:
+			fmt.Fprintf(w, "  %s has no option to accept here.\n", e.twin(it.Seat))
+		case it.Kind != InboxDecision && len(it.Options) == 1:
+			fmt.Fprintf(w, "  %s recommends: %s\n", e.twin(it.Seat), r.Label)
 		default:
-			fmt.Fprintf(w, "  %s has no recommendation to accept here.\n", e.twin(it.Seat))
+			switch {
+			case it.Kind != InboxDecision:
+				fmt.Fprintf(w, "  %s recommends option %d.\n", e.twin(it.Seat), r.N)
+			case r == nil:
+				fmt.Fprintln(w, "  the Decision names no recommendation.")
+			}
+			for _, o := range it.Options {
+				mark := ""
+				if o.Recommended {
+					mark = " (recommended)"
+				}
+				fmt.Fprintf(w, "  %d. %s%s\n", o.N, o.Label, mark)
+			}
 		}
-		for j, o := range it.Others {
-			fmt.Fprintf(w, "  other %d: %s\n", j+1, o.Label)
-		}
-		for {
+		choices := inboxChoices(it)
+		fmt.Fprintln(w, choices)
+		key := func() (byte, error) {
 			fmt.Fprint(w, "  > ")
 			k, err := e.readKey()
+			switch {
+			case err != nil:
+			case k == '\r' || k == '\n':
+				fmt.Fprintln(w)
+			default:
+				fmt.Fprintf(w, "%c\n", k)
+			}
+			return k, err
+		}
+		for {
+			k, err := key()
 			if err != nil {
 				fmt.Fprintln(w)
 				return finishInbox(w, done, skipped, len(items)-i)
 			}
-			fmt.Fprintf(w, "%c\n", k)
 			var act *InboxAction
-			switch k {
-			case 'q', 3:
+			switch {
+			case k == 'q' || k == 3:
 				return finishInbox(w, done, skipped, len(items)-i)
-			case 's':
+			case k == 's':
 				skipped++
-			case 'o':
+			case k == 'o':
 				fmt.Fprintf(w, "  open: %s\n", it.URL)
 				e.openURL(it.URL)
 				continue
-			case 'a':
-				if it.Recommend == nil {
-					fmt.Fprintln(w, "  no recommendation: choose another (c), open (o), or skip (s)")
-					continue
-				}
-				act = it.Recommend
-			case 'c':
-				if len(it.Others) == 0 {
-					fmt.Fprintln(w, "  no other option: accept (a), open (o), or skip (s)")
-					continue
-				}
-				act = &it.Others[0]
-				if len(it.Others) > 1 {
-					fmt.Fprintf(w, "  which other (1-%d)? ", len(it.Others))
-					d, err := e.readKey()
-					if err != nil {
-						return finishInbox(w, done, skipped, len(items)-i)
-					}
-					fmt.Fprintf(w, "%c\n", d)
-					n := int(d - '0')
-					if n < 1 || n > len(it.Others) {
-						fmt.Fprintln(w, "  not one of the others")
-						continue
-					}
-					act = &it.Others[n-1]
-				}
+			case (k == 'a' || k == '\r' || k == '\n') && r != nil:
+				act = r
+			case k >= '1' && k <= '9' && it.option(int(k-'0')) != nil:
+				act = it.option(int(k - '0'))
 			default:
-				fmt.Fprintln(w, "  keys: a, c, s, o, q")
+				fmt.Fprintln(w, choices)
 				continue
+			}
+			if act != nil && (!act.Recommended || it.OneWay) {
+				fmt.Fprintln(w, inboxConfirm(it, *act))
+				y, err := key()
+				if err != nil {
+					fmt.Fprintln(w)
+					return finishInbox(w, done, skipped, len(items)-i)
+				}
+				if y != 'y' && y != 'Y' {
+					fmt.Fprintln(w, "  not applied")
+					fmt.Fprintln(w, choices)
+					continue
+				}
 			}
 			if act != nil {
 				if act.Command == "open" {
@@ -429,7 +460,7 @@ func (e *Env) twin(seat verbs.SeatID) string {
 func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem, a InboxAction) error {
 	switch it.Kind {
 	case InboxDecision:
-		return decideAccept(ctx, e, cfg, repo, it.Number, a.Option)
+		return decideAccept(ctx, e, cfg, repo, it.Number, strconv.Itoa(a.N))
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	}

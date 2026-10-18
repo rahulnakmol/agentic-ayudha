@@ -65,6 +65,34 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 	if r, _ := RunHook("pre-tool", verbs.HostClaude, "", filepath.Join(t.TempDir(), "none"), []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`)); r.Code != 0 {
 		t.Errorf("build was blocked: %+v", r)
 	}
+	// Copilot sends camelCase toolArgs, an object or a JSON string; a denial
+	// is exit 2 with Copilot's permissionDecision JSON. A shell command that
+	// runs aayu build records its session, so build can read the models
+	// Copilot reported; any other command records nothing.
+	for _, args := range []string{`{"command":"aayu ship 4"}`, `"{\"command\":\"aayu ship 4\"}"`} {
+		ev := []byte(`{"sessionId":"s-1","cwd":"/r","toolName":"bash","toolArgs":` + args + `}`)
+		r, _ := RunHook("pre-tool", verbs.HostCopilot, "", filepath.Join(t.TempDir(), "none"), ev)
+		var out struct{ PermissionDecision, PermissionDecisionReason string }
+		if r.Code != 2 || json.Unmarshal([]byte(r.Stdout), &out) != nil || out.PermissionDecision != "deny" || !strings.Contains(out.PermissionDecisionReason, "run `aayu ship 4` in their own terminal") {
+			t.Errorf("copilot, toolArgs %s: %+v", args, r)
+		}
+	}
+	root := t.TempDir()
+	for _, tt := range []struct{ id, cmd, want string }{
+		{"s-other", "aayu status", ""},
+		{"../x", "aayu build 4", ""},
+		{"0f3c-session", "cd sub && aayu build 4 --asked \"add it\"", `{"cwd":"/r","session_id":"0f3c-session"}`},
+	} {
+		ev, _ := json.Marshal(map[string]any{"sessionId": tt.id, "cwd": "/r", "toolName": "bash", "toolArgs": map[string]string{"command": tt.cmd}})
+		if r, _ := RunHook("pre-tool", verbs.HostCopilot, root, filepath.Join(t.TempDir(), "none"), ev); r.Code != 0 || r.Stdout != "" {
+			t.Errorf("copilot %s: %+v", tt.cmd, r)
+		}
+		RecordCopilotSession(root, ev) // what the CLI does once every check passed
+		got, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(CopilotSession)))
+		if strings.TrimSpace(string(got)) != tt.want {
+			t.Errorf("copilot %s recorded %q, want %q", tt.cmd, got, tt.want)
+		}
+	}
 	// An agent never writes the stable-release request that `release --to main`
 	// needs (Story #430), with whatever tool posts it; reading it, or the word in a
 	// commit, passes.

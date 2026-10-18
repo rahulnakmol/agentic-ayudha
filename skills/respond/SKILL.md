@@ -110,7 +110,9 @@ timestamped lines, one decision at a time, and every change to production is a p
    (`# Incident log: …` at a startup, `# Postmortem: …` at a scaleup, `# Incident review: …` at an enterprise), with
    the parts Summary, Impact, Timeline, Causes, What went well, and Actions as `##` headings. The Timeline cites the
    incident (`#<incident>`) and gives each event its UTC time; Causes names the root cause and the contributing
-   conditions as systems, changes, and decisions, with their evidence (a commit, a `path:line`, `query qN`); each
+   conditions as systems, changes, and decisions (the root cause is the earliest change in the chain the record
+   supports, never the failure mechanism: a timeout, a 503, or a slow dependency is how it failed, not why; a cause
+   another team reports in a comment is the root cause, labelled "reported by the owning team (`#N`), not in our telemetry"), with their evidence (a commit, a `path:line`, `query qN`); each
    action has an owner and its Bug or Story, the durable fix's follow-up Bug first. Contributing conditions come from the record (the note's
    evidence, the timeline, the queries); when it shows none, write "No contributing condition is established" with
    the citation, and turn open questions into actions rather than causes. Keep the
@@ -122,7 +124,7 @@ timestamped lines, one decision at a time, and every change to production is a p
    that as its reason ("the record names no alert"), never that no alert fired or that people found it; a team saying
    it has no alert on one signal is not evidence that no signal existed. Measure the impact from the first observed
    failure to the start of the verified recovery window, say the end is approximate when no query covers it, and
-   quote counts per window as the queries give them; never extend a rate past the window that measured it. Describe the response only by what the timeline and
+   quote counts per window as the queries give them, in the Summary as in Impact (N of M, never "every request"); never extend a rate past the window that measured it. Describe the response only by what the timeline and
    comments record, not by how an investigation is meant to run (such as "the revision was established before the code
    was read"). Never call a run a first try or a clean run unless the record
    shows its history. The incident is open until `--close` runs: describe recovery by the recovery query and its window,

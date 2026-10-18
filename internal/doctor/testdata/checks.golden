@@ -37,7 +37,7 @@ FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is
 ## host pass
 PASS  host  host amp (from AMP_THREAD_ID)
 ## host fail
-WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, GitHub Copilot, or Cursor); pass --host when running outside one
 ## secrets pass
 PASS  secrets  secrets backends: env, file
                  unavailable: keychain (no Secret Service)
@@ -55,11 +55,30 @@ PASS  mcp  aayudha MCP server: claude from .mcp.json at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## provider-mcp pass
+PASS  provider-mcp  no PostHog or Sentry MCP server registered with a host
+## provider-mcp fail
+FAIL  provider-mcp  3 PostHog or Sentry MCP server(s); aayudha's pre-tool hook lets them read and refuses their writes; the lines say what to tighten
+                      posthog "posthog" (claude, .mcp.json): a PostHog or Sentry key is written into this file, which the repository shares. Fix: revoke that key now, then reference an environment variable instead (for example "Authorization": "Bearer ${POSTHOG_API_KEY}") or move the server to your user config
+                      posthog "posthog" (claude, .mcp.json): the server offers PostHog's write tools. Fix: add readonly=true to the URL (https://mcp.posthog.com/mcp?readonly=true) or the header x-posthog-read-only: true, so it lists only read tools
+                      posthog "posthog" (claude, .mcp.json): the server is not pinned to one project, so an agent can switch projects. Fix: add project_id=<your project ID> to the URL, or the header x-posthog-project-id
+                      sentry "sentry" (claude, .mcp.json): the server offers Sentry skills beyond inspect (seer starts paid runs; triage and project-management write). Fix: limit it to the inspect skill: ?skills=inspect on https://mcp.sentry.dev/mcp, or --skills=inspect for npx @sentry/mcp-server
+                      sentry "sentry" (claude, .mcp.json): the server is not limited to one organization. Fix: use https://mcp.sentry.dev/mcp/<org>/<project>
+                      sentry "sentry" (claude, .mcp.json): the hosted server signs in with OAuth, and Sentry grants that token write scopes whatever skills you pick. Fix: prefer a read-only token: run npx @sentry/mcp-server --access-token=${SENTRY_ACCESS_TOKEN} --skills=inspect (stdio), with the token aayudha's doctor accepts
+                      sentry "sentry-local" (claude, .mcp.json): set up to read only
 ## codex-hooks pass
 PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
 ## codex-hooks fail
 FAIL  codex-hooks  Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them
                      plugin aayudha@aayudha: the PreToolUse hook is not trusted yet; trust it in Codex's /hooks
+## copilot pass
+PASS  copilot  not installed for GitHub Copilot here
+## copilot fail
+FAIL  copilot  GitHub Copilot is not set up safely here; the lines say what to fix
+                 no aayudha hooks in .github/hooks/aayudha.json, so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`
+                 aayu's GitHub token (AAYU_GITHUB_TOKEN) is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token
+                 Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks
+                 live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills, the aayudha MCP tool, the hooks, each Auto tier, a HydraFusion Critique turn); VS Code agent mode is not live-proven
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass
@@ -148,6 +167,14 @@ WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; a
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
                        no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
                        falling back to a human review
+## review-rung pass
+PASS  review-rung  C  same-family review: codex (openai), no other family reachable; it never counts toward autonomy, so a person passes every PR
+                     builder any of [anthropic openai] (amp picks the model for its modes)
+                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
+## review-rung fail
+WARN  review-rung  no reviewer app can review: a person reviews every PR
+                     builder any of [anthropic openai] (amp picks the model for its modes)
+                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
 ## retired-workflows pass
 PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail

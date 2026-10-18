@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "preToolUse": [
+      {
+        "bash": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host copilot",
+        "powershell": "& \"/opt/aayudha/bin/aayu\" hook pre-tool --host copilot",
+        "type": "command"
+      }
+    ],
+    "sessionStart": [
+      {
+        "bash": "\"/opt/aayudha/bin/aayu\" hook session-start --host copilot",
+        "powershell": "& \"/opt/aayudha/bin/aayu\" hook session-start --host copilot",
+        "type": "command"
+      }
+    ]
+  },
+  "version": 1
+}

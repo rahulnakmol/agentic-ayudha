@@ -62,7 +62,7 @@ The usual call: `aayu experiment 42 --hypothesis "A one-page checkout lifts sign
 checkout-v2 --mde 10%`.
 
 > **Needs setup:** the baseline rate always comes from PostHog. Connect it with `aayu init --integrations`, then
-> store a read-only project key with `aayu auth set-secret posthog`.
+> store a read-only key with `aayu auth set-secret posthog` ([PostHog and Sentry](../guide-integrations.md)).
 >
 > **Honest status:** the PostHog adapter has not been proven live against a real PostHog project here.
 

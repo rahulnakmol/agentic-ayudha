@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
@@ -281,14 +283,19 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	// #449): a write is a catalog action a person approves.
 	if name == "pre-tool" && !standAside && r.Code == 0 {
 		if ev, ok := hostcall.FromHook(event); ok {
-			if v := hostcall.Decide(ev, e.hostcallOptions()); !v.Allow {
+			if v := e.hostcallDecide(ctx, ev); !v.Allow {
 				r = hosts.Deny(verbs.HostID(e.Host), v.Reason)
 				r.Next = "read instead, or propose the write with the verb that owns it"
 			}
 		}
 	}
+	// Only a call every check let through: a denied build is never credited
+	// to the Copilot session that asked for it.
+	if name == "pre-tool" && !standAside && r.Code == 0 && e.Host == string(verbs.HostCopilot) {
+		hosts.RecordCopilotSession(root, event)
+	}
 	if name == "post-tool" && !standAside {
-		e.logHostCall(event)
+		e.logHostCall(ctx, event)
 	}
 	// A marketplace plugin calls aayu from PATH and passes the skills version it
 	// carries; session-start says so when this binary carries another.
@@ -302,27 +309,61 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	return nil
 }
 
-// hostcallOptions are the repository's choices for host PostHog and Sentry
-// calls. Without a readable config every opt-in stays off.
-func (e *Env) hostcallOptions() hostcall.Options {
-	o := hostcall.Options{AllowPII: map[string]bool{}}
-	if l, err := e.Config(); err == nil {
-		for _, p := range []string{hostcall.PostHog, hostcall.Sentry} {
-			o.AllowPII[p] = l.Config.Integrations[p].AllowPII
+// hostcallDecide decides a host's PostHog or Sentry call (Decision #449).
+// The hosts' MCP configs name the servers registered under any name; they are
+// read only for an MCP call. allow_pii is read only when the call would be
+// refused without it.
+func (e *Env) hostcallDecide(ctx context.Context, ev hostcall.Event) hostcall.Verdict {
+	var o hostcall.Options
+	if strings.HasPrefix(ev.Tool, "mcp__") {
+		o.Servers = map[string]string{}
+		root, home := config.RepoRoot(e.Dir), e.homeDir()
+		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv)) {
+			o.Servers[s.Name] = hostcall.ProviderOf(strings.Join(append([]string{s.Name, s.URL, s.Command}, s.Args...), " "))
 		}
 	}
-	return o
+	v := hostcall.Decide(ev, o)
+	if v.Provider != "" && !v.Allow {
+		o.AllowPII = e.committedAllowPII(ctx)
+		v = hostcall.Decide(ev, o)
+	}
+	return v
+}
+
+// committedAllowPII reads [integrations.<provider>] allow_pii from
+// .aayudha/config.toml as committed where this branch left the dev branch, or
+// at HEAD when there is no dev branch to compare with; never from the working
+// tree, so an agent that edits the file, or commits it on its own branch,
+// cannot opt itself in to personal data. Unreadable, every opt-in stays off.
+func (e *Env) committedAllowPII(ctx context.Context) map[string]bool {
+	root, git := config.RepoRoot(e.Dir), e.exec()
+	ref := "HEAD"
+	if mb, err := git(ctx, root, "git", "merge-base", "HEAD", "origin/"+e.devBranch()); err == nil && strings.TrimSpace(mb) != "" {
+		ref = strings.TrimSpace(mb)
+	}
+	out := map[string]bool{}
+	var cfg struct {
+		Integrations map[string]struct {
+			AllowPII bool `toml:"allow_pii"`
+		} `toml:"integrations"`
+	}
+	if b, err := git(ctx, root, "git", "show", ref+":.aayudha/config.toml"); err == nil && toml.Unmarshal([]byte(b), &cfg) == nil {
+		for p, i := range cfg.Integrations {
+			out[p] = i.AllowPII
+		}
+	}
+	return out
 }
 
 // logHostCall appends a PostHog or Sentry call the host ran to the session's
 // call log (.aayudha/state/calls). A failure to log is reported on stderr and
 // never fails the hook: the call has already run.
-func (e *Env) logHostCall(event []byte) {
+func (e *Env) logHostCall(ctx context.Context, event []byte) {
 	ev, res, session, ok := hostcall.FromPostHook(event)
 	if !ok {
 		return
 	}
-	v := hostcall.Decide(ev, e.hostcallOptions())
+	v := e.hostcallDecide(ctx, ev)
 	if v.Provider == "" || !v.Allow {
 		return
 	}

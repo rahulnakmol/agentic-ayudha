@@ -96,6 +96,9 @@ type CallLog struct {
 	MaxTokens    int     `json:"max_tokens"`
 	Error        string  `json:"error,omitempty"`
 	CostUSD      float64 `json:"cost_usd"` // this attempt; each retry's cost is on the retry
+	// Step is the saved step (Harness.step) the call belongs to, such as a
+	// survey section, so tokens and cost add up per step.
+	Step string `json:"step,omitempty"`
 	// Retries are the provider faults the call was retried after (WP5.8,
 	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
 	// never the skill's, so it does not cost the run its one allowed error.
@@ -163,13 +166,17 @@ type Harness struct {
 	Assets  fs.FS // embedded skills/; stub skills live in evals/skills under Root
 	// Inspect is [inspect] from the configuration: the review cases' filters and peer model.
 	Inspect config.Inspect
-	mu      sync.Mutex
-	spent   float64
+	// Steps is the directory each run's steps are saved in as they return
+	// (<case>/<sample>/<step>.json) and resumed from; "" saves nothing.
+	Steps string
+	mu    sync.Mutex
+	spent float64
 	// unpriced counts the calls charged at the fallback rate, by model: such a
 	// model has no price, so its cost (and the max_usd cap) is a guess.
 	unpriced map[string]int
 
 	fallback string // the current case's skill-lane fallback model
+	model    string // the current case's skill-lane model
 }
 
 // skillLane returns the registry lane of the verb the case's skill is, or
@@ -531,7 +538,7 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				return nil, fmt.Errorf("judge %s against fallback %s: %w", h.Config.Judge, alt, err)
 			}
 		}
-		h.fallback = alt
+		h.fallback, h.model = alt, m.Model
 		// One prompt-cache key per case: its runs share their prompt prefixes.
 		ctx := context.WithValue(ctx, cacheKey{}, "aayu-eval-"+c.ID)
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
@@ -540,6 +547,7 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
 				continue
 			}
+			ctx := context.WithValue(ctx, sampleKey{}, i) // a saved step belongs to one sample
 			var run Run
 			switch {
 			case c.UX != nil:

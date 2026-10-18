@@ -70,7 +70,8 @@ type Verdict struct {
 
 // Options are the per-provider settings a project chose.
 type Options struct {
-	AllowPII map[string]bool // provider → [integrations.<provider>] allow_pii
+	AllowPII map[string]bool   // provider → [integrations.<provider>] allow_pii
+	Servers  map[string]string // MCP server name → provider, for servers registered under a name that says neither (from the hosts' MCP configs: their URL, command, or package)
 }
 
 // Decide decides one call. It is pure: no network, no files.
@@ -78,7 +79,7 @@ func Decide(e Event, o Options) Verdict {
 	if e.Shell != "" {
 		return decideShell(e.Shell, o)
 	}
-	provider, tool := mcpTool(e)
+	provider, tool := mcpTool(e, o.Servers)
 	if provider == "" {
 		return Verdict{Allow: true}
 	}
@@ -105,12 +106,18 @@ func check(v Verdict, tool string, o Options) Verdict {
 	case l.pii[tool] && o.AllowPII[v.Provider]:
 		v.Allow = true
 	case l.pii[tool]:
-		v.Reason = fmt.Sprintf("aayudha: %s %s returns personal data, which is opt-in: a person sets [integrations.%s] allow_pii = true in .aayudha/config.toml to allow it.", name, quote(tool), v.Provider)
+		v.Reason = piiReason(v.Provider, quote(tool))
 	default:
 		v.Reason = fmt.Sprintf("aayudha: %s %s is not on aayudha's read allowlist, so it may write or spend: agents only read %s through a host. "+
 			"A write is a catalog action a person approves: propose it with the verb that owns it, which runs it through ops/actions.toml.", name, quote(tool), name)
 	}
 	return v
+}
+
+// piiReason refuses a read that returns personal data while allow_pii is off.
+func piiReason(provider, call string) string {
+	name := map[string]string{PostHog: "PostHog", Sentry: "Sentry"}[provider]
+	return fmt.Sprintf("aayudha: %s %s returns personal data, which is opt-in: a person sets [integrations.%s] allow_pii = true in .aayudha/config.toml to allow it.", name, call, provider)
 }
 
 func quote(s string) string {
@@ -124,8 +131,9 @@ func str(v any) string { s, _ := v.(string); return strings.TrimSpace(s) }
 
 // mcpTool names the provider and tool of an MCP call. A server is PostHog's
 // or Sentry's when its name (mcp__<server>__…) or, in Cursor, its URL or
-// command says so.
-func mcpTool(e Event) (provider, tool string) {
+// command says so, or when the hosts registered it with a URL, command, or
+// package that does (servers).
+func mcpTool(e Event, servers map[string]string) (provider, tool string) {
 	server, tool := "", e.Tool
 	if rest, ok := strings.CutPrefix(e.Tool, "mcp__"); ok {
 		if i := strings.Index(rest, "__"); i > 0 {
@@ -135,16 +143,26 @@ func mcpTool(e Event) (provider, tool string) {
 	if server == "" {
 		server = e.Server
 	}
-	s := strings.ToLower(server)
-	switch {
-	case server == "":
+	if server == "" {
 		return "", ""
-	case strings.Contains(s, "posthog"):
-		return PostHog, tool
-	case strings.Contains(s, "sentry"):
-		return Sentry, tool
 	}
-	return "", ""
+	if p := ProviderOf(server); p != "" {
+		return p, tool
+	}
+	return servers[server], tool
+}
+
+// ProviderOf names the provider a server name, URL, command, or package
+// belongs to, or "".
+func ProviderOf(s string) string {
+	s = strings.ToLower(s)
+	switch {
+	case strings.Contains(s, "posthog"):
+		return PostHog
+	case strings.Contains(s, "sentry"):
+		return Sentry
+	}
+	return ""
 }
 
 // execReads are the PostHog exec verbs that only look at the catalog.
@@ -202,29 +220,64 @@ func execLines(command string) []string {
 	return out
 }
 
-// shellSplit splits a shell command into simple commands at ;, &&, ||, |,
-// and newlines. It is deliberately simple: a provider CLI hidden in a
-// subshell or a quoted string is not seen.
-var shellSplit = regexp.MustCompile(`&&|\|\||[;|\n]`)
+// shellSplit splits a shell command into simple commands at ;, &&, ||, |, &,
+// newlines, parentheses, and backticks, so a provider CLI in a subshell or a
+// command substitution is seen too. Quotes are dropped before the split, so
+// one passed as a string (bash -c 'sentry-cli …') is seen as well; a provider
+// CLI named inside other quoted text may be refused, never missed.
+var (
+	shellSplit = regexp.MustCompile("&&|\\|\\||[;|\n&()`]")
+	unquote    = strings.NewReplacer(`"`, "", `'`, "")
+	numeric    = regexp.MustCompile(`^[0-9.]+[smhd]?$`) // timeout 30, xargs -n 1
+)
 
 // runners are commands that run a package's binary: npx @sentry/cli …
 var runners = map[string]int{"npx": 1, "bunx": 1, "pnpx": 1, "pnpm": 2, "yarn": 2} // pnpm dlx, yarn dlx
 
-func decideShell(shell string, o Options) Verdict {
-	first := Verdict{Allow: true}
-	for _, part := range shellSplit.Split(shell, -1) {
-		f := strings.Fields(part)
+// wrappers are commands that run the command after their own flags: env,
+// sudo, timeout 30, xargs; shells run the script after -c.
+var (
+	wrappers = []string{"env", "command", "exec", "builtin", "nohup", "time", "nice", "ionice", "stdbuf", "timeout", "xargs", "sudo", "doas", "caffeinate"}
+	shells   = []string{"sh", "bash", "zsh", "dash", "ksh", "fish"}
+)
+
+// unwrap drops environment assignments, wrappers, and package runners from a
+// simple command until the program it runs comes first.
+func unwrap(f []string) []string {
+	for {
 		for len(f) > 0 && strings.Contains(f[0], "=") && !strings.HasPrefix(f[0], "-") { // FOO=bar cmd
 			f = f[1:]
 		}
-		if len(f) > 0 {
-			if n, ok := runners[path.Base(f[0])]; ok && len(f) > n {
-				f = f[n:]
-				for len(f) > 0 && strings.HasPrefix(f[0], "-") { // npx -y @sentry/cli
-					f = f[1:]
-				}
-			}
+		if len(f) == 0 {
+			return f
 		}
+		prog := path.Base(f[0])
+		n, runner := runners[prog]
+		switch {
+		case runner && len(f) > n:
+			f = f[n:]
+		case slices.Contains(wrappers, prog):
+			f = f[1:]
+		case slices.Contains(shells, prog) && slices.ContainsFunc(f[1:], isScriptFlag):
+			f = f[1:]
+		default:
+			return f
+		}
+		for len(f) > 0 && (strings.HasPrefix(f[0], "-") || numeric.MatchString(f[0])) { // npx -y, bash -lc, timeout 30
+			f = f[1:]
+		}
+	}
+}
+
+// isScriptFlag reports a shell flag that makes its next word the script: -c, -lc, -ec.
+func isScriptFlag(a string) bool {
+	return strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c")
+}
+
+func decideShell(shell string, o Options) Verdict {
+	first := Verdict{Allow: true}
+	for _, part := range shellSplit.Split(unquote.Replace(shell), -1) {
+		f := unwrap(strings.Fields(part))
 		if len(f) == 0 {
 			continue
 		}
@@ -257,12 +310,18 @@ func cliName(prog string) string {
 	return ""
 }
 
-// args drops flags (and the value of a --flag=value form) so the
+// valueFlags are the CLIs' flags whose value is the next word.
+var valueFlags = []string{"--auth-token", "--api-key", "--token", "--url", "--header", "-H", "--log-level", "--org", "-o", "--project", "-p", "--host"}
+
+// words drops flags, and the value of a flag that takes one, so the
 // subcommands remain.
 func words(args []string) []string {
 	var out []string
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case slices.Contains(valueFlags, a):
+			i++
+		case !strings.HasPrefix(a, "-"):
 			out = append(out, a)
 		}
 	}
@@ -282,8 +341,12 @@ var cliReads = map[string][]string{
 }
 
 // sentryNouns are the new sentry CLI's nouns whose list, view, and events
-// subcommands read.
-var sentryNouns = []string{"issue", "event", "span", "trace", "log", "replay", "feedback", "dashboard", "release", "monitor", "org", "project", "team", "repo", "dsn"}
+// subcommands read; replays and user feedback return personal data, so they
+// read only with allow_pii.
+var (
+	sentryNouns = []string{"issue", "event", "span", "trace", "log", "replay", "feedback", "dashboard", "release", "monitor", "org", "project", "team", "repo", "dsn"}
+	sentryPII   = []string{"replay", "feedback"}
+)
 
 func decideCLI(cli string, args []string, o Options) Verdict {
 	if cli == "" {
@@ -302,6 +365,10 @@ func decideCLI(cli string, args []string, o Options) Verdict {
 		return r
 	}
 	if cli == "sentry" && len(w) >= 2 && slices.Contains(sentryNouns, w[0]) && slices.Contains([]string{"list", "view", "events"}, w[1]) {
+		if slices.Contains(sentryPII, w[0]) && !o.AllowPII[Sentry] {
+			v.Reason = piiReason(Sentry, "`"+cmd+"`")
+			return v
+		}
 		v.Allow = true
 		return v
 	}

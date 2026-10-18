@@ -57,7 +57,8 @@ With GrowthBook: `aayu readout 57 --source growthbook --metric met_signup`.
 
 > **Needs setup:** the counts come from PostHog or GrowthBook. Connect the one you use with `aayu init
 > --integrations`, then store its read-only key with `aayu auth set-secret posthog` or `aayu auth set-secret
-> growthbook`.
+> growthbook`. Connecting PostHog is in [PostHog and Sentry](../guide-integrations.md#connect-posthog); GrowthBook
+> has no step-by-step guide yet, and aayu cannot check its key's role, so give it a read-only key.
 >
 > **Honest status:** the PostHog and GrowthBook readouts have not been proven live against real accounts here.
 

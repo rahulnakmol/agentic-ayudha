@@ -60,6 +60,25 @@ checks cover the binary, `git`, `git-lfs`, your sign-in, the bot identity, the c
 server, optional tools, agent environments, reviewer apps, loops, and existing CI. With `--fix`, it shows the diff,
 then re-syncs the skill copies and `.aayudha/lock.toml`.
 
+**PostHog and Sentry.** When `[integrations.posthog]` or `[integrations.sentry]` is set, the `integrations` row
+first checks that the key reads only, then tries each thing aayudha reads from the provider with one cheap read
+(PostHog: a `SELECT 1` query; Sentry: the organization, its region, and the project, then one hour of sessions,
+error counts, and issues, and one release and one alert). A Sentry token needs `org:read`, `event:read`,
+`project:read`, and `alerts:read`; a PostHog personal API key needs `query:read`. Each line says `works`, or `does not work` with the exact fix: the scope to add to the key, the other
+region's URL, or the project or organization ID to set. The `provider-mcp` row reads every PostHog or Sentry MCP
+server your hosts have registered and says how to make it read-only and pinned to one project. It fails when a
+committed file holds a key.
+
+```text
+FAIL  integrations  1 of 1 configured integration(s) reachable with a read-only key
+                      posthog: reachable as personal API key aayudha; read-only scope verified (query:read, insight:read per GET /api/personal_api_keys/@current/)
+                        posthog, HogQL queries (query:read; used by measure, grill, experiment, readout): does not work: PostHog at https://eu.posthog.com has no project 12345. Fix: set project = to the numeric ID in Project settings → Project ID; if the project is on the other cloud, set url = "https://us.posthog.com"
+```
+
+> **Honest status:** the PostHog and Sentry checks are tested against answers shaped from each provider's published
+> API specification, not against a live account. Your first `aayu doctor` with your own key is the first real run.
+> If a line looks wrong for your account, open an issue with that line.
+
 **You should see** `PASS` on every row you need. `WARN` and `N/A` rows are optional. A `FAIL` marked `[blocking]`
 exits 3 until you fix it. See [install problems](../troubleshooting.md#install), or
 [everything else](../troubleshooting.md#everything-else).

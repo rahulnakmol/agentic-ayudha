@@ -134,7 +134,8 @@ func TestBuildLeaseAttemptsResume(t *testing.T) {
 }
 
 // WP5.5 build budget: a second verify miss on a never layer blocks before the
-// attempts budget, and spend over [autonomy.budget] cost_usd blocks at once.
+// attempts budget, and metered spend over [autonomy.budget] cost_usd blocks at
+// once, but only when aayu's own model calls are pay-as-you-go.
 func TestBuildNeverLayerAndCost(t *testing.T) {
 	g, env, opts, dir, _, _, _ := thinFixture(t)
 	wt := BuildWorktree(dir, 2)
@@ -156,9 +157,64 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready again: %s", errOut)
 	}
-	env["AAYU_COST_USD"] = "30"
-	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: 30.00 USD spent, budget 25.00 USD") {
-		t.Fatalf("over the cost budget: %d %s %s", code, out, errOut)
+	// The cost limit (60 USD) applies only when aayu's own calls are
+	// pay-as-you-go: a direct provider's key here. Spend is appended to the
+	// clone's actions log, which build reads.
+	logged := func(usd string) {
+		t.Helper()
+		p := filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString(`{"kind":"model.call","story":"#2","status":"done","cost_usd":` + usd + "}\n")
+		_ = f.Close()
+	}
+	notBlocked := func(what string) {
+		t.Helper()
+		if _, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") {
+			t.Fatalf("%s: blocked: %s %s", what, out, errOut)
+		}
+	}
+	env["AAYU_SECRET_ANTHROPIC"] = "model-key"
+	logged("60")
+	notBlocked("metered, at 60 USD")
+	logged("0.01")
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 60.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("metered, over the cost budget: %d %s %s", code, out, errOut)
+	}
+	// With no metered key or endpoint there is no cost limit, though the log
+	// shows 100 USD for the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	delete(env, "AAYU_SECRET_ANTHROPIC")
+	logged("39.99")
+	_ = os.WriteFile(filepath.Join(wt, "notes.txt"), []byte("a checkpoint\n"), 0o644)
+	_, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+	if strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") ||
+		!strings.Contains(out, "metered spend 100.00 USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)") {
+		t.Fatalf("no metered key, 100 USD logged: %s %s", out, errOut)
+	}
+	// Spend a host reports in AAYU_COST_USD is metered: it counts, and the
+	// limit applies to it.
+	env["AAYU_COST_USD"] = "0.01"
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("AAYU_COST_USD reported, over the cost budget: %d %s %s", code, out, errOut)
+	}
+	// A cap set to 0 on purpose says so, rather than blaming a missing key;
+	// a per_story_usd kept below cost_usd is the limit that stops the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "notes2.txt"), []byte("another checkpoint\n"), 0o644)
+	_, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "autonomy.budget.cost_usd=0")
+	if strings.Contains(out+errOut, "cost budget breached") || !strings.Contains(out, "metered spend 100.01 USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)") {
+		t.Fatalf("cost_usd = 0: %s %s", out, errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "budget.per_story_usd=25"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 25 (subscription use not counted)") {
+		t.Fatalf("per_story_usd 25 below cost_usd 60: %d %s %s", code, out, errOut)
 	}
 }
 
@@ -748,10 +804,66 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
 		t.Fatalf("own grilled story: %d %s", code, errOut)
 	}
+	// The same holds across two Copilot sessions.
+	copilot := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "COPILOT_AGENT_SESSION_ID": session}
+	}
+	code, out, errOut = run(t, copilot("c1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show averages", "--body", body, "--labels", "effort:S", "--create")
+	res = GrillResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill in Copilot: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(res.Issue), "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %d: %s", res.Issue, errOut)
+	}
+	if code, _, errOut := run(t, copilot("c2"), opts, "build", strconv.Itoa(res.Issue), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another Copilot session's grilled story: %d %s", code, errOut)
+	}
 	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready 6: %s", errOut)
 	}
 	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CURSOR_TRACE_ID": "t"}, opts, "build", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("a person in Cursor's terminal: %d %s", code, errOut)
+	}
+}
+
+// Under GitHub Copilot, aayu cannot name the model: the checkpoint commit
+// records every model Copilot reported in the session that ran build, most
+// recent first, and a HydraFusion critic apart from them, for inspect's
+// different-family rule. The build record holds one model, so with two
+// families it names none: naming the latest would hide the other.
+func TestBuildRecordsCopilotModels(t *testing.T) {
+	_, env, opts, dir, bare := buildSetup(t)
+	copilotHome := t.TempDir()
+	env["COPILOT_HOME"] = copilotHome
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	session := filepath.Join(copilotHome, "session-state", "s-1")
+	_ = os.MkdirAll(session, 0o755)
+	_ = os.WriteFile(filepath.Join(session, "events.jsonl"), []byte(`{"type":"assistant.message","data":{"model":"gpt-6-luna"}}
+{"type":"session.fusion_resolved","data":{"pattern":"critique","secondaryModel":"gpt-6-luna"}}
+{"type":"assistant.message","data":{"model":"claude-opus-5.5","fusion":{"phaseKind":"draft","sourceModel":"claude-opus-5.5"}}}
+`), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "state"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "copilot-session.json"), []byte(`{"session_id":"s-1"}`), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 {
+		t.Fatalf("build: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json"); code != 0 {
+		t.Fatalf("build (checkpoint): %d %s", code, errOut)
+	}
+	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
+	if want := "Aayudha-Host: copilot\nAayudha-Model: claude-opus-5.5\nAayudha-Model: gpt-6-luna\nAayudha-Critic-Model: gpt-6-luna"; !strings.Contains(msg, want) {
+		t.Fatalf("checkpoint commit lacks the Copilot trailers:\n%s", msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }

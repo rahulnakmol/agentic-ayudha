@@ -119,7 +119,9 @@ the account's installations, and from the comments, reviews, and checks on the l
 `[inspect] reviewer` picks one on the review ladder. `auto`, the default, takes the first listed app whose family the
 builder cannot be: a different-family review. With none, it takes the first listed app that can review: a
 same-family review, the default for a user with one subscription. With no app at all, a person reviews,
-`[autonomy] approver`. A high-risk pull request still gets this one reviewer, never two.
+`[autonomy] approver`. A high-risk pull request still gets this one reviewer, never two. `aayu doctor`'s
+`review-rung` row shows the rung this checkout's builds get, from the detected host's build lane and the listed
+apps, and names the apps that would move it up; it calls no model.
 
 The review the gate records, and shows as the first line of the inspect comment, is one of three:
 

@@ -23,6 +23,11 @@ func TestDecide(t *testing.T) {
 		{"posthog AI-credit read", Event{Tool: "mcp__posthog__surveys-summarize-responses-create"}, Options{}, PostHog, false, "not on aayudha's read allowlist"},
 		{"posthog person data", Event{Tool: "mcp__posthog__persons-list"}, Options{}, PostHog, false, "allow_pii = true"},
 		{"posthog person data opted in", Event{Tool: "mcp__posthog__persons-list"}, pii, PostHog, true, ""},
+		{"posthog session recording", Event{Tool: "mcp__posthog__session-recording-get"}, Options{}, PostHog, false, "allow_pii = true"},
+		{"posthog session recording opted in", Event{Tool: "mcp__posthog__session-recording-get"}, pii, PostHog, true, ""},
+		{"posthog recordings query", Event{Tool: "mcp__posthog__query-session-recordings-list"}, Options{}, PostHog, false, "personal data"},
+		{"posthog recording playlist", Event{Tool: "mcp__posthog__session-recording-playlist-get"}, Options{}, PostHog, false, "personal data"},
+		{"posthog replay vision observations", Event{Tool: "mcp__posthog__vision-observations-list"}, Options{}, PostHog, false, "personal data"},
 		{"posthog unknown tool", Event{Tool: "mcp__posthog__brand-new-tool"}, Options{}, PostHog, false, "not on aayudha's read allowlist"},
 		{"posthog server named by its user", Event{Tool: "mcp__plugin_posthog_PostHog__delete-feature-flag"}, Options{}, PostHog, false, "`delete-feature-flag`"},
 		// PostHog MCP in CLI mode: one exec tool whose command names the tool.
@@ -39,9 +44,13 @@ func TestDecide(t *testing.T) {
 		{"sentry proxy read", Event{Tool: "mcp__sentry__execute_sentry_tool", Input: map[string]any{"name": "find_releases"}}, Options{}, Sentry, true, ""},
 		{"sentry proxy write", Event{Tool: "mcp__sentry__execute_sentry_tool", Input: map[string]any{"name": "create_alert_rule"}}, Options{}, Sentry, false, "`create_alert_rule`"},
 		{"sentry replay content", Event{Tool: "mcp__sentry__get_replay_details"}, Options{}, Sentry, false, "[integrations.sentry] allow_pii"},
+		{"sentry replay search", Event{Tool: "mcp__sentry__search_replays"}, Options{}, Sentry, false, "[integrations.sentry] allow_pii"},
 		// Cursor names the tool alone and reports the server's URL or command.
 		{"cursor posthog url", Event{Tool: "update-feature-flag", Server: "https://mcp.posthog.com/mcp?readonly=true"}, Options{}, PostHog, false, ""},
 		{"cursor sentry stdio", Event{Tool: "search_issues", Server: "npx @sentry/mcp-server --access-token=…"}, Options{}, Sentry, true, ""},
+		// A server registered under another name is known by its URL, command, or package.
+		{"renamed sentry server", Event{Tool: "mcp__errors__update_issue"}, Options{Servers: map[string]string{"errors": Sentry}}, Sentry, false, "`update_issue`"},
+		{"renamed posthog server read", Event{Tool: "mcp__analytics__feature-flag-get-all"}, Options{Servers: map[string]string{"analytics": PostHog}}, PostHog, true, ""},
 		// Other servers and tools are not decided here.
 		{"other server", Event{Tool: "mcp__github__create_issue"}, Options{}, "", true, ""},
 		{"built-in tool", Event{Tool: "edit_file"}, Options{}, "", true, ""},
@@ -52,6 +61,9 @@ func TestDecide(t *testing.T) {
 		{"sentry-cli after an env assignment", Event{Shell: "SENTRY_AUTH_TOKEN=x sentry-cli deploys new -e prod"}, Options{}, Sentry, false, ""},
 		{"a later write refuses the line", Event{Shell: "git log -1 && sentry-cli releases list && sentry-cli releases finalize 1.2.3"}, Options{}, Sentry, false, "finalize"},
 		{"sentry cli noun read", Event{Shell: "sentry issue view ACME-12 --json"}, Options{}, Sentry, true, ""},
+		{"sentry cli replay", Event{Shell: "sentry replay view 4f1c --json"}, Options{}, Sentry, false, "[integrations.sentry] allow_pii"},
+		{"sentry cli replay opted in", Event{Shell: "sentry replay view 4f1c --json"}, pii, Sentry, true, ""},
+		{"sentry cli user feedback", Event{Shell: "sentry feedback list"}, Options{}, Sentry, false, "personal data"},
 		{"sentry cli resolve", Event{Shell: "sentry issue resolve ACME-12"}, Options{}, Sentry, false, ""},
 		{"sentry cli seer", Event{Shell: "sentry issue explain ACME-12"}, Options{}, Sentry, false, ""},
 		{"sentry cli raw api", Event{Shell: "sentry api /organizations/acme/issues/ -X PUT"}, Options{}, Sentry, false, ""},
@@ -59,6 +71,15 @@ func TestDecide(t *testing.T) {
 		{"posthog-cli api read", Event{Shell: "posthog-cli api call --json feature-flag-get-all '{}'"}, Options{}, PostHog, true, ""},
 		{"posthog-cli api write", Event{Shell: "posthog-cli api call --confirm create-feature-flag '{}'"}, Options{}, PostHog, false, "`create-feature-flag`"},
 		{"posthog-cli upload", Event{Shell: "posthog-cli sourcemap upload --directory dist"}, Options{}, PostHog, false, ""},
+		{"sentry-cli in bash -c", Event{Shell: `bash -c 'sentry-cli releases new 1.2.3'`}, Options{}, Sentry, false, "`sentry-cli releases new 1.2.3`"},
+		{"sentry-cli in sh -lc with an env assignment", Event{Shell: `sh -lc "SENTRY_AUTH_TOKEN=x sentry-cli deploys new -e prod"`}, Options{}, Sentry, false, "deploys new"},
+		{"sentry-cli after env", Event{Shell: "env FOO=1 sentry-cli releases finalize 1.2.3"}, Options{}, Sentry, false, "finalize"},
+		{"npx under timeout", Event{Shell: "timeout 30 npx -y @sentry/cli releases new 1.2.3"}, Options{}, Sentry, false, "releases new"},
+		{"sentry-cli through xargs", Event{Shell: "echo 1.2.3 | xargs -n 1 sentry-cli releases delete"}, Options{}, Sentry, false, "releases delete"},
+		{"sentry-cli in a command substitution", Event{Shell: "echo $(sentry-cli releases new 1.2.3)"}, Options{}, Sentry, false, "releases new"},
+		{"posthog-cli in the background under nohup", Event{Shell: "nohup posthog-cli sourcemap upload --directory dist &"}, Options{}, PostHog, false, "sourcemap upload"},
+		{"a read through bash -lc", Event{Shell: `bash -lc "sentry-cli releases list --org acme"`}, Options{}, Sentry, true, ""},
+		{"global flags before the subcommand", Event{Shell: "sentry-cli --auth-token abc123 --org acme issues list"}, Options{}, Sentry, true, ""},
 		{"no provider CLI", Event{Shell: "echo sentry-cli releases new && go test ./..."}, Options{}, "", true, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

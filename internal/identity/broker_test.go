@@ -302,4 +302,10 @@ func TestHumanTokenOrder(t *testing.T) {
 	if _, err := (Resolver{Getenv: func(string) string { return "" }, GH: noGH}).Human(context.Background()); !errors.Is(err, ErrNoToken) {
 		t.Errorf("no source: err = %v", err)
 	}
+	// Copilot CLI's own token is never aayu's: under copilot, aayu's GitHub
+	// identity stays the one gh or AAYU_GITHUB_TOKEN gives it.
+	copilot := func(k string) string { return map[string]string{"COPILOT_GITHUB_TOKEN": "copilot-account"}[k] }
+	if tok, err := (Resolver{Getenv: copilot, CI: true, GH: noGH}).Human(context.Background()); !errors.Is(err, ErrNoToken) {
+		t.Errorf("COPILOT_GITHUB_TOKEN alone resolved a human token from %s", tok.Source)
+	}
 }

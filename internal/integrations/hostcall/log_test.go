@@ -59,13 +59,43 @@ func TestNewEntry(t *testing.T) {
 			}
 		})
 	}
-	// Arguments are stored redacted; the result never is stored.
-	pat := "ghp_" + strings.Repeat("0", 36) // built at run time so secret scanners see no token
-	e := Event{Tool: "mcp__sentry__find_releases", Input: map[string]any{"query": "token " + pat}}
-	en := NewEntry(e, Decide(e, Options{}), Result{Output: []byte(`[{"email":"person@example.com"}]`)}, "claude", "s1", at)
-	b, _ := json.Marshal(en)
-	if strings.Contains(string(b), pat) || strings.Contains(string(b), "person@example.com") {
-		t.Errorf("the entry holds a secret or the result: %s", b)
+	// Arguments are stored redacted, PostHog's and Sentry's tokens included
+	// however they are typed; the result never is stored. Tokens are built at
+	// run time so secret scanners see none.
+	hex := strings.Repeat("a1", 32) // a Sentry user token of the old shape: only its context says it is one
+	for _, tt := range []struct {
+		name, secret, keep string
+		e                  Event
+	}{
+		{"github token in an argument", "ghp_" + strings.Repeat("0", 36), "",
+			Event{Tool: "mcp__sentry__find_releases", Input: map[string]any{"query": "token ghp_" + strings.Repeat("0", 36)}}},
+		{"sentry token in an environment assignment", hex, "SENTRY_AUTH_TOKEN=[REDACTED]",
+			Event{Shell: "SENTRY_AUTH_TOKEN=" + hex + " sentry-cli issues list --limit 5 --period 1d"}},
+		{"sentry token after export", hex, "",
+			Event{Shell: "export SENTRY_AUTH_TOKEN='" + hex + "'; sentry-cli releases list --limit 5"}},
+		{"sentry organization token in a flag", "sntrys_" + strings.Repeat("Q", 40), "--auth-token=[REDACTED]",
+			Event{Shell: "sentry-cli --auth-token=sntrys_" + strings.Repeat("Q", 40) + " issues list"}},
+		{"posthog personal key, quoted", "phx_" + strings.Repeat("Z", 43), "POSTHOG_PERSONAL_API_KEY=[REDACTED]",
+			Event{Shell: `POSTHOG_PERSONAL_API_KEY="phx_` + strings.Repeat("Z", 43) + `" posthog-cli exp query run 'SELECT 1'`}},
+		{"bearer header in an mcp argument", hex, "",
+			Event{Tool: "mcp__posthog__execute-sql", Input: map[string]any{"query": "SELECT 1 -- Authorization: Bearer " + hex}}},
+		{"sentry user token in an mcp argument", "sntryu_" + hex, "",
+			Event{Tool: "mcp__sentry__find_releases", Input: map[string]any{"query": "sntryu_" + hex}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			v := Decide(tt.e, Options{})
+			if !v.Allow {
+				t.Fatalf("Decide refused the call: %s", v.Reason)
+			}
+			en := NewEntry(tt.e, v, Result{Output: []byte(`[{"email":"person@example.com"}]`)}, "claude", "s1", at)
+			b, _ := json.Marshal(en)
+			if strings.Contains(string(b), tt.secret) || strings.Contains(string(b), "person@example.com") {
+				t.Errorf("the entry holds a secret or the result: %s", b)
+			}
+			if !strings.Contains(string(en.Args), tt.keep) {
+				t.Errorf("args %s; want %q kept with only the value redacted", en.Args, tt.keep)
+			}
+		})
 	}
 }
 

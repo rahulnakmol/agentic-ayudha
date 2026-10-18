@@ -82,6 +82,9 @@ func (r Resolver) Resolve(lane verbs.LaneID, host verbs.HostID) (Resolved, error
 	if fam == "" {
 		fam = verbs.FamilyOf(c.Model)
 	}
+	if fam == "" && host == verbs.HostCopilot && verbs.CopilotSelector(c.Model) {
+		fam = verbs.FamilyHostManaged // Copilot reports the model per response
+	}
 	if fam == "" {
 		return Resolved{}, fmt.Errorf("[models.%s.%s] model %q: unknown family; set family", lane, host, c.Model)
 	}

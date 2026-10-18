@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "preToolUse": [
+      {
+        "bash": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host copilot",
+        "powershell": "& \"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host copilot",
+        "type": "command"
+      }
+    ],
+    "sessionStart": [
+      {
+        "bash": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook session-start --host copilot",
+        "powershell": "& \"C:\\Program Files\\aayudha\\aayu.exe\" hook session-start --host copilot",
+        "type": "command"
+      }
+    ]
+  },
+  "version": 1
+}

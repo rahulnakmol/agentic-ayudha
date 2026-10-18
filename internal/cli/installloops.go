@@ -51,6 +51,9 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if root == "" {
 		return Errorf(ExitUsage, "install --loops: run inside a git repository")
 	}
+	if h := e.Host; h != "" && h != "all" && !slices.Contains(loops.AgentHosts, h) {
+		return Errorf(ExitUsage, "install --loops: %s does not run aayudha's loops; name one that does with --host (%s)", h, strings.Join(loops.AgentHosts, ", "))
+	}
 	ls, err := loops.Load(root)
 	if err != nil {
 		return Wrap(ExitUsage, err)

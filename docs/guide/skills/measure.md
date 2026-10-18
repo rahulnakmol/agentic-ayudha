@@ -40,7 +40,8 @@ Use the measure skill to measure Goal issue 12 against its baseline from payment
 
 > **Needs setup:** a billing export (CSV) or an events export from Application Insights, CloudWatch RUM, or GA4
 > BigQuery (JSON lines). For `--live`, connect [Azure](../../getting-started-azure.md),
-> [AWS](../../getting-started-aws.md), or [Google Cloud](../../getting-started-gcp.md) first.
+> [AWS](../../getting-started-aws.md), or [Google Cloud](../../getting-started-gcp.md) first. A Goal whose Metric is a
+> PostHog or Sentry baseline needs that integration ([PostHog and Sentry](../guide-integrations.md)).
 
 <!-- BEGIN GENERATED: skill-usage -->
 

@@ -599,7 +599,7 @@ func (d *Data) fetchAutonomy(ctx context.Context, s Source, in *Inputs) error {
 		if !s.Rules.Agent(p) {
 			continue
 		}
-		a := AgentPR{Number: p.Number, MergedAt: p.MergedAt, Layers: s.Rules.Layers.Footprint(p.Files)}
+		a := AgentPR{Number: p.Number, MergedAt: p.MergedAt, Layers: s.Rules.Layers.Footprint(p.Files), Rung: p.Rung}
 		for _, f := range p.Files {
 			if rest, ok := strings.CutPrefix(f, "skills/"); ok {
 				if sk, _, ok := strings.Cut(rest, "/"); ok && !slices.Contains(a.Skills, sk) {

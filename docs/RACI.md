@@ -118,23 +118,29 @@ The reviewer model family must differ from the builder model family on every sto
 | `build` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `build` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `build` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `build` | GitHub Copilot | Copilot Auto (Balance) | `auto:balance` | host-managed | escalation: Copilot Auto (Intelligence) |
 | `spec` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
 | `spec` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `spec` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `spec` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `spec` | GitHub Copilot | Copilot Auto (Balance) | `auto:balance` | host-managed | escalation: Copilot Auto (Intelligence) |
 | `plan` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
 | `plan` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `plan` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `plan` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `plan` | GitHub Copilot | Copilot Auto (Balance) | `auto:balance` | host-managed | escalation: Copilot Auto (Intelligence) |
 | `review` (adversarial) | Amp | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | Cursor | Grok 4.7 | `grok-4.7` | xai | — |
 | `review` (adversarial) | Claude Code | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | OpenAI Codex | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Grok 4.7 (grok-4.7) |
+| `review` (adversarial) | GitHub Copilot | Copilot Auto (Intelligence) | `auto:intelligence` | host-managed | or a model from a family other than the builder's, picked in Copilot's model picker; or HydraFusion Critique, opt-in, which counts only when its recorded critic's family differs from the builder's |
 | `ui-review` (adversarial) | Amp | Amp high | host-managed | host-managed | — |
 | `ui-review` (adversarial) | Cursor | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | Claude Code | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | OpenAI Codex | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | GitHub Copilot | Copilot Auto (Intelligence) | `auto:intelligence` | host-managed | — |
 | `chore` | Amp | Amp low | host-managed | host-managed | — |
 | `chore` | Cursor | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
 | `chore` | Claude Code | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
 | `chore` | OpenAI Codex | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
+| `chore` | GitHub Copilot | Copilot Auto (Efficiency) | `auto:efficiency` | host-managed | — |

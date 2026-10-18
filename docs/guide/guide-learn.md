@@ -26,7 +26,8 @@ for you when it ships work, and the `release-measure` [loop](guide-loops.md) can
 from [the story](journey-8-learn.md).
 
 Need to know whether *your change* caused the difference, not just whether the number moved? Plan an `experiment`
-before the release and `readout` after. That needs PostHog or GrowthBook and enough traffic.
+before the release and `readout` after. That needs PostHog and enough traffic (`readout` can also read GrowthBook);
+connecting PostHog is in [PostHog and Sentry](guide-integrations.md).
 
 ## Learn from the work: retro
 

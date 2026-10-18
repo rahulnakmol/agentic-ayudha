@@ -81,7 +81,7 @@ ledger.
 SHA-256, workflows default to `contents: read`, and checkout never persists credentials. Releases are signed and
 attested; see [releases and the supply chain](how-releases.md).
 
-**Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story reaches
+**Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story goes over
 `per_story_usd` or spend for the day reaches `per_day_usd`. It pauses agent lanes (exit code 6) until a human runs
 `aayu resume`, and pages once per scope per day.
 

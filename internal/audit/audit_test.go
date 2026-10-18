@@ -215,6 +215,26 @@ func TestAuditPlanReviewBypass(t *testing.T) {
 	}
 }
 
+// Decision #469: the report counts the agent merges in the window by their
+// review's rung, and leaves out merges outside it.
+func TestAuditReviewRungs(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(5), Until: at(24)}
+	d := &Data{Dev: "dev", AgentPRs: []AgentPR{{Number: 1, MergedAt: at(6), Rung: "A"}, {Number: 2, MergedAt: at(7), Rung: "C"}, {Number: 3, MergedAt: at(8), Rung: "C"},
+		{Number: 4, MergedAt: at(9)}, {Number: 5, MergedAt: at(10), Rung: "human"}, {Number: 6, MergedAt: at(2), Rung: "A"}, {Number: 7, MergedAt: at(24), Rung: "B"}}}
+	md := string(Build(in, d).Markdown())
+	if want := "- Review rungs of agent merges among the newest 100 merged PRs (Decision #469): different-family (A) 1; paid different-family (B) 0; a person's 1; same-family (C) 2; none recorded 1"; !strings.Contains(md, want) {
+		t.Errorf("report lacks %q:\n%s", want, md)
+	}
+	// With no rung on record (a snapshot from before the ladder), the line is
+	// left out, so a replayed report stays byte for byte the same.
+	for i := range d.AgentPRs {
+		d.AgentPRs[i].Rung = ""
+	}
+	if md = string(Build(in, d).Markdown()); strings.Contains(md, "Review rungs") {
+		t.Errorf("a report with no rung on record shows the rung line:\n%s", md)
+	}
+}
+
 // Flow metrics (P1, S-7.6e) on hand-computed, asymmetric data: #1 waits 24 h
 // for a person after its gate went green and was touched three times; #2 has
 // no build record, ships an hour after green, and escapes as Bug #9. Bug #8

@@ -216,6 +216,26 @@ func Check(ctx context.Context, d Deps, name string) (integrations.Scope, error)
 	return s.Scope(ctx)
 }
 
+// capable is what an adapter adds when doctor can try each of its
+// capabilities with a cheap read (Decision #449).
+type capable interface {
+	Capabilities(ctx context.Context) []integrations.Check
+}
+
+// Capabilities tries each capability of the named integration with its
+// cheapest read, after the same resolution Check makes; nil when the adapter
+// has no capability checks.
+func Capabilities(ctx context.Context, d Deps, name string) ([]integrations.Check, error) {
+	_, s, err := open(d, name)
+	if err != nil {
+		return nil, err
+	}
+	if c, ok := s.(capable); ok {
+		return c.Capabilities(ctx), nil
+	}
+	return nil, nil
+}
+
 // PostHog opens [integrations.posthog] for experiment and readout (WP6.7).
 func PostHog(d Deps) (*posthog.Client, error) {
 	_, s, err := open(d, "posthog")

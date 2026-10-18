@@ -18,6 +18,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/hostcall"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -175,7 +176,7 @@ func DetectHost(flag string, getenv func(string) string) (host, how string) {
 func checkHost(_ context.Context, p *Probe) Result {
 	host, how := DetectHost(p.Host, p.Getenv)
 	if host == "" {
-		return Result{Status: Warn, Detail: "no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one"}
+		return Result{Status: Warn, Detail: "no host detected (Amp, Claude Code, OpenAI Codex, GitHub Copilot, or Cursor); pass --host when running outside one"}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("host %s (from %s)", host, how)}
 }
@@ -273,6 +274,11 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: %v", n, err))
 		case err != nil:
 			worse(Fail)
+			// An adapter that can explain the failure says what to fix.
+			if checks := capabilities(ctx, p, n); len(checks) > 0 && !checks[0].OK && checks[0].Fix != "" {
+				r.Lines = append(r.Lines, fmt.Sprintf("%s: %s. Fix: %s", n, checks[0].Detail, checks[0].Fix))
+				continue
+			}
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: unreachable: %v", n, err))
 		case len(sc.Write) > 0:
 			worse(Fail)
@@ -280,6 +286,18 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 		case sc.Verified:
 			reachable++
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; read-only scope verified (%s per %s)", n, sc.Account, strings.Join(sc.Scopes, ", "), sc.Endpoint))
+			for _, ch := range capabilities(ctx, p, n) {
+				what := fmt.Sprintf("  %s, %s (%s", n, ch.Capability, strings.Join(ch.Scopes, ", "))
+				if len(ch.Verbs) > 0 {
+					what += "; used by " + strings.Join(ch.Verbs, ", ")
+				}
+				if ch.OK {
+					r.Lines = append(r.Lines, what+"): works: "+ch.Detail)
+					continue
+				}
+				worse(Fail)
+				r.Lines = append(r.Lines, what+"): does not work: "+ch.Detail+". Fix: "+ch.Fix)
+			}
 		default:
 			reachable++
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; the provider does not report this key's scope, so configured scope %s is trusted", n, sc.Account, in.Scope))
@@ -288,6 +306,60 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 	r.Detail = fmt.Sprintf("%d of %d configured integration(s) reachable with a read-only key", reachable, len(configured))
 	if len(configured) == 0 {
 		r.Detail = "no integrations configured"
+	}
+	return r
+}
+
+// capabilities asks the integration's adapter to try each capability with a
+// cheap read; nil when doctor cannot or the adapter has no checks.
+func capabilities(ctx context.Context, p *Probe, name string) []integrations.Check {
+	if p.Capabilities == nil {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	checks, err := p.Capabilities(cctx, name)
+	if err != nil {
+		return nil
+	}
+	return checks
+}
+
+// checkProviderMCP reads every PostHog and Sentry MCP server a host has
+// registered (Decision #449) and says what to change so it reads only, is
+// pinned to one project, and keeps no key in a file the repository shares.
+// aayudha's pre-tool hook refuses their writes either way, so a loose setting
+// is a warning; a shared key fails.
+func checkProviderMCP(_ context.Context, p *Probe) Result {
+	home := p.Getenv("HOME")
+	servers := hosts.ProviderServers(p.Root, home, hosts.CodexHome(home, p.Getenv))
+	if len(servers) == 0 {
+		return Result{Status: Pass, Detail: "no PostHog or Sentry MCP server registered with a host"}
+	}
+	r := Result{Status: Pass}
+	var ok []string
+	for _, s := range servers {
+		provider, findings := hostcall.Audit(hostcall.Server{URL: s.URL, Command: s.Command, Args: s.Args, Env: s.Env, Headers: s.Headers, Committed: s.Committed})
+		where := fmt.Sprintf("%s %q (%s, %s)", provider, s.Name, s.Host, s.File)
+		if len(findings) == 0 {
+			ok = append(ok, where)
+			continue
+		}
+		for _, f := range findings {
+			if f.Secret {
+				r.Status = Fail
+			} else if r.Status == Pass {
+				r.Status = Warn
+			}
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: %s. Fix: %s", where, f.Problem, f.Fix))
+		}
+	}
+	for _, w := range ok {
+		r.Lines = append(r.Lines, w+": set up to read only")
+	}
+	r.Detail = fmt.Sprintf("%d PostHog or Sentry MCP server(s); aayudha's pre-tool hook lets them read and refuses their writes", len(servers))
+	if r.Status != Pass {
+		r.Detail += "; the lines say what to tighten"
 	}
 	return r
 }
@@ -522,6 +594,10 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
 		case r.Command == "":
 			problems = append(problems, fmt.Sprintf("%s: no %q server in %s", r.Host, hosts.ServerName, r.File))
+		case repoLocal(p.Root, r.Command):
+			// A registration is repository content anyone can change; doctor
+			// runs only an absolute binary outside the checkout.
+			problems = append(problems, fmt.Sprintf("%s: %s points the %q server at %s, which is relative or inside this repository, so doctor does not run it; install writes aayu's absolute path", r.Host, r.File, hosts.ServerName, r.Command))
 		default:
 			out, err := p.Exec(ctx, "", r.Command, "version")
 			if err != nil {
@@ -556,9 +632,100 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		return Result{Status: Warn, Detail: detail, Lines: steps}
 	}
 	if len(fine) == 0 {
-		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|cursor|amp> --apply`, or add the aayudha plugin to your host"}
+		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|copilot|cursor|amp> --apply`, or add the aayudha plugin to your host"}
 	}
 	return Result{Status: Pass, Detail: "aayudha MCP server: " + strings.Join(fine, "; ")}
+}
+
+// repoLocal reports whether command is relative or lies inside root, after
+// resolving symbolic links: a file the repository itself can supply.
+func repoLocal(root, command string) bool {
+	if !filepath.IsAbs(command) {
+		return true
+	}
+	for _, r := range []string{root, evalOr(root)} {
+		for _, c := range []string{command, evalOr(command)} {
+			if rel, err := filepath.Rel(r, c); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evalOr(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
+// checkCopilot reports what GitHub Copilot needs from a person here: the
+// hooks file, trust in the folder (Copilot CLI loads the project's MCP server
+// and hooks only then), and a sign-in kept apart from aayu's GitHub identity.
+// Copilot CLI signs in with COPILOT_GITHUB_TOKEN, then GH_TOKEN, then
+// GITHUB_TOKEN, before a stored copilot login; aayu never reads
+// COPILOT_GITHUB_TOKEN, so with it set each keeps its own account.
+func checkCopilot(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	if l, ok, err := hosts.ReadLock(p.Root); err != nil || !ok || !slices.Contains(l.Hosts, string(verbs.HostCopilot)) {
+		return Result{Status: Pass, Detail: "not installed for GitHub Copilot here"}
+	}
+	var problems, steps, lines []string
+	if !hosts.CopilotGuarded(p.Root) {
+		problems = append(problems, "no aayudha hooks in "+hosts.CopilotHooks+", so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`")
+	}
+	if other := hosts.CopilotOtherHooks(p.Root); len(other) > 0 {
+		// A trusted folder runs every hook file in it, from whatever branch is
+		// checked out, with the person's environment.
+		steps = append(steps, "Copilot runs these hook commands from this repository with your environment; check you expect each one, especially after checking out someone else's branch:")
+		steps = append(steps, other...)
+	}
+	home := p.Getenv("HOME")
+	if home == "" {
+		home = p.Getenv("USERPROFILE") // Windows
+	}
+	if path, err := p.LookPath("copilot"); err == nil {
+		if out, err := p.Exec(ctx, "", path, "--version"); err == nil {
+			lines = append(lines, strings.TrimSpace(strings.SplitN(out, "\n", 2)[0]))
+		} else {
+			steps = append(steps, fmt.Sprintf("%s --version fails (%v): reinstall Copilot CLI or fix PATH", path, err))
+		}
+		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(home, p.Getenv)) {
+			steps = append(steps, "trust this folder in Copilot CLI: start `copilot` here once and answer yes; until then it loads neither the aayudha MCP server nor the hooks")
+		}
+		if p.Getenv("TERM_PROGRAM") == "vscode" {
+			// VS Code keeps its own Workspace Trust, which aayu cannot read.
+			steps = append(steps, "this is VS Code's terminal: VS Code keeps its own Workspace Trust, which aayu cannot read; trust this folder there, or VS Code's agent mode loads neither the aayudha MCP server nor the hooks")
+		}
+	} else {
+		// VS Code keeps Workspace Trust where aayu cannot read it.
+		steps = append(steps, "Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks")
+	}
+	switch ct := p.Getenv("COPILOT_GITHUB_TOKEN"); {
+	case ct != "" && p.Human != nil:
+		if tok, err := p.Human(ctx); err == nil && tok.Value == ct {
+			problems = append(problems, "aayu's GitHub token ("+tok.Source+") is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token")
+		} else {
+			lines = append(lines, "Copilot signs in with COPILOT_GITHUB_TOKEN; aayu's GitHub writes never use it")
+		}
+	case ct != "":
+		lines = append(lines, "Copilot signs in with COPILOT_GITHUB_TOKEN; aayu's GitHub writes never use it")
+	case p.Getenv("GH_TOKEN") != "" || p.Getenv("GITHUB_TOKEN") != "":
+		lines = append(lines, "Copilot CLI signs in with GH_TOKEN or GITHUB_TOKEN here, ahead of a stored copilot login; to run Copilot on another account, set COPILOT_GITHUB_TOKEN for it")
+	default:
+		lines = append(lines, "Copilot signs in with its own login (copilot login, or VS Code's GitHub account)")
+	}
+	lines = append(lines, hosts.CopilotProven)
+	switch {
+	case len(problems) > 0:
+		return Result{Status: Fail, Detail: "GitHub Copilot is not set up safely here; the lines say what to fix", Lines: append(append(problems, steps...), lines...)}
+	case len(steps) > 0:
+		return Result{Status: Warn, Detail: "GitHub Copilot needs a person's step; the lines say which", Lines: append(steps, lines...)}
+	}
+	return Result{Status: Pass, Detail: "GitHub Copilot has the aayudha hooks and trusts this folder", Lines: lines}
 }
 
 // checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,

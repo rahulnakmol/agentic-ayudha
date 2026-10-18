@@ -87,7 +87,8 @@ The baseline gate means no target without today's number. For a Goal measured in
 baseline itself; nobody types it in.
 
 > **Needs setup:** fetching a baseline needs the analytics integration. Without it, the Goal is refused Ready and the
-> message names the metric. Run `aayu init --integrations`, or pick a metric you can already count.
+> message names the metric. Connect one ([PostHog and Sentry](../guide-integrations.md)), or pick a metric you can
+> already count.
 
 ## What only a person does
 
