@@ -604,7 +604,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	case err != nil:
 		return Wrap(ExitExternal, err)
 	}
-	if res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
+	// The review lane's model reviewed this head, so no person's review is
+	// awaited: a human wait an earlier run recorded is cleared, even on a
+	// cached judgement, or the inbox would still offer it (Codex's P2 on #678).
+	waited := st.Human != ""
+	st.Human = ""
+	if res.Disposition != inspect.Skipped && (!res.Cached || relabel || waited) {
 		if lines := inspect.InlineComments(res, st.Posted); len(lines) > 0 && !res.Cached {
 			if err := e.postInline(ctx, c, repo, n, res, lines); err != nil {
 				res.Notes = append(res.Notes, "inline review comments not posted: "+oneLineErr(err))

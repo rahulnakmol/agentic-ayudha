@@ -91,7 +91,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		if e.CI {
 			st := a.prev
 			cp := res
-			st.Stopped, st.Result = head, &cp
+			st.Stopped, st.Result, st.Human = head, &cp, "" // a stopped review is the capped card's, not a human wait
 			if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
 				Payload: map[string]any{"disposition": res.Disposition, "reviewer": choice.Kind()}}); err != nil {
 				return err

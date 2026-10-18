@@ -27,6 +27,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -1008,6 +1009,16 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 	}
 	if !slices.Equal(listed, []int{prA, prB.Number}) {
 		t.Fatalf("human-review items %v, want #%d and #%d:\n%s", listed, prA, prB.Number, out)
+	}
+	// Once the review lane's model reviews a head that waited on a person, the
+	// state no longer offers it (Codex's P2 on #678); the gate at the human
+	// rung records the wait again.
+	if code, res, errOut := inspectRun(t, env, opts, &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}, prA); code != 0 || res.Disposition != inspect.Merge ||
+		inspect.ParseState(lastInspect(t, g, prA)).Human != "" {
+		t.Fatalf("the model's review of #%d leaves the human wait: %d %+v %s\n%s", prA, code, res, errOut, lastInspect(t, g, prA))
+	}
+	if code, _, errOut := inspectApp(t, env, opts, prA, "--ci"); code != ExitBlocked || inspect.ParseState(lastInspect(t, g, prA)).Human != headA {
+		t.Fatalf("gate on #%d at the human rung again: %d %s", prA, code, errOut)
 	}
 
 	marked := maps.Clone(env)
