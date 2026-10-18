@@ -1,0 +1,66 @@
+{
+  "story": 594,
+  "body_hash": "0680025801c22eef12314010ed40d7512c21d01c32a6c974f33491bc20668668",
+  "footprint": [
+    "L02",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Config: [identity] exchange, the HTTPS URL of the owner's token exchange",
+      "contracts": [
+        "config.Identity.Exchange: an https URL with no path, query, or user info; validation names a bad value"
+      ],
+      "tests": [
+        "internal/config:TestIdentityExchange"
+      ],
+      "instrumentation": [
+        "aayu config show prints it"
+      ],
+      "rollback": "revert the PR; an unset exchange keeps today's per-repository App",
+      "criteria": [
+        4,
+        5
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "The exchange's setup service and init --identity through it: a one-time setup state authorised by an allowlisted host OIDC token, the manifest callback that converts the code and imports the key into Key Vault, polling from init, and reuse of the owner's App on later repositories",
+      "contracts": [
+        "cmd/aayudha-exchange: flags and environment, serves internal/exchange.Server",
+        "exchange.Server: POST /v1/setup, GET /setup/start, GET /setup/callback, GET /v1/setup/{state}, GET /v1/app",
+        "exchange.Verifier: RS256/ES256 JWTs against the issuer's JWKS, exact issuer, subject and audience",
+        "exchange.KeyVault: the RSA key imported as non-exportable, signing JWTs through Key Vault's sign operation",
+        "initrepo.Extras.Exchange: the exchange client; with it, app() runs no manifest flow of its own and writes no secret",
+        "Env.exchangeSetup: the host's OIDC token, the start link, polling until created, failed, or an hour"
+      ],
+      "tests": [
+        "internal/exchange:TestSetupCallback",
+        "internal/exchange:TestSetupRefusals",
+        "internal/exchange:TestConversionRefused",
+        "internal/cli:TestInitIdentityThroughExchange"
+      ],
+      "instrumentation": [
+        "one structured log line per setup step with the owner, the state's first 6 characters, and the result; never the code or key",
+        "the init report names the identity step's result: created through the exchange, reused, not covered"
+      ],
+      "rollback": "stop the service; no repository depends on it until story 3 of Decision #576",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-18T08:13:02Z",
+  "planned_by": "human-fallback"
+}
