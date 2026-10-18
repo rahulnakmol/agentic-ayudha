@@ -2,6 +2,28 @@
   "story": 481,
   "branch": "story/481-approve-agents-human-only-steps-as-one-b",
   "started_at": "2026-10-17T22:46:04Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1,
+    "L06": 1,
+    "L07": 1,
+    "L09": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 4,
+      "attempt": 1,
+      "commit": "5a9c7f72fa69d5420670d286183b142e1d01cb30",
+      "layers": [
+        "L02",
+        "L06",
+        "L07",
+        "L09"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T00:07:23Z"
+    }
+  ]
 }
