@@ -30,6 +30,18 @@
       "verify": "miss",
       "detail": "coverage fail",
       "at": "2026-10-18T03:07:29Z"
+    },
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 3,
+      "commit": "78ecc5f2ed184d6086e7bba0841c6504fc018155",
+      "layers": [
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T03:14:15Z"
     }
   ]
 }
