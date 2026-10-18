@@ -83,6 +83,10 @@ Produce design-system mockups for a Feature from its wireframes.
      draws it: its tabs or sections, never swapped for another pattern, each day's windows filled in, and each option
      in it once: a message that offers other options points to their radios in the group or names them, never a
      second radio for the same option), a message that appears as an alert or status, one primary action per state.
+   - **What a state offers is reachable in its file**: an alternative a message offers points to a radio a person
+     can see and choose in that state; if it sits in a day's panel the state hides, show that panel open or include
+     the few lines of script that open it and select the window. Never a link to an element the state hides, and
+     never a note claiming behaviour (focus moves, a panel opens) that the markup does not do.
    - **Every state the wireframe describes, as the wireframe describes it**: the same items, windows, choices, and
      copy (a mockup styles the structure; it does not change what a state offers), and its assumptions still marked.
      Each file shows one state as a person would see it: a transient state the wireframe names (loading, retrying)
