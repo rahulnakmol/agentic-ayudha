@@ -1,0 +1,16 @@
+{
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17) and its source at 8bb4013: posthog/api/personal_api_key.py (@current), posthog/permissions.py (\"API key missing required scope '\u2026'\", \"API key does not have access to the requested project: ID \u2026\"), posthog/auth.py (\"Personal API key found in request Authorization header is invalid.\"), and the {type, code, detail, attr} error shape of posthog/exceptions.py. Not live-proven: no PostHog account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://us.posthog.com/api/personal_api_keys/@current/",
+      "status": 401,
+      "response": {
+        "type": "authentication_error",
+        "code": "authentication_failed",
+        "detail": "Personal API key found in request Authorization header is invalid.",
+        "attr": null
+      }
+    }
+  ]
+}

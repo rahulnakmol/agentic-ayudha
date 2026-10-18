@@ -52,6 +52,9 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p.Integration = func(ctx context.Context, name string) (integrations.Scope, error) {
 		return providers.Check(ctx, e.integrationDeps(p.Repo), name)
 	}
+	p.Capabilities = func(ctx context.Context, name string) ([]integrations.Check, error) {
+		return providers.Capabilities(ctx, e.integrationDeps(p.Repo), name)
+	}
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
 	}

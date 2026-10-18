@@ -1,0 +1,164 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17): 200 bodies are the spec's response examples, with the slug and IDs changed to the test's org acme and project 4507; error bodies are Sentry's DRF answers (getsentry/sentry src/sentry/api/authentication.py at 5218028: {\"detail\": \"Invalid token\"}). The issues, releases, and detectors lists (listOrganizationIssues, listOrganizationReleases, listOrganizationDetectors) answer empty, which their schemas allow. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/",
+      "status": 200,
+      "response": {
+        "version": "0",
+        "auth": {
+          "scopes": [
+            "alerts:read",
+            "event:read",
+            "org:read",
+            "project:read"
+          ]
+        },
+        "user": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/",
+      "status": 200,
+      "response": [
+        {
+          "avatar": {
+            "avatarType": "letter_avatar",
+            "avatarUuid": null
+          },
+          "dateCreated": "2018-11-06T21:19:55.101Z",
+          "features": [
+            "session-replay-video",
+            "onboarding",
+            "advanced-search",
+            "monitor-seat-billing",
+            "issue-platform"
+          ],
+          "hasAuthProvider": false,
+          "id": "2",
+          "isEarlyAdopter": false,
+          "allowMemberInvite": true,
+          "allowMemberProjectCreation": true,
+          "allowSuperuserAccess": false,
+          "links": {
+            "organizationUrl": "https://acme.sentry.io",
+            "regionUrl": "https://us.sentry.io"
+          },
+          "name": "Acme",
+          "require2FA": false,
+          "slug": "acme",
+          "status": {
+            "id": "active",
+            "name": "active"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/projects/",
+      "status": 200,
+      "response": [
+        {
+          "slug": "web",
+          "name": "Prime Mover",
+          "dateCreated": "2018-11-06T21:19:58.536Z",
+          "firstEvent": null,
+          "access": [],
+          "hasAccess": true,
+          "id": "4507",
+          "isBookmarked": false,
+          "isMember": true,
+          "platform": "",
+          "platforms": [],
+          "team": {
+            "id": "2",
+            "name": "Powerful Abolitionist",
+            "slug": "powerful-abolitionist"
+          },
+          "teams": [
+            {
+              "id": "2",
+              "name": "Powerful Abolitionist",
+              "slug": "powerful-abolitionist"
+            }
+          ],
+          "environments": [
+            "local"
+          ],
+          "features": [
+            "releases"
+          ],
+          "firstTransactionEvent": true,
+          "hasSessions": true,
+          "hasProfiles": true,
+          "hasReplays": true,
+          "hasFlags": true,
+          "hasMinifiedStackTrace": false,
+          "hasMonitors": true,
+          "hasFeedbacks": false,
+          "hasNewFeedbacks": false,
+          "hasUserReports": false,
+          "hasInsightsHttp": true,
+          "hasInsightsDb": false,
+          "hasInsightsAssets": true,
+          "hasInsightsAppStart": false,
+          "hasInsightsScreenLoad": false,
+          "hasInsightsVitals": false,
+          "hasInsightsCaches": false,
+          "hasInsightsQueues": false,
+          "hasInsightsAgentMonitoring": false,
+          "hasInsightsMCP": false,
+          "hasLogs": false,
+          "hasTraceMetrics": false,
+          "latestRelease": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/sessions/?field=crash_free_rate%28session%29&includeSeries=0&interval=1h&project=4507&statsPeriod=1h",
+      "status": 403,
+      "response": {
+        "detail": "You do not have permission to perform this action."
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=errors&field=count%28%29&project=4507&statsPeriod=1h",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "count()": 12
+          }
+        ],
+        "meta": {
+          "fields": {
+            "count()": "integer"
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/issues/?limit=1&project=4507&statsPeriod=1h",
+      "status": 200,
+      "response": []
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/?per_page=1&project=4507",
+      "status": 200,
+      "response": []
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/detectors/?per_page=1&project=4507",
+      "status": 200,
+      "response": []
+    }
+  ]
+}
