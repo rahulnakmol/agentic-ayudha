@@ -371,8 +371,11 @@ func TestShipOnProof(t *testing.T) {
 			".github/workflows/pages.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    \"environm\\u0065nt\": production\n    runs-on: ubuntu-latest\n",
 			// The workflow token, a write permission, and a job left to the
 			// repository's default permissions are credentials too.
-			".github/workflows/token.yml":   "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh pr list\n        env: {GH_TOKEN: \"${{ github.token }}\"}\n",
-			".github/workflows/index.yml":   "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github['token'] }}\"\n",
+			".github/workflows/token.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh pr list\n        env: {GH_TOKEN: \"${{ github.token }}\"}\n",
+			".github/workflows/index.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github['token'] }}\"\n",
+			// The whole github context holds the token too.
+			".github/workflows/context.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"$CTX\"\n        env: {CTX: \"${{ toJSON( github ) }}\"}\n",
+			".github/workflows/values.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ join(github.*, ' ') }}\"\n",
 			".github/workflows/write.yml":   "on: push\njobs:\n  x:\n    permissions: {contents: write}\n    runs-on: ubuntu-latest\n",
 			".github/workflows/default.yml": "on: push\njobs:\n  x:\n    permissions: {contents: read}\n    runs-on: ubuntu-latest\n  y:\n    runs-on: ubuntu-latest\n",
 			// A read-only workflow holds none: it merges on proof.
@@ -466,7 +469,8 @@ func TestShipOnProof(t *testing.T) {
 		}
 	}
 	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml",
-		".github/workflows/token.yml", ".github/workflows/index.yml", ".github/workflows/write.yml", ".github/workflows/default.yml"} {
+		".github/workflows/token.yml", ".github/workflows/index.yml", ".github/workflows/context.yml", ".github/workflows/values.yml",
+		".github/workflows/write.yml", ".github/workflows/default.yml"} {
 		g.Mu.Lock()
 		g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt", wf}, 0
 		g.Mu.Unlock()
