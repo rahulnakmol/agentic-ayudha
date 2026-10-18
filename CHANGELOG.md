@@ -14,7 +14,7 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
 
 With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @rahulnakmol. With `[autonomy] proof` on,
-`aayu ship` merges an agent's Story pull request into dev on proof alone, and only a narrow set of paths and settings always
+`aayu ship` merges an agent's Story pull request into dev on proof alone, and on that path a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
 now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
@@ -70,7 +70,7 @@ for this release.
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check passes (ship counts a skipped or neutral check as passing) except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
-- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml` or `action.yaml`), and any changed symbolic link; a pull request in it waits for a person (#617).
+- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml` or `action.yaml`), and any changed symbolic link; with merge on proof on, a pull request in it waits for a person, and with it off, ship does not read the narrow set, so a layer's correction-free streak can merge one (#617, #89).
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
 - `aayu ship` refuses to merge while a required check other than `protected-paths` is red, whoever passes it; it reads the checks once, so a check that turns red later can still pass under a bypass identity (#617, #632).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
