@@ -241,7 +241,9 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 		ran = append(ran, lq)
-		if rows := lq.Result.Rows; len(rows) > 0 {
+		// Release and environment names are provider text: only plain tokens
+		// leave the query's untrusted rows for the facts and the scope.
+		if rows := lq.Result.Rows; len(rows) > 0 && plainTokens(rows[len(rows)-1][2:5]...) {
 			d := rows[len(rows)-1] // time, service, environment, revision, previous, actor
 			if rep.Deployed == "" {
 				rep.Deployed, rep.Previous = d[3], d[4]
@@ -805,6 +807,20 @@ func (e *Env) liveSource(ctx context.Context, repo, source string, configured ma
 	}
 	p := production.PostHog{API: c, Project: configured["posthog"].Project}
 	return func(q production.Query) (production.Result, production.Provenance, error) { return p.Run(ctx, q) }, nil
+}
+
+// plainToken is a release, revision, or environment name with no spaces,
+// quotes, or markup, so it can be shown outside the untrusted rows.
+var plainToken = regexp.MustCompile(`^[A-Za-z0-9._@+:/-]{0,128}$`)
+
+// plainTokens reports whether every value is a plain token.
+func plainTokens(values ...string) bool {
+	for _, v := range values {
+		if !plainToken.MatchString(v) {
+			return false
+		}
+	}
+	return true
 }
 
 // repoFrame reports whether frame is path:line for a file in the deployed
