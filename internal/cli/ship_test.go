@@ -347,10 +347,15 @@ func TestShipOnProof(t *testing.T) {
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
 	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
-	g.RequiredChecks = []string{"build", "lint", "docs", "security", "protected-paths"}
-	// build was rerun green: its newest run counts, not the stale failure.
-	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
-		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
+	// One rule per page: ship reads every page. build must come from GitHub
+	// Actions (app 15368): another app's green build does not pass it, and
+	// its newest run counts, not a stale failure before a rerun.
+	g.RequiredChecks, g.RulesPerPage = []string{"build", "lint", "docs", "security", "protected-paths"}, 1
+	g.RequiredCheckApps = map[string]int64{"build": 15368}
+	actions := &fake.App{ID: 15368}
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success", App: &fake.App{ID: 99}},
+		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
+		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
 		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"},
 		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
@@ -377,6 +382,10 @@ func TestShipOnProof(t *testing.T) {
 			t.Fatalf("merged although %q", want)
 		}
 	}
+	refused("required check build is failure on " + short(head) + "; never merge with a red required check")
+	g.Mu.Lock()
+	g.CheckRuns[head][slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.App == actions })].Conclusion = "success" // the rerun
+	g.Mu.Unlock()
 	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
 	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success" // lint

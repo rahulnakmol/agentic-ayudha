@@ -36,37 +36,40 @@ type ProofPass struct {
 }
 
 // requiredChecks checks that every required status check of the base
-// branch's rules, other than the CODEOWNERS check (seats.GateCheck), is green
-// on the head. It returns the checks it read, and the CODEOWNERS check's state
+// branch's rules (every page of them), other than the CODEOWNERS check
+// (seats.GateCheck), is green on the head, from the app the rule names if it
+// names one. It returns the checks it read, and the CODEOWNERS check's state
 // ("" when it is not required), which only proofPass may accept red.
 func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
-	rules, _, err := c.REST.Repositories.ListRulesForBranch(ctx, owner, name, base, nil)
-	if err != nil && !github.NotFound(err) {
-		return nil, "", Wrap(ExitExternal, err)
-	}
-	for _, r := range rules.GetRequiredStatusChecks() {
-		for _, sc := range r.Parameters.RequiredStatusChecks {
-			switch ctxName := sc.Context; {
-			case ctxName == seats.GateCheck:
-				gate = checkState(runs, ctxName)
-			case !slices.Contains(want, ctxName):
-				want = append(want, ctxName)
-			}
+	var checks []*gh.RuleStatusCheck
+	for rule, err := range c.REST.Repositories.ListRulesForBranchIter(ctx, owner, name, base, &gh.ListOptions{PerPage: 100}) {
+		if err != nil && !github.NotFound(err) {
+			return nil, "", Wrap(ExitExternal, err)
+		}
+		if r, ok := rule.(*gh.RequiredStatusChecksBranchRule); ok {
+			checks = append(checks, r.Parameters.RequiredStatusChecks...)
 		}
 	}
-	for _, w := range want {
-		if state := checkState(runs, w); state != "success" {
-			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, w, state, short(head))
+	for _, sc := range checks {
+		state := checkState(runs, sc)
+		switch {
+		case sc.Context == seats.GateCheck:
+			gate = state
+		case state != "success":
+			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, sc.Context, state, short(head))
+		case !slices.Contains(want, sc.Context):
+			want = append(want, sc.Context)
 		}
 	}
 	return want, gate, nil
 }
 
-// checkState is the state of the newest run named name ("missing" when none),
-// with skipped counted as success, as GitHub counts it for a required check.
-func checkState(runs []*gh.CheckRun, name string) string {
+// checkState is the state of the newest run of a required check from its app
+// (any app when the rule names none), "missing" when there is none, with
+// skipped counted as success, as GitHub counts it for a required check.
+func checkState(runs []*gh.CheckRun, sc *gh.RuleStatusCheck) string {
 	for _, r := range runs { // the API lists the newest run of a name first; a rerun's success replaces a failure
-		if r.GetName() != name {
+		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID {
 			continue
 		}
 		switch {

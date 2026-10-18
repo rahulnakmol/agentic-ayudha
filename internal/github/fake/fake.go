@@ -141,6 +141,12 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	App        *App   `json:"app,omitempty"` // the GitHub App that made it
+}
+
+// App is the GitHub App of a check run.
+type App struct {
+	ID int64 `json:"id"`
 }
 
 // WorkflowRun is an Actions run.
@@ -240,8 +246,12 @@ type GitHub struct {
 	// private repository on GitHub Free.
 	RulesetsUnavailable bool
 	// RequiredChecks are the required status checks the rules for every
-	// branch name (GET /rules/branches/{branch}).
-	RequiredChecks []string
+	// branch name (GET /rules/branches/{branch}), one rule each, served a page
+	// of RulesPerPage at a time (0: all). RequiredCheckApps pins a check to
+	// the app (integration_id) it must come from.
+	RequiredChecks    []string
+	RequiredCheckApps map[string]int64
+	RulesPerPage      int
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -538,13 +548,21 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(204)
 	case m == "GET" && strings.HasPrefix(p, repo+"/rules/branches/"):
 		out := []any{}
-		if len(g.RequiredChecks) > 0 {
-			var cs []any
-			for _, c := range g.RequiredChecks {
-				cs = append(cs, map[string]any{"context": c})
+		for i, c := range g.RequiredChecks {
+			sc := map[string]any{"context": c}
+			if id, ok := g.RequiredCheckApps[c]; ok {
+				sc["integration_id"] = id
 			}
-			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": 1,
-				"parameters": map[string]any{"required_status_checks": cs, "strict_required_status_checks_policy": false}})
+			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": i + 1,
+				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": false}})
+		}
+		if per := g.RulesPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			out = out[lo:hi]
 		}
 		reply(200, out)
 	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
