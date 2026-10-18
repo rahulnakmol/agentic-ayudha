@@ -1,0 +1,22 @@
+{
+  "covered": 116,
+  "executable": 126,
+  "percent": 92.06349206349206,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inspect.go": [
+      187,
+      188,
+      191,
+      192,
+      772,
+      773,
+      829,
+      830,
+      833,
+      834
+    ]
+  },
+  "format": "go coverprofile"
+}
