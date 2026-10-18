@@ -1429,7 +1429,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a cap the session review shares: exit %d %s, %d model calls, state %+v %s", code, res.Disposition, len(model.Requests), inspect.ParseState(lastInspect(t, g, prN)), errOut)
 	}
 	// A closed PR's session spend is not this PR's: the paid review runs.
-	g, env, opts, prN, model = setup(`"claude"`, "google-key")
+	_, env, opts, prN, model = setup(`"claude"`, "google-key")
 	rec, _ = json.Marshal(BuildState{Story: 2, ReviewUSD: 5, ReviewPR: prN + 100})
 	putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(rec))
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || len(model.Requests) != 1 {
