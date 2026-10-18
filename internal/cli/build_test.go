@@ -1054,6 +1054,12 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, _, errOut := build(); code != ExitBudget || pushed() != before {
 		t.Fatalf("a tripped breaker: %d %s", code, errOut)
 	}
+	// The checkpoint it committed is on the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a review error is not recorded: %v %+v", err, bst.Checkpoints)
+	}
 	delete(env, "AAYU_BUDGET__PER_DAY_USD")
 	_ = os.Remove(filepath.Join(opts.Dir, ".aayudha", "state", "paused"))
 

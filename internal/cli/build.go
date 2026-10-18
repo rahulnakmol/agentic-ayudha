@@ -562,6 +562,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			err = Wrap(ExitInternal, serr)
 		}
 		if err != nil {
+			// The checkpoint is committed and verified: record it, so the run
+			// after the fix (a review setting, a budget) continues after it.
+			if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
+				fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
+			}
 			return err
 		}
 		if rep.Round > 0 || rep.Skipped != "" {
