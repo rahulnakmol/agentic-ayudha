@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -292,10 +293,10 @@ func sectionRubricsKeepEveryCriterion(t *testing.T, id string) {
 }
 
 // A sectioned survey run writes each section in its own call, at its own cap
-// and effort, judged against its own rubric; a section that stops at its cap
-// reruns alone at twice it; the score loses a point per point a section
-// loses; and a rerun with the saved steps resumes every finished section
-// without a call.
+// and effort, judged against its own rubric; a draft that stops at its cap is
+// written again at twice it, and a self-check that does is rerun on the same
+// draft; the score loses a point per point a section loses; and a rerun with
+// the saved steps resumes every finished section without a call.
 func TestTier2SurveySections(t *testing.T) {
 	c, good := surveyCase(t, "survey/tinyjs-rust")
 	parts, err := survey.SplitDraft([]byte(good))
@@ -307,11 +308,18 @@ func TestTier2SurveySections(t *testing.T) {
 	}
 	final := map[string]int{"engineering": 5, "capabilities": 4, "product": 4, "modernisation": 5, "questions": 5}
 	var replies []models.Response
+	cut := func(text string) models.Response {
+		return models.Response{Text: text[:20], Truncated: true, StopReason: "max_tokens"}
+	}
 	for _, name := range survey.SectionNames() {
-		if name == "engineering" {
-			replies = append(replies, models.Response{Text: string(parts[name][:200]), Truncated: true, StopReason: "max_tokens"})
+		if name == "questions" {
+			replies = append(replies, cut(string(parts[name])))
 		}
-		replies = append(replies, models.Response{Text: string(parts[name])}, judge(3), models.Response{Text: selfCheckReply(t, string(parts[name]), nil)}, judge(final[name]))
+		replies = append(replies, models.Response{Text: string(parts[name])}, judge(3))
+		if name == "product" {
+			replies = append(replies, cut(selfCheckReply(t, string(parts[name]), nil)))
+		}
+		replies = append(replies, models.Response{Text: selfCheckReply(t, string(parts[name]), nil)}, judge(final[name]))
 	}
 	fake := &models.Fake{Replies: replies}
 	h := harness(t, fake, "gpt-6.1-sol")
@@ -327,17 +335,29 @@ func TestTier2SurveySections(t *testing.T) {
 	if r.Status != RunFail || r.Score != 3 || len(r.Sections) != 5 || r.Answer == "" {
 		t.Fatalf("run: status %s, score %d (want 3: two sections at 4), %d sections, floor %q, error %q", r.Status, r.Score, len(r.Sections), r.Floor, r.Error)
 	}
-	eng := r.Sections[0]
-	if eng.Name != "engineering" || eng.Truncations != 1 || eng.MaxTokens != 64000 || eng.FirstScore != 3 || eng.Score != 5 {
-		t.Errorf("engineering: %+v; want one truncation, rerun at 64000, first 3, scored 5", eng)
+	if eng := r.Sections[0]; eng.Name != "engineering" || eng.Truncations != 0 || eng.MaxTokens != 64000 || eng.FirstScore != 3 || eng.Score != 5 {
+		t.Errorf("engineering: %+v; want no truncation at 64000, first 3, scored 5", eng)
 	}
-	if got := fake.Requests[0]; got.MaxTokens != 32000 || got.Effort != "high" || !got.Messages[0].CacheBreak || !strings.Contains(got.Messages[1].Content, "Write the engineering section") {
+	if got := fake.Requests[0]; got.MaxTokens != 64000 || got.Effort != "high" || !got.Messages[0].CacheBreak || !strings.Contains(got.Messages[1].Content, "Write the engineering section") {
 		t.Errorf("first engineering call: cap %d, effort %q", got.MaxTokens, got.Effort)
 	}
-	if got := fake.Requests[1]; got.MaxTokens != 64000 {
-		t.Errorf("the truncated section reran at %d, want 64000", got.MaxTokens)
+	// product: draft 8, judge 9, self-check cut off at 8000 (10), the same
+	// self-check on the same draft at 16000 (11), judge 12; no second draft.
+	if prod := r.Sections[2]; prod.Name != "product" || prod.Truncations != 1 || prod.MaxTokens != 16000 || prod.Score != 4 {
+		t.Errorf("product: %+v; want one truncation, its self-check rerun at 16000, scored 4", prod)
 	}
-	capCall, capJudge := fake.Requests[5], fake.Requests[6]
+	if cut, again := fake.Requests[10], fake.Requests[11]; cut.MaxTokens != 8000 || again.MaxTokens != 16000 || len(again.Messages) != 4 ||
+		!slices.EqualFunc(again.Messages, cut.Messages, func(a, b models.Message) bool { return a.Role == b.Role && a.Content == b.Content }) || again.Messages[2].Role != "assistant" || !strings.Contains(again.Messages[3].Content, "product section") {
+		t.Errorf("product self-check: caps %d then %d, %d messages; want 8000 then 16000 on the same draft", cut.MaxTokens, again.MaxTokens, len(again.Messages))
+	}
+	// questions: its draft cut off at 16000 is written again at 32000.
+	if q := r.Sections[4]; q.Name != "questions" || q.Truncations != 1 || q.MaxTokens != 32000 {
+		t.Errorf("questions: %+v; want one truncation, written again at 32000", q)
+	}
+	if cut, again := fake.Requests[17], fake.Requests[18]; cut.MaxTokens != 16000 || again.MaxTokens != 32000 || len(again.Messages) != 2 {
+		t.Errorf("questions drafts: caps %d then %d, %d messages; want 16000 then a new draft at 32000", cut.MaxTokens, again.MaxTokens, len(again.Messages))
+	}
+	capCall, capJudge := fake.Requests[4], fake.Requests[5]
 	if capCall.MaxTokens != 8000 || capCall.Effort != "medium" || !strings.Contains(capCall.Messages[1].Content, `"engineering"`) ||
 		capCall.Messages[0].Content != fake.Requests[0].Messages[0].Content {
 		t.Errorf("capabilities call: cap %d, effort %q; it must share the prefix and see the engineering section", capCall.MaxTokens, capCall.Effort)

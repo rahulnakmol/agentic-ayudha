@@ -18,18 +18,20 @@ import (
 
 // surveySectionSettings are each section's first output cap and reasoning
 // effort (survey-sections-2026-10.md): about five times the largest section
-// JSON of the pilots plus a reasoning allowance the effort bounds. In run
-// 39101367105 (tiny-js) engineering, modernisation, and questions each stopped
-// at that first cap and finished at twice it (engineering used 30648 of
-// 32000), so they start there: a cap is not a charge, a draft cut off is.
+// JSON of the pilots plus a reasoning allowance the effort bounds. A cap is
+// not a charge; a reply cut off at it is, so each starts where its sections
+// finished: in run 39101367105 (tiny-js) engineering, modernisation, and
+// questions stopped at half these caps, and in run 39106751006 engineering and
+// modernisation stopped at 32000 in four of five sections and product at 4000
+// in two of three.
 var surveySectionSettings = map[string]struct {
 	cap    int
 	effort string
 }{
-	"engineering":   {32000, "high"},
+	"engineering":   {64000, "high"},
 	"capabilities":  {8000, "medium"},
-	"product":       {4000, "medium"},
-	"modernisation": {32000, "high"},
+	"product":       {8000, "medium"},
+	"modernisation": {64000, "high"},
 	"questions":     {16000, "medium"},
 }
 
@@ -182,8 +184,9 @@ func (h *Harness) runSurveySections(ctx context.Context, c Case, lane verbs.Lane
 }
 
 // surveySection writes, checks, judges, and self-checks one section, rerunning
-// it at twice its cap while a reply stops at the cap, up to maxSectionCap.
-// When its last saved attempt stopped at a cap, it starts at twice that cap.
+// a reply that stops at its cap at twice it, up to maxSectionCap: a draft is
+// written again, a self-check is rerun on the same draft. When its last saved
+// attempt stopped at a cap, it starts at twice that cap.
 func (h *Harness) surveySection(ctx context.Context, c Case, w surveyWorld, lane verbs.LaneID, name string, req models.Request, prev *Step,
 	parts map[string]json.RawMessage, judgeInput, rubric string, calls *[]CallLog) (Step, error) {
 	if prev != nil && prev.Status == StepTruncated {
@@ -226,25 +229,29 @@ func (h *Harness) surveySection(ctx context.Context, c Case, w surveyWorld, lane
 		sreq := req
 		sreq.Messages = append(slices.Clone(req.Messages), models.Message{Role: "assistant", Content: reply, CacheBreak: true},
 			models.Message{Role: "user", Content: selfCheckPrompt("draft", name+" section")})
-		var corrected string
-		patch, problems, again, err := reviseOnceAsking(ctx, complete, sreq, func(p string) []string {
-			var refused []string
-			corrected, o.Changed, refused = applyCorrections(reply, p)
-			if len(refused) > 0 {
-				for i := range refused {
-					refused[i] = "corrections not applied (none is, until all apply): " + refused[i]
+		var corrected, patch string
+		var again []string
+		for {
+			patch, problems, again, err = reviseOnceAsking(ctx, complete, sreq, func(p string) []string {
+				var refused []string
+				corrected, o.Changed, refused = applyCorrections(reply, p)
+				if len(refused) > 0 {
+					for i := range refused {
+						refused[i] = "corrections not applied (none is, until all apply): " + refused[i]
+					}
+					return refused
 				}
-				return refused
+				return check(corrected)
+			}, "Fix every finding and reply with the whole corrections object again, for the "+name+" section you self-checked, never the section itself.")
+			if !errors.As(err, &re) || !re.Truncated {
+				break
 			}
-			return check(corrected)
-		}, "Fix every finding and reply with the whole corrections object again, for the "+name+" section you self-checked, never the section itself.")
-		if errors.As(err, &re) && re.Truncated {
 			o.Truncations++
-			if req.MaxTokens >= maxSectionCap {
+			if sreq.MaxTokens >= maxSectionCap {
 				return sectionStep(StepTruncated, o, nil), nil
 			}
-			req.MaxTokens = min(2*req.MaxTokens, maxSectionCap)
-			continue
+			sreq.MaxTokens = min(2*sreq.MaxTokens, maxSectionCap)
+			o.MaxTokens = sreq.MaxTokens
 		}
 		o.Corrections, o.SelfRevised = actions.RedactString(patch), len(again) > 0
 		if err != nil {
