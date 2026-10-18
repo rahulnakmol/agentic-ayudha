@@ -118,10 +118,11 @@ with an @-mention and reads its reply deterministically:
 
 `[inspect] apps` lists the apps installed (`aayu doctor`'s `reviewer-apps` row and `aayu install` detect them from
 the account's installations, and from the comments, reviews, and checks on the last ten pull requests).
-`[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the
-paid reviewer through the AI gateway, called directly), or `human`. There is no automatic choice (founder,
-2026-10-18). `aayu install --apply` asks for it and writes it. Unset, a person reviews every pull request, the inspect
-comment says how to choose, and `aayu doctor` fails with the same step. The chosen tool is the only reviewer while it
+`[inspect] reviewer` names the one review tool: `ci` (the default: the model the repository's code-review environment
+names, called directly; [Code review in the gate](how-review.md) sets it up), `codex`, `coderabbit`, `greptile`,
+`claude`, `cursor`, or `human`. There is no automatic choice (founder, 2026-10-18). `aayu install --apply` asks for it
+and writes it; Enter picks `ci`. Emptied, a person reviews every pull request, the inspect comment says how to choose,
+and `aayu doctor` fails with the same step. The chosen tool is the only reviewer while it
 answers; a same-family app gives a labelled same-family review.
 
 CodeRabbit and Greptile are dedicated review services. Their review counts as different-family whatever the builder's
@@ -137,7 +138,7 @@ The review the gate records, and shows as the first line of the inspect comment,
 | Review | When | Counts toward autonomy |
 |---|---|---|
 | Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
-| Different-family, paid (rung B) | `reviewer = "grok"`, or no installed app can review the head, and the repository opted into a paid reviewer of another family | yes |
+| Different-family, paid (rung B) | `reviewer = "ci"`, or no installed app can review the head, and the code-review environment names a model of another family | yes |
 | Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
 | Human | A person reviewed | a person's review |
 
@@ -148,13 +149,11 @@ autonomous pass unless the inspect job of the base branch's `pull_request_target
 different-family review in its log, so after a same-family review, or with no such record, a person passes it. A run whose judgement was cached from the state comment does not count; ship reads the newest fresh judgement of the head. A
 comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
-**Rung B, a paid reviewer (opt-in).** The founder's one deliberate exception to "no AI keys in a product repository's
-CI" (2026-10-18), off by default. It needs both steps:
-
-1. `[inspect] paid_reviewer` in `.aayudha/config.toml` names a model of a family the builder cannot be, for example
-   `gemini-3.8-flash` for Amp, Claude Code, or Codex builds.
-2. The repository adds that provider's pay-as-you-go key as an Actions secret named `AAYU_SECRET_<FAMILY>`:
-   `AAYU_SECRET_GOOGLE` for Gemini, `AAYU_SECRET_XAI` for Grok, `AAYU_SECRET_OPENAI`, or `AAYU_SECRET_ANTHROPIC`.
+**Rung B, the CI review.** The default review (founder, 2026-10-18), and the fallback when an app cannot review. The
+inspect job runs under the `code-review` environment, which only the base branches can deploy to, and calls the model
+it names: the variables `AAYU_REVIEW_MODEL_URL` (the model endpoint's base URL) and `AAYU_REVIEW_MODEL` (the model ID,
+of a family the builder cannot be, such as `grok-4.7`), with the secret `AAYU_REVIEW_MODEL_KEY`. `[inspect]
+paid_reviewer` names the model when the environment names none. [Code review in the gate](how-review.md) sets it up.
 
 `[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
 empty leaves the provider's default.
@@ -165,8 +164,8 @@ one that is not fast.
 **When the chosen tool cannot review.** An app cannot review a head when it replies that it reached a usage limit,
 quota, or rate limit (Codex: "You have reached your Codex usage limits for code reviews"), or has not replied 30
 minutes after the review request. Then the next installed app reviews, in a fixed order: codex, coderabbit, greptile,
-claude, cursor. After the apps comes the paid reviewer, with the same key, cap, and checks, then a person
-(`[autonomy] approver`). When `grok` is chosen and cannot review, the apps review in that order, then a person. The
+claude, cursor. After the apps comes the CI review, with the same key, cap, and checks, then a person
+(`[autonomy] approver`). When `ci` is chosen and cannot review, the apps review in that order, then a person. The
 inspect comment's note names each step and why. A same-family app is labelled so at any step, and the paid reviewer
 is never of a family the builder may be. The gate notices the 30 minutes only when its inspect job runs again: a push,
 a re-run of the failed job, or a bot's comment or a review on the pull request. The 30 minutes run from that app's own
@@ -178,14 +177,13 @@ reviews a PR that serves no story against its title, description, and diff. `[bu
 default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. Only a PR whose author has write access
 to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
 only read cannot open PRs to spend the key. The review is labelled
-`different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
-model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
+`different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. With `reviewer = "ci"`, a
+missing variable or secret fails the gate closed, naming it and where to set it. If the model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
 has spent its cap, the gate logs why and the apps review. A failed call's cost still counts toward the cap. A failed paid
 call is recorded against the head: later runs on that head, such as the one a reply triggers, go straight to the app, and
 the next push tries the paid reviewer again. A run triggered by a reply makes no paid call itself. It only re-runs the
 head's inspect job. `aayu doctor`'s
-`review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
-needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
+`review-rung` row shows B when it is configured. Doctor cannot read the environment, so it names what the gate needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
 untrusted data.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the

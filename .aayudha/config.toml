@@ -39,10 +39,11 @@ activation_days = 7
 # rabbit then", and "Will turn off code code review if you can make it work with code rabbit"; this supersedes "Use
 # codex for now". No AI key in the merge gate (founder decision 2026-10-15).
 [inspect]
-reviewer = "coderabbit"   # the one review tool
-apps = ["coderabbit"]
-# Rung B through the AI gateway (founder, 2026-10-18): the fallback when CodeRabbit cannot review a head.
-paid_reviewer = "grok-4.7"
+# The CI review (founder, 2026-10-18: "Let's dog food this"): the merge gate calls the model the code-review environment
+# names (AAYU_REVIEW_MODEL_URL, AAYU_REVIEW_MODEL, secret AAYU_REVIEW_MODEL_KEY; docs/guide/how-review.md).
+reviewer = "ci"
+apps = ["coderabbit"]      # installed; reviews only when the CI review cannot
+paid_reviewer = "grok-4.7" # when the environment names no model
 paid_effort = "high"
 
 # Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rung C stays accepted, and recorded, until

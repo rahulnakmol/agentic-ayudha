@@ -77,6 +77,12 @@ func TestInstall(t *testing.T) {
 	if b, _ := os.ReadFile(cfgPath); string(b) != dotted {
 		t.Fatalf("install rewrote a dotted key:\n%s", b)
 	}
+	// Enter picks ci, the default.
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect]\nreviewer = \"auto\"\n"), 0o644)
+	_, _, _ = runIn(t, env, opts, "\n", "install", "--apply")
+	if b, _ := os.ReadFile(cfgPath); string(b) != "version = 1\n\n[inspect]\nreviewer = \"ci\"\n" {
+		t.Fatalf("Enter did not choose ci:\n%s", b)
+	}
 	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"auto\"\n\n[budget]\nper_pr_inspect_max = 5.0\n"), 0o644)
 	// --apply without confirmation writes the repository but not the home directory, and says so.
 	code, _, errs = runIn(t, env, opts, "coderabbit\n", "install", "--apply")

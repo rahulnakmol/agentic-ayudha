@@ -496,7 +496,10 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 		}
 	}
 	fmt.Fprintf(e.Err, "Which tool reviews this repository's pull requests? Detected: %s. [%s] (Enter: ci, the model the code-review environment names): ", cmp.Or(strings.Join(found, ", "), "none"), strings.Join(ReviewTools, "/"))
-	line, _ := bufio.NewReader(e.In).ReadString('\n')
+	line, err := bufio.NewReader(e.In).ReadString('\n')
+	if err != nil && line == "" {
+		return stop // no answer at all; Enter picks ci
+	}
 	ans := cmp.Or(strings.ToLower(strings.TrimSpace(line)), inspect.ReviewerCI)
 	if !slices.Contains(ReviewTools, ans) {
 		return stop

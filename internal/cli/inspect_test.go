@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -1312,12 +1313,12 @@ func TestInspectPaidReviewer(t *testing.T) {
 	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\nreviewer = \"grok\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
+		cfg := "version = 1\n\n[inspect]\nreviewer = \"ci\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_GOOGLE"] = key
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelKeyVar] = "https://gw.example/v1", key
 		reply := inspectReply("merge", "")
 		reply.ServiceTier, reply.TokensIn, reply.TokensOut = "priority", 1200, 300
 		model := &models.Fake{Replies: []models.Response{reply}}
@@ -1412,16 +1413,22 @@ func TestInspectReviewerFallback(t *testing.T) {
 	setup := func() (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5: Codex is of another family (A)
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[autonomy]\napprover = \"founder\"\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		// No paid_reviewer: the code-review environment names the model, its endpoint, and its key.
+		cfg := "version = 1\n\n[autonomy]\napprover = \"founder\"\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_XAI"] = "xai-key"
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelVar], env[inspect.ReviewModelKeyVar] = "https://review.example/v1", "grok-4.7", "review-key"
 		reply := inspectReply("merge", "")
 		reply.Model, reply.ServiceTier, reply.TokensIn, reply.TokensOut = "grok-4.7", "default", 1200, 300
 		model := &models.Fake{Replies: []models.Response{reply}}
-		opts.ModelClient = func(models.Route, string) models.Client { return model }
+		opts.ModelClient = func(r models.Route, key string) models.Client {
+			if r.BaseURL != "https://review.example/v1" || key != "review-key" {
+				t.Errorf("the fallback review calls %s with key %q, not the code-review environment's endpoint and key", r.BaseURL, key)
+			}
+			return model
+		}
 		return g, env, opts, prN, model
 	}
 	postedAt := func(g *fake.GitHub, prN int, at time.Time) { // the newest comment's time
@@ -1435,8 +1442,8 @@ func TestInspectReviewerFallback(t *testing.T) {
 		postedAt(g, prN, at)
 	}
 
-	// Codex's usage-limit reply: Grok 4.7 reviews at high effort and fast
-	// serving, labelled (B, paid) with why. The reply was served at the default
+	// Codex's usage-limit reply: Grok 4.7, the code-review environment's
+	// model, reviews at high effort and fast serving, labelled (B, paid) with why. The reply was served at the default
 	// tier, which the comment flags; it is charged at the priority rate (2x).
 	g, env, opts, prN, model := setup()
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
@@ -1566,7 +1573,7 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_XAI"] = "xai-key"
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelKeyVar] = "https://gw.example/v1", "review-key"
 		reply := inspectReply("merge", "")
 		reply.Model, reply.ServiceTier = "grok-4.7", "priority"
 		model := &models.Fake{Replies: []models.Response{reply}}
@@ -1592,13 +1599,31 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Errorf("reviewer %s: exit %d, %d model calls, comments %+v %s", tool, code, len(model.Requests), cs, errOut)
 		}
 	}
-	// grok: the gateway model reviews, called directly, at fast serving.
-	_, env, opts, prN, model := setup("grok")
+	// ci, the default: the code-review environment's model reviews, called directly, at fast serving.
+	_, env, opts, prN, model := setup("")
 	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority {
-		t.Fatalf("reviewer grok: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
+		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
 	}
-	// Unset: a person reviews, and the PR says how to choose.
+	// Each piece the code-review environment lacks fails the gate closed, by name and where to set it; a URL that
+	// carries a credential is refused without being echoed.
+	for _, c := range []struct{ drop, set, want string }{
+		{inspect.ReviewModelURLVar, "", "the variable AAYU_REVIEW_MODEL_URL is not set: add it in Settings → Environments → code-review"},
+		{inspect.ReviewModelKeyVar, "", "the secret AAYU_REVIEW_MODEL_KEY is not set: add it in Settings → Environments → code-review"},
+		{"", "https://user:hunter2@gw.example/v1?api-key=hunter2", "AAYU_REVIEW_MODEL_URL must be the model endpoint's https base URL"},
+	} {
+		_, env, opts, prN, model := setup("ci")
+		delete(env, c.drop)
+		if c.set != "" {
+			env[inspect.ReviewModelURLVar] = c.set
+		}
+		code, _, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if code == 0 || len(model.Requests) != 0 || !strings.Contains(errOut, c.want) || strings.Contains(errOut, "hunter2") {
+			t.Errorf("code-review without %s: exit %d, %d model calls %s", cmp.Or(c.drop, c.set), code, len(model.Requests), errOut)
+		}
+	}
+	// Emptied: a person reviews, and the PR says how to choose.
 	g, env, opts, prN, model := setup("")
+	env["AAYU_INSPECT__REVIEWER"] = ""
 	if code, res, _ := inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Rung != inspect.RungHuman || len(model.Requests) != 0 ||
 		!strings.Contains(lastInspect(t, g, prN), `set [inspect] reviewer = "<tool>"`) {
 		t.Fatalf("reviewer unset: exit %d rung %q\n%s", code, res.Rung, lastInspect(t, g, prN))

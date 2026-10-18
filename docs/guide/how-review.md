@@ -1,0 +1,75 @@
+# Code review in the merge gate
+
+An agent wrote the change; something other than that agent must read it before it merges. By default the merge gate
+does this itself: its inspect job sends the diff, the story's promises, and the floors' results to a review model of
+another vendor, and turns the reply into the inspect check. No review app, no subscription quota, and no second tool
+to manage. You choose the model and pay for its calls; a pull request's review costs cents, capped per pull request.
+
+This page sets the review up for one repository. [The merge gate](how-merge-gate.md) explains what the inspect check
+decides with the review.
+
+## Set up the code-review environment
+
+The review model's endpoint, ID, and key live in a GitHub environment named `code-review`. Only the base branches
+(`dev`, `rolling`, `main`) can deploy to it, and the gate's inspect job checks out the base branch and never runs
+pull request code, so no pull request can reach the key.
+
+1. Run `aayu init --gates`. It installs the merge gate and creates the `code-review` environment, with its
+   deployment branches limited to the base branches and two variables filled in:
+
+   | Name | Kind | What it holds | Filled in with |
+   |---|---|---|---|
+   | `AAYU_REVIEW_MODEL_URL` | variable | the model endpoint's base URL: an OpenAI-compatible gateway, or a provider's API | `https://api.x.ai/v1` |
+   | `AAYU_REVIEW_MODEL` | variable | the model ID | `grok-4.7` |
+   | `AAYU_REVIEW_MODEL_KEY` | secret | the endpoint's key | nothing: you add it |
+
+   You should see an `environment code-review` line in init's report that says to set the secret.
+
+2. Open the repository's **Settings → Environments → code-review** and add the secret `AAYU_REVIEW_MODEL_KEY`: your
+   key for the endpoint in `AAYU_REVIEW_MODEL_URL`.
+
+3. To use another model, change the two variables. A gateway such as OpenRouter or your own AI gateway reaches
+   several model families with one key; a provider's API reaches its own. The URL is a base URL ending before
+   `/chat/completions`, `/responses`, or `/messages`, with no key or query in it: aayu refuses one that has either.
+
+4. Open a pull request. You should see the inspect comment's first line,
+   `different-family review (B, paid): grok-4.7 (xai)`, and the inspect check pass or fail with the review's findings.
+
+`[inspect] reviewer = "ci"` in `.aayudha/config.toml` selects this review. It is the default, so a repository that
+names no reviewer uses it.
+
+## Choosing a model
+
+The review model must come from a vendor other than the agent that built the change, so the builder never grades its
+own work. aayu checks this on every pull request from the builder's recorded family; a model of the builder's family
+is never used, and the gate says so.
+
+| You build with | A review model of another family |
+|---|---|
+| Claude Code, or Amp on Claude models | `grok-4.7`, or a GPT or Gemini model |
+| Codex, or Amp on GPT models | `grok-4.7`, or a Claude or Gemini model |
+| Cursor or Grok | a Claude, GPT, or Gemini model |
+
+Every review asks for fast (priority) serving, at the reasoning effort `[inspect] paid_effort` names. `[budget]
+per_pr_inspect_max` (5 USD by default) caps what one pull request's reviews may spend; the inspect comment records
+what each review cost and the tier it was served at.
+
+## When something is missing
+
+The gate fails closed, and its log and the inspect check say which piece is missing and where to set it, for example:
+
+```text
+inspect #42: [inspect] reviewer = "ci" calls the model the code-review environment names, and the secret
+AAYU_REVIEW_MODEL_KEY is not set: add it in Settings → Environments → code-review (docs/guide/how-review.md)
+```
+
+Logs and comments name the model and never print the key or the endpoint's URL. `aayu doctor`'s `review-rung` row
+shows the setup steps; it cannot read the environment, so the gate is where a missing piece shows.
+
+## Review apps, if you want one
+
+A review app (Codex, CodeRabbit, Greptile, Claude, or Cursor) can review instead: install it on the account that owns
+the repository, then set `[inspect] reviewer` to its name and add it to `[inspect] apps`. The gate then reads the
+app's review of the head. When the app cannot review a head (a usage limit, or no reply within 30 minutes), the next
+installed app reviews, then the code-review environment's model, then a person. See
+[the merge gate](how-merge-gate.md) for how each app's review is read.

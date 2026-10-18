@@ -33,6 +33,7 @@ import (
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -495,6 +496,20 @@ func TestInitExtras(t *testing.T) {
 		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), leak) {
 			t.Error("private key in the actions log")
 		}
+	}
+
+	// The code-review environment: only the base branches deploy to it, so no PR branch reaches the review model's
+	// key; its two variables carry the recommended endpoint and model, and the key is left to the person.
+	g.Mu.Lock()
+	ce := g.Environments[inspect.ReviewEnvironment]
+	if ce == nil || ce.Policy["custom_branch_policies"] != true || ce.Policy["protected_branches"] != false || !slices.Equal(ce.Branches, []string{"dev", "rolling", "main"}) ||
+		ce.Variables[inspect.ReviewModelURLVar] != inspect.RecommendedReviewURL || ce.Variables[inspect.ReviewModelVar] != inspect.RecommendedReviewModel || len(ce.Variables) != 2 {
+		t.Errorf("the code-review environment after --gates: %+v", ce)
+	}
+	ce.Variables[inspect.ReviewModelVar] = "gemini-3.8-flash" // a person's choice survives the next run
+	g.Mu.Unlock()
+	if !strings.Contains(errOut, "set the secret AAYU_REVIEW_MODEL_KEY, the endpoint's key, in Settings → Environments → code-review") && !strings.Contains(out, "set the secret AAYU_REVIEW_MODEL_KEY") {
+		t.Errorf("init does not say to set the review model's key:\n%s\n%s", out, errOut)
 	}
 
 	// Idempotent: the same flags again write nothing.
