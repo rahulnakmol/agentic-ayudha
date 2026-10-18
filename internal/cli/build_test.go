@@ -1098,13 +1098,16 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
 		t.Fatalf("a resume past the PR's review budget: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
 	}
-	// A cap of 0 is no cap to inspect: the session makes no review call at all.
+	// A cap of 0 is no cap to inspect: the session makes no review call at
+	// all, and a review endpoint it would refuse does not stop the push.
 	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "0"
+	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
 	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("uncapped\n"), 0o644)
 	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max is 0") {
 		t.Fatalf("a zero per-PR cap: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
 	}
 	delete(env, "AAYU_BUDGET__PER_PR_INSPECT_MAX")
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
 
 	// A review that trips the budget breaker stops the build: nothing is pushed.
 	costly := sessionReply("")
