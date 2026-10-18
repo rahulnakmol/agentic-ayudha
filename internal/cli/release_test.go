@@ -922,10 +922,11 @@ func TestReleaseSecurityBugsHold(t *testing.T) {
 		t.Fatalf("a Bug seen on rolling did not hold, or the dev one did: %d %s", code, errOut)
 	}
 	// A waiver that names another floor, or one nobody accepted, waives nothing.
-	waiver := func(title string, accepted bool) {
+	waiver := func(title string, accepted bool, closer ...string) {
+		by := append(closer, "founder")[0]
 		body := decisionBody("false", fmt.Sprintf("waives #%d", onRolling.Number))
 		if accepted {
-			body += "\n### Decision\n\nwaive, accepted by @founder on 2026-10-12.\n"
+			body += "\n### Decision\n\nwaive, accepted by @" + by + " on 2026-10-12.\n"
 		}
 		d := f.g.AddIssue(title, body, "type:decision")
 		f.g.Mu.Lock()
@@ -933,13 +934,20 @@ func TestReleaseSecurityBugsHold(t *testing.T) {
 		d.Parent = onRolling.Number
 		onRolling.Subs = append(onRolling.Subs, d.Number)
 		if accepted {
-			d.State, d.StateReason, d.ClosedBy = "closed", "completed", &fake.Account{Login: "founder", Type: "User"}
+			d.State, d.StateReason, d.ClosedBy = "closed", "completed", &fake.Account{Login: by, Type: "User"}
 		}
 	}
 	waiver("Waive the deps floor on #"+strconv.Itoa(onRolling.Number), true)
 	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), false)
 	if code, errOut := dry(); code != ExitBlocked {
 		t.Fatalf("a waiver of another floor, or an unaccepted one, released the hold: %d %s", code, errOut)
+	}
+	// Bug #599: once the founder is the floor-waiver authority, a sast waiver
+	// another person with write access accepted and closed holds nothing back.
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), true, "mallory")
+	f.env["AAYU_AUTONOMY__APPROVER"] = "founder"
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, fmt.Sprintf("#%d (sast", onRolling.Number)) {
+		t.Fatalf("a waiver the authority did not accept released the hold: %d %s", code, errOut)
 	}
 	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), true)
 	if code, errOut := dry(); code != 0 {

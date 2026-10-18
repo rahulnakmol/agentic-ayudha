@@ -6,5 +6,9 @@ id = 1 # only the authority's waiver waives the floor; verify names the other tw
 tests = ["internal/cli:TestWaiverAuthority"]
 
 [[criterion]]
+id = 2 # a security Bug on rolling whose sast waiver another person accepted and closed still holds the promotion
+tests = ["internal/cli:TestReleaseSecurityBugsHold"]
+
+[[criterion]]
 id = 3 # no authority login configured: any person's waiver counts
 tests = ["internal/cli:TestWaiverAuthority"]
