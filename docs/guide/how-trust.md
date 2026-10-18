@@ -159,8 +159,9 @@ factor. aayu then checks the approving account, and refuses unless all of these 
 - it is the same account as the token aayu acts with;
 - it has the repository access the command needs: admin for the bypasses, `init`, `uninit`, `seat`,
   `install --apply`, and `upgrade --apply`; write for `decide --accept`, `inbox`, `resume`, `plan --approve`,
-  `inspect --dismiss`, `inspect --approve`, `tell --publish`, and the stable-release yes of `release --to main`. `auth set-secret` and
-  `self-update` need only a person, so a fresh runner with no token yet can still store its first one.
+  `inspect --dismiss`, `inspect --approve`, `tell --publish`, and the stable-release yes of `release --to main`.
+  `auth set-secret` and `self-update` need only a person, so a fresh runner with no token yet can still store its
+  first one.
 
 Each failure says what happened and the one next step: the code expired, the request was cancelled on GitHub, a bot
 or another account approved it, or the account lacks the access. Nothing is done in any of them. The approval is
