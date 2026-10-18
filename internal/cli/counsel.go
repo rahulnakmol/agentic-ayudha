@@ -299,12 +299,12 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	var order []string
 	var odd []string
 	for _, f := range files {
-		rep.sources = append(rep.sources, f.GetFilename())
 		if !plainPath.MatchString(f.GetFilename()) {
-			// A file name is the contributor's text; one that is not a plain path is data, never a fact.
+			// A file name is the contributor's text; one that is not a plain path is data, never a fact or a source.
 			odd = append(odd, strconv.Quote(f.GetFilename()))
 			continue
 		}
+		rep.sources = append(rep.sources, f.GetFilename())
 		ly := strings.Join(globs.Footprint([]string{f.GetFilename()}), ", ")
 		if ly == "" {
 			ly = "no layer"
