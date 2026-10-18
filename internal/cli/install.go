@@ -481,7 +481,9 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 			Reviewer string `toml:"reviewer"`
 		} `toml:"inspect"`
 	}
-	if toml.Unmarshal(b, &v) == nil && v.Inspect.Reviewer != "" && v.Inspect.Reviewer != "auto" {
+	// Only a tool the gate can use counts as chosen ("model" is aayudha's own
+	// evals); a leftover value such as "amp", or a typo, asks again.
+	if toml.Unmarshal(b, &v) == nil && (slices.Contains(ReviewTools, v.Inspect.Reviewer) || v.Inspect.Reviewer == inspect.ReviewerModel) {
 		return nil
 	}
 	if !e.isTerminal(e.In) {

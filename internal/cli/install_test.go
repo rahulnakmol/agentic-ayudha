@@ -77,8 +77,8 @@ func TestInstall(t *testing.T) {
 	if b, _ := os.ReadFile(cfgPath); string(b) != dotted {
 		t.Fatalf("install rewrote a dotted key:\n%s", b)
 	}
-	// Enter picks ci, the default.
-	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect]\nreviewer = \"auto\"\n"), 0o644)
+	// Enter picks ci, the default; a leftover tool aayu no longer supports (amp) is asked again, not kept.
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect]\nreviewer = \"amp\"\n"), 0o644)
 	_, _, _ = runIn(t, env, opts, "\n", "install", "--apply")
 	if b, _ := os.ReadFile(cfgPath); string(b) != "version = 1\n\n[inspect]\nreviewer = \"ci\"\n" {
 		t.Fatalf("Enter did not choose ci:\n%s", b)
