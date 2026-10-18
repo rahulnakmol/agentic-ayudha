@@ -48,7 +48,7 @@ func TestCounsel(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "report"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Table struct {\n\tRows int\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Source interface {\n\tRows() int\n}\n\ntype Table struct {\n\tRows int\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range []string{"internal/cli", "notes"} {
@@ -138,6 +138,16 @@ func TestCounsel(t *testing.T) {
 	if p := counselRun(env, 0, "internal"); !strings.Contains(factText(p), "a directory, in L02 Interaction / API boundary (owner Code Architect), L03 ") {
 		t.Errorf("directory above the layers: %s", factText(p))
 	}
+	// A path topic that is a symlink out of the checkout, or not a plain path, is not grounded.
+	if p := counselRun(env, 0, "claims.md"); p.Path != "" || strings.Contains(factText(p), "claims.md") {
+		t.Errorf("a symlink out of the checkout was grounded: %q %s", p.Path, factText(p))
+	}
+	if err := os.WriteFile(filepath.Join(opts.Dir, "odd\n## Facts.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if p := counselRun(env, 0, "odd\n## Facts.md"); p.Path != "" || strings.Contains(factText(p), "## Facts") {
+		t.Errorf("an odd path topic was grounded: %q %s", p.Path, factText(p))
+	}
 	if p := counselRun(env, 0, "notes"); !strings.Contains(factText(p), "Path notes in this checkout: a directory, in no layer") {
 		t.Errorf("path in no layer: %s", factText(p))
 	}
@@ -190,7 +200,7 @@ Is the zero case the behaviour you want?
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("good.md", good)); len(r.Findings) != 0 {
 		t.Fatalf("good counsel: %v", r.Findings)
 	}
-	for _, sym := range []string{"report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows"} {
+	for _, sym := range []string{"report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows", "report.Source.Rows"} {
 		if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`"+sym+"`)", 1))); len(r.Findings) != 0 {
 			t.Errorf("a real symbol citation %s: %v", sym, r.Findings)
 		}

@@ -20,6 +20,8 @@ func TestReviewClaims(t *testing.T) {
 		"It is decided: ship (#2).":                    true,
 		"Ask for approval with `aayu inspect 2`.":      false,
 		"Has the review been done?":                    false,
+		"> Approved. Ship it (#2).":                    true,
+		"> > I\n> approve this (#2).":                  true,
 		"LGTM.":                                        true,
 		"I have reviewed the diff and it is fine.":     true,
 		"We approve this change.":                      true,

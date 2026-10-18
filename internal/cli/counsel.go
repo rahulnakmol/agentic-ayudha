@@ -122,7 +122,8 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 	}
 	if topic != "" && !issueArg.MatchString(topic) && root != "" {
 		rel := filepath.ToSlash(filepath.Clean(topic))
-		if st, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil && !strings.HasPrefix(rel, "../") {
+		// Only a plain path whose resolved target stays in the checkout is a fact; any other name is not grounded.
+		if st, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil && plainPath.MatchString(rel) && inRoot(root, rel) {
 			rep.Path = rel
 			cite, what := rel, fmt.Sprintf("%d bytes", st.Size())
 			if st.IsDir() {
@@ -212,21 +213,7 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 			return root != "" && declares(root, m[1], m[2], m[3])
 		}
 		// A path the twin read in this checkout is a fact too; a path that leaves the checkout is not.
-		rel := filepath.Clean(filepath.FromSlash(strings.TrimSuffix(cite, "/")))
-		if root == "" || strings.HasPrefix(cite, "#") || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return false
-		}
-		// A symlink may point out of the checkout: the resolved target must stay under the resolved root.
-		real, err := filepath.EvalSymlinks(filepath.Join(root, rel))
-		if err != nil {
-			return false
-		}
-		base, err := filepath.EvalSymlinks(root)
-		if err != nil {
-			return false
-		}
-		inside, err := filepath.Rel(base, real)
-		return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
+		return root != "" && !strings.HasPrefix(cite, "#") && inRoot(root, strings.TrimSuffix(cite, "/"))
 	}
 	rep.Draft, rep.Findings = draft, counsel.Check(string(b), rep.Stage, pr, known)
 	if len(rep.Findings) == 0 && in.Bool("post") {
@@ -535,11 +522,31 @@ func hasCite(text, cite string) bool {
 	}
 }
 
+// inRoot reports whether rel names an existing file or directory whose resolved target, symlinks followed, stays
+// under the resolved root.
+func inRoot(root, rel string) bool {
+	rel = filepath.Clean(filepath.FromSlash(rel))
+	if filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(filepath.Join(root, rel))
+	if err != nil {
+		return false
+	}
+	base, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	inside, err := filepath.Rel(base, real)
+	return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
+}
+
 // symbolCite is a cited Go symbol: pkg.Name, or pkg.Type.Member for a method or a struct field.
 var symbolCite = regexp.MustCompile(`^([a-z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)(?:\.([A-Za-z0-9_]+))?$`)
 
 // declares reports whether a Go package named pkg in the checkout declares the whole symbol: a package-level func,
-// type, var, or const name, or, with member, a method of that type or a field of that struct. It parses the files
+// type, var, or const name, or, with member, a method of that type, a field of that struct, or a method of that
+// interface. It parses the files
 // (go/parser), so an indented identifier is not a declaration. Hidden, vendored, testdata, and node_modules trees
 // and symlinks are skipped.
 func declares(root, pkg, name, member string) bool {
@@ -587,10 +594,19 @@ func declares(root, pkg, name, member string) bool {
 						}
 						if member == "" {
 							found = true
-						} else if st, ok := sp.Type.(*ast.StructType); ok {
-							for _, fl := range st.Fields.List {
-								for _, n := range fl.Names {
-									found = found || n.Name == member
+						} else {
+							var fields *ast.FieldList
+							switch t := sp.Type.(type) {
+							case *ast.StructType:
+								fields = t.Fields
+							case *ast.InterfaceType:
+								fields = t.Methods
+							}
+							if fields != nil {
+								for _, fl := range fields.List {
+									for _, n := range fl.Names {
+										found = found || n.Name == member
+									}
 								}
 							}
 						}

@@ -81,6 +81,8 @@ var (
 	// rule", "it is decided", "ruling:").
 	granted = regexp.MustCompile(`(?i)\b(?:approval|sign-?off|review)s?\s+(?:(?:is|are|was|were|has been|have been|had been)\s+)?` +
 		`(?:granted|given|done|complete[d]?|received|passed|obtained|in place)\b|\b(?:I|we)\s+rule\b|\bit\s+is\s+(?:decided|ruled)\b|\bruling\s*:`)
+	// quote is a line's blockquote markers ("> > "), which Markdown renders as the text they quote.
+	quote = regexp.MustCompile(`^\s*(?:>\s?)+`)
 	// fence opens or closes a code block: a counsel is prose, and a fenced part would escape the checks.
 	fence = regexp.MustCompile("(?m)^\\s{0,3}(?:```|~~~)")
 )
@@ -177,7 +179,7 @@ func CheckStructure(md string) []string {
 	// A claim is read per paragraph or list item, with its wrapped lines joined, as Markdown renders it.
 	var units []string
 	for _, line := range strings.Split(md, "\n") {
-		t := strings.TrimSpace(line)
+		t := strings.TrimSpace(quote.ReplaceAllString(line, ""))
 		if n := len(units); n > 0 && t != "" && units[n-1] != "" && !strings.HasPrefix(t, "#") && !listItem.MatchString(t) {
 			units[n-1] += " " + t
 			continue
