@@ -90,7 +90,7 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	// an agent's branch sends nothing to the bucket that checkout names.
 	evil := fakes3.New(t, "sk")
 	env["AAYU_SECRET_OTHER"] = "ak:sk"
-	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket and its secret are read only from") {
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket, its secret, and its retention are read only from") {
 		t.Fatalf("push with a bucket only the checkout names: %d %s", code, errOut)
 	}
 	fgh.Mu.Lock()
@@ -99,11 +99,27 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	}
 	fgh.Files[".aayudha/config.toml"] = cfg
 	fgh.Mu.Unlock()
-	for _, args := range [][]string{{"--set", "proof.media=s3://evil/x?endpoint=" + evil.Server.URL, "--set", "proof.media_secret=other"}, {"--set", "proof.media_secret=other"}} {
-		if code, _, errOut := run(t, env, opts, append([]string{"proof", "push", "2", "--media", "--repo", "o/r"}, args...)...); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket and its secret are read only from") {
+	for _, args := range [][]string{{"--set", "proof.media=s3://evil/x?endpoint=" + evil.Server.URL, "--set", "proof.media_secret=other"}, {"--set", "proof.media_secret=other"}, {"--set", "proof.retention_days=1"}} {
+		if code, _, errOut := run(t, env, opts, append([]string{"proof", "push", "2", "--media", "--repo", "o/r"}, args...)...); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket, its secret, and its retention are read only from") {
 			t.Fatalf("push with %v: %d %s", args, code, errOut)
 		}
 	}
+	// dev's config that cannot be read, or does not load, trusts nothing.
+	for _, f := range []struct{ fail, file, want string }{
+		{"GET /repos/o/r/git/ref/heads/dev", cfg, "500"},
+		{"GET /repos/o/r/contents/.aayudha/config.toml", cfg, "dev's .aayudha/config.toml cannot be read or does not load"},
+		{"", "version = [", "dev's .aayudha/config.toml cannot be read or does not load"},
+	} {
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.FailAfter, fgh.Files[".aayudha/config.toml"] = f.fail, 0, f.file
+		fgh.Mu.Unlock()
+		if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, f.want) {
+			t.Fatalf("push when %q fails with %q committed: %d %s", f.fail, f.file, code, errOut)
+		}
+	}
+	fgh.Mu.Lock()
+	fgh.Fail, fgh.Files[".aayudha/config.toml"] = "", cfg
+	fgh.Mu.Unlock()
 	if len(evil.Objects) != 0 || len(s3.Objects) != 0 {
 		t.Fatalf("a refused push uploaded: %d to the checkout's bucket, %d to dev's", len(evil.Objects), len(s3.Objects))
 	}
@@ -128,6 +144,30 @@ func TestProofPushVerifyCLI(t *testing.T) {
 			t.Fatalf("proof comment on #%d: %+v", n, cs)
 		}
 	}
+	// A repository with no dev branch: aayu init maps [branches] dev in the
+	// default branch's committed config, and the branch it maps is trusted.
+	fgh.Mu.Lock()
+	base, def := fgh.Pulls[prN].Base, fgh.Default
+	fgh.Pulls[prN].Base.Ref, fgh.Default = "trunk", "main"
+	fgh.Refs["heads/main"], fgh.Refs["heads/trunk"] = base.SHA, base.SHA
+	fgh.Files[".aayudha/config.toml"] = cfg + "[branches]\ndev = \"trunk\"\n"
+	fgh.Fail, fgh.FailAfter = "GET /repos/o/r", 0
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, "500") {
+		t.Fatalf("push when the repository's default branch cannot be read: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	fgh.Fail = ""
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
+		t.Fatalf("push in a repository whose default branch maps dev: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	fgh.Pulls[prN].Base, fgh.Default = base, def
+	delete(fgh.Refs, "heads/main")
+	delete(fgh.Refs, "heads/trunk")
+	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.Mu.Unlock()
 	// Pushing again replaces the comment in place.
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
 		t.Fatalf("second push: %s", errOut)

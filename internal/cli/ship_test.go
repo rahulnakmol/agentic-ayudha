@@ -1194,7 +1194,7 @@ func TestShipEMSeatApprover(t *testing.T) {
 	_ = os.WriteFile(local, []byte("version = 1\n[proof]\nmedia = \"s3://evil/x?endpoint=http://127.0.0.1:9\"\nmedia_secret = \"github-token\"\n"), 0o644)
 	code, out = shipCmd(t, env, opts, prN, seat...)
 	_ = os.Remove(local)
-	if code != ExitBlocked || contains(g.LabelNames(2), "status:merged") || !strings.Contains(out, "the proof media bucket and its secret are read only from the user config and dev's committed .aayudha/config.toml") {
+	if code != ExitBlocked || contains(g.LabelNames(2), "status:merged") || !strings.Contains(out, "the proof media bucket, its secret, and its retention are read only from the user config and dev's committed .aayudha/config.toml") {
 		t.Fatalf("ship with the checkout's media bucket: %d %s", code, out)
 	}
 	g.Mu.Lock()

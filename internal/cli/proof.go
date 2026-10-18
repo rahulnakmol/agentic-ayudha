@@ -67,7 +67,8 @@ func (e *Env) private(ctx context.Context, c *github.Client, repo string) bool {
 
 // proofStore builds the repository's proof store: its ledger under tok, and
 // the [proof] media bucket with credentials from the secrets store. The
-// bucket and the name of its secret come only from trustedProof (#667).
+// bucket, the name of its secret, and the retention its lifecycle rule
+// sets come only from trustedProof (#667).
 func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Token, ident, tag string) (*proof.Store, error) {
 	l, err := e.Config()
 	if err != nil {
@@ -85,7 +86,7 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	if err != nil {
 		return nil, err
 	}
-	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: l.Config.Proof.RetentionDays}
+	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: pc.RetentionDays}
 	if m := pc.Media; m != "" {
 		name := pc.MediaSecret
 		if name == "" {
@@ -105,10 +106,14 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	return s, nil
 }
 
-// trustedProof is the [proof] media bucket and the name of its secret from
-// sources the person controls (#667): the defaults, the user config, and the
-// integration branch's committed .aayudha/config.toml at its tip (only the
-// defaults and the user config when that branch or file cannot be found).
+// trustedProof is the [proof] media bucket, the name of its secret, and the
+// retention its lifecycle rule sets, from sources the person controls
+// (#667): the defaults, the user config, and the integration branch's
+// committed .aayudha/config.toml at its tip (only the defaults and the user
+// config when that file cannot be found). The integration branch is the
+// user config's [branches] dev, else a dev branch, else the one the
+// default branch's committed config maps (aayu init writes [branches] dev
+// there when a repository has no dev), else the default branch.
 // The checkout, config.local, AAYU_* variables and --set may belong to an
 // agent whose branch the person has checked out, and naming a bucket there
 // would send the person's local secret to it, so a run whose values differ
@@ -119,30 +124,58 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 	if err != nil {
 		return config.Proof{}, Wrap(ExitUsage, fmt.Errorf("config: %w", err))
 	}
-	branch := or(user.Config.Branches.Dev, "dev")
 	owner, name, _ := github.SplitRepo(repo)
-	var text []byte
-	if ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+branch); err == nil {
+	// load is the user config over branch's committed .aayudha/config.toml at
+	// its tip; found is false when the branch does not exist. A file there
+	// that cannot be read (a directory, or one over the API's 1 MB) or does
+	// not load is no config the run may be judged against.
+	load := func(branch string) (l *config.Loaded, found bool, err error) {
+		ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+branch)
+		if github.NotFound(err) {
+			return &config.Loaded{Config: user.Config}, false, nil
+		}
+		if err != nil {
+			return nil, false, Wrap(ExitExternal, err)
+		}
+		var text string
 		fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, ".aayudha/config.toml", &gh.RepositoryContentGetOptions{Ref: ref.GetObject().GetSHA()})
-		if err != nil && !github.NotFound(err) {
-			return config.Proof{}, Wrap(ExitExternal, err)
+		switch {
+		case github.NotFound(err):
+			err = nil
+		case err == nil && fc == nil:
+			err = errors.New("it is a directory")
+		case err == nil:
+			text, err = fc.GetContent()
 		}
 		if err == nil {
-			t, _ := fc.GetContent()
-			text = []byte(t)
+			l, err = config.Load(config.Sources{UserDir: src.UserDir, RepoTOML: []byte(text), RepoSource: ".aayudha/config.toml on " + branch})
 		}
-	} else if !github.NotFound(err) {
-		return config.Proof{}, Wrap(ExitExternal, err)
+		if err != nil {
+			return nil, true, Errorf(ExitBlocked, "%s's .aayudha/config.toml cannot be read or does not load, so the proof media bucket cannot be trusted: %v", branch, err)
+		}
+		return l, true, nil
 	}
-	trusted, err := config.Load(config.Sources{UserDir: src.UserDir, RepoTOML: text, RepoSource: ".aayudha/config.toml on " + branch})
+	branch := or(user.Config.Branches.Dev, "dev")
+	trusted, found, err := load(branch)
+	if err == nil && !found && user.Config.Branches.Dev == "" {
+		var r *gh.Repository
+		if r, _, err = c.REST.Repositories.Get(ctx, owner, name); err != nil {
+			return config.Proof{}, Wrap(ExitExternal, err)
+		}
+		branch = r.GetDefaultBranch()
+		if trusted, _, err = load(branch); err == nil && trusted.Config.Branches.Dev != "" && trusted.Config.Branches.Dev != branch {
+			branch = trusted.Config.Branches.Dev
+			trusted, _, err = load(branch)
+		}
+	}
 	if err != nil {
-		return config.Proof{}, Errorf(ExitBlocked, "%s's .aayudha/config.toml does not load, so the proof media bucket cannot be trusted: %v", branch, err)
+		return config.Proof{}, err
 	}
 	t, r := trusted.Config.Proof, run.Config.Proof
-	if r.Media != t.Media || t.Media != "" && r.MediaSecret != t.MediaSecret {
-		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket and its secret are read only from the user config and %s's committed .aayudha/config.toml; "+
-			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q and media_secret %q, not %q and %q; "+
-			"remove those settings, or change %s through a reviewed PR", branch, r.Media, r.MediaSecret, t.Media, t.MediaSecret, branch)
+	if r.Media != t.Media || t.Media != "" && (r.MediaSecret != t.MediaSecret || r.RetentionDays != t.RetentionDays) {
+		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket, its secret, and its retention are read only from the user config and %s's committed .aayudha/config.toml; "+
+			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q, media_secret %q and retention_days %d, not %q, %q and %d; "+
+			"remove those settings, or change %s through a reviewed PR", branch, r.Media, r.MediaSecret, r.RetentionDays, t.Media, t.MediaSecret, t.RetentionDays, branch)
 	}
 	return t, nil
 }
