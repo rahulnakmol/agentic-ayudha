@@ -106,6 +106,9 @@ prefixes = ["investigate/", "slo/", "runbook/", "respond/"]
 max_usd = 15.0 # an estimate, no run yet: data-ai's latest full run cost about 0.93 USD a case (39012883212), so eight cases about 7.44
 gate = "advisory"
 events = ["workflow_dispatch"]
+# A scaleup incident assessment is long: run 39092388903 stopped one investigate/upstream-scaleup draft at the
+# 12000-token cap, and its first drafts reached 10.4k before, so the group's cap is 32000, a ceiling and not a charge.
+max_tokens = 32000
 
 # Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
 # scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
