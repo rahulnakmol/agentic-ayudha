@@ -127,6 +127,10 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting. A review
    app, such as Codex, CodeRabbit, or Greptile, can review instead: set `[inspect] reviewer` to its name and list it
    in `[inspect] apps`.
+
+   > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
+   > not create `code-review`. Choose a review app as above, or `human`, or make the repository public or upgrade.
+
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
 
