@@ -413,33 +413,10 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// adds its host: that host picked the model, so every family its modes
 	// may use is a candidate, and a host aayu cannot place makes the builder
 	// unknown.
-	var commits, claims, hosts []string
+	var commits []string
+	var dc declarations
 	lane := verbs.Family("")
-	declare := func(models []string, host string, named bool) {
-		concrete := false
-		for _, m := range models {
-			if m = strings.ToLower(m); !slices.Contains(claims, m) {
-				claims = append(claims, m)
-			}
-			concrete = concrete || verbs.Family(m) != verbs.FamilyHostManaged
-		}
-		if host = strings.ToLower(host); !concrete && (named || len(models) > 0) && !slices.Contains(hosts, host) {
-			hosts = append(hosts, host)
-		}
-	}
-	trailers := func(text string) {
-		var models []string
-		for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
-			models = append(models, m[1])
-		}
-		h := hostTrailer.FindStringSubmatch(text)
-		if h == nil {
-			declare(models, "", false)
-		} else {
-			declare(models, h[1], true)
-		}
-	}
-	trailers(pr.GetBody())
+	dc.trailers(pr.GetBody())
 	// Without the commits' declarations a family could be missing, so a
 	// failed listing fails the run rather than reviewing on the rest.
 	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
@@ -450,7 +427,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	for _, x := range cs {
 		commits = append(commits, x.GetSHA())
-		trailers(x.GetCommit().GetMessage())
+		dc.trailers(x.GetCommit().GetMessage())
 	}
 	if ins.Pack != nil {
 		_, known := verbs.FindHost(verbs.HostID(ins.Pack.Host))
@@ -464,9 +441,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			}
 		}
 		// A build lane that names a family is the model the pack's host ran.
-		declare(models, ins.Pack.Host, known && (lane == "" || lane == verbs.FamilyHostManaged))
+		dc.declare(models, ins.Pack.Host, known && (lane == "" || lane == verbs.FamilyHostManaged))
 	}
-	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claims, hosts, lane)
+	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, dc.claims, dc.hosts, lane)
 	// A docs-only PR merges without a review, whichever backend reviews.
 	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,

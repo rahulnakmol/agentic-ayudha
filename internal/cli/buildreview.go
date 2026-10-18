@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -76,7 +75,8 @@ type sessionRound struct {
 	Family      string        `json:"family"`
 	Builder     string        `json:"builder"`
 	Disposition string        `json:"disposition"`
-	Items       []sessionItem `json:"items,omitempty"` // what the round left to fix: findings P0 to P2, unmet criteria
+	Serving     string        `json:"serving,omitempty"` // the service tier the reply was served at (tierNote)
+	Items       []sessionItem `json:"items,omitempty"`   // what the round left to fix: findings P0 to P2, unmet criteria
 	CostUSD     float64       `json:"cost_usd"`
 }
 
@@ -235,18 +235,12 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	if a.w != nil {
 		in.Dismissed = readDismissed(ctx, a.w)
 	}
-	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
+	// The merge gate's own review call: fast serving where the endpoint has
+	// it, the founder's effort per model, and the cost at the rate asked.
+	var served []string
 	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax,
-		Filter: inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
-		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
-			req.Effort = cmp.Or(req.Effort, m.Effort)
-			if m.Source == models.SourceConfig {
-				req.ServiceTier = models.TierPriority // as the merge gate's paid review asks
-			}
-			resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
-			usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
-			return resp, usd, err
-		}}}}
+		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
+		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &served)}}}
 	p := e.progress(fmt.Sprintf("Session review by %s (%s)", m.Model, m.Family))
 	res, st, err := r.Run(ctx, in, s.State)
 	s.State = st
@@ -261,6 +255,9 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	}
 	if !res.Cached {
 		rd := sessionRound{Head: a.head, Model: m.Model, Family: string(m.Family), Builder: builder.Note(), Disposition: res.Disposition, CostUSD: res.CostUSD}
+		if len(served) > 0 {
+			rd.Serving = tierNote(served)
+		}
 		for _, f := range res.Findings {
 			if f.Severity != "P3" {
 				rd.Items = append(rd.Items, sessionItem{ID: f.ID, Severity: f.Severity, File: f.File, Line: f.Line, Title: clipText(oneLine(f.Title), 200), Detail: clipText(oneLine(f.Detail), 600), Fix: clipText(oneLine(f.Fix), 400)})
@@ -373,8 +370,8 @@ func withDeclarations(body string, lines []string) string {
 	return strings.TrimRight(body, "\n") + "\n\n" + block + "\n"
 }
 
-// declarations collects a PR's builder declarations (Decision #469), as
-// runInspect reads them: every model an Aayudha-Model line or trailer names,
+// declarations collects a PR's builder declarations (Decision #469), for
+// runInspect and the session review alike: every model an Aayudha-Model line or trailer names,
 // and the host of a declaration that names no concrete model, which picked
 // the model itself.
 type declarations struct{ claims, hosts []string }
@@ -422,6 +419,9 @@ func (s *sessionReview) summary() string {
 		b.WriteString("\n")
 		last := s.Rounds[len(s.Rounds)-1]
 		fmt.Fprintf(&b, "Builder, as the reviewer was picked against it: %s.\n\n", sessionCell(last.Builder))
+		if last.Serving != "" {
+			fmt.Fprintf(&b, "Last round's serving: %s.\n\n", sessionCell(last.Serving))
+		}
 		seen := map[string]bool{}
 		var fixed, declined, open []string
 		for _, r := range s.Rounds {

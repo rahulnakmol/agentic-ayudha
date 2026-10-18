@@ -945,7 +945,8 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("first\n"), 0o644)
 	code, res, errOut := build()
 	if code != ExitBlocked || res.Review == nil || res.Review.Disposition != "fix" || len(res.Review.Open) != 1 || pushed() != before ||
-		len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" || !slices.Equal(routes, []string{"https://review.example/v1 review-key"}) {
+		len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" || !slices.Equal(routes, []string{"https://review.example/v1 review-key"}) ||
+		model.Requests[0].ServiceTier != models.TierPriority || model.Requests[0].Effort != "high" {
 		t.Fatalf("round 1: %d %+v %s", code, res.Review, errOut)
 	}
 	id := res.Review.Open[0].ID
