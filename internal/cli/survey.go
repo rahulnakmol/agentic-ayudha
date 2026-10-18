@@ -360,24 +360,51 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 	for name, b := range fromFile {
 		parts[name] = b
 	}
+	save := func(parts map[string]json.RawMessage, rep survey.SectionReport) error {
+		for _, name := range survey.SectionNames() {
+			b, ok := fromFile[name]
+			if _, in := parts[name]; !ok || !in {
+				if in {
+					res.Resumed = append(res.Resumed, name)
+				}
+				continue
+			}
+			ps := rep.Sections[name]
+			if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: ix.Digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
+				return Wrap(ExitInternal, err)
+			}
+			res.Saved = append(res.Saved, name)
+		}
+		return nil
+	}
 	d, rep, err := survey.CheckSections(ix, parts)
 	if err != nil {
-		return Errorf(ExitUsage, "%s: %v", cmp.Or(file, res.Dir), err)
+		// A section that does not parse is reported; the sections that do are
+		// still checked and saved, so the error never loses them.
+		good, bad := survey.Parseable(parts)
+		if len(bad) == 0 {
+			return Errorf(ExitUsage, "%s: %v", cmp.Or(file, res.Dir), err)
+		}
+		var msgs []string
+		for _, name := range survey.SectionNames() {
+			if e, ok := bad[name]; ok {
+				msgs = append(msgs, e.Error())
+			}
+		}
+		if _, rep, err := survey.CheckSections(ix, good); err == nil {
+			if err := save(good, rep); err != nil {
+				return err
+			}
+		}
+		saved := "none saved"
+		if len(res.Saved) > 0 {
+			saved = "saved " + strings.Join(res.Saved, ", ")
+		}
+		return Errorf(ExitUsage, "%s: %s (%s; fix the section and run again)", cmp.Or(file, res.Dir), strings.Join(msgs, "; "), saved)
 	}
 	res.SectionReport = rep
-	for _, name := range survey.SectionNames() {
-		b, ok := fromFile[name]
-		if !ok {
-			if _, ok := parts[name]; ok {
-				res.Resumed = append(res.Resumed, name)
-			}
-			continue
-		}
-		ps := rep.Sections[name]
-		if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: ix.Digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
-			return Wrap(ExitInternal, err)
-		}
-		res.Saved = append(res.Saved, name)
+	if err := save(parts, rep); err != nil {
+		return err
 	}
 	switch {
 	case len(rep.Missing) > 0:

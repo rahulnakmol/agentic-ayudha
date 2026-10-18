@@ -148,6 +148,24 @@ func MergeSections(parts map[string]json.RawMessage) (Draft, []string, error) {
 	return d, problems, nil
 }
 
+// Parseable splits sections into those that parse on their own and those
+// that do not, with each one's error, so a malformed section never stops the
+// sections beside it being checked and saved.
+func Parseable(parts map[string]json.RawMessage) (good map[string]json.RawMessage, bad map[string]error) {
+	good, bad = map[string]json.RawMessage{}, map[string]error{}
+	for name, b := range parts {
+		if _, _, err := MergeSections(map[string]json.RawMessage{name: b}); err != nil {
+			if !strings.HasPrefix(err.Error(), "section ") {
+				err = fmt.Errorf("section %s: %w", name, err)
+			}
+			bad[name] = err
+		} else {
+			good[name] = b
+		}
+	}
+	return good, bad
+}
+
 // applyAssign gives each pending item the question the questions section
 // assigns it, and reports assignments to items that are not pending or to
 // questions that do not exist.

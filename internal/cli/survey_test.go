@@ -131,6 +131,24 @@ func TestSurveyDraftSections(t *testing.T) {
 		return s
 	}
 
+	// A section that does not parse is reported, and the section beside it in
+	// the same file is still checked and saved.
+	broken := write("broken.json", func(k string) bool { return slices.Contains(first, k) && k != "capabilities" }, func(s string) string {
+		return strings.TrimSuffix(s, "}") + `,"capabilities":"truncated"}`
+	})
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--draft", broken); code != ExitUsage || !strings.Contains(stderr, "section capabilities") || !strings.Contains(stderr, "saved engineering") {
+		t.Fatalf("a section that does not parse: %d %s", code, stderr)
+	}
+	if s := saved("engineering"); !s.Pass {
+		t.Fatalf("engineering beside a broken section: %+v", s)
+	}
+	if _, err := os.Stat(filepath.Join(out, "sections", "capabilities.json")); !os.IsNotExist(err) {
+		t.Fatalf("the broken section was saved: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(out, "sections")); err != nil {
+		t.Fatal(err)
+	}
+
 	code, r := draft("--draft", a)
 	if code != 0 || !slices.Equal(r.Saved, []string{"engineering", "capabilities"}) || !slices.Equal(r.Missing, []string{"product", "modernisation", "questions"}) || r.Merged != "" {
 		t.Fatalf("first sections: %d %+v", code, r)
