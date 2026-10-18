@@ -2,9 +2,9 @@
   "story": 578,
   "branch": "story/578-init-identity-cannot-complete-from-a-rem",
   "started_at": "2026-10-18T07:32:26Z",
-  "failed_attempts": 1,
+  "failed_attempts": 2,
   "failures_by_layer": {
-    "L02": 1
+    "L02": 2
   },
   "checkpoints": [
     {
@@ -42,6 +42,18 @@
       "verify": "hold",
       "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
       "at": "2026-10-18T08:07:33Z"
+    },
+    {
+      "k": 3,
+      "n": 3,
+      "attempt": 1,
+      "commit": "215b670616e9f8cebe6b361385aaff6b12d183b7",
+      "layers": [
+        "L02"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T12:49:53Z"
     }
   ]
 }
