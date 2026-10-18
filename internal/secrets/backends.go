@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -24,8 +25,31 @@ type Keychain struct{}
 
 func (Keychain) Name() string { return "keychain" }
 
+// errNoSessionBus is the Secret Service's answer before it is asked: there is
+// no D-Bus session bus to ask it on.
+var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset and $XDG_RUNTIME_DIR/bus does not exist)")
+
+// sessionBus reports whether the Secret Service can be reached without
+// starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
+// which forks a session dbus-daemon that outlives aayu: one per probe on a
+// headless machine. macOS and Windows use no D-Bus.
+func sessionBus() error {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" || os.Getenv("DBUS_SESSION_BUS_ADDRESS") != "" {
+		return nil
+	}
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+		if _, err := os.Stat(filepath.Join(d, "bus")); err == nil {
+			return nil
+		}
+	}
+	return errNoSessionBus
+}
+
 // Available probes the keychain; headless Linux without a Secret Service fails here.
 func (Keychain) Available() error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
 	_, err := keyring.Get(keyringService, "aayudha-probe")
 	if err == nil || errors.Is(err, keyring.ErrNotFound) {
 		return nil
@@ -34,6 +58,9 @@ func (Keychain) Available() error {
 }
 
 func (Keychain) Get(name string) (string, error) {
+	if err := sessionBus(); err != nil {
+		return "", err
+	}
 	v, err := keyring.Get(keyringService, name)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return "", ErrNotFound
@@ -41,9 +68,17 @@ func (Keychain) Get(name string) (string, error) {
 	return v, err
 }
 
-func (Keychain) Set(name, value string) error { return keyring.Set(keyringService, name, value) }
+func (Keychain) Set(name, value string) error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
+	return keyring.Set(keyringService, name, value)
+}
 
 func (Keychain) Delete(name string) error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
 	err := keyring.Delete(keyringService, name)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return ErrNotFound
