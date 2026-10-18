@@ -463,7 +463,8 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	}
 	// gh stores the founder as an inactive account: `gh auth token` gives only
 	// the active one, but `--user founder` reaches the founder's token.
-	d6 := g.AddIssue("Choose the log store\x1b[2K\rApproving: nothing", decisionBody("true", ""), "type:decision", "status:ready") // terminal escapes in a title stay inert
+	// Terminal escapes and a bidi override in a title stay inert, on the terminal and in the comment.
+	d6 := g.AddIssue("Choose the log store\x1b[2K\rApproving: nothing\u202e", decisionBody("true", ""), "type:decision", "status:ready")
 	g.Mu.Lock()
 	g.TokenLogins["ghu_otheractive"] = fake.Account{Login: "someone-else", Type: "User"}
 	g.Mu.Unlock()
@@ -479,8 +480,20 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder)") || strings.Contains(body, "ghu_") || strings.Contains(body, "/aayu approve all") {
 		t.Fatalf("inactive gh account: exit %d %s\n%s", code, errOut, body)
 	}
-	if strings.ContainsAny(errOut, "\x1b\r") || !strings.Contains(errOut, "Choose the log store\uFFFD[2K\uFFFDApproving: nothing") {
-		t.Fatalf("the terminal shows the title's control characters: %q", errOut)
+	if strings.ContainsAny(errOut+body, "\x1b\r\u202e") || !strings.Contains(errOut, "Choose the log store\uFFFD[2K\uFFFDApproving: nothing\uFFFD") {
+		t.Fatalf("the title's control characters reach the person: %q\n%q", errOut, body)
+	}
+	// gh lists the founder's account but cannot read its token just now: it still counts.
+	d7 := g.AddIssue("Choose the CI runner", decisionBody("true", ""), "type:decision", "status:ready")
+	unreadable := func(context.Context) (map[string]string, error) { return map[string]string{"founder": ""}, nil }
+	code, _, errOut = run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, GHAccounts: unreadable, GHToken: func(context.Context) (string, error) { return "ghu_otheractive", nil }},
+		"decide", strconv.Itoa(d7.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	g.Mu.Lock()
+	body = g.Issues[d7.Number].Comments[len(g.Issues[d7.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder (unreadable now))") {
+		t.Fatalf("unreadable gh account: exit %d %s\n%s", code, errOut, body)
 	}
 	// A token in aayu's own secrets store (`aayu auth set-secret github-token`) is reachable too.
 	d3 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
@@ -543,6 +556,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	g.Viewer = "founder"
 	var ds []*fake.Issue
 	old := g.AddIssue("Choose the queue (first try)", decisionBody("true", ""), "type:decision", "status:ready")
+	feature := g.AddIssue("Data platform", "", "type:feature", "status:in-progress")
 	for _, title := range []string{"Choose the rules engine", "Choose the queue", "Choose the data store"} {
 		links := ""
 		if title == "Choose the queue" { // accepting it closes #old too, and the batch must say so
@@ -625,7 +639,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		}
 	}
 	g.Mu.Unlock()
-	want := fmt.Sprintf("Accepted #%d; #%d was not accepted: its title or body changed while the batch was applied", e1.Number, e2.Number)
+	want := fmt.Sprintf("Accepted #%d; #%d was not accepted: its title, body, or parent changed while the batch was applied", e1.Number, e2.Number)
 	if code != ExitBlocked || e1State != "closed" || e2State != "open" || !strings.Contains(errOut, want) || !strings.Contains(eb, want) ||
 		!strings.Contains(errOut, "Command: aayu decide '"+pair+"' --accept A,A") {
 		t.Fatalf("edited between writes: exit %d %s\n%s", code, errOut, eb)
@@ -638,6 +652,9 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	g.Mu.Unlock()
 	for name, edit := range map[string]func(){
 		"Decision #" + strconv.Itoa(ds[1].Number) + " changed while the code was waiting": func() { g.Issues[ds[1].Number].Body += "\nEdited." },
+		"Decision #" + strconv.Itoa(ds[2].Number) + " changed while the code was waiting": func() { // moved under a Feature: its authority may differ now
+			ds[2].Parent = feature.Number
+		},
 		"the batch comment changed while the code was waiting": func() {
 			cs := g.Issues[ds[0].Number].Comments
 			cs[len(cs)-1].Body += "\n2. (all of it was fine)"
@@ -658,6 +675,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		}
 		g.Mu.Lock()
 		g.Issues[ds[1].Number].Body = body1
+		ds[2].Parent = 0
 		g.Mu.Unlock()
 	}
 
@@ -717,7 +735,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	}
 	// One per approval the person gave: the run stopped between writes, the
 	// two voided runs, and the applied one.
-	if len(approvals) != 4 || strings.Count(approvals[3], "Accepts option") != 3 || !strings.Contains(approvals[3], `"approver":"founder"`) {
+	if len(approvals) != 5 || strings.Count(approvals[4], "Accepts option") != 3 || !strings.Contains(approvals[4], `"approver":"founder"`) {
 		t.Fatalf("presence.approve records: %v", approvals)
 	}
 }

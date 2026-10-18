@@ -85,10 +85,11 @@ type batch struct {
 	Mention []string    `json:"-"` // who is asked
 }
 
-// decisionHash covers what the batch shows of a Decision: its title and body
-// (labels are read again when the reply arrives).
+// decisionHash covers what the batch shows of a Decision, its title and
+// body, and its parent's type, which decides its authority (labels are read
+// again when the reply arrives).
 func decisionHash(d decide.Decision) string {
-	sum := sha256.Sum256([]byte(d.Title + "\x00" + d.Body))
+	sum := sha256.Sum256([]byte(d.Title + "\x00" + d.Body + "\x00" + d.ParentType))
 	return hex.EncodeToString(sum[:8])
 }
 
@@ -174,14 +175,14 @@ func fence(s string) string {
 var mdEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\\", "\\\\", "`", "\\`", "*", "\\*", "_", "\\_",
 	"[", "\\[", "]", "\\]", "#", "\\#", "|", "\\|", "~", "\\~", "!", "\\!", "@", "@\u200b")
 
-func mdText(s string) string { return mdEscape.Replace(s) }
+func mdText(s string) string { return mdEscape.Replace(termText(s)) }
 
-// termText makes untrusted text safe to print on a terminal: control
-// characters (escape sequences, carriage returns) show as U+FFFD instead of
-// moving the cursor or rewriting what the person reads.
+// termText makes untrusted text safe to show: control and format characters
+// (escape sequences, carriage returns, bidi overrides) show as U+FFFD instead
+// of moving the cursor or reordering what the person reads.
 func termText(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) { // Cf: bidi overrides and isolates, zero-width marks
 			return '\uFFFD'
 		}
 		return r
@@ -325,7 +326,12 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 	// gh stores several accounts and `gh auth token` gives only the active
 	// one; any of them, active or not, can write a reply.
 	accounts, _ := e.ghAccounts(ctx)
+	var unread []identity.Reach // gh names the account but would not give its token now: it is still reachable
 	for login, tok := range accounts {
+		if tok == "" {
+			unread = append(unread, identity.Reach{Source: "gh auth token --user " + login + " (unreadable now)", Login: login})
+			continue
+		}
 		sources["gh auth token --user "+login] = func(context.Context) (string, error) { return tok, nil }
 	}
 	for name, f := range map[string]func(context.Context) (string, error){
@@ -370,12 +376,12 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 	} {
 		sources[name] = f
 	}
-	return identity.Reachable(ctx, e.Environ, sources, func(ctx context.Context, t identity.Token) (identity.User, error) {
+	return append(identity.Reachable(ctx, e.Environ, sources, func(ctx context.Context, t identity.Token) (identity.User, error) {
 		return identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), t)
-	})
+	}), unread...)
 }
 
-// ghAccounts is every account gh stores for github.com, login to token.
+// ghAccounts is every account gh stores for github.com, login to token ("" when unreadable).
 func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
 	if e.GHAccounts != nil {
 		return e.GHAccounts(ctx)
@@ -393,9 +399,8 @@ func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
 	}
 	toks := map[string]string{}
 	for _, a := range st.Hosts["github.com"] {
-		if t, err := run(ctx, e.Dir, "gh", "auth", "token", "--hostname", "github.com", "--user", a.Login); err == nil && strings.TrimSpace(t) != "" {
-			toks[a.Login] = strings.TrimSpace(t)
-		}
+		t, _ := run(ctx, e.Dir, "gh", "auth", "token", "--hostname", "github.com", "--user", a.Login)
+		toks[a.Login] = strings.TrimSpace(t) // "" when gh could not read it now: it still counts
 	}
 	return toks, nil
 }
@@ -731,7 +736,7 @@ func unchangedDecision(ctx context.Context, c *github.Client, repo string, it ba
 	case d.State != "open":
 		return d, "it was closed", nil
 	case decisionHash(d) != it.BodyHash:
-		return d, "its title or body changed", nil
+		return d, "its title, body, or parent changed", nil
 	case (!d.Reversible() || d.Waiver()) != it.OneWay:
 		return d, "its door changed", nil
 	}

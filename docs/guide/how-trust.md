@@ -223,7 +223,7 @@ answers a refusal on the thread with the reason and the next step:
 | The author is in `[approvals] approvers`, has write access, and is not a bot | The workflow reads the default branch's `.aayudha/config.toml`, a protected path, so an agent cannot add itself |
 | The reply names the batch by its hash, was not edited, and came after the batch | An edited reply could have said something else when it was read |
 | The batch was not edited, was posted by the bot, is still open, its hash matches its record, and its text is exactly what aayu renders from that record and the Decisions | The steps are exactly the ones you were shown, even if someone else posted as the bot |
-| Each Decision's body is unchanged since the batch, and the Decision's authority is the author | A later edit voids the approval |
+| Each Decision's title, body, and parent are unchanged since the batch, and the Decision's authority is the author | A later edit voids the approval |
 | No item is a door `[approvals] device_for` keeps on the device code | One-way doors need the device code by default |
 
 `[approvals] device_for = ["one-way"]` is the default: an irreversible Decision or a floor waiver always needs the
