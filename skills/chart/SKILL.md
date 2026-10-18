@@ -203,7 +203,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   retention ages them out: that is the open risk. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source that compares like
   with like (the same event type, filters, and deduplication on both sides, never the metric against all rows), a
-  completeness check over the same span the metric reads (the week plus its outcome cutoff), quality checks with
+  completeness check over the same span the metric reads (its window, plus the outcome cutoff when it has one: for
+  example, a week and 24 hours), quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
   Completion Goal criteria (`metric` evidence) that `plan` turns into checkpoints. When a week can be provisional,
   the completeness check and the Completion Goal criteria hold the final week; the provisional view only carries
