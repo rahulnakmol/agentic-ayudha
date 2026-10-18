@@ -62,9 +62,11 @@ Which tools have a trigger for an issue that opens (checked 2026-10-18):
 | Claude Code | None: a routine's GitHub trigger takes pull request and release events only ([docs](https://code.claude.com/docs/en/routines)) | A note in `loops/claude/routines.md`; `triage-daily` covers it |
 | Codex | None: event tasks take GitHub pull request activity only, on the web ([docs](https://learn.chatgpt.com/docs/automations)) | A note in `loops/codex/scheduled-tasks.md`; `triage-daily` covers it |
 
-Some issues have no intake label when they open: an issue opened without a form, or through the API. The event loop
-does not start for them. `triage-daily` lists every open intake issue on its schedule, so it covers those issues too,
-and any issue that a run missed. The Cursor trigger depends on GitHub's `labeled` event for the label the form adds as
+Some issues have no intake label when they open: an issue opened without a form, or through the API. No triage run
+sees them, on arrival or on the schedule: `aayu triage` lists only open issues with the `intake` label. A person adds
+the `intake` label by hand; then the next `triage-daily` run triages the issue (Cursor's label trigger starts at once;
+Amp's spawner does not, because it fires only when the issue opens). `triage-daily` also triages any intake issue that
+an event run missed. The Cursor trigger depends on GitHub's `labeled` event for the label the form adds as
 the issue opens: we expect this, but we have not seen it in a live Cursor run yet.
 
 No event loop runs in GitHub Actions, and no model key or tool token goes to Actions for one. An Amp spawner starts
