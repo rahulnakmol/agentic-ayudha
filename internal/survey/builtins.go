@@ -10,8 +10,9 @@ var (
 	// registerCall is a call that registers a builtin: a string literal naming
 	// it followed by a reference to the function that implements it
 	// (addNative("function Math.abs(a)", scMathAbs, 0), lua_register(L, "f", f),
+	// register("f", handlers.f),
 	// Tcl_CreateObjCommand(interp, "cmd", Cmd, …), register('name', fn)).
-	registerCall = regexp.MustCompile(`\b[A-Za-z_]\w*\s*\(\s*(?:[^()"';{}]*?,\s*)?(?:"([^"\\\n]{1,200})"|'([^'\\\n]{1,200})')\s*,\s*&?\s*([A-Za-z_][\w:]*)\s*[,)]`)
+	registerCall = regexp.MustCompile(`\b[A-Za-z_]\w*\s*\(\s*(?:[^()"';{}]*?,\s*)?(?:"([^"\\\n]{1,200})"|'([^'\\\n]{1,200})')\s*,\s*&?\s*([A-Za-z_][\w:.]*)\s*[,)]`)
 	builtinName  = regexp.MustCompile(`^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$`)
 )
 
@@ -43,7 +44,7 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 	for _, p := range sortedKeys(files) {
 		s := files[p]
 		k, ok := ix.byPath[p]
-		if !ok || s.code == "" || ix.Files[k].Role != "source" {
+		if !ok || s.code == "" || ix.Files[k].Role != "source" && ix.Files[k].Role != "test" {
 			continue
 		}
 		for _, m := range registerCall.FindAllStringSubmatchIndex(s.raw, -1) {

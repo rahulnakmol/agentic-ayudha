@@ -76,8 +76,8 @@ func TestFloorCapabilityMap(t *testing.T) {
 func TestFloorCapabilityMapNamespaces(t *testing.T) {
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"api.h":   "namespace a {\nvoid parse();\nclass Foo {\npublic:\n  void bar();\n};\n}\nnamespace b {\nvoid parse();\nvoid load(int n);\nvoid load(double x);\n}\n",
-		"api.cpp": "#include \"api.h\"\nnamespace a {\nvoid parse() {}\n}\nvoid a::Foo::bar() {}\nvoid b::parse() {}\nvoid b::load(int n) {}\nvoid b::load(double x) {}\n",
+		"api.h":   "namespace a {\nvoid parse();\nclass Foo {\npublic:\n  void bar();\n};\n}\nnamespace b {\nvoid parse();\nvoid load(int n);\nvoid load(double x);\n}\ninline namespace v1 {\nvoid tune();\n}\n",
+		"api.cpp": "#include \"api.h\"\nnamespace a {\nvoid parse() {}\n}\nvoid a::Foo::bar() {}\nvoid b::parse() {}\nvoid b::load(int n) {}\nvoid b::load(double x) {}\nvoid v1::tune() {}\n",
 		"more.h":  "namespace a {\nvoid parse();\n}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
@@ -90,13 +90,14 @@ func TestFloorCapabilityMapNamespaces(t *testing.T) {
 	}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed",
-			Cites: []string{"sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"}}}}
+			Cites: []string{"sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2", "sym:api.cpp#v1::tune"}}}}
 	}
 	cites := func(c ...string) func(d *Draft) { return func(d *Draft) { d.Capabilities[0].Cites = c } }
 	runFloorCases(t, ix, base, []floorCase{
-		{"negated", "each declaration covered by its definition's symbol", func(*Draft) {}, "no capability covers", false},
+		{"negated", "each declaration covered by its definition's symbol, in an inline namespace too", func(*Draft) {}, "no capability covers", false},
+		{"match", "the inline namespace's declaration left out", cites("sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"), "(function v1::tune)", true},
 		{"match", "the method's definition left out", cites("sym:api.cpp#a::parse", "sym:api.cpp#b::parse", "api.h:3"), "5 (method a::Foo::bar)", true},
-		{"near miss", "another namespace's parse cited for a::parse", cites("sym:api.cpp#b::parse", "sym:api.cpp#a::Foo::bar", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"), "api.h:2 (function a::parse)", true},
+		{"near miss", "another namespace's parse cited for a::parse", cites("sym:api.cpp#b::parse", "sym:api.cpp#a::Foo::bar", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"), "2 (function a::parse)", true},
 		{"match", "one of two overloads cited", cites("sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load"), "(function b::load)", true},
 		{"negated", "a function declared in two headers, its one definition cited", func(*Draft) {}, "more.h", false},
 	})
@@ -222,15 +223,17 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		}
 	}
 	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
+	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n")
+	write("cases/dot.js", "dot(1);\n")
+	write("cases/probe.js", "probe(1);\n")
 	write("cases/hum.js", "hum(1);\n")
 	write("examples/case.py", "shout(\"x\")\n")
-	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef setup(env):\n    env.register('shout', shout)\n")
 	write("cases/loud.js", "shout(\"hi\");\n")
 	write("plugins.py", "import lib\n\n\ndef yell(x):\n    return x\n\n\nlib.REG.register('yell', yell)\n")
 	write("cases/yell.js", "yell(1);\n")
 	write("quiet.py", "def whisper(x):\n    return x\n\n\ndef setup_quiet(env):\n    env.register('whisper', whisper)\n")
 	write("cases/quiet.js", "whisper(\"x\");\n")
-	write("tests/test_render.py", "import helpers\n\n\ndef test_render():\n    assert helpers.check(1)\n")
+	write("tests/test_render.py", "import helpers\n\n\ndef test_render():\n    assert helpers.check(1)\n\n\ndef test_probe(env):\n    env.register('probe', helpers.check)\n")
 	write("tests/helpers.py", "import lib\n\n\ndef check(x):\n    return lib.render(x) == str(x)\n")
 	write("tests/make_data.py", "def make():\n    return [1, 2]\n")
 	write("spec/render_spec.py", "import lib\n\nassert lib.render(3) == \"3\"\n")
@@ -269,6 +272,14 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
 		{"match", "an input in the host's own language", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"examples/case.py"} }),
 			"examples/case.py:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"negated", "a registration whose callback is dotted (lib.dotf), from the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/dot.js"} }), "case set G1", false},
+		{"match", "the dotted registration, from a runner that never makes it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/dot.js"} }),
+			"cases/dot.js:1 calls dot, which runner entry:other.py:1 does not register", true},
+		{"negated", "a test harness that registers the builtin itself", set(func(g *CaseSet) {
+			g.Runners, g.Inputs = []string{"test:tests/test_render.py"}, []string{"cases/probe.js"}
+		}), "case set G1", false},
+		{"match", "the harness's registration, from a program that never makes it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/probe.js"} }),
+			"cases/probe.js:1 calls probe, which runner entry:other.py:1 does not register", true},
 		{"negated", "a script whose top-level code calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/boom.js"} }), "case set G1", false},
 		{"match", "a function of the script its top-level code never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
 			"cases/hush.js:1 calls hush, which runner entry:other.py:1 does not register", true},
