@@ -175,7 +175,8 @@ the query that tells the rivals apart. Test a rival only with an observation it 
 leading hypothesis (the previous revision serving the same inputs, the same input failing on both revisions); an
 observation both predict tests neither, and when no query in the grounding separates them, keep the rival open and
 name the query that would. A rule-out names an observation that has not been made: write it as its own list item
-starting `Unverified:` and citing the query it would run or extend (`query qN`), never behind a bold label. A
+starting `Unverified:` that names the bounded query to run in plain text, never behind a bold label; cite `query qN`
+only for a query that already ran, such as the one the new query extends. A
 prediction about a fix (a test that will pass) is written the same way. Read a telemetry field only as its name and values show (a duration field is a measured duration,
 not a configured deadline, unless the grounding says so). Never state as fact what the grounding does not show about the infrastructure (that a deploy
 replaced every instance, that a cache was cleared): mark it `Assumption:` and build no conclusion on it. Separate the symptom, the contributing conditions, and the root
