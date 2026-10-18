@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // copilotLog is a Copilot session log in the shape of github/copilot-sdk's
@@ -115,5 +117,28 @@ func TestCopilotTrusted(t *testing.T) {
 	}
 	if !CopilotTrusted(repo, home) {
 		t.Error("the parent folder's trust did not count")
+	}
+}
+
+// Install removes a Copilot command skill it wrote and no longer ships, and
+// leaves a person's own .github/skills/aayudha-* skill alone.
+func TestCopilotInstallKeepsPersonsSkills(t *testing.T) {
+	tmp := t.TempDir()
+	root, home := filepath.Join(tmp, "repo"), filepath.Join(tmp, "home")
+	write(t, root, ".github/skills/aayudha-ours/SKILL.md", "---\nname: aayudha-ours\n---\nour own skill\n")
+	write(t, root, ".github/skills/aayudha-retired/SKILL.md", "<!-- The aayudha command `retired`, "+copilotCommandMark+". -->\n")
+	o := opts(t, root, home, false, verbs.HostCopilot)
+	res, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(o, res.Edits, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, root, ".github/skills/aayudha-ours/SKILL.md"); !strings.Contains(got, "our own skill") {
+		t.Errorf("a person's skill changed: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github", "skills", "aayudha-retired", "SKILL.md")); err == nil {
+		t.Error("a command install wrote and no longer ships was kept")
 	}
 }
