@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -377,7 +378,7 @@ func TestInitExtras(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": appKey()}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}, "pem": appKey()}
 	g.Static = map[string]any{"/app/hook/config": noHook}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
@@ -710,6 +711,9 @@ func identityGitHub(t *testing.T, owner string, perms map[string]any) *fake.GitH
 	g := fake.New(t, "o/r", kind)
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+	if perms == nil {
+		perms = map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+	}
 	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
 	g.Static = map[string]any{"/app/hook/config": noHook}
 	return g
@@ -721,12 +725,17 @@ func identityGitHub(t *testing.T, owner string, perms map[string]any) *fake.GitH
 // exits 4 too, never as an internal error. The phone setup itself moved to
 // the owner's token exchange (#594), after Codex's security review of #603.
 func TestInitIdentityRemoteShell(t *testing.T) {
+	defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
+	loopbackWait = 50 * time.Millisecond
 	for _, env := range []map[string]string{
 		{"AMP_ORB": "1", "DISPLAY": ":0"}, // an orb's Terminal tab
 		{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22", "DISPLAY": ":0"},
 		{"CLAUDE_CODE_REMOTE": "true"},
 		{}, // a Linux server or container: no desktop
 	} {
+		if len(env) == 0 && runtime.GOOS != "linux" {
+			continue // darwin and windows count as a desktop: localBrowser's table below covers them
+		}
 		g := identityGitHub(t, "o", nil)
 		code, printed := runIdentity(t, g.URL(), "", env)
 		if code != ExitBlocked || !strings.Contains(printed, "init --identity needs a browser on this machine") || !strings.Contains(printed, "no App was created") ||
@@ -740,8 +749,6 @@ func TestInitIdentityRemoteShell(t *testing.T) {
 			}
 		}
 	}
-	defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
-	loopbackWait = 50 * time.Millisecond
 	g := identityGitHub(t, "o", nil)
 	code, printed := runIdentity(t, g.URL(), "", map[string]string{"DISPLAY": ":0"})
 	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "If you created the App on GitHub, aayu never received its key: delete it at https://github.com/settings/apps, then run this again") ||
@@ -760,6 +767,8 @@ func TestInitIdentityRemoteShell(t *testing.T) {
 		{map[string]string{"SSH_TTY": "/dev/pts/0"}, "darwin", false},
 		{map[string]string{"AMP_THREAD_ID": "T-1"}, "darwin", false}, // an agent's shell
 		{map[string]string{"AAYU_REMOTE_BROWSER": "1"}, "darwin", false},
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1"}, "linux", true}, // WSL2 without WSLg
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1", "SSH_TTY": "/dev/pts/0"}, "linux", false},
 	} {
 		if got := localBrowser(func(k string) string { return tt.env[k] }, tt.goos); got != tt.want {
 			t.Errorf("localBrowser(%v, %s) = %v, want %v", tt.env, tt.goos, got, tt.want)
@@ -774,20 +783,24 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 	g := identityGitHub(t, "o", nil)
 	target, _ := url.Parse(g.URL())
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	convStatus := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.WriteHeader(convStatus)
 			_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
 			return
 		}
 		proxy.ServeHTTP(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	code, printed := runIdentity(t, srv.URL, "c0de1234c0de5678", nil)
-	if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
-		!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
-		t.Fatalf("a 422 conversion: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadGateway} {
+		convStatus = status
+		code, printed := runIdentity(t, srv.URL, "c0de1234c0de5678", nil)
+		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
+			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
+			t.Fatalf("a %d conversion: exit %d, secrets %v:\n%s", status, code, g.Secrets, printed)
+		}
 	}
 
 	for _, tt := range []struct {
@@ -797,11 +810,12 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 	}{
 		{"another owner's App", identityGitHub(t, "mallory", map[string]any{"contents": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
 		{"wider permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "administration": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"fewer permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "metadata": "read"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
 		{"an App with events", func() *fake.GitHub {
 			g := identityGitHub(t, "o", nil)
 			g.App["events"] = []string{"push", "issues"}
 			return g
-		}(), "permissions or events aayu did not ask for"},
+		}(), "permissions other than those aayu asked for, events"},
 		{"an App with a webhook", func() *fake.GitHub {
 			g := identityGitHub(t, "o", nil)
 			g.Static["/app/hook/config"] = map[string]any{"url": "https://attacker.example/hook"}
@@ -823,7 +837,7 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 	}
 	// The App aayu asked for is stored, and only then is the Install link printed.
 	g = identityGitHub(t, "o", nil)
-	code, printed = runIdentity(t, g.URL(), "c0de1234c0de5678", nil)
+	code, printed := runIdentity(t, g.URL(), "c0de1234c0de5678", nil)
 	if code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
 		t.Fatalf("the App aayu asked for: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
 	}

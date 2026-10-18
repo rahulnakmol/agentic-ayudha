@@ -434,24 +434,26 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, er.Response.StatusCode, appSettings(r))
 	}
 	if err != nil {
-		return err
+		// A 5xx or a lost connection: GitHub created the App when it
+		// redirected, and may have converted the code, so the App is not
+		// one aayu holds the key of.
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%v). Do not install the App: delete it at %s, then run aayu init --identity again", err, appSettings(r)))
+		return fmt.Errorf("%w (%w); do not install the App: delete it at %s", ErrAppNotConverted, err, appSettings(r))
 	}
-	// Store the key only for the App aayu asked for: the browser that posted
-	// the manifest is outside aayu's control.
-	wider := false
-	for k, v := range conv.Permissions {
-		wider = wider || AppPermissions[k] != v
-	}
+	// Store the key only for the App aayu asked for, with exactly the
+	// permissions asked for: the browser that posted the manifest is outside
+	// aayu's control, and a narrower App leaves the agent lanes unable to work.
+	other := !maps.Equal(conv.Permissions, AppPermissions)
 	hook := noWebhook
-	if !wider && len(conv.Events) == 0 && strings.EqualFold(conv.Owner.Login, r.Owner) {
+	if !other && len(conv.Events) == 0 && strings.EqualFold(conv.Owner.Login, r.Owner) {
 		var herr error
 		if hook, herr = appHookURL(ctx, in.GH.REST.BaseURL(), conv.ID, conv.PEM); herr != nil {
 			hook = "unknown (" + herr.Error() + ")"
 		}
 	}
-	if !strings.EqualFold(conv.Owner.Login, r.Owner) || wider || len(conv.Events) > 0 || hook != noWebhook {
+	if !strings.EqualFold(conv.Owner.Login, r.Owner) || other || len(conv.Events) > 0 || hook != noWebhook {
 		conv.PEM = ""
-		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", permissions or events aayu did not ask for, or webhook "+hook+"). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
+		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", permissions other than those aayu asked for, events, or webhook "+hook+"). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
 		return fmt.Errorf("%w: the created App %s is not the one aayu asked for; do not install it: delete it at %s", ErrAppNotConverted, conv.Slug, appSettings(r))
 	}
 	in.State.Put(Object{Kind: "app", Name: "bot", ID: strconv.FormatInt(conv.ID, 10), External: true})

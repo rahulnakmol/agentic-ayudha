@@ -57,7 +57,8 @@ func (e *Env) manifestCode(ctx context.Context, postURL string, manifest func(re
 
 // localBrowser reports whether a browser on this machine can reach a loopback
 // callback: not over SSH, not in a cloud or agent session, and a desktop.
-// AAYU_REMOTE_BROWSER=1 says the browser is elsewhere.
+// AAYU_REMOTE_BROWSER=1 says the browser is elsewhere; AAYU_LOCAL_BROWSER=1
+// says it is here when aayu cannot tell (never over SSH or in an agent shell).
 func localBrowser(getenv func(string) string, goos string) bool {
 	for _, v := range []string{"AAYU_REMOTE_BROWSER", "SSH_CONNECTION", "SSH_TTY", "AMP_ORB", "CLAUDE_CODE_REMOTE", "CODESPACES", "GITPOD_WORKSPACE_ID"} {
 		if getenv(v) != "" {
@@ -66,6 +67,11 @@ func localBrowser(getenv func(string) string, goos string) bool {
 	}
 	if hosts.AgentMarker(getenv) != "" {
 		return false
+	}
+	// A local browser aayu cannot detect (WSL2 without WSLg, which forwards
+	// localhost to Windows): the person says so.
+	if getenv("AAYU_LOCAL_BROWSER") != "" {
+		return true
 	}
 	return goos == "darwin" || goos == "windows" || getenv("DISPLAY") != "" || getenv("WAYLAND_DISPLAY") != ""
 }
