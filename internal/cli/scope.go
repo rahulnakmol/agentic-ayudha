@@ -118,8 +118,8 @@ func runScope(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	if len(l.Config.Scope.EffortPoints) != len(workitems.Efforts) {
-		return Errorf(ExitUsage, "scope: [scope] effort_points needs %d values, for %s", len(workitems.Efforts), strings.Join(workitems.Efforts, ", "))
+	if len(l.Config.Scope.EffortPoints) != len(workitems.Efforts) || slices.Min(l.Config.Scope.EffortPoints) < 1 {
+		return Errorf(ExitUsage, "scope: [scope] effort_points needs %d values of at least 1, for %s", len(workitems.Efforts), strings.Join(workitems.Efforts, ", "))
 	}
 	r := &scopeRun{e: e, cfg: &l.Config, repo: repo, n: issueNumber(in.String("release"))}
 	var tok identity.Token
@@ -327,10 +327,35 @@ func (r *scopeRun) measure(items []scope.Item) *scope.Drift {
 	}
 	d := scope.Measure(*r.base, items, r.cfg.Scope.EffortPoints)
 	d.MeasuredAt = r.e.Now().UTC().Format("2006-01-02T15:04:05Z")
-	if r.drift != nil && d.Over() {
+	if r.drift != nil && d.Over() && within(d, *r.drift) {
 		d.OverBudgetDecision = r.drift.OverBudgetDecision
 	}
 	return &d
+}
+
+// within reports whether every change in d is one the recorded drift already
+// holds, unchanged: a Decision covers the changes a person accepted with it,
+// or fewer, and never a change made after it.
+func within(d, recorded scope.Drift) bool {
+	has := func(list []scope.Item, it scope.Item) bool {
+		return slices.ContainsFunc(list, func(x scope.Item) bool { return x.Number == it.Number && x.Effort == it.Effort })
+	}
+	for _, it := range d.Added {
+		if !has(recorded.Added, it) {
+			return false
+		}
+	}
+	for _, it := range d.Removed {
+		if !has(recorded.Removed, it) {
+			return false
+		}
+	}
+	for _, z := range d.Resized {
+		if !slices.Contains(recorded.Resized, z) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *scopeRun) report() ScopeReport {
@@ -661,38 +686,93 @@ func (r *scopeRun) ask(ctx context.Context, q scopeRequest) error {
 	body := fmt.Sprintf("%s\n**Waiting for a person (aayu scope):** %s.\n\nAccept it with `aayu scope %d --accept`, or in `aayu inbox`. "+
 		"Accepting is a person's call, through GitHub's device code; an agent only asks.\n<!-- scope-request %s -->\n",
 		ScopeRequestMarker, q.describe(r.version), r.n, b)
-	if _, err := r.c.UpsertComment(ctx, r.repo, r.n, ScopeRequestMarker, body, actions.Action{Kind: "github.comment.scope-request"}); err != nil {
+	comments, err := r.comments(ctx)
+	if err != nil {
+		return err
+	}
+	var own *gh.IssueComment // only the writer's own request comment is edited: anyone may post the marker
+	for _, cm := range comments {
+		if strings.Contains(cm.GetBody(), ScopeRequestMarker) && strings.EqualFold(cm.GetUser().GetLogin(), r.who) {
+			own = cm
+		}
+	}
+	return r.writeComment(ctx, own, body, "github.comment.scope-request")
+}
+
+func (r *scopeRun) comments(ctx context.Context) ([]*gh.IssueComment, error) {
+	owner, name, _ := github.SplitRepo(r.repo)
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return r.c.REST.Issues.ListComments(ctx, owner, name, r.n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	return cs, nil
+}
+
+// writeComment edits cm, or posts a new comment when cm is nil.
+func (r *scopeRun) writeComment(ctx context.Context, cm *gh.IssueComment, body, kind string) error {
+	owner, name, _ := github.SplitRepo(r.repo)
+	a := actions.Action{Kind: kind, Target: fmt.Sprintf("%s#%d", r.repo, r.n),
+		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", r.repo, r.n)}}
+	if cm != nil {
+		if cm.GetBody() == body {
+			return nil
+		}
+		a.Request = &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", r.repo, cm.GetID())}
+	}
+	_, err := r.c.Write(ctx, a, func(ctx context.Context) (any, error) {
+		if cm != nil {
+			_, _, err := r.c.REST.Issues.EditComment(ctx, owner, name, cm.GetID(), &gh.IssueComment{Body: gh.Ptr(body)})
+			return cm.GetID(), err
+		}
+		c, _, err := r.c.REST.Issues.CreateComment(ctx, owner, name, r.n, &gh.IssueComment{Body: gh.Ptr(body)})
+		return c.GetID(), err
+	})
+	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	return nil
 }
 
-// request is the request waiting on the Release, read from a comment by an
-// account with write access or a bot, and that comment's author.
-func (r *scopeRun) request(ctx context.Context) (*scopeRequest, string, error) {
-	return scopeRequestOn(ctx, r.c, r.repo, r.n)
+// request is the request waiting on the Release: the newest request comment
+// by a bot or an account with write access, and that comment. A newer
+// trusted comment that is no longer a request (an accepted one) means none.
+func (r *scopeRun) request(ctx context.Context) (*scopeRequest, *gh.IssueComment, error) {
+	comments, err := r.comments(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := len(comments) - 1; i >= 0; i-- {
+		cm := comments[i]
+		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
+			continue
+		}
+		if ok, err := r.trusted(ctx, cm.GetUser()); err != nil || !ok {
+			if err != nil {
+				return nil, nil, err
+			}
+			continue
+		}
+		q, ok := parseScopeRequest(cm.GetBody())
+		if !ok {
+			return nil, nil, nil
+		}
+		return q, cm, nil
+	}
+	return nil, nil, nil
 }
 
-func scopeRequestOn(ctx context.Context, c *github.Client, repo string, n int) (*scopeRequest, string, error) {
-	owner, name, _ := github.SplitRepo(repo)
-	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
-		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
-	})
-	if err != nil {
-		return nil, "", Wrap(ExitExternal, err)
+func parseScopeRequest(body string) (*scopeRequest, bool) {
+	m := scopeRequestRE.FindStringSubmatch(body)
+	if m == nil {
+		return nil, false
 	}
-	for _, cm := range comments {
-		m := scopeRequestRE.FindStringSubmatch(cm.GetBody())
-		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) || m == nil {
-			continue
-		}
-		var q scopeRequest
-		if json.Unmarshal([]byte(m[1]), &q) != nil {
-			continue
-		}
-		return &q, cm.GetUser().GetLogin(), nil
+	var q scopeRequest
+	if json.Unmarshal([]byte(m[1]), &q) != nil {
+		return nil, false
 	}
-	return nil, "", nil
+	return &q, true
 }
 
 // acceptedDecision checks that Decision d was accepted and names the Release.
@@ -721,17 +801,12 @@ func (r *scopeRun) acceptedDecision(ctx context.Context, d int) error {
 // aayu inbox, the session's one device code covers it. It reads everything
 // again and applies only what still holds.
 func (r *scopeRun) accept(ctx context.Context) error {
-	q, by, err := r.request(ctx)
+	q, cm, err := r.request(ctx)
 	if err != nil {
 		return err
 	}
 	if q == nil {
-		return Errorf(ExitBlocked, "scope: nothing waits for a person on Release #%d", r.n)
-	}
-	if ok, err := r.trusted(ctx, by); err != nil {
-		return err
-	} else if !ok {
-		return Errorf(ExitBlocked, "scope: the request on Release #%d is from @%s, who has no write access; it is text, not a request", r.n, by)
+		return Errorf(ExitBlocked, "scope: nothing waits for a person on Release #%d from a bot or an account with write access", r.n)
 	}
 	if q.Decision != 0 {
 		if err := r.acceptedDecision(ctx, q.Decision); err != nil {
@@ -743,6 +818,12 @@ func (r *scopeRun) accept(ctx context.Context) error {
 	switch q.Kind {
 	case "baseline":
 		hash := scope.Hash(r.intent, r.items)
+		if r.base != nil && r.base.Hash == q.Hash { // applied before; only its comment was not updated
+			commit = func(string) (string, error) {
+				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
+			}
+			break
+		}
 		switch {
 		case r.draft == nil || r.draft.Hash != q.Hash:
 			return WithNext(Errorf(ExitBlocked, "scope: the draft on the ledger is not the one the request names"), fmt.Sprintf("aayu scope %d --draft", r.n))
@@ -762,7 +843,8 @@ func (r *scopeRun) accept(ctx context.Context) error {
 		commit = func(login string) (string, error) {
 			now := r.e.Now().UTC().Format("2006-01-02T15:04:05Z")
 			b := scope.Baseline{Schema: scope.BaselineSchema, Version: r.version, ReleaseIssue: r.n, Baseline: n, BaselinedAt: now, BaselinedBy: login,
-				Intent: r.intent, BudgetPct: r.cfg.Scope.BudgetPercent, Points: scope.Total(r.items), Hash: hash, Decision: q.Decision, Items: r.items}
+				Intent: r.intent, BudgetPct: r.cfg.Scope.BudgetPercent, Points: scope.Total(r.items), Hash: hash, Decision: q.Decision,
+				EffortPoints: r.cfg.Scope.EffortPoints, Items: r.items}
 			d := scope.Measure(b, r.items, r.cfg.Scope.EffortPoints)
 			d.MeasuredAt = now
 			err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
@@ -770,6 +852,9 @@ func (r *scopeRun) accept(ctx context.Context) error {
 			return fmt.Sprintf("baseline %d accepted by @%s: ledger %s", n, login, scope.BaselinePath(r.version, n)), err
 		}
 	case "add", "drop":
+		if q.Decision == 0 { // asked for only over budget, so it always rests on a Decision
+			return Errorf(ExitBlocked, "scope: the request to %s #%d names no Decision; a change over budget needs an accepted one", q.Kind, q.Item)
+		}
 		owner, name, _ := github.SplitRepo(r.repo)
 		is, _, err := r.c.REST.Issues.Get(ctx, owner, name, q.Item)
 		if err != nil {
@@ -780,6 +865,13 @@ func (r *scopeRun) accept(ctx context.Context) error {
 			return err
 		}
 		in := slices.ContainsFunc(r.items, func(x scope.Item) bool { return x.Number == q.Item })
+		if (q.Kind == "add") == in && r.drift != nil && r.drift.OverBudgetDecision == q.Decision { // applied before
+			effect = fmt.Sprintf("Closes the request to %s #%d on Release #%d, which was already applied on Decision #%d.", q.Kind, q.Item, r.n, q.Decision)
+			commit = func(string) (string, error) {
+				return fmt.Sprintf("%s #%d was already applied; request closed", q.Kind, q.Item), nil
+			}
+			break
+		}
 		if (q.Kind == "add") == in || r.base == nil {
 			return Errorf(ExitBlocked, "scope: the request to %s #%d no longer applies; the plan changed", q.Kind, q.Item)
 		}
@@ -813,8 +905,8 @@ func (r *scopeRun) accept(ctx context.Context) error {
 		return err
 	}
 	body := fmt.Sprintf("%s\n**Accepted (aayu scope):** %s, by @%s on %s.\n", ScopeRequestMarker, q.describe(r.version), login, r.e.Now().UTC().Format("2006-01-02"))
-	if _, err := r.c.UpsertComment(ctx, r.repo, r.n, ScopeRequestMarker, body, actions.Action{Kind: "github.comment.scope-request", Payload: map[string]any{"by": login}}); err != nil {
-		return Wrap(ExitExternal, err)
+	if err := r.writeComment(ctx, cm, body, "github.comment.scope-request"); err != nil {
+		return err
 	}
 	if err := r.readLedger(ctx); err != nil {
 		return err
@@ -829,8 +921,9 @@ func (r *scopeRun) accept(ctx context.Context) error {
 
 // trusted reports whether login may leave a request: a bot, or an account
 // with write access. Anyone may comment.
-func (r *scopeRun) trusted(ctx context.Context, login string) (bool, error) {
-	if strings.HasSuffix(login, "[bot]") || slices.Contains(r.cfg.Identity.BotLogins, login) {
+func (r *scopeRun) trusted(ctx context.Context, u *gh.User) (bool, error) {
+	login := u.GetLogin()
+	if u.GetType() == "Bot" || slices.Contains(r.cfg.Identity.BotLogins, login) {
 		return true, nil
 	}
 	owner, name, _ := github.SplitRepo(r.repo)
@@ -865,20 +958,25 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 	if r.base == nil {
 		return WithNext(Errorf(ExitBlocked, "scope: %s has no baseline; a person accepts one before hand-off", r.version), fmt.Sprintf("aayu scope %d --draft", r.n))
 	}
+	rep := r.report()
+	switch {
+	case len(rep.Problems) > 0:
+		return WithNext(Errorf(ExitBlocked, "scope: %s cannot be handed off (%d problem(s)): %s", r.version, len(rep.Problems), strings.Join(rep.Problems, "; ")),
+			fmt.Sprintf("aayu scope %d", r.n))
+	case strings.TrimSpace(r.base.Intent) != r.intent:
+		return WithNext(Errorf(ExitBlocked, "scope: the Release's Summary changed since baseline %d was accepted; a person accepts the new intent", r.base.Baseline),
+			fmt.Sprintf("aayu scope %d --draft, then a person accepts it", r.n))
+	}
 	d := r.measure(r.items)
 	if d.Over() && d.OverBudgetDecision == 0 {
 		return WithNext(Errorf(ExitBlocked, "scope: %s drifted %.1f%% from baseline %d, over the %.1f%% budget, through changes outside aayu scope; a person decides before hand-off",
 			r.version, d.DriftPct, d.Baseline, d.BudgetPct), fmt.Sprintf("re-baseline: aayu scope %d --draft --decision <accepted decision>", r.n))
 	}
-	features := map[int]bool{}
-	for _, it := range r.items {
-		if it.Type == "feature" {
-			features[it.Number] = true
-		}
-	}
+	// Stories and Bugs, never their Feature: aayu release expands a Feature to
+	// every Story under it, and some may be planned for a later release.
 	var lines []string
 	for _, it := range r.items {
-		if it.Type == "feature" || (it.Type == "story" || it.Type == "bug") && !features[it.Parent] {
+		if it.Type == "story" || it.Type == "bug" {
 			lines = append(lines, fmt.Sprintf("includes #%d", it.Number))
 		}
 	}
@@ -913,7 +1011,7 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 	if err := r.writeDrift(ctx, *d, "hand-off"); err != nil {
 		return err
 	}
-	rep := r.report()
+	rep = r.report()
 	rep.Done = fmt.Sprintf("handed off baseline %d: %d includes links on Release #%d, plan posted", r.base.Baseline, len(lines), r.n)
 	rep.Next = fmt.Sprintf("aayu next picks the Stories; aayu release %d --to rolling ships them", r.n)
 	return r.emit(rep)
@@ -946,19 +1044,21 @@ func (s *inboxSource) scopeItem(ctx context.Context, it *InboxItem) (bool, error
 	if err != nil {
 		return false, err
 	}
-	for _, cm := range comments {
-		m := scopeRequestRE.FindStringSubmatch(cm.GetBody())
-		if m == nil || !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
+	for i := len(comments) - 1; i >= 0; i-- {
+		cm := comments[i]
+		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
 			continue
 		}
-		var q scopeRequest
-		if json.Unmarshal([]byte(m[1]), &q) != nil {
-			return false, nil
-		}
 		if login := cm.GetUser().GetLogin(); cm.GetUser().GetType() != "Bot" && !slices.Contains(s.id.BotLogins, login) {
-			if ok, err := s.canWrite(ctx, login); err != nil || !ok {
+			if ok, err := s.canWrite(ctx, login); err != nil {
 				return false, err
+			} else if !ok {
+				continue
 			}
+		}
+		q, ok := parseScopeRequest(cm.GetBody())
+		if !ok {
+			return false, nil
 		}
 		is := s.issues[it.Number]
 		w, _ := workitems.Parse(it.Number, is.GetTitle(), is.GetBody(), is.GetType().GetName(), it.labels)

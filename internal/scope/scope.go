@@ -78,7 +78,10 @@ type Baseline struct {
 	Points       int     `json:"points"`
 	Hash         string  `json:"hash"`
 	Decision     int     `json:"decision"` // the Decision that let an over-budget re-baseline through, else 0
-	Items        []Item  `json:"items"`
+	// EffortPoints is the effort table at acceptance: drift is measured with
+	// it, so a later change to [scope] effort_points cannot hide drift.
+	EffortPoints []int  `json:"effort_points"`
+	Items        []Item `json:"items"`
 }
 
 // Resize is a planned item whose effort changed since the baseline.
@@ -206,9 +209,13 @@ func Hash(intent string, items []Item) string {
 // every item resized; drift is changed points as a percentage of the
 // baseline's points, rounded to one decimal. Cutting scope is drift too: a
 // slip that moves half the plan to the next release needs a person's call.
-// table recomputes points from effort for both sides, so a change to
-// [scope] effort_points never shows as drift.
+// The baseline's own effort table weighs both sides, so a later change to
+// [scope] effort_points neither shows nor hides drift; table is the fallback
+// for a baseline that recorded none.
 func Measure(b Baseline, items []Item, table []int) Drift {
+	if len(b.EffortPoints) == len(workitems.Efforts) {
+		table = b.EffortPoints
+	}
 	d := Drift{Schema: DriftSchema, Version: b.Version, ReleaseIssue: b.ReleaseIssue, Baseline: b.Baseline, BudgetPct: b.BudgetPct,
 		Added: []Item{}, Removed: []Item{}, Resized: []Resize{}}
 	was := map[int]Item{}

@@ -156,7 +156,7 @@ Use **`doctor`**. It checks tools, sign-in, configuration, installed skills, age
 loops, and existing CI, and says what to fix. `aayu doctor --fix` re-syncs skill copies after an upgrade. Not sure
 what to do next at all? `aayu next` names one step. A specific error? See [troubleshooting](troubleshooting.md).
 
-## All 34 verbs, by journey stage
+## Every verb, by journey stage
 
 This map is generated from the verb registry, the same source as the command line, so it always lists every verb.
 The descriptions are the registry's own one-liners, written for agents, so they are terser than the rest of this

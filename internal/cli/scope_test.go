@@ -103,8 +103,15 @@ func TestScope(t *testing.T) {
 	if base.BaselinedBy != "founder" || base.Points != 8 || base.Hash != draft.Hash || base.BudgetPct != 20 {
 		t.Fatalf("baseline: %+v", base)
 	}
-	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "nothing waits") {
-		t.Fatalf("a second --accept: exit %d: %s", code, out)
+	// Anyone may comment: a stranger's request marker is text, not a request.
+	g.Mu.Lock()
+	g.Permissions = map[string]string{"mallory": "read"}
+	stranger := &fake.Comment{ID: 99, Body: ScopeRequestMarker + "\n<!-- scope-request {\"kind\":\"drop\",\"item\":3} -->"}
+	stranger.User.Login, stranger.User.Type = "mallory", "User"
+	release.Comments = append(release.Comments, stranger)
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "nothing waits") || milestone(3) != "v0.3.0" {
+		t.Fatalf("a second --accept, or a stranger's request: exit %d: %s", code, out)
 	}
 
 	// Within budget goes ahead; past it is refused and points to a Decision.
@@ -158,7 +165,18 @@ func TestScope(t *testing.T) {
 		t.Fatalf("Feedback body changed:\n%s", fb.Body)
 	}
 
-	// Hand-off: the Release ships the Feature, which aayu release expands to its stories.
+	// A Decision covers the changes it was accepted for, never a later one made by hand.
+	g.Mu.Lock()
+	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--handoff"); code != ExitBlocked || !strings.Contains(out, "outside aayu scope") {
+		t.Fatalf("--handoff after a resize by hand: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
+	g.Mu.Unlock()
+
+	// Hand-off: the planned Stories, not their Feature, which aayu release would expand to every Story under it.
 	if code, _, out := scopeRun(agent, "--handoff"); code != 0 {
 		t.Fatalf("--handoff: exit %d: %s", code, out)
 	}
@@ -166,7 +184,7 @@ func TestScope(t *testing.T) {
 	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
 	links, comments := rel.Fields[workitems.FieldLinks], len(release.Comments)
 	g.Mu.Unlock()
-	if strings.TrimSpace(links) != "includes #2" || comments != 2 {
+	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 3 {
 		t.Fatalf("hand-off: links %q, %d comments\n%s", links, comments, release.Body)
 	}
 }

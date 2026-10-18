@@ -164,7 +164,7 @@ type Review struct {
 // Scope is [scope] (aayu scope).
 type Scope struct {
 	BudgetPercent float64 `koanf:"budget_percent" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Drift from a release's accepted baseline, in percent of its effort points, that changes may reach without a person's accepted Decision."`
-	EffortPoints  []int   `koanf:"effort_points" jsonschema:"minItems=5,maxItems=5" jsonschema_description:"Effort points of XS, S, M, L, and XL, in that order: the weights of Stories and Bugs in a plan and its drift."`
+	EffortPoints  []int   `koanf:"effort_points" jsonschema:"minItems=5,maxItems=5" jsonschema_description:"Effort points, each at least 1, of XS, S, M, L, and XL, in that order: the weights of Stories and Bugs in a plan and its drift."`
 }
 
 // Measure is [measure]: which exported events mark each AARRR stage. Event
