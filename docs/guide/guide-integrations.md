@@ -161,8 +161,9 @@ In Codex, trust the three aayudha hooks in `/hooks` first, or none of this runs.
 >   it, and so does a CLI read that returns personal data, such as `sentry replay view`.
 > - `allow_pii` is read from the working tree, so an uncommitted edit takes effect at once. CODEOWNERS review applies
 >   only when the change is merged.
-> - The call log redacts GitHub, OpenAI, and Slack tokens, not PostHog or Sentry ones. Keep provider tokens in the
->   CLI's config or your environment, never typed on the command line.
+> - The call log redacts a token by its shape (GitHub, OpenAI, Slack, PostHog `phx_` and `phs_`, Sentry `sntrys_` and
+>   `sntryu_`) or by where it is typed (`SENTRY_AUTH_TOKEN=…`, `--auth-token …`, `Authorization: Bearer …`). A token
+>   typed any other way may be logged, so keep provider tokens in the CLI's config or your environment.
 >
 > Keep the provider's own setup read-only as well: add `?mode=tools&readonly=true` to PostHog's MCP URL, and give
 > Sentry's MCP server a read-only token with `skills=inspect`. The full rules are in
