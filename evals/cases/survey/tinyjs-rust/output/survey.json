@@ -229,7 +229,7 @@
       "basis": "observed",
       "cites": [
         "sym:TinyJS.cpp#CTinyJS::addNative",
-        "TinyJS.h:304-318"
+        "TinyJS.h:177", "TinyJS.h:304-318"
       ]
     },
     {

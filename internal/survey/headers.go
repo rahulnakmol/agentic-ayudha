@@ -10,8 +10,11 @@ var (
 	typeOpen    = regexp.MustCompile(`^(?:template\s*<[^{}]*>\s*)?(class|struct|union)\s+(?:[A-Z_][A-Z0-9_]*\s+)?([A-Za-z_]\w*)\b[^(]*$`)
 	scopeOpen   = regexp.MustCompile(`^(?:(?:inline\s+)?namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
 	// annotation names the function-like attributes a declaration may start with.
-	annotation = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
-	notDecl    = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
+	annotation  = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
+	typedefTag  = regexp.MustCompile(`^typedef\s+(?:struct|union|enum)\s+(?:class\s+)?([A-Za-z_]\w*)`)
+	typedefFunc = regexp.MustCompile(`\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\(`)
+	typedefName = regexp.MustCompile(`([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*$`)
+	notDecl     = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
 )
 
 // blankAnnotations blanks the attributes a declaration may carry, with
@@ -84,7 +87,10 @@ func headerAPI(code string) []Symbol {
 		name         string
 		public       bool // the class's current section is public, and the class itself is reachable
 		reachable    bool
+		typedef      bool   // typedef struct {…} Name;: the names after the brace are types
+		tag          string // its struct, union, or enum tag, an entry of its own
 	}
+	var tail *open // the typedef whose brace just closed
 	var stack []open
 	var out []Symbol
 	reachable := func() bool {
@@ -116,12 +122,44 @@ func headerAPI(code string) []Symbol {
 			return
 		}
 		h := blankAnnotations(strings.TrimSpace(text)) // __declspec(dllexport) int f(); declares f
+		td, after := tail, strings.HasPrefix(h, "typedef") && (len(h) == 7 || !isWord(h[7]))
+		tail = nil
+		if td != nil || after {
+			// A type callers name: typedef struct ctx ctx_t;, typedef unsigned status;,
+			// typedef int (*cb)(int);, or the names after typedef struct {…}.
+			tag := "" // typedef struct node {…} node;: the struct is already an entry
+			if td != nil {
+				tag = td.tag
+			}
+			for _, d := range splitTop(h) {
+				m := typedefFunc.FindStringSubmatch(d)
+				if m == nil {
+					m = typedefName.FindStringSubmatch(d)
+				}
+				if m == nil || cKeywords[m[1]] || m[1] == "typedef" || td != nil && m[1] == tag {
+					continue
+				}
+				q := m[1]
+				for k := len(stack) - 1; k >= 0; k-- {
+					if stack[k].name != "" {
+						q = stack[k].name + "::" + q
+					}
+				}
+				ln := line
+				if loc := regexp.MustCompile(`\b`+m[1]+`\b`).FindAllStringIndex(chunk, -1); loc != nil {
+					ln += strings.Count(chunk[:loc[len(loc)-1][0]], "\n")
+				}
+				out = append(out, Symbol{Kind: "type", Name: q, line: ln})
+			}
+			return
+		}
 		if strings.TrimSpace(h) == "" || notDecl.MatchString(h) {
 			return
 		}
+		resume := 0 // past a declarator already listed: void start(), stop(); declares two
 		for _, m := range funcName.FindAllStringSubmatchIndex(h, -1) {
 			nm := h[m[2]:m[3]]
-			if cKeywords[nm] {
+			if cKeywords[nm] || m[2] < resume {
 				continue
 			}
 			before := strings.TrimSpace(h[:m[2]])
@@ -150,7 +188,24 @@ func headerAPI(code string) []Symbol {
 				kind = "method"
 			}
 			out = append(out, Symbol{Kind: kind, Name: q, line: ln})
-			return
+			depth, j := 0, m[1]-1 // at this declarator's (
+			for ; j < len(h); j++ {
+				if h[j] == '(' {
+					depth++
+				} else if h[j] == ')' {
+					if depth--; depth == 0 {
+						break
+					}
+				}
+			}
+			rest := ""
+			if j < len(h) {
+				rest = strings.TrimLeft(h[j+1:], " \t\r\n")
+			}
+			if !strings.HasPrefix(rest, ",") {
+				return
+			}
+			resume = len(h) - len(rest) + 1
 		}
 	}
 	line, start, startLine, parens := 1, 0, 1, 0
@@ -187,14 +242,44 @@ func headerAPI(code string) []Symbol {
 					}
 				}
 			}
+			if h := strings.TrimSpace(code[start:i]); strings.HasPrefix(h, "typedef") {
+				o.typedef = true
+				if m := typedefTag.FindStringSubmatch(strings.Join(strings.Fields(h), " ")); m != nil {
+					o.tag = m[1]
+				}
+			}
 			stack = append(stack, o)
+			tail = nil
 			start, startLine, parens = i+1, line, 0
 		case '}':
 			if n := len(stack); n > 0 {
+				if t := stack[n-1]; t.typedef {
+					tail = &t
+				}
 				stack = stack[:n-1]
 			}
 			start, startLine, parens = i+1, line, 0
 		}
 	}
 	return out
+}
+
+// splitTop splits a declaration at its top-level commas (typedef struct s s_t,
+// *s_p; declares s_t and s_p).
+func splitTop(h string) []string {
+	var out []string
+	depth, from := 0, 0
+	for i := 0; i < len(h); i++ {
+		switch h[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case ',':
+			if depth == 0 {
+				out, from = append(out, h[from:i]), i+1
+			}
+		}
+	}
+	return append(out, h[from:])
 }
