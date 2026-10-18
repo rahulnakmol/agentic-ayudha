@@ -438,13 +438,13 @@ type OptionalTool struct {
 
 // OptionalTools are reported when missing; none is required to run aayudha.
 // Playwright, axe-core, Lighthouse's runtime, and Guidepup are npm packages
-// the web and screen-reader floors load through node.
+// the web and screen-reader floors load through node. The dast floor's
+// container runtime, Docker or Podman, is the dast check's.
 var OptionalTools = []OptionalTool{
 	{"node", "a11y, perf, and screen-reader floors: Playwright, axe-core, Guidepup", true},
 	{"semgrep", "sast floor", true},
 	{"gitleaks", "secrets floor", true},
 	{"osv-scanner", "deps floor", true},
-	{"docker", "dast floor: ZAP", true},
 	{"k6", "api floor", true},
 	{"lighthouse", "perf floor", true},
 	{"tesseract", "OCR in the redaction pass; without it the pass scans the DOM only", false},

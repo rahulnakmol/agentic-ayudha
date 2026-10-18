@@ -6,7 +6,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 // SecurityWorkflow is the security workflow `aayu init --gates` installs
@@ -127,6 +131,79 @@ func runOutcome(r workflowRun) string {
 		return r.Status
 	}
 	return r.Conclusion
+}
+
+// checkDAST reports what the dast floor will do here (Decision #485): n/a
+// off the web and api platforms, the fix for a missing target, and the
+// container runtime it runs ZAP under, rootless Podman named.
+func checkDAST(ctx context.Context, p *Probe) Result {
+	if p.Config == nil {
+		return Result{Status: Pass, Detail: "no config"}
+	}
+	v := p.Config.Config.Verify
+	if len(v.Platforms) == 0 {
+		return Result{Status: Warn, Detail: "[verify] platforms is unset, so the dast floor is n/a: set it (e.g. [\"web\"], [\"api\"], or [\"cli\"]) so a web or api app is scanned"}
+	}
+	if !slices.ContainsFunc(v.Platforms, func(x string) bool { return slices.Contains(verify.DASTPlatforms, strings.ToLower(x)) }) {
+		return Result{Status: Pass, Detail: "n/a: no web or api in [verify] platforms"}
+	}
+	var lines []string
+	status := Pass
+	env := "local"
+	if p.Getenv != nil && p.Getenv("AAYU_ENV") != "" {
+		env = p.Getenv("AAYU_ENV")
+	}
+	target := strings.TrimSpace(v.Environments[env].URL)
+	switch {
+	case !v.DAST:
+		status = Warn
+		lines = append(lines, "target: none ([verify] dast = false), so a web or api story records a blocking skipped: dast. "+verify.DASTFix)
+	case target == "":
+		status = Warn
+		lines = append(lines, "target: none ([verify.environments."+env+"] url is unset), so a web or api story records a blocking skipped: dast. "+verify.DASTFix)
+	case v.Environments[env].ActiveScan:
+		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
+	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):
+		lines = append(lines, "target: "+target+", started by [verify] seed: active scan")
+	default:
+		lines = append(lines, "target: "+target+", not started by [verify] seed on a loopback host: passive scan only")
+	}
+	rt := ""
+	for _, name := range verify.ContainerRuntimes {
+		if _, err := p.LookPath(name); err == nil {
+			rt = name
+			break
+		}
+	}
+	if rt == "" {
+		status = Warn
+		lines = append(lines, "container runtime: none; install Docker or Podman to scan locally (the merge gate and "+SecurityWorkflow+" run it in CI)")
+	} else {
+		ver, _ := p.Exec(ctx, p.Root, rt, "--version")
+		desc := rt
+		if f := strings.Fields(strings.ReplaceAll(ver, ",", " ")); len(f) >= 3 {
+			desc += " " + f[2] // "Docker version 29.9.0, build x" and "podman version 4.3.1"
+		}
+		if rt == "podman" {
+			if out, err := p.Exec(ctx, p.Root, rt, "info", "--format", "{{.Host.Security.Rootless}}"); err == nil && strings.TrimSpace(out) == "true" {
+				desc += " (rootless)"
+			}
+		}
+		lines = append(lines, "container runtime: "+desc)
+	}
+	detail := "the dast floor runs here"
+	if status == Warn {
+		detail = "the dast floor cannot run here as configured"
+	}
+	return Result{Status: status, Detail: detail, Lines: lines}
+}
+
+func hostname(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
 
 func short(sha string) string {

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 )
 
 // Story #487 criterion 5: the security-workflow row fails when the workflow
@@ -113,5 +116,44 @@ func TestSecurityWorkflowRow(t *testing.T) {
 	r := checkSecurityWorkflow(ctx, p)
 	if got := strings.Join(*asked, " "); !strings.Contains(got, "branch=trunk") || !strings.Contains(got, "/branches/release%2F2026") || strings.Contains(got, "branch=rolling") || strings.Contains(got, "branch=dev") {
 		t.Fatalf("mapped branches asked: %s (%+v)", got, r)
+	}
+}
+
+// Decision #485 G2 and G4: doctor names the runtime the dast floor will use
+// (docker before podman, rootless Podman said so), warns when [verify]
+// platforms is unset, and is n/a for a CLI.
+func TestContainerRuntimeRow(t *testing.T) {
+	probe := func(found ...string) *Probe {
+		p := healthy(t)
+		p.LookPath = func(n string) (string, error) {
+			if slices.Contains(found, n) {
+				return "/usr/bin/" + n, nil
+			}
+			return "", errors.New("not found")
+		}
+		overlay(p, map[string]string{
+			"podman --version": "podman version 4.3.1\n",
+			"podman info --format {{.Host.Security.Rootless}}": "true\n",
+		})
+		return p
+	}
+	ctx := context.Background()
+	for found, want := range map[string]string{"docker podman": "container runtime: docker 29.9.0", "podman": "container runtime: podman 4.3.1 (rootless)"} {
+		r := checkDAST(ctx, probe(strings.Fields(found)...))
+		if r.Status != Pass || !slices.Contains(r.Lines, want) {
+			t.Errorf("%s: %s %v, want %q", found, r.Status, r.Lines, want)
+		}
+	}
+	for platforms, want := range map[string]string{"": "[verify] platforms is unset", "cli": "n/a: no web or api"} {
+		p := probe("docker")
+		p.Config.Config.Verify.Platforms = strings.Fields(platforms)
+		if r := checkDAST(ctx, p); !strings.Contains(r.Detail, want) || (platforms == "") != (r.Status == Warn) {
+			t.Errorf("platforms %q: %s %q", platforms, r.Status, r.Detail)
+		}
+	}
+	p := probe("docker")
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "https://staging.example.test"}}
+	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "passive scan only") {
+		t.Errorf("a URL verify does not start: %+v", r)
 	}
 }

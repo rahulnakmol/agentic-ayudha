@@ -135,6 +135,19 @@ func TestVerifyRefusesProduction(t *testing.T) {
 // which does not hold (the gate and ship refuse it); a floor-waiver Decision
 // under the story waives it and the pack records the Decision.
 func TestVerifyMobileSkipAndWaiver(t *testing.T) {
+	skipAndWaiver(t, "mobile", `["web", "ios"]`, func(d string) bool { return d == proof.SkippedMobile })
+}
+
+// Decision #485 G3: an api story with no runnable target gets a blocking
+// "skipped: dast: no runnable target" that says how to fix it, and a
+// floor-waiver Decision naming dast releases it the same way.
+func TestVerifyDASTWaiver(t *testing.T) {
+	skipAndWaiver(t, "dast", `["api"]`, func(d string) bool {
+		return strings.HasPrefix(d, "skipped: dast: no runnable target") && strings.Contains(d, "[verify] seed") && strings.Contains(d, "aayu decide <story> --waiver dast")
+	})
+}
+
+func skipAndWaiver(t *testing.T, floor, platforms string, detail func(string) bool) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
@@ -142,42 +155,42 @@ func TestVerifyMobileSkipAndWaiver(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
-	git(t, dir, "checkout", "--quiet", "-b", "story/2-mobile")
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-"+floor)
 	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
 	git(t, dir, "add", "cov.info")
-	git(t, dir, "commit", "--quiet", "-m", "feat: mobile")
-	cfg := "version = 1\n[verify]\nplatforms = [\"web\", \"ios\"]\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	git(t, dir, "commit", "--quiet", "-m", "feat: "+floor)
+	cfg := "version = 1\n[verify]\nplatforms = " + platforms + "\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
-	verifyMobile := func() (int, string) {
-		code, out, errOut := run(t, env, opts, "verify", "--floor", "mobile", "--repo", "o/r")
+	verifyFloor := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "verify", "--floor", floor, "--repo", "o/r")
 		return code, out + errOut
 	}
-	code, out := verifyMobile()
+	code, out := verifyFloor()
 	p, err := proof.LoadLocal(proof.LocalDir(dir, 2))
 	if code != ExitFloor || err != nil {
-		t.Fatalf("mobile story: %d %s %v", code, out, err)
+		t.Fatalf("%s story: %d %s %v", floor, code, out, err)
 	}
-	if c, _ := p.Check("mobile"); c.Result != proof.Skipped || c.Detail != proof.SkippedMobile || p.FloorsHold() {
-		t.Fatalf("mobile check: %+v", c)
+	if c, _ := p.Check(floor); c.Result != proof.Skipped || !detail(c.Detail) || p.FloorsHold() {
+		t.Fatalf("%s check: %+v", floor, c)
 	}
 	// A filed waiver waives nothing until a human accepts it (WP5.6).
-	code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", "mobile", "--repo", "o/r", "--json")
+	code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", floor, "--repo", "o/r", "--json")
 	var filed decideReport
 	if err := json.Unmarshal([]byte(out), &filed); code != 0 || err != nil {
 		t.Fatalf("decide --waiver: %d %s %s", code, out, errOut)
 	}
 	d := g.Issues[filed.Waiver.Decision]
-	if code, out = verifyMobile(); code != ExitFloor {
+	if code, out = verifyFloor(); code != ExitFloor {
 		t.Fatalf("with an unaccepted waiver: %d %s", code, out)
 	}
 	if code, out, errOut := run(t, env, opts, "decide", strconv.Itoa(d.Number), "--accept", "waive", "--repo", "o/r"); code != 0 {
 		t.Fatalf("accept the waiver: %d %s %s", code, out, errOut)
 	}
-	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, "waived: mobile by #"+strconv.Itoa(d.Number)) {
+	if code, out = verifyFloor(); code != 0 || !strings.Contains(out, "waived: "+floor+" by #"+strconv.Itoa(d.Number)) {
 		t.Fatalf("with a waiver: %d %s", code, out)
 	}
 	p, _ = proof.LoadLocal(proof.LocalDir(dir, 2))
-	if c, _ := p.Check("mobile"); c.Result != proof.Waived || c.Waiver != "#"+strconv.Itoa(d.Number) || !p.FloorsHold() {
+	if c, _ := p.Check(floor); c.Result != proof.Waived || c.Waiver != "#"+strconv.Itoa(d.Number) || !p.FloorsHold() {
 		t.Fatalf("waived check: %+v", c)
 	}
 }

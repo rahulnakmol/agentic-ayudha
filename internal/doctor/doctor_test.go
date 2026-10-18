@@ -152,6 +152,7 @@ func healthy(t *testing.T) *Probe {
 			"git worktree list --porcelain": "worktree /repo\nHEAD abc\nbranch refs/heads/dev\n",
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
+			"docker --version": "Docker version 29.9.0, build 1a2b3c4\n",
 		}),
 		Config: load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex", "inspect.reviewer=codex", "approvals.approvers=rahulnakmol"),
 		// Decision #488: this agent session reaches only the bot's token.
@@ -195,6 +196,9 @@ func healthy(t *testing.T) *Probe {
 		Latest:    func(context.Context) (string, error) { return "v1.2.0", nil },
 		TracePath: ".aayudha/telemetry/traces.jsonl",
 	}
+	// A web app verify starts on a loopback host, so the dast floor runs its active rules.
+	p.Config.Config.Verify.Platforms, p.Config.Config.Verify.Seed = []string{"web"}, []string{"./serve.sh"}
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "http://127.0.0.1:8080"}}
 	p.Integration = realIntegrations(p, providerAPI{
 		"https://us.posthog.com/api/personal_api_keys/@current/": `{"label":"aayudha","scopes":["query:read"]}`,
 	})
@@ -346,6 +350,15 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		"dast": func(p *Probe) {
+			p.Config.Config.Verify.Environments = nil
+			p.LookPath = func(n string) (string, error) {
+				if n == "docker" || n == "podman" {
+					return "", errors.New("not found")
+				}
+				return "/usr/bin/" + n, nil
+			}
+		},
 		"security-workflow": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"})
 		},
@@ -493,10 +506,10 @@ func TestOptionalToolsNamesFloors(t *testing.T) {
 		}
 		return p
 	}
-	r := checkOptionalTools(context.Background(), probe("semgrep", "docker"))
-	want := "2 optional tool(s) missing: semgrep (sast floor), docker (dast floor: ZAP); a floor whose tool is missing blocks verify, it never passes"
+	r := checkOptionalTools(context.Background(), probe("semgrep", "k6"))
+	want := "2 optional tool(s) missing: semgrep (sast floor), k6 (api floor); a floor whose tool is missing blocks verify, it never passes"
 	if r.Status != Warn || r.Detail != want {
-		t.Errorf("semgrep and docker missing: %s %q, want warn %q", r.Status, r.Detail, want)
+		t.Errorf("semgrep and k6 missing: %s %q, want warn %q", r.Status, r.Detail, want)
 	}
 	r = checkOptionalTools(context.Background(), probe("tesseract"))
 	if r.Status != Warn || strings.Contains(r.Detail, "blocks verify") || !strings.Contains(r.Detail, "tesseract (OCR in the redaction pass") {
