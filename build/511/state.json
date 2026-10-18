@@ -2,6 +2,22 @@
   "story": 511,
   "branch": "story/511-investigate-s-logs-and-exceptions-querie",
   "started_at": "2026-10-18T02:48:35Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L06": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "9bb4d46e7a4b91486ab018c1e00f41dacef710df",
+      "layers": [
+        "L06"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T02:49:43Z"
+    }
+  ]
 }
