@@ -82,6 +82,7 @@ var sitePages = []SitePage{
 	{Out: "hosts.html", Nav: "Your agent", Group: "Your agent", Source: "docs/guide/hosts/README.md"},
 	{Out: "hosts-claude-code.html", Nav: "Claude Code", Group: "Your agent", Source: "docs/guide/hosts/claude-code.md"},
 	{Out: "hosts-codex.html", Nav: "OpenAI Codex", Group: "Your agent", Source: "docs/guide/hosts/codex.md"},
+	{Out: "hosts-copilot.html", Nav: "GitHub Copilot", Group: "Your agent", Source: "docs/guide/hosts/copilot.md"},
 	{Out: "hosts-amp.html", Nav: "Amp", Group: "Your agent", Source: "docs/guide/hosts/amp.md"},
 	{Out: "hosts-cursor.html", Nav: "Cursor", Group: "Your agent", Source: "docs/guide/hosts/cursor.md"},
 	{Out: "make-it-yours.html", Summary: "Changing aayu's colours, symbols, and voice in your terminal and docs.", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},

@@ -287,6 +287,11 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 			}
 		}
 	}
+	// Only a call every check let through: a denied build is never credited
+	// to the Copilot session that asked for it.
+	if name == "pre-tool" && !standAside && r.Code == 0 && e.Host == string(verbs.HostCopilot) {
+		hosts.RecordCopilotSession(root, event)
+	}
 	if name == "post-tool" && !standAside {
 		e.logHostCall(event)
 	}

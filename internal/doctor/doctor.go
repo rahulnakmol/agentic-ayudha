@@ -90,6 +90,7 @@ var Checks = []Check{
 	{"mcp", checkMCP},
 	{"provider-mcp", checkProviderMCP},
 	{"codex-hooks", checkCodexHooks},
+	{"copilot", checkCopilot},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
 	{"ledger-rulesets", checkLedgerRulesets},
