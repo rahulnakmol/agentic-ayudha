@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Story #481 (Decision #488): an agent starts `decide a,b --accept x,y` and
@@ -24,7 +25,8 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	g.Permissions = map[string]string{"founder": "admin", "mallory": "write"}
 	d1 := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
 	d2 := g.AddIssue("Choose the queue", decisionBody("true", ""), "type:decision", "status:ready")
-	d4 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
+	// Decision text is untrusted: HTML or Markdown in it must not hide or fake part of the batch.
+	d4 := g.AddIssue("Choose the cache <!-- hide", strings.Replace(decisionBody("true", ""), "A: in-house.", "A: in-house <!-- the rest is hidden", 1), "type:decision", "status:ready")
 	d5 := g.AddIssue("Choose the CDN", decisionBody("true", ""), "type:decision", "status:ready")
 	d6 := g.AddIssue("Choose the CI runner", decisionBody("true", ""), "type:decision", "status:ready")
 	d3 := g.AddIssue("Choose the data store", decisionBody("false", ""), "type:decision", "status:ready")
@@ -90,6 +92,10 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		!strings.Contains(batch, "1. **Accepts option A of Decision #"+strconv.Itoa(d1.Number)+": Choose the rules engine.** Two-way door") ||
 		!strings.Contains(batch, "This is not the recommendation.") || !strings.Contains(batch, "`/aayu approve 2`") || strings.Contains(batch, "login/device") {
 		t.Fatalf("batch: exit %d %s\n%s", code, errOut, batch)
+	}
+	if strings.Count(batch, "<!--") != 3 || !strings.Contains(batch, "Choose the cache &lt;\\!-- hide.**") ||
+		!strings.Contains(batch, "   ```text\n   Options:\n   A: in-house <!-- the rest is hidden") || !strings.Contains(batch, "Command:\n\n```text\naayu decide ") {
+		t.Fatalf("Decision text was not rendered inert:\n%s", batch)
 	}
 	if cs := comments(d1.Number); cs[len(cs)-1].User.Login != "aayudha-bot[bot]" {
 		t.Fatalf("the batch was posted as @%s, not the bot", cs[len(cs)-1].User.Login)
@@ -201,6 +207,17 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		}
 	}
 
+	// A Decision that became a floor waiver after the batch is a one-way door
+	// now, whatever the batch recorded.
+	g.Mu.Lock()
+	g.Issues[d1.Number].Labels = append(g.Issues[d1.Number].Labels, fake.Label{Name: workitems.LabelWaiver})
+	g.Mu.Unlock()
+	if code, _ := workflow(reply("founder", "/aayu approve 1", false)); code != ExitBlocked || !strings.Contains(last(d1.Number), "item 1 is a one-way door") || !none() {
+		t.Fatalf("waiver label added after the batch: %d\n%s", code, last(d1.Number))
+	}
+	g.Mu.Lock()
+	g.Issues[d1.Number].Labels = g.Issues[d1.Number].Labels[:len(g.Issues[d1.Number].Labels)-1]
+	g.Mu.Unlock()
 	// `/aayu approve 1 3` accepts exactly those items; the result names who
 	// approved and where.
 	id = reply("founder", "/aayu approve 1 3", false)

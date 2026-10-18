@@ -61,7 +61,8 @@ type batchItem struct {
 	// the item, or the device code).
 	Other    bool   `json:"not_recommended"`
 	BodyHash string `json:"body_hash"` // the issue body when the batch was made: a later edit voids the approval
-	Effect   string `json:"-"`
+	Effect   string `json:"-"`         // plain words, for the terminal and the actions log
+	Heading  string `json:"-"`         // Effect with the Decision's own text escaped, for the comment
 	Door     string `json:"-"`
 	Detail   string `json:"-"`
 }
@@ -101,9 +102,11 @@ func batchDecision(d decide.Decision, option string) batchItem {
 	title := strings.TrimSpace(strings.TrimPrefix(d.Title, "Decision:"))
 	it := batchItem{Kind: "decision", Issue: d.Number, Option: option, OneWay: !d.Reversible() || d.Waiver(), BodyHash: bodyHash(d.Body),
 		Effect: fmt.Sprintf("Accepts option %s of Decision #%d: %s.", option, d.Number, strings.TrimSuffix(title, "."))}
+	it.Heading = fmt.Sprintf("Accepts option %s of Decision #%d: %s.", mdText(option), d.Number, mdText(strings.TrimSuffix(title, ".")))
 	if rec := strings.TrimSpace(d.Item.Fields["recommendation"]); !recommends(rec, option) {
 		it.Other = true
 		it.Effect += " This is not the recommendation."
+		it.Heading += " This is not the recommendation."
 	}
 	switch {
 	case d.Waiver():
@@ -115,14 +118,38 @@ func batchDecision(d decide.Decision, option string) batchItem {
 	}
 	var b strings.Builder
 	if opts := clip(strings.TrimSpace(d.Item.Fields["options"]), 1500); opts != "" {
-		b.WriteString("Options:\n\n" + opts + "\n\n")
+		b.WriteString("Options:\n" + opts + "\n")
 	}
 	if rec := clip(strings.TrimSpace(d.Item.Fields["recommendation"]), 500); rec != "" {
 		b.WriteString("Recommendation: " + strings.ReplaceAll(rec, "\n", " ") + "\n")
 	}
-	it.Detail = b.String()
+	it.Detail = b.String() // untrusted issue text: render shows it only inside a code fence
 	return it
 }
+
+// fence shows untrusted text (an issue's options, a command line) as an inert
+// code block: no Markdown, HTML, or mention in it takes effect, and no
+// backtick run in it can close the fence.
+func fence(s string) string {
+	run, longest := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	f := strings.Repeat("`", max(3, longest+1))
+	return f + "text\n" + strings.TrimRight(s, "\n") + "\n" + f + "\n"
+}
+
+// mdEscape makes untrusted text (a Decision's title, an option) plain in
+// Markdown: no HTML, emphasis, links, or code spans.
+var mdEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\\", "\\\\", "`", "\\`", "*", "\\*", "_", "\\_",
+	"[", "\\[", "]", "\\]", "#", "\\#", "|", "\\|", "~", "\\~", "!", "\\!", "@", "@\u200b")
+
+func mdText(s string) string { return mdEscape.Replace(s) }
 
 // recommends reports whether the Recommendation names option first: "B",
 // "B: ...", "Option 2 ...", or "2. ...". Anything else counts as another
@@ -163,10 +190,10 @@ func (b *batch) render(st batchStatus) string {
 	}
 	fmt.Fprintf(&w, "%s**%d human-only %s for your approval** (batch `%s`).\n\n", who, len(b.Items), noun, b.hash())
 	for i, it := range b.Items {
-		fmt.Fprintf(&w, "%d. **%s** %s\n", i+1, it.Effect, it.Door)
+		fmt.Fprintf(&w, "%d. **%s** %s\n", i+1, it.Heading, it.Door)
 		if it.Detail != "" {
 			w.WriteString("\n")
-			for _, line := range strings.Split(strings.TrimRight(it.Detail, "\n"), "\n") {
+			for _, line := range strings.Split(strings.TrimRight(fence(it.Detail), "\n"), "\n") {
 				w.WriteString("   " + line + "\n")
 			}
 		}
@@ -198,7 +225,7 @@ func (b *batch) render(st batchStatus) string {
 	if b.Mode == batchByDevice && b.Why != "" {
 		w.WriteString("\nComment approval is off for this batch: " + b.Why + "\n")
 	}
-	fmt.Fprintf(&w, "\nCommand: `%s`\n", b.Command)
+	w.WriteString("\nCommand:\n\n" + fence(b.Command))
 	w.WriteString(batchDataMarker + base64.StdEncoding.EncodeToString(b.data()) + " -->\n")
 	return w.String()
 }
@@ -505,9 +532,6 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 	var todo []ready
 	for _, i := range picked {
 		it := b.Items[i-1]
-		if it.OneWay && (slices.Contains(cfg.Approvals.DeviceFor, "one-way") || slices.Contains(cfg.Approvals.DeviceFor, "all")) {
-			return refuse(fmt.Sprintf("item %d is a one-way door, and `[approvals] device_for` keeps one-way doors on the device code.", i), "approve it with the device code.")
-		}
 		is, _, err := hc.REST.Issues.Get(ctx, owner, name, it.Issue)
 		if err != nil {
 			return Wrap(ExitExternal, err)
@@ -515,6 +539,12 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 		d, err := loadDecision(ctx, hc, repo, is)
 		if err != nil {
 			return err
+		}
+		// The door as the Decision is now, not as the batch recorded it: a
+		// waiver label added since makes it one-way (the body hash does not
+		// cover labels).
+		if oneWay := it.OneWay || !d.Reversible() || d.Waiver(); oneWay && (slices.Contains(cfg.Approvals.DeviceFor, "one-way") || slices.Contains(cfg.Approvals.DeviceFor, "all")) {
+			return refuse(fmt.Sprintf("item %d is a one-way door, and `[approvals] device_for` keeps one-way doors on the device code.", i), "approve it with the device code.")
 		}
 		if bodyHash(d.Body) != it.BodyHash {
 			return refuse(fmt.Sprintf("Decision #%d changed after the batch was posted.", it.Issue), "ask the agent to start the steps again; it posts a new batch.")
@@ -531,7 +561,7 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 			lines = append(lines, fmt.Sprintf("%d. #%d was not accepted: %v", r.pos, r.it.Issue, err))
 			return e.batchResult(ctx, writer, repo, n, shown, author, lines, picked, len(b.Items), err)
 		}
-		lines = append(lines, fmt.Sprintf("%d. #%d accepted: option %s, by @%s in %s", r.pos, r.it.Issue, r.it.Option, author, url))
+		lines = append(lines, fmt.Sprintf("%d. #%d accepted: option %s, by @%s in %s", r.pos, r.it.Issue, mdText(r.it.Option), author, url))
 	}
 	return e.batchResult(ctx, writer, repo, n, shown, author, lines, picked, len(b.Items), nil)
 }
