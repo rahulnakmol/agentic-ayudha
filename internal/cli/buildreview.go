@@ -183,6 +183,12 @@ type sessionReviewIn struct {
 // review that cannot run is a note, and the merge gate still reviews.
 func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionReviewIn) (wait bool, rep SessionReview, err error) {
 	skip := func(why string) (bool, SessionReview, error) {
+		// A push held for open items stays held when no review can run: only
+		// a fix the reviewer saw, a decline, or the round cap releases it.
+		if open := s.open(); s.Pending != "" && len(open) > 0 && len(s.Rounds)-s.Pushed < inspect.MaxRounds {
+			last := s.Rounds[len(s.Rounds)-1]
+			return true, SessionReview{Round: len(s.Rounds), Model: last.Model, Disposition: last.Disposition, Open: open, Skipped: why}, nil
+		}
 		s.Skipped, s.Pending = why, ""
 		return false, SessionReview{Skipped: why}, nil
 	}

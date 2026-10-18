@@ -1060,6 +1060,15 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id {
 		t.Fatalf("the P2 raised again: %d %+v %s", code, res.Review, errOut)
 	}
+	// A review that cannot run does not release a held push: the open item
+	// still waits for a fix the reviewer sees, or a decline.
+	model.Err = errors.New("gateway down")
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("unseen fix\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || pushed() != before || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id || !strings.Contains(res.Review.Skipped, "could not run") {
+		t.Fatalf("a held push when the review cannot run: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Err = nil
 
 	// A review that trips the budget breaker stops the build: nothing is pushed.
 	costly := sessionReply("")

@@ -582,6 +582,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 					fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
 				}
 				fmt.Fprintf(w, "#%d: session review round %d by %s: %s; not pushed yet\n", n, rep.Round, rep.Model, rep.Disposition)
+				if rep.Skipped != "" {
+					fmt.Fprintf(w, "  this run's review did not happen (%s); round %d's items stay open\n", rep.Skipped, rep.Round)
+				}
 				for _, it := range rep.Open {
 					at := ""
 					if it.File != "" {
