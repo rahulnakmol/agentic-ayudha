@@ -406,7 +406,7 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	ds := make([]decide.Decision, len(nums))
-	b := &batch{Repo: repo, Issue: nums[0], Command: e.commandLine()}
+	b := &batch{Repo: repo, Issue: nums[0], Command: e.commandLine(), Posted: e.Now().UTC().Format(time.RFC3339Nano)}
 	for i, n := range nums {
 		if slices.Contains(nums[:i], n) {
 			return Errorf(ExitUsage, "decide --accept: #%d is in the batch twice", n)
@@ -488,7 +488,7 @@ func (e *Env) postCommentBatch(ctx context.Context, c *github.Client, cfg *confi
 				fmt.Sprintf("wait for the approver's reply on #%d, or start the batch on another Decision", b.Issue))
 		}
 	}
-	if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{}), actions.Action{Kind: "github.comment.batch"}); err != nil {
+	if err := postComment(ctx, c, b.Repo, b.Issue, "github.comment.batch", b.render(batchStatus{})); err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	return WithNext(Errorf(ExitBlocked, "posted batch %s on #%d for %s; nothing is accepted until an approver replies `/aayu approve all` (or `approve 1 3`, `skip 2`) there", b.hash(), b.Issue, strings.Join(b.Mention, ", ")),

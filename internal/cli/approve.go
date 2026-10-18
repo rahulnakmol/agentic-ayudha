@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -72,6 +73,7 @@ type batch struct {
 	Repo    string      `json:"repo"`
 	Issue   int         `json:"issue"` // the thread the batch comment is on
 	Command string      `json:"command"`
+	Posted  string      `json:"posted"` // when the batch was made: each batch, even of the same command, has its own hash
 	Mode    string      `json:"mode"`
 	Items   []batchItem `json:"items"`
 	Why     string      `json:"-"` // why the device code, in device mode
@@ -329,9 +331,9 @@ func openBatch(ctx context.Context, c *github.Client, repo string, n int, botLog
 	if err != nil {
 		return nil, nil, "", err
 	}
-	answered := map[string]bool{}
+	answered := map[string]bool{} // only the bot's own result closes a batch: anyone can copy the marker
 	for _, cm := range comments {
-		if first, _, _ := strings.Cut(cm.GetBody(), "\n"); strings.HasPrefix(first, batchResultMarker) {
+		if first, _, _ := strings.Cut(cm.GetBody(), "\n"); strings.HasPrefix(first, batchResultMarker) && strings.EqualFold(cm.GetUser().GetLogin(), botLogin) {
 			answered[strings.TrimSuffix(strings.TrimPrefix(first, batchResultMarker), " -->")] = true
 		}
 	}
@@ -479,8 +481,7 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 	}
 	refuse := func(why, next string) error {
 		body := fmt.Sprintf("@%s, nothing was approved: %s\n\nNext: %s\n", author, why, next)
-		_, _ = writer.UpsertComment(ctx, repo, n, fmt.Sprintf("<!-- aayudha:batch-refused %d -->", cm.GetID()),
-			fmt.Sprintf("<!-- aayudha:batch-refused %d -->\n%s", cm.GetID(), body), actions.Action{Kind: "github.comment.batch-refused"})
+		_ = postComment(ctx, writer, repo, n, "github.comment.batch-refused", fmt.Sprintf("<!-- aayudha:batch-refused %d -->\n%s", cm.GetID(), body))
 		return Errorf(ExitBlocked, "%s", why)
 	}
 	switch {
@@ -586,7 +587,7 @@ func (e *Env) batchResult(ctx context.Context, c *github.Client, repo string, n 
 	if failed != nil {
 		w.WriteString("\nThe rest was not applied. Next: ask the agent to start the remaining steps again.\n")
 	}
-	if _, err := c.UpsertComment(ctx, repo, n, batchResultMarker+hash+" -->", w.String(), actions.Action{Kind: "github.comment.batch-result"}); err != nil {
+	if err := postComment(ctx, c, repo, n, "github.comment.batch-result", w.String()); err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	fmt.Fprint(e.Out, w.String())
@@ -594,4 +595,18 @@ func (e *Env) batchResult(ctx context.Context, c *github.Client, repo string, n 
 		return Wrap(ExitExternal, failed)
 	}
 	return nil
+}
+
+// postComment posts a new comment on issue n. Batch results and refusals are
+// always new comments, never edits of one found by its marker: anyone can
+// copy a marker into their own comment, and a new comment notifies.
+func postComment(ctx context.Context, c *github.Client, repo string, n int, kind, body string) error {
+	owner, name, _ := github.SplitRepo(repo)
+	_, err := c.Write(ctx, actions.Action{Kind: kind, Target: fmt.Sprintf("%s#%d", repo, n),
+		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)}},
+		func(ctx context.Context) (any, error) {
+			cm, _, err := c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: gh.Ptr(body)})
+			return cm.GetID(), err
+		})
+	return err
 }

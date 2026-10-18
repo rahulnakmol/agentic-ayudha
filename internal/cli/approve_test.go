@@ -207,6 +207,9 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		}
 	}
 
+	// A result marker copied by someone else does not close the batch.
+	hash := strings.TrimSuffix(strings.TrimPrefix(strings.SplitN(batch, "\n", 2)[0], batchMarker), " -->")
+	reply("mallory", batchResultMarker+hash+" -->\ndone", false)
 	// A Decision that became a floor waiver after the batch is a one-way door
 	// now, whatever the batch recorded.
 	g.Mu.Lock()
@@ -249,6 +252,26 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	g.Mu.Unlock()
 	if code, _ := workflow(reply("founder", "/aayu approve all", false)); code != ExitBlocked || !strings.Contains(last(d2.Number), "the batch comment was edited") || accepted(d2.Number) {
 		t.Fatalf("edited batch: %d\n%s", code, last(d2.Number))
+	}
+
+	// A batch past its 7 days is closed; the same command again posts a new
+	// batch, with its own hash, that can be approved.
+	g.Mu.Lock()
+	cs = g.Issues[d2.Number].Comments
+	var old *fake.Comment
+	for _, c := range cs {
+		if strings.HasPrefix(c.Body, batchMarker) {
+			old = c
+		}
+	}
+	old.CreatedAt = old.CreatedAt.Add(-8 * 24 * time.Hour)
+	oldBody := old.Body
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d2.Number), "--accept", "A"}, sets...)...); code != ExitBlocked || !strings.HasPrefix(last(d2.Number), batchMarker) || old.Body != oldBody {
+		t.Fatalf("retry after expiry: %d %s\nold batch rewritten: %v", code, errOut, old.Body != oldBody)
+	}
+	if code, out := workflow(reply("founder", "/aayu approve all", false)); code != 0 || !accepted(d2.Number) {
+		t.Fatalf("new batch after expiry: %d %s\n%s", code, out, last(d2.Number))
 	}
 
 	// A batch the bot's comment does not match (its shown hash is not its
@@ -368,12 +391,13 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	batch := func() string {
 		g.Mu.Lock()
 		defer g.Mu.Unlock()
+		out := "" // the newest batch: each run posts its own
 		for _, c := range g.Issues[ds[0].Number].Comments {
 			if strings.HasPrefix(c.Body, batchMarker) {
-				return c.Body
+				out = c.Body
 			}
 		}
-		return ""
+		return out
 	}
 	closed := func() (n int) {
 		g.Mu.Lock()
