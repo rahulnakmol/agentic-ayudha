@@ -329,6 +329,26 @@ func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n 
 	return "", nil
 }
 
+// StaleGrace is how long after its lease runs out a loop claim with no PR
+// waits before the sweep blocks it: one more lease term, so a builder that
+// resumes within 4 hours of the expiry (after a usage-limit wait, a paused
+// orb, or the next morning's first run) keeps its story. It narrows the race
+// between the sweep and a resuming builder; it does not close it.
+const StaleGrace = LeaseTTL
+
+// lastActivity is when a build state last moved: its newest checkpoint, else
+// its start. A claim with no lock comment left (gc reclaimed it) is taken to
+// have expired one lease term after it.
+func lastActivity(st BuildState) time.Time {
+	t, _ := time.Parse(time.RFC3339, st.StartedAt)
+	for _, cp := range st.Checkpoints {
+		if at, err := time.Parse(time.RFC3339, cp.At); err == nil && at.After(t) {
+			t = at
+		}
+	}
+	return t
+}
+
 // priorityRank orders P0 first and an item with no priority last.
 func priorityRank(labels []string) int {
 	for _, l := range labels {
@@ -412,13 +432,26 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			p.InFlight = append(p.InFlight, LoopItem{Story: st.Story, Claim: lease.Holder + " until " + lease.Expires.UTC().Format(time.RFC3339)})
 			continue
 		}
-		if mode != "pick" || !contains(labels, labelInProgress) {
+		if !contains(labels, labelInProgress) {
+			continue
+		}
+		// A claim whose lease ran out within StaleGrace may be a builder about
+		// to resume: it keeps its slot and is not blocked yet.
+		expired := lastActivity(st).Add(LeaseTTL)
+		if lease != nil {
+			expired = lease.Expires
+		}
+		if now.Sub(expired) < StaleGrace {
+			p.InFlight = append(p.InFlight, LoopItem{Story: st.Story, Claim: fmt.Sprintf("lease ran out %s; blocked as stale after %s", expired.UTC().Format(time.RFC3339), expired.Add(StaleGrace).UTC().Format(time.RFC3339))})
+			continue
+		}
+		if mode != "pick" {
 			continue
 		}
 		// A stale claim: the loop's build went away before a pull request.
-		why := "the build-ready loop's claim ran out with no pull request"
+		why := fmt.Sprintf("the build-ready loop's claim ran out with no pull request (lease expired %s, more than %s ago)", expired.UTC().Format(time.RFC3339), StaleGrace)
 		if lease != nil {
-			why += fmt.Sprintf(" (lease of %s expired %s)", lease.Holder, lease.Expires.UTC().Format(time.RFC3339))
+			why = fmt.Sprintf("the build-ready loop's claim ran out with no pull request (lease of %s expired %s, more than %s ago)", lease.Holder, lease.Expires.UTC().Format(time.RFC3339), StaleGrace)
 		}
 		st := st
 		res := BuildResult{Issue: st.Story, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, now)}

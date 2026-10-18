@@ -193,7 +193,13 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)
 	}
 	// The claim on #8 runs out with no PR: the next pick blocks it, reports it, and takes the next item.
-	setLease(g, newer.Number, "founder@gone", time.Now().Add(-time.Minute))
+	// Within the grace period after its lease ran out, the claim may be a
+	// builder about to resume: it keeps its slot and is not blocked.
+	setLease(g, newer.Number, "founder@gone", time.Now().Add(-time.Hour))
+	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || len(pick.Stale) != 0 || len(pick.InFlight) != 2 || contains(g.LabelNames(newer.Number), "status:blocked") {
+		t.Fatalf("a claim within the grace period was blocked or lost its slot: %d %s", code, out)
+	}
+	setLease(g, newer.Number, "founder@gone", time.Now().Add(-StaleGrace-time.Minute))
 	code, res, pick, out = next(two, "--next", "pick")
 	if code != 0 || res.Issue != low.Number || !hasLine(pick.Stale, "#8:", "claim ran out with no pull request") {
 		t.Fatalf("stale claim: want #8 blocked and #%d picked: %d %s", low.Number, code, out)

@@ -83,8 +83,9 @@ agent loop, and the binary decides everything except the code:
 1. `aayu build --next ship` lists the loop's own open pull requests, oldest first, and changes nothing. The agent runs
    `aayu ship <pr>` on each. ship merges on proof, or refuses and says why; a pull request that needs a person waits
    as **Ready to ship** in `aayu inbox`. The loop never passes `--solo-bypass` or `--admin` and never merges another way.
-2. `aayu build --next pick` first blocks each of the loop's claims whose lease ran out with no pull request
-   (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Then it counts what the
+2. `aayu build --next pick` first blocks each of the loop's claims whose lease ran out more than 4 hours ago with no
+   pull request (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Within those
+   4 hours the claim keeps its slot, so a builder that resumes keeps its story. Then it counts what the
    loop has in flight: its open pull requests, its live claims with no pull request yet, and any Ready item with a
    live lease (a claim another pick is still setting up). Under `[build] in_flight`
    (default 1, so one item from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
