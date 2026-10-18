@@ -115,8 +115,9 @@ building it. Whenever you are unsure, `aayu next` reads the repository and names
 ## Optional: your first proven pull request (another half hour)
 
 To have every pull request checked before it merges, move to Level 2. The review in your own CI arrives in aayudha
-0.3. If `aayu version` prints 0.2.x or older, run `aayu self-update` first. Until 0.3 is released, install the
-integration build with `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`.
+0.3. If `aayu version` prints 0.2.x or older, run `aayu self-update` first. If you installed aayu with Homebrew,
+Scoop, or winget, self-update only prints that tool's upgrade command, so run that command. Until 0.3 is released,
+install the integration build with `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`.
 
 1. `aayu init --gates` adds the merge gate workflow and creates the `code-review` environment, with Grok 4.7 at
    `https://api.x.ai/v1` filled in. Commit the workflow through a pull request and merge it. The gate runs from your
