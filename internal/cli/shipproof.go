@@ -164,8 +164,8 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 				if s := changedSections(read(p, base), read(p, head), a.AlwaysPersonSections); len(s) > 0 {
 					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass", strings.Join(s, "], ["), p), true, nil
 				}
-			case strings.HasPrefix(p, ".github/workflows/") && (holdsSecrets(read(p, base)) || holdsSecrets(read(p, head))):
-				return nil, fmt.Sprintf("it touches %s, a workflow that reads a secret or names an environment", p), true, nil
+			case strings.HasPrefix(p, ".github/workflows/") && (holdsCredentials(read(p, base)) || holdsCredentials(read(p, head))):
+				return nil, fmt.Sprintf("it touches %s, a workflow that holds a credential (a secret, the workflow token, an environment, or a write permission)", p), true, nil
 			}
 			if owners, _, _ := identity.Owners(codeowners, p); len(owners) > 0 && !slices.Contains(pp.Protected, p) {
 				pp.Protected = append(pp.Protected, p)
@@ -198,25 +198,43 @@ func alwaysPerson(patterns []string, p string) string {
 	return ""
 }
 
-// secretRef is, in a workflow's canonical JSON, any mention of the secrets
-// context (secrets.X, secrets['X'], toJSON(secrets), secrets: inherit; the
-// expression language ignores case) or an environment key.
-var secretRef = regexp.MustCompile(`(?i)\bsecrets\b|"environment":`)
+// credentialRef is, in a workflow's canonical JSON, any mention of the
+// secrets context (secrets.X, secrets['X'], toJSON(secrets), secrets: inherit;
+// the expression language ignores case), the workflow token, an environment
+// key, or a write permission.
+var credentialRef = regexp.MustCompile(`(?i)\bsecrets\b|github\.token|\bgithub_token\b|"environment":|"write(-all)?"`)
 
-// holdsSecrets reports whether a workflow reads a secret or names an
-// environment (an environment holds secrets and deployment rights). It judges
-// the parsed YAML, so quoting, escapes, anchors and merge keys change nothing,
-// and a workflow it cannot parse counts as holding them. "" is no workflow.
-func holdsSecrets(workflow string) bool {
+// holdsCredentials reports whether a workflow holds a credential: it reads a
+// secret or the workflow token, names an environment (which holds secrets
+// and deployment rights), grants a write permission, or leaves a job's
+// permissions to the repository's default, which may be write. It judges the
+// parsed YAML, so quoting, escapes, anchors and merge keys change nothing,
+// and a workflow it cannot parse counts as holding one. "" is no workflow.
+func holdsCredentials(workflow string) bool {
 	if workflow == "" {
 		return false
 	}
-	var v any
+	var v map[string]any
 	if err := yaml.Unmarshal([]byte(workflow), &v); err != nil {
 		return true
 	}
 	b, err := json.Marshal(v)
-	return err != nil || secretRef.Match(b)
+	if err != nil || credentialRef.Match(b) {
+		return true
+	}
+	if v["permissions"] != nil {
+		return false
+	}
+	jobs, ok := v["jobs"].(map[string]any)
+	if !ok {
+		return true
+	}
+	for _, j := range jobs {
+		if job, ok := j.(map[string]any); !ok || job["permissions"] == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // changedSections lists the TOML tables in names whose parsed values differ

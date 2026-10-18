@@ -99,13 +99,16 @@ footprint whose layers all have a long enough correction-free streak needs no re
 
 With `[autonomy] proof` on, `ship` merges a pull request into the integration branch on proof, with no review. Every
 required check of the base branch must be green, the pack must verify with its floors holding, and inspect must be at
-`merge` with a rung in `proof_rungs`. A skipped or neutral required check counts as green, as GitHub counts it, and the
-CODEOWNERS check may be red only when the pull request touches a CODEOWNERS path. The `[autonomy]` table and the
-integration branch that decide this are read from the base branch, never from the pull request, so a change cannot
-loosen the rules it is judged by. A change to the narrow set still needs a person per pull request, and the streak
-cannot pass it either: the paths in `always_person`, the approval tables of the config files, and any workflow that
-reads a secret or names an environment. Ship fails closed: a workflow it cannot parse counts as one that reads a
-secret, and a pull request with more files than GitHub lists needs a person. `ship` records the merge as `proof`, with the checks, the rung, and any CODEOWNERS paths it merged.
+`merge` with a fresh judgement at a rung in `proof_rungs`; a cached rung, which a workflow on a branch could forge,
+grants nothing. A skipped or neutral required check counts as green, as GitHub counts it, and the CODEOWNERS check may
+be red only by failing on a CODEOWNERS path the pull request touches. The `[autonomy]` table and the integration
+branch that decide this are read from the base branch, never from the pull request, so a change cannot loosen the
+rules it is judged by. A change to the narrow set still needs a person per pull request, and the streak cannot pass it
+either: the paths in `always_person`, the approval tables of the config files, and any workflow that holds a
+credential (it reads a secret or the workflow token, names an environment, grants a write permission, or leaves a
+job to the default permissions). Ship fails closed: a workflow it cannot parse counts as one that holds a credential,
+and a pull request with more files than GitHub lists needs a person. `ship` records the merge as `proof`, with the
+checks, the rung, and any CODEOWNERS paths it merged.
 
 ## Solo mode
 

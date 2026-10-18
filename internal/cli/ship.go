@@ -233,9 +233,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
-	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
+	var fresh bool
+	rec.Review, fresh = autonomy.GateRungFresh(ctx, c, owner, name, n, head)
+	proofRung := rec.Review
+	if !fresh && proofRung != "" { // a cached rung (C) a branch workflow could have forged grants no proof
+		proofRung = "cached " + proofRung
+	}
 	// Merge on proof (Decision #593): with it, no human pass is needed.
-	proofOK, proofWhy, needsPerson, err := e.proofPass(ctx, c, owner, name, pr, rec.Review, gateState)
+	proofOK, proofWhy, needsPerson, err := e.proofPass(ctx, c, owner, name, pr, proofRung, gateState)
 	if err != nil {
 		return err
 	}

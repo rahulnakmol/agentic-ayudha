@@ -367,8 +367,15 @@ func TestShipOnProof(t *testing.T) {
 		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
 		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, "version = 1\n", "version = 1\napprovals.approvers = [\"mallory\"]\n", 1), // a dotted key, no [table]
 			// A quoted key, and an escaped one, name an environment as surely as a bare one.
-			".github/workflows/deploy.yml": "on: push\njobs:\n  x:\n    \"environment\": production\n    runs-on: ubuntu-latest\n",
-			".github/workflows/pages.yml":  "on: push\njobs:\n  x:\n    \"environm\\u0065nt\": production\n    runs-on: ubuntu-latest\n"},
+			".github/workflows/deploy.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    \"environment\": production\n    runs-on: ubuntu-latest\n",
+			".github/workflows/pages.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    \"environm\\u0065nt\": production\n    runs-on: ubuntu-latest\n",
+			// The workflow token, a write permission, and a job left to the
+			// repository's default permissions are credentials too.
+			".github/workflows/token.yml":   "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh pr list\n        env: {GH_TOKEN: \"${{ github.token }}\"}\n",
+			".github/workflows/write.yml":   "on: push\njobs:\n  x:\n    permissions: {contents: write}\n    runs-on: ubuntu-latest\n",
+			".github/workflows/default.yml": "on: push\njobs:\n  x:\n    permissions: {contents: read}\n    runs-on: ubuntu-latest\n  y:\n    runs-on: ubuntu-latest\n",
+			// A read-only workflow holds none: it merges on proof.
+			".github/workflows/lint.yml": "on: pull_request\npermissions: {contents: read}\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n"},
 	}
 	g.Pulls[prN].Files = []string{"empty.txt"}
 	g.Mu.Unlock()
@@ -450,16 +457,17 @@ func TestShipOnProof(t *testing.T) {
 			t.Fatalf("ship when %s fails: %d %s", fail, code, out)
 		}
 	}
-	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml"} {
+	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml",
+		".github/workflows/token.yml", ".github/workflows/write.yml", ".github/workflows/default.yml"} {
 		g.Mu.Lock()
 		g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt", wf}, 0
 		g.Mu.Unlock()
-		refused("no merge on proof: it touches " + wf + ", a workflow that reads a secret or names an environment")
+		refused("no merge on proof: it touches " + wf + ", a workflow that holds a credential (a secret, the workflow token, an environment, or a write permission)")
 	}
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/ci.yml"}
 	g.Mu.Unlock()
-	refused("no merge on proof: it touches .github/workflows/ci.yml, a workflow that reads a secret or names an environment")
+	refused("no merge on proof: it touches .github/workflows/ci.yml, a workflow that holds a credential (a secret, the workflow token, an environment, or a write permission)")
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
@@ -491,6 +499,14 @@ func TestShipOnProof(t *testing.T) {
 	refused("no merge on proof: required check protected-paths is queued; only its failure for the CODEOWNERS paths a PR touches is accepted")
 	g.Mu.Lock()
 	g.CheckRuns[head] = g.CheckRuns[head][1:]
+	// A cached C, which a workflow on a branch could have written as the
+	// gate's account, grants no proof.
+	g.JobLogs[7701] = strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is cached C, not one of A, B, C ([autonomy] proof_rungs)")
+	g.Mu.Lock()
+	g.JobLogs[7701] = strings.Replace(g.JobLogs[7701], ": merge (cached) (reviewed by codex)", ": merge (reviewed by codex)", 1)
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".github/workflows/lint.yml")
 	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)

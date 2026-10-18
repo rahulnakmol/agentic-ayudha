@@ -86,8 +86,8 @@ over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and
    with a review rung in `[autonomy] proof_rungs`, all read from the base revision's `.aayudha/config.toml`, never the
    PR's own. A PR that touches the narrow set needs the human pass as above:
    `[autonomy] always_person`, a change to `always_person_sections` in an `always_person_config` file, or a workflow
-   that reads a secret or names an environment. The ship record says `proof`, and the never layers and the streak go
-   to the sampled audit after merge.
+   that holds a credential (a secret, the workflow token, an environment, or a write permission). The ship record
+   says `proof`, and the never layers and the streak go to the sampled audit after merge.
 3. The agent or a person runs `aayu ship <pr>`. It squash-merges, writes the story's Outcome (Complete) section, moves it to
    `status:merged`, records the approval, the pass rule, and the streak in `ship.json` beside the pack, releases the
    build lease, and removes the branch and the worktree.

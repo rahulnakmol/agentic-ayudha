@@ -76,7 +76,7 @@ var sections = []section{
 			{"autonomy.correction_days", "Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched.", "proposed (WP5.7)"},
 			{"autonomy.proof", "Merge a PR into the integration branch on proof alone: every required check green, the merge gate's pack verified with its floors holding, inspect at merge with a `proof_rungs` rung, and nothing in the narrow set. The streak, never layers and plan review then feed the sampled audit after merge instead of blocking.", "WP5.7"},
 			{"autonomy.proof_rungs", "Review rungs at the head that let `ship` merge on proof.", "WP5.7"},
-			{"autonomy.always_person", "The narrow set: paths whose change always needs a person per PR (a trailing `/` covers a directory; otherwise a glob). A workflow that reads a secret or names an environment is in it by rule.", "WP5.7"},
+			{"autonomy.always_person", "The narrow set: paths whose change always needs a person per PR (a trailing `/` covers a directory; otherwise a glob). A workflow that holds a credential (a secret, the workflow token, an environment, or a write permission, or a job left to the default permissions) is in it by rule.", "WP5.7"},
 			{"autonomy.always_person_config", "Config files whose `always_person_sections` need a person per PR when they change.", "WP5.7"},
 			{"autonomy.always_person_sections", "Config tables, by their first key, that decide who may approve or bypass.", "WP5.7"},
 			{"autonomy.budget.wall_hours", "Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged.", proposed},

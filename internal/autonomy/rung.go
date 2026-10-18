@@ -31,10 +31,18 @@ const MergeGateWorkflow = "aayudha-merge-gate.yml"
 // the review line are all unknown. A run whose judgement was cached is
 // skipped for the newest fresh one.
 func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, head string) string {
+	rung, _ := GateRungFresh(ctx, c, owner, name, n, head)
+	return rung
+}
+
+// GateRungFresh is GateRung, and whether that rung is a fresh judgement:
+// false for a cached C, which stands because it only lowers, but which a
+// workflow on a branch could also have written, so it grants nothing.
+func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n int, head string) (rung string, fresh bool) {
 	path := ".github/workflows/" + MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
 	if err != nil {
-		return ""
+		return "", false
 	}
 	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
 	cached := false
@@ -44,7 +52,7 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 		}
 		jobs, _, err := c.REST.Actions.ListWorkflowJobs(ctx, owner, name, r.GetID(), &gh.ListWorkflowJobsOptions{Filter: "latest"})
 		if err != nil {
-			return ""
+			return "", false
 		}
 		for _, j := range jobs.Jobs {
 			if j.GetName() == "aayudha/inspect" && j.GetConclusion() == "success" {
@@ -53,7 +61,7 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 				log := JobLog(ctx, c, owner, name, j.GetID())
 				h, m := inspectHeader.FindStringSubmatch(log), reviewLine.FindStringSubmatch(log)
 				if h == nil || h[1] != strconv.Itoa(n) || m == nil {
-					return ""
+					return "", false
 				}
 				// A cached judgement comes from the state in a PR comment,
 				// which a workflow on a branch can also write as the gate's
@@ -66,16 +74,16 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 					cached = true
 					break
 				}
-				return rung
+				return rung, h[2] == ""
 			}
 		}
 		if cached {
 			cached = false
 			continue
 		}
-		return ""
+		return "", false
 	}
-	return ""
+	return "", false
 }
 
 // Proven reports whether a review at rung counts toward the streak and the
