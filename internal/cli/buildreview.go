@@ -173,6 +173,7 @@ type sessionReviewIn struct {
 	chk     ready.Result
 	body    string          // the story's body
 	pr      *gh.PullRequest // the open PR, nil before the first push
+	ciSpent float64         // what the merge gate's inspect spent on the PR, from its trusted comment
 	wt, dev string
 	head    string
 	st      BuildState
@@ -249,13 +250,20 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	// The merge gate's own review call: fast serving where the endpoint has
 	// it, the founder's effort per model, and the cost at the rate asked.
 	var served []string
-	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax,
+	// The merge gate's inspect spends from the same per-PR cap.
+	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax, SpentElsewhere: a.ciSpent,
 		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
 		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &served)}}}
 	// The spend outlives the worktree: a resumed build on another machine
 	// starts from what the PR body says was spent, so per_pr_inspect_max
 	// still caps the PR.
 	s.State.SpentUSD = max(s.State.SpentUSD, sessionSpent(a.pr.GetBody()))
+	// inspect's cache key leaves out the builder's declarations: a result
+	// another reviewer gave, before a declaration changed the pick, is not
+	// this reviewer's.
+	if len(s.Rounds) > 0 && s.Rounds[len(s.Rounds)-1].Model != m.Model {
+		s.State.Result = nil
+	}
 	p := e.progress(fmt.Sprintf("Session review by %s (%s)", m.Model, m.Family))
 	res, st, err := r.Run(ctx, in, s.State)
 	s.State = st

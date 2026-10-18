@@ -557,7 +557,18 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, wt: res.Worktree, dev: dev, head: head, st: st})
+		var ciSpent float64
+		if pr != nil {
+			owner, name, _ := github.SplitRepo(repo)
+			comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+				return c.REST.Issues.ListComments(ctx, owner, name, pr.GetNumber(), &gh.IssueListCommentsOptions{ListOptions: o})
+			})
+			if err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			ciSpent = inspectState(comments, viewer(ctx, c), l.Config.Identity).SpentUSD
+		}
+		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, ciSpent: ciSpent, wt: res.Worktree, dev: dev, head: head, st: st})
 		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
 			err = Wrap(ExitInternal, serr)
 		}

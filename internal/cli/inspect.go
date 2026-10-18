@@ -571,7 +571,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	r := inspect.Runner{MaxUSD: l.Config.Budget.PerPRInspectMax,
+	// The build session's review spends from the same per-PR cap.
+	r := inspect.Runner{MaxUSD: l.Config.Budget.PerPRInspectMax, SpentElsewhere: sessionSpent(pr.GetBody()),
 		Filter: inspect.Filter{MinConfidence: cfg.MinConfidence, SuppressAfter: cfg.SuppressAfter, Generated: cfg.Generated},
 		Page: func(ctx context.Context, subject, body string) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})

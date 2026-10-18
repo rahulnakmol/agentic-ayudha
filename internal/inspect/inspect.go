@@ -389,7 +389,11 @@ type Runner struct {
 	Reviewers []Reviewer // the first reviews in general mode; the first two in peer mode
 	Filter    Filter
 	MaxUSD    float64
-	Page      func(ctx context.Context, subject, body string) error
+	// SpentElsewhere is spend on the same PR that another review loop records
+	// outside this State (the build session's review, or the merge gate's):
+	// it counts against MaxUSD but is never added to the State.
+	SpentElsewhere float64
+	Page           func(ctx context.Context, subject, body string) error
 }
 
 // review asks one reviewer for its structured reply.
@@ -510,9 +514,9 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 		out.Cached, out.CostUSD = true, 0
 		return out, prev, nil
 	}
-	if r.MaxUSD > 0 && prev.SpentUSD >= r.MaxUSD {
+	if r.MaxUSD > 0 && prev.SpentUSD+r.SpentElsewhere >= r.MaxUSD {
 		if r.Page != nil {
-			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d reached its budget", in.PR), fmt.Sprintf("%s#%d spent %.2f USD of %.2f on inspect.", in.Repo, in.PR, prev.SpentUSD, r.MaxUSD))
+			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d reached its budget", in.PR), fmt.Sprintf("%s#%d spent %.2f USD of %.2f on inspect.", in.Repo, in.PR, prev.SpentUSD+r.SpentElsewhere, r.MaxUSD))
 		}
 		return res, st, ErrBudget
 	}

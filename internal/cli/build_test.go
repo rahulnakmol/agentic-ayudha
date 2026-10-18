@@ -1071,7 +1071,8 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	model.Err = nil
 
 	// The spend the PR body records still caps the PR when the worktree's
-	// own state is gone, as on a resume elsewhere: no new review call.
+	// own state is gone, as on a resume elsewhere, with the merge gate's
+	// spend: no new review call.
 	stateFile := filepath.Join(git(t, wt, "rev-parse", "--absolute-git-dir"), sessionReviewFile)
 	_ = os.Remove(stateFile)
 	paid := sessionReply("")
@@ -1088,7 +1089,9 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if err := os.Remove(stateFile); err != nil {
 		t.Fatal(err)
 	}
-	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = strconv.FormatFloat(spent, 'f', -1, 64)
+	// The merge gate's inspect spends from the same cap: 1 USD on its record.
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":1,\"hashes\":[]} -->\n")
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = strconv.FormatFloat(spent+1, 'f', -1, 64)
 	calls := len(model.Requests)
 	model.Replies = []models.Response{sessionReply("")}
 	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("resumed\n"), 0o644)
@@ -1203,6 +1206,22 @@ func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
 		if !strings.Contains(b, want) {
 			t.Fatalf("PR body lacks %q:\n%s", want, b)
 		}
+	}
+	// A held round's head, retried after a declaration names the reviewer's
+	// own family, is reviewed again by another reviewer: the first one's
+	// cached result is not the new reviewer's.
+	model.Replies = []models.Response{sessionReply("held")}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("three\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	first, calls := model.Requests[len(model.Requests)-1].Model, len(model.Requests)
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\nAayudha-Model: " + first + "\n"
+	g.Mu.Unlock()
+	model.Replies = []models.Response{sessionReply("")}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || len(model.Requests) != calls+1 || family() == verbs.FamilyOf(first) {
+		t.Fatalf("the held head after %s is declared: %d %s %s, %d new calls, reviewer %v", first, code, out, errOut, len(model.Requests)-calls, family())
 	}
 }
 
