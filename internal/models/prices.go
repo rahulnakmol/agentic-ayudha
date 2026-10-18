@@ -1,6 +1,10 @@
 package models
 
-import "github.com/rahulnakmol/agentic-ayudha/internal/config"
+import (
+	"slices"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+)
 
 // Rates are USD per million tokens. CachedInput is a cache read and
 // CacheWrite a prompt written to the provider's cache; either at 0 is charged
@@ -89,16 +93,19 @@ var ListPrices = []ListPrice{
 // PriceOf returns model's price: a [[models.prices]] entry in config first,
 // then its list price. ok is false when neither names it.
 func PriceOf(prices []config.Price, model string) (p ListPrice, source string, ok bool) {
+	i := slices.IndexFunc(ListPrices, func(l ListPrice) bool { return l.Model == model })
 	for _, c := range prices {
 		if c.Model == model {
-			return ListPrice{Model: model, Short: Rates{Input: c.InputPerMTok, CachedInput: c.CachedInputPerMTok,
-				CacheWrite: c.CacheWritePerMTok, Output: c.OutputPerMTok}}, CostPriceTable, true
+			p := ListPrice{Model: model, Short: Rates{Input: c.InputPerMTok, CachedInput: c.CachedInputPerMTok,
+				CacheWrite: c.CacheWritePerMTok, Output: c.OutputPerMTok}}
+			if i >= 0 {
+				p.Priority = ListPrices[i].Priority // the provider's priority multiplier applies to an overridden rate too
+			}
+			return p, CostPriceTable, true
 		}
 	}
-	for _, l := range ListPrices {
-		if l.Model == model {
-			return l, CostListPrice, true
-		}
+	if i >= 0 {
+		return ListPrices[i], CostListPrice, true
 	}
 	return ListPrice{}, "", false
 }
