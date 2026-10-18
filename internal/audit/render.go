@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
@@ -84,8 +85,8 @@ func (r *Report) Markdown() []byte {
 	p("- Decisions over their SLA: %d\n", c.OverSLA)
 	p("- Autonomy exceptions: %d corrections; %d agent merges on never-layers\n", c.Corrections, c.NeverMerges)
 	if len(r.Rungs) > 0 {
-		p("- Review rungs of agent merges (Decision #469): different-family (A) %d; paid different-family (B) %d; a person's %d; same-family (C) %d; none recorded %d\n",
-			r.Rungs["A"], r.Rungs["B"], r.Rungs["human"], r.Rungs["C"], r.Rungs[""])
+		p("- Review rungs of agent merges among the newest %d merged PRs (Decision #469): different-family (A) %d; paid different-family (B) %d; a person's %d; same-family (C) %d; none recorded %d\n",
+			autonomy.MaxPRs, r.Rungs["A"], r.Rungs["B"], r.Rungs["human"], r.Rungs["C"], r.Rungs[""])
 	}
 	p("- Licence findings: %d (%d go.mod modules); CI `security` job on the code commit: %s\n\n", c.Licence, r.Modules, or(strings.Join(r.Security, ", "), "no completed run"))
 

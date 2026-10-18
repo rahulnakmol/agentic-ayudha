@@ -222,7 +222,7 @@ func TestAuditReviewRungs(t *testing.T) {
 	d := &Data{Dev: "dev", AgentPRs: []AgentPR{{Number: 1, MergedAt: at(6), Rung: "A"}, {Number: 2, MergedAt: at(7), Rung: "C"}, {Number: 3, MergedAt: at(8), Rung: "C"},
 		{Number: 4, MergedAt: at(9)}, {Number: 5, MergedAt: at(10), Rung: "human"}, {Number: 6, MergedAt: at(2), Rung: "A"}, {Number: 7, MergedAt: at(24), Rung: "B"}}}
 	md := string(Build(in, d).Markdown())
-	if want := "- Review rungs of agent merges (Decision #469): different-family (A) 1; paid different-family (B) 0; a person's 1; same-family (C) 2; none recorded 1"; !strings.Contains(md, want) {
+	if want := "- Review rungs of agent merges among the newest 100 merged PRs (Decision #469): different-family (A) 1; paid different-family (B) 0; a person's 1; same-family (C) 2; none recorded 1"; !strings.Contains(md, want) {
 		t.Errorf("report lacks %q:\n%s", want, md)
 	}
 	// With no rung on record (a snapshot from before the ladder), the line is
