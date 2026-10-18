@@ -81,6 +81,9 @@ func under(dir, p string) (string, bool) {
 // directory from the checkout down to out, and everything already under out,
 // must be a real file or directory.
 func surveyOutSafe(root, out string) error {
+	if absPath(root) == absPath(out) { // the next index would read the survey's own files
+		return fmt.Errorf("survey: --out %s is the checkout itself; give it a directory inside or outside the checkout", out)
+	}
 	refuse := func(p string) error {
 		return fmt.Errorf("survey: %s is a symbolic link; the survey writes only real files under its output directory %s (remove the link, or give --out a real directory)", p, out)
 	}

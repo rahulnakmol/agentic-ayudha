@@ -338,6 +338,9 @@ func TestSurveyDocs(t *testing.T) {
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", clash); code != ExitUsage || !strings.Contains(stderr, "would both be manual:guide.pdf.txt") {
 		t.Fatalf("colliding manual names: %d %s", code, stderr)
 	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
+		t.Fatalf("--out the checkout root: %d %s", code, stderr)
+	}
 	// A link the surveyed checkout commits under the default output directory
 	// never redirects a write: the survey refuses before writing anything.
 	victim := filepath.Join(t.TempDir(), "config")
