@@ -6,8 +6,10 @@ where you already work.
 
 > **Honest status:** Copilot CLI 1.0.98 ran all of this against a real Copilot Business subscription on 17 October
 > 2026: the skills, the `aayudha` MCP tool, both hooks, one call at each Auto tier, and one HydraFusion Critique turn.
-> VS Code agent mode reads the same files, but no one has run aayudha in it yet. Use Copilot CLI if you need what is
-> proven.
+> The `copilot-live` workflow repeats the core of it in CI after each change to the Copilot host: a pinned Copilot
+> CLI, in a folder it trusts, calls the `aayudha` MCP server's `doctor` tool, and the pre-tool hook stops `aayu ship`.
+> Each run costs one premium request. VS Code agent mode reads the same files, but nothing has run aayudha in it
+> yet, by hand or in CI, because it has no headless mode. Use Copilot CLI if you need what is proven.
 
 ## Before you start
 

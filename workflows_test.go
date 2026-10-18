@@ -262,8 +262,9 @@ func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 
 // Founder decisions of 2026-10-15 and 2026-10-16 (Appendix B S-4.8c, S-2.9b, D-2.9b): product CI never calls a model,
 // and this repository's model checks never gate. Every workflow `init --gates` installs holds no model key or
-// AI-gateway environment; the four workflows that call the gateway for aayudha's own model code run on no pull
-// request event (so none can be a required check of a PR), and ci.yml's gates (PR, rolling, stable) never name them.
+// AI-gateway environment; the four workflows that call the gateway for aayudha's own model code, and copilot-live, which
+// calls Copilot, run on no pull request event (so none can be a required check of a PR), and ci.yml's gates (PR,
+// rolling, stable) never name them.
 func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
 	keys := regexp.MustCompile(`ai-gateway|AAYU_SECRET_|AAYU_MODELS__|AAYU_AI_GATEWAY`)
 	for name, b := range initrepo.GateWorkflows("dev") {
@@ -275,7 +276,7 @@ func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"inspect-live", "aayudha-model-lanes", "models-live", "ux-review-live"} {
+	for _, f := range []string{"inspect-live", "aayudha-model-lanes", "models-live", "ux-review-live", "copilot-live"} {
 		b, err := os.ReadFile(".github/workflows/" + f + ".yml")
 		if err != nil {
 			t.Fatal(err)
