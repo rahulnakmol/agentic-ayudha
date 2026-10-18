@@ -383,6 +383,15 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 			}
 			out, err := run(ctx, e.Dir, "sh", "-c", "printf 'protocol=https\\nhost=github.com\\n"+path+"\\n' | GIT_TERMINAL_PROMPT=0 git credential fill")
 			if err != nil {
+				// No helper: nothing stored. A helper that is configured but
+				// did not answer (a locked keychain or Credential Manager) may
+				// hold the person's token once it does: it counts.
+				helpers, _ := run(ctx, e.Dir, "git", "config", "--get-regexp", `^credential\..*helper$`)
+				for _, line := range strings.Split(helpers, "\n") {
+					if _, v, _ := strings.Cut(strings.TrimSpace(line), " "); strings.TrimSpace(v) != "" {
+						return "", fmt.Errorf("%w: a git credential helper is configured but did not answer: %w", identity.ErrUnreadable, err)
+					}
+				}
 				return "", err
 			}
 			for _, line := range strings.Split(out, "\n") {

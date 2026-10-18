@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -804,3 +805,33 @@ func (lockedKeychain) Get(string) (string, error) { return "", secrets.ErrNotFou
 func (lockedKeychain) Set(string, string) error   { return errors.New("locked") }
 func (lockedKeychain) Delete(string) error        { return errors.New("locked") }
 func (lockedKeychain) Names() ([]string, error)   { return nil, nil }
+
+// A git credential helper that is configured but does not answer now (a
+// locked keychain) may hold the approver's token once it does, so it counts;
+// with no helper configured, nothing is stored.
+func TestReachableCountsAHelperThatDoesNotAnswer(t *testing.T) {
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	_ = os.WriteFile(global, nil, 0o644)
+	t.Setenv("GIT_CONFIG_GLOBAL", global) // this machine's own helpers stay out of it
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_COUNT", "0")
+	for _, tt := range []struct{ helper, want string }{
+		{"", "[]"},
+		{"!f() { echo locked >&2; exit 1; }; f", "[{git credential helper (unreadable now) }]"},
+	} {
+		repo := t.TempDir()
+		git(t, repo, "init", "-q")
+		if tt.helper != "" {
+			git(t, repo, "config", "credential.helper", tt.helper)
+		}
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: repo, Getenv: func(string) string { return "" }, Secrets: secrets.New(),
+			GHToken:    func(context.Context) (string, error) { return "", errors.New("no gh") },
+			GHAccounts: func(context.Context) (map[string]string, error) { return nil, nil }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprint(e.reachable(context.Background(), "")); got != tt.want {
+			t.Errorf("helper %q: reachable = %s, want %s", tt.helper, got, tt.want)
+		}
+	}
+}
