@@ -275,8 +275,10 @@ func TestSurveyDocs(t *testing.T) {
 	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:9"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md:9") {
 		t.Fatalf("cite past the end: %d %s", code, stdout)
 	}
-	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("doc:manual:operator-notes.md"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "cite the lines of manual operator-notes.md") {
-		t.Fatalf("the whole manual cited: %d %s", code, stdout)
+	for _, whole := range []string{"doc:manual:operator-notes.md", "file:manual:operator-notes.md"} {
+		if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite(whole), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "cite the lines of manual operator-notes.md") {
+			t.Fatalf("the whole manual cited as %s: %d %s", whole, code, stdout)
+		}
 	}
 }
 

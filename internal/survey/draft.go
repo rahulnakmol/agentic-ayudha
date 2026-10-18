@@ -250,7 +250,7 @@ func Check(ix *Index, d Draft) Report {
 				add("%s: cite %v", where, err)
 				continue
 			}
-			if m, ok := strings.CutPrefix(c, "doc:manual:"); ok {
+			if m, ok := wholeManual(c); ok {
 				add("%s: cite the lines of manual %s that say it (manual:%s:<line> or <start>-<end>), not the whole manual", where, m, m)
 				continue
 			}
@@ -603,4 +603,15 @@ func contractIDs(d Draft) map[string]bool {
 		out[k.ID] = true
 	}
 	return out
+}
+
+// wholeManual reports whether a citation names a manual by one of its
+// whole-file facts (doc:manual:<name>, file:manual:<name>), and which.
+func wholeManual(c string) (string, bool) {
+	for _, p := range []string{"doc:manual:", "file:manual:"} {
+		if m, ok := strings.CutPrefix(c, p); ok {
+			return m, true
+		}
+	}
+	return "", false
 }
