@@ -446,6 +446,16 @@ func TestSurveyDocsNotRun(t *testing.T) {
 		if v, reasons := Compare(res, base, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "; "), "below the baseline 5.00") {
 			t.Errorf("%s: a drop from 5 to 4 on the cases that ran: %s %v", tc.path, v, reasons)
 		}
+		// A case new since the baseline is out of the drop too: other fell from
+		// 5 to 4.5 while the new case scored 5, so the whole mean (4.75) would
+		// hide a drop of 0.5.
+		newer := &Results{SHA: "cur", Mean: 4.75, Cases: []CaseResult{
+			{Case: "survey/other", PassK: 1, Mean: 4.5, Runs: []Run{{Status: RunPass, Score: 4, Pass: true}, {Status: RunPass, Score: 5, Pass: true}}},
+			{Case: "survey/new", PassK: 1, Mean: 5, Runs: []Run{{Status: RunPass, Score: 5, Pass: true}, {Status: RunPass, Score: 5, Pass: true}}},
+		}}
+		if v, reasons := Compare(newer, &Results{SHA: "base", Mean: 5, Cases: base.Cases[:1]}, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "; "), "4.50 is 0.50 below the baseline 5.00") {
+			t.Errorf("%s: a drop hidden by a new case: %s %v", tc.path, v, reasons)
+		}
 	}
 	matching := with(srv.URL+"/guide.pdf", sumHex(pdf)).Survey.Docs
 	gets = 0

@@ -787,6 +787,41 @@ func (r *Results) Scored() bool {
 	return len(r.Cases) == 0 || len(ranCases(r.Cases)) > 0
 }
 
+// commonMeans is the baseline's and the current run's mean score over the
+// cases both scored: each case's mean, weighted by its completed runs. When
+// both scored the same cases it is their recorded means.
+func commonMeans(base *Results, cur *Results, ran []CaseResult) (baseMean, curMean float64) {
+	weight := func(c CaseResult) float64 {
+		if n := len(c.Runs) - c.Errors; n > 0 {
+			return float64(n)
+		}
+		return 1
+	}
+	curCase := map[string]CaseResult{}
+	for _, c := range ran {
+		curCase[c.Case] = c
+	}
+	baseRan := ranCases(base.Cases)
+	same := len(baseRan) == len(ran)
+	var bs, cs, bw, cw float64
+	for _, b := range baseRan {
+		c, ok := curCase[b.Case]
+		if !ok {
+			same = false
+			continue
+		}
+		bs, bw = bs+b.Mean*weight(b), bw+weight(b)
+		cs, cw = cs+c.Mean*weight(c), cw+weight(c)
+	}
+	switch {
+	case same:
+		return base.Mean, cur.Mean
+	case bw == 0:
+		return 0, 0 // no case in common: nothing to compare
+	}
+	return bs / bw, cs / cw
+}
+
 // ranCases drops the cases that did not run (CaseResult.NotRun).
 func ranCases(cs []CaseResult) []CaseResult {
 	var out []CaseResult
@@ -828,26 +863,12 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
 	}
 	if base != nil {
-		baseMean := base.Mean
-		if len(ran) < len(cur.Cases) {
-			// A case that did not run is out of the current mean, so the
-			// baseline's is taken over the same cases.
-			ids := map[string]bool{}
-			for _, c := range ran {
-				ids[c.Case] = true
-			}
-			var s []int
-			for _, c := range base.Cases {
-				for _, r := range c.Runs {
-					if ids[c.Case] && r.Status != RunError {
-						s = append(s, r.Score)
-					}
-				}
-			}
-			baseMean = mean(s)
-		}
-		if drop := baseMean - cur.Mean; drop > cfg.MaxDrop+1e-9 {
-			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s); at most %.2f allowed", cur.Mean, drop, baseMean, short(base.SHA), cfg.MaxDrop))
+		// The drop is measured over the cases both runs scored: a case new
+		// since the baseline, or not run in either, is held to the per-case
+		// bar above, never mixed into one side's mean.
+		baseMean, curMean := commonMeans(base, cur, ran)
+		if drop := baseMean - curMean; drop > cfg.MaxDrop+1e-9 {
+			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s) over the cases both scored; at most %.2f allowed", curMean, drop, baseMean, short(base.SHA), cfg.MaxDrop))
 		}
 		baseCase := map[string]CaseResult{}
 		for _, c := range base.Cases {
