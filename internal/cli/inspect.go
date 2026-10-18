@@ -545,32 +545,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})
 			return err
 		}}
-	var served []string // the service tier of each paid call's reply ("" when it states none)
+	var served []string // the service tier of each reply ("" when it states none)
 	for _, m := range picked {
-		g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
-		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model,
-			Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
-				if paid != nil {
-					if req.Effort == "" {
-						req.Effort = paid.Effort // [inspect] paid_effort
-					}
-					// Every paid review asks for fast serving (founder, 2026-10-18)
-					// and is charged at its rate, so per_pr_inspect_max holds.
-					req.ServiceTier = models.TierPriority
-				}
-				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
-				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, models.Billed(req, resp))
-				if paid != nil && err == nil {
-					served = append(served, resp.ServiceTier)
-				}
-				if err == nil {
-					// The gate run's log shows what the review was served at and
-					// used; a subscription credential makes the USD an estimate.
-					fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
-						cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
-				}
-				return resp, usd, err
-			}})
+		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, &served)})
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
@@ -898,7 +875,48 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 		logf("inspect: [inspect] paid_reviewer %s is not used: %s; a reviewer app or a human reviews", m, why)
 		return nil
 	}
-	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
+	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: reviewEffort(m, ic), Source: models.SourceConfig}
+}
+
+// reviewEffort is the reasoning effort a review model is called at
+// (founder, 2026-10-18): high, and medium for Claude Opus, Claude Fable, and
+// GPT-6 Astra. [inspect] paid_effort, when set, overrides it.
+func reviewEffort(model string, ic config.Inspect) string {
+	if ic.PaidEffort != "" {
+		return ic.PaidEffort
+	}
+	m := strings.ToLower(model)
+	for _, heavy := range []string{"opus", "fable", "astra"} {
+		if strings.Contains(m, heavy) {
+			return "medium"
+		}
+	}
+	return "high"
+}
+
+// reviewCall is the one way a review model is called: the CI review, its
+// fallback for an app that cannot review, the review lane's model, and
+// build's session review. It asks for fast (priority) serving at
+// reviewEffort; an endpoint without tiers ignores the ask. The call is
+// charged at the priority rate whatever tier the reply states, so
+// per_pr_inspect_max holds. Each reply's tier is appended to *served, which
+// the caller turns into a note with tierNote.
+func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
+	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
+	return func(ctx context.Context, req models.Request) (models.Response, float64, error) {
+		req.Effort = cmp.Or(req.Effort, reviewEffort(model, cfg.Inspect))
+		req.ServiceTier = models.TierPriority
+		resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
+		usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
+		if err == nil {
+			*served = append(*served, resp.ServiceTier)
+			// The run's log shows what the review was served at and used; a
+			// subscription credential makes the USD an estimate.
+			fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
+				cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
+		}
+		return resp, usd, err
+	}
 }
 
 // useReviewModel points the CI review at the model the code-review
@@ -947,7 +965,7 @@ func tierNote(served []string) string {
 		}
 	}
 	if len(slow) > 0 {
-		return fmt.Sprintf("**not fast:** the paid review asked for service tier %s (fast) but was served at %s; it is charged at the %s rate", models.TierPriority, strings.Join(slow, ", "), models.TierPriority)
+		return fmt.Sprintf("**not fast:** the review asked for service tier %s (fast) but was served at %s; it is charged at the %s rate", models.TierPriority, strings.Join(slow, ", "), models.TierPriority)
 	}
 	return fmt.Sprintf("served at service tier %s (fast), as asked", served[len(served)-1])
 }

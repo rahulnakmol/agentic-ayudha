@@ -912,7 +912,7 @@
             "high",
             "xhigh"
           ],
-          "description": "Reasoning effort the paid reviewer is called at (low, medium, high, xhigh); empty: the provider's default."
+          "description": "Reasoning effort every review model call is made at (low, medium, high, xhigh); empty: high, and medium for Claude Opus, Claude Fable, and GPT-6 Astra. Every review asks for fast (priority) serving."
         }
       },
       "additionalProperties": false,

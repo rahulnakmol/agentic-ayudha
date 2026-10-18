@@ -111,7 +111,7 @@ apps = []                 # codex, coderabbit, greptile, claude, cursor: what `a
 # asked for fast (priority) serving, and labelled (B, paid). The code-review environment's key is the one AI key in a
 # product repository's CI, and only base branches reach it.
 paid_reviewer = ""
-paid_effort = ""          # the paid reviewer's reasoning effort: low, medium, high, xhigh; empty: the provider default
+paid_effort = ""          # a review's reasoning effort: low, medium, high, xhigh; empty: high (medium for Opus, Fable, Astra)
 
 [inspect.app_families]
 claude = "anthropic"

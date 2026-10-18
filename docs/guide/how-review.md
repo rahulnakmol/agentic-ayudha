@@ -50,7 +50,8 @@ is never used, and the gate says so.
 | Codex, or Amp on GPT models | `grok-4.7`, or a Claude or Gemini model |
 | Cursor or Grok | a Claude, GPT, or Gemini model |
 
-Every review asks for fast (priority) serving, at the reasoning effort `[inspect] paid_effort` names. `[budget]
+Every review asks for fast (priority) serving where the endpoint offers it, at reasoning effort high, or medium for
+Claude Opus, Claude Fable, and GPT-6 Astra; `[inspect] paid_effort` overrides the effort. `[budget]
 per_pr_inspect_max` (5 USD by default) caps what one pull request's reviews may spend; the inspect comment records
 what each review cost and the tier it was served at.
 

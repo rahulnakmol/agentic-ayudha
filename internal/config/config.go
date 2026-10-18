@@ -95,7 +95,7 @@ type Inspect struct {
 	// PaidReviewer is rung B of the review ladder (Decision #469; founder,
 	// 2026-10-18).
 	PaidReviewer string `koanf:"paid_reviewer" jsonschema_description:"Rung B: the model ID (grok-4.7, gemini-3.8-flash, ...) the CI review calls when the code-review environment's AAYU_REVIEW_MODEL names none, and the fallback when no installed app can review the head. It must be of a family the builder cannot be; each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."`
-	PaidEffort   string `koanf:"paid_effort" jsonschema:"enum=,enum=low,enum=medium,enum=high,enum=xhigh" jsonschema_description:"Reasoning effort the paid reviewer is called at (low, medium, high, xhigh); empty: the provider's default."`
+	PaidEffort   string `koanf:"paid_effort" jsonschema:"enum=,enum=low,enum=medium,enum=high,enum=xhigh" jsonschema_description:"Reasoning effort every review model call is made at (low, medium, high, xhigh); empty: high, and medium for Claude Opus, Claude Fable, and GPT-6 Astra. Every review asks for fast (priority) serving."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.

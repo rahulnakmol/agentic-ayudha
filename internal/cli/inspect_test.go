@@ -1456,7 +1456,7 @@ func TestInspectReviewerFallback(t *testing.T) {
 	}
 	body := lastInspect(t, g, prN)
 	if !strings.Contains(body, "fallback: no installed reviewer app can review this head") || !strings.Contains(body, "usage limits for code reviews") ||
-		!strings.Contains(body, "**not fast:** the paid review asked for service tier priority (fast) but was served at default") {
+		!strings.Contains(body, "**not fast:** the review asked for service tier priority (fast) but was served at default") {
 		t.Errorf("the inspect comment does not say which rung, why, or the tier:\n%s", body)
 	}
 	if want := (1200*2.0 + 300*6.0) * 2 / 1e6; math.Abs(res.CostUSD-want) > 1e-12 {
@@ -1603,6 +1603,30 @@ func TestInspectReviewTools(t *testing.T) {
 	_, env, opts, prN, model := setup("")
 	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority {
 		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
+	}
+	// Every review asks for fast serving (founder, 2026-10-18), at effort high by default, and medium for Claude Opus,
+	// Claude Fable, and GPT-6 Astra; [inspect] paid_effort, set to high in this fixture, overrides both.
+	for _, c := range []struct{ model, builder, effort string }{
+		{"grok-4.7", "claude", "high"},
+		{"claude-opus-5-5", "codex", "medium"},
+		{"claude-fable-5-1", "codex", "medium"},
+		{"gpt-6-astra", "claude", "medium"},
+		{"claude-opus-5-5 with paid_effort", "codex", "high"},
+	} {
+		g, env, opts, prN, model := setup("")
+		m, override := strings.CutSuffix(c.model, " with paid_effort")
+		env[inspect.ReviewModelVar] = m
+		if !override {
+			env["AAYU_INSPECT__PAID_EFFORT"] = ""
+		}
+		if c.builder == "codex" {
+			writeInspectPackAs(t, opts.Dir, prN, g.Pulls[prN].Head.SHA, nil, "codex", "gpt-6.1-sol")
+		}
+		code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].Model != m ||
+			model.Requests[0].ServiceTier != models.TierPriority || model.Requests[0].Effort != c.effort {
+			t.Errorf("review by %s: exit %d rung %q, requests %+v %s", c.model, code, res.Rung, model.Requests, errOut)
+		}
 	}
 	// Each piece the code-review environment lacks fails the gate closed, by name and where to set it; a URL that
 	// carries a credential is refused without being echoed.
