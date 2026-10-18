@@ -1,0 +1,40 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationEvents: the body follows the response schema; the rows are invented for the test's project 4507. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=spans&end=2026-10-17T09%3A00%3A00Z&environment=production&field=release&field=transaction&field=count%28%29&field=p50%28span.duration%29&field=p95%28span.duration%29&field=p99%28span.duration%29&per_page=51&project=4507&query=is_transaction%3Atrue&sort=-count%28%29&start=2026-10-17T08%3A00%3A00Z",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "release": "web@2.4.1",
+            "transaction": "POST /api/checkout/",
+            "count()": 1840,
+            "p50(span.duration)": 120.5,
+            "p95(span.duration)": 812.5,
+            "p99(span.duration)": 1630
+          }
+        ],
+        "meta": {
+          "fields": {
+            "release": "string",
+            "transaction": "string",
+            "count()": "integer",
+            "p50(span.duration)": "duration",
+            "p95(span.duration)": "duration",
+            "p99(span.duration)": "duration"
+          },
+          "units": {
+            "release": null,
+            "transaction": null,
+            "count()": null,
+            "p50(span.duration)": "millisecond",
+            "p95(span.duration)": "millisecond",
+            "p99(span.duration)": "millisecond"
+          }
+        }
+      }
+    }
+  ]
+}
