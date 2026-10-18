@@ -57,6 +57,10 @@ var sentryFields = map[string]map[string]string{
 
 var errSource = errors.New("live source")
 
+// Unanswerable reports whether err is a query a source cannot answer as
+// asked, or one that is not bounded: the asker's to fix, not the provider's.
+func Unanswerable(err error) bool { return errors.Is(err, errSource) || errors.Is(err, errQuery) }
+
 // Run evaluates the query against the Sentry project.
 func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Provenance, error) {
 	pv := Provenance{Source: "sentry project " + s.API.Project()}

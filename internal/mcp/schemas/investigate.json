@@ -23,7 +23,7 @@
       "x-aayu-type": "string"
     },
     "from": {
-      "description": "Window start (RFC 3339, UTC); default an hour before the incident started. The window is at most 7 days.",
+      "description": "Window start (RFC 3339, UTC); default an hour before the incident started, or with --source and no start, 24 hours before --to. The window is at most 7 days.",
       "type": "string",
       "x-aayu-type": "string"
     },
@@ -48,20 +48,28 @@
       "type": "string",
       "x-aayu-type": "string"
     },
+    "source": {
+      "description": "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only.",
+      "enum": [
+        "sentry",
+        "posthog"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
     "telemetry": {
-      "description": "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network.",
+      "description": "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source.",
       "type": "string",
       "x-aayu-type": "path"
     },
     "to": {
-      "description": "Window end, exclusive (RFC 3339, UTC); default the export's last record.",
+      "description": "Window end, exclusive (RFC 3339, UTC); default the export's last record, or now for --source.",
       "type": "string",
       "x-aayu-type": "string"
     }
   },
   "required": [
-    "incident",
-    "telemetry"
+    "incident"
   ],
   "title": "investigate",
   "type": "object",
