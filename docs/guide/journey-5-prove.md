@@ -101,8 +101,10 @@ capped pull request is rebuilt.
 Two reviewers that disagree, one building and one checking, find more than one reviewer that agrees with itself. And
 when a model and a measurement disagree, believe the measurement.
 
-> **Needs setup:** the merge gate comes with `aayu init --gates`, and the review needs a reviewer app installed on
-> your account and named in `[inspect] apps`. The proof needs nothing else: no bot App, bucket, or secret. The pack waits as a file on the CI
+> **Needs setup:** the merge gate comes with `aayu init --gates`, which also creates the `code-review` environment.
+> The review needs your model endpoint's key there, as the secret `AAYU_REVIEW_MODEL_KEY`
+> ([code review in the gate](how-review.md)); a reviewer app named in `[inspect] reviewer` is the alternative. The
+> proof needs nothing else: no bot App or bucket. The pack waits as a file on the CI
 > run for `[proof] retention_days` (90 by default), and `ship` checks it came from that run and records it under your
 > name. An agent's own preview, even with screenshots and video in your thread, never counts. See
 > [Adopt at your own pace](adopt.md).
