@@ -489,6 +489,7 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 	for name, copilot := range map[string]*models.Fake{
 		"copilot missing":   {Err: fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", models.ErrCopilot)},
 		"reply is not JSON": {Replies: []models.Response{{Text: "Sure! Here is my review."}}},
+		"stderr is long":    {Err: fmt.Errorf("%w: copilot: exit status 1: %s", models.ErrCopilot, strings.Repeat("x", 300))},
 	} {
 		e, gateway, _ := setup("gemini-4-argon", copilot)
 		sr := e.screenshotReview(context.Background(), arts, 0, "")
@@ -499,6 +500,25 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 		if !strings.Contains(e.IO.Err.(*strings.Builder).String(), "lane A falls back to "+verbs.ModelGemini+" (high)") {
 			t.Errorf("%s: the fallback is not reported: %q", name, e.IO.Err.(*strings.Builder).String())
 		}
+		if strings.Count(sr.Model, "x") > 160 {
+			t.Errorf("%s: the label carries the whole failure: %q", name, sr.Model)
+		}
+	}
+
+	// A Copilot route that fails after a good reply says both in the label.
+	partial := &models.Fake{Replies: []models.Response{argon, {Text: "not JSON"}}}
+	e, gateway, _ = setup("gemini-4-argon", partial)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(partial.Requests) != 2 || len(gateway.Requests) != uireview.K-1 ||
+		!strings.HasPrefix(sr.Model, "gemini-4-argon via Copilot, then "+verbs.ModelGemini+" (the Copilot route failed: ") {
+		t.Errorf("partial Copilot run: %+v, %d Copilot and %d gateway calls", sr, len(partial.Requests), len(gateway.Requests))
+	}
+
+	// The opt-in model is held to reviewer != builder too: Opus through
+	// Copilot cannot review an Anthropic builder's work.
+	opus := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("claude-opus-5.5", opus)
+	if sr := e.screenshotReview(context.Background(), arts, 0, "claude-opus-5-5"); sr == nil || !strings.Contains(sr.Skipped, "equals builder family") || len(opus.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("same-family opt-in: %+v, %d Copilot and %d gateway calls", sr, len(opus.Requests), len(gateway.Requests))
 	}
 
 	// A mistyped opt-in model is a configuration error to fix, not a silent

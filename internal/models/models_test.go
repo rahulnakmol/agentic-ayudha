@@ -427,6 +427,15 @@ func TestStructured(t *testing.T) {
 	if prose.Requests[1].Messages[0].Content != "(empty reply)" {
 		t.Errorf("empty reply echoed as %q", prose.Requests[1].Messages[0].Content)
 	}
+	// ValidReply makes Structured's check without a retry: nil without a
+	// format or for a valid fenced reply, else why the reply fails.
+	f := &Format{Schema: schema}
+	if ValidReply("anything", nil) != nil || ValidReply("```json\n{\"disposition\":\"fix\",\"findings\":[]}\n```", f) != nil {
+		t.Error("ValidReply rejected a valid reply")
+	}
+	if err := ValidReply(`{"disposition":"merge"}`, f); err == nil || !strings.Contains(err.Error(), "findings") {
+		t.Errorf("ValidReply on a reply without findings: %v", err)
+	}
 	junk := &Fake{Replies: []Response{{Text: "I cannot comply."}}}
 	if err := Structured(context.Background(), junk.Complete, Request{}, schema, &v); !errors.As(err, &re) || !re.Parse || re.Reply != "I cannot comply." {
 		t.Fatalf("unparseable twice: %v", err)
