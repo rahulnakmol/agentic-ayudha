@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -203,6 +205,34 @@ func currentBaseline(ctx context.Context, c *github.Client, w *ledger.Writer, ow
 		}
 	}
 	return nil, nil
+}
+
+// pickLockTTL bounds a pick's local lock: a run that died holding it
+// leaves it, and the next run takes it over after this long.
+const pickLockTTL = 15 * time.Minute
+
+// lockPick holds this checkout's pick lock from the queue read through the
+// claim and the worktree. Two runs on one machine share a lease holder
+// (login@host), so the lease alone cannot tell them apart; the second run
+// stops here instead of building the same story.
+func (e *Env) lockPick() (func(), error) {
+	p := filepath.Join(e.stateDir(), "state", "build-next.lock")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return nil, err
+	}
+	if fi, err := os.Stat(p); err == nil && e.Now().Sub(fi.ModTime()) > pickLockTTL {
+		_ = os.Remove(p)
+	}
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if errors.Is(err, os.ErrExist) {
+		return nil, Errorf(ExitBlocked, "build --next: another build --next run on this machine holds %s; this run claims nothing", p)
+	}
+	if err != nil {
+		return nil, err
+	}
+	_, _ = fmt.Fprintf(f, "pid %d at %s\n", os.Getpid(), e.Now().UTC().Format(time.RFC3339))
+	_ = f.Close()
+	return func() { _ = os.Remove(p) }, nil
 }
 
 // priorityRank orders P0 first and an item with no priority last.

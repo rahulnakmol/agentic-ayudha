@@ -98,7 +98,20 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	g.AddPR("Their PR", "Refs #11\n", "someone", "feat/x", strings.Repeat("a", 40), "dev")
 
+	// Another pick on this machine holds the lock: this one claims nothing. A
+	// lock left by a run that died is taken over once it is old.
+	lock := filepath.Join(dir, ".aayudha", "state", "build-next.lock")
+	_ = os.MkdirAll(filepath.Dir(lock), 0o755)
+	_ = os.WriteFile(lock, []byte("pid 1\n"), 0o644)
+	if code, res, _, out := next(nil, "--next", "pick"); code != ExitBlocked || res.Issue != 0 || !strings.Contains(out, "another build --next run on this machine") || contains(g.LabelNames(older.Number), LeaseLabel) {
+		t.Fatalf("pick under a live lock: %d %s", code, out)
+	}
+	old := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(lock, old, old)
 	code, res, pick, out := next(nil, "--next", "pick")
+	if _, err := os.Stat(lock); !os.IsNotExist(err) {
+		t.Fatalf("the pick kept its lock: %v", err)
+	}
 	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
 		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
 	}

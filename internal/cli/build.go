@@ -219,6 +219,13 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	var pick *BuildPick
+	if mode == "pick" {
+		unlock, err := e.lockPick()
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	if mode != "" {
 		pw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 		if err != nil {
