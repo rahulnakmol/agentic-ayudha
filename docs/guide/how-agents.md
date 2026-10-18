@@ -188,8 +188,9 @@ a product's.
 | GitHub Actions | `.github/workflows/aayudha-loops.yml`, one cron per UTC offset, only the `agent = false` loops | Nothing to set up: the workflow runs them with the workflow token and no model | `workflow_dispatch` |
 
 `--run-now <loop>` runs one loop's prompt once with the chosen tool's CLI in this checkout, marked as a test so the
-guard's `not due` does not stop it, and the terminal offers it after setup. `--apply` and `--run-now` are refused to
-an agent, because they act as you.
+guard's `not due` does not stop it, and the terminal offers it after setup. `--apply` and `--run-now` act as you. In a
+shell with an agent marker, such as an orb's Terminal tab, they ask for your approval through GitHub's device flow
+and name the loops they start; with no terminal they are refused.
 
 The Actions fallback never calls a model. A job checks out the repository, installs aayudha, runs the guard, and
 only then the command.

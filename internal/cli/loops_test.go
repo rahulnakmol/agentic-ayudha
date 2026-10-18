@@ -12,6 +12,7 @@ import (
 	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
 
@@ -120,6 +121,53 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	}
 	if code, _ := eventGuard(""); code != ExitBudget {
 		t.Errorf("paused event loop: exit %d, want %d", code, ExitBudget)
+	}
+}
+
+// Bug #698: in a shell with an agent marker (an orb's Terminal tab inherits
+// AMP_THREAD_ID), --apply asks the person through the device flow, naming the
+// loops it starts as them, instead of refusing; a denied code starts nothing,
+// and with no terminal it is refused with no code.
+func TestInstallLoopsApplyPresence(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Viewer = "founder"
+	g.Variables = map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": "c"}
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops", "amp"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-daily.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "amp", "triage-daily.json"), []byte("{}\n"), 0o644)
+	threads := 0
+	opts := Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, IsTerminal: stdinTTY,
+		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
+		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
+			if slices.Contains(args, "-ox") {
+				threads++
+			}
+			return "schedule s-1 on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
+		}}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AMP_THREAD_ID": "T-0000", "XDG_STATE_HOME": t.TempDir()}
+	apply := func(outcome string) (int, string) {
+		t.Helper()
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: outcome}
+		g.Mu.Unlock()
+		code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--apply")
+		return code, errOut
+	}
+	code, errOut := apply("deny")
+	if code != ExitBlocked || threads != 0 || !strings.Contains(errOut, "was not approved: the request was denied") {
+		t.Fatalf("denied: exit %d, %d threads: %s", code, threads, errOut)
+	}
+	code, errOut = apply("approve")
+	if code != 0 || threads != 1 || !strings.Contains(errOut, "install --loops --apply on o/r needs a person's approval.") ||
+		!strings.Contains(errOut, "Approving: Starts one headless Amp thread per loop in orbs of the o/r project, to set up triage-daily. They act as you") ||
+		!strings.Contains(errOut, "Approved by @founder") {
+		t.Fatalf("approved: exit %d, %d threads: %s", code, threads, errOut)
+	}
+	opts.IsTerminal = func(any) bool { return false }
+	code, errOut = apply("approve")
+	if code != ExitBlocked || threads != 1 || g.Device.Started != 0 || !strings.Contains(errOut, "a human runs them (agent lane: AMP_THREAD_ID=T-0000)") {
+		t.Errorf("no terminal: exit %d, %d threads, %d codes: %s", code, threads, g.Device.Started, errOut)
 	}
 }
 
