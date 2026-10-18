@@ -246,8 +246,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	b := l.Config.Autonomy.Budget
 	// A story's spend is capped by the lower of the build budget and the
 	// breaker's per-story limit, so a config that keeps a lower per_story_usd
-	// is reported, and blocks, at the limit that actually stops it.
-	if p := l.Config.Budget.PerStoryUSD; p > 0 && (b.CostUSD <= 0 || p < b.CostUSD) && e.meteredBy(&l.Config) != "" {
+	// is reported, and blocks, at the limit that actually stops it. A cap of 0
+	// is off on purpose and stays off.
+	if p := l.Config.Budget.PerStoryUSD; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
 		b.CostUSD = p
 	}
 	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}

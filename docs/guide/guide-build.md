@@ -22,8 +22,10 @@ commits a checkpoint after each, checks it, then opens a pull request. A budget 
 (a gateway endpoint or a provider key); subscription use is not counted. When it runs out, the agent stops and asks
 a person. A pause at a subscription usage limit is not a failed attempt, and the 8 hours keep running. When an agent
 building on your machine (`--delegate <agent> --local`) hits its limit and says when it resets, the build waits and
-then continues by itself. When it gives no reset time, or the reset comes too late for the 8 hours, the build stops as
-paused and prints the command to run again, `aayu build <story> --delegate <agent> --local`, once the limit resets.
+then continues by itself. When it gives no reset time, the build stops as paused: run
+`aayu build <story> --delegate <agent> --local` again once the limit resets. When the reset comes after the 8 hours
+end, the build stops as paused too, and a rerun needs a fresh budget: once the limit resets, a person runs
+`aayu ready <story>`, then the same `aayu build` command.
 
 **You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
 and budget used.

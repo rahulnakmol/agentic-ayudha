@@ -209,7 +209,7 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 		t.Fatalf("ready again: %s", errOut)
 	}
 	_ = os.WriteFile(filepath.Join(wt, "notes2.txt"), []byte("another checkpoint\n"), 0o644)
-	_, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "autonomy.budget.cost_usd=0", "--set", "budget.per_story_usd=0")
+	_, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "autonomy.budget.cost_usd=0")
 	if strings.Contains(out+errOut, "cost budget breached") || !strings.Contains(out, "metered spend 100.01 USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)") {
 		t.Fatalf("cost_usd = 0: %s %s", out, errOut)
 	}
