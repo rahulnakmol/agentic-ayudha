@@ -778,9 +778,21 @@
             "auto",
             "saffron",
             "contrast",
-            "mono"
+            "mono",
+            "nord",
+            "catppuccin-mocha",
+            "catppuccin-latte",
+            "gruvbox-dark",
+            "gruvbox-light",
+            "dracula",
+            "tokyonight",
+            "solarized"
           ],
-          "description": "Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."
+          "description": "Colour theme: auto (the terminal's own 16 colours, so a themed terminal's palette and its light or dark background apply; default), saffron (warm true colour for dark terminals), contrast (bright and bold), mono (no hue), or a named palette for a terminal that is not themed: nord, catppuccin-mocha, catppuccin-latte, gruvbox-dark, gruvbox-light, dracula, tokyonight, or solarized (dark or light by the terminal's background)."
+        },
+        "motion": {
+          "type": "boolean",
+          "description": "Animate the full-screen inbox (loading, the next card, the selection, results); default true. false keeps it still. --plain, AAYU_PLAIN=1, [ui] plain, TERM=dumb, and NO_COLOR are always still."
         }
       },
       "additionalProperties": false,

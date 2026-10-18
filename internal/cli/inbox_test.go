@@ -16,6 +16,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
@@ -26,6 +27,8 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -549,7 +552,7 @@ func teaDrive(m tea.Model, cmd tea.Cmd) bool {
 			return false
 		case tea.QuitMsg:
 			return true
-		case nil, spinner.TickMsg, inboxTickMsg:
+		case nil, spinner.TickMsg, inboxTickMsg, inboxFrameMsg:
 			return false
 		default:
 			_, cmd = m.Update(msg)
@@ -657,7 +660,7 @@ func TestInboxTUI(t *testing.T) {
 			"Enter do it · 1-9 pick · s skip"},
 		{"This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door", "Enter again applies it · Esc goes back"},
 		{"🧭 Decision · #2 · provisional", "The call: Which engine runs the rules", "› 2 Accept: B", "Selected; click it again, or press Enter, to do it."},
-		{"done · Choose the rules engine", "› ✋ fix(cli): capped", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub."},
+		{"aayu inbox · 2 need you", "› ✋ fix(cli): capped", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub."},
 		{"Find: bug", "🐞 #7 A bug · Bug fixed, still open · Drona"},
 		{"› 🐞 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
 		{"Tidy all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
@@ -674,6 +677,9 @@ func TestInboxTUI(t *testing.T) {
 				t.Errorf("view %d: a %d-column line at 64 columns: %q", i, n, l)
 			}
 		}
+	}
+	if strings.Contains(views[3], "Choose the rules engine") {
+		t.Errorf("a done item stays in the list:\n%s", views[3])
 	}
 	g.Mu.Lock()
 	if g.Issues[2].State != "closed" || !strings.Contains(g.Issues[2].Body, "A, accepted by @o") || g.Issues[1].State != "open" {
@@ -811,9 +817,96 @@ func TestInboxList(t *testing.T) {
 	}
 }
 
+// Motion is only visual and never delays a key: the highlight glides to
+// where the cursor already is, a done item shows ✓ and then leaves the list,
+// a refused action shakes the card and reads in the Fail role, and the theme
+// follows the terminal's background. Still (no motion), nothing ticks.
+func TestInboxMotion(t *testing.T) {
+	clock := time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)
+	items := []InboxItem{
+		{Kind: InboxDecision, Number: 1, Title: "Pick the engine", Options: []InboxAction{{N: 1, Label: "Accept: A", Recommended: true, Command: "aayu decide 1 --accept 1"}}},
+		{Kind: InboxDecision, Number: 2, Title: "Pick the queue", Options: []InboxAction{{N: 1, Label: "Accept: B", Recommended: true, Command: "aayu decide 2 --accept 1"}}},
+	}
+	for i := range items {
+		items[i].Seat, items[i].Counsel = verbs.Founder, "counsel"
+	}
+	newModel := func(motion bool) *inboxModel {
+		m := newInboxModel("o/r", "o", "auto", false)
+		m.now, m.motion = func() time.Time { return clock }, motion
+		m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) { return it, "", nil }
+		m.merge(items)
+		m.loading = false
+		m.Update(tea.WindowSizeMsg{Width: 64, Height: 30})
+		return m
+	}
+	frames := func(m *inboxModel, d time.Duration) {
+		for end := clock.Add(d); clock.Before(end); clock = clock.Add(inboxFrame) {
+			m.Update(inboxFrameMsg(clock))
+		}
+	}
+	listRow := func(m *inboxModel) string {
+		m.dirty = true
+		for _, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			if strings.HasPrefix(l, "› ") {
+				return l
+			}
+		}
+		return ""
+	}
+
+	m := newModel(true)
+	if m.cardShift() == 0 {
+		t.Error("a new card does not slide in")
+	}
+	frames(m, 300*time.Millisecond)
+	if m.cardShift() != 0 {
+		t.Errorf("the card still slides after 300 ms: %d", m.cardShift())
+	}
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
+	if m.items[m.item()].Number != 2 || cmd == nil || !strings.Contains(listRow(m), "Pick the engine") {
+		t.Errorf("j: cursor on #%d, frame %v, highlight %q; want the cursor on #2 at once and the highlight still gliding", m.items[m.item()].Number, cmd != nil, listRow(m))
+	}
+	frames(m, 300*time.Millisecond)
+	if !strings.Contains(listRow(m), "Pick the queue") {
+		t.Errorf("the highlight did not reach #2: %q", listRow(m))
+	}
+	teaKeys(m, "enter")
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ done · Pick the queue") {
+		t.Errorf("no ✓ on the done item:\n%s", v)
+	}
+	frames(m, 300*time.Millisecond)
+	if v := ansi.Strip(m.View().Content); strings.Contains(v, "Pick the queue") || !strings.Contains(v, "› 🧭 Pick the engine") {
+		t.Errorf("the done item stays after its ✓:\n%s", v)
+	}
+	teaKeys(m, "9")
+	clock = clock.Add(40 * time.Millisecond)
+	if m.cardShift() == 0 || m.refusal != m.status || !strings.Contains(m.status, "no choice 9") {
+		t.Errorf("a refused 9: shift %d, status %q", m.cardShift(), m.status)
+	}
+
+	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#FBF1C7")})
+	if m.p.Theme.Styles[ui.Warn].GetForeground() != (lipgloss.NoColor{}) {
+		t.Error("auto on a light background keeps yellow warnings")
+	}
+	m.theme = "nord"
+	m.Update(tea.BackgroundColorMsg{Color: lipgloss.Color("#000000")})
+	if v := m.View(); v.BackgroundColor == nil || m.p.Theme.Name != "nord" {
+		t.Errorf("nord: background %v, theme %q", v.BackgroundColor, m.p.Theme.Name)
+	}
+
+	still := newModel(false)
+	if _, cmd := still.Update(tea.KeyPressMsg{Code: 'j', Text: "j"}); cmd != nil || still.cardShift() != 0 || !strings.Contains(listRow(still), "Pick the queue") {
+		t.Errorf("still: a frame %v, shift %d, highlight %q", cmd != nil, still.cardShift(), listRow(still))
+	}
+	teaKeys(still, "enter")
+	if v := ansi.Strip(still.View().Content); strings.Contains(v, "Pick the queue") {
+		t.Errorf("still: the done item stays:\n%s", v)
+	}
+}
+
 // BenchmarkInboxFrame is one key to one frame (Update, then View) with 200
-// items, at a phone's width and a desktop's, with the finder open: a
-// validation tool for the 120 fps budget (8.3 ms), not a CI gate.
+// items, at a phone's width and a desktop's, with the finder open, every
+// frame in motion (a card sliding in, the highlight gliding): a validation tool for the 120 fps budget (8.3 ms), not a CI gate.
 func BenchmarkInboxFrame(b *testing.B) {
 	var items []InboxItem
 	for i := range 200 {
@@ -830,6 +923,9 @@ func BenchmarkInboxFrame(b *testing.B) {
 				m := newInboxModel("o/r", "o", "", false)
 				m.merge(items)
 				m.loading = false
+				// In motion: the card stays mid-slide and the highlight mid-glide.
+				now := time.Now()
+				m.motion, m.now = true, func() time.Time { return now }
 				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 				if find {
 					teaKeys(m, "/", "fit")

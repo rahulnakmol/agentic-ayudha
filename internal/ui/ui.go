@@ -76,38 +76,109 @@ const (
 type Theme struct {
 	Name   string
 	Styles map[Role]lipgloss.Style
+	// Bg and Fg are a named palette's background and text colours, which a
+	// full-screen view (the inbox) paints so the palette reads as published;
+	// empty for the themes that use the terminal's own colours.
+	Bg, Fg string
 }
 
 // Themes are the [ui] theme values. "auto" uses the terminal's own 16-colour
-// palette, which follows the user's light or dark terminal theme.
-var Themes = []string{"auto", "saffron", "contrast", "mono"}
+// palette, which follows the terminal's theme (Nord, Catppuccin, Gruvbox, or
+// any other) and its light or dark background; the named palettes are for a
+// terminal that is not themed.
+var Themes = []string{"auto", "saffron", "contrast", "mono",
+	"nord", "catppuccin-mocha", "catppuccin-latte", "gruvbox-dark", "gruvbox-light", "dracula", "tokyonight", "solarized"}
 
-// ThemeNamed returns a theme; an unknown name is "auto".
-func ThemeNamed(name string) Theme {
+// palette is a named theme from a project's published colours (sources and
+// licences in THIRD_PARTY_NOTICES.md, "Colour palettes"). Every role keeps a
+// contrast of at least 3:1 against bg, and muted text at least 4:1
+// (TestPalettesAreReadable).
+type palette struct {
+	bg, fg, title, accent, ok, warn, fail, muted, command, seat string
+}
+
+var palettes = map[string]palette{
+	// https://www.nordtheme.com/docs/colors-and-palettes
+	"nord": {bg: "#2E3440", fg: "#D8DEE9", title: "#88C0D0", accent: "#5E81AC", ok: "#A3BE8C", warn: "#EBCB8B", fail: "#BF616A",
+		muted: "#81A1C1", command: "#8FBCBB", seat: "#B48EAD"},
+	// https://catppuccin.com/palette (Mocha and Latte)
+	"catppuccin-mocha": {bg: "#1E1E2E", fg: "#CDD6F4", title: "#CBA6F7", accent: "#B4BEFE", ok: "#A6E3A1", warn: "#F9E2AF", fail: "#F38BA8",
+		muted: "#A6ADC8", command: "#89DCEB", seat: "#F5C2E7"},
+	"catppuccin-latte": {bg: "#EFF1F5", fg: "#4C4F69", title: "#8839EF", accent: "#1E66F5", ok: "#179299", warn: "#E64553", fail: "#D20F39",
+		muted: "#5C5F77", command: "#1E66F5", seat: "#8839EF"},
+	// https://github.com/morhetz/gruvbox (bright colours on dark, faded on light)
+	"gruvbox-dark": {bg: "#282828", fg: "#EBDBB2", title: "#FE8019", accent: "#83A598", ok: "#B8BB26", warn: "#FABD2F", fail: "#FB4934",
+		muted: "#A89984", command: "#8EC07C", seat: "#D3869B"},
+	"gruvbox-light": {bg: "#FBF1C7", fg: "#3C3836", title: "#AF3A03", accent: "#076678", ok: "#79740E", warn: "#B57614", fail: "#9D0006",
+		muted: "#7C6F64", command: "#427B58", seat: "#8F3F71"},
+	// https://draculatheme.com/spec
+	"dracula": {bg: "#282A36", fg: "#F8F8F2", title: "#FF79C6", accent: "#FFB86C", ok: "#50FA7B", warn: "#F1FA8C", fail: "#FF5555",
+		muted: "#BD93F9", command: "#8BE9FD", seat: "#FF79C6"},
+	// https://github.com/enkia/tokyo-night-vscode-theme (Night)
+	"tokyonight": {bg: "#1A1B26", fg: "#C0CAF5", title: "#7AA2F7", accent: "#BB9AF7", ok: "#9ECE6A", warn: "#E0AF68", fail: "#F7768E",
+		muted: "#737AA2", command: "#7DCFFF", seat: "#BB9AF7"},
+	// https://ethanschoonover.com/solarized/ (one palette, dark or light by the
+	// terminal's background; on light, its green and yellow fall below 3:1, so
+	// success is the emphasised text colour and warnings orange)
+	"solarized": {bg: "#002B36", fg: "#93A1A1", title: "#268BD2", accent: "#6C71C4", ok: "#859900", warn: "#B58900", fail: "#DC322F",
+		muted: "#839496", command: "#2AA198", seat: "#D33682"},
+	"solarized-light": {bg: "#FDF6E3", fg: "#586E75", title: "#268BD2", accent: "#6C71C4", ok: "#586E75", warn: "#CB4B16", fail: "#DC322F",
+		muted: "#657B83", command: "#268BD2", seat: "#D33682"},
+}
+
+// ThemeNamed returns a theme for a dark background; an unknown name is "auto".
+func ThemeNamed(name string) Theme { return ThemeFor(name, true) }
+
+// ThemeFor returns a theme for a dark or light terminal background (the
+// inbox asks the terminal; elsewhere it is taken as dark). Only "auto" and
+// "solarized" change with it: a named palette paints its own background.
+func ThemeFor(name string, dark bool) Theme {
 	s := lipgloss.NewStyle
+	if name == "solarized" && !dark {
+		name = "solarized-light"
+	}
+	if pl, ok := palettes[name]; ok {
+		c := func(h string) lipgloss.Style { return s().Foreground(lipgloss.Color(h)) }
+		if name == "solarized-light" {
+			name = "solarized"
+		}
+		return Theme{Name: name, Bg: pl.bg, Fg: pl.fg, Styles: map[Role]lipgloss.Style{
+			Title: c(pl.title).Bold(true), Accent: c(pl.accent), OK: c(pl.ok), Warn: c(pl.warn), Fail: c(pl.fail).Bold(true),
+			Muted: c(pl.muted), Command: c(pl.command), Seat: c(pl.seat).Italic(true),
+		}}
+	}
 	switch name {
 	case "saffron": // warm true-colour palette for dark terminals
-		return Theme{"saffron", map[Role]lipgloss.Style{
+		return Theme{Name: "saffron", Styles: map[Role]lipgloss.Style{
 			Title: s().Bold(true).Foreground(lipgloss.Color("#FF9933")), Accent: s().Foreground(lipgloss.Color("#FFB86B")),
 			OK: s().Foreground(lipgloss.Color("#7FD99A")), Warn: s().Foreground(lipgloss.Color("#F5D76E")), Fail: s().Bold(true).Foreground(lipgloss.Color("#FF6B6B")),
 			Muted: s().Foreground(lipgloss.Color("#9AA3B2")), Command: s().Foreground(lipgloss.Color("#6FD3E8")), Seat: s().Italic(true).Foreground(lipgloss.Color("#D7A8FF")),
 		}}
 	case "contrast": // bright basic colours and bold for low vision
-		return Theme{"contrast", map[Role]lipgloss.Style{
+		return Theme{Name: "contrast", Styles: map[Role]lipgloss.Style{
 			Title: s().Bold(true).Underline(true), Accent: s().Bold(true).Foreground(lipgloss.BrightWhite),
 			OK: s().Bold(true).Foreground(lipgloss.BrightGreen), Warn: s().Bold(true).Foreground(lipgloss.BrightYellow), Fail: s().Bold(true).Foreground(lipgloss.BrightRed),
 			Muted: s(), Command: s().Bold(true).Foreground(lipgloss.BrightCyan), Seat: s().Bold(true).Foreground(lipgloss.BrightMagenta),
 		}}
 	case "mono": // no hue at all: weight and underline only
-		return Theme{"mono", map[Role]lipgloss.Style{
+		return Theme{Name: "mono", Styles: map[Role]lipgloss.Style{
 			Title: s().Bold(true), Accent: s().Bold(true), OK: s(), Warn: s().Bold(true), Fail: s().Bold(true).Underline(true),
 			Muted: s().Faint(true), Command: s().Underline(true), Seat: s().Italic(true),
 		}}
 	}
-	return Theme{"auto", map[Role]lipgloss.Style{
+	// auto: only the 16 ANSI colours and the default foreground, so the
+	// terminal's palette applies. On a light background the ANSI green,
+	// yellow, and cyan of common palettes (Gruvbox, Catppuccin Latte,
+	// Solarized) and faint text fall near or below 3:1, so success and
+	// warnings are bold text, commands blue, and muted text plain.
+	ok, warn, command, muted := s().Foreground(lipgloss.Green), s().Foreground(lipgloss.Yellow), s().Foreground(lipgloss.Cyan), s().Faint(true)
+	if !dark {
+		ok, warn, command, muted = s().Bold(true), s().Bold(true), s().Foreground(lipgloss.Blue), s()
+	}
+	return Theme{Name: "auto", Styles: map[Role]lipgloss.Style{
 		Title: s().Bold(true).Foreground(lipgloss.Magenta), Accent: s().Foreground(lipgloss.Magenta),
-		OK: s().Foreground(lipgloss.Green), Warn: s().Foreground(lipgloss.Yellow), Fail: s().Bold(true).Foreground(lipgloss.Red),
-		Muted: s().Faint(true), Command: s().Foreground(lipgloss.Cyan), Seat: s().Italic(true).Foreground(lipgloss.Magenta),
+		OK: ok, Warn: warn, Fail: s().Bold(true).Foreground(lipgloss.Red),
+		Muted: muted, Command: command, Seat: s().Italic(true).Foreground(lipgloss.Magenta),
 	}}
 }
 

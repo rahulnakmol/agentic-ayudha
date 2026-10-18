@@ -79,9 +79,11 @@ var inboxKinds = map[string]inboxKind{
 			"If you leave it, the question stays open and that work stays parked.",
 		Terms: []string{"Decision", "Waiver"}},
 	InboxReady: {Icon: "🚢", Word: "Ready to ship", Seat: verbs.EngineeringManager,
-		Line: "Finished work with every check green; it merges when you say so.",
-		Explain: "An agent finished this pull request and every automatic check passed on its latest commit, but a Story's change merges " +
-			"only after a person says yes. Shipping it runs `aayu ship`, which checks everything again, saves the proof, and merges it into dev. " +
+		Line: "Finished work with every check green; it touches a sensitive area, so it merges when you say so.",
+		Explain: "Most agent pull requests merge into dev on their own once every check is green and the proof shows they do what they say. " +
+			"This one waits for you because it changes one of the few sensitive areas that still need a person: who may approve or bypass a merge, " +
+			"the merge gate's own code, or the workflows that publish releases or use secrets (Decision #593). " +
+			"Shipping it runs `aayu ship`, which checks everything again, saves the proof, and merges it into dev. " +
 			"If you leave it, nothing merges and the work waits; its checks may need to run again once dev moves on.",
 		Terms: []string{"Merge gate", "Human pass", "Solo-mode bypass"}},
 	InboxCapped: {Icon: "✋", Word: "At the review cap", Seat: verbs.EngineeringManager,
@@ -280,6 +282,15 @@ type inboxSource struct {
 	comments    map[int]inboxComments
 	green       map[string]bool // head SHAs whose gate checks were all green
 	perms       map[string]string
+	// progress, when set, hears how far a read has got: what it reads, and
+	// how many of how many items it has checked (0 of 0 while listing).
+	progress func(what string, done, total int)
+}
+
+func (s *inboxSource) report(what string, done, total int) {
+	if s.progress != nil {
+		s.progress(what, done, total)
+	}
 }
 
 type inboxComments struct {
@@ -306,12 +317,14 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.loaded {
+		s.report("Listing the issues", 0, 0)
 		issues, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
 			return s.c.REST.Issues.ListByRepo(ctx, s.owner, s.name, &gh.IssueListByRepoOptions{State: "all", ListOptions: o})
 		})
 		if err != nil {
 			return false, err
 		}
+		s.report(fmt.Sprintf("Listing the pull requests (%d issues read)", len(issues)), 0, 0)
 		prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
 			return s.c.REST.PullRequests.List(ctx, s.owner, s.name, &gh.PullRequestListOptions{State: "all", ListOptions: o})
 		})
@@ -435,11 +448,19 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		return issueURL
 	}
 	var out []InboxItem
+	total, done := len(open), 0
+	for _, is := range s.issues {
+		if !is.IsPullRequest() && is.GetState() == "open" {
+			total++
+		}
+	}
 	for _, n := range numbers {
 		is := s.issues[n]
 		if is.IsPullRequest() || is.GetState() != "open" {
 			continue
 		}
+		done++
+		s.report("Checking", done, total)
 		labels := github.IssueLabels(is)
 		typ, _ := workitems.TypeOf(is.GetType().GetName(), labels)
 		it := InboxItem{Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), labels: labels}
@@ -485,6 +506,8 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		out = append(out, it)
 	}
 	for _, p := range open {
+		done++
+		s.report("Checking", done, total)
 		comments, err := s.commentsOf(ctx, p.GetNumber())
 		if err != nil {
 			return nil, err
