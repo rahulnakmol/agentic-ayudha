@@ -744,7 +744,7 @@ func TestInitIdentityRemoteShell(t *testing.T) {
 	loopbackWait = 50 * time.Millisecond
 	g := identityGitHub(t, "o", nil)
 	code, printed := runIdentity(t, g.URL(), "", map[string]string{"DISPLAY": ":0"})
-	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "within 10 minutes, so no App was created") ||
+	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "If you created the App on GitHub, aayu never received its key: delete it at https://github.com/settings/apps, then run this again") ||
 		!strings.Contains(printed, "aayu init --identity") || strings.Contains(printed, "internal error") {
 		t.Fatalf("a desktop browser that never redirects back: exit %d:\n%s", code, printed)
 	}

@@ -107,6 +107,9 @@ func (e *Env) manifestLoopback(ctx context.Context, postURL string, manifest fun
 	case c := <-codes:
 		return c, nil
 	case <-ctx.Done():
-		return "", WithNext(Errorf(ExitBlocked, "init --identity: GitHub did not redirect back with the App code within 10 minutes, so no App was created"), "aayu init --identity")
+		// GitHub may have created the App before the redirect was lost: say
+		// where to delete it, so a rerun does not leave a second one.
+		settings := strings.TrimSuffix(postURL, "/new")
+		return "", WithNext(Errorf(ExitBlocked, "init --identity: GitHub did not redirect back with the App code within 10 minutes. If you created the App on GitHub, aayu never received its key: delete it at %s, then run this again", settings), "aayu init --identity")
 	}
 }
