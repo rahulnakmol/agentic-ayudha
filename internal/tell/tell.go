@@ -239,8 +239,12 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 		sup[w] = true
 	}
 	named := map[int]int{} // proven Feature -> first line naming it
+	raw := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	for i, line := range proseLines(md) {
-		text := linkURL.ReplaceAllString(alertRE.ReplaceAllString(line, ""), " ")
+		if i == 0 || strings.TrimSpace(raw[i-1]) == "" { // a marker counts only where it opens the blockquote
+			line = alertRE.ReplaceAllString(line, "")
+		}
+		text := linkURL.ReplaceAllString(line, " ")
 		for _, w := range word.FindAllString(text, -1) {
 			if sup[strings.ToLower(w)] {
 				probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("%q is a superlative: it claims a comparison no pack proves; say what the Feature does instead", w)})
@@ -279,9 +283,10 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 
 var sentenceRE = regexp.MustCompile(`[.!?;:]\s+`)
 
-// alertRE is a GitHub alert marker (`> [!NOTE]`), alone on the first line of
-// a top-level blockquote as GitHub renders it: its "!" is syntax, not an
-// exclamation mark. A nested or indented marker renders as text.
+// alertRE is a GitHub alert marker (`> [!NOTE]`), alone on its line. GitHub
+// renders it as syntax only on the first line of a top-level blockquote, so
+// CheckDraft skips it only after a blank line or at the start; a nested,
+// indented, or later marker renders as text and its "!" is still refused.
 var alertRE = regexp.MustCompile(`^ {0,3}>\s*\[!(?i:note|tip|important|warning|caution)\]\s*$`)
 
 // stop words carry no Feature name.
