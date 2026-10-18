@@ -125,6 +125,13 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [hosts.cursor] plan is read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout", source))
 			return
 		}
+		// Likewise the opt-in Copilot route for the ui-review lane: it spends
+		// the person's Copilot credits and sends their captures to Copilot, so
+		// only the person turns it on.
+		if (name == LayerRepo || name == LayerLocal) && k.Exists("models.ui-review.copilot") {
+			errs = append(errs, fmt.Errorf("%s: [models.ui-review.copilot] (the opt-in Copilot route) is read only from the user config or --set, never from the checkout", source))
+			return
+		}
 		// Like [autonomy], the solo window is the protected repository
 		// config's alone (Story #432): no person's or agent's own layer sets it.
 		if name != LayerDefault && name != LayerRepo && k.Exists("decisions.solo_provisional_after_hours") {

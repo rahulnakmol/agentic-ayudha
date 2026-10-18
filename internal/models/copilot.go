@@ -18,8 +18,8 @@ import (
 )
 
 // CopilotRoute is the route of a call through GitHub Copilot's own client: a
-// [models.<lane>.copilot] row that names a concrete Copilot model (not an
-// Auto selector) opts that lane's direct calls into it. The key is the
+// [models.ui-review.copilot] row that names a concrete Copilot model (not an
+// Auto selector) opts the ui-review lane's direct calls into it. The key is the
 // "copilot" secret, else COPILOT_GITHUB_TOKEN, and goes to that process only.
 var CopilotRoute = Route{Via: "copilot", Style: "copilot-cli", Secret: "copilot"}
 
@@ -209,10 +209,11 @@ func RouteOf(m config.Models, res Resolved) (Route, error) {
 	return RouteFor(m, res.Model, res.Family)
 }
 
-// CopilotOptIn reports whether host's row for lane routes direct calls
-// through Copilot: a [models.<lane>.copilot] row that names a concrete model.
+// CopilotOptIn reports whether a resolved model routes the ui-review lane's
+// direct calls through Copilot: a [models.ui-review.copilot] row (read only
+// from the person's own configuration) that names a concrete model.
 func CopilotOptIn(m Resolved) bool {
-	return m.Host == verbs.HostCopilot && m.Source == SourceConfig && m.Family != verbs.FamilyHostManaged
+	return m.Lane == verbs.LaneUIReview && m.Host == verbs.HostCopilot && m.Source == SourceConfig && m.Family != verbs.FamilyHostManaged
 }
 
 func isExec(p string) bool {
