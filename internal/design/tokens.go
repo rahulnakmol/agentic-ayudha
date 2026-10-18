@@ -257,8 +257,11 @@ func markupProse(s string) string {
 // codeComments blanks the comments of JavaScript, TypeScript, or CSS source
 // (/* … */ and, unless css, // to the end of the line), keeping string
 // literals whole and every newline, so a comment's "slot-full: #572" names a
-// story and line numbers still hold. Other code is read whole: JSX text
-// cannot be told from comparisons and generics without a parser.
+// story and line numbers still hold. A // comment starts only at a line's
+// start or after a space or code punctuation, never after ":" or a word, so a
+// URL in JSX text ("https://…") hides nothing after it; a /* without its */
+// blanks nothing. Other code is read whole: JSX text cannot be told from
+// comparisons and generics without a parser.
 func codeComments(s string, css bool) string {
 	b := []byte(s)
 	var quote byte
@@ -273,12 +276,11 @@ func codeComments(s string, css bool) string {
 			}
 		case c == '"' || c == '\'' || c == '`':
 			quote = c
-		case c == '/' && i+1 < len(b) && b[i+1] == '*':
-			end := strings.Index(s[i+2:], "*/")
-			end = map[bool]int{true: len(b), false: i + 2 + end + 2}[end < 0]
+		case c == '/' && i+1 < len(b) && b[i+1] == '*' && strings.Contains(s[i+2:], "*/"):
+			end := i + 2 + strings.Index(s[i+2:], "*/") + 2
 			blank(b[i:end])
 			i = end - 1
-		case c == '/' && i+1 < len(b) && b[i+1] == '/' && !css:
+		case c == '/' && i+1 < len(b) && b[i+1] == '/' && !css && (i == 0 || strings.IndexByte(" \t\n;{}(),", b[i-1]) >= 0):
 			end := strings.IndexByte(s[i:], '\n')
 			end = map[bool]int{true: len(b), false: i + end}[end < 0]
 			blank(b[i:end])

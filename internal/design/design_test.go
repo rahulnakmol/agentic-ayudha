@@ -141,13 +141,15 @@ func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 		t.Fatalf("code is read whole: %v", got)
 	}
 	// Comments in code are prose too: a story reference in one is not a
-	// colour, but an off-token colour in the code, a string with "//" in it,
-	// or after a comment on the same line still fails, at its line.
+	// colour, but an off-token colour in the code, after a string with "//"
+	// in it, before a comment on the same line, after a URL in JSX text, or
+	// after an unclosed "/*" in JSX text still fails, at its line.
 	tsx := []byte("// slot-full: #572, see #573\n/* states: #571,\n   #574 */\nconst u = \"https://x.example/a\", c = \"#ff00aa\";\n" +
-		"const d = { color: \"#575\" }; // was: #576\n")
+		"const d = { color: \"#575\" }; // was: #576\n" +
+		"<p>https://x.example <span style={{color:\"#577\"}} /></p>\n<p>a /* b <span style={{color:\"#578\"}} /></p>\n")
 	got = tok.CheckLiterals("src/Page.tsx", tsx)
-	if len(got) != 2 || got[0].Value != "#ff00aa" || got[0].Where != "src/Page.tsx:4" || got[1].Value != "#557755" || got[1].Where != "src/Page.tsx:5" ||
-		!strings.Contains(got[1].String(), `color: \"#575\"`) {
+	if len(got) != 4 || got[0].Value != "#ff00aa" || got[0].Where != "src/Page.tsx:4" || got[1].Value != "#557755" || got[1].Where != "src/Page.tsx:5" ||
+		!strings.Contains(got[1].String(), `color: \"#575\"`) || got[2].Where != "src/Page.tsx:6" || got[3].Where != "src/Page.tsx:7" {
 		t.Fatalf("tsx literals: %v", got)
 	}
 	css := []byte("/* brand was #572 */\n.a { background: url(https://x.example/i.png); color: #ff00aa; }\n")
