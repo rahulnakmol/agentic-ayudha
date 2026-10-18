@@ -39,7 +39,7 @@ it once. None of this needs an adjective.
 - <How to start: the control or command the criterion names.>
 - <A limit from the scope, when the reader would expect more.>
 
-<The count of the changes you cannot describe.>
+<The count of the changes you cannot describe, when there are any.>
 
 ## Thanks                   <- only when a source names a person
 
@@ -48,7 +48,8 @@ it once. None of this needs an adjective.
 
 At a startup stage this fits on one page. With no step and no break, it is the title, the summary, the short reader
 block when readers need different sections, one section per proven Feature, and the count, in at most 400
-words.
+words. When the parts do not fit, keep every proven Feature with what changed and its link, and cut first the
+limits, then the solo and team lines, then how to start. Never drop a Feature, a step, or a break to fit.
 
 ## Readers: from one person to a medium team
 
@@ -157,13 +158,14 @@ Run `aayu tell release --from notes.md --tag <tag>` until it passes. Then read t
 because the binary does not check these:
 
 1. Every claim, including the title, the summary, each step, each table row, each code block, and each diagram label,
-   restates a criterion, a Feature field, or a Result. Nothing from an earlier release is new here.
+   restates a criterion, an inspect judgement, a Feature field, or a Result. Nothing from an earlier release is new
+   here.
 2. In the first ten lines, the reader knows what they get, sees each step or break a source names, and, when readers
    need different sections, knows which ones to read.
 3. Every step comes before the changes, with its check and who can do it. Every break is in the table, with what
    replaces it.
-4. Each Feature section has what changed, who it helps, and how to start, in that order, and says what it means on
-   your own and in a team where a source shows they differ.
+4. Each Feature section has what changed, then who it helps, how to start, and what it means on your own and in a
+   team, in the skeleton's order, each only where a source gives it.
 5. The sections are in the skeleton's order, and none is empty.
 6. Plain, calm, second person, one idea per sentence; no avoided word, superlative, or exclamation mark.
 7. Every number has its unit, population, and source.

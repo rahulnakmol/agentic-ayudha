@@ -228,14 +228,15 @@ Positioning line; keep it to one page. Never write the artefact's name into the 
      when a source shows they differ (a criterion with a second person, a setting a person must approve), how to
      start (the control or command the criterion names), and a limit from the scope when the reader would expect
      more.
-  6. The count of the changes you cannot describe, as the last line of the changes.
+  6. The count of the changes you cannot describe, when there are any, as the last line of the changes.
   7. Thanks, only when a source names a person: by GitHub login, next to their work.
 
   No marketing. A `changelog` entry is `## <version>` and the date, the summary sentence, then the same parts as
   bullets, without the reader block. The team stage sets the depth, never the evidence. The reader the request names
   comes first. Otherwise, at a startup the reader on their own comes first, the block is at most three short lines,
-  and the page is at most 400 words; at a scaleup or an enterprise the team reader comes first, and each step's who
-  and each solo-or-team difference gets its own sentence.
+  and the page is at most 400 words (when the parts do not fit, keep every Feature, step, and break, and shorten
+  the other parts; the reference says which go first); at a scaleup or an enterprise the team reader comes first,
+  and each step's who and each solo-or-team difference gets its own sentence.
 - `guide` and `docs`: one page of one kind: a how-to (one task), a tutorial (learning by doing), a reference, or an
   explanation. A how-to has a title that names the task; one paragraph on when to use it, with the Feature's link;
   "Before you start", linking existing docs pages by path; numbered steps, one action each, naming the control; what
