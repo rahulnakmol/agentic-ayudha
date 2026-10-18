@@ -11,6 +11,8 @@ package survey
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -92,8 +94,12 @@ type Count struct {
 // Index is the deterministic survey of one checkout: the same commit gives
 // the same bytes (no clock, sorted lists).
 type Index struct {
-	Version    int      `json:"version"`
-	Commit     string   `json:"commit,omitempty"`
+	Version int    `json:"version"`
+	Commit  string `json:"commit,omitempty"`
+	// Digest is the SHA-256 of every indexed file's path and content, and of
+	// the manuals': saved survey sections are stale when it changes, at the
+	// same commit too (an uncommitted edit, a checkout with no git).
+	Digest     string   `json:"digest,omitempty"`
 	History    *History `json:"history,omitempty"`
 	Languages  []Count  `json:"languages"`
 	NotIndexed []Count  `json:"not_indexed,omitempty"` // file extensions with no language the index knows
@@ -136,6 +142,14 @@ type Options struct {
 	// Git runs git in the checkout; nil runs the git binary. It returns ""
 	// when git fails (not a repository), and the index then walks the tree.
 	Git func(ctx context.Context, dir string, args ...string) string
+	// Manuals are user manuals and notes from outside the checkout, by name,
+	// as text: each is indexed as a document (manual:<name>), cited by line
+	// like a file, so a claim a manual states is traced to it.
+	Manuals map[string]string
+	// Out is the survey's output directory relative to the checkout (slash
+	// separated), when it is inside it: its files are never indexed, so a
+	// re-index of an unchanged checkout gives the same index and digest.
+	Out string
 }
 
 var (
@@ -238,6 +252,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	paths, err := listFiles(ctx, root, opt.Git)
 	if err != nil {
 		return nil, err
+	}
+	if opt.Out != "" { // the survey's own output, when it sits in the checkout
+		paths = slices.DeleteFunc(paths, func(p string) bool { return p == opt.Out || strings.HasPrefix(p, opt.Out+"/") })
 	}
 	ix := &Index{Version: Version, byPath: map[string]int{}}
 	ix.Commit = strings.TrimSpace(opt.Git(ctx, root, "rev-parse", "HEAD"))
@@ -412,6 +429,18 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		ix.scriptCalls(p, s, byName)
 	}
 	ix.builtins(files, byName)
+	for _, name := range sortedKeys(opt.Manuals) {
+		text := opt.Manuals[name]
+		p := "manual:" + name
+		lines := strings.Count(text, "\n")
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			lines++
+		}
+		ix.byPath[p] = len(ix.Files)
+		ix.Files = append(ix.Files, File{Path: p, Role: "doc", Lines: lines, Bytes: len(text)})
+		ix.Docs = append(ix.Docs, Fact{ID: "doc:" + p, Kind: "manual", At: p + ":1", Detail: firstHeading(text)})
+	}
+	ix.digest(files, opt.Manuals)
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
@@ -493,6 +522,22 @@ func callEdge(from, name string, to []string, at string) Edge {
 		e.To, e.Name = to[:8], name
 	}
 	return e
+}
+
+// digest sets Index.Digest from the files in path order: each path with its
+// size, and the content of every file the index read.
+func (ix *Index) digest(files map[string]*scanned, manuals map[string]string) {
+	h := sha256.New()
+	for _, f := range ix.Files {
+		fmt.Fprintf(h, "%s\x00%d\x00", f.Path, f.Bytes)
+		if s, ok := files[f.Path]; ok {
+			h.Write([]byte(s.raw))
+		} else if text, ok := manuals[strings.TrimPrefix(f.Path, "manual:")]; ok && strings.HasPrefix(f.Path, "manual:") {
+			h.Write([]byte(text))
+		}
+		h.Write([]byte{0})
+	}
+	ix.Digest = hex.EncodeToString(h.Sum(nil))
 }
 
 // scanned is one file read while building the index.

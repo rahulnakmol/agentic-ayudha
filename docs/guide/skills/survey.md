@@ -53,7 +53,9 @@ aayu survey [<path>]
 | `--out` | no | Directory for the survey's files (index.json, SURVEY.md, backlog.md, golden/); default .aayudha/survey under the surveyed checkout. |
 | `--budget` | no | Module size in tokens (about four bytes each) when grouping files; default 20000. |
 | `--module` | no | Print one module's fact pack (files, targets, entry points, surfaces, markers, symbols, calls in and out) from the index; read-only. |
-| `--draft` | no | Survey draft to check (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index or a probe, or is marked unknown; renders SURVEY.md. |
+| `--docs` | no | User manuals and notes from outside the checkout (a file or a directory of text, Markdown, HTML, man pages, or PDF through pdftotext), indexed as manual:\<name> documents a claim cites by line; their text is written under \<out>/manuals. |
+| `--draft` | no | Survey draft to check, whole or some of its sections (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index, a manual, or a probe, or is marked unknown. Each section is saved with its findings under \<out>/sections and resumed by later runs; with every section present it writes survey.json and renders SURVEY.md. |
+| `--sections` | no | Report the survey sections saved under \<out>/sections: which pass, which have problems, and which are missing or stale. |
 | `--backlog` | no | Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs, and do-not-carry Decisions) against the work-item schema, the survey draft, and its compatibility contract; renders backlog.md and its review digest. |
 | `--create` | no | With --backlog: file the reviewed backlog as issues through the actions log, skipping items already filed; needs --reviewed. |
 | `--reviewed` | no | With --create: the review digest of the exact backlog the person reviewed (printed by --backlog). |
