@@ -332,7 +332,7 @@ func capabilities(ctx context.Context, p *Probe, name string) []integrations.Che
 // is a warning; a shared key fails.
 func checkProviderMCP(_ context.Context, p *Probe) Result {
 	home := p.Getenv("HOME")
-	servers := hosts.ProviderServers(p.Root, home, hosts.CodexHome(home, p.Getenv))
+	servers := hosts.ProviderServers(p.Root, home, hosts.CodexHome(home, p.Getenv), hosts.CopilotHome(home, p.Getenv))
 	if len(servers) == 0 {
 		return Result{Status: Pass, Detail: "no PostHog or Sentry MCP server registered with a host"}
 	}

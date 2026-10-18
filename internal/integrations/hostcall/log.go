@@ -253,8 +253,9 @@ func sessionFile(session string) string {
 
 // FromPostHook reads a host's post-tool event: the call as FromHook reads it,
 // the result (Claude Code and Codex tool_response, Cursor result_json or a
-// shell's output, the Amp plugin's output), whether it failed, and the
-// session ID.
+// shell's output, the Amp plugin's output, Copilot's toolResult
+// textResultForLlm), whether it failed (Copilot: a postToolUseFailure event,
+// which carries error and no toolResult), and the session ID.
 func FromPostHook(event []byte) (Event, Result, string, bool) {
 	e, ok := FromHook(event)
 	if !ok {
@@ -269,10 +270,24 @@ func FromPostHook(event []byte) (Event, Result, string, bool) {
 		Output       json.RawMessage `json:"output"`
 		Status       string          `json:"status"`
 		Error        string          `json:"error"`
+		// GitHub Copilot: postToolUse sends toolResult (tool_result in VS Code's
+		// form) only for a call that succeeded; postToolUseFailure sends error.
+		CopilotSession string         `json:"sessionId"`
+		CopilotResult  *copilotResult `json:"toolResult"`
+		VSCodeResult   *struct {
+			Type string `json:"result_type"`
+			Text string `json:"text_result_for_llm"`
+		} `json:"tool_result"`
+		HookEvent string `json:"hook_event_name"`
 	}
 	_ = json.Unmarshal(event, &raw)
-	r := Result{Failed: raw.Status == "error" || raw.Error != ""}
-	switch {
+	if v := raw.VSCodeResult; v != nil && raw.CopilotResult == nil {
+		raw.CopilotResult = &copilotResult{Type: v.Type, Text: v.Text}
+	}
+	r := Result{Failed: raw.Status == "error" || raw.Error != "" || raw.HookEvent == "PostToolUseFailure"}
+	switch c := raw.CopilotResult; {
+	case c != nil:
+		r.Output, r.Failed = []byte(c.Text), r.Failed || c.Type != "success"
 	case len(raw.Response) > 0:
 		r.Output = raw.Response
 	case raw.ResultJSON != "":
@@ -288,10 +303,19 @@ func FromPostHook(event []byte) (Event, Result, string, bool) {
 	}
 	session := raw.Session
 	if session == "" {
+		session = raw.CopilotSession
+	}
+	if session == "" {
 		session = raw.Conversation
 	}
 	if session == "" {
 		session = raw.Thread
 	}
 	return e, r, session, true
+}
+
+// copilotResult is Copilot's toolResult.
+type copilotResult struct {
+	Type string `json:"resultType"`
+	Text string `json:"textResultForLlm"`
 }
