@@ -10,8 +10,11 @@ var (
 	typeOpen    = regexp.MustCompile(`^(?:template\s*<[^{}]*>\s*)?(class|struct|union)\s+(?:[A-Z_][A-Z0-9_]*\s+)?([A-Za-z_]\w*)\b[^(]*$`)
 	scopeOpen   = regexp.MustCompile(`^(?:(?:inline\s+)?namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
 	// annotation names the function-like attributes a declaration may start with.
-	annotation  = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
-	usingAlias  = regexp.MustCompile(`^(?:template\s*<[^;]*>\s*)?using\s+([A-Za-z_]\w*)\s*=`)
+	annotation = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
+	usingAlias = regexp.MustCompile(`^(?:template\s*<[^;]*>\s*)?using\s+([A-Za-z_]\w*)\s*=`)
+	// fwdDecl is a type declared without its body: struct Context;, class
+	// API Handle;, template <class T> class Box;, or enum class Mode : int;.
+	fwdDecl     = regexp.MustCompile(`^(?:template\s*<[^;]*>\s*)?(?:class|struct|union|enum(?:\s+(?:class|struct))?)\s+(?:[A-Z_][A-Z0-9_]*\s+)?([A-Za-z_]\w*)\s*(?::\s*[\w:\s]+)?$`)
 	typedefTag  = regexp.MustCompile(`^typedef\s+(?:struct|union|enum)\s+(?:class\s+)?([A-Za-z_]\w*)`)
 	typedefFunc = regexp.MustCompile(`\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\(`)
 	typedefName = regexp.MustCompile(`([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*$`)
@@ -145,6 +148,11 @@ func headerAPI(code string) []Symbol {
 		tail = nil
 		if m := usingAlias.FindStringSubmatch(h); m != nil { // using Status = int;
 			addType(m[1], chunk, line, false)
+			return
+		}
+		if m := fwdDecl.FindStringSubmatch(h); m != nil { // an opaque type callers name: struct Context;
+			addType(m[1], chunk, line, false)
+			out[len(out)-1].Kind = "opaque" // an entry only while nothing defines it (Index.opaqueEntries)
 			return
 		}
 		if td != nil || after {

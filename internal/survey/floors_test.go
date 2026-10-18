@@ -119,7 +119,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
 		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\nunion Value { int i; double d; };\n",
-		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\nusing Callback = void (*)(int);\ntemplate <class T> using List = T*;\n",
+		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\nusing Callback = void (*)(int);\ntemplate <class T> using List = T*;\nstruct Opaque;\nenum class Mode : int;\nstruct Opaque *open_it(void);\nstruct node;\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-9"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -147,8 +147,8 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"match", "a Go package's exported named type left out", without("sym:parse/parse.go#Status"), "parse/parse.go:7 (type Status)", true},
 		{"match", "a header's public enum left out", without("util.hxx:2"), "util.hxx:2 (enum Status)", true},
 		{"match", "a header's public union left out", without("util.hxx:3"), "util.hxx:3 (union Value)", true},
-		{"match", "a C header's typedefs and declarators left out", without("c.h:1-9"),
-			"c.h:1 (type ctx_t), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context), 8 (type Callback), 9 (type List)", true},
+		{"match", "a C header's typedefs and declarators left out", without("c.h:1-12"),
+			"c.h:1 (type ctx_t), 10 (opaque Opaque), 11 (opaque Mode), 12 (function open_it), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context), 8 (type Callback), 9 (type List)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
 		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
 		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},
@@ -265,6 +265,12 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "a file-scope registration in a file the runner's executable links", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/boot.js"} }), "case set G1", false},
 		{"match", "the same registration, from an executable that does not link it", set(func(g *CaseSet) { g.Inputs = []string{"tests/boot.js"} }),
 			"tests/boot.js:1 calls Boot.go, which runner entry:cli.cpp:3 does not register", true},
+		{"negated", "the lines that call it excluded, naming what decided it", set(func(g *CaseSet) {
+			g.Inputs, g.Exclude = []string{"tests/math.js"}, []string{"tests/math.js:1 needs Math (Q1)"}
+		}), "case set G1", false},
+		{"match", "other lines of that file excluded", set(func(g *CaseSet) {
+			g.Inputs, g.Exclude = []string{"tests/math.js"}, []string{"tests/math.js:2-9 is random (Q1)"}
+		}), "case set G1: tests/math.js:1 calls Math.sqrt, " + notCLI, true},
 		{"match", "an exclusion that names tests/math.js does not exclude math.js", set(func(g *CaseSet) {
 			g.Inputs, g.Exclude = []string{"math.js", "tests/math.js"}, []string{"tests/math.js needs Math (Q1)"}
 		}), "case set G1: math.js:1 calls Math.sqrt", true},

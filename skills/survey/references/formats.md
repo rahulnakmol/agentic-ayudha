@@ -92,7 +92,8 @@ a misspelt field never silently drops a claim.
   none named, the `test:` files in `from` are the inputs. Each runner must register every builtin the cases call
   (`builtin:` facts; a call in an input file, or a dotted builtin such as `Math.sqrt` named in `title` or
   `compare`): a case that needs a builtin only one runner registers belongs in that runner's case set, or in
-  `exclude` with the file and the claim or question that decided it.
+  `exclude` with the file and the claim or question that decided it. Name the lines (`tests/math.js:12-20`) to leave
+  out only those cases; a file named alone is left out whole, and the floor no longer checks any of its cases.
 - A question's `affects` lists the claims, do-not-carry entries, interfaces, and modernisation steps, case sets, suites,
   migrations, and shims its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered

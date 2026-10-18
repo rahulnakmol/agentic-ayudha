@@ -223,17 +223,29 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 				add("case set %s: input %q matches no file of the checkout", g.ID, in)
 			}
 		}
+		// An exclusion that names a file's lines (tests/math.js:12-20) leaves
+		// out those cases; one that names the file alone leaves out the file.
+		skip := map[string][][2]int{}
 		for f := range files {
-			named := regexp.MustCompile(`(?:^|[^\w./-])` + regexp.QuoteMeta(f) + `(?:$|[^\w/-]|\.(?:$|\s))`)
+			named := regexp.MustCompile(`(?:^|[^\w./-])` + regexp.QuoteMeta(f) + `(?::(\d+)(?:-(\d+))?)?(?:$|[^\w/-]|\.(?:$|\s))`)
 			for _, x := range g.Exclude {
-				if named.MatchString(x) { // the exclusion names this path, not one that ends with it
-					delete(files, f)
+				for _, m := range named.FindAllStringSubmatch(x, -1) { // this path, not one that ends with it
+					if m[1] == "" {
+						delete(files, f)
+						continue
+					}
+					a, _ := strconv.Atoi(m[1])
+					b, _ := strconv.Atoi(cmp.Or(m[2], m[1]))
+					skip[f] = append(skip[f], [2]int{a, b})
 				}
 			}
 		}
+		in := func(l int, rs [][2]int) bool {
+			return slices.ContainsFunc(rs, func(r [2]int) bool { return r[0] <= l && l <= r[1] })
+		}
 		used := map[string]string{} // builtin → where the case set calls it
 		for _, u := range ix.Uses {
-			if f, l := splitAt(u.At); files[f] && (lines[f] == nil || slices.ContainsFunc(lines[f], func(r [2]int) bool { return r[0] <= l && l <= r[1] })) {
+			if f, l := splitAt(u.At); files[f] && (lines[f] == nil || in(l, lines[f])) && !in(l, skip[f]) {
 				if _, ok := used[u.Detail]; !ok || lessAt(u.At, used[u.Detail]) {
 					used[u.Detail] = u.At
 				}

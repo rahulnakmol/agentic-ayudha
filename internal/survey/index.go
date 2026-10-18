@@ -386,6 +386,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	for _, p := range keywordFiles {
 		ix.keywordImports(p, langs[strings.ToLower(path.Ext(p))].Syntax, files[p].raw, exists)
 	}
+	ix.opaqueEntries()
 	// The call graph, resolved by the called name's last component.
 	byName := map[string][]string{}
 	for _, s := range ix.Symbols {
@@ -651,6 +652,24 @@ func (ix *Index) headerEntries(file, code string) {
 		have[id] = true
 		ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: at, Detail: detail})
 	}
+}
+
+// opaqueEntries drops a forward-declared type (class CScriptVar;) from the
+// entry points when a header defines it: callers reach the definition, which
+// is an entry of its own. A type no file defines stays, as the opaque handle
+// callers name.
+func (ix *Index) opaqueEntries() {
+	defined := map[string]bool{}
+	for _, s := range ix.Symbols {
+		switch s.Kind {
+		case "class", "struct", "union", "enum":
+			defined[s.Name] = true
+		}
+	}
+	ix.Entries = slices.DeleteFunc(ix.Entries, func(e Fact) bool {
+		name, ok := strings.CutPrefix(e.Detail, "opaque ")
+		return ok && defined[name]
+	})
 }
 
 func isHeader(p string) bool {
