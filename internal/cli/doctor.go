@@ -55,6 +55,8 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
 	}
+	p.Reachable = func(ctx context.Context) []identity.Reach { return e.reachable(ctx, p.Repo) }
+	p.Agent = e.agentSignal()
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
 			TagName string `json:"tag_name"`

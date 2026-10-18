@@ -33,6 +33,7 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 		fmt.Fprintf(io.Err, "aayu: %v\n", err)
 		return ExitInternal
 	}
+	e.args = args
 	root := newRoot(e)
 	root.SetArgs(args)
 	cmd, err := root.ExecuteContextC(ctx)

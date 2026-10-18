@@ -46,7 +46,9 @@ func (e *Env) BotGitHub(ctx context.Context, capability string) (*github.Client,
 	r := e.Resolver()
 	var broker identity.Minter
 	id := l.Config.Identity
-	if identity.Configured(id) == identity.KindApp {
+	// The broker mints with the person's token; an agent that already holds
+	// the bot's token (AAYU_BOT_TOKEN, a bot-only session) needs neither.
+	if identity.Configured(id) == identity.KindApp && e.Getenv("AAYU_BOT_TOKEN") == "" {
 		h, err := r.Human(ctx)
 		if err != nil {
 			return nil, identity.Bot{}, Wrap(ExitBlocked, err)

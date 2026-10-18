@@ -37,8 +37,8 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"}, want: "a bot identity"},
 		{name: "under-permissioned approver", perm: "triage", device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"}, want: "needs write access; @founder has triage"},
 		{name: "wrong account", device: fake.DeviceFlow{Approver: "mallory", Outcome: "approve"}, want: "approved by @mallory, but aayu acts as @founder"},
-		{name: "no client ID", vars: map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": ""}, device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"},
-			want: "refused for an agent lane (AMP_THREAD_ID=T-0000)"},
+		// Story #481: with no client ID configured, the project's default app asks; no setup needed.
+		{name: "default client ID", vars: map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": ""}, device: fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}},
 		{name: "aayu's own agent lane", env: map[string]string{"AAYU_AGENT": "1"}, device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"},
 			want: "refused for an agent lane (AAYU_AGENT=1)"},
 		{name: "in CI", args: []string{"--ci"}, device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"},
@@ -60,7 +60,9 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 				}
 			}
 			d := tt.device
-			d.ClientID = client
+			if d.ClientID == "" {
+				d.ClientID = client
+			}
 			g.Device = &d
 			dir := t.TempDir()
 			env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(dir, "state")}
@@ -79,7 +81,7 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			g.Mu.Unlock()
 			log, _ := os.ReadFile(filepath.Join(dir, "state", "aayudha", "telemetry", "actions.jsonl"))
 			if tt.want == "" {
-				if code != 0 || halted || !strings.Contains(errOut, "resume on o/r needs a person's approval.\n  On any device, open https://github.com/login/device and enter WDJB-MJHT") ||
+				if code != 0 || halted || !strings.Contains(errOut, "resume on o/r needs a person's approval.\n  Command: aayu resume --repo o/r\n  On any device, open https://github.com/login/device and enter WDJB-MJHT (expires in 15 minutes, at ") ||
 					!strings.Contains(errOut, "Approved by @founder (device-flow, admin access)") ||
 					!bytes.Contains(log, []byte(`"kind":"presence.approve"`)) || !bytes.Contains(log, []byte(`"approver":"founder"`)) || bytes.Contains(log, []byte(fake.DeviceToken)) {
 					t.Fatalf("exit %d, halted %v: %s\n%s", code, halted, errOut, log)
@@ -89,7 +91,7 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			if code != ExitBlocked || !halted || !strings.Contains(errOut, tt.want) || bytes.Contains(log, []byte("presence.approve")) {
 				t.Fatalf("exit %d, halted %v, want %q: %s\n%s", code, halted, tt.want, errOut, log)
 			}
-			if asked := started > 0; asked != (tt.name != "no client ID" && tt.name != "aayu's own agent lane" && tt.name != "in CI") {
+			if asked := started > 0; asked != (tt.name != "aayu's own agent lane" && tt.name != "in CI") {
 				t.Errorf("device codes issued: %d", started)
 			}
 		})

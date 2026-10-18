@@ -106,6 +106,7 @@ type Promotion struct {
 	PromotedBy      string         `json:"promoted_by"`
 	PromotedAt      string         `json:"promoted_at"`
 	Agent           string         `json:"agent,omitempty"`          // the agent marker when an agent ran it (Story #430); empty for a person
+	Approval        *Approval      `json:"approval,omitempty"`       // the person who approved it through the device code (Story #481)
 	Request         *StableRequest `json:"stable_request,omitempty"` // main: who asked for the stable release
 	DryRun          bool           `json:"dry_run,omitempty"`
 	Notices         []string       `json:"notices,omitempty"`
@@ -249,11 +250,14 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 				// Or the person approves it from any device (presence.go): their yes,
 				// as at a terminal.
 				refusal := WithNext(Errorf(ExitBlocked, "%s", why), fmt.Sprintf("a person comments `%s %s` on #%d", StableRequestPrefix, version, n))
-				a, err := e.presenceCheck(ctx, fmt.Sprintf("release #%d --to main (%s)", n, version), AccessWrite, refusal)
+				a, err := e.presenceCheck(ctx, Pending{What: fmt.Sprintf("release #%d --to main (%s)", n, version),
+					Effect: []string{fmt.Sprintf("Promotes %s to %s as %s and tags it: the stable release of Release #%d. One-way door: a published release is not taken back.", src, dst, version, n)}},
+					AccessWrite, refusal)
 				if err != nil {
 					return err
 				}
 				p.Request = &StableRequest{Via: a.Via, Author: a.Login, At: e.Now().UTC().Format(time.RFC3339)}
+				p.Approval = a
 			}
 		}
 	} else {
@@ -980,7 +984,10 @@ func (e *Env) shippingEvidence(ctx context.Context, c *github.Client, repo strin
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s → %s** on %s by @%s: `%s` as `%s`, tag `%s`.\n\n", p.Source, p.Target, p.PromotedAt, p.PromotedBy, short(p.Commit), p.Message, p.Tag)
-	if p.Agent != "" {
+	switch {
+	case p.Agent != "" && p.Approval != nil:
+		fmt.Fprintf(&b, "- Run under an agent marker (`%s`) with @%s's account, approved by @%s through the device code (%s)\n", p.Agent, p.PromotedBy, p.Approval.Login, p.Approval.Via)
+	case p.Agent != "":
 		fmt.Fprintf(&b, "- Run by an agent (`%s`) under @%s's account\n", p.Agent, p.PromotedBy)
 	}
 	if r := p.Request; r != nil {
@@ -1048,7 +1055,10 @@ func promotionText(out io.Writer, p Promotion) error {
 		fmt.Fprintf(out, " = %s", short(p.Commit))
 	}
 	fmt.Fprintf(out, ", tag %s (candidate %s)\n", p.Tag, p.Candidate)
-	if p.Agent != "" {
+	switch {
+	case p.Agent != "" && p.Approval != nil:
+		fmt.Fprintf(out, "  run under an agent marker (%s) with @%s's account, approved by @%s through the device code\n", p.Agent, p.PromotedBy, p.Approval.Login)
+	case p.Agent != "":
 		fmt.Fprintf(out, "  run by an agent (%s) under @%s\n", p.Agent, p.PromotedBy)
 	}
 	if r := p.Request; r != nil {

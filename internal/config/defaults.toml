@@ -124,6 +124,12 @@ provisional_after_hours = 48
 # 12, and read only from .aayudha/config.toml, a protected path. Never a waiver, seat change, or human-only step.
 solo_provisional_after_hours = 24
 
+# Approving agents' human-only steps (Decision #488): a recorded approver's `/aayu approve` reply on a batch, or
+# GitHub's device code. One-way doors always need the device code.
+[approvals]
+approvers = []
+device_for = ["one-way"]
+
 # Business hours for SLA clocks and paging windows (WP1.2). DST-aware through the IANA zone.
 [time]
 tz = "Europe/London"

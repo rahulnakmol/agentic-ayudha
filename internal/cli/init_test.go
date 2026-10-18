@@ -386,10 +386,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-approve.yml", "aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
+	for _, wf := range []string{"aayudha-approve.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)

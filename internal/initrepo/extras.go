@@ -42,15 +42,19 @@ var mergeGateTemplate string
 //go:embed aayudha-ops.yml
 var opsTemplate string
 
+//go:embed aayudha-approve.yml
+var approveTemplate string
+
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, and the
-// WP5.7 streak. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, the
+// WP5.7 streak, and the Story #481 approvals. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
 	StreakWorkflow     = "aayudha-streak.yml"
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
 	OpsWorkflow        = "aayudha-ops.yml"
+	ApproveWorkflow    = "aayudha-approve.yml"
 )
 
 // GateWorkflows renders the workflows init --gates installs, by file name.
@@ -62,6 +66,7 @@ func GateWorkflows(version string) map[string][]byte {
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 		MergeGateWorkflow:  []byte(strings.ReplaceAll(mergeGateTemplate, "{{VERSION}}", GuardVersion(version))),
 		OpsWorkflow:        []byte(strings.ReplaceAll(opsTemplate, "{{VERSION}}", GuardVersion(version))),
+		ApproveWorkflow:    []byte(strings.ReplaceAll(approveTemplate, "{{VERSION}}", GuardVersion(version))),
 	}
 }
 
