@@ -113,6 +113,9 @@ Google plan. It stays opt-in until a gating run on it passes and the founder agr
 model = "gemini-4-argon"
 ```
 
+> **Honest status:** the setting is not wired yet. aayu's UI-review calls still run `gemini-3.8-flash` through the
+> AI gateway, whatever this row says, until the route that sends them through `copilot -p` ships.
+
 One UI-review call on it cost about 0.043 USD: Copilot charges AI credits for input at 2 USD per million tokens and
 visible output at 10 USD per million, and does not bill reasoning tokens. About 15,000 of a call's 19,000 input tokens
 are Copilot CLI's own prompt. The figure is from Copilot CLI's usage report for two such calls on 18 October 2026.

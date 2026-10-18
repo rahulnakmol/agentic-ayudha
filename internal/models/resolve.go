@@ -21,7 +21,7 @@ const (
 	SourceDefault  = "default"  // the registry default for the lane and host
 	SourceConfig   = "config"   // [models.<lane>.<host>]
 	SourceFallback = "fallback" // configured family not available on the host; registry default used
-	SourceDirect   = "direct"   // host-managed, or a Copilot catalog model, on this host; the binary's direct call uses DirectHost's default
+	SourceDirect   = "direct"   // host-managed, or a Copilot catalog model, on this host; the binary's direct call uses DirectHost's row
 )
 
 // Resolved is the model a lane uses on a host.
@@ -117,9 +117,10 @@ func (r Resolver) ResolveDirect(lane verbs.LaneID, host verbs.HostID, heavy bool
 	if err != nil {
 		return res, err
 	}
-	// Copilot's registry rows name models in Copilot's own catalog
-	// (claude-opus-5.5), which the gateway does not route.
-	copilotOnly := host == verbs.HostCopilot && res.Source != SourceConfig
+	// Copilot's rows, its defaults and a person's [models.<lane>.copilot],
+	// name models in Copilot's own catalog (claude-opus-5.5), which the
+	// gateway does not route.
+	copilotOnly := host == verbs.HostCopilot
 	if res.Family == verbs.FamilyHostManaged || copilotOnly {
 		alt, err := r.Resolve(lane, verbs.DirectHost)
 		if err != nil {
