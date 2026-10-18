@@ -60,11 +60,11 @@ for this release.
 - The ship record, `aayu audit`, and `aayu status --streak` record each merge's review rung (#518).
 - The autonomy streak counts only merges whose review was of another family or a person's (#510).
 - Rung B is an opt-in paid reviewer in the merge gate: it runs only when you name a model in `[inspect] paid_reviewer` and add that provider's key (#550).
-- `[inspect] paid_effort` sets the paid reviewer's reasoning effort, and a paid review runs only for pull requests from owners, members, and collaborators (#579).
+- `[inspect] paid_effort` sets the paid reviewer's reasoning effort, and a paid review runs only for pull requests whose author has write or admin access to the repository (#579).
 - When the reviewer app answers with a usage-limit or quota message, or still has not replied when inspect runs again at least 30 minutes after the request (on a push, a rerun, or a new comment or review), the rung B reviewer reviews instead, and a person reviews when rung B cannot (#634).
 - A paid review asks for priority serving where the provider offers it (xAI and OpenAI, not Anthropic), and the review budget charges the priority rate for xAI models (#634).
 - inspect makes one paid review call per head commit, and none on a reply event (#623).
-- inspect's review settles within three rounds, and findings in code the pull request did not change are tagged as pre-existing (#583).
+- inspect reviews a pull request for at most three rounds, then stops until a person reopens the review, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check is green except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
