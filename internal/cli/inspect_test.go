@@ -813,6 +813,14 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q %s", code, res.Disposition, res.Rung, errOut)
 	}
 
+	// A PR that spent its per-PR cap gets no further paid call, and the app
+	// reviews; the gate's record keeps the spend.
+	g, env, opts, prN, model = setup(`"claude"`, "google-key")
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":5,\"hashes\":[]} -->\n")
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || inspect.ParseState(lastInspect(t, g, prN)).SpentUSD != 5 {
+		t.Fatalf("a spent cap: exit %d %s, %d model calls, state %+v %s", code, res.Disposition, len(model.Requests), inspect.ParseState(lastInspect(t, g, prN)), errOut)
+	}
+
 	// An author without write access gets no paid review, whatever GitHub's
 	// author association says (an organization member may only read).
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")

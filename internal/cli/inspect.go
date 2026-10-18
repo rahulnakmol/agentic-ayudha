@@ -505,15 +505,19 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, err)
 	case errors.Is(err, inspect.ErrCycles):
 		return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
-	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
-		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil && paid != nil && cfg.Reviewer != inspect.ReviewerModel:
 		// A paid review that fails (the gateway timed out on a large diff, the
-		// provider is down) leaves the PR to the reviewer app, as an unset key
-		// does: the gate still needs that app's reply, so it fails closed
-		// without one.
-		e.Logf("inspect: [inspect] paid_reviewer %s failed (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
+		// provider is down) or whose PR spent its [budget] per_pr_inspect_max
+		// leaves the PR to the reviewer app, as an unset key does: the gate
+		// still needs that app's reply, so it fails closed without one. What
+		// the failed call cost stays on the PR's record, so retries cannot
+		// spend past the cap.
+		e.Logf("inspect: [inspect] paid_reviewer %s not used (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
+		fb := prev
+		fb.SpentUSD = max(prev.SpentUSD, st.SpentUSD)
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config})
+	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
+		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:
 		return Wrap(ExitExternal, err)
 	}
