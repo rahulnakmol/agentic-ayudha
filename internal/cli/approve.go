@@ -61,7 +61,7 @@ type batchItem struct {
 	// one-way door, it is confirmed explicitly (an approve reply that names
 	// the item, or the device code).
 	Other    bool   `json:"not_recommended"`
-	BodyHash string `json:"body_hash"` // the issue body when the batch was made: a later edit voids the approval
+	BodyHash string `json:"body_hash"` // the issue's title and body when the batch was made: a later edit voids the approval
 	Effect   string `json:"-"`         // plain words, for the terminal and the actions log
 	Heading  string `json:"-"`         // Effect with the Decision's own text escaped, for the comment
 	Door     string `json:"-"`
@@ -80,8 +80,10 @@ type batch struct {
 	Mention []string    `json:"-"` // who is asked
 }
 
-func bodyHash(body string) string {
-	sum := sha256.Sum256([]byte(body))
+// decisionHash covers what the batch shows of a Decision: its title and body
+// (labels are read again when the reply arrives).
+func decisionHash(d decide.Decision) string {
+	sum := sha256.Sum256([]byte(d.Title + "\x00" + d.Body))
 	return hex.EncodeToString(sum[:8])
 }
 
@@ -102,7 +104,7 @@ func (b *batch) marker() string { return batchMarker + b.hash() + " -->" }
 // batchDecision describes accepting option of Decision d in plain words.
 func batchDecision(d decide.Decision, option string) batchItem {
 	title := strings.TrimSpace(strings.TrimPrefix(d.Title, "Decision:"))
-	it := batchItem{Kind: "decision", Issue: d.Number, Option: option, OneWay: !d.Reversible() || d.Waiver(), BodyHash: bodyHash(d.Body),
+	it := batchItem{Kind: "decision", Issue: d.Number, Option: option, OneWay: !d.Reversible() || d.Waiver(), BodyHash: decisionHash(d),
 		Effect: fmt.Sprintf("Accepts option %s of Decision #%d: %s.", option, d.Number, strings.TrimSuffix(title, "."))}
 	it.Heading = fmt.Sprintf("Accepts option %s of Decision #%d: %s.", mdText(option), d.Number, mdText(strings.TrimSuffix(title, ".")))
 	if rec := strings.TrimSpace(d.Item.Fields["recommendation"]); !recommends(rec, option) {
@@ -294,6 +296,18 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 			}
 			out, err := run(ctx, e.Dir, "gh", "auth", "token")
 			return strings.TrimSpace(out), err
+		},
+		"aayu's GitHub token": func(ctx context.Context) (string, error) { // AAYU_GITHUB_TOKEN, gh, or the store: whatever aayu would act as
+			t, err := e.Resolver().Human(ctx)
+			return t.Value, err
+		},
+		"aayu secrets store": func(context.Context) (string, error) {
+			st := e.Resolver().Secrets
+			if st == nil {
+				return "", errors.New("no secrets store")
+			}
+			v, _, err := st.Get(identity.HumanTokenSecret)
+			return v, err
 		},
 		"git credential helper": func(ctx context.Context) (string, error) {
 			if e.GitCredential != nil {
@@ -547,7 +561,7 @@ func (e *Env) approveFromComment(ctx context.Context) error {
 		if oneWay := it.OneWay || !d.Reversible() || d.Waiver(); oneWay && (slices.Contains(cfg.Approvals.DeviceFor, "one-way") || slices.Contains(cfg.Approvals.DeviceFor, "all")) {
 			return refuse(fmt.Sprintf("item %d is a one-way door, and `[approvals] device_for` keeps one-way doors on the device code.", i), "approve it with the device code.")
 		}
-		if bodyHash(d.Body) != it.BodyHash {
+		if decisionHash(d) != it.BodyHash {
 			return refuse(fmt.Sprintf("Decision #%d changed after the batch was posted.", it.Issue), "ask the agent to start the steps again; it posts a new batch.")
 		}
 		if err := acceptable(cfg, d, it.Option, author); err != nil {

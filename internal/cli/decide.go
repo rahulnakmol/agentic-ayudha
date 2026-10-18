@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -355,6 +356,23 @@ func humanCaller(ctx context.Context, e *Env, cfg *config.Config, what string) (
 	return c, u.Login, nil
 }
 
+// humanLogin is a client under the person's own token and their login. It
+// fails when there is no token, or when the token is a bot identity's.
+func (e *Env) humanLogin(ctx context.Context, cfg *config.Config) (*github.Client, string, error) {
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	u, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
+	if err != nil {
+		return nil, "", Wrap(ExitExternal, err)
+	}
+	if identity.IsBot(identity.Account{Login: u.Login, Type: u.Type}, cfg.Identity.BotLogins) {
+		return nil, "", Errorf(ExitBlocked, "decide --accept: %s is a bot identity; only a human may do this", u.Login)
+	}
+	return c, u.Login, nil
+}
+
 // acceptable checks that login may accept option of the open, Decision-ready
 // Decision d: the checks decide --accept makes before it writes anything.
 func acceptable(cfg *config.Config, d decide.Decision, option, login string) error {
@@ -369,7 +387,9 @@ func acceptable(cfg *config.Config, d decide.Decision, option, login string) err
 		return Errorf(ExitBlocked, "decide: #%d is not Decision-ready: %s", d.Number, strings.Join(msgs, "; "))
 	}
 	key, value := decide.Authority(cfg, d)
-	if want := decide.Login(cfg, value); want != "" && !strings.EqualFold(want, login) {
+	// No login (a bot-only agent's comment batch): the reply's author is
+	// checked against the authority when it arrives (approveFromComment).
+	if want := decide.Login(cfg, value); login != "" && want != "" && !strings.EqualFold(want, login) {
 		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", d.Number, want, key, value, login)
 	}
 	if !decide.MatchOption(d.Item.Fields["options"], option) {
@@ -392,17 +412,26 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	if len(nums) > batchMax {
 		return Errorf(ExitUsage, "decide --accept: at most %d Decisions in one batch", batchMax)
 	}
-	c, tok, err := e.HumanGitHub(ctx)
-	if err != nil {
-		return err
+	// The person's account, when this session has it. An agent that writes
+	// only as the bot (the setup comment approval needs) has none: it reads and
+	// posts the batch as the bot, and the reply carries the person's authority.
+	agentRun := e.agentSignal() != "" || !e.isTerminal(e.In)
+	c, login, herr := e.humanLogin(ctx, cfg)
+	if herr != nil && !agentRun {
+		return herr
 	}
-	u, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
-	if err != nil {
-		return Wrap(ExitExternal, err)
+	var bc *github.Client
+	var bot identity.Bot
+	berr := errors.New("a person at their own terminal accepts as themselves")
+	if agentRun {
+		bc, bot, berr = e.BotGitHub(ctx, "")
 	}
-	login := u.Login
-	if identity.IsBot(identity.Account{Login: u.Login, Type: u.Type}, cfg.Identity.BotLogins) {
-		return Errorf(ExitBlocked, "decide --accept: %s is a bot identity; only a human may do this", u.Login)
+	reader := c
+	if herr != nil {
+		if berr != nil {
+			return herr
+		}
+		reader = bc
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	ds := make([]decide.Decision, len(nums))
@@ -411,11 +440,11 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		if slices.Contains(nums[:i], n) {
 			return Errorf(ExitUsage, "decide --accept: #%d is in the batch twice", n)
 		}
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+		is, _, err := reader.REST.Issues.Get(ctx, owner, name, n)
 		if err != nil {
 			return err
 		}
-		if ds[i], err = loadDecision(ctx, c, repo, is); err != nil {
+		if ds[i], err = loadDecision(ctx, reader, repo, is); err != nil {
 			return err
 		}
 		if err := acceptable(cfg, ds[i], options[i], login); err != nil {
@@ -424,8 +453,8 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		b.Items = append(b.Items, batchDecision(ds[i], options[i]))
 	}
 	via, writer := "", c
-	if e.agentSignal() != "" || !e.isTerminal(e.In) {
-		if bc, bot, err := e.BotGitHub(ctx, ""); err == nil {
+	if agentRun {
+		if berr == nil {
 			writer = bc
 			if why := e.commentApprovalsOff(ctx, cfg, bot, b.Items); why == "" {
 				return e.postCommentBatch(ctx, writer, cfg, b)
@@ -433,7 +462,11 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 				b.Why = why
 			}
 		} else {
-			b.Why = fmt.Sprintf("the bot identity is not available (%v).", err)
+			b.Why = fmt.Sprintf("the bot identity is not available (%v).", berr)
+		}
+		if herr != nil {
+			return WithNext(Errorf(ExitBlocked, "decide --accept: comment approval is off for this batch (%s), and the device code needs the person's own GitHub account, which this session does not hold: %v", strings.TrimSuffix(b.Why, "."), herr),
+				"a person runs the command where their account is, or the repository turns comment approval on (docs/guide/how-trust.md)")
 		}
 		if err := e.deviceBatch(ctx, writer, b, login); err != nil {
 			return err

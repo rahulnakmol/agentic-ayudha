@@ -31,7 +31,8 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	d6 := g.AddIssue("Choose the CI runner", decisionBody("true", ""), "type:decision", "status:ready")
 	d3 := g.AddIssue("Choose the data store", decisionBody("false", ""), "type:decision", "status:ready")
 	sets := []string{"--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder"}
-	agent := map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "CODEX_THREAD_ID": "019a"}
+	// The intended setup: the agent holds only the bot's token, never the founder's.
+	agent := map[string]string{"AAYU_BOT_TOKEN": "bot-token", "CODEX_THREAD_ID": "019a"}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond}
 	comments := func(n int) []*fake.Comment {
 		g.Mu.Lock()
@@ -86,6 +87,9 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	// The agent's batch: #d1 and #d4 at the recommendation (A), #d2 at another option.
 	list := strconv.Itoa(d1.Number) + "," + strconv.Itoa(d2.Number) + "," + strconv.Itoa(d4.Number)
 	code, _, errOut := run(t, agent, opts, append([]string{"decide", list, "--accept", "A,B,A"}, sets...)...)
+	if len(comments(d1.Number)) == 0 {
+		t.Fatalf("no batch: exit %d %s", code, errOut)
+	}
 	batch := last(d1.Number)
 	if code != ExitBlocked || !strings.Contains(errOut, "nothing is accepted until an approver replies") || accepted(d1.Number) ||
 		!strings.Contains(batch, "@founder **3 human-only steps wait for your approval**") ||
@@ -126,6 +130,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		edited      bool
 		before      bool   // the reply is dated before the batch
 		edit        string // the Decision's body is edited first
+		title       string // or its title
 		want        string
 	}{
 		{login: "mallory", body: "/aayu approve all", want: "@mallory is not a recorded approver"},
@@ -134,19 +139,24 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		{login: "founder", body: "/aayu approve 4", want: "the batch has items 1 to 3, not 4"},
 		{login: "founder", body: "/aayu skip 1 3", want: "Item 2 was left out: it is not the recommendation"},
 		{login: "founder", body: "/aayu approve 1 3", edit: body1 + "\nEdited.", want: "changed after the batch was posted"},
+		{login: "founder", body: "/aayu approve 1 3", title: "Choose the rules engine (renamed)", want: "changed after the batch was posted"},
 	} {
 		at := []time.Time{}
 		if tt.before {
 			at = append(at, time.Now().UTC().Add(-time.Hour))
 		}
 		g.Mu.Lock()
+		title1 := g.Issues[d1.Number].Title
 		if tt.edit != "" {
 			g.Issues[d1.Number].Body = tt.edit
+		}
+		if tt.title != "" {
+			g.Issues[d1.Number].Title = tt.title
 		}
 		g.Mu.Unlock()
 		code, out := workflow(reply(tt.login, tt.body, tt.edited, at...))
 		g.Mu.Lock()
-		g.Issues[d1.Number].Body = body1
+		g.Issues[d1.Number].Body, g.Issues[d1.Number].Title = body1, title1
 		g.Mu.Unlock()
 		if code != ExitBlocked || !strings.Contains(last(d1.Number), tt.want) || !strings.Contains(last(d1.Number), "Next: ") || !none() {
 			t.Fatalf("%s %q: exit %d %s\n%s", tt.login, tt.body, code, out, last(d1.Number))
@@ -319,11 +329,22 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	}
 
 	// A one-way door stays on the device code (device_for = ["one-way"] by
-	// default): the batch carries the code, and a denial says so on the thread.
+	// default). The bot-only agent cannot ask for it: the code proves the
+	// person's own account, which it does not hold.
+	if code, _, errOut := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...); code != ExitBlocked ||
+		!strings.Contains(errOut, "the device code needs the person's own GitHub account, which this session does not hold") || accepted(d3.Number) {
+		t.Fatalf("one-way door from a bot-only agent: %d %s", code, errOut)
+	}
+	// In the person's own marked shell (an orb's Terminal tab) the batch
+	// carries the code, and a denial says so on the thread.
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "founder-token"}
+	for k, v := range agent {
+		person[k] = v
+	}
 	g.Mu.Lock()
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
 	g.Mu.Unlock()
-	code, _, errOut = run(t, agent, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...)
+	code, _, errOut = run(t, person, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...)
 	if code != ExitBlocked || accepted(d3.Number) || !strings.Contains(last(d3.Number), "The request was cancelled on GitHub; nothing was done.") ||
 		!strings.Contains(last(d3.Number), "item 1 is a one-way door") {
 		t.Fatalf("one-way door, denied: %d %s\n%s", code, errOut, last(d3.Number))
@@ -332,7 +353,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	g.Mu.Lock()
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
 	g.Mu.Unlock()
-	code, out, errOut := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...)
+	code, out, errOut := run(t, person, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...)
 	if code != 0 || !accepted(d3.Number) || !strings.Contains(out, "accepted: A, by @founder through the device code") ||
 		!strings.Contains(errOut, "Approving: Accepts option A of Decision #"+strconv.Itoa(d3.Number)) ||
 		!strings.Contains(last(d3.Number), "accepted: option A, by @founder through the device code") {
@@ -357,6 +378,17 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	g.Mu.Unlock()
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (GH_TOKEN)") || strings.Contains(body, "/aayu approve all") || strings.Contains(body, "ghu_") {
 		t.Fatalf("exit %d %s\n%s", code, errOut, body)
+	}
+	// A token in aayu's own secrets store (`aayu auth set-secret github-token`) is reachable too.
+	d3 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
+	stored := map[string]string{"AAYU_SECRET_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"}
+	code, _, errOut = run(t, stored, Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond},
+		"decide", strconv.Itoa(d3.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	g.Mu.Lock()
+	body = g.Issues[d3.Number].Comments[len(g.Issues[d3.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (aayu secrets store") {
+		t.Fatalf("stored token: exit %d %s\n%s", code, errOut, body)
 	}
 	// device_for = ["all"] keeps every batch on the code, whatever the session holds.
 	d2 := g.AddIssue("Choose the queue", decisionBody("true", ""), "type:decision", "status:ready")

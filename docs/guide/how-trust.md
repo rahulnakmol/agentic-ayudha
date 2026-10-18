@@ -228,8 +228,10 @@ reaction, a `workflow_dispatch`, an environment approval, or a Slack message mad
 not proof of a person: the agent could have made it. The device code works because it mints a fresh credential on
 your own device. A reply works only when agents never hold your GitHub credential, which is why aayu refuses replies,
 with that reason, whenever a session can reach it. `aayu doctor`'s approvals row lists every GitHub credential the
-session can reach (an environment variable, `gh auth token`, the git credential helper) by source and account, never
-by value, and fails when one belongs to an approver.
+session can reach (a token-shaped environment variable, `gh auth token`, the git credential helper, and the token
+aayu itself would use, including one in its secrets store) by source and account, never by value, and fails when one
+belongs to an approver. An agent with only the bot's token (`AAYU_BOT_TOKEN`) reads and posts the batch as the bot;
+it cannot ask for a device code, which proves the person's own account, so a one-way door waits for the person.
 
 **Setup for replies, once per repository (about 20 minutes):**
 
