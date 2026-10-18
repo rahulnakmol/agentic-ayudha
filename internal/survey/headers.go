@@ -179,8 +179,11 @@ func headerAPI(code string) []Symbol {
 					o = open{class: true, name: m[2], reachable: r, public: r && m[1] != "class"}
 				} else if scopeOpen.MatchString(h) {
 					o = open{}
-					if f := strings.Fields(strings.TrimPrefix(h, "inline ")); len(f) > 1 && f[0] == "namespace" {
+					switch f := strings.Fields(strings.TrimPrefix(h, "inline ")); {
+					case len(f) > 1 && f[0] == "namespace":
 						o.name = strings.Join(f[1:], "")
+					case len(f) == 1 && f[0] == "namespace":
+						o.other = true // an anonymous namespace: internal linkage, no caller sees it
 					}
 				}
 			}
