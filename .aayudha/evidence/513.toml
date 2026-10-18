@@ -1,0 +1,11 @@
+[[criterion]]
+id = 1
+tests = ["./internal/production:TestRunbookAlerts"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/production:TestRunbookAlerts"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/production:TestRunbookAlerts", "./internal/integrations/posthog:TestGet"]

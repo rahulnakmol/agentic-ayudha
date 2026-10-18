@@ -310,3 +310,66 @@ type phAnswer struct {
 func (a phAnswer) Query(context.Context, string, map[string]any) ([]byte, string, error) {
 	return []byte(a.body), "POST /api/projects/12345/query/", a.err
 }
+
+// listAnswer answers every list read with one body or one error.
+type listAnswer struct {
+	body string
+	err  error
+}
+
+func (a listAnswer) Get(context.Context, string, url.Values) ([]byte, string, error) {
+	return []byte(a.body), "GET /list/", a.err
+}
+
+func (listAnswer) Project() string { return "4507" }
+
+// TestRunbookAlerts (Decision #449, phase P1): the alerts a runbook's Symptom
+// names are looked up in Sentry and PostHog; an SLO name is not an alert, and
+// with no provider every alert is not checked rather than missing.
+func TestRunbookAlerts(t *testing.T) {
+	src, r := sentrySource(t, "alerts")
+	sentryAlerts, spv, err := src.Alerts(context.Background())
+	r.Done()
+	if err != nil || len(spv.Requests) != 3 || len(spv.Digest) != 64 {
+		t.Fatalf("Sentry alerts: %v, provenance %+v", err, spv)
+	}
+	pr := &fixture.Replayer{T: t, Rec: fixture.Load(t, filepath.Join("testdata", "posthog", "alerts.json")), AuthHeader: "Authorization", AuthValue: "Bearer phx_test"}
+	c, err := posthog.New(integrations.Conn{Name: "posthog", Key: "phx_test", Integration: config.Integration{URL: "https://eu.posthog.com", Project: "12345"}}, pr, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	posthogAlerts, ppv, err := PostHogAlerts(context.Background(), c, "12345")
+	pr.Done()
+	if err != nil || len(ppv.Requests) != 1 {
+		t.Fatalf("PostHog alerts: %v, provenance %+v", err, ppv)
+	}
+	slos := &SLOs{SLOs: []SLO{{Name: "checkout-availability"}}}
+	md := "## Symptom\n\n`error-monitor` fires (`error-monitor` pages), or `nightly-billing` misses, or `exceptions-spike`, or `disk-full`; it protects `checkout-availability`.\n"
+	got := RunbookAlerts(md, slos, map[string][]string{"sentry": sentryAlerts, "posthog": posthogAlerts})
+	want := []AlertStatus{{"error-monitor", AlertFound, "sentry"}, {"nightly-billing", AlertFound, "sentry"}, {"exceptions-spike", AlertFound, "posthog"}, {"disk-full", AlertMissing, ""}}
+	if !slices.Equal(got, want) {
+		t.Errorf("RunbookAlerts = %+v; want %+v", got, want)
+	}
+	for _, a := range RunbookAlerts(md, slos, nil) {
+		if a.State != AlertNotChecked {
+			t.Errorf("no provider: %+v; want not checked", a)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		api  listAnswer
+	}{
+		{"a failed read", listAnswer{err: errors.New("503")}},
+		{"a wrong-shape answer", listAnswer{body: `"not a list"`}},
+	} {
+		if _, pv, err := (Sentry{API: c.api}).Alerts(context.Background()); err == nil || len(pv.Requests) != 1 {
+			t.Errorf("Sentry alerts, %s: err %v, requests %v; want an error after the first request", c.name, err, pv.Requests)
+		}
+		if _, pv, err := PostHogAlerts(context.Background(), c.api, "12345"); err == nil || len(pv.Requests) != 1 {
+			t.Errorf("PostHog alerts, %s: err %v, requests %v; want an error", c.name, err, pv.Requests)
+		}
+	}
+	if Slug("[us] High error-rate!") != "us-high-error-rate" {
+		t.Errorf("Slug = %q", Slug("[us] High error-rate!"))
+	}
+}
