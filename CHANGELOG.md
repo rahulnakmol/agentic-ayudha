@@ -13,9 +13,9 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 
 Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
 
-With v0.3.0, aayu builds its own repository, agentic-ayudha, with one founder. With `[autonomy] proof` on, `aayu ship`
-merges an agent's pull request into dev on proof alone, and only a narrow set of paths and settings always waits for
-the founder (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
+With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @rahulnakmol. With `[autonomy] proof` on,
+`aayu ship` merges an agent's pull request into dev on proof alone, and only a narrow set of paths and settings always
+waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, data designs, and legacy-code surveys. Every pull request that is not docs-only
 now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
 agents queue for you from any device, one at a time in `aayu inbox` or as one batch. No Feature is claimed as proven
@@ -82,8 +82,8 @@ for this release.
 - A human-only command in a shell an agent started, or with no terminal, runs only after you approve it from any device through GitHub's device flow, so it works from a remote shell such as an orb or a runner (#192, #467).
 - `aayu decide a,b --accept x,y` puts up to 10 human-only steps into one batch that a separate approver accepts with a comment, with one device code as the fallback and for one-way doors (#501).
 - `aayu init --gates` protects every host's executable config with CODEOWNERS, and `aayu doctor` fails when it drifts (#538).
-- A host's PostHog or Sentry MCP server or CLI may only read, and the host guard sees wrapped CLIs and servers under any name (#489, #525).
-- Every PostHog or Sentry read a host makes is logged and citable like aayu's own queries, with tokens typed inline redacted (#494, #517).
+- A host's PostHog or Sentry MCP server or CLI may only read; the host guard sees a CLI behind `sh -c`, `env`, and similar wrappers and a server by its registered name, URL, command, or package, but not a CLI started from a script file or an alias, or a server behind a generic proxy (#489, #525).
+- Each PostHog or Sentry read the host guard recognises is logged and citable like aayu's own queries, with tokens typed inline redacted (#494, #517).
 - Host recordings, replays, and feedback reads need `allow_pii`, which counts only when committed on the dev branch (#523, #531).
 - The host guard covers PostHog and Sentry calls under GitHub Copilot, and a Copilot shell call that exits non-zero is logged as failed (#537, #556).
 - `aayu doctor` tries each PostHog and Sentry capability with one cheap read and names the exact fix (#499).
@@ -236,7 +236,7 @@ example product the thin-slice run built:
 - `aayu build --delegate` hands a Ready story to Codex, Cursor, Claude Code, or Amp, and closes the review loop (#187).
 - `aayu gc` reclaims expired leases and says how to free a build worktree it keeps (#109, #113).
 - `aayu verify` runs floors: diff coverage, SAST, secrets, dependencies, web accessibility, performance, DAST, API, and a screen reader (#81, #84, #85).
-- `aayu proof` builds proof packs, and `aayu ship` lands each pack on the ledger, a branch that holds the record of the work; media stay in the merge gate's run artifact or an optional bucket, never in the ledger or Git LFS (#20, #78, #159, #206).
+- `aayu verify` writes the proof pack, `aayu proof` pushes, lists, fetches, and checks packs, and `aayu ship` lands each pack on the ledger, a branch that holds the record of the work; media stay in the merge gate's run artifact or an optional bucket, never in the ledger or Git LFS (#20, #78, #159, #206).
 - research, wireframe, mockup, and prototype work from pinned references behind a Figma diff gate (#94).
 - review, polish, and baseline check UI work in two lanes (#99).
 - A design system ships tokens, density modes, shadcn primitives, Storybook with axe, seven floorplans, and SwiftUI and Compose token parity (#9, #10).
