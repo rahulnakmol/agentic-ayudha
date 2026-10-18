@@ -292,7 +292,11 @@ func (s *Seat) policy(ctx context.Context, res *Result) error {
 		return nil
 	}
 	id := int64(rs["id"].(float64))
-	if !want && !s.hasGate() {
+	gate, err := s.hasGate(ctx)
+	if err != nil {
+		return fmt.Errorf("reading the protected-paths workflow on %s: %w", s.Default, err)
+	}
+	if !want && !gate {
 		// Back to one human in a repository without the solo-mode gate (one
 		// seat add created): the solo form would require a check nothing
 		// posts and block every merge, so the ruleset goes, as init left it.
@@ -325,12 +329,17 @@ func (s *Seat) policy(ctx context.Context, res *Result) error {
 	return nil
 }
 
-// hasGate reports whether the checkout has the solo-mode gate workflow that
-// posts the protected-paths check (this repository's own; aayu init does not
-// install it).
-func (s *Seat) hasGate() bool {
-	_, err := os.Stat(filepath.Join(s.Root, ".github", "workflows", "protected-paths.yml"))
-	return err == nil
+// hasGate reports whether the default branch has the solo-mode gate workflow
+// that posts the protected-paths check (this repository's own; aayu init does
+// not install it). The default branch's copy is the one that runs, whatever
+// the checkout holds.
+func (s *Seat) hasGate(ctx context.Context) (bool, error) {
+	owner, name, _ := github.SplitRepo(s.Repo)
+	_, _, _, err := s.GH.REST.Repositories.GetContents(ctx, owner, name, ".github/workflows/protected-paths.yml", &gh.RepositoryContentGetOptions{Ref: s.Default})
+	if github.NotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // deleteRuleset removes the protected-paths ruleset.

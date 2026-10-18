@@ -36,15 +36,10 @@ func seatFixture(t *testing.T) (dir, bare string, g *fake.GitHub, files map[stri
 			t.Fatal(err)
 		}
 	}
-	// aayudha's own solo-mode gate, which posts the protected-paths check.
-	gate := filepath.Join(dir, ".github", "workflows", "protected-paths.yml")
-	_ = os.MkdirAll(filepath.Dir(gate), 0o755)
-	if err := os.WriteFile(gate, []byte("name: protected-paths\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	g = fake.New(t, "o/r", "User")
 	g.Viewer = "rahulnakmol"
-	g.Files = map[string]string{".github/CODEOWNERS": files[".github/CODEOWNERS"]}
+	// The default branch has aayudha's own solo-mode gate, which posts the protected-paths check.
+	g.Files = map[string]string{".github/CODEOWNERS": files[".github/CODEOWNERS"], ".github/workflows/protected-paths.yml": "name: protected-paths\n"}
 	var rs map[string]any
 	b, _ := os.ReadFile(filepath.Join("testdata", "seat", "ruleset.json"))
 	if err := json.Unmarshal(b, &rs); err != nil {
@@ -185,7 +180,7 @@ func TestSeatAddRemove(t *testing.T) {
 	// seat remove deletes it again, since its solo form would require a check
 	// nothing posts.
 	dir2, _, g2, _ := seatFixture(t)
-	_ = os.Remove(filepath.Join(dir2, ".github", "workflows", "protected-paths.yml"))
+	delete(g2.Files, ".github/workflows/protected-paths.yml")
 	g2.Rulesets = nil
 	if code, res, errOut := seatRun(t, dir2, g2, "add", "ux-researcher-evolutionist", "--human", "alice"); code != 0 || res.Policy != seats.PolicyPending ||
 		res.Ruleset != "absent" || !strings.Contains(res.PolicyNote, "then rerun this command: it creates the "+seats.GateRuleset+" ruleset") || len(g2.Rulesets) != 0 {
