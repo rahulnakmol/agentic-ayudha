@@ -21,8 +21,9 @@ a tool version has no effect on its own run. Its changes apply only after they m
 `.github/` is also a protected path in `.github/CODEOWNERS`, so a change to the gate needs a CODEOWNER review.
 
 That trigger has a known risk: the job runs in the base repository's context, and checking out untrusted code there
-can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing, and since 0.2 no
-job holds an AI key at all.
+can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing. The
+one AI key, the code-review environment's `AAYU_REVIEW_MODEL_KEY`, reaches only the inspect job, which checks out the
+base branch and runs no pull request code.
 
 `aayu init --gates` installs the template from
 [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml) into a product

@@ -393,7 +393,12 @@ func TestInitExtras(t *testing.T) {
 		}}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	// A code-review environment someone made earlier, which also admits feature branches.
-	g.Environments = map[string]*fake.Environment{inspect.ReviewEnvironment: {Policy: map[string]any{"protected_branches": false, "custom_branch_policies": true}, Branches: []string{"feature/*"}, Variables: map[string]string{}}}
+	// Its 101st rule sits on the second page of GitHub's list.
+	old := []string{"feature/*"}
+	for i := range 100 {
+		old = append(old, fmt.Sprintf("old/%d", i))
+	}
+	g.Environments = map[string]*fake.Environment{inspect.ReviewEnvironment: {Policy: map[string]any{"protected_branches": false, "custom_branch_policies": true}, Branches: old, Variables: map[string]string{}}}
 	args := []string{"init", "--yes", "--json", "--gates", "--projects", "--identity", "--integrations"}
 	code, out, errOut := run(t, env, opts, args...)
 	if code != 0 {

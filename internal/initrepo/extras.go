@@ -273,11 +273,21 @@ func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error 
 			return err
 		}
 	}
+	// Every page: a rule left on a later one would still admit its ref.
 	var have struct {
 		Policies []branchPolicy `json:"branch_policies"`
 	}
-	if err := in.rest(ctx, http.MethodGet, base+"/deployment-branch-policies?per_page=100", nil, &have); err != nil {
-		return err
+	for page := 1; ; page++ {
+		var got struct {
+			Policies []branchPolicy `json:"branch_policies"`
+		}
+		if err := in.rest(ctx, http.MethodGet, fmt.Sprintf("%s/deployment-branch-policies?per_page=100&page=%d", base, page), nil, &got); err != nil {
+			return err
+		}
+		have.Policies = append(have.Policies, got.Policies...)
+		if len(got.Policies) < 100 {
+			break
+		}
 	}
 	// Any other rule (a wildcard, a tag, an old branch) would let that ref reach the key, so it goes.
 	for _, p := range have.Policies {

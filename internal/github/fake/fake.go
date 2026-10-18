@@ -673,6 +673,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 					ps = append(ps, map[string]any{"id": i + 1, "name": b, "type": "branch"})
 				}
 			}
+			// GitHub pages this list: per_page (default 30) from page (default 1).
+			per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			per, pg = cmp.Or(per, 30), cmp.Or(pg, 1)
+			ps = ps[min((pg-1)*per, len(ps)):min(pg*per, len(ps))]
 			reply(200, map[string]any{"total_count": len(ps), "branch_policies": ps})
 		case m == "DELETE" && strings.HasPrefix(rest, "deployment-branch-policies/"):
 			i, err := strconv.Atoi(strings.TrimPrefix(rest, "deployment-branch-policies/"))
