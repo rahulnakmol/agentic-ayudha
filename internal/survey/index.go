@@ -440,9 +440,14 @@ func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 		return slices.ContainsFunc(s.syms, func(d Symbol) bool { return isDefKind(d.Kind) && d.line <= ln && ln <= d.End })
 	}
 	seen := map[string]bool{}
+	other := false // in the guard's else or elif branch, which runs only on import
 	for ln := 1; ln <= len(lines); ln++ {
 		text := lines[ln-1]
-		if inDef(ln) {
+		if ln > guard && text != "" && text[0] != ' ' && text[0] != '\t' {
+			t := strings.TrimSpace(text)
+			other = strings.HasPrefix(t, "elif ") || strings.HasPrefix(t, "else") && (len(t) == 4 || t[4] == ':' || t[4] == ' ')
+		}
+		if other || inDef(ln) {
 			continue // a function's body runs only when it is called
 		}
 		if ln == guard {
@@ -603,7 +608,8 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		case s.Kind == "program":
 			add("main", s.line, s.Name)
 		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"),
-			lang == "java" && s.Kind == "method" && n == "main", lang == "csharp" && s.Kind == "method" && n == "Main": // App::main, Program::Main
+			lang == "java" && s.Kind == "method" && n == "main" && !declares(raw, s.line, "private"), // App::main
+			lang == "csharp" && s.Kind == "method" && n == "Main" && declares(raw, s.line, "static"): // Program::Main
 			add("main", s.line, s.Name)
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
 			// A function defined in a C or C++ header (inline int parse(…) {…}) is
@@ -621,6 +627,12 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
 		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
 	}
+}
+
+// declares reports whether line ln of raw has the modifier word.
+func declares(raw string, ln int, word string) bool {
+	lines := strings.Split(raw, "\n")
+	return ln >= 1 && ln <= len(lines) && regexp.MustCompile(`\b`+word+`\b`).MatchString(lines[ln-1])
 }
 
 // rustPub reports whether a Rust function is declared pub (not pub(crate)):
@@ -674,14 +686,14 @@ func (ix *Index) headerEntries(file, code string) {
 
 // opaqueEntries drops a forward-declared type (class CScriptVar;) from the
 // entry points when a header defines it: callers reach the definition, which
-// is an entry of its own. A type no file defines stays, as the opaque handle
-// callers name.
+// is an entry of its own. A type no header defines stays, as the opaque handle
+// callers name, even when a .c or .cpp file defines it privately.
 func (ix *Index) opaqueEntries() {
 	defined := map[string]bool{}
 	for _, s := range ix.Symbols {
-		switch s.Kind {
+		switch f, _ := splitAt(s.At); s.Kind {
 		case "class", "struct", "union", "enum":
-			defined[s.Name] = true
+			defined[s.Name] = defined[s.Name] || isHeader(f)
 		}
 	}
 	ix.Entries = slices.DeleteFunc(ix.Entries, func(e Fact) bool {

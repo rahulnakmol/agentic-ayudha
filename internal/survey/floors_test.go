@@ -122,6 +122,9 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"rlib/src/lib.rs":  "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n\nfn helper() {}\n\npub(crate) fn inner() {}\n",
 		"App.java":         "public class App {\n    public static void main(String[] args) {}\n}\n",
 		"Program.cs":       "class Program {\n    static void Main(string[] args) {}\n}\n",
+		"ctximpl.c":        "struct Opaque { int x; };\n",
+		"Hidden.java":      "public class Hidden {\n    private void main() {}\n}\n",
+		"Inst.cs":          "class Inst {\n    void Main() {}\n}\n",
 		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\nusing Callback = void (*)(int);\ntemplate <class T> using List = T*;\nstruct Opaque;\nenum class Mode : int;\nstruct Opaque *open_it(void);\nstruct node;\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
@@ -135,9 +138,13 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2", "Hidden.java:1", "Inst.cs:1-2"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
+	}
+	// A private Java main and a C# Main that is not static launch nothing.
+	if slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.Kind == "main" && (e.At == "Hidden.java:2" || e.At == "Inst.cs:2") }) {
+		t.Errorf("entries = %v; a private or instance main is not a program", ix.Entries)
 	}
 	without := func(c string) func(d *Draft) {
 		return func(d *Draft) {
@@ -303,7 +310,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\nlib.early(lib.Env())\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
+	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\nlib.early(lib.Env())\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\nelse:\n    unused(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
 	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef early(env):\n    env.register('early', shout)\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n    env.register('loud-x', shout)\n    env.register('::ns::yo', shout)\n")
 	write("cases/dot.js", "dot(1);\n")
 	write("cases/early.js", "early(1);\n")
@@ -407,7 +414,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"negated", "a script whose top-level code calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/boom.js"} }), "case set G1", false},
 		{"match", "a function of the script its top-level code only names (callback = mute), never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
 			"cases/hush.js:1 calls hush, which runner entry:other.py:1 does not register", true},
-		{"match", "a function of the guard's file the guard never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hum.js"} }),
+		{"match", "a function of the guard's file only its else branch calls (on import)", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hum.js"} }),
 			"cases/hum.js:1 calls hum, which runner entry:tool.py:11 does not register", true},
 		{"negated", "a file-scope registration in a module the runner imports", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/yell.js"} }), "case set G1", false},
 		{"match", "the same registration, from a program that never imports it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/yell.js"} }),
