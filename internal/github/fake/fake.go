@@ -84,8 +84,11 @@ type PR struct {
 	Draft  bool    `json:"draft"`
 	Merged bool    `json:"merged"`
 	User   Account `json:"user"`
-	Head   Branch  `json:"head"`
-	Base   Branch  `json:"base"`
+	// AuthorAssociation is the author's relation to the repository; AddPR
+	// sets OWNER.
+	AuthorAssociation string `json:"author_association,omitempty"`
+	Head              Branch `json:"head"`
+	Base              Branch `json:"base"`
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
@@ -306,7 +309,7 @@ func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
 	is.PullRequest = &struct {
 		URL string `json:"url"`
 	}{URL: fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", g.Repo, is.Number)}
-	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
+	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"}, AuthorAssociation: "OWNER",
 		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
 	g.Pulls[is.Number] = pr
 	return pr

@@ -427,7 +427,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
 	}
-	paid := paidReviewer(gw, &l.Config, builder, e.Logf)
+	paid := paidReviewer(gw, &l.Config, builder, pr.GetAuthorAssociation(), e.Logf)
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	}
@@ -655,8 +655,11 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 // repo's CI": [inspect] paid_reviewer, called with the repository's own key,
 // only when no installed app reaches rung A, the model's family is one the
 // builder cannot be, the key is present, and [budget] per_pr_inspect_max caps
-// the spend. nil leaves the review to the reviewer app.
-func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, logf func(string, ...any)) *models.Resolved {
+// the spend. Only a PR whose author has write access to the repository
+// (author association OWNER, MEMBER, or COLLABORATOR) gets a paid review, so
+// an outsider cannot open PRs to spend the key. nil leaves the review to the
+// reviewer app.
+func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, assoc string, logf func(string, ...any)) *models.Resolved {
 	ic := cfg.Inspect
 	m := ic.PaidReviewer
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
@@ -669,6 +672,8 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, log
 	why := ""
 	route, err := models.RouteFor(cfg.Models, m, f)
 	switch {
+	case !slices.Contains([]string{"OWNER", "MEMBER", "COLLABORATOR"}, assoc):
+		why = fmt.Sprintf("the PR's author has no write access to the repository (author association %q), so no paid review is spent on it", assoc)
 	case b.Rung(f) != inspect.RungA:
 		why = fmt.Sprintf("its family (%s) cannot be shown to differ from the builder's", f)
 	case cfg.Budget.PerPRInspectMax <= 0:
