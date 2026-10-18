@@ -3,5 +3,19 @@
   "branch": "story/515-host-call-log-writes-posthog-and-sentry",
   "started_at": "2026-10-18T01:43:13Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "3adc4e0462eadc4ff697ead7f2f325d9f371004b",
+      "layers": [
+        "L06",
+        "L07"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T01:44:04Z"
+    }
+  ]
 }
