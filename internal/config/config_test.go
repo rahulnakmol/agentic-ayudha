@@ -300,6 +300,56 @@ func TestAllowPIIRepoOnly(t *testing.T) {
 	}
 }
 
+// TestIntegrationURLFromCheckout (Bug #598): a stored key is sent to its
+// integration's url, so a checkout's config names only the provider's cloud
+// host; any other url, including a look-alike host, comes only from the
+// person's own layers.
+func TestIntegrationURLFromCheckout(t *testing.T) {
+	section := func(p, u string) string {
+		return "version = 1\n[integrations." + p + "]\nsecret = \"" + p + "\"\nscope = \"read\"\nurl = \"" + u + "\"\n"
+	}
+	for _, file := range []string{"repo/.aayudha/config.toml", "repo/.aayudha/config.local.toml"} {
+		for _, c := range [][2]string{
+			{"posthog", "https://collector.example.com"},
+			{"posthog", "http://us.posthog.com"},
+			{"posthog", "https://us.posthog.com.example.com"},
+			{"posthog", "https://eu.posthog.com:8443"},
+			{"sentry", "https://collector.example.com"},
+			{"sentry", "https://sentry.io.example.com"},
+			{"sentry", "https://evilsentry.io"},
+			{"github", "https://collector.example.com"},
+			{"growthbook", "https://growthbook.example.com"},
+		} {
+			_, err := Load(fixture(t, map[string]string{file: section(c[0], c[1])}))
+			if err == nil || !strings.Contains(err.Error(), "[integrations."+c[0]+"] url") || !strings.Contains(err.Error(), "--set") {
+				t.Errorf("%s with %s url %s: err = %v; want the checkout refusal", file, c[0], c[1], err)
+			}
+		}
+	}
+	for _, c := range [][2]string{{"posthog", "https://eu.posthog.com"}, {"sentry", "https://de.sentry.io"}, {"sentry", "https://acme.sentry.io/"}} {
+		l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": section(c[0], c[1])}))
+		if err != nil || l.Config.Integrations[c[0]].URL != c[1] {
+			t.Errorf("checkout %s url %s: %v; want it accepted", c[0], c[1], err)
+		}
+	}
+	self := "https://posthog.example.com"
+	for name, tt := range map[string]struct {
+		files    map[string]string
+		env, set []string
+	}{
+		"user config": {files: map[string]string{"home/.config/aayudha/config.toml": section("posthog", self)}},
+		"environment": {files: map[string]string{"repo/.aayudha/config.toml": section("posthog", "https://eu.posthog.com")}, env: []string{"AAYU_INTEGRATIONS__POSTHOG__URL=" + self}},
+		"--set":       {files: map[string]string{"repo/.aayudha/config.toml": section("posthog", "https://eu.posthog.com")}, set: []string{"integrations.posthog.url=" + self}},
+	} {
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		l, err := Load(src)
+		if err != nil || l.Config.Integrations["posthog"].URL != self {
+			t.Errorf("%s: %v; want url %s", name, err, self)
+		}
+	}
+}
+
 // TestBuildBudgetDefaults (founder decision, 2026-10-17): a build may run 8
 // wall hours, 3 failed attempts, and 60 USD of metered spend, and the
 // gateway breaker's per-story limit is never below the build's, so the

@@ -133,7 +133,9 @@ that does not end in `:read`. Create a new key with only the scopes in
 and `project:read`, and store it again.
 
 **A 401, or no data, from a key that works in the provider's own UI.** Your account is in another region or is
-self-hosted. Set `url` in the section, for example `url = "https://eu.posthog.com"`.
+self-hosted. Set `url` in the section, for example `url = "https://eu.posthog.com"`. A self-hosted `url` goes in
+your user config (`~/.config/aayudha/config.toml`), an `AAYU_INTEGRATIONS__<NAME>__URL` variable, or `--set`: the
+repository's config may name only the provider's cloud hosts, so `aayu` refuses any other there.
 
 ## Everything else
 

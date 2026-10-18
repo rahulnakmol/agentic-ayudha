@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -144,6 +145,17 @@ func Load(src Sources) (*Loaded, error) {
 			for _, p := range []string{"posthog", "sentry"} {
 				if k.Exists("integrations." + p + ".allow_pii") {
 					errs = append(errs, fmt.Errorf("%s: [integrations.%s] allow_pii is read only from .aayudha/config.toml, a protected path", source, p))
+					return
+				}
+			}
+		}
+		// An integration's stored key is sent to its url, so the checkout
+		// names only the provider's own cloud host (Bug #598); a self-hosted
+		// url is the person's choice, like [models.gateway] base_url.
+		if name == LayerRepo || name == LayerLocal {
+			for _, p := range k.MapKeys("integrations") {
+				if u := k.String("integrations." + p + ".url"); u != "" && !providerHost(p, u) {
+					errs = append(errs, fmt.Errorf("%s: [integrations.%s] url = %q: a checkout names only the provider's cloud host; any other url is read only from the user config, AAYU_INTEGRATIONS__%s__URL, or --set", source, p, u, strings.ToUpper(p)))
 					return
 				}
 			}
@@ -305,4 +317,27 @@ func (l *Loaded) Origin(key string) (name, source string) {
 		}
 	}
 	return "", ""
+}
+
+// checkoutHosts are the provider cloud hosts a checkout may name as an
+// integration's url (Bug #598): each adapter's default and its cloud regions.
+// Sentry also serves every organization at <org>.sentry.io.
+var checkoutHosts = map[string][]string{
+	"posthog":    {"us.posthog.com", "eu.posthog.com"},
+	"sentry":     {"sentry.io"},
+	"growthbook": {"api.growthbook.io"},
+	"figma":      {"api.figma.com", "mcp.figma.com"},
+	"mobbin":     {"api.mobbin.com"},
+	"github":     {"api.github.com"},
+}
+
+// providerHost reports whether raw is an https URL on one of integration
+// name's cloud hosts.
+func providerHost(name, raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return slices.Contains(checkoutHosts[name], h) || (name == "sentry" && strings.HasSuffix(h, ".sentry.io"))
 }

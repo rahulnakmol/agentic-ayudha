@@ -47,7 +47,7 @@ stores it in your secrets store; it is for people only and refuses agents.
 secret = "posthog" # set the value with: aayu auth set-secret posthog
 scope = "read"
 project = "12345"  # your PostHog project ID
-# url = "https://eu.posthog.com"  # EU Cloud or self-hosted; the default is https://us.posthog.com
+# url = "https://eu.posthog.com"  # EU Cloud; the default is https://us.posthog.com
 ```
 
 **You should see** `stored posthog in the <backend> backend` from `auth set-secret`, and the section above, with your
@@ -101,7 +101,7 @@ secret = "sentry" # set the value with: aayu auth set-secret sentry
 scope = "read"
 org = "your-org"   # the Sentry organization slug
 project = "67890"  # the numeric project ID
-# url = "https://sentry.example.com"  # the EU region or self-hosted; the default is https://sentry.io
+# url = "https://de.sentry.io"  # the EU region; the default is https://sentry.io
 ```
 
 **You should see** `stored sentry in the <backend> backend` from `auth set-secret`, and the section, with your org and
@@ -192,7 +192,9 @@ step-by-step guide here yet. The clouds connect with no stored key: see [Azure](
   in your own terminal.
 - **A 403 from Sentry's sessions or events.** The token lacks `org:read`. Add it, or create a new token.
 - **A 401, or no data, from the right key.** Your account is on another region or is self-hosted: set `url` in the
-  section, for example `https://eu.posthog.com`.
+  section, for example `https://eu.posthog.com`. A self-hosted `url` goes in your user config
+  (`~/.config/aayudha/config.toml`), never the repository's: a checkout may name only the provider's cloud hosts, so
+  a pull request cannot send your key elsewhere.
 - **`no data?` for a Sentry metric.** The project had no sessions or events in the window. Check that release health
   is on for the project, or pick another metric.
 
