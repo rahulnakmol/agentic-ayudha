@@ -292,8 +292,14 @@ survey untrustworthy. Go through the draft claim by claim (traps, interfaces, de
   that skips files when it discovers them may still run a file named on its command line), a helper that differs
   from the constructor (a registration function may add what the default set lacks), an error handler that throws
   rather than continues, a caller in another module, an input the code treats specially (a non-finite number, an
-  empty array). Then write the claim for the scope it holds in ("discovery skips …", "the command-line runner
-  registers …"), or make it a risk to check or a question.
+  empty array). A setting under a condition (`if(NOT WIN32)`, `#ifdef`, a platform or compiler check) holds only
+  under it, and a build that leaves a setting unset gets the toolchain's default, which may be the same. "Reached only
+  through X" or "never called" holds only when the index's calls in for the symbol (`aayu survey --module`), the
+  file's own callers included, name nothing else. Then write the claim for the scope it holds in ("discovery skips
+  …", "the command-line runner registers …"), or make it a risk to check or a question.
+- **What the code allows, not what its programs do.** That the shipped programs never do something (seed the random
+  generator, set an option, call a function) does not show that a host or caller cannot: a claim about what hosts
+  can or cannot do cites the public interface or the shared state that allows or prevents it.
 - **Outcomes from their path.** Exit codes, output and error text, and number, date, and locale formatting come
   from the code that produces them: trace from the entry point to the return, the exit, or the print, through every
   catch block on the way. Quote text only from the line that prints it, for the path that prints it.
@@ -316,7 +322,8 @@ survey untrustworthy. Go through the draft claim by claim (traps, interfaces, de
   upgrade is blocked, that a TODO changes nothing) is a risk to check or a question, unless the code or a probe shows
   it.
 - **Defaults and interfaces too.** A question's default and an interface's consumers are claims: "callers use only
-  these calls" must hold for every caller the index shows.
+  these calls" must hold for every caller the index shows. A default that describes today ("as today", "unchanged",
+  "as the code does now") is a claim about today: cite what shows it, or write the default as a proposal.
 
 Then list, for each modernisation step, every do-not-carry entry (except one the person rejected) whose citations
 fall in a module the step names, in that step's `avoids`: the check matches by module, so two steps that replace the
