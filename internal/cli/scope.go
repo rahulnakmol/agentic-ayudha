@@ -371,10 +371,9 @@ func (r *scopeRun) emit(rep ScopeReport) error {
 		if len(rep.Feedback) > 0 {
 			fmt.Fprintf(w, "  feedback assigned: %s\n", issueRefs(rep.Feedback))
 		}
-		switch d := rep.Drift; {
-		case d == nil:
+		if d := rep.Drift; d == nil {
 			fmt.Fprintln(w, "  no baseline yet: changes are free until a person accepts one")
-		default:
+		} else {
 			fmt.Fprintf(w, "  baseline %d: drift %.1f%% of %d points, budget %.1f%% (added %d, removed %d, resized %d)\n",
 				d.Baseline, d.DriftPct, d.BaselinePoints, d.BudgetPct, len(d.Added), len(d.Removed), len(d.Resized))
 			if d.Over() {
@@ -739,7 +738,7 @@ func (r *scopeRun) accept(ctx context.Context) error {
 			return err
 		}
 	}
-	effect := "Accepts on Release #" + strconv.Itoa(r.n) + ": " + q.describe(r.version) + "."
+	var effect string
 	var commit func(login string) (string, error)
 	switch q.Kind {
 	case "baseline":
