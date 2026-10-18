@@ -30,7 +30,15 @@ func TestKeychainStartsNoSessionBus(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the session-bus check is for Linux")
 	}
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	// A bus socket under XDG_RUNTIME_DIR is not one godbus finds.
+	xdg := t.TempDir()
+	if err := os.WriteFile(filepath.Join(xdg, "bus"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", xdg)
+	old := runUserDir
+	runUserDir = t.TempDir()
+	t.Cleanup(func() { runUserDir = old })
 	before := sessionDaemons(t)
 	for _, addr := range []string{"", "autolaunch:"} {
 		t.Setenv("DBUS_SESSION_BUS_ADDRESS", addr)

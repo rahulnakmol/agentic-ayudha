@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"filippo.io/age"
@@ -27,13 +28,19 @@ func (Keychain) Name() string { return "keychain" }
 
 // errNoSessionBus is the Secret Service's answer before it is asked: there is
 // no D-Bus session bus to ask it on.
-var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset or autolaunch:, and $XDG_RUNTIME_DIR/bus does not exist)")
+var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset or autolaunch:, and /run/user/<uid> has no bus or dbus-session)")
+
+// runUserDir is where godbus looks for a running session bus when
+// DBUS_SESSION_BUS_ADDRESS is unset (conn_other.go, getRuntimeDirectory): it
+// ignores XDG_RUNTIME_DIR.
+var runUserDir = "/run/user/" + strconv.Itoa(os.Getuid())
 
 // sessionBus reports whether the Secret Service can be reached without
 // starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
 // which forks a session dbus-daemon that outlives aayu: one per probe on a
-// headless machine. An autolaunch: address asks for exactly that, so it counts
-// as no address. macOS and Windows use no D-Bus.
+// headless machine. It mirrors the lookup godbus v5 runs before it falls back
+// to dbus-launch. An autolaunch: address asks for exactly that fallback, so it
+// counts as no address. macOS and Windows use no D-Bus.
 func sessionBus() error {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		return nil
@@ -41,10 +48,12 @@ func sessionBus() error {
 	if a := os.Getenv("DBUS_SESSION_BUS_ADDRESS"); a != "" && !strings.HasPrefix(a, "autolaunch:") {
 		return nil
 	}
-	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
-		if _, err := os.Stat(filepath.Join(d, "bus")); err == nil {
-			return nil
-		}
+	// godbus's discovery, in its order: the bus socket, then a file naming the address.
+	if _, err := os.Stat(filepath.Join(runUserDir, "bus")); err == nil {
+		return nil
+	}
+	if b, err := os.ReadFile(filepath.Join(runUserDir, "dbus-session")); err == nil && strings.HasPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS=") {
+		return nil
 	}
 	return errNoSessionBus
 }
