@@ -414,7 +414,8 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	// new input: it salts the cache key, and the edited PR is reviewed again.
 	// The Aayudha-Host and Aayudha-Model lines are aayu's own metadata: a
 	// changed declaration relabels the cached review's rung instead.
-	res, st, err := r.begin(ctx, &in, prev, "pr\x00"+in.Title+"\x00"+strings.Join(strings.Fields(declLine.ReplaceAllString(in.Body, "")), " "))
+	body := botSummary.ReplaceAllString(declLine.ReplaceAllString(in.Body, ""), "")
+	res, st, err := r.begin(ctx, &in, prev, "pr\x00"+in.Title+"\x00"+strings.Join(strings.Fields(body), " "))
 	if err != nil || res.Disposition == Skipped || res.Disposition == StepBack || res.Cached {
 		return res, st, err
 	}
@@ -914,6 +915,11 @@ func capText(s string, n int) string {
 	}
 	return s[:n] + fmt.Sprintf("\n… (%d more bytes not shown)", len(s)-n)
 }
+
+// botSummary is the release-notes block CodeRabbit writes into a PR body.
+// It is not the author's input: its edit would otherwise change the cache
+// key, so the gate's re-run would pay for a second review of the same head.
+var botSummary = regexp.MustCompile(`(?s)<!-- This is an auto-generated comment: release notes by coderabbit\.ai -->.*?<!-- end of auto-generated comment: release notes by coderabbit\.ai -->`)
 
 // declLine is a PR body's builder declaration, exactly as aayu reads one
 // (internal/cli/verify.go modelTrailer and hostTrailer); any other line,
