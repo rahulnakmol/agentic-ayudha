@@ -1350,9 +1350,14 @@ func TestInspectPaidReviewer(t *testing.T) {
 	// live on #583) leaves the PR to the reviewer app: its reply is judged,
 	// and without one the gate fails closed with no-reply, not an error.
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
-	model.Err = errors.New("model endpoint returned 524: error code: 524")
+	model.Err = errors.New(`Post "https://gw.example/v1/chat/completions": context deadline exceeded (Client.Timeout exceeded while awaiting headers)`)
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 1 {
 		t.Fatalf("a failed paid review, no reply: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
+	}
+	// The comment says why rung B did not review, without --verbose, and never names the endpoint's URL.
+	if body := lastInspect(t, g, prN); !strings.Contains(body, `fallback: rung B ([inspect] paid_reviewer gemini-3.8-flash) failed on this head (Post "<endpoint>/chat/completions": context deadline exceeded`) ||
+		strings.Contains(body, "gw.example") {
+		t.Errorf("the inspect comment does not say why rung B failed, or names the endpoint:\n%s", body)
 	}
 	head := g.Pulls[prN].Head.SHA
 	addComment(g, prN, "claude[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
