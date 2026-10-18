@@ -133,8 +133,8 @@ func TestFloorRunners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ix.Builtins) != 5 {
-		t.Fatalf("builtins = %v; want print, Math.sqrt, the file-scope Extra.f and Boot.go, and the constructor's JSON.parse only (not the commented registration, strcmp, or printf)", ix.Builtins)
+	if len(ix.Builtins) != 6 {
+		t.Fatalf("builtins = %v; want print, Math.sqrt, the file-scope Extra.f, Boot.go, and the lambda's Lam.go, and the constructor's JSON.parse only (not the commented registration, strcmp, or printf)", ix.Builtins)
 	}
 	// Two declarations on one header line are two entry points.
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == "entry:interp.h:20#beta" && e.At == "interp.h:20" }) {
@@ -159,6 +159,10 @@ func TestFloorRunners(t *testing.T) {
 	}
 	if slices.ContainsFunc(ix.Entries, func(e Fact) bool { return strings.Contains(e.Detail, "Impl") || strings.Contains(e.Detail, "Hidden") }) {
 		t.Errorf("entries = %v; a private nested type is not an entry point", ix.Entries)
+	}
+	// A header with an uppercase extension is a header.
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == "Upper.HPP:2" && e.Detail == "function upper_api" }) {
+		t.Errorf("entries = %v; want upper_api in Upper.HPP", ix.Entries)
 	}
 	// Three overloads on one line are three entry points.
 	if n := len(slices.DeleteFunc(slices.Clone(ix.Entries), func(e Fact) bool { return e.At != "util.hxx:15" })); n != 3 {
@@ -192,7 +196,7 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/math.js"} }), "case set G1", false},
 		{"negated", "a builtin both runners register", set(func(g *CaseSet) { g.Inputs = []string{"tests/hello.js"} }), "case set G1", false},
 		{"negated", "the file excluded, naming what decided it", set(func(g *CaseSet) {
-			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)", "tests/json.js needs JSON (Q1)", "tests/boot.js needs Boot (Q1)"}
+			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)", "tests/json.js needs JSON (Q1)", "tests/boot.js needs Boot (Q1)", "tests/lambda.js needs Lam (Q1)"}
 		}), "case set G1", false},
 		{"match", "a file-scope registration in a file the runner never loads", set(func(g *CaseSet) { g.Inputs = []string{"tests/extra.js"} }),
 			"tests/extra.js:1 calls Extra.f, which runner entry:cli.cpp:3 does not register", true},
@@ -212,6 +216,9 @@ func TestFloorRunners(t *testing.T) {
 		{"match", "an exclusion that names tests/math.js does not exclude math.js", set(func(g *CaseSet) {
 			g.Inputs, g.Exclude = []string{"math.js", "tests/math.js"}, []string{"tests/math.js needs Math (Q1)"}
 		}), "case set G1: math.js:1 calls Math.sqrt", true},
+		{"negated", "a registration with an inline lambda, from the executable that links it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/lambda.js"} }), "case set G1", false},
+		{"match", "that registration, from an executable that does not link it", set(func(g *CaseSet) { g.Inputs = []string{"tests/lambda.js"} }),
+			"tests/lambda.js:1 calls Lam.go, which runner entry:cli.cpp:3 does not register", true},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
 	})
@@ -276,7 +283,18 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	write("other.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef hush(x):\n    return x\n\n\ndef mute(env):\n    env.register('hush', hush)\n\n\ndef loud(env):\n    env.register('boom', hush)\n\n\nloud(lib.Env())\nprint(lib.render(2))\n")
 	write("cases/hush.js", "hush(1);\n")
 	write("cases/boom.js", "boom(1);\n")
+	// Nine functions named go: a call edge lists eight, and its name resolves the
+	// ninth, which registers zed.
+	for k := 1; k <= 8; k++ {
+		write(fmt.Sprintf("g%d.py", k), "def go(env):\n    return env\n")
+	}
+	write("zz.py", "def go(env):\n    env.register('zed', go)\n")
+	write("nine.py", "#!/usr/bin/env python3\ngo(1)\n")
+	write("cases/zed.js", "zed(1);\n")
 	runFloorCases(t, build(), base, []floorCase{
+		{"negated", "a call whose name has more definitions than its edge lists", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:nine.py:1"}, []string{"cases/zed.js"} }), "case set G1", false},
+		{"match", "the ninth definition's registration, from a program that never calls go", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/zed.js"} }),
+			"cases/zed.js:1 calls zed, which runner entry:other.py:1 does not register", true},
 		{"match", "a second program, no runners", func(*Draft) {}, "case set G1: name its runners", true},
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
