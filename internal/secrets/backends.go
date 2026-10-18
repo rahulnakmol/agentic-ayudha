@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"filippo.io/age"
@@ -31,29 +31,43 @@ func (Keychain) Name() string { return "keychain" }
 var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset or autolaunch:, and /run/user/<uid> has no bus or dbus-session)")
 
 // runUserDir is where godbus looks for a running session bus when
-// DBUS_SESSION_BUS_ADDRESS is unset (conn_other.go, getRuntimeDirectory): it
-// ignores XDG_RUNTIME_DIR.
-var runUserDir = "/run/user/" + strconv.Itoa(os.Getuid())
+// DBUS_SESSION_BUS_ADDRESS is unset (conn_other.go, getRuntimeDirectory):
+// /run/user/<uid> from user.Current, never XDG_RUNTIME_DIR. When the lookup
+// fails, godbus skips this discovery and runs dbus-launch.
+var runUserDir = func() (string, error) {
+	u, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return "/run/user/" + u.Uid, nil
+}
 
 // sessionBus reports whether the Secret Service can be reached without
 // starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
 // which forks a session dbus-daemon that outlives aayu: one per probe on a
 // headless machine. It mirrors the lookup godbus v5 runs before it falls back
-// to dbus-launch. An autolaunch: address asks for exactly that fallback, so it
-// counts as no address. macOS and Windows use no D-Bus.
+// to dbus-launch: an address it would dial, which an empty or autolaunch: one
+// is not. macOS and Windows use no D-Bus.
 func sessionBus() error {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		return nil
 	}
-	if a := os.Getenv("DBUS_SESSION_BUS_ADDRESS"); a != "" && !strings.HasPrefix(a, "autolaunch:") {
+	dialable := func(a string) bool { return a != "" && !strings.HasPrefix(a, "autolaunch:") }
+	if dialable(os.Getenv("DBUS_SESSION_BUS_ADDRESS")) {
 		return nil
+	}
+	dir, err := runUserDir()
+	if err != nil {
+		return errNoSessionBus
 	}
 	// godbus's discovery, in its order: the bus socket, then a file naming the address.
-	if _, err := os.Stat(filepath.Join(runUserDir, "bus")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, "bus")); err == nil {
 		return nil
 	}
-	if b, err := os.ReadFile(filepath.Join(runUserDir, "dbus-session")); err == nil && strings.HasPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS=") {
-		return nil
+	if b, err := os.ReadFile(filepath.Join(dir, "dbus-session")); err == nil {
+		if a, ok := strings.CutPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS="); ok && dialable(strings.TrimRight(a, "\n\r")) {
+			return nil
+		}
 	}
 	return errNoSessionBus
 }
