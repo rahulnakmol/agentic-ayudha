@@ -552,7 +552,7 @@ func TestCheckStates(t *testing.T) {
 	}
 }
 
-// The copilot row passes only on trust it can read: Copilot CLI's, found
+// The copilot row passes only on a Copilot CLI that runs and trust it can read: Copilot CLI's, found
 // through USERPROFILE where HOME is unset (Windows). Without Copilot CLI,
 // VS Code's Workspace Trust is out of reach, so the row asks for it; and a
 // hooks file only counts when Copilot would run aayu's pre-tool hook from it.
@@ -565,9 +565,16 @@ func TestCopilotTrustRow(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(profile, ".copilot", "config.json"), []byte("// managed\n"+`{"trustedFolders":[`+strconv.Quote(p.Root)+`]}`), 0o644)
 	env := map[string]string{"USERPROFILE": profile}
 	p.Getenv = func(k string) string { return env[k] }
+	overlay(p, map[string]string{"/usr/bin/x --version": "GitHub Copilot CLI 1.0.98.\n"})
 	if r := checkCopilot(context.Background(), p); r.Status != Pass {
 		t.Errorf("trusted through USERPROFILE: %s %s %v", r.Status, r.Detail, r.Lines)
 	}
+	exec := p.Exec
+	overlay(p, map[string]string{"/usr/bin/x --version": "ERR"})
+	if r := checkCopilot(context.Background(), p); r.Status != Warn {
+		t.Errorf("a copilot that does not run: %s %s", r.Status, r.Detail)
+	}
+	p.Exec = exec
 	p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
 	if r := checkCopilot(context.Background(), p); r.Status != Warn {
 		t.Errorf("VS Code only: %s %s", r.Status, r.Detail)
