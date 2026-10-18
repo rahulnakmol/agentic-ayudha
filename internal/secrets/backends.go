@@ -27,14 +27,18 @@ func (Keychain) Name() string { return "keychain" }
 
 // errNoSessionBus is the Secret Service's answer before it is asked: there is
 // no D-Bus session bus to ask it on.
-var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset and $XDG_RUNTIME_DIR/bus does not exist)")
+var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset or autolaunch:, and $XDG_RUNTIME_DIR/bus does not exist)")
 
 // sessionBus reports whether the Secret Service can be reached without
 // starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
 // which forks a session dbus-daemon that outlives aayu: one per probe on a
-// headless machine. macOS and Windows use no D-Bus.
+// headless machine. An autolaunch: address asks for exactly that, so it counts
+// as no address. macOS and Windows use no D-Bus.
 func sessionBus() error {
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" || os.Getenv("DBUS_SESSION_BUS_ADDRESS") != "" {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return nil
+	}
+	if a := os.Getenv("DBUS_SESSION_BUS_ADDRESS"); a != "" && !strings.HasPrefix(a, "autolaunch:") {
 		return nil
 	}
 	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {

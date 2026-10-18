@@ -30,18 +30,20 @@ func TestKeychainStartsNoSessionBus(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("the session-bus check is for Linux")
 	}
-	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "")
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	before := sessionDaemons(t)
-	k := Keychain{}
-	if err := k.Available(); err == nil || !strings.Contains(err.Error(), "no D-Bus session bus") {
-		t.Errorf("Available: %v", err)
-	}
-	if _, err := k.Get("x"); err == nil {
-		t.Error("Get found a keychain without a session bus")
-	}
-	if err := k.Set("x", "y"); err == nil {
-		t.Error("Set wrote a keychain without a session bus")
+	for _, addr := range []string{"", "autolaunch:"} {
+		t.Setenv("DBUS_SESSION_BUS_ADDRESS", addr)
+		k := Keychain{}
+		if err := k.Available(); err == nil || !strings.Contains(err.Error(), "no D-Bus session bus") {
+			t.Errorf("%q: Available: %v", addr, err)
+		}
+		if _, err := k.Get("x"); err == nil {
+			t.Errorf("%q: Get found a keychain without a session bus", addr)
+		}
+		if err := k.Set("x", "y"); err == nil {
+			t.Errorf("%q: Set wrote a keychain without a session bus", addr)
+		}
 	}
 	if after := sessionDaemons(t); after > before {
 		t.Errorf("the keychain started %d session dbus-daemon(s)", after-before)
