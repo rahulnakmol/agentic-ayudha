@@ -1062,11 +1062,15 @@ func TestInspectThroughApp(t *testing.T) {
 			t.Fatalf("a comment by %s: %d %+v %s\n%s", who, code, res, errOut, lastInspect(t, g, prN))
 		}
 	}
-	// --approve is a person's step: refused in an agent lane (no presence), and
-	// for any account but the approver's.
+	// --approve is a person's step: the approver enters GitHub's device code,
+	// even on a terminal with no agent marker (CodeRabbit's Major on #647). It
+	// is refused in an agent lane, for any account but the approver's, and
+	// when the person denies the code.
+	outcome := "approve"
 	approve := func(env map[string]string, opts Options, viewer string) (int, string) {
 		g.Mu.Lock()
 		g.Viewer = viewer
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: viewer, Outcome: outcome}
 		g.Mu.Unlock()
 		code, _, errOut := run(t, env, opts, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff and the pack", "--repo", "o/r")
 		return code, errOut
@@ -1077,9 +1081,15 @@ func TestInspectThroughApp(t *testing.T) {
 	}
 	person := opts
 	person.IsTerminal = stdinTTY
+	person.DevicePoll = time.Millisecond
 	if code, errOut := approve(agent, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("approve without presence: %d %s", code, errOut)
 	}
+	outcome = "deny"
+	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "the request was denied") {
+		t.Fatalf("approve on a terminal with the device code denied: %d %s", code, errOut)
+	}
+	outcome = "approve"
 	if code, errOut := approve(env, person, "mallory"); code != ExitBlocked || !strings.Contains(errOut, "approver is lead, not mallory") {
 		t.Fatalf("approve by a non-approver: %d %s", code, errOut)
 	}
@@ -1460,9 +1470,11 @@ func TestInspectReviewerFallback(t *testing.T) {
 	}
 	g.Mu.Lock()
 	g.Viewer = "founder"
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
 	g.Mu.Unlock()
 	person := opts
 	person.IsTerminal = stdinTTY
+	person.DevicePoll = time.Millisecond
 	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff", "--repo", "o/r"); code != 0 {
 		t.Fatalf("the approver's --approve: %d %s", code, errOut)
 	}

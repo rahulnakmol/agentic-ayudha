@@ -213,7 +213,8 @@ untrusted data.
    against the schema. Codex will not use a custom format, so its own review counts instead: a receipt naming the
    exact head commit, and its inline findings on that commit, each with a P0 to P3 badge. A person's review counts
    only when the `[autonomy] approver` gave it with `aayu inspect <pr> --approve --reason "<what you checked>"` (story
-   639). That command is human-only: it runs through the presence check (the device flow) as the approver, records
+   639). That command is human-only: it runs through the presence check (the device flow) as the approver every time,
+   also on a terminal with no agent marker, records
    the pull request, the head, the approver, the time, and the reason on the ledger (`inspect/approved.jsonl`), and
    posts the review. The gate counts the approver's reply only when such a record names its exact head, so a new push
    needs a new approval. A comment alone, even from the approver's account, does not count: an agent holding the

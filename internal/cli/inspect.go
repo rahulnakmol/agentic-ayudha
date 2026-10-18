@@ -796,8 +796,15 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	// The person approves this head by name; a push after it voids the step.
-	if err := e.requireApproval(ctx, Pending{What: "inspect --approve", Effect: []string{fmt.Sprintf("Records your review of PR #%d at commit %s as the human review the merge gate reads.", n, short(head))}}, AccessWrite); err != nil {
+	// The person approves this head by name through the device flow, always:
+	// a terminal without an agent marker is not proof of a person here, since
+	// this record is what the gate trusts over a comment written with the
+	// person's token (CodeRabbit's Major on #647). A push after it voids it.
+	refusal := Errorf(ExitBlocked, "inspect --approve needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code")
+	if sig := e.agentSignal(); sig != "" {
+		refusal = Errorf(ExitBlocked, "inspect --approve is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", sig)
+	}
+	if _, err := e.presenceCheck(ctx, Pending{What: "inspect --approve", Effect: []string{fmt.Sprintf("Records your review of PR #%d at commit %s as the human review the merge gate reads.", n, short(head))}}, AccessWrite, refusal); err != nil {
 		return err
 	}
 	if now, err := headOf(); err != nil || now != head {
