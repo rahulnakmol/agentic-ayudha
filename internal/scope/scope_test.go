@@ -61,16 +61,17 @@ func TestMeasure(t *testing.T) {
 func TestProblems(t *testing.T) {
 	ps := Problems("Ship eligibility", []Item{
 		{Number: 1, Type: "feature"}, story(2, "", 1), story(3, "XL", 1),
-		{Number: 4, Type: "feature"}, // no Story under it in the plan
-		{Number: 5, Type: "bug", Effort: "S", Parent: 4 + 100},
+		{Number: 4, Type: "feature"},                     // only a Feature under it: no executable child
+		{Number: 6, Type: "feature", Parent: 4},          // and #6 has no Story or Bug either
+		{Number: 5, Type: "bug", Effort: "S", Parent: 1}, // the plan's real work sits under #1
 	})
 	got := strings.Join(ps, "\n")
-	for _, want := range []string{"#2 (story) has no effort", "#3 (story) is XL", "Feature #4 has no Story or Bug"} {
+	for _, want := range []string{"#2 (story) has no effort", "#3 (story) is XL", "Feature #4 has no Story or Bug", "Feature #6 has no Story or Bug"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	if len(ps) != 3 || strings.Contains(got, "Feature #1") {
+	if len(ps) != 4 || strings.Contains(got, "Feature #1") {
 		t.Fatalf("problems:\n%s", got)
 	}
 	if ps := Problems(" ", nil); len(ps) != 2 {

@@ -208,7 +208,9 @@ func Problems(intent string, items []Item) []string {
 	}
 	children := map[int]bool{}
 	for _, it := range items {
-		children[it.Parent] = true
+		if it.Type == "story" || it.Type == "bug" { // only executable work breaks a Feature down
+			children[it.Parent] = true
+		}
 	}
 	for _, it := range items {
 		switch {

@@ -48,6 +48,13 @@ The date stays fixed and the scope moves: a slip goes to the next release with `
 
 ## Run it
 
+Ask your agent with the Release's number. It reports the plan and its drift, adds or drops items, and drafts the
+baseline. It stops there: you accept the baseline yourself, in `aayu inbox` or with `aayu scope <release> --accept`.
+
+```text
+Use the scope skill to plan Release 12: add Stories 31, 32, and 35, check the plan, and draft the baseline for me.
+```
+
 <!-- BEGIN GENERATED: skill-usage -->
 
 ```sh
