@@ -243,7 +243,8 @@ type GitHub struct {
 	ViewerType  string // GET /user type; default User
 	// Permissions is each login's repository permission (GET
 	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
-	// maintain, read, or none. The Viewer defaults to admin, others to read.
+	// maintain, read, or none, or "not-found" for an account that is not a
+	// collaborator (GitHub answers 404). The Viewer defaults to admin, others to read.
 	Permissions map[string]string
 	Labels      []*Label
 	IssueTypes  []*IssueType
@@ -1309,6 +1310,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		login := rePerm.FindStringSubmatch(p)[1]
 		perm := g.Permissions[login]
 		switch {
+		case perm == "not-found":
+			reply(404, map[string]any{"message": "Not Found"})
+			return
 		case perm == "" && login == g.Viewer:
 			perm = "admin"
 		case perm == "":

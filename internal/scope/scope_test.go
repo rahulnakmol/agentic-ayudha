@@ -80,14 +80,16 @@ func TestProblems(t *testing.T) {
 		{Number: 4, Type: "feature"},                     // only a Feature under it: no executable child
 		{Number: 6, Type: "feature", Parent: 4},          // and #6 has no Story or Bug either
 		{Number: 5, Type: "bug", Effort: "S", Parent: 1}, // the plan's real work sits under #1
+		story(7, "XXL", 1), story(8, "S,M", 1),           // efforts scope cannot weigh, never zero points
 	})
 	got := strings.Join(ps, "\n")
-	for _, want := range []string{"#2 (story) has no effort", "#3 (story) is XL", "Feature #4 has no Story or Bug", "Feature #6 has no Story or Bug"} {
+	for _, want := range []string{"#2 (story) has no effort", "#3 (story) is XL", "Feature #4 has no Story or Bug", "Feature #6 has no Story or Bug",
+		"#7 (story) has effort XXL", "#8 (story) has effort S,M"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	if len(ps) != 4 || strings.Contains(got, "Feature #1") {
+	if len(ps) != 6 || strings.Contains(got, "Feature #1") {
 		t.Fatalf("problems:\n%s", got)
 	}
 	if ps := Problems(" ", nil); len(ps) != 2 {

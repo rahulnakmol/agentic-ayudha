@@ -196,7 +196,7 @@ func Total(items []Item) int {
 
 // Problems are what keep a plan from being drafted as a baseline: it is not
 // broken down (a Feature with no Story or Bug in the plan), not sized (a
-// Story or Bug without an effort, or an XL that must be sliced first), or it
+// Story or Bug without one known effort, or an XL that must be sliced first), or it
 // has no intent or no items.
 func Problems(intent string, items []Item) []string {
 	var out []string
@@ -218,6 +218,8 @@ func Problems(intent string, items []Item) []string {
 			out = append(out, fmt.Sprintf("#%d (%s) has no effort: label: size it XS-L", it.Number, it.Type))
 		case (it.Type == "story" || it.Type == "bug") && it.Effort == "XL":
 			out = append(out, fmt.Sprintf("#%d (%s) is XL: slice it before it joins a baseline (aayu slice %d)", it.Number, it.Type, it.Number))
+		case (it.Type == "story" || it.Type == "bug") && !slices.Contains(workitems.Efforts, it.Effort): // two labels, or one scope cannot weigh
+			out = append(out, fmt.Sprintf("#%d (%s) has effort %s: keep one effort: label, XS-L", it.Number, it.Type, it.Effort))
 		case it.Type == "feature" && !children[it.Number]:
 			out = append(out, fmt.Sprintf("Feature #%d has no Story or Bug in the plan: slice it (aayu slice %d) and add its stories", it.Number, it.Number))
 		}

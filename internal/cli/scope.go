@@ -260,6 +260,16 @@ func (r *scopeRun) handoffReady(items []scope.Item) error {
 	return nil
 }
 
+// held refuses drift over budget that no accepted Decision holds: execution
+// never reads such a plan until a person decides.
+func (r *scopeRun) held(d *scope.Drift) error {
+	if d.Over() && d.OverBudgetDecision == 0 {
+		return WithNext(Errorf(ExitBlocked, "scope: %s drifted %.1f%% from baseline %d, over the %.1f%% budget, and no accepted Decision holds that drift; a person decides before hand-off",
+			r.version, d.DriftPct, d.Baseline, d.BudgetPct), fmt.Sprintf("re-baseline: aayu scope %d --draft --decision <accepted decision>", r.n))
+	}
+	return nil
+}
+
 // handedOff notes whether --handoff ran: its plan comment by aayu's App or a
 // writer is on the Release. The includes links cannot say so: a plan with no
 // Story or Bug left has none, and the next one added must still reach them.
@@ -323,7 +333,13 @@ func (r *scopeRun) readPlan(ctx context.Context) error {
 func (r *scopeRun) item(ctx context.Context, is *gh.Issue) (scope.Item, error) {
 	owner, name, _ := github.SplitRepo(r.repo)
 	w, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
-	it := scope.Item{Number: is.GetNumber(), Type: w.Type, Title: is.GetTitle(), Effort: w.Label("effort")}
+	var efforts []string // all of them: two labels are no effort scope can weigh
+	for _, l := range github.IssueLabels(is) {
+		if v, ok := strings.CutPrefix(l, "effort:"); ok {
+			efforts = append(efforts, v)
+		}
+	}
+	it := scope.Item{Number: is.GetNumber(), Type: w.Type, Title: is.GetTitle(), Effort: strings.Join(efforts, ",")}
 	it.Points = scope.PointsFor(it.Type, it.Effort, r.cfg.Scope.EffortPoints)
 	if !slices.Contains(scope.Types, it.Type) {
 		return it, nil
@@ -582,6 +598,9 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 			if err := r.handoffReady(r.items); err != nil {
 				return err
 			}
+			if err := r.held(d); err != nil { // a Story planned by hand, over budget, waits for a person
+				return err
+			}
 			if _, err := r.publish(ctx, d); err != nil {
 				return err
 			}
@@ -606,9 +625,9 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	cur, d := r.measure(r.items), r.measure(next)
 	// A Decision covers the changes a person accepted with it, never a later
 	// one: over budget, any change it does not hold asks a person, even one
-	// worth zero points. Only a change that cuts drift goes ahead unasked.
+	// worth zero points, and one that cuts drift but leaves it over budget.
 	covered := d != nil && r.drift != nil && r.drift.OverBudgetDecision != 0 && within(*d, *r.drift)
-	if d != nil && d.Over() && !covered && d.ChangedPoints >= cur.ChangedPoints {
+	if d != nil && d.Over() && !covered {
 		// A person accepts one change, never drift no Decision holds beside it.
 		if cur.Over() && cur.OverBudgetDecision == 0 {
 			return WithNext(Errorf(ExitBlocked, "scope: %s is already %.1f%% from baseline %d through changes no Decision holds; a person re-baselines before another change over budget",
@@ -1183,12 +1202,20 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 // scopeTrusted is the one rule every reader of a scope marker applies (scope
 // and the inbox): aayu's own App, or an account with write access (maintain
 // counts). Anyone may comment, and any installed App may too, so every other
-// comment with the marker is skipped: an App holds no repository role.
+// comment with the marker is skipped: an App holds no repository role, and
+// an account that is not a collaborator (GitHub answers 404) holds none either.
 func scopeTrusted(u *gh.User, id config.Identity, canWrite func(login string) (bool, error)) (bool, error) {
+	if u.GetLogin() == "" {
+		return false, nil
+	}
 	if identity.IsBot(identity.Account{Login: u.GetLogin(), Type: u.GetType()}, nil) {
 		return id.AppSlug != "" && strings.EqualFold(u.GetLogin(), id.AppSlug+"[bot]"), nil
 	}
-	return canWrite(u.GetLogin())
+	ok, err := canWrite(u.GetLogin())
+	if github.NotFound(err) {
+		return false, nil
+	}
+	return ok, err
 }
 
 func (r *scopeRun) trusted(ctx context.Context, u *gh.User) (bool, error) {
@@ -1230,9 +1257,8 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 		return err
 	}
 	d := r.measure(r.items)
-	if d.Over() && d.OverBudgetDecision == 0 {
-		return WithNext(Errorf(ExitBlocked, "scope: %s drifted %.1f%% from baseline %d, over the %.1f%% budget, and no accepted Decision holds that drift; a person decides before hand-off",
-			r.version, d.DriftPct, d.Baseline, d.BudgetPct), fmt.Sprintf("re-baseline: aayu scope %d --draft --decision <accepted decision>", r.n))
+	if err := r.held(d); err != nil {
+		return err
 	}
 	n, err := r.publish(ctx, d)
 	if err != nil {

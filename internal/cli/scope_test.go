@@ -120,10 +120,13 @@ func TestScope(t *testing.T) {
 	}
 	// Anyone may comment: a stranger's request marker is text, not a request.
 	g.Mu.Lock()
-	g.Permissions = map[string]string{"mallory": "read"}
+	g.Permissions = map[string]string{"mallory": "read", "passerby": "not-found"}
 	stranger := &fake.Comment{ID: 99, Body: ScopeRequestMarker + "\n<!-- scope-request {\"kind\":\"drop\",\"item\":3} -->"}
 	stranger.User.Login, stranger.User.Type = "mallory", "User"
-	release.Comments = append(release.Comments, stranger)
+	// and one by someone who is not a collaborator at all, on a public repository: GitHub answers 404
+	passerby := &fake.Comment{ID: 98, Body: stranger.Body + "\n" + ScopePlanMarker}
+	passerby.User.Login, passerby.User.Type = "passerby", "User"
+	release.Comments = append(release.Comments, stranger, passerby)
 	g.Mu.Unlock()
 	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "nothing waits") || milestone(3) != "v0.3.0" {
 		t.Fatalf("a second --accept, or a stranger's request: exit %d: %s", code, out)
@@ -280,6 +283,10 @@ func TestScope(t *testing.T) {
 	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(epic.Number), "--decision", "7"); code != ExitBlocked || !strings.Contains(out, "no Decision holds") {
 		t.Fatalf("a request beside drift no Decision holds: exit %d: %s", code, out)
 	}
+	// A change that cuts that drift but leaves it over budget still needs a person.
+	if code, _, out := scopeRun(agent, "--drop", "5"); code != ExitBlocked || !strings.Contains(out, "no Decision holds") || milestone(5) != "v0.3.0" {
+		t.Fatalf("a cut that stays over budget: exit %d, #5 in %q: %s", code, milestone(5), out)
+	}
 	g.Mu.Lock()
 	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
 	g.Mu.Unlock()
@@ -305,7 +312,7 @@ func TestScope(t *testing.T) {
 	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
 	links, comments := rel.Fields[workitems.FieldLinks], len(release.Comments)
 	g.Mu.Unlock()
-	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 6 {
+	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 7 {
 		t.Fatalf("hand-off: links %q, %d comments\n%s", links, comments, release.Body)
 	}
 	// After hand-off, a change keeps the plan ready to hand off: a Summary edited since the baseline stops it.
@@ -344,6 +351,33 @@ func TestScope(t *testing.T) {
 	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #4" {
 		t.Fatalf("links after hand-off with none left: %q", links)
 	}
+	// A Story put in the milestone by hand, over budget: a retried --add never ships it without a person.
+	byHand := g.AddIssue("Planned by hand", fixtureBody(t, "story", nil), "type:story", "effort:L")
+	g.Mu.Lock()
+	byHand.Milestone = g.Issues[4].Milestone
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(byHand.Number)); code != ExitBlocked || !strings.Contains(out, "no accepted Decision holds") {
+		t.Fatalf("a retried --add of a Story planned by hand: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	rel, _ = workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
+	byHand.Milestone = nil
+	g.Mu.Unlock()
+	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #4" {
+		t.Fatalf("links after a retried --add over budget: %q", links)
+	}
+	// Two effort labels are no size: a problem that stops the next change, never zero points.
+	g.Mu.Lock()
+	sized := g.Issues[4].Labels
+	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:XS"}, {Name: "effort:L"}}
+	g.Mu.Unlock()
+	small := g.AddIssue("Small", fixtureBody(t, "story", nil), "type:story", "effort:XS")
+	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(small.Number)); code != ExitBlocked || !strings.Contains(out, "#4 (story) has effort XS,L") || milestone(small.Number) != "" {
+		t.Fatalf("a change with two effort labels in the plan: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Issues[4].Labels = sized
+	g.Mu.Unlock()
 	// A Story closed as not planned is cut from scope: drift, not a planned item.
 	g.Mu.Lock()
 	l.State, l.StateReason = "closed", "not_planned"
