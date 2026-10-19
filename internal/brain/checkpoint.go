@@ -203,7 +203,11 @@ func (c *cp) upsert(p string, create func() *Note, meta map[string]any, blocks m
 			n.Set(k, v)
 		}
 	}
+	have := Blocks(n.Body)
 	for _, k := range slices.SortedFunc(maps.Keys(blocks), byBlockOrder) {
+		if _, ok := have[k]; !ok && blocks[k] == "" {
+			continue // an empty block adds no section: one a person removed stays removed
+		}
 		n.Body = SetBlock(n.Body, k, blocks[k])
 	}
 	if exists && string(n.Render()) == before {
@@ -333,6 +337,39 @@ func CompareVersions(a, b string) int {
 
 func releasePath(version string) string { return "Releases/" + version + ".md" }
 
+// note returns the note of type typ named name, wherever a person moved it and
+// whatever the case of its name, or def when there is none. A checkpoint so
+// never makes a second note that the same [[name]] link would reach.
+func (c *cp) note(typ, name, def string) string {
+	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
+		if c.v.Notes[p].Str("type") == typ && strings.EqualFold(Base(p), name) {
+			return p
+		}
+	}
+	return def
+}
+
+// clearGone empties the named generated blocks of every note of type typ
+// that the records no longer name (not in kept): a generated block shows only
+// what the records hold. A block a person removed stays removed.
+func (c *cp) clearGone(typ string, kept map[string]bool, names ...string) {
+	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
+		n := c.v.Notes[p]
+		if n.Str("type") != typ || kept[p] {
+			continue
+		}
+		clear := map[string]string{}
+		for k, b := range Blocks(n.Body) {
+			if slices.Contains(names, k) && b != "" {
+				clear[k] = ""
+			}
+		}
+		if len(clear) > 0 {
+			c.upsert(p, nil, nil, clear)
+		}
+	}
+}
+
 // releases creates and refreshes one note per version: the plan from the
 // newest baseline, the changes since it, and what shipped.
 func (c *cp) releases() {
@@ -352,6 +389,7 @@ func (c *cp) releases() {
 	}
 	del := c.delivered()
 	t, _ := FindType("release")
+	kept := map[string]bool{}
 	for _, ver := range slices.SortedFunc(maps.Keys(versions), CompareVersions) {
 		var src []string
 		var rec []string
@@ -397,7 +435,8 @@ func (c *cp) releases() {
 		if s := del[ver]; len(s) > 0 {
 			blocks["delivered"] = c.deliveredBlock(s)
 		}
-		p := releasePath(ver)
+		p := c.note("release", ver, releasePath(ver))
+		kept[p] = true
 		meta := map[string]any{"sources": union(nil, src), "version": ver}
 		if issue != 0 {
 			meta["release_issue"] = issue
@@ -416,6 +455,7 @@ func (c *cp) releases() {
 			return n
 		}, meta, blocks)
 	}
+	c.clearGone("release", kept, "record", "plan", "changes", "delivered")
 }
 
 // group renders issue lines grouped under their Initiative and Feature, each
@@ -583,7 +623,7 @@ func (c *cp) issueBlocks() {
 			}
 			if len(by) > 0 {
 				link := ver
-				if _, ok := c.files[releasePath(ver)]; ok {
+				if c.note("release", ver, "") != "" {
 					link = "[[" + ver + "]]"
 				}
 				hist = append(hist, fmt.Sprintf("- Delivered in %s by %s.", link, strings.Join(by, ", ")))
@@ -602,27 +642,35 @@ func (c *cp) issueBlocks() {
 func (c *cp) seats() {
 	st, _ := FindType("seat")
 	pt, _ := FindType("person")
-	people := map[string][]string{} // by login: GitHub logins ignore case, and the @ is optional
-	login := func(s string) string { return strings.ToLower(strings.TrimPrefix(s, "@")) }
+	people := map[string][]string{}  // by login: GitHub logins ignore case, and the @ is optional
+	login := func(s string) string { // "" for text that is not a login: it names no note and no path
+		if !isLogin(s) {
+			return ""
+		}
+		return strings.ToLower(strings.TrimPrefix(s, "@"))
+	}
 	if a := login(c.r.Approver); a != "" {
 		people[a] = append(people[a], "the approver ([autonomy] approver)")
 	}
+	seatNotes := map[string]bool{}
 	for _, s := range c.r.Seats {
 		facts := []string{
 			fmt.Sprintf("- Twin: %s. %s", s.Twin, s.Purpose),
 			"- Accountable for: " + strings.Join(codes(s.Verbs), ", ") + ".",
 		}
-		if s.Human != "" {
-			h := login(s.Human)
+		if h := login(s.Human); h != "" {
 			facts = append(facts, "- Paired with [["+h+"]].")
 			people[h] = append(people[h], "[["+s.Name+"]]")
+		} else if s.Human != "" {
+			facts = append(facts, "- Paired, but [seats."+s.ID+"] human is not a GitHub login.")
 		} else {
 			facts = append(facts, "- Solo: the twin runs it alone.")
 		}
 		if len(s.Verbs) == 0 {
 			facts[1] = "- Accountable for no verb."
 		}
-		p := "Seats/" + s.Name + ".md"
+		p := c.note("seat", s.Name, "Seats/"+s.Name+".md")
+		seatNotes[p] = true
 		c.upsert(p, func() *Note {
 			n := newNote(st, "seat-"+s.ID, s.Name, c.today, nil, "[[Seats]]")
 			n.Set("status", "current")
@@ -631,6 +679,7 @@ func (c *cp) seats() {
 		}, map[string]any{"sources": []string{"file seats/" + s.ID + "/persona.toml", "file internal/verbs/registry.go"}},
 			map[string]string{"facts": strings.Join(facts, "\n")})
 	}
+	c.clearGone("seat", seatNotes, "facts")
 	// A person who no longer holds a role keeps their note; its generated
 	// roles say so, rather than a role they lost. A login matches its note
 	// whatever the case of either (People/Alice.md is alice's note).
@@ -640,7 +689,7 @@ func (c *cp) seats() {
 		if n.Str("type") != "person" {
 			continue
 		}
-		l := login(Base(p))
+		l := strings.ToLower(strings.TrimPrefix(Base(p), "@"))
 		notes[l] = p
 		if people[l] == nil && Blocks(n.Body)["roles"] != "" {
 			c.upsert(p, nil, nil, map[string]string{"roles": "- No role in the current records."})

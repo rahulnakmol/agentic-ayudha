@@ -88,6 +88,22 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	if out := brainRun(3, "check", "--dir", vault); !strings.Contains(out, "[[Nowhere]] does not resolve") {
 		t.Errorf("check --dir passed a broken link: %s", out)
 	}
+	// A symlink in the vault could carry a read or a write out of it: aayu refuses it on the branch and in --dir.
+	_ = os.WriteFile(filepath.Join(vault, "Capabilities", "Proof packs.md"), []byte(capNote), 0o644)
+	if err := os.Symlink(t.TempDir(), filepath.Join(vault, "Releases", "elsewhere")); err != nil {
+		t.Fatal(err)
+	}
+	if out := brainRun(2, "check", "--dir", vault); !strings.Contains(out, "Releases/elsewhere is not a regular file") {
+		t.Errorf("check --dir read through a symlink: %s", out)
+	}
+	git(t, vault, "add", ".")
+	git(t, vault, "commit", "--quiet", "-m", "a symlink")
+	git(t, vault, "push", "--quiet", "origin", "HEAD:refs/heads/brain")
+	for _, action := range []string{"checkpoint", "check"} {
+		if out := brainRun(4, action); !strings.Contains(out, "holds Releases/elsewhere, which is not a regular file (mode 120000)") {
+			t.Errorf("%s over a symlink on the branch: %s", action, out)
+		}
+	}
 	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") || !strings.Contains(out, "git -C ../r-brain merge --ff-only origin/brain") {
 		t.Errorf("open: %s", out)
 	}

@@ -361,3 +361,65 @@ func TestWorkstreamsLinkIntoOneGraph(t *testing.T) {
 		t.Errorf("two notes with one name pass:\n%s", got)
 	}
 }
+
+// A checkpoint finds a note a person moved or re-cased instead of making a
+// second one; it empties the generated blocks of a release or seat the records
+// no longer name; and text that is not a login names no person note.
+func TestCheckpointFindsMovedNotesAndClearsGoneRecords(t *testing.T) {
+	seat := func(id, name, human string) Seat {
+		return Seat{ID: id, Name: name, Twin: "Atri", Purpose: "Counsels.", Verbs: []string{"decide"}, Human: human}
+	}
+	r := Records{Repo: "o/r", Issues: map[int]Issue{},
+		Tags:  []Tag{{Name: "v0.1.0", Date: "2026-10-01", URL: "https://github.com/o/r/releases/tag/v0.1.0"}, {Name: "v0.2.0", Date: "2026-10-17", URL: "https://github.com/o/r/releases/tag/v0.2.0"}},
+		Seats: []Seat{seat("founder", "Founder", ""), seat("old-seat", "Old Seat", "")},
+	}
+	first, err := Run(skeleton(t), r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := maps.Clone(skeleton(t))
+	maps.Copy(files, first.Files)
+	// A person moves the note, changes its case, and removes its empty Plan block.
+	files["Releases/2026/V0.2.0.md"] = []byte(strings.Replace(string(files["Releases/v0.2.0.md"]), Block("plan", ""), "", 1))
+	delete(files, "Releases/v0.2.0.md")
+
+	r.Tags = r.Tags[1:] // v0.1.0 and Old Seat leave the records
+	r.Seats = []Seat{seat("founder", "Founder", "../not a login")}
+	second, err := Run(files, r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maps.Copy(files, second.Files)
+	if _, dup := files["Releases/v0.2.0.md"]; dup {
+		t.Errorf("the checkpoint made a second v0.2.0 note beside the moved one: wrote %v", second.Paths)
+	}
+	blocks := func(p string) map[string]string {
+		n, err := Parse(p, files[p])
+		if err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		return Blocks(n.Body)
+	}
+	if b := blocks("Releases/2026/V0.2.0.md"); !strings.Contains(b["record"], "Tagged v0.2.0") {
+		t.Errorf("the moved release note was not refreshed: %v", b)
+	} else if _, ok := b["plan"]; ok {
+		t.Error("an empty generated block came back after a person removed it")
+	}
+	if b := blocks("Releases/v0.1.0.md"); strings.TrimSpace(b["record"]) != "" {
+		t.Errorf("a release the records no longer name keeps its record: %q", b["record"])
+	}
+	if b := blocks("Seats/Old Seat.md"); strings.TrimSpace(b["facts"]) != "" {
+		t.Errorf("a seat the records no longer name keeps its facts: %q", b["facts"])
+	}
+	if b := blocks("Seats/Founder.md"); !strings.Contains(b["facts"], "human is not a GitHub login") {
+		t.Errorf("a paired seat with a bad login: %q", b["facts"])
+	}
+	for _, p := range second.Paths {
+		if strings.HasPrefix(p, "People/") && p != "People/People.md" {
+			t.Errorf("text that is not a login made a person note: %s", p)
+		}
+	}
+	if rep := Check(files); !rep.OK() {
+		t.Errorf("the vault fails check: %v", rep.Errors)
+	}
+}

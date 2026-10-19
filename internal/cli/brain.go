@@ -108,14 +108,20 @@ func brainFiles(ctx context.Context, w *ledger.Writer) (map[string][]byte, strin
 		return nil, "", Wrap(ExitExternal, err)
 	}
 	defer t.Close()
-	out, err := w.Output(ctx, w.Dir, "ls-tree", "-r", "-z", "--name-only", t.Tip)
+	out, err := w.Output(ctx, w.Dir, "ls-tree", "-r", "-z", t.Tip)
 	if err != nil {
 		return nil, "", err
 	}
 	files := map[string][]byte{}
-	for p := range strings.SplitSeq(out, "\x00") {
-		if p == "" {
+	for e := range strings.SplitSeq(out, "\x00") {
+		meta, p, ok := strings.Cut(e, "\t") // <mode> <type> <object>\t<path>
+		if !ok {
 			continue
+		}
+		if mode, _, _ := strings.Cut(meta, " "); mode != "100644" && mode != "100755" {
+			// a symlink could carry a write out of the worktree, and Obsidian
+			// shows neither a symlink nor a submodule as a note
+			return nil, "", Errorf(ExitBlocked, "the %s branch holds %s, which is not a regular file (mode %s): a vault holds only files; remove it, then run aayu again", brain.Branch, p, mode)
 		}
 		b, err := t.File(ctx, p)
 		if err != nil {
@@ -254,6 +260,9 @@ func readVault(dir string) (map[string][]byte, error) {
 		}
 		if rel == ".git" { // a worktree's .git file
 			return nil
+		}
+		if !d.Type().IsRegular() { // a symlink would read a file outside the vault
+			return fmt.Errorf("%s is not a regular file: a vault holds only files", rel)
 		}
 		b, err := os.ReadFile(p)
 		files[rel] = b
