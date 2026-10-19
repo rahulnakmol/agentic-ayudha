@@ -943,7 +943,9 @@ func (m *inboxModel) blocker(j inboxJob) *inboxJob {
 func (m *inboxModel) pump() tea.Cmd {
 	var cmds []tea.Cmd
 	for k := range m.queue {
-		if m.writing() >= inboxParallel || m.quitting == quitCurrent {
+		// No new write starts while the quit question is open: q promises
+		// to leave the queued ones unstarted.
+		if m.writing() >= inboxParallel || m.quitting == quitCurrent || m.ask != nil && m.ask.quit {
 			break
 		}
 		j := &m.queue[k]
@@ -1067,6 +1069,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 				return tea.Quit
 			}
 			m.status = fmt.Sprintf("Quitting once every write has finished: %d to go.", len(m.queue))
+			return m.pump()
 		case "q", "ctrl+c":
 			m.ask, m.quitting = nil, quitCurrent
 			m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil })
@@ -1076,6 +1079,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.status = fmt.Sprintf("Quitting once the %d %s under way %s; nothing else is started.", m.writing(), plural(m.writing(), "write", "writes"), plural(m.writing(), "finishes", "finish"))
 		case "esc", "n":
 			m.ask, m.status = nil, "Staying; the writes go on."
+			return m.pump()
 		}
 		return nil
 	case writing && (k == "ctrl+c" || k == "q" && m.ask == nil && !m.finding && !m.help):

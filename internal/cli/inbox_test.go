@@ -1422,6 +1422,31 @@ func TestInboxWriteFailures(t *testing.T) {
 		}
 	}
 
+	// While the quit question is open, a write that ends starts no queued
+	// one: q promises to leave them unstarted. Esc resumes them.
+	{
+		m := inboxScene(clock)
+		m.queue = nil
+		clear(m.state)
+		var jobs []inboxJob
+		for _, n := range []int{697, 685, 666} {
+			it := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n })]
+			jobs = append(jobs, inboxJob{it: it, a: *it.recommended()})
+		}
+		for _, j := range jobs {
+			m.start([]inboxJob{j})
+		}
+		teaKeys(m, "q")
+		m.finished(inboxDoneMsg{key: jobs[0].it.key(), fresh: jobs[0].it})
+		if running, _ := m.queued(jobs[2].it.key()); running || m.writing() != 1 {
+			t.Errorf("a write ended under the quit question and #666 started: running %v, %d writing", running, m.writing())
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEscape}) // its command is not run: the write stays under way
+		if running, _ := m.queued(jobs[2].it.key()); !running {
+			t.Error("Esc on the quit question did not resume the queued write")
+		}
+	}
+
 	// The writes end while the quit question is open: w and q then quit at
 	// once, with nothing left to wait for.
 	for _, key := range []string{"w", "q"} {
