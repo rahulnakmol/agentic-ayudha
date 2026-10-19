@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -2041,6 +2042,9 @@ func TestInboxLoginScreen(t *testing.T) {
 	m.dirty = true
 	if v := ansi.Strip(m.View().Content); strings.Contains(v, "set-clipboard") {
 		t.Errorf("with set-clipboard on, the tmux hint still shows:\n%s", v)
+	}
+	if runtime.GOOS == "linux" && browserHere(func(k string) string { return map[string]string{"BROWSER": "firefox"}[k] }) {
+		t.Error("$BROWSER on a headless machine counts as a browser, though openURL runs xdg-open")
 	}
 	m.signin.browser = false
 	opened = ""

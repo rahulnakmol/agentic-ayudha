@@ -264,11 +264,12 @@ func (m *inboxModel) signinKeys() []string {
 	return []string{"c", "copy the code", "q", "quit"}
 }
 
-// browserHere reports whether a browser can open on this machine: macOS and
-// Windows have one; elsewhere it takes a display and xdg-open, or $BROWSER.
+// browserHere reports whether openURL can open a browser on this machine:
+// macOS and Windows have one; elsewhere it takes a display and xdg-open, the
+// opener openURL runs ($BROWSER alone is not enough: openURL does not use it).
 func browserHere(getenv func(string) string) bool {
 	switch {
-	case runtime.GOOS == "darwin" || runtime.GOOS == "windows" || getenv("BROWSER") != "":
+	case runtime.GOOS == "darwin" || runtime.GOOS == "windows":
 		return true
 	case getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "":
 		return false
