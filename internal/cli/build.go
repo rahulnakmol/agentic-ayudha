@@ -310,25 +310,31 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
 		// A checkpoint the session review held is on its own ref: it carries
 		// on from there when the story branch does not hold it yet.
-		from := "origin/" + res.Branch
-		if held, _ := run2(ctx, root, "git", "ls-remote", "origin", heldRef(res.Branch)); held != "" {
-			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+"+heldRef(res.Branch)+":"+heldRef(res.Branch)); err != nil {
-				return Wrap(ExitExternal, err)
+		held, _ := run2(ctx, root, "git", "ls-remote", "origin", heldRef(res.Branch))
+		switch {
+		case (remote != "" || held != "") && !in.Bool("resume") && dlg == nil:
+			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
+		case remote != "" || held != "":
+			from := "origin/" + res.Branch
+			if remote != "" {
+				if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+			} else {
+				// The story branch is not on origin: a tracking ref left from an
+				// earlier one would make the first push's lease refuse.
+				_, _ = run2(ctx, root, "git", "update-ref", "-d", "refs/remotes/origin/"+res.Branch)
 			}
-			if remote == "" {
-				from, remote = heldRef(res.Branch), held
-			} else if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err == nil {
-				if _, err := run2(ctx, root, "git", "merge-base", "--is-ancestor", heldRef(res.Branch), "origin/"+res.Branch); err != nil {
+			// A checkpoint the session review held is on its own ref: the
+			// resume carries on from there when the story branch, if any, does
+			// not hold it yet.
+			if held != "" {
+				if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+"+heldRef(res.Branch)+":"+heldRef(res.Branch)); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+				if _, err := run2(ctx, root, "git", "merge-base", "--is-ancestor", heldRef(res.Branch), from); remote == "" || err != nil {
 					from = heldRef(res.Branch)
 				}
-			}
-		}
-		switch {
-		case remote != "" && !in.Bool("resume") && dlg == nil:
-			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
-		case remote != "":
-			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
-				return Wrap(ExitExternal, err)
 			}
 			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, from); err != nil {
 				return Wrap(ExitExternal, err)
@@ -570,13 +576,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	// the branch before it is pushed; on fix the push waits for the builder. A
 	// delegated receiver is reviewed by the merge gate's inspect only.
 	if dlg == nil && res.Verify != "miss" {
+		// The checkpoint is committed and verified: any failure from here on
+		// records it first, so the run after the fix continues after it.
+		keep := func(err error) error {
+			if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
+				fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
+			}
+			return err
+		}
 		head, err := run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
 		if err != nil {
-			return Wrap(ExitExternal, err)
+			return keep(Wrap(ExitExternal, err))
 		}
 		pr, err := storyPR(ctx, c, repo, res.Branch)
 		if err != nil {
-			return err
+			return keep(err)
 		}
 		if st.ReviewPR != 0 && pr.GetNumber() != st.ReviewPR {
 			// The PR the spend belongs to is closed: a new PR has its own cap.
@@ -589,7 +603,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				return c.REST.Issues.ListComments(ctx, owner, name, pr.GetNumber(), &gh.IssueListCommentsOptions{ListOptions: o})
 			})
 			if err != nil {
-				return Wrap(ExitExternal, err)
+				return keep(Wrap(ExitExternal, err))
 			}
 			ciSpent = inspectState(comments, viewer(ctx, c), l.Config.Identity).SpentUSD
 		}
@@ -603,12 +617,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			err = Wrap(ExitInternal, serr)
 		}
 		if err != nil {
-			// The checkpoint is committed and verified: record it, so the run
-			// after the fix (a review setting, a budget) continues after it.
-			if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
-				fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
-			}
-			return err
+			return keep(err)
 		}
 		if rep.Round > 0 || rep.Skipped != "" {
 			res.Review = &rep
@@ -678,13 +687,15 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if st.ReviewUSD > 0 {
 		st.ReviewPR = res.PR
 	}
+	// The ledger first: the pushed checkpoint is the record the next run,
+	// anywhere, continues from; the worktree's own state comes second.
+	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+		return err
+	}
 	sr.Pushed, sr.PushedAt, sr.Pending = len(sr.Rounds), e.Now().UTC().Truncate(time.Second), ""
 	sr.PushedHead, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
 	if err := sr.save(ctx, res.Worktree); err != nil {
 		return Wrap(ExitInternal, err)
-	}
-	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-		return err
 	}
 	if dlg != nil {
 		dlg.state.PR = res.PR
@@ -731,6 +742,12 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 				return nil, gw.Exec(ctx, res.Worktree, "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/"+res.Branch)
 			}); err != nil {
 			return Wrap(ExitExternal, err)
+		}
+		// The branch now holds what the session review held: a held ref left
+		// behind would outlive a later rewrite of the branch and send a resume
+		// back to it. Removing it is best effort; a resume checks it anyway.
+		if held, _ := run2(ctx, res.Worktree, "git", "ls-remote", "origin", heldRef(res.Branch)); held != "" {
+			_ = gw.Exec(ctx, res.Worktree, "push", "--quiet", "origin", ":"+heldRef(res.Branch))
 		}
 	}
 	owner, name, _ := github.SplitRepo(repo)

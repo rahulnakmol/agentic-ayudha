@@ -1173,17 +1173,41 @@ func TestBuildSessionReviewHeldCheckpointResumes(t *testing.T) {
 	if got := git(t, bare, "rev-parse", heldRef(branch)); got != head || git(t, bare, "rev-parse", "refs/heads/"+branch) != before {
 		t.Fatalf("held ref %s, branch moved: want %s on the held ref only", got, head)
 	}
-	git(t, dir, "worktree", "remove", "--force", wt)
-	git(t, dir, "branch", "-D", branch)
+	gone := func() {
+		t.Helper()
+		git(t, dir, "worktree", "remove", "--force", wt)
+		git(t, dir, "branch", "-D", branch)
+	}
+	gone()
 	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
 		t.Fatalf("resume from the held checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// The story branch was never pushed, only the held ref: a build without
+	// --resume says so, and --resume continues from the held ref.
+	gone()
+	git(t, bare, "update-ref", "-d", "refs/heads/"+branch)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "--resume") {
+		t.Fatalf("a held-only story without --resume: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from a held-only checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// Once the reviewer is satisfied the branch is pushed and the held ref is
+	// gone, so a later rewrite of the branch cannot send a resume back to it.
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar fixed = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || git(t, bare, "rev-parse", "refs/heads/"+branch) != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the push after the hold: %d %s", code, errOut)
+	}
+	if refs := git(t, bare, "for-each-ref", "refs/aayudha/held/"); refs != "" {
+		t.Fatalf("the held ref outlives the push: %s", refs)
 	}
 }
 
 // A reviewer of the builder's family never reviews in the session: the push
 // goes out unreviewed, and the PR body says so.
 func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
-	g, env, opts, _, _, prN, _ := thinFixture(t)
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
 	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
 	opts.ModelClient = func(models.Route, string) models.Client { return model }
 	env["AAYU_MODEL"] = "grok-4.7"
@@ -1196,6 +1220,12 @@ func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
 	g.Mu.Unlock()
 	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal {
 		t.Fatalf("the PR list fails: %d %s", code, errOut)
+	}
+	// The verified checkpoint reaches the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil || len(bst.Checkpoints) == 0 ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, BuildWorktree(opts.Dir, 2), "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a PR-list failure is not recorded: %v %+v", err, bst.Checkpoints)
 	}
 	// The PR body cannot be updated: the push went out, and build says so.
 	g.Mu.Lock()
