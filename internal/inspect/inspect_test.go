@@ -542,11 +542,13 @@ func TestCoverageManifest(t *testing.T) {
 	// parts is kept once (CodeRabbit's minor on #714).
 	// A finding the noise rules dropped as low-confidence keeps its part's fix,
 	// as liftFix keeps one (Codex's P1 on #714).
+	// So does a P3 the noise rules counted as a nit, as in an unsplit review.
 	for _, c := range []struct {
 		finding bool
 		low     bool
+		nit     bool
 		want    string
-	}{{false, false, Merge}, {true, false, Fix}, {false, true, Fix}} {
+	}{{false, false, false, Merge}, {true, false, false, Fix}, {false, true, false, Fix}, {false, false, true, Fix}} {
 		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
 			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
 			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
@@ -556,6 +558,9 @@ func TestCoverageManifest(t *testing.T) {
 				}
 				if c.low {
 					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A guess about b", 0.1))
+				}
+				if c.nit {
+					fs = append(fs, finding("P3", "maintainability", "internal/b/b.go", "package parts", "A nit in b", 0.9))
 				}
 				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
 					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": "not in this part"}}}
@@ -574,7 +579,7 @@ func TestCoverageManifest(t *testing.T) {
 			want = append(want, "internal/b/b.go A bug in b")
 		}
 		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
-			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t): %s, findings %v, err %v", c.finding, c.low, res.Disposition, fs, err)
+			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t, a nit %t): %s, findings %v, err %v", c.finding, c.low, c.nit, res.Disposition, fs, err)
 		}
 	}
 

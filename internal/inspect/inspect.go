@@ -550,7 +550,8 @@ func (r Runner) reviewOne(ctx context.Context, in Input, mode string) (Result, e
 
 // partFixStands reports whether a part's fix rests on a finding of its
 // own: one it kept, or one the noise rules dropped for a reason that keeps a
-// fix (liftFix). A finding on a file another part holds is not its own.
+// fix (liftFix), a P3 included. A finding on a file another part holds is not
+// its own.
 func partFixStands(o Result, files []DiffFile) bool {
 	if o.Disposition != Fix {
 		return false
@@ -560,7 +561,6 @@ func partFixStands(o Result, files []DiffFile) bool {
 	}
 	for _, d := range o.Dropped {
 		switch {
-		case d.Severity == "P3":
 		case d.Why == DropRefuted, d.Why == DropDismissed, d.Why == DropTestGap, d.Why == DropTestValue, d.Why == DropPreExisting, d.Why == DropDuplicate:
 		case d.Why == DropOutsideDiff && slices.ContainsFunc(files, func(f DiffFile) bool { return f.Path == d.File }):
 		default:
