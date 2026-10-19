@@ -518,11 +518,11 @@ const (
 
 // prBodyFloor applies the PR description check (prbody.Check) to
 // res on every path that emits a result. A blocking problem on an agent PR
-// (labelled agent-authored, or opened by a bot) turns merge, or a docs-only
-// skip, into fix, as a floor does (rule 7); a warning is a note. The check is
-// deterministic and runs on the body as it is now: a cached result first gets
-// back the review's own disposition (Reviewed), so an edited body needs no
-// new review. It reports whether the check's notes differ from the ones prev
+// (labelled agent-authored or human-fallback, or declaring Aayudha-Host)
+// turns merge, or a docs-only skip, into fix, as a floor does (rule 7); a
+// warning is a note. The check is deterministic and runs on the body as it is
+// now: a cached result first gets back the review's own disposition
+// (Reviewed). It reports whether the check's notes differ from the ones prev
 // recorded, so the comment is written again. A draft is not checked.
 func (e *Env) prBodyFloor(res *inspect.Result, pr *gh.PullRequest, prev *inspect.Result) bool {
 	ours := func(s string) bool { return strings.HasPrefix(s, prBodyBlocks) || strings.HasPrefix(s, prBodyWarns) }
@@ -531,9 +531,13 @@ func (e *Env) prBodyFloor(res *inspect.Result, pr *gh.PullRequest, prev *inspect
 		res.Disposition, res.Reviewed, res.Overridden = res.Reviewed, "", ""
 	}
 	if !pr.GetDraft() {
-		u := pr.GetUser()
-		agent := u.GetType() == "Bot" || strings.HasSuffix(u.GetLogin(), "[bot]") ||
-			slices.ContainsFunc(pr.Labels, func(l *gh.Label) bool { return l.GetName() == workitems.LabelAgentAuthored })
+		// An agent's PR declares itself: by label, or by the Aayudha-Host
+		// line build writes when it opens the PR (so a failed label call
+		// still blocks). A bot author alone (Dependabot, a cloud agent's own
+		// PR) only warns: it cannot rewrite its body.
+		agent := hostTrailer.MatchString(pr.GetBody()) || slices.ContainsFunc(pr.Labels, func(l *gh.Label) bool {
+			return l.GetName() == workitems.LabelAgentAuthored || l.GetName() == workitems.LabelHumanFallback
+		})
 		words, _ := e.steWords() // without the list, sentence length is still checked
 		block, warn := prbody.Check(pr.GetBody(), words, agent)
 		var why []string

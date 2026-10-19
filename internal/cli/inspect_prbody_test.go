@@ -69,10 +69,17 @@ func TestPRBodyFloor(t *testing.T) {
 	if e.prBodyFloor(&person, &gh.PullRequest{Body: &bad}, nil); person.Disposition != inspect.Merge || !hasNote(person, prBodyWarns, `"Why"`) {
 		t.Fatalf("a person's PR: %s %v", person.Disposition, person.Notes)
 	}
-	// A bot's PR is an agent's, label or not.
+	// A body that declares its host is an agent's, label or not (build's
+	// label call may fail); a bot author alone, which cannot rewrite its
+	// body, only warns.
+	declared := bad + "\nAayudha-Host: amp\n"
+	declaredRes := inspect.Result{Disposition: inspect.Merge}
+	if e.prBodyFloor(&declaredRes, &gh.PullRequest{Body: &declared}, nil); declaredRes.Disposition != inspect.Fix {
+		t.Errorf("an unlabelled PR that declares its host: %s", declaredRes.Disposition)
+	}
 	bot := inspect.Result{Disposition: inspect.Merge}
-	if e.prBodyFloor(&bot, &gh.PullRequest{Body: &bad, User: &gh.User{Login: gh.Ptr("aayudha-bot[bot]")}}, nil); bot.Disposition != inspect.Fix {
-		t.Errorf("a bot's PR with a bad body: %s", bot.Disposition)
+	if e.prBodyFloor(&bot, &gh.PullRequest{Body: &bad, User: &gh.User{Login: gh.Ptr("dependabot[bot]"), Type: gh.Ptr("Bot")}}, nil); bot.Disposition != inspect.Merge || !hasNote(bot, prBodyWarns, `"Why"`) {
+		t.Errorf("a bot's PR with no declaration: %s %v", bot.Disposition, bot.Notes)
 	}
 	draft := inspect.Result{Disposition: inspect.Skipped}
 	if e.prBodyFloor(&draft, &gh.PullRequest{Body: &bad, Labels: agent, Draft: gh.Ptr(true)}, nil); draft.Disposition != inspect.Skipped || len(draft.Notes) > 0 {
@@ -91,5 +98,17 @@ func TestInspectDocsOnlyChecksPRBody(t *testing.T) {
 	code, res, errOut := inspectApp(t, env, opts, docs.Number, "--ci")
 	if code != 0 || res.Disposition != inspect.Skipped || !hasNote(res, prBodyWarns, `"What this does": the section is missing`) {
 		t.Fatalf("docs-only PR by a person: exit %d %s %v %s", code, res.Disposition, res.Notes, errOut)
+	}
+}
+
+// TestEvolveBodyPassesTheFloor: aayu evolve labels its PR agent-authored and
+// no agent edits the body later, so the body it writes must pass the check.
+func TestEvolveBodyPassesTheFloor(t *testing.T) {
+	b := evolveBody(&EvolveResult{Skill: "tell", Feedback: 12, Cases: []EvolveCase{{ID: "tell-12"}}, Evidence: []int{12, 15}})
+	if block, _ := prbody.Check(b, nil, true); len(block) > 0 {
+		t.Fatalf("the evolve body blocks: %v\n%s", block, b)
+	}
+	if !strings.Contains(b, "`evals/cases/tell-12`") || !strings.Contains(b, "#12, #15") || !strings.Contains(b, "Refs #12") {
+		t.Errorf("the evolve body lost its cases, evidence, or reference:\n%s", b)
 	}
 }

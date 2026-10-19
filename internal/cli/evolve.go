@@ -307,6 +307,51 @@ func or(s, def string) string {
 	return s
 }
 
+// evolveBody is the evolve PR's description in the pull request format
+// (internal/prbody), every section written, since no agent edits it later.
+func evolveBody(res *EvolveResult) string {
+	var ids, ev []string
+	for _, x := range res.Cases {
+		ids = append(ids, "`evals/cases/"+x.ID+"`")
+	}
+	for _, x := range res.Evidence {
+		ev = append(ev, fmt.Sprintf("#%d", x))
+	}
+	return fmt.Sprintf(`## What this does
+
+This changes the %[1]s skill so that agents stop making the mistake that Feedback #%[2]d reports.
+
+## Why
+
+People corrected the same prose mistake in the %[1]s skill at least two times. The accepted Feedback is %[3]s.
+
+## What changed
+
+- The %[1]s skill has new or changed instructions.
+- New eval cases repeat the mistake: %[4]s.
+
+## How we know it works
+
+- The new eval cases fail on the current %[1]s skill and pass with this change.
+- The eval-first check in CI runs them again.
+- After the merge, the skills table of `+"`aayu retro`"+` shows the correction rate before and after.
+
+## Risk and rollback
+
+The risk is low. The change is to skill text only. A person who owns `+"`skills/`"+` reviews it, and it ships through rolling. To roll back, run `+"`aayu install --pin <previous version>`"+`.
+
+## For reviewers
+
+<details><summary>Technical detail</summary>
+
+Opened by `+"`aayu evolve`"+` (WP7.7), eval-first: each case's `+"`before/`"+` run fails tier 1 on the current skill. Evidence: %[3]s, each classified as a prose correction. Never auto-merged: `+"`skills/`"+` is a protected path.
+
+</details>
+
+Refs #%[2]d
+`, res.Skill, res.Feedback, strings.Join(ev, ", "), strings.Join(ids, ", "))
+}
+
 // openEvolvePR opens the evolve PR (or finds the open one) and labels it
 // agent-authored and aayu:evolve.
 func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, res *EvolveResult) error {
@@ -318,22 +363,8 @@ func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, 
 	if len(open) > 0 {
 		res.PR = open[0].GetNumber()
 	} else {
-		var ids []string
-		for _, x := range res.Cases {
-			ids = append(ids, "`evals/cases/"+x.ID+"`")
-		}
 		title := fmt.Sprintf("feat(skills): evolve %s for Feedback #%d (WP7.7)", res.Skill, res.Feedback)
-		var ev []string
-		for _, x := range res.Evidence {
-			ev = append(ev, fmt.Sprintf("#%d", x))
-		}
-		body := fmt.Sprintf("Refs #%d\n\nOpened by `aayu evolve` (WP7.7), eval-first: %s reproduces the accepted Feedback on the current `%s` skill "+
-			"(its `before/` run fails tier 1) and passes with this skill diff. CI's eval-first gate re-checks it.\n\n"+
-			"- Evidence: %s, the accepted retro Feedback that names this skill, each classified as a prose correction (at least two).\n"+
-			"- Correction rate of agent PRs that changed this skill: the skills table of `aayu retro`, before and after this merges.\n"+
-			"- Never auto-merged: `skills/` is a protected path, so a human CODEOWNER reviews it. It ships through `rolling`.\n"+
-			"- Rollback: `aayu install --pin <previous version>`. `aayu retro` reports whether the problem comes back.\n",
-			res.Feedback, strings.Join(ids, ", "), res.Skill, strings.Join(ev, ", "))
+		body := evolveBody(res)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", res.Feedback),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
