@@ -835,10 +835,17 @@ func (r *scopeRun) milestoneNumber(ctx context.Context, title string) (int, erro
 	if err != nil {
 		return 0, Wrap(ExitExternal, err)
 	}
+	n := 0
 	for _, m := range mss {
 		if m.GetTitle() == title {
-			return m.GetNumber(), nil
+			if n != 0 { // GitHub allows one title twice: never guess which release an item rides
+				return 0, Errorf(ExitBlocked, "scope: two open milestones are titled %s; close or rename one first", title)
+			}
+			n = m.GetNumber()
 		}
+	}
+	if n != 0 {
+		return n, nil
 	}
 	return 0, Errorf(ExitExternal, "scope: milestone %s not found", title)
 }
