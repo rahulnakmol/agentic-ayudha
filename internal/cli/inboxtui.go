@@ -168,7 +168,11 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 			return err
 		}
 	}
-	if err := run(m); err != nil {
+	err := run(m)
+	for _, sv := range m.saves { // Bubble Tea does not wait for its commands when it quits
+		sv.once.Do(func() { m.recordDone(sv.key, sv.d) })
+	}
+	if err != nil {
 		return err
 	}
 	if m.err != nil && len(m.items) == 0 {
@@ -272,6 +276,15 @@ type inboxJob struct {
 	w     *inboxWork // the write under way; nil while it waits its turn
 }
 
+// inboxSave is a done write's record in the cache: written by a command off
+// the update loop, and once more on the way out if that command has not run,
+// so a quick q never loses it.
+type inboxSave struct {
+	key  string
+	d    inboxDone
+	once sync.Once
+}
+
 // inboxBatch is how far a bulk write has got, for the "4 of 17 done" line.
 type inboxBatch struct{ total, done, failed int }
 
@@ -336,6 +349,7 @@ type inboxModel struct {
 	workTick   bool                    // the once-a-second redraw of the writes runs
 	readAfter  bool                    // R was pressed during writes: read GitHub again once they end
 	dryRun     bool                    // --dry-run: a write is planned, never done
+	saves      []*inboxSave            // the done writes' records in the cache, written once each before aayu exits
 	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
@@ -844,8 +858,10 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.done[msg.key] = d
 		// The cache is a file: it is written off the update loop, unless
 		// the inbox quits now and would not wait for it.
-		record, key := m.recordDone, msg.key
-		save = func() tea.Msg { record(key, d); return nil }
+		sv := &inboxSave{key: msg.key, d: d}
+		m.saves = append(m.saves, sv)
+		record := m.recordDone
+		save = func() tea.Msg { sv.once.Do(func() { record(sv.key, sv.d) }); return nil }
 		if m.motion {
 			m.flash[msg.key] = m.now()
 		}

@@ -24,8 +24,15 @@ type transport struct {
 	cache *cache
 	next  http.RoundTripper
 
-	writeMu   sync.Mutex
-	lastWrite time.Time
+	own WriteGate // the client's own, when Options.Writes shares none
+}
+
+// WriteGate serializes writes and keeps GitHub's gap between them. Clients
+// that share one (Options.Writes) never overlap their writes, though each
+// was built on its own: the inbox's background writes do.
+type WriteGate struct {
+	mu   sync.Mutex
+	last time.Time
 }
 
 func mutating(m string) bool { return m != http.MethodGet && m != http.MethodHead }
@@ -69,16 +76,20 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if write {
 		// Serialize writes with a gap between them: GitHub's guidance for avoiding
 		// secondary rate limits on bulk writes.
-		t.writeMu.Lock()
-		defer t.writeMu.Unlock()
-		if o.WriteGap > 0 && !t.lastWrite.IsZero() {
-			if d := t.lastWrite.Add(o.WriteGap).Sub(o.Now()); d > 0 {
+		g := o.Writes
+		if g == nil {
+			g = &t.own
+		}
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if o.WriteGap > 0 && !g.last.IsZero() {
+			if d := g.last.Add(o.WriteGap).Sub(o.Now()); d > 0 {
 				if err := o.Sleep(req.Context(), d); err != nil {
 					return nil, err
 				}
 			}
 		}
-		defer func() { t.lastWrite = o.Now() }()
+		defer func() { g.last = o.Now() }()
 	}
 
 	var cached *entry

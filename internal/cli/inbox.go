@@ -946,6 +946,9 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		}
 		hc.Transport = &inboxWatch{next: hc.Transport}
 		e.HTTP = &hc
+		// Every client of this session, the writes' own included, keeps one
+		// gap between GitHub writes: two writes in the background never overlap.
+		e.writes = &github.WriteGate{}
 	}
 	// Once per session, before anything is read or done: every later step
 	// is covered by this approval (presence.go), and none weakens it.
@@ -1576,8 +1579,11 @@ func (e *Env) saveInboxCache(c inboxCache) {
 	if p == "" || os.MkdirAll(filepath.Dir(p), 0o700) != nil {
 		return
 	}
-	if b, err := json.Marshal(c); err == nil {
-		_ = os.WriteFile(p, b, 0o600)
+	if b, err := json.Marshal(c); err == nil { // whole or not at all: a write cut short never leaves a broken cache
+		tmp := p + ".tmp"
+		if os.WriteFile(tmp, b, 0o600) == nil {
+			_ = os.Rename(tmp, p)
+		}
 	}
 }
 

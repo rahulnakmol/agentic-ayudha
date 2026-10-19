@@ -1896,3 +1896,32 @@ func TestInboxRelisted(t *testing.T) {
 		t.Errorf("relisted, second Enter: ran %d", ran)
 	}
 }
+
+// A done write is kept for the next session even when the inbox quits before
+// Bubble Tea runs the command that writes it: runInboxTUI writes it on the
+// way out.
+func TestInboxKeepsDoneOnQuit(t *testing.T) {
+	g := inboxRepo(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+	var key string
+	opts.TUI = func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		teaDrive(m, m.Init())
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 2 })
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // the write starts; its command is not run here
+		j := m.queue[slices.IndexFunc(m.queue, func(j inboxJob) bool { return j.w != nil })]
+		fresh, out, err := m.act(j.it, j.a, j.w)
+		key = j.it.key()
+		_ = m.finished(inboxDoneMsg{key, fresh, out, err}) // the save command is dropped, as a quick q would
+		return nil
+	}
+	if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+	}
+	b, _ := os.ReadFile(filepath.Join(env["XDG_STATE_HOME"], "aayudha", "inbox", "o_r.json"))
+	var c inboxCache
+	if err := json.Unmarshal(b, &c); err != nil || c.Done[key].By != "o" {
+		t.Errorf("the done write of %s is not in the cache after a quick quit: %v %s", key, err, b)
+	}
+}
