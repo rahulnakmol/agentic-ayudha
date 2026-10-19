@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,13 +143,15 @@ func (m *inboxModel) signinUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 func (m *inboxModel) signinKey(k string) tea.Cmd {
 	s := m.signin
 	m.dirty = true
+	if s.approved != "" { // the inbox is about to show: no key acts on an item it hides
+		return nil
+	}
 	switch k {
 	case "q", "esc", "ctrl+c":
 		s.err = errNotApproved
 		return tea.Quit
 	}
 	switch {
-	case s.approved != "":
 	case s.failed != "" && k == "enter":
 		s.code = nil
 		m.status = "Asking GitHub for a new code…"
@@ -189,7 +192,9 @@ func (m *inboxModel) signinView(w, h int) []string {
 		return out
 	}
 	add(ui.Title, "Approve this session on GitHub")
-	plain("aayu inbox acts as you on human-only steps, so GitHub asks you, once per session, to prove it is you at this terminal.")
+	// The general intro goes first when the terminal is short, so the copy
+	// hint and the safety line stay.
+	at, intro := len(out), m.wrap("aayu inbox acts as you on human-only steps, so GitHub asks you, once per session, to prove it is you at this terminal.", tw)
 	out = append(out, "")
 	c := s.code
 	link := ansi.SetHyperlink(c.uri) + c.uri + ansi.ResetHyperlink()
@@ -210,22 +215,30 @@ func (m *inboxModel) signinView(w, h int) []string {
 		"   "+m.style(role, "┌"+strings.Repeat("─", bw)+"┐"),
 		"   "+m.style(role, "│   ")+m.style(role, inboxBold.Render(spaced))+m.style(role, "   │"),
 		"   "+m.style(role, "└"+strings.Repeat("─", bw)+"┘"))
+	// The copy's fallback sits under the code, so a short terminal cuts the
+	// general text below it first.
+	fallback, fr := "If it is not in your clipboard, select the code with the mouse.", ui.Muted
+	if s.tmuxClip != "" && s.tmuxClip != "on" {
+		fallback, fr = fmt.Sprintf("Inside tmux the copy reaches your clipboard only with set-clipboard on (it is %s): run tmux set -s set-clipboard on, or select the code with the mouse.", s.tmuxClip), ui.Warn
+	}
 	switch {
 	case s.failed != "":
 	case s.copied:
 		out = append(out, "   "+m.style(ui.OK, "✓ Copied"))
-		for _, l := range m.wrap("If it is not in your clipboard, select the code with the mouse.", tw-3) {
-			out = append(out, "   "+m.style(ui.Muted, l))
-		}
 	default:
 		out = append(out, "   "+m.style(ui.Muted, "c copies it"))
+	}
+	if s.failed == "" && (s.copied || fr == ui.Warn) {
+		for _, l := range m.wrap(fallback, tw-3) {
+			out = append(out, "   "+m.style(fr, l))
+		}
 	}
 	out = append(out, "")
 	if s.failed != "" {
 		add(ui.Fail, "✗ "+upperFirst(s.failed))
 		out = append(out, "")
 		plain("Enter asks GitHub for a new code; q quits.")
-		return out
+		return slices.Insert(out, at, intro...)
 	}
 	left := c.expires.Sub(m.now()).Round(time.Second)
 	sp := m.spinner() // the wrapped line hangs under its text, not under the spinner
@@ -238,9 +251,8 @@ func (m *inboxModel) signinView(w, h int) []string {
 	out = append(out, m.style(ui.Muted, fmt.Sprintf("Expires in %d:%02d (at %s).", int(max(left, 0).Minutes()), int(max(left, 0).Seconds())%60, c.expires.UTC().Format("15:04 UTC"))))
 	out = append(out, "")
 	add(ui.Muted, "Approve only if you asked for this command: aayu inbox. The code is shown only here: aayu never logs it.")
-	if s.tmuxClip != "" && s.tmuxClip != "on" {
-		out = append(out, "")
-		add(ui.Warn, fmt.Sprintf("Inside tmux the copy reaches your clipboard only with set-clipboard on (it is %s): run tmux set -s set-clipboard on, or select the code with the mouse.", s.tmuxClip))
+	if len(out)+len(intro) <= h {
+		out = slices.Insert(out, at, intro...)
 	}
 	if len(out) > h {
 		out = out[:h]

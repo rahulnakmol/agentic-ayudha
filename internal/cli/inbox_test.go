@@ -2033,6 +2033,15 @@ func TestInboxLoginScreen(t *testing.T) {
 	if n := strings.Count(ansi.Strip(m.View().Content), "Copied"); n != 1 {
 		t.Errorf("after c, Copied shows %d times; want once, next to the code", n)
 	}
+	for _, w := range []int{80, 72} { // a short terminal keeps what to do when the copy did not land
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		m.dirty = true
+		if v := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " "); !strings.Contains(v, "✓ Copied") || !strings.Contains(v, "run tmux set -s set-clipboard on, or select the code with the mouse") ||
+			!strings.Contains(v, "Approve only if you asked for this command: aayu inbox. The code is shown only here: aayu never logs it.") {
+			t.Errorf("%dx24 after c: the tmux hint or the safety line is cut:\n%s", w, ansi.Strip(m.View().Content))
+		}
+	}
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
 	teaKeys(m, "enter")
 	m.dirty = true
 	if v := ansi.Strip(m.View().Content); opened != uri || !strings.Contains(v, "✓ Copied") || strings.Contains(m.status, code) {
@@ -2091,6 +2100,15 @@ func TestInboxLoginScreen(t *testing.T) {
 	}
 	if _, tick := m.Update(inboxSecondMsg{}); tick != nil {
 		t.Error("the countdown still ticks after the approval")
+	}
+	// The inbox read under the approval screen takes no key until it shows.
+	ran := 0
+	m.act = func(it InboxItem, _ InboxAction, _ *inboxWork) (InboxItem, string, error) { ran++; return it, "", nil }
+	dec := InboxItem{Kind: InboxDecision, Number: 4, Title: "Pick", Seat: verbs.Founder, Options: []InboxAction{{N: 1, Label: "Accept: A", Recommended: true, Command: "aayu decide 4 --accept 1"}}}
+	m.Update(inboxGatheredMsg{items: []InboxItem{dec}, changed: true, at: clock})
+	m.cur = slices.Index(m.rows, 0)
+	if teaKeys(m, "enter", "q"); ran != 0 || m.signin == nil || m.signin.err != nil {
+		t.Errorf("keys under the approval screen: %d writes ran", ran)
 	}
 	m.Update(inboxApprovedMsg{})
 	if m.signin != nil {

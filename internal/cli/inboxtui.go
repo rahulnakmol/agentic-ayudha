@@ -724,7 +724,7 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 	if cmd, ok := m.signinUpdate(msg); ok {
 		return cmd
 	}
-	if s := m.signin; s != nil && (s.running || s.screen() && s.approved == "") {
+	if s := m.signin; s != nil && (s.running || s.screen()) {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
 			return m.signinKey(msg.String())
