@@ -123,7 +123,15 @@
       "L04",
       "L07",
       "L09"
-    ]
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-19T11:17:49Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/496#issuecomment-6265942953",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"
+    }
   },
   "planned_at": "2026-10-19T08:18:33Z",
   "planned_by": "human-fallback"
