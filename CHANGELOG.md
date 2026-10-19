@@ -57,7 +57,7 @@ proof pack yet.
 ### The merge gate and review
 
 - The merge gate reviews every pull request that is not docs-only once it is marked ready for review (drafts wait) and its checks and proof pass, and `aayu build` asks for the review after each push (#466, #577).
-- `aayu build` has a reviewer model of another family review the branch before each push; on `fix` the push waits until the builder fixes each open item or declines it with `--decline "<id>: <why>"`, for at most three rounds within `[budget] per_pr_inspect_max`; a held checkpoint is pushed to `refs/aayudha/held/<branch>`, so `aayu build --resume` continues from it on another machine; and the PR body's "Session review (self-attested)" section never counts as a review (#663).
+- Without `--delegate`, `aayu build` has a reviewer model of another family review a verified checkpoint's branch before each push (a delegated build is reviewed only by the merge gate); on `fix` the push waits until the builder fixes each open item or declines it with `--decline "<id>: <why>"`, for at most three rounds within `[budget] per_pr_inspect_max`; a held checkpoint is pushed to `refs/aayudha/held/<branch>`, so `aayu build --resume` continues from it on another machine; and the PR body's "Session review (self-attested)" section never counts as a review (#663).
 - The merge gate records which model family built a pull request and which rung of the review ladder reviewed it: A for a reviewer app of another family, B for a paid reviewer of another family, C for a labelled same-family review (#483).
 - `aayu doctor` shows the rung your builds get and how to move up a rung (#522).
 - The ship record, `aayu audit`, and `aayu status --streak` record each merge's review rung (#518).
