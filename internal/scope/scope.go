@@ -295,6 +295,15 @@ func Measure(b Baseline, items []Item, table []int) Drift {
 	return d
 }
 
+// BudgetOK reports whether pct is a usable change budget: a number from 0 to
+// 100. NaN would make every Over false and 200 would let a plan be replaced.
+func BudgetOK(pct float64) bool { return pct >= 0 && pct <= 100 }
+
+// EffortPointsOK reports whether p is a usable effort table: one value of at
+// least 1 per effort, in workitems.Efforts order. A 0 would hide every change
+// to items of that effort.
+func EffortPointsOK(p []int) bool { return len(p) == len(workitems.Efforts) && slices.Min(p) >= 1 }
+
 // VersionRE is the version a planned release carries.
 var VersionRE = regexp.MustCompile(`^v([0-9]+)\.([0-9]+)\.([0-9]+)$`)
 

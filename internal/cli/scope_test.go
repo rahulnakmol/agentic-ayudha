@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -47,7 +48,7 @@ func TestScope(t *testing.T) {
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
 	scopeRun := func(env map[string]string, args ...string) (int, ScopeReport, string) {
 		t.Helper()
-		code, out, errOut := run(t, env, opts, append([]string{"scope", "1", "--repo", "o/r", "--json"}, args...)...)
+		code, out, errOut := run(t, env, opts, append([]string{"scope", "1", "--repo", "o/r", "--json", "--set", "identity.app_slug=aayudha-r"}, args...)...)
 		var rep ScopeReport
 		_ = json.Unmarshal([]byte(out), &rep)
 		return code, rep, out + errOut
@@ -73,6 +74,11 @@ func TestScope(t *testing.T) {
 	}
 	started := func() int { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Device.Started }
 
+	// A budget past 100% would allow replacing the whole plan without a person.
+	if code, _, out := scopeRun(agent, "--add", "2", "--set", "scope.budget_percent=200"); code != ExitUsage || !strings.Contains(out, "budget_percent is 200") {
+		t.Fatalf("budget_percent 200: exit %d: %s", code, out)
+	}
+
 	// Plan: before a baseline, changes are free; the milestone is made on the first add.
 	for _, n := range []string{"2", "3", "4"} {
 		if code, _, out := scopeRun(agent, "--add", n); code != 0 {
@@ -95,6 +101,10 @@ func TestScope(t *testing.T) {
 		t.Fatalf("draft: %+v", draft)
 	}
 
+	// The budget is part of what a person accepts: a budget changed since the draft is refused, before any code.
+	if code, _, out := scopeRun(person, "--accept", "--set", "scope.budget_percent=100"); code != ExitBlocked || !strings.Contains(out, "drafted with 20.0%") {
+		t.Fatalf("--accept with a budget changed since the draft: exit %d: %s", code, out)
+	}
 	// Accepting is a person's: refused for an agent lane, and a device code even at a bare terminal.
 	if code, _, out := scopeRun(agent, "--accept"); code != ExitBlocked || !strings.Contains(out, "refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("agent --accept: exit %d: %s", code, out)
@@ -163,8 +173,16 @@ func TestScope(t *testing.T) {
 	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "plan changed since the request") || milestone(3) != "v0.3.0" {
 		t.Fatalf("--accept after a change by hand: exit %d: %s", code, out)
 	}
+	// A drop waits; the item is retyped to Feedback: it leaves the plan by --assign, never by accepting the drop.
 	g.Mu.Lock()
 	l.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
+	m.Labels = []fake.Label{{Name: "type:feedback"}}
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "is a feedback now") || milestone(3) != "v0.3.0" {
+		t.Fatalf("--accept a drop of an item retyped to Feedback: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	m.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
 	// The bot posted this request: the person cannot edit it, so the acceptance is a new comment.
 	g.AuthorOnlyEdits = true
 	var asked *fake.Comment
@@ -175,10 +193,19 @@ func TestScope(t *testing.T) {
 	}
 	asked.User.Login, asked.User.Type = "aayudha-r[bot]", "Bot"
 	askedBody := asked.Body
+	// While it waits, someone moves #3 by hand to a shipped milestone with the next release's title.
+	shippedNext, openNext := &fake.Milestone{Number: 9, Title: "v0.3.9", State: "closed"}, &fake.Milestone{Number: 10, Title: "v0.3.9", State: "open"}
+	g.Milestones = append(g.Milestones, shippedNext, openNext)
+	m.Milestone = shippedNext
 	g.Mu.Unlock()
 	approve()
-	if code, _, out := scopeRun(person, "--accept"); code != 0 || milestone(3) != "" || started() != 1 {
-		t.Fatalf("person accepts the drop: exit %d: %s", code, out)
+	code, _, out = scopeRun(person, "--accept")
+	g.Mu.Lock()
+	rides := m.Milestone == openNext
+	g.Milestones, m.Milestone = g.Milestones[:len(g.Milestones)-2], nil // back to no later release
+	g.Mu.Unlock()
+	if code != 0 || !rides || started() != 1 {
+		t.Fatalf("person accepts the drop: exit %d, #3 rides the open next release %v: %s", code, rides, out)
 	}
 	g.Mu.Lock()
 	newest := release.Comments[len(release.Comments)-1]
@@ -201,15 +228,38 @@ func TestScope(t *testing.T) {
 		t.Fatalf("a zero-point add over budget: exit %d, milestone %q: %s", code, milestone(epic.Number), out)
 	}
 
+	// After another writer's acceptance sits above the asker's own request, the next request still reaches a person.
+	g.Mu.Lock()
+	asked.User.Login, asked.User.Type = "founder", "User"
+	newest.User.Login = "maintainer"
+	g.Permissions["maintainer"] = "maintain" // GitHub's Maintain role is a writer, so readers stop at its acceptance
+	g.Mu.Unlock()
+	if code, rep, out := scopeRun(agent, "--add", strconv.Itoa(epic.Number), "--decision", "7"); code != 0 || rep.Request == nil {
+		t.Fatalf("a request after another's acceptance: exit %d: %s", code, out)
+	}
+	if code, list, _ := run(t, agent, opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || !strings.Contains(list, fmt.Sprintf("add #%d", epic.Number)) {
+		t.Fatalf("the next request is hidden under the acceptance: exit %d:\n%s", code, list)
+	}
+
 	// Feedback: by milestone and horizon label, never its body, and not drift.
 	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != ExitBlocked || !strings.Contains(out, "no release milestone after v0.3.0") {
 		t.Fatalf("--to next with none: exit %d: %s", code, out)
 	}
 	g.Mu.Lock()
-	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 2, Title: "v0.10.0", State: "open"}, &fake.Milestone{Number: 3, Title: "v0.4.0", State: "open"},
+	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 2, Title: "v0.10.0", State: "open"},
+		&fake.Milestone{Number: 6, Title: "v0.4.0", State: "closed"}, // GitHub allows one title twice: the shipped one is never the next
+		&fake.Milestone{Number: 3, Title: "v0.4.0", State: "open"},
 		&fake.Milestone{Number: 4, Title: "v0.3.5", State: "closed"}) // a shipped release is never the next one
 	g.Mu.Unlock()
-	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != 0 || milestone(6) != "v0.4.0" || !slices.Contains(g.LabelNames(6), "horizon:next") || slices.Contains(g.LabelNames(6), "horizon:now") {
+	msNumber := func(n int) int {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if ms := g.Issues[n].Milestone; ms != nil {
+			return ms.Number
+		}
+		return 0
+	}
+	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != 0 || msNumber(6) != 3 || !slices.Contains(g.LabelNames(6), "horizon:next") || slices.Contains(g.LabelNames(6), "horizon:now") {
 		t.Fatalf("--to next: exit %d, %q %v: %s", code, milestone(6), g.LabelNames(6), out)
 	}
 	if code, rep, out := scopeRun(agent, "--assign", "6", "--to", "backlog"); code != 0 || milestone(6) != "" || !slices.Contains(g.LabelNames(6), "horizon:later") || rep.Drift.DriftPct != 50 {
@@ -223,7 +273,7 @@ func TestScope(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
 	g.Mu.Unlock()
-	if code, _, out := scopeRun(agent, "--handoff"); code != ExitBlocked || !strings.Contains(out, "outside aayu scope") {
+	if code, _, out := scopeRun(agent, "--handoff"); code != ExitBlocked || !strings.Contains(out, "no accepted Decision holds") {
 		t.Fatalf("--handoff after a resize by hand: exit %d: %s", code, out)
 	}
 	// Nor does a new request sweep that resize under the next person's acceptance.
@@ -255,12 +305,44 @@ func TestScope(t *testing.T) {
 	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
 	links, comments := rel.Fields[workitems.FieldLinks], len(release.Comments)
 	g.Mu.Unlock()
-	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 4 {
+	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 6 {
 		t.Fatalf("hand-off: links %q, %d comments\n%s", links, comments, release.Body)
 	}
+	// After hand-off, a change keeps the plan ready to hand off: a Summary edited since the baseline stops it.
+	g.Mu.Lock()
+	intentBody := release.Body
+	release.Body = workitems.SetSection(release.Body, workitems.FieldSummary, "A different release.")
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--drop", "5"); code != ExitBlocked || !strings.Contains(out, "Summary changed") || milestone(5) != "v0.3.0" {
+		t.Fatalf("--drop after hand-off with a new Summary: exit %d, #5 in %q: %s", code, milestone(5), out)
+	}
+	g.Mu.Lock()
+	release.Body = intentBody
+	g.Mu.Unlock()
 	// A dropped item rides the next open release, not the backlog.
 	if code, rep, out := scopeRun(agent, "--drop", "5"); code != 0 || milestone(5) != "v0.4.0" || !strings.Contains(rep.Done, "it rides v0.4.0") {
 		t.Fatalf("--drop with a later release: exit %d, milestone %q: %s", code, milestone(5), out)
+	}
+	// After hand-off, a change also changes what aayu release ships.
+	g.Mu.Lock()
+	rel, _ = workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
+	g.Mu.Unlock()
+	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #4" {
+		t.Fatalf("links after a drop past hand-off: %q", links)
+	}
+	// Hand-off is the plan comment, not the links: with no includes left (a plan
+	// emptied of Stories), the next change still writes them.
+	g.Mu.Lock()
+	release.Body = workitems.SetSection(release.Body, workitems.FieldLinks, "")
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--add", "4"); code != 0 {
+		t.Fatalf("--add 4 again: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	rel, _ = workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
+	g.Mu.Unlock()
+	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #4" {
+		t.Fatalf("links after hand-off with none left: %q", links)
 	}
 	// A Story closed as not planned is cut from scope: drift, not a planned item.
 	g.Mu.Lock()
@@ -285,5 +367,181 @@ func TestScopeDecisionCoversOnlyItsChanges(t *testing.T) {
 	resized := scope.Drift{Resized: []scope.Resize{{Number: 4, Type: "story", Title: "Baseline it", From: "L", To: "M"}}}
 	if retitled := (scope.Drift{Resized: []scope.Resize{{Number: 4, Type: "story", Title: "Baseline the plan", From: "L", To: "M"}}}); !within(retitled, resized) {
 		t.Fatal("a title edit cost a resize its Decision")
+	}
+}
+
+// The request protocol end to end, with the bot asking and a person
+// accepting: only an author edits a comment, so each acceptance is a new
+// comment, and the bot's next request goes below it, where every reader looks.
+// A re-drafted plan is a new card, and a Decision reopened since holds nothing.
+func TestScopeRequestWalk(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Viewer, g.AuthorOnlyEdits = "founder", true
+	g.TokenLogins = map[string]fake.Account{"bot-token": {Login: "aayudha-bot[bot]", Type: "Bot"}}
+	release := g.AddIssue("v0.3.0", fixtureBody(t, "release", func(f map[string]string) {
+		f["version"], f[workitems.FieldLinks] = "v0.3.0", ""
+	}), "type:release") // #1
+	g.AddIssue("Draft a plan", fixtureBody(t, "story", nil), "type:story", "effort:M")     // #2, 3 points
+	l := g.AddIssue("Baseline it", fixtureBody(t, "story", nil), "type:story", "effort:L") // #3, 5 points
+	g.AddIssue("Assign feedback", fixtureBody(t, "story", nil), "type:story", "effort:S")  // #4, 2 points
+	decision := g.AddIssue("Let #4 into v0.3.0", fixtureBody(t, "decision", func(f map[string]string) {
+		f[workitems.FieldSummary] += " It decides the scope of Release #1."
+	}), "type:decision") // #5
+	decision.State, decision.StateReason = "closed", "completed"
+	decision.Body = workitems.SetSection(decision.Body, "Decision", "Option 1, accepted by @founder on 2026-10-19.")
+	decision.ClosedBy = &fake.Account{Login: "founder", Type: "User"}
+	dir, _ := ledgerCheckout(t)
+	state := filepath.Join(dir, "state")
+	bot := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": state}
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
+	app := []string{"--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot"}
+	scopeRun := func(env map[string]string, args ...string) (int, ScopeReport, string) {
+		t.Helper()
+		pre := []string{"scope", "1", "--json", "--repo", "o/r"}
+		pre = append(pre, app[4:]...) // aayu's App: whose requests every reader trusts
+		if env["AAYU_BOT_TOKEN"] != "" {
+			pre = append(pre, app[2:4]...) // the bot writes as it; the person signs in with their own device code
+		}
+		code, out, errOut := run(t, env, opts, append(pre, args...)...)
+		var rep ScopeReport
+		_ = json.Unmarshal([]byte(out), &rep)
+		return code, rep, out + errOut
+	}
+	inbox := func() string {
+		t.Helper()
+		_, list, _ := run(t, bot, opts, append([]string{"inbox", "--list", "--json"}, app...)...)
+		return list
+	}
+	accept := func() {
+		t.Helper()
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+		g.Mu.Unlock()
+		if code, _, out := scopeRun(person, "--accept"); code != 0 {
+			t.Fatalf("person --accept: exit %d: %s", code, out)
+		}
+	}
+	thread := func() (who []string, newest string) {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		for _, c := range release.Comments {
+			if strings.Contains(c.Body, ScopeRequestMarker) {
+				who, newest = append(who, c.User.Login), c.Body
+			}
+		}
+		return who, newest
+	}
+
+	for _, n := range []string{"2", "3"} {
+		if code, _, out := scopeRun(bot, "--add", n); code != 0 {
+			t.Fatalf("--add %s: exit %d: %s", n, code, out)
+		}
+	}
+	_, first, _ := scopeRun(bot, "--draft")
+	// A resize by hand, then a new draft: the bot's own request is edited, and the inbox card changes with it.
+	g.Mu.Lock()
+	l.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
+	g.Mu.Unlock()
+	code, second, out := scopeRun(bot, "--draft")
+	if code != 0 || first.Request == nil || second.Request == nil || first.Request.Hash == second.Request.Hash {
+		t.Fatalf("re-draft: exit %d: %s", code, out)
+	}
+	if list := inbox(); !strings.Contains(list, second.Request.Hash[:12]) || strings.Contains(list, first.Request.Hash[:12]) {
+		t.Fatalf("the card after a re-draft does not show the new plan %s:\n%s", second.Request.Hash[:12], list)
+	}
+	// The version's milestone renamed while the code waits: the plan is read again, and nothing is accepted.
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: func(int) {
+		g.Milestones[0].Title = "v0.3.0-old"
+	}}
+	g.Mu.Unlock()
+	code, _, out = scopeRun(person, "--accept")
+	g.Mu.Lock()
+	g.Milestones[0].Title = "v0.3.0"
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(out, "changed") {
+		t.Fatalf("a milestone renamed during the code: exit %d: %s", code, out)
+	}
+	// 1. bot asks, 2. person accepts: a new comment under the bot's.
+	accept()
+	if who, newest := thread(); !slices.Equal(who, []string{"aayudha-bot[bot]", "founder"}) || !strings.Contains(newest, "Accepted (aayu scope)") {
+		t.Fatalf("after the first acceptance: %v, newest %q", who, newest)
+	}
+	if code, _, out := scopeRun(bot, "--handoff"); code != 0 {
+		t.Fatalf("--handoff: exit %d: %s", code, out)
+	}
+	// The same plan drafted again with a new budget is a new baseline, not a retry of the old one.
+	if code, _, out := scopeRun(bot, "--draft", "--set", "scope.budget_percent=10"); code != 0 {
+		t.Fatalf("re-draft with a 10%% budget: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if code, rep, out := scopeRun(person, "--accept", "--set", "scope.budget_percent=10"); code != 0 || rep.Baseline != 2 || rep.Drift == nil || rep.Drift.BudgetPct != 10 {
+		t.Fatalf("accept the same plan with a 10%% budget: exit %d: %s", code, out)
+	}
+	// 3. bot asks again, over budget (2 of 6 points): below the acceptance, not in its old comment above it.
+	if code, rep, out := scopeRun(bot, "--add", "4", "--decision", "5"); code != 0 || rep.Request == nil || rep.Request.Kind != "add" {
+		t.Fatalf("the second request: exit %d: %s", code, out)
+	}
+	if who, newest := thread(); !slices.Equal(who, []string{"aayudha-bot[bot]", "founder", "aayudha-bot[bot]", "founder", "aayudha-bot[bot]"}) || !strings.Contains(newest, `"kind":"add"`) {
+		t.Fatalf("after the second request: %v, newest %q", who, newest)
+	}
+	// Another installed App's marker comment, newer than the request, neither hides nor replaces it.
+	g.Mu.Lock()
+	other := &fake.Comment{ID: 98, Body: ScopeRequestMarker + "\n**Accepted (aayu scope):** quoted by another app.\n"}
+	other.User.Login, other.User.Type = "other-app[bot]", "Bot"
+	release.Comments = append(release.Comments, other)
+	g.Mu.Unlock()
+	if list := inbox(); !strings.Contains(list, "add #4") {
+		t.Fatalf("the second request is not in the inbox:\n%s", list)
+	}
+	// A change to the plan while the code waits: nothing is accepted.
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: func(int) {
+		g.Issues[2].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
+	}}
+	g.Mu.Unlock()
+	code, _, out = scopeRun(person, "--accept")
+	g.Mu.Lock()
+	moved := g.Issues[4].Milestone != nil
+	g.Issues[2].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(out, "changed") || moved {
+		t.Fatalf("a plan changed during the code: exit %d, #4 moved %v: %s", code, moved, out)
+	}
+	// 4. person accepts again; then nothing waits.
+	accept()
+	g.Mu.Lock()
+	planned := g.Issues[4].Milestone != nil && g.Issues[4].Milestone.Title == "v0.3.0"
+	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
+	g.Mu.Unlock()
+	// The plan was handed off, so the accepted add is in what aayu release ships.
+	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #2\nincludes #3\nincludes #4" {
+		t.Fatalf("links after an accepted add past hand-off: %q", links)
+	}
+	if who, _ := thread(); !slices.Equal(who, []string{"aayudha-bot[bot]", "founder", "aayudha-bot[bot]", "founder", "aayudha-bot[bot]", "other-app[bot]", "founder"}) || !planned {
+		t.Fatalf("after the second acceptance: %v, #4 planned %v", who, planned)
+	}
+	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "nothing waits") {
+		t.Fatalf("a third --accept: exit %d: %s", code, out)
+	}
+	// The drift record names Decision #5; once it is reopened, it holds nothing.
+	if code, _, out := scopeRun(bot, "--handoff"); code != 0 {
+		t.Fatalf("--handoff on an accepted Decision: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	decision.State, decision.StateReason = "open", ""
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(bot, "--handoff"); code != ExitBlocked || !strings.Contains(out, "no accepted Decision holds") {
+		t.Fatalf("--handoff on a reopened Decision: exit %d: %s", code, out)
+	}
+	// A failed read of the comments is an error, never "nothing waits".
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/1/comments", 0
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(bot); code != ExitExternal {
+		t.Fatalf("a failed comments read: exit %d: %s", code, out)
 	}
 }

@@ -1,6 +1,7 @@
 package scope
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -46,6 +47,21 @@ func TestMeasure(t *testing.T) {
 	if d := Measure(Baseline{BudgetPct: 20, Items: []Item{story(2, "L", 0), story(3, "M", 0)}},
 		[]Item{{Number: 2, Type: "initiative", Effort: "L"}, story(3, "M", 0)}, table); d.ChangedPoints != 5 || len(d.Resized) != 1 || d.Resized[0].FromType != "story" || !d.Over() {
 		t.Fatalf("a retyped Story: %+v", d)
+	}
+	// A budget is a number from 0 to 100: NaN would turn every Over off, and 200 would allow any plan.
+	for pct, ok := range map[float64]bool{0: true, 20: true, 100: true, -1: false, 100.5: false, 200: false, math.NaN(): false} {
+		if BudgetOK(pct) != ok {
+			t.Errorf("BudgetOK(%v) = %v", pct, !ok)
+		}
+	}
+	// An effort table has one value of at least 1 per effort: a 0 would hide every change at that size.
+	for _, c := range []struct {
+		p  []int
+		ok bool
+	}{{table, true}, {[]int{1, 1, 1, 1, 1}, true}, {[]int{1, 2, 0, 5, 8}, false}, {[]int{1, 2, 3, 5}, false}, {[]int{1, 2, 3, 5, 8, 13}, false}} {
+		if EffortPointsOK(c.p) != c.ok {
+			t.Errorf("EffortPointsOK(%v) = %v", c.p, !c.ok)
+		}
 	}
 	// The budget compares the exact ratio: 20.01% rounds to 20.0% for people, yet is over a 20.0% budget.
 	if d := (Drift{BudgetPct: 20, BaselinePoints: 10000, ChangedPoints: 2001, DriftPct: 20}); !d.Over() {

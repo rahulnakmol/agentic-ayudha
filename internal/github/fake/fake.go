@@ -1324,7 +1324,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		for _, is := range g.Issues {
 			for _, c := range is.Comments {
 				if c.ID == id {
-					if m == "PATCH" && g.AuthorOnlyEdits && !strings.EqualFold(c.User.Login, g.Viewer) {
+					caller := g.Viewer
+					if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+						caller = a.Login // a bot's token edits as the bot
+					}
+					if m == "PATCH" && g.AuthorOnlyEdits && !strings.EqualFold(c.User.Login, caller) {
 						reply(403, map[string]any{"message": "Resource not accessible: only the author edits a comment"})
 						return
 					}

@@ -92,6 +92,7 @@ type scopeRun struct {
 	base     *scope.Baseline
 	draft    *scope.Draft
 	drift    *scope.Drift
+	handed   bool // --handoff ran: aayu's plan comment is on the Release (handedOff)
 }
 
 // runScope plans a release (aayu scope). The plan is the GitHub milestone
@@ -123,8 +124,11 @@ func runScope(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	if len(l.Config.Scope.EffortPoints) != len(workitems.Efforts) || slices.Min(l.Config.Scope.EffortPoints) < 1 {
+	if !scope.EffortPointsOK(l.Config.Scope.EffortPoints) {
 		return Errorf(ExitUsage, "scope: [scope] effort_points needs %d values of at least 1, for %s", len(workitems.Efforts), strings.Join(workitems.Efforts, ", "))
+	}
+	if !scope.BudgetOK(l.Config.Scope.BudgetPercent) {
+		return Errorf(ExitUsage, "scope: [scope] budget_percent is %v; it needs a number from 0 to 100", l.Config.Scope.BudgetPercent)
 	}
 	r := &scopeRun{e: e, cfg: &l.Config, repo: repo, n: issueNumber(in.String("release"))}
 	var tok identity.Token
@@ -167,7 +171,10 @@ func runScope(ctx context.Context, e *Env, in Values) error {
 	}
 	rep := r.report()
 	if rep.Request == nil {
-		req, _, _ := r.request(ctx)
+		req, _, err := r.request(ctx)
+		if err != nil { // a failed read is never "nothing waits"
+			return err
+		}
 		rep.Request = req
 	}
 	switch {
@@ -212,7 +219,7 @@ func (r *scopeRun) load(ctx context.Context) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	r.titles = nil
+	r.titles, r.ms = nil, nil // a reload (after the device code) finds the milestone again
 	for _, m := range mss {
 		if m.GetState() == "open" { // a closed milestone is a shipped release: never the next one
 			r.titles = append(r.titles, m.GetTitle())
@@ -232,7 +239,48 @@ func (r *scopeRun) load(ctx context.Context) error {
 	if err := r.readPlan(ctx); err != nil {
 		return err
 	}
+	if err := r.handedOff(ctx); err != nil {
+		return err
+	}
 	return r.readLedger(ctx)
+}
+
+// handoffReady is what a plan meets before execution reads it: no
+// problems, and the intent the baseline was accepted for. --handoff checks it,
+// and so does every change after hand-off, which writes the links again.
+func (r *scopeRun) handoffReady(items []scope.Item) error {
+	if p := scope.Problems(r.intent, items); len(p) > 0 {
+		return WithNext(Errorf(ExitBlocked, "scope: %s cannot be handed off (%d problem(s)): %s", r.version, len(p), strings.Join(p, "; ")),
+			fmt.Sprintf("aayu scope %d", r.n))
+	}
+	if strings.TrimSpace(r.base.Intent) != r.intent {
+		return WithNext(Errorf(ExitBlocked, "scope: the Release's Summary changed since baseline %d was accepted; a person accepts the new intent", r.base.Baseline),
+			fmt.Sprintf("aayu scope %d --draft, then a person accepts it", r.n))
+	}
+	return nil
+}
+
+// handedOff notes whether --handoff ran: its plan comment by aayu's App or a
+// writer is on the Release. The includes links cannot say so: a plan with no
+// Story or Bug left has none, and the next one added must still reach them.
+func (r *scopeRun) handedOff(ctx context.Context) error {
+	comments, err := r.comments(ctx)
+	if err != nil {
+		return err
+	}
+	r.handed = false
+	for _, cm := range comments {
+		if !strings.Contains(cm.GetBody(), ScopePlanMarker) {
+			continue
+		}
+		if ok, err := r.trusted(ctx, cm.GetUser()); err != nil {
+			return err
+		} else if ok {
+			r.handed = true
+			return nil
+		}
+	}
+	return nil
 }
 
 // readPlan lists the milestone's issues: the plan's items, with their
@@ -322,6 +370,14 @@ func (r *scopeRun) readLedger(ctx context.Context) error {
 		if _, err := get(scope.BaselinePath(r.version, n), r.base); err != nil {
 			return err
 		}
+		// Drift is measured with the baseline's own budget and effort table,
+		// so both meet the rules the config meets at load.
+		if !scope.BudgetOK(r.base.BudgetPct) {
+			return Errorf(ExitExternal, "ledger %s: budget_pct %v is not a number from 0 to 100", scope.BaselinePath(r.version, n), r.base.BudgetPct)
+		}
+		if p := r.base.EffortPoints; len(p) != 0 && !scope.EffortPointsOK(p) {
+			return Errorf(ExitExternal, "ledger %s: effort_points %v needs %d values of at least 1", scope.BaselinePath(r.version, n), p, len(workitems.Efforts))
+		}
 	}
 	r.draft, r.drift = &scope.Draft{}, &scope.Drift{}
 	if ok, err := get(scope.DraftPath(r.version), r.draft); err != nil {
@@ -339,6 +395,16 @@ func (r *scopeRun) readLedger(ctx context.Context) error {
 		if owner != 0 && owner != r.n {
 			return WithNext(Errorf(ExitBlocked, "scope: ledger releases/%s/ belongs to Release #%d, not #%d; two Releases cannot plan one version", r.version, owner, r.n),
 				fmt.Sprintf("aayu scope %d", owner))
+		}
+	}
+	// The drift record names the Decision a person accepted drift over budget
+	// on; every gate that leans on it reads it from here, so it is checked
+	// here. A Decision reopened or edited since holds nothing.
+	if r.drift != nil && r.drift.OverBudgetDecision != 0 {
+		if err := r.acceptedDecision(ctx, r.drift.OverBudgetDecision); CodeOf(err) == ExitExternal {
+			return err
+		} else if err != nil {
+			r.drift.OverBudgetDecision = 0
 		}
 	}
 	return nil
@@ -468,18 +534,22 @@ func issueRefs(ns []int) string {
 	return strings.Join(s, ", ")
 }
 
+// The plan hash is in the text, so a new request never reads as the one a
+// person saw: the inbox reads a card again before it acts (inboxApply), and a
+// re-drafted plan edits the same comment.
 func (q scopeRequest) describe(version string) string {
+	plan := q.Hash[:min(12, len(q.Hash))]
 	switch q.Kind {
 	case "baseline":
-		s := fmt.Sprintf("accept the drafted plan as the baseline of %s", version)
+		s := fmt.Sprintf("accept the drafted plan %s as the baseline of %s", plan, version)
 		if q.Decision != 0 {
 			s += fmt.Sprintf(", %.1f%% from the last baseline, against Decision #%d", q.DriftPct, q.Decision)
 		}
 		return s
 	case "add":
-		return fmt.Sprintf("add #%d to %s, taking drift to %.1f%%, against Decision #%d", q.Item, version, q.DriftPct, q.Decision)
+		return fmt.Sprintf("add #%d to %s (plan %s), taking drift to %.1f%%, against Decision #%d", q.Item, version, plan, q.DriftPct, q.Decision)
 	}
-	return fmt.Sprintf("drop #%d from %s, taking drift to %.1f%%, against Decision #%d", q.Item, version, q.DriftPct, q.Decision)
+	return fmt.Sprintf("drop #%d from %s (plan %s), taking drift to %.1f%%, against Decision #%d", q.Item, version, plan, q.DriftPct, q.Decision)
 }
 
 // change adds item n to the plan or drops it. Before a baseline, or within
@@ -508,6 +578,14 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 				return err
 			}
 		}
+		if d := r.measure(r.items); r.handed && d != nil { // and the links, if that run stopped before them
+			if err := r.handoffReady(r.items); err != nil {
+				return err
+			}
+			if _, err := r.publish(ctx, d); err != nil {
+				return err
+			}
+		}
 		rep.Done = fmt.Sprintf("#%d is already %s the plan; nothing to do", n, map[string]string{"add": "in", "drop": "not in"}[op])
 		return r.emit(rep)
 	case op == "add" && is.GetState() != "open":
@@ -519,6 +597,11 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	next := slices.DeleteFunc(slices.Clone(r.items), func(x scope.Item) bool { return x.Number == n })
 	if op == "add" {
 		next = append(next, it)
+	}
+	if r.handed && r.base != nil { // execution reads the plan now: a change keeps it ready to hand off
+		if err := r.handoffReady(next); err != nil {
+			return err
+		}
 	}
 	cur, d := r.measure(r.items), r.measure(next)
 	// A Decision covers the changes a person accepted with it, never a later
@@ -561,6 +644,11 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 		}
 	}
 	r.items = next
+	if r.handed && d != nil {
+		if _, err := r.publish(ctx, d); err != nil {
+			return err
+		}
+	}
 	rep = r.report()
 	rep.Done = fmt.Sprintf("added #%d (%s)", n, r.version)
 	if op == "drop" {
@@ -708,7 +796,7 @@ func (r *scopeRun) assign(ctx context.Context, n int, to string) error {
 func (r *scopeRun) milestoneNumber(ctx context.Context, title string) (int, error) {
 	owner, name, _ := github.SplitRepo(r.repo)
 	mss, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Milestone, *gh.Response, error) {
-		return r.c.REST.Issues.ListMilestones(ctx, owner, name, &gh.MilestoneListOptions{State: "all", ListOptions: o})
+		return r.c.REST.Issues.ListMilestones(ctx, owner, name, &gh.MilestoneListOptions{State: "open", ListOptions: o})
 	})
 	if err != nil {
 		return 0, Wrap(ExitExternal, err)
@@ -775,10 +863,16 @@ func (r *scopeRun) upsertOwn(ctx context.Context, marker, body, kind string) err
 	if err != nil {
 		return err
 	}
+	// Edit the writer's own comment only while it is the newest with the
+	// marker: under another's newer one (a person's acceptance), readers stop
+	// at that one, so the next request is a new comment below it.
 	var own *gh.IssueComment
 	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), marker) && strings.EqualFold(cm.GetUser().GetLogin(), r.who) {
-			own = cm
+		if strings.Contains(cm.GetBody(), marker) {
+			own = nil
+			if strings.EqualFold(cm.GetUser().GetLogin(), r.who) {
+				own = cm
+			}
 		}
 	}
 	return r.writeComment(ctx, own, body, kind)
@@ -821,7 +915,7 @@ func (r *scopeRun) writeComment(ctx context.Context, cm *gh.IssueComment, body, 
 }
 
 // request is the request waiting on the Release: the newest request comment
-// by a bot or an account with write access, and that comment. A newer
+// by aayu's App or an account with write access (scopeTrusted), and that comment. A newer
 // trusted comment that is no longer a request (an accepted one) means none.
 func (r *scopeRun) request(ctx context.Context) (*scopeRequest, *gh.IssueComment, error) {
 	comments, err := r.comments(ctx)
@@ -906,118 +1000,26 @@ var acceptedByRE = regexp.MustCompile(`accepted by @([A-Za-z0-9-]+(?:\[bot\])?)`
 // aayu inbox, the session's one device code covers it. It reads everything
 // again and applies only what still holds.
 func (r *scopeRun) accept(ctx context.Context) error {
-	q, cm, err := r.request(ctx)
+	q, cm, effect, _, err := r.prepare(ctx)
 	if err != nil {
 		return err
-	}
-	if q == nil {
-		return Errorf(ExitBlocked, "scope: nothing waits for a person on Release #%d from a bot or an account with write access", r.n)
-	}
-	if q.Decision != 0 {
-		if err := r.acceptedDecision(ctx, q.Decision); err != nil {
-			return err
-		}
-	}
-	var effect string
-	var commit func(login string) (string, error)
-	switch q.Kind {
-	case "baseline":
-		hash := scope.Hash(r.intent, r.items)
-		if r.base != nil && r.base.Hash == q.Hash { // applied before; only its comment was not updated
-			effect = fmt.Sprintf("Closes the request on Release #%d: baseline %d of %s already holds the drafted plan; nothing else changes.", r.n, r.base.Baseline, r.version)
-			commit = func(string) (string, error) {
-				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
-			}
-			break
-		}
-		switch {
-		case r.draft == nil || r.draft.Hash != q.Hash:
-			return WithNext(Errorf(ExitBlocked, "scope: the draft on the ledger is not the one the request names"), fmt.Sprintf("aayu scope %d --draft", r.n))
-		case hash != q.Hash:
-			return WithNext(Errorf(ExitBlocked, "scope: the plan changed since it was drafted; a person accepts only the plan they see"), fmt.Sprintf("aayu scope %d --draft", r.n))
-		}
-		if d := r.measure(r.items); d != nil && d.Over() && q.Decision == 0 {
-			return WithNext(Errorf(ExitBlocked, "scope: the plan is %.1f%% from baseline %d, over budget, and the request names no Decision", d.DriftPct, d.Baseline),
-				fmt.Sprintf("aayu scope %d --draft --decision <accepted decision>", r.n))
-		}
-		n := 1
-		if r.base != nil {
-			n = r.base.Baseline + 1
-		}
-		effect = fmt.Sprintf("Accepts the plan drafted for %s on Release #%d (%d items, %d points) as baseline %d, the scope freeze later changes are measured against.",
-			r.version, r.n, len(r.items), scope.Total(r.items), n)
-		commit = func(login string) (string, error) {
-			now := r.e.Now().UTC().Format("2006-01-02T15:04:05Z")
-			b := scope.Baseline{Schema: scope.BaselineSchema, Version: r.version, ReleaseIssue: r.n, Baseline: n, BaselinedAt: now, BaselinedBy: login,
-				Intent: r.intent, BudgetPct: r.cfg.Scope.BudgetPercent, Points: scope.Total(r.items), Hash: hash, Decision: q.Decision,
-				EffortPoints: r.cfg.Scope.EffortPoints, Items: r.items}
-			d := scope.Measure(b, r.items, r.cfg.Scope.EffortPoints)
-			d.MeasuredAt = now
-			err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
-				map[string]any{scope.BaselinePath(r.version, n): b, scope.DriftPath(r.version): d})
-			return fmt.Sprintf("baseline %d accepted by @%s: ledger %s", n, login, scope.BaselinePath(r.version, n)), err
-		}
-	case "add", "drop":
-		if q.Decision == 0 { // asked for only over budget, so it always rests on a Decision
-			return Errorf(ExitBlocked, "scope: the request to %s #%d names no Decision; a change over budget needs an accepted one", q.Kind, q.Item)
-		}
-		owner, name, _ := github.SplitRepo(r.repo)
-		is, _, err := r.c.REST.Issues.Get(ctx, owner, name, q.Item)
-		if err != nil {
-			return Wrap(ExitExternal, err)
-		}
-		it, err := r.item(ctx, is)
-		if err != nil {
-			return err
-		}
-		in := slices.ContainsFunc(r.items, func(x scope.Item) bool { return x.Number == q.Item })
-		// Applied before (a retry after a failed write): record it, never apply it twice.
-		applied := (q.Kind == "add") == in
-		switch {
-		case r.base == nil:
-			return Errorf(ExitBlocked, "scope: %s has no baseline; the request no longer applies", r.version)
-		case q.Kind == "add" && !applied && !slices.Contains(scope.Types, it.Type):
-			return Errorf(ExitBlocked, "scope: #%d is a %s now; a plan holds Initiatives, Features, Stories, and Bugs", q.Item, or(it.Type, "issue"))
-		case q.Kind == "add" && !applied && is.GetState() != "open":
-			return Errorf(ExitBlocked, "scope: #%d was closed while the request waited", q.Item)
-		case q.Kind == "add" && !applied && is.GetMilestone() != nil:
-			return Errorf(ExitBlocked, "scope: #%d was planned for %s while the request waited", q.Item, is.GetMilestone().GetTitle())
-		}
-		next := r.items
-		if !applied {
-			next = slices.DeleteFunc(slices.Clone(r.items), func(x scope.Item) bool { return x.Number == q.Item })
-			if q.Kind == "add" {
-				next = append(next, it)
-			}
-		}
-		// The person accepts the plan the request showed: any other change since
-		// (a milestone or an effort label set by hand) needs its own request.
-		if scope.Hash(r.intent, next) != q.Hash {
-			return WithNext(Errorf(ExitBlocked, "scope: the plan changed since the request to %s #%d; a person accepts only the change they see", q.Kind, q.Item),
-				fmt.Sprintf("aayu scope %d --%s %d --decision %d", r.n, q.Kind, q.Item, q.Decision))
-		}
-		d := r.measure(next)
-		effect = fmt.Sprintf("Lets %s #%d %s %s, taking drift from baseline %d to %.1f%% against a %.1f%% budget, on Decision #%d.",
-			q.Kind, q.Item, map[string]string{"add": "into", "drop": "out of"}[q.Kind], r.version, d.Baseline, d.DriftPct, d.BudgetPct, q.Decision)
-		commit = func(login string) (string, error) {
-			if !applied {
-				if err := r.apply(ctx, q.Kind, it); err != nil {
-					return "", err
-				}
-			}
-			if d.Over() {
-				d.OverBudgetDecision = q.Decision
-			}
-			r.items = next
-			return fmt.Sprintf("%s #%d accepted by @%s on Decision #%d", q.Kind, q.Item, login, q.Decision),
-				r.writeDrift(ctx, *d, fmt.Sprintf("%s #%d accepted by @%s on Decision #%d", q.Kind, q.Item, login, q.Decision))
-		}
-	default:
-		return Errorf(ExitBlocked, "scope: unknown request %q on Release #%d", q.Kind, r.n)
 	}
 	login, err := r.e.scopePerson(ctx, effect)
 	if err != nil {
 		return err
+	}
+	// The plan, the request, or the Decision can change while the code
+	// waits: read it all again, and apply only what the person saw.
+	if err := r.load(ctx); err != nil {
+		return err
+	}
+	q2, cm2, effect2, commit, err := r.prepare(ctx)
+	if err != nil {
+		return err
+	}
+	if *q2 != *q || cm2.GetID() != cm.GetID() || effect2 != effect {
+		return WithNext(Errorf(ExitBlocked, "scope: the request or the plan on Release #%d changed while the code was waiting; nothing was accepted", r.n),
+			fmt.Sprintf("aayu scope %d, then a person accepts what it shows", r.n))
 	}
 	done, err := commit(login)
 	if err != nil {
@@ -1041,20 +1043,164 @@ func (r *scopeRun) accept(ctx context.Context) error {
 	return r.emit(rep)
 }
 
-// trusted reports whether login may leave a request: a bot, or an account
-// with write access. Anyone may comment.
-func (r *scopeRun) trusted(ctx context.Context, u *gh.User) (bool, error) {
-	login := u.GetLogin()
-	if u.GetType() == "Bot" || slices.Contains(r.cfg.Identity.BotLogins, login) {
-		return true, nil
-	}
-	owner, name, _ := github.SplitRepo(r.repo)
-	perm, _, err := r.c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+// prepare reads the waiting request and checks it against the plan and the
+// ledger as they are now: the effect a person approves, and the commit that
+// applies it.
+func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment, string, func(login string) (string, error), error) {
+	q, cm, err := r.request(ctx)
 	if err != nil {
-		return false, Wrap(ExitExternal, err)
+		return nil, nil, "", nil, err
 	}
-	p := permissionOf(perm)
-	return p == "write" || p == "admin", nil
+	if q == nil {
+		return nil, nil, "", nil, Errorf(ExitBlocked, "scope: nothing waits for a person on Release #%d from aayu's App or an account with write access", r.n)
+	}
+	if q.Decision != 0 {
+		if err := r.acceptedDecision(ctx, q.Decision); err != nil {
+			return nil, nil, "", nil, err
+		}
+	}
+	var effect string
+	var commit func(login string) (string, error)
+	switch q.Kind {
+	case "baseline":
+		hash := scope.Hash(r.intent, r.items)
+		// Applied before, and only its comment was not updated: the baseline holds
+		// the draft's plan and its budget. A new budget on the same plan is a new baseline.
+		if r.base != nil && r.base.Hash == q.Hash && r.draft != nil && r.draft.Hash == q.Hash && r.draft.BudgetPct == r.base.BudgetPct {
+			effect = fmt.Sprintf("Closes the request on Release #%d: baseline %d of %s already holds the drafted plan; nothing else changes.", r.n, r.base.Baseline, r.version)
+			commit = func(string) (string, error) {
+				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
+			}
+			break
+		}
+		switch {
+		case r.draft == nil || r.draft.Hash != q.Hash:
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the draft on the ledger is not the one the request names"), fmt.Sprintf("aayu scope %d --draft", r.n))
+		case hash != q.Hash:
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the plan changed since it was drafted; a person accepts only the plan they see"), fmt.Sprintf("aayu scope %d --draft", r.n))
+		case r.draft.BudgetPct != r.cfg.Scope.BudgetPercent: // the budget is part of what the person accepts
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: [scope] budget_percent is %.1f%% now, but the plan was drafted with %.1f%%; a person accepts only the budget they see",
+				r.cfg.Scope.BudgetPercent, r.draft.BudgetPct), fmt.Sprintf("aayu scope %d --draft", r.n))
+		}
+		if d := r.measure(r.items); d != nil && d.Over() && q.Decision == 0 {
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the plan is %.1f%% from baseline %d, over budget, and the request names no Decision", d.DriftPct, d.Baseline),
+				fmt.Sprintf("aayu scope %d --draft --decision <accepted decision>", r.n))
+		}
+		n := 1
+		if r.base != nil {
+			n = r.base.Baseline + 1
+		}
+		effect = fmt.Sprintf("Accepts the plan drafted for %s on Release #%d (%d items, %d points) as baseline %d, the scope freeze later changes are measured against, with a %.1f%% change budget.",
+			r.version, r.n, len(r.items), scope.Total(r.items), n, r.draft.BudgetPct)
+		commit = func(login string) (string, error) {
+			now := r.e.Now().UTC().Format("2006-01-02T15:04:05Z")
+			b := scope.Baseline{Schema: scope.BaselineSchema, Version: r.version, ReleaseIssue: r.n, Baseline: n, BaselinedAt: now, BaselinedBy: login,
+				Intent: r.intent, BudgetPct: r.draft.BudgetPct, Points: scope.Total(r.items), Hash: hash, Decision: q.Decision,
+				EffortPoints: r.cfg.Scope.EffortPoints, Items: r.items}
+			d := scope.Measure(b, r.items, r.cfg.Scope.EffortPoints)
+			d.MeasuredAt = now
+			err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
+				map[string]any{scope.BaselinePath(r.version, n): b, scope.DriftPath(r.version): d})
+			return fmt.Sprintf("baseline %d accepted by @%s: ledger %s", n, login, scope.BaselinePath(r.version, n)), err
+		}
+	case "add", "drop":
+		if q.Decision == 0 { // asked for only over budget, so it always rests on a Decision
+			return nil, nil, "", nil, Errorf(ExitBlocked, "scope: the request to %s #%d names no Decision; a change over budget needs an accepted one", q.Kind, q.Item)
+		}
+		owner, name, _ := github.SplitRepo(r.repo)
+		is, _, err := r.c.REST.Issues.Get(ctx, owner, name, q.Item)
+		if err != nil {
+			return nil, nil, "", nil, Wrap(ExitExternal, err)
+		}
+		it, err := r.item(ctx, is)
+		if err != nil {
+			return nil, nil, "", nil, err
+		}
+		in := slices.ContainsFunc(r.items, func(x scope.Item) bool { return x.Number == q.Item })
+		// Applied before (a retry after a failed write): record it, never apply it twice.
+		applied := (q.Kind == "add") == in
+		if ms := is.GetMilestone(); applied && q.Kind == "drop" && (ms.GetTitle() != scope.Next(r.version, r.titles) || ms != nil && ms.GetState() != "open") {
+			applied = false // out of the plan, but not where a drop puts it: the next release, or the backlog
+		}
+		switch {
+		case r.base == nil:
+			return nil, nil, "", nil, Errorf(ExitBlocked, "scope: %s has no baseline; the request no longer applies", r.version)
+		case !slices.Contains(scope.Types, it.Type) && (q.Kind == "drop" || !applied): // a retyped item leaves the plan by --assign, never by a drop
+			return nil, nil, "", nil, Errorf(ExitBlocked, "scope: #%d is a %s now; a plan holds Initiatives, Features, Stories, and Bugs", q.Item, or(it.Type, "issue"))
+		case q.Kind == "add" && !applied && is.GetState() != "open":
+			return nil, nil, "", nil, Errorf(ExitBlocked, "scope: #%d was closed while the request waited", q.Item)
+		case q.Kind == "add" && !applied && is.GetMilestone() != nil:
+			return nil, nil, "", nil, Errorf(ExitBlocked, "scope: #%d was planned for %s while the request waited", q.Item, is.GetMilestone().GetTitle())
+		}
+		next := r.items
+		if !applied {
+			next = slices.DeleteFunc(slices.Clone(r.items), func(x scope.Item) bool { return x.Number == q.Item })
+			if q.Kind == "add" {
+				next = append(next, it)
+			}
+		}
+		// The person accepts the plan the request showed: any other change since
+		// (a milestone or an effort label set by hand) needs its own request.
+		if scope.Hash(r.intent, next) != q.Hash {
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the plan changed since the request to %s #%d; a person accepts only the change they see", q.Kind, q.Item),
+				fmt.Sprintf("aayu scope %d --%s %d --decision %d", r.n, q.Kind, q.Item, q.Decision))
+		}
+		if r.handed {
+			if err := r.handoffReady(next); err != nil {
+				return nil, nil, "", nil, err
+			}
+		}
+		d := r.measure(next)
+		effect = fmt.Sprintf("Lets %s #%d %s %s, taking drift from baseline %d to %.1f%% against a %.1f%% budget, on Decision #%d.",
+			q.Kind, q.Item, map[string]string{"add": "into", "drop": "out of"}[q.Kind], r.version, d.Baseline, d.DriftPct, d.BudgetPct, q.Decision)
+		commit = func(login string) (string, error) {
+			if !applied {
+				if err := r.apply(ctx, q.Kind, it); err != nil {
+					return "", err
+				}
+			}
+			if d.Over() {
+				d.OverBudgetDecision = q.Decision
+			}
+			r.items = next
+			if err := r.writeDrift(ctx, *d, fmt.Sprintf("%s #%d accepted by @%s on Decision #%d", q.Kind, q.Item, login, q.Decision)); err != nil {
+				return "", err
+			}
+			if r.handed {
+				r.who = login
+				if _, err := r.publish(ctx, d); err != nil {
+					return "", err
+				}
+			}
+			return fmt.Sprintf("%s #%d accepted by @%s on Decision #%d", q.Kind, q.Item, login, q.Decision), nil
+		}
+	default:
+		return nil, nil, "", nil, Errorf(ExitBlocked, "scope: unknown request %q on Release #%d", q.Kind, r.n)
+	}
+	return q, cm, effect, commit, nil
+}
+
+// scopeTrusted is the one rule every reader of a scope marker applies (scope
+// and the inbox): aayu's own App, or an account with write access (maintain
+// counts). Anyone may comment, and any installed App may too, so every other
+// comment with the marker is skipped: an App holds no repository role.
+func scopeTrusted(u *gh.User, id config.Identity, canWrite func(login string) (bool, error)) (bool, error) {
+	if identity.IsBot(identity.Account{Login: u.GetLogin(), Type: u.GetType()}, nil) {
+		return id.AppSlug != "" && strings.EqualFold(u.GetLogin(), id.AppSlug+"[bot]"), nil
+	}
+	return canWrite(u.GetLogin())
+}
+
+func (r *scopeRun) trusted(ctx context.Context, u *gh.User) (bool, error) {
+	return scopeTrusted(u, r.cfg.Identity, func(login string) (bool, error) {
+		owner, name, _ := github.SplitRepo(r.repo)
+		perm, _, err := r.c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+		if err != nil {
+			return false, Wrap(ExitExternal, err)
+		}
+		p := permissionOf(perm)
+		return p == "write" || p == "admin", nil
+	})
 }
 
 // scopePerson proves a person accepts effect through GitHub's device flow,
@@ -1080,20 +1226,32 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 	if r.base == nil {
 		return WithNext(Errorf(ExitBlocked, "scope: %s has no baseline; a person accepts one before hand-off", r.version), fmt.Sprintf("aayu scope %d --draft", r.n))
 	}
-	rep := r.report()
-	switch {
-	case len(rep.Problems) > 0:
-		return WithNext(Errorf(ExitBlocked, "scope: %s cannot be handed off (%d problem(s)): %s", r.version, len(rep.Problems), strings.Join(rep.Problems, "; ")),
-			fmt.Sprintf("aayu scope %d", r.n))
-	case strings.TrimSpace(r.base.Intent) != r.intent:
-		return WithNext(Errorf(ExitBlocked, "scope: the Release's Summary changed since baseline %d was accepted; a person accepts the new intent", r.base.Baseline),
-			fmt.Sprintf("aayu scope %d --draft, then a person accepts it", r.n))
+	if err := r.handoffReady(r.items); err != nil {
+		return err
 	}
 	d := r.measure(r.items)
 	if d.Over() && d.OverBudgetDecision == 0 {
-		return WithNext(Errorf(ExitBlocked, "scope: %s drifted %.1f%% from baseline %d, over the %.1f%% budget, through changes outside aayu scope; a person decides before hand-off",
+		return WithNext(Errorf(ExitBlocked, "scope: %s drifted %.1f%% from baseline %d, over the %.1f%% budget, and no accepted Decision holds that drift; a person decides before hand-off",
 			r.version, d.DriftPct, d.Baseline, d.BudgetPct), fmt.Sprintf("re-baseline: aayu scope %d --draft --decision <accepted decision>", r.n))
 	}
+	n, err := r.publish(ctx, d)
+	if err != nil {
+		return err
+	}
+	if err := r.writeDrift(ctx, *d, "hand-off"); err != nil {
+		return err
+	}
+	rep := r.report()
+	rep.Done = fmt.Sprintf("handed off baseline %d: %d includes links on Release #%d, plan posted", r.base.Baseline, n, r.n)
+	rep.Next = fmt.Sprintf("aayu next picks the Stories; aayu release %d --to rolling ships them", r.n)
+	return r.emit(rep)
+}
+
+// publish writes the plan where execution reads it: the Release's includes
+// links, which aayu release ships, and the plan comment. Hand-off writes it
+// first; every change applied after hand-off writes it again, so a release
+// never ships a plan older than the milestone.
+func (r *scopeRun) publish(ctx context.Context, d *scope.Drift) (int, error) {
 	// Stories and Bugs, never their Feature: aayu release expands a Feature to
 	// every Story under it, and some may be planned for a later release.
 	var lines []string
@@ -1112,8 +1270,9 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 				return nil, err
 			})
 		if err != nil {
-			return Wrap(ExitExternal, err)
+			return 0, Wrap(ExitExternal, err)
 		}
+		r.issue.Body = gh.Ptr(body)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n## Release plan: %s\n\nBaseline %d, accepted by @%s on %s; ledger `%s`. Drift now: %.1f%% of %d points, budget %.1f%%.\n\n",
@@ -1127,16 +1286,7 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 		fmt.Fprintf(&b, "| #%d | %s | %s | %s |\n", it.Number, it.Type, it.Effort, parent)
 	}
 	fmt.Fprintf(&b, "\nThis is the plan of record, not a promise: a slip moves an item to the next release. A change that takes drift past %.1f%% waits for a person's accepted Decision.\n", d.BudgetPct)
-	if err := r.upsertOwn(ctx, ScopePlanMarker, b.String(), "github.comment.scope-plan"); err != nil {
-		return err
-	}
-	if err := r.writeDrift(ctx, *d, "hand-off"); err != nil {
-		return err
-	}
-	rep = r.report()
-	rep.Done = fmt.Sprintf("handed off baseline %d: %d includes links on Release #%d, plan posted", r.base.Baseline, len(lines), r.n)
-	rep.Next = fmt.Sprintf("aayu next picks the Stories; aayu release %d --to rolling ships them", r.n)
-	return r.emit(rep)
+	return len(lines), r.upsertOwn(ctx, ScopePlanMarker, b.String(), "github.comment.scope-plan")
 }
 
 func (r *scopeRun) writeDrift(ctx context.Context, d scope.Drift, why string) error {
@@ -1160,7 +1310,7 @@ func (r *scopeRun) writeLedger(ctx context.Context, msg string, files map[string
 }
 
 // scopeItem makes an open Release with a waiting scope request an inbox
-// card, when a bot or an account with write access asked: anyone may comment.
+// card, when aayu's App or an account with write access asked (scopeTrusted).
 func (s *inboxSource) scopeItem(ctx context.Context, it *InboxItem) (bool, error) {
 	comments, err := s.commentsOf(ctx, it.Number)
 	if err != nil {
@@ -1171,12 +1321,10 @@ func (s *inboxSource) scopeItem(ctx context.Context, it *InboxItem) (bool, error
 		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
 			continue
 		}
-		if login := cm.GetUser().GetLogin(); cm.GetUser().GetType() != "Bot" && !slices.Contains(s.id.BotLogins, login) {
-			if ok, err := s.canWrite(ctx, login); err != nil {
-				return false, err
-			} else if !ok {
-				continue
-			}
+		if ok, err := scopeTrusted(cm.GetUser(), s.id, func(login string) (bool, error) { return s.canWrite(ctx, login) }); err != nil {
+			return false, err
+		} else if !ok {
+			continue
 		}
 		q, ok := parseScopeRequest(cm.GetBody())
 		if !ok {
