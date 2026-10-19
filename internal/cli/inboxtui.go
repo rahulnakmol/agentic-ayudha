@@ -771,6 +771,9 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	case strings.HasPrefix(m.status, "From the last read"):
 		m.status = "Up to date."
 	}
+	if read := m.deferredRead(); read != nil { // R asked during the writes, and this read began before they ended
+		return read
+	}
 	return m.tick()
 }
 
@@ -854,11 +857,20 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	if m.quitting != quitNo && m.writing() == 0 && (m.quitting == quitCurrent || len(m.queue) == 0) {
 		return tea.Quit
 	}
-	if len(m.queue) == 0 && m.readAfter && !m.refreshing { // the refresh R asked for during the writes
-		m.readAfter, m.refreshing = false, true
-		return tea.Batch(m.spinTick(), m.gatherCmd())
+	if read := m.deferredRead(); read != nil {
+		return read
 	}
 	return m.pump()
+}
+
+// deferredRead is the read R asked for during the writes, once they have
+// ended and no other read is under way; else nil.
+func (m *inboxModel) deferredRead() tea.Cmd {
+	if len(m.queue) > 0 || !m.readAfter || m.refreshing {
+		return nil
+	}
+	m.readAfter, m.refreshing = false, true
+	return tea.Batch(m.spinTick(), m.gatherCmd())
 }
 
 // writing counts the writes under way.
@@ -876,7 +888,7 @@ func (m *inboxModel) writing() int {
 // change: the item, its pull request, and its Story.
 func inboxTouches(it InboxItem) []int {
 	var out []int
-	for _, n := range []int{it.Number, it.PR, it.f.story} {
+	for _, n := range []int{it.Number, it.PR, it.Story} {
 		if n > 0 && !slices.Contains(out, n) {
 			out = append(out, n)
 		}

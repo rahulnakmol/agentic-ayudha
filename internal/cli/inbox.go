@@ -177,6 +177,7 @@ type InboxItem struct {
 	CounselFrom string        `json:"counsel_from"`          // "posted" (aayu counsel --post, a Decision's) or "facts"
 	Evidence    string        `json:"evidence"`              // the one link the counsel rests on
 	Updated     time.Time     `json:"updated,omitzero"`      // when the issue or PR last changed on GitHub
+	Story       int           `json:"story,omitempty"`       // the Story a ship of this PR completes, so two writes on it never run at once
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
@@ -597,6 +598,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			disp = st.Result.Disposition
 		}
 		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
+			Story:    StoryOf(p.GetBody(), "", p.GetHead().GetRef()), // its "ship now" choice completes the Story
 			Evidence: p.GetHTMLURL(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
 			Why: fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
 			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
@@ -664,7 +666,7 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, by []str
 	}
 	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
 	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time,
-		Evidence: p.GetHTMLURL(), f: inboxFacts{story: story, head: head},
+		Evidence: p.GetHTMLURL(), Story: story, f: inboxFacts{story: story, head: head},
 		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
 		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
 			{N: 2, Label: "open it and review it", Command: "open"}}}, nil
@@ -1130,7 +1132,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 					fmt.Fprintf(w, "  open: %s\n", it.URL)
 					e.openURL(it.URL)
 					continue
-				case ch == 'A':
+				case ch == 'A' || ch == 'C': // C as in the full-screen inbox
 					if _, err := tidyAll(); err != nil {
 						return true, nil
 					}
@@ -1214,7 +1216,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 				skipped += len(house)
 				handled += len(house)
 				break tidy
-			case 'a', 'A', '\r', '\n', '1':
+			case 'a', 'A', 'C', '\r', '\n', '1':
 				if ok, err := tidyAll(); err != nil || ok {
 					break tidy
 				}

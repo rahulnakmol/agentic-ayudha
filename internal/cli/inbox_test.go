@@ -116,7 +116,7 @@ func TestInbox(t *testing.T) {
 	// recommendation on each: the waiver, a one-way door, after it is asked
 	// again; s skips the capped PR; the housekeeping is tidied in one go.
 	env := newEnv()
-	code, out, errOut := runIn(t, env, opts, "ay a s a y", "inbox", "--repo", "o/r")
+	code, out, errOut := runIn(t, env, opts, "ay a s C y", "inbox", "--repo", "o/r") // C tidies, as in the full-screen inbox
 	if code != 0 {
 		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
 	}
@@ -135,7 +135,7 @@ func TestInbox(t *testing.T) {
 		"[4/4] Housekeeping: 3 items\n  " + inboxTidy.Line + "\n  Vidhi (Auditor), counsel, not approval: Criterion: GitHub's records match what already happened. Condition: 3 items disagree: 1 merged without ship; 1 bug fixed, still open; 1 replaced, still open.",
 		"    Merged without ship #5: Merged story: mark #5 merged without proof (it stays uncovered)\n    Bug fixed, still open #7: A bug: close #7 as completed, fixed in #8\n    Replaced, still open #3: Old story: close #3 as not planned, replaced by #4\n" +
 			"  1. Tidy all 3 (recommended)\n  2. Go through them one by one\n",
-		"  > a\n  This tidies 3 housekeeping items, each written to GitHub as @o and not undone later: #5 mark #5 merged without proof (it stays uncovered); #7 close #7 as completed, fixed in #8; #3 close #3 as not planned, replaced by #4. Apply it to all 3? y = yes · n = no, go back\n  > y\n",
+		"  > C\n  This tidies 3 housekeeping items, each written to GitHub as @o and not undone later: #5 mark #5 merged without proof (it stays uncovered); #7 close #7 as completed, fixed in #8; #3 close #3 as not planned, replaced by #4. Apply it to all 3? y = yes · n = no, go back\n  > y\n",
 		"inbox: 5 done, 1 skipped, 0 left",
 	} {
 		if !strings.Contains(out, want) {
@@ -1315,9 +1315,15 @@ func TestInboxWriteFailures(t *testing.T) {
 	if reads != 0 {
 		t.Errorf("R during the writes read GitHub %d times before they ended", reads)
 	}
+	m.refreshing = true // a periodic read is under way when the writes end
 	teaDrive(m, first)
+	if reads != 0 || !m.readAfter {
+		t.Errorf("the writes ended during a read: %d reads, pending %v; want the asked-for read after it", reads, m.readAfter)
+	}
+	_, read := m.Update(inboxGatheredMsg{items: slices.Clone(m.items), at: clock})
+	teaDrive(m, read)
 	if reads != 1 || m.readAfter {
-		t.Errorf("R during the writes: %d reads after they ended, still pending %v; want 1", reads, m.readAfter)
+		t.Errorf("R during the writes: %d reads after they and the running read ended, still pending %v; want 1", reads, m.readAfter)
 	}
 	slices.Sort(ran)
 	if !slices.Equal(ran, []int{640, 642, 644, 646, 654}) {
@@ -1357,6 +1363,23 @@ func TestInboxWriteFailures(t *testing.T) {
 	m.dirty = true
 	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ Marked #646 merged without proof") || !strings.Contains(v, "What happens next") {
 		t.Errorf("#646's card body is not its result:\n%s", v)
+	}
+
+	// A capped PR's "ship now" completes its Story: a write on the Story's
+	// own card waits for it, as two writes on one PR do.
+	{
+		m := inboxScene(clock)
+		m.queue = nil
+		clear(m.state)
+		m.act = func(it InboxItem, _ InboxAction, _ *inboxWork) (InboxItem, string, error) { return it, "", nil }
+		i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Kind == InboxCapped })
+		m.items[i].Story = 644
+		capped, story := m.items[i], m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 644 })]
+		m.start([]inboxJob{{it: capped, a: capped.Options[1]}})
+		m.start([]inboxJob{{it: story, a: *story.recommended()}})
+		if running, waiting := m.queued(story.key()); running || !waiting {
+			t.Errorf("a write on Story #644 while capped #%d ships it: running %v, waiting %v", capped.Number, running, waiting)
+		}
 	}
 
 	// The writes end while the quit question is open: w and q then quit at
