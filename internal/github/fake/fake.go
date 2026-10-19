@@ -110,6 +110,10 @@ type PR struct {
 	// Labels and NodeID are served from the PR's issue and number.
 	Labels []Label `json:"labels"`
 	NodeID string  `json:"node_id"`
+	// Mergeable and MergeableState are what GitHub says of merging it
+	// (GET /pulls/{n} only): nil is still being computed.
+	Mergeable      *bool  `json:"mergeable"`
+	MergeableState string `json:"mergeable_state,omitempty"`
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
@@ -314,8 +318,11 @@ type GitHub struct {
 	// branch name (GET /rules/branches/{branch}), one rule each, served a page
 	// of RulesPerPage at a time (0: all). "name@id" pins a check to the app
 	// (integration_id) it must come from.
-	RequiredChecks   []string
-	ClassicChecks    []string // classic branch protection's required checks (GET /branches/{b}), "name@id" pinned
+	RequiredChecks []string
+	ClassicChecks  []string // classic branch protection's required checks (GET /branches/{b}), "name@id" pinned
+	// Strict is the rules' strict_required_status_checks_policy: a PR must
+	// be up to date with its base to merge.
+	Strict           bool
 	RulesPerPage     int
 	CheckRunsPerPage int
 	RunsPerPage      int // workflow runs a page, whatever per_page asks (0: per_page)
@@ -700,7 +707,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				sc["integration_id"] = atoi(app)
 			}
 			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": i + 1,
-				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": false}})
+				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": g.Strict}})
 		}
 		if per := g.RulesPerPage; per > 0 {
 			page := max(atoi(r.URL.Query().Get("page")), 1)

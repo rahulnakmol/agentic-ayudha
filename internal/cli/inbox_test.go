@@ -327,7 +327,7 @@ func TestInboxWords(t *testing.T) {
 	}
 	sentence := regexp.MustCompile(`[.!?](\s|$)`)
 	for name, k := range map[string]inboxKind{"needs": inboxNeedsYou, "tidy": inboxTidy, InboxDecision: inboxKinds[InboxDecision], InboxReady: inboxKinds[InboxReady], InboxHumanReview: inboxKinds[InboxHumanReview],
-		InboxCapped: inboxKinds[InboxCapped], InboxUnshipped: inboxKinds[InboxUnshipped], InboxFixed: inboxKinds[InboxFixed], InboxReplaced: inboxKinds[InboxReplaced], InboxAudit: inboxKinds[InboxAudit]} {
+		InboxCapped: inboxKinds[InboxCapped], InboxUnshipped: inboxKinds[InboxUnshipped], InboxFixed: inboxKinds[InboxFixed], InboxReplaced: inboxKinds[InboxReplaced], InboxAudit: inboxKinds[InboxAudit], InboxNotReady: inboxKinds[InboxNotReady]} {
 		if n := len(sentence.FindAllString(k.Explain, -1)); k.Word == "" || k.Line == "" || n < 2 || n > 4 {
 			t.Errorf("%s: word %q, line %q, explainer of %d sentences", name, k.Word, k.Line, n)
 		}
@@ -353,7 +353,7 @@ func TestInboxWords(t *testing.T) {
 	if err != nil || len(items) != 17 {
 		t.Fatalf("%d items: %v", len(items), err)
 	}
-	_, house := splitInbox(items)
+	_, house, _ := splitInbox(items)
 	ready := InboxItem{Kind: InboxReady, Number: 590, PR: 590, f: inboxFacts{story: 586, head: strings.Repeat("3", 40)}}
 	human := InboxItem{Kind: InboxHumanReview, Number: 591, f: inboxFacts{head: strings.Repeat("4", 40)}}
 	audit := InboxItem{Kind: InboxAudit, Number: 592, PR: 592, mergeSHA: strings.Repeat("5", 40)}
@@ -497,9 +497,12 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	// A push to PR A after the inbox listed it: the pick was for the head
 	// the person saw, so nothing merges or is commented.
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	gets := 0 // the push lands after the inbox read A and before ship reads it: the list's read, the read before the write, then ship's
 	g.Hook = func(method, path string) {
 		if method == "GET" && path == "/repos/o/r/pulls/"+strconv.Itoa(prA) {
-			g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
+			if gets++; gets == 3 {
+				g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
+			}
 		}
 	}
 	g.Mu.Unlock()
@@ -1092,7 +1095,7 @@ func TestInboxAlignment(t *testing.T) {
 		w, h := size[0], size[1]
 		m := inboxScene(clock)
 		m.Update(tea.WindowSizeMsg{Width: w, Height: h})
-		for _, keys := range [][]string{nil, {"j", "j", "j", "j", "j", "j"}, {"j", "j", "j", "j", "j", "j", "j", "j", "j", "j"}} {
+		for _, keys := range [][]string{nil, {"j", "j", "j", "j", "j", "j"}, {"j", "j", "j", "j", "j", "j", "j", "j", "j", "j"}, {"d"}} { // d: a card with no details says so
 			teaKeys(m, keys...)
 			m.dirty = true
 			lines := strings.Split(ansi.Strip(m.View().Content), "\n")

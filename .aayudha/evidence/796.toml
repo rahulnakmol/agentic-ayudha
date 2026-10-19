@@ -1,0 +1,30 @@
+# Which tests prove story #796's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a conflicting Ready card under Not ready yet at 120x34 and 72x34: the reason, the next actor, no ship choice, not counted, every line the width
+tests = ["internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 2 # a refresh no updated_at triggered reads the PR again: conflict, then Ready again after a rebase and a new Ready to ship
+tests = ["internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 3 # every required check of dev, not only the gate's three: running, failed, and green, read on a refresh
+tests = ["internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 4 # new commits after ship's Ready to ship: the card stays, not ready, with no ship choice
+tests = ["internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 5 # the key bar names R refresh and the status line says when the inbox last read GitHub
+tests = ["internal/cli:TestInboxNotReady", "internal/cli:TestInboxAlignment"]
+
+[[criterion]]
+id = 6 # --list as Markdown and JSON: the same reason and next actor, no ship
+tests = ["internal/cli:TestInboxNotReady", "internal/cli:TestInboxList"]
+
+[[criterion]]
+id = 7 # d shows GitHub's facts under the card and hides them again; the main lines name no SHA, URL, method or status code
+tests = ["internal/cli:TestInboxNotReady"]

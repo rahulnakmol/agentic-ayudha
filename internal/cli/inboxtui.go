@@ -413,6 +413,7 @@ type inboxModel struct {
 	armed     bool
 	ask       *inboxAsk
 	help      bool
+	details   bool // d: GitHub's own facts under each card's plain lines
 	finding   bool
 	query     string
 	hits      []inboxHit
@@ -545,8 +546,8 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 			out = append(out, it)
 		}
 	}
-	needs, house := splitInbox(out)
-	m.items = append(needs, house...)
+	needs, house, waiting := splitInbox(out)
+	m.items = append(append(needs, waiting...), house...)
 	m.layoutRows()
 	m.cur = 0
 	for r, i := range m.rows {
@@ -581,6 +582,7 @@ func (m *inboxModel) relist(fresh []InboxItem, at time.Time) {
 // this session settled.
 var inboxGroups = [...]struct{ name, about string }{
 	{"Needs you now", "one at a time"},
+	{"Not ready yet", "nothing for you; d says why"},
 	{"Waiting on the review cap", "agents stopped; you look next"},
 	{"Housekeeping", "x select · X all · C clear all"},
 	{"Done this session", "written here, or gone from GitHub"},
@@ -592,10 +594,12 @@ func (m *inboxModel) group(i int) int {
 	it := m.items[i]
 	switch st := m.state[it.key()]; {
 	case st == "gone" || st == "done" && !m.flashing(it.key()):
-		return 3
+		return 4
 	case it.kind().Housekeeping:
-		return 2
+		return 3
 	case it.Kind == InboxCapped:
+		return 2
+	case it.waiting():
 		return 1
 	}
 	return 0
@@ -656,7 +660,7 @@ func (m *inboxModel) left() (needs, house int) {
 	for i := range m.items {
 		it := &m.items[i]
 		switch st := m.state[it.key()]; {
-		case st == "done" || st == "gone":
+		case st == "done" || st == "gone" || it.Kind == InboxNotReady:
 		case inboxKinds[it.Kind].Housekeeping:
 			house++
 		default:
@@ -843,9 +847,9 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	m.every = inboxRefreshEvery
 	m.fresh = m.now()
 	m.refreshLog = fmt.Sprintf("%d GitHub %s, %d not modified", msg.calls, plural(msg.calls, "call", "calls"), msg.notModified)
-	if msg.changed || first {
-		m.merge(msg.items)
-	}
+	// Every read is taken in: a card's pull request is read again on each
+	// refresh, and a conflict or a finished check changes no updated_at.
+	m.merge(msg.items)
 	m.live = true
 	m.relist(msg.items, msg.at)
 	if m.quitting != quitNo && m.writing() == 0 {
@@ -1079,7 +1083,7 @@ func (m *inboxModel) next() {
 	m.sel, m.armed = 0, false
 	for d := 1; d <= len(m.rows); d++ {
 		r := (m.cur + d) % len(m.rows)
-		if m.state[m.items[m.rows[r]].key()] == "" {
+		if it := m.items[m.rows[r]]; m.state[it.key()] == "" && !it.waiting() {
 			m.cur = r
 			return
 		}
@@ -1093,7 +1097,7 @@ func (m *inboxModel) moveOn(house bool) {
 		r := (m.cur + d) % len(m.rows)
 		it := m.items[m.rows[r]]
 		running, waiting := m.queued(it.key())
-		if m.state[it.key()] == "" && !running && !waiting && (house || !it.kind().Housekeeping) {
+		if m.state[it.key()] == "" && !running && !waiting && !it.waiting() && (house || !it.kind().Housekeeping) {
 			m.cur, m.sel, m.armed = r, 0, false
 			return
 		}
@@ -1254,6 +1258,9 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case "/", "ctrl+k":
 		m.finding, m.query, m.hit = true, "", 0
 		m.find()
+	case "d":
+		m.details = !m.details
+		m.status = map[bool]string{true: "Details shown: what GitHub said, under each card. d hides them.", false: "Details hidden."}[m.details]
 	case "o":
 		if i := m.item(); i >= 0 {
 			m.open(m.items[i].URL)
@@ -1293,7 +1300,7 @@ func (m *inboxModel) cycle(dir int) {
 	for d := 1; d <= n; d++ {
 		r := ((m.cur+dir*d)%n + n) % n
 		i := m.rows[r]
-		if st := m.state[m.items[i].key()]; !m.items[i].kind().Housekeeping && st != "done" && st != "gone" {
+		if st := m.state[m.items[i].key()]; !m.items[i].kind().Housekeeping && !m.items[i].waiting() && st != "done" && st != "gone" {
 			if r != m.cur {
 				m.cur, m.sel, m.armed = r, 0, false
 			}
@@ -1396,6 +1403,8 @@ func (m *inboxModel) selectable(i int) string {
 	it := m.items[i]
 	running, waiting := m.queued(it.key())
 	switch st := m.state[it.key()]; {
+	case it.waiting():
+		return fmt.Sprintf("#%d is not ready yet; only housekeeping can be selected.", it.Number)
 	case !it.kind().Housekeeping:
 		return fmt.Sprintf("#%d needs you; only housekeeping can be selected.", it.Number)
 	case running || waiting:
@@ -1715,7 +1724,7 @@ func (m *inboxModel) render() string {
 		}
 	default:
 		listH := min(len(m.listLines()), max(body/2-1, 4))
-		if i := m.item(); i >= 0 && (m.actionView(m.items[i], inner, body) != nil || m.state[m.items[i].key()] == "not done") {
+		if i := m.item(); i >= 0 && (m.actionView(m.items[i], inner, body) != nil || m.state[m.items[i].key()] == "not done" || m.details) {
 			listH = min(listH, max(body/3-1, 4)) // the action's progress needs the room; the list stays in view
 		}
 		lines = append(lines, m.columnsHead(inner))
@@ -1996,6 +2005,8 @@ func (m *inboxModel) rowState(i int) (mark, why string, role ui.Role) {
 		return " ! ", "listed again after you", ui.Warn
 	case st == "skipped":
 		return "   ", "skipped for now", ui.Muted
+	case it.waiting():
+		return "   ", it.short(), ui.Muted
 	case !it.kind().Housekeeping:
 		return "   ", it.short(), inboxText
 	case m.selected[k]:
@@ -2074,9 +2085,16 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		top = append(top, inboxBold.Render(l))
 	}
 	top = append(top, wrapTo(kind.Line, w)...) // what it means, in the text colour: it is read, not skimmed
-	var whyLines, writes []string              // the list's why-it-waits column, in full; a write that stopped
-	if it.Why != "" {
+	var whyLines, writes, details []string     // the list's why-it-waits column, in full; a write that stopped; d's facts
+	switch {
+	case it.Next != "": // nothing for the person yet: why, and who acts, in the text colour
+		whyLines = append([]string{""}, m.wrap(fmt.Sprintf("#%d %s", it.Number, it.Why), w)...)
+		whyLines = append(whyLines, m.wrapStyled(ui.Accent, "Next: "+it.Next, w)...)
+	case it.Why != "":
 		whyLines = m.wrapStyled(ui.Muted, "Why it waits: "+it.Why, w)
+	}
+	if m.details && i >= 0 {
+		details = m.detailLines(it, w)
 	}
 	var counselLines []string
 	if counselText != "" {
@@ -2147,7 +2165,12 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	}
 	// Fit: the counsel gives way, then the full why; the choices and what
 	// the selected one does always show.
-	extra := func() int { return len(top) + len(whyLines) + len(writes) + len(counselLines) + len(choiceLines) - h }
+	extra := func() int {
+		return len(top) + len(whyLines) + len(details) + len(writes) + len(counselLines) + len(choiceLines) - h
+	}
+	if len(details) > 0 && extra() > 0 {
+		counselLines = nil // the person asked for the details
+	}
 	if len(writes) > 0 && extra() > 0 {
 		counselLines = nil // a write that stopped matters more than the counsel
 	}
@@ -2157,13 +2180,16 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 			counselLines = append(counselLines[:keep], m.style(ui.Muted, "▏ … ? shows all of it"))
 		}
 	}
+	if extra() > 0 && len(details) > 3 { // the details give way before the card's own words
+		details = append(details[:max(len(details)-extra()-1, 2)], m.style(ui.Muted, cell("… more on a taller terminal", w)))
+	}
 	if extra() > 0 {
 		whyLines = whyLines[:max(len(whyLines)-extra(), 0)]
 	}
 	if extra() > 0 {
 		counselLines = nil
 	}
-	top = append(append(top, whyLines...), writes...)
+	top = append(append(append(top, whyLines...), details...), writes...)
 	out := append(append(top, counselLines...), choiceLines...)
 	base := y + len(top) + len(counselLines)
 	for ci, at := range choiceAt {
@@ -2285,6 +2311,19 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 	return append(append(out, ""), m.wrapStyled(ui.Muted, "It moves to Done this session; Tab goes to the next item that needs you.", w)...)
 }
 
+// detailLines are d's view: GitHub's own facts behind the card, below its
+// plain lines, for a person who wants the commit, the check, or the state.
+func (m *inboxModel) detailLines(it InboxItem, w int) []string {
+	if len(it.Details) == 0 {
+		return []string{"", m.style(ui.Muted, cell("No details for this card; d hides this.", w))}
+	}
+	out := []string{"", m.style(ui.Muted, inboxBold.Render("Details")+" (d hides them)")}
+	for _, d := range it.Details {
+		out = append(out, m.wrapStyled(ui.Muted, "· "+d, w)...)
+	}
+	return out
+}
+
 // failLines is what the card says above its choices about a write that
 // stopped: the step, why, and what GitHub had already answered as written;
 // and for an item listed again after a write, that write.
@@ -2361,7 +2400,7 @@ func (m *inboxModel) helpView(w, h int) []string {
 	for _, kv := range [][2]string{{"Enter", "do the selected choice; a one-way door asks again"}, {"1-9", "select a choice"}, {"s", "skip for now"},
 		{"Tab", "next needs-you item (Shift-Tab back)"}, {"j/k", "move (↓/↑ and the mouse wheel too)"}, {"/", "find any item or choice (Ctrl+K)"},
 		{"x", "select housekeeping; never a needs-you item"}, {"X", "select all housekeeping"}, {"C", "clear all housekeeping, after one confirmation"},
-		{"Esc", "clear the selection, or go back"}, {"o", "open on GitHub"}, {"R", "refresh now"}, {"q", "quit"}} {
+		{"Esc", "clear the selection, or go back"}, {"o", "open on GitHub"}, {"d", "show or hide what GitHub said, under each card"}, {"R", "refresh now: read every card's pull request again"}, {"q", "quit"}} {
 		for li, l := range m.wrap(kv[1], w-keyW) {
 			key := ""
 			if li == 0 {
@@ -2437,7 +2476,7 @@ func (m *inboxModel) statusLine(w int) string {
 	case m.refreshing && !m.loading:
 		right = m.spinner() + "refreshing"
 	case !m.fresh.IsZero():
-		right = "updated " + ago(m.now(), m.fresh)
+		right = "read " + ago(m.now(), m.fresh)
 	}
 	if lw, rw := ansi.StringWidth(left), ansi.StringWidth(right); right != "" && lw+rw+3 <= w {
 		return left + strings.Repeat(" ", w-lw-rw) + m.style(ui.Muted, right)
@@ -2474,14 +2513,24 @@ func (m *inboxModel) keysLine(w int) string {
 	case m.armed:
 		keys = []kb{{"Enter", "apply it", 0}, {"Esc", "back", 0}, {"1-9", "pick another", 1}}
 	case len(m.queue) > 0:
-		keys = []kb{{"Enter", "do it too", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"/", "find", 2}, {"?", "help", 1}, {"q", "quit (asks)", 0}}
+		keys = []kb{{"Enter", "do it too", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"/", "find", 2}, {"R", "refresh", 1}, {"?", "help", 1}, {"q", "quit (asks)", 0}}
 	case len(m.selected) > 0:
 		n := len(m.selected)
 		keys = []kb{{strconv.Itoa(n), "selected", 0}, {"Enter", fmt.Sprintf("do all %d", n), 0}, {"x", "toggle", 1}, {"X", "all/none", 2}, {"Esc", "clear", 0}}
 	default:
-		keys = []kb{{"Enter", "do it", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"X", "all", 3}, {"C", "clear", 3}, {"/", "find", 2}, {"?", "help", 1}, {"q", "quit", 0}}
+		keys = []kb{{"Enter", "do it", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"X", "all", 3}, {"C", "clear", 3}, {"/", "find", 2}, {"d", "details", 3}, {"R", "refresh", 1}, {"?", "help", 1}, {"q", "quit", 0}}
+		if i := m.item(); i >= 0 && m.items[i].waiting() { // nothing to do on it: Enter only opens it
+			keys = []kb{{"Tab", "next", 0}, {"o", "open", 1}, {"x", "select", 2}, {"X", "all", 3}, {"C", "clear", 3}, {"/", "find", 2}, {"d", "details", 1}, {"R", "refresh", 1}, {"?", "help", 1}, {"q", "quit", 0}}
+		}
 		if m.houseLeft() == 0 {
 			keys = slices.DeleteFunc(keys, func(k kb) bool { return k.key == "x" || k.key == "X" || k.key == "C" })
+		}
+		if m.details {
+			for i := range keys {
+				if keys[i].key == "d" {
+					keys[i] = kb{"d", "hide details", 1}
+				}
+			}
 		}
 	}
 	for p := 5; p >= 0; p-- {
