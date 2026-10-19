@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/brief"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -59,7 +60,7 @@ func Load(files map[string][]byte) *Vault {
 		if !strings.HasSuffix(p, ".md") || isTemplate(p) {
 			continue
 		}
-		if b := Base(p); unsafeName.MatchString(b) || b == "" || strings.TrimSpace(b) != b { // [[x]] ![t](u)]] would close the link; [[ A]] reaches A
+		if b := Base(p); unsafeName.MatchString(b) || b == "" || strings.TrimSpace(b) != b || strings.ContainsFunc(b, unicode.IsControl) { // [[x]] ![t](u)]] would close the link; [[ A]] reaches A; a line break splits it
 			v.unsafe = append(v.unsafe, p)
 			continue
 		}
@@ -225,7 +226,7 @@ func Check(files map[string][]byte) Report {
 		}
 	}
 	for _, p := range v.unsafe {
-		fail(p, "name", "the file name %q breaks a wikilink (a character of [ ] # ^ | \\ : * ? \" < >, or space at an end): rename the note", Base(p))
+		fail(p, "name", "the file name %q breaks a wikilink (a character of [ ] # ^ | \\ : * ? \" < >, a control character such as a line break, or space at an end): rename the note", Base(p))
 	}
 	ids := map[string]string{}
 	for _, p := range slices.Sorted(mapKeys(v.Notes)) {

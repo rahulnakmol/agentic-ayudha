@@ -1,6 +1,7 @@
 package brain
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -310,9 +311,10 @@ tags: [type/principle]
 	files := skeleton(t) // a file name that closes a wikilink fails check, and no generated map links it
 	files["Principles/x]] ![t](t.png).md"] = note(good, "Short.\n")
 	files["Principles/ Evidence first.md"] = note(strings.Replace(good, "principle-evidence", "principle-spaced", 1), "Short.\n") // [[ Evidence first]] would reach the other note
+	files["Principles/x\n---\ny.md"] = note(strings.Replace(good, "principle-evidence", "principle-broken", 1), "Short.\n")       // a line break would split a generated link
 	got := rules(Check(files))
-	for _, name := range []string{"x]] ![t](t.png)", " Evidence first"} {
-		if !strings.Contains(got, "name the file name \""+name+"\" breaks a wikilink") {
+	for _, name := range []string{"x]] ![t](t.png)", " Evidence first", "x\n---\ny"} {
+		if !strings.Contains(got, fmt.Sprintf("name the file name %q breaks a wikilink", name)) {
 			t.Errorf("check passed the file name %q:\n%s", name, got)
 		}
 	}
