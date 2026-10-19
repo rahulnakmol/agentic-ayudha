@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -532,6 +533,35 @@ func TestCoverageManifest(t *testing.T) {
 		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): e" ||
 		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
 		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
+	}
+	// An oversized file first and one part after it: the reviewer is sent
+	// only the part, never the oversized file truncated (Codex's P1 on #714).
+	in.Diff = big + pkgDiff
+	var sent string
+	one := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		sent = req.Messages[0].Content
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res4, _, _ := Runner{Reviewers: []Reviewer{one}}.Run(context.Background(), in, State{})
+	if strings.Contains(sent, "b/internal/big/big.go") || !strings.Contains(sent, "b/internal/report/percent.go") ||
+		!slices.Equal(res4.Coverage.Unreviewed(), []string{"internal/big/big.go"}) || res4.Coverage.Files[1].Status != Reviewed {
+		t.Errorf("an oversized file before one part: sent the oversized file %t, coverage %+v", strings.Contains(sent, "b/internal/big/big.go"), res4.Coverage)
+	}
+
+	// At most maxParts parts start: a fourth file waits for a person or an
+	// app, so one round's parallel calls cannot run past the budget unbounded.
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go") + file("internal/c/c.go") + file("internal/d/d.go") + file("internal/e/e.go")
+	var calls atomic.Int32
+	count := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		calls.Add(1)
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res5, _, _ := Runner{Reviewers: []Reviewer{count}}.Run(context.Background(), in, State{})
+	if u := res5.Coverage.Unreviewed(); calls.Load() != maxParts || len(u) != 2 || u[0] != "internal/d/d.go" ||
+		!strings.Contains(res5.Coverage.Files[4].Why, "comes after the review's 3 parts") {
+		t.Errorf("past %d parts: %d calls, %+v", maxParts, calls.Load(), res5.Coverage)
 	}
 	for _, p := range prompts {
 		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {

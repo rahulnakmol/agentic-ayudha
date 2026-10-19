@@ -141,14 +141,16 @@ func inPrompt(diff string, limit int) func(string) bool {
 	return func(p string) bool { return shown[p] }
 }
 
-// splitDiff splits a diff over limit bytes into parts of whole files, each
-// at most limit bytes and of about equal size, in diff order. A file whose
-// section alone is over limit is in no part: it is returned in over. A diff
-// within limit is one part, as it is.
-func splitDiff(diff string, limit int) (parts, over []string) {
+// splitDiff splits a diff over limit bytes into at most maxParts parts of
+// whole files, each at most limit bytes and of about equal size, in diff
+// order. A file in no part is in out, with why: its diff alone is over
+// limit, or it comes after the last part. A diff within limit is one part,
+// as it is.
+func splitDiff(diff string, limit, maxParts int) (parts []string, out map[string]string) {
 	if len(diff) <= limit {
 		return []string{diff}, nil
 	}
+	out = map[string]string{}
 	secs := diffSections(diff)
 	total := 0
 	for _, s := range secs {
@@ -157,10 +159,10 @@ func splitDiff(diff string, limit int) (parts, over []string) {
 			continue
 		}
 		for _, f := range ParseDiff(s) {
-			over = append(over, f.Path)
+			out[f.Path] = fmt.Sprintf("its diff alone is over the %d-byte prompt cap: a person or a reviewer app reviews it", limit)
 		}
 	}
-	target := total / max((total+limit-1)/limit, 1)
+	target := total / min(max((total+limit-1)/limit, 1), maxParts)
 	var cur strings.Builder
 	for _, s := range secs {
 		if len(s) > limit {
@@ -169,12 +171,18 @@ func splitDiff(diff string, limit int) (parts, over []string) {
 		if cur.Len() > 0 && (cur.Len()+len(s) > limit || cur.Len() >= target) {
 			parts, cur = append(parts, cur.String()), strings.Builder{}
 		}
+		if len(parts) == maxParts {
+			for _, f := range ParseDiff(s) {
+				out[f.Path] = fmt.Sprintf("it comes after the review's %d parts of %d bytes: a person or a reviewer app reviews it", maxParts, limit)
+			}
+			continue
+		}
 		cur.WriteString(s)
 	}
 	if cur.Len() > 0 {
 		parts = append(parts, cur.String())
 	}
-	return parts, over
+	return parts, out
 }
 
 // Weakening is a check the PR made weaker: fewer assertions, a skipped test,

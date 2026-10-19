@@ -181,8 +181,8 @@ type Input struct {
 	// Manager twin, WP5.1b) with the evidence rule; empty: no persona.
 	Voice string
 
-	part      string   // which part of a split diff this review reads (Run sets it)
-	oversized []string // the files whose diff alone is over the prompt's cap (Run sets it)
+	part    string            // which part of a split diff this review reads (Run sets it)
+	unsplit map[string]string // the files no part of a split diff holds, with why (Run sets it)
 }
 
 // DiffHash is the cache key of an inspection: the diff, the pack's head and
@@ -436,17 +436,18 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	if in.Mode == ModePeer && len(r.Reviewers) > 1 {
 		res.Mode = ModePeer
 	}
-	// A diff over the prompt's cap is reviewed in parts of whole files, in
-	// parallel, each with the same plan and criteria; the calls share the
-	// PR's budget through the reviewers' Complete.
-	parts, over := splitDiff(in.Diff, maxDiffBytes)
-	in.oversized = over
+	// A diff over the prompt's cap is reviewed in at most maxParts parts of
+	// whole files, in parallel, each with the same plan and criteria; the
+	// calls share the PR's budget through the reviewers' Complete.
+	parts, unsplit := splitDiff(in.Diff, maxDiffBytes, maxParts)
+	in.unsplit = unsplit
 	outs, errs := make([]Result, len(parts)), make([]error, len(parts))
 	var wg sync.WaitGroup
 	for i, p := range parts {
 		pin := in
+		pin.Diff = p // the whole diff when it fits; a split part never sends a file another part or none holds
 		if len(parts) > 1 {
-			pin.Diff, pin.part = p, partNote(i, parts)
+			pin.part = partNote(i, parts)
 		}
 		wg.Go(func() { outs[i], errs[i] = r.reviewOne(ctx, pin, res.Mode) })
 	}
@@ -698,8 +699,8 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 		return covered(p) || before[p] != "" && before[p] == hashes[p]
 	})
 	for i, c := range m.Files {
-		if c.Status == Unreviewed && slices.Contains(in.oversized, c.Path) {
-			m.Files[i].Why = fmt.Sprintf("its diff alone is over the %d-byte prompt cap: a person or a reviewer app reviews it", maxDiffBytes)
+		if why := in.unsplit[c.Path]; c.Status == Unreviewed && why != "" {
+			m.Files[i].Why = why
 		}
 	}
 	m.seal()
@@ -961,6 +962,11 @@ func reviewMaterial(in Input) string {
 // parts. A file whose diff alone is over it is unreviewed in the coverage
 // manifest, which fails the gate.
 const maxDiffBytes = 120000
+
+// maxParts bounds the parts of a split diff: their calls start together,
+// before any cost is known, so it bounds how far one round can pass
+// [budget] per_pr_inspect_max (about 0.8 USD a part at 92 kB on grok-4.7).
+const maxParts = 3
 
 var notIdent = regexp.MustCompile(`[^A-Za-z0-9_.$:/ -]`)
 
