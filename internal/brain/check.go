@@ -34,10 +34,11 @@ func (r Report) OK() bool { return len(r.Errors) == 0 }
 
 // Vault is the parsed vault: every note by path, and link resolution.
 type Vault struct {
-	Files map[string][]byte
-	Notes map[string]*Note // Markdown notes outside Templates/, by path
-	bad   map[string]error // notes whose frontmatter did not parse
-	names map[string][]string
+	Files  map[string][]byte
+	Notes  map[string]*Note // Markdown notes outside Templates/, by path
+	bad    map[string]error // notes whose frontmatter did not parse
+	names  map[string][]string
+	unsafe []string // notes whose file name breaks a wikilink: no generated link names them
 }
 
 // isTemplate reports whether p is an Obsidian template (outside the checks).
@@ -56,6 +57,10 @@ func Load(files map[string][]byte) *Vault {
 		}
 		v.names[strings.ToLower(name)] = append(v.names[strings.ToLower(name)], p)
 		if !strings.HasSuffix(p, ".md") || isTemplate(p) {
+			continue
+		}
+		if unsafeName.MatchString(Base(p)) { // [[x]] ![t](u)]] would close the link and render the rest
+			v.unsafe = append(v.unsafe, p)
 			continue
 		}
 		n, err := Parse(p, b)
@@ -213,6 +218,9 @@ func Check(files map[string][]byte) Report {
 			fail(ps[0], "unique-name", "%d notes share the name %q (%s): a wikilink to it is ambiguous", len(ps), name, strings.Join(ps, ", "))
 		}
 	}
+	for _, p := range v.unsafe {
+		fail(p, "name", "the file name %q has a character that breaks a wikilink (one of [ ] # ^ | \\ : * ? \" < >): rename the note", Base(p))
+	}
 	ids := map[string]string{}
 	for _, p := range slices.Sorted(mapKeys(v.Notes)) {
 		n := v.Notes[p]
@@ -291,6 +299,8 @@ func Check(files map[string][]byte) Report {
 					fail(p, "link", "%s: %q is not a [[wikilink]]", k, val)
 				} else if q := v.Resolve(lt); !v.isNote(q) || q == p { // the note itself, a template, or an attachment links no other note
 					fail(p, "link", "%s: [[%s]] does not resolve to another note", k, lt)
+				} else if want := target[k]; want != "" && v.Notes[q].typ() != want {
+					fail(p, "link", "%s: [[%s]] has type %s; %s links a note of type %s", k, lt, v.Notes[q].typ(), k, want)
 				}
 			}
 		}
@@ -396,6 +406,9 @@ func (v *Vault) twoWay() []Finding {
 var objectable = []string{"direction", "principle", "objective", "decision"}
 
 // relation holds, for each two-way key, the note types it may run from and to.
+// target is the note type a one-way relationship field links to.
+var target = map[string]string{"direction": "direction", "objectives": "objective"}
+
 var relation = map[string][2][]string{
 	"supersedes":    {{"decision"}, {"decision"}},
 	"superseded_by": {{"decision"}, {"decision"}},

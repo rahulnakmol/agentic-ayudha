@@ -308,6 +308,9 @@ func Parse(p string, src []byte) (*Note, error) {
 			return n, fmt.Errorf("frontmatter: key %q appears twice", k)
 		}
 		seen[k] = true
+		if !flat(m.Content[i+1]) { // `issues: {1: 2}` would read as two issues
+			return n, fmt.Errorf("frontmatter: %q holds a mapping; a property holds a value or a list of values", k)
+		}
 		n.Meta = append(n.Meta, KV{Key: k, Value: m.Content[i+1], key: m.Content[i]})
 	}
 	return n, nil
@@ -332,6 +335,23 @@ func (n *Note) Str(key string) string {
 		return ""
 	}
 	return v.Value
+}
+
+// flat reports whether v is a property value Obsidian shows: a scalar, or a
+// list of scalars.
+func flat(v *yaml.Node) bool {
+	switch v.Kind {
+	case yaml.ScalarNode:
+		return true
+	case yaml.SequenceNode:
+		for _, c := range v.Content {
+			if c.Kind != yaml.ScalarNode {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // List returns a list frontmatter value (a scalar counts as a list of one).

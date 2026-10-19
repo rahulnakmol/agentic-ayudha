@@ -277,6 +277,8 @@ tags: [type/principle]
 		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},
 		{"owner is a person", strings.Replace(good, "owner: founder", "owner: rahulnakmol", 1), "Short.\n", `owner "rahulnakmol" is not a seat slug`},
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},
+		{"issues as a mapping", strings.Replace(good, "owner: founder", "owner: founder\nissues: {1: 2}", 1), "Short.\n", `frontmatter: "issues" holds a mapping`},
+		{"objectives links a note of another type", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Decisions]]\"]", 1), "Short.\n", "objectives: [[Decisions]] has type moc; objectives links a note of type objective"},
 		{"pasted criterion", good, "1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
 		{"pasted label", good, "It is status:ready now.\n", "copy an issue label (status:ready)"},
 		{"label in code is fine", good, "The label is `status:ready`.\n", ""},
@@ -295,7 +297,15 @@ tags: [type/principle]
 			}
 		})
 	}
-	files := skeleton(t) // a closing line of ---suffix is not the delimiter, so the note has no frontmatter
+	files := skeleton(t) // a file name that closes a wikilink fails check, and no generated map links it
+	files["Principles/x]] ![t](t.png).md"] = note(good, "Short.\n")
+	if got := rules(Check(files)); !strings.Contains(got, "name the file name \"x]] ![t](t.png)\" has a character that breaks a wikilink") {
+		t.Errorf("check passed a file name that breaks a wikilink:\n%s", got)
+	}
+	if cp, err := Run(files, Records{Repo: "o/r"}, today, true); err != nil || strings.Contains(string(cp.Files["Principles/Principles.md"]), "![t]") {
+		t.Errorf("a checkpoint linked a file name that breaks a wikilink (%v):\n%s", err, cp.Files["Principles/Principles.md"])
+	}
+	files = skeleton(t) // a closing line of ---suffix is not the delimiter, so the note has no frontmatter
 	files["Principles/Evidence first.md"] = []byte("---\n" + good + "---suffix\nShort.\n")
 	if got := rules(Check(files)); !strings.Contains(got, "frontmatter no YAML frontmatter") {
 		t.Errorf("a ---suffix line closed the frontmatter:\n%s", got)
