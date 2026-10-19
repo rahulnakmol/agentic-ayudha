@@ -122,6 +122,9 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
 1. `aayu init --gates` adds the merge gate workflow and creates the `code-review` environment, with Grok 4.7 at
    `https://api.x.ai/v1` filled in. Commit the workflow through a pull request and merge it. The gate runs from your
    base branch's copy, so it starts checking from the next pull request.
+
+   **You should see** an `environment code-review` line in init's report, and the workflow file in the merged pull
+   request. If the line is missing, read the note below step 2.
 2. In **Settings → Environments → code-review**, add the secret `AAYU_REVIEW_MODEL_KEY`: your key for that endpoint.
    The review model must come from a vendor other than the one that builds; change `AAYU_REVIEW_MODEL_URL` and
    `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting. A review
@@ -132,12 +135,16 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    > not create `code-review`. Choose a review app as above, or `human` with `[autonomy] approver` set to the person
    > who reviews, or make the repository public or upgrade.
 
+   **You should see** `AAYU_REVIEW_MODEL_KEY` under **Environment secrets** on the `code-review` page. `aayu doctor`
+   cannot read the environment, so the gate's first run is where a wrong key shows.
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
 
 **You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. The inspect
-comment's first line names the review model, for example `different-family review (B, paid): grok-4.7 (xai)`. If a
-setting is missing, the gate fails and names it. [A pull request is ready](guide-review.md) walks you
+comment's first line names the review model, for example `different-family review (B, paid): grok-4.7 (xai)`. The
+model reviews only when its family differs from the builder's and the author has write access. Otherwise the comment
+names the app or person that reviews instead, which is also a working setup. If a setting is missing, the gate fails
+and names it. [A pull request is ready](guide-review.md) walks you
 through it.
 
 ## What's next
