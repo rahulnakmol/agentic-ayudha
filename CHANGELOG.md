@@ -165,9 +165,10 @@ proof pack yet.
 Released 2026-10-17.
 
 v0.2.0 moves review out of your CI: the merge gate asks an installed agent app for the review, so a product
-repository needs no AI key. verify gains feature maps and behaviour checks. `aayu install --env` sets up the
-environment each agent host's cloud works in, and hand-offs reach any agent from any host. Loops run on schedules in
-the one tool you pick. No Feature is claimed as proven for this release.
+repository needs no AI key (#225). verify gains feature maps and behaviour checks (#215, #218). `aayu install --env`
+sets up the environment each agent host's cloud works in (#240), and hand-offs reach any agent from any host
+(#220, #224). Loops run on schedules in the one tool you pick (#248, #261). No Feature is claimed as proven for this release:
+none of its Features has an authoritative proof pack yet.
 
 ### New verbs and skills
 
@@ -227,10 +228,11 @@ the one tool you pick. No Feature is claimed as proven for this release.
 
 Released 2026-10-15.
 
-v0.1.0 is the first release of aayu. It runs a product's work on GitHub with coding agents: work items as issues,
-checkable criteria frozen as Ready, a build by an agent in its own worktree, a merge gate that checks the proof against
-the criteria, a person's approval or an earned autonomy streak to ship, and promotion through rolling to main. Seats with agent twins share the
-work, and each verb has one accountable seat.
+v0.1.0 is the first release of aayu. It runs a product's work on GitHub with coding agents: work items as issues
+(#18), checkable criteria frozen as Ready (#73), a build by an agent in its own worktree (#109), a merge gate that
+checks the proof against the criteria (#86), a person's approval or an earned autonomy streak to ship (#88, #89), and
+promotion through rolling to main (#110). Seats with agent twins share the work, and each verb has one accountable
+seat (#83, #167).
 
 ### Proven Features
 
