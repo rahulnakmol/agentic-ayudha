@@ -144,7 +144,8 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
 
-**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. The inspect
+**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. The review
+runs only after the checks and proof pass; if they fail, the inspect check is skipped and the gate names the failure. The inspect
 comment's first line names the review model, for example `different-family review (B, paid): grok-4.7 (xai)`. The
 model reviews only when its family differs from the builder's and the author has write access. Otherwise the comment
 names the app or person that reviews instead, which is also a working setup. If a setting is missing, the gate fails
