@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof","Output":"=== RUN   TestShipOnProof\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof","Output":"--- PASS: TestShipOnProof (5.25s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/autonomy","Test":"TestStreakAtThreshold"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/autonomy","Test":"TestStreakAtThreshold","Output":"=== RUN   TestStreakAtThreshold\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/autonomy","Test":"TestStreakAtThreshold","Output":"--- PASS: TestStreakAtThreshold (0.02s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/autonomy","Test":"TestStreakAtThreshold"}

@@ -1,0 +1,59 @@
+{
+  "covered": 355,
+  "executable": 394,
+  "percent": 90.1015228426396,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inbox.go": [
+      497,
+      498
+    ],
+    "internal/cli/inboxaudit.go": [
+      78,
+      79,
+      82,
+      83,
+      86,
+      87,
+      89,
+      90,
+      94,
+      95,
+      119,
+      120,
+      123,
+      124,
+      129,
+      139,
+      140,
+      171,
+      172,
+      185,
+      186,
+      208,
+      209
+    ],
+    "internal/cli/inboxwork.go": [
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260
+    ],
+    "internal/cli/shipproof.go": [
+      117,
+      118,
+      129,
+      130
+    ],
+    "internal/github/fake/fake.go": [
+      584,
+      585,
+      586
+    ]
+  },
+  "format": "go coverprofile"
+}
