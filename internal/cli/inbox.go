@@ -1217,6 +1217,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	items = append(needs, house...)
 	done, skipped, handled := 0, 0, 0
 	left := func() int { return len(items) - handled }
+	failed := 0 // writes that did not land: no celebration after one
 	key := func() (byte, error) {
 		fmt.Fprint(w, "  > ")
 		k, err := e.readKey()
@@ -1263,6 +1264,8 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			mark := "✗ "
 			if why.Landed {
 				mark, done = "✓ ", done+1
+			} else {
+				failed++
 			}
 			say("  ", mark+why.What)
 			say("  ", why.Changed)
@@ -1418,6 +1421,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		say("  ", fmt.Sprintf("1. Tidy all %d (recommended)", len(house)))
 		say("  ", "2. Go through them one by one")
 		say("  ", "Enter = 1 · 2 = one by one · s = leave them · ? = explain · q = quit")
+		before, failedBefore := done, failed
 	tidy:
 		for {
 			ch, err := key()
@@ -1435,7 +1439,11 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 				handled += len(house)
 				break tidy
 			case 'a', 'A', 'C', '\r', '\n', '1':
-				if ok, err := tidyAll(); err != nil || ok {
+				ok, err := tidyAll()
+				if ok && failed == failedBefore && done > before && (left() > 0 || skipped > 0 || failed > 0) { // a set cleared; inbox zero says its own
+					e.cheer(w, cheerFor(len(house), false))
+				}
+				if err != nil || ok {
 					break tidy
 				}
 			case '2':
@@ -1453,7 +1461,15 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 		}
 	}
+	if left() == 0 && done > 0 && failed == 0 && skipped == 0 {
+		e.cheer(w, cheerFor(0, true))
+	}
 	return finishInbox(w, done, skipped, left())
+}
+
+// cheer prints a celebration as words: the line-by-line inbox has no motion.
+func (e *Env) cheer(w io.Writer, c inboxCheer) {
+	fmt.Fprintf(w, "\n🎉 %s\n  %s: %s\n", c.head, e.twin(c.seat), c.voice)
 }
 
 // refs is "1-3" for choices numbered 1 to 3, else their numbers.

@@ -487,6 +487,7 @@ type inboxModel struct {
 	// the state at once.
 	motion    bool
 	ticking   bool
+	cheer     *inboxCheer // a set of housekeeping or the inbox just cleared (Story #798), until a key
 	cardKey   string
 	cardIn    time.Time
 	refusal   string    // the status a refused action set, shown in the Fail role while it stands
@@ -769,7 +770,7 @@ func (m *inboxModel) animate() tea.Cmd {
 }
 
 func (m *inboxModel) moving(now time.Time) bool {
-	return now.Sub(m.cardIn) < inboxSlide || now.Sub(m.refusedAt) < inboxShake || len(m.flash) > 0 ||
+	return now.Sub(m.cardIn) < inboxSlide || now.Sub(m.refusedAt) < inboxShake || len(m.flash) > 0 || m.cheer != nil && now.Sub(m.cheer.at) < inboxParty ||
 		math.Abs(m.glide-float64(m.cur)) > 0.01 || math.Abs(m.glideV) > 0.01
 }
 
@@ -851,10 +852,10 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 		m.dirty = true
 		return m.finished(msg)
 	case tea.KeyPressMsg:
-		m.dirty = true
+		m.dirty, m.cheer = true, nil // the cheer never blocks: the key does what it always does
 		return m.key(msg)
 	case tea.MouseClickMsg:
-		m.dirty = true
+		m.dirty, m.cheer = true, nil
 		return m.click(msg.Mouse())
 	case tea.MouseWheelMsg:
 		m.dirty = true
@@ -1042,6 +1043,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.status = "✓ " + inboxDoingFor(job.it, job.a).did + "."
 		m.relayout()
 	}
+	cleared := b.total > 1 && b.done+b.failed >= b.total && b.failed == 0 && !m.dryRun // a set of housekeeping, every one done
 	if b.total > 1 && b.done+b.failed >= b.total {
 		delete(m.batches, job.batch)
 		m.status = fmt.Sprintf("Applied %d: %d done, %d not done. Written changes are not undone here.", b.total, b.done, b.failed)
@@ -1050,6 +1052,16 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		}
 		if i := m.item(); i >= 0 && m.state[m.items[i].key()] != "" {
 			m.next() // the bulk is over: on to what still waits
+		}
+	}
+	// A celebration only after a write that succeeded, with nothing failed
+	// in its set and nothing still running or not done: never on a failure.
+	if needs, house := m.left(); m.state[msg.key] == "done" && msg.err == nil && m.quitting == quitNo && len(m.queue) == 0 && (cleared || b.total == 1) {
+		switch {
+		case needs == 0 && house == 0: // a skipped or failed item still counts
+			m.celebrate(cheerFor(0, true))
+		case cleared:
+			m.celebrate(cheerFor(b.total, false))
 		}
 	}
 	if m.quitting == quitCurrent {
@@ -1814,6 +1826,8 @@ func (m *inboxModel) render() string {
 			card = m.askView(rw, body)[1:]
 		case m.help:
 			card = m.helpView(rw, body+1)[1:]
+		case m.cheer != nil:
+			card = m.cheerView(rw, body)
 		default:
 			card = m.cardView(rw, body, lw+3*inboxPad+1, 1)
 		}
@@ -1836,7 +1850,11 @@ func (m *inboxModel) render() string {
 		lines = append(lines, m.columnsHead(inner))
 		lines = append(lines, m.listView(inner, listH, inboxPad, 2)...)
 		lines = append(lines, m.style(ui.Muted, strings.Repeat("─", inner)))
-		for _, l := range m.cardView(inner, body-len(lines), inboxPad, len(lines)+1) {
+		card := m.cardView
+		if m.cheer != nil {
+			card = func(w, h, _, _ int) []string { return m.cheerView(w, h) }
+		}
+		for _, l := range card(inner, body-len(lines), inboxPad, len(lines)+1) {
 			lines = append(lines, shift+l)
 		}
 		lines = padded(lines)
