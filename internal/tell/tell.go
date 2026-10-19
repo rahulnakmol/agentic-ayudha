@@ -241,12 +241,23 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 	named := map[int]int{} // proven Feature -> first line naming it
 	raw := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	quoted := false // the previous line is inside a top-level blockquote, a lazy continuation line included
+	htmlEnd := ""   // inside a raw HTML block: its closing tag, or "\n" when a blank line ends it
 	for i, line := range proseLines(md) {
-		opens := quoteRE.MatchString(raw[i])
+		if htmlEnd == "" && htmlRE.MatchString(line) {
+			htmlEnd = "\n"
+			if m := htmlTextRE.FindStringSubmatch(line); m != nil {
+				htmlEnd = "</" + strings.ToLower(m[1]) + ">"
+			}
+		}
+		inHTML := htmlEnd != "" // a marker in raw HTML renders as text
+		if htmlEnd == "\n" && strings.TrimSpace(line) == "" || htmlEnd != "\n" && strings.Contains(strings.ToLower(line), htmlEnd) {
+			htmlEnd = ""
+		}
+		opens := !inHTML && quoteRE.MatchString(raw[i])
 		if opens && !quoted && alertRE.MatchString(raw[i]) { // only alone on the blockquote's first line, code spans included
 			line = ""
 		}
-		quoted = opens || (quoted && strings.TrimSpace(raw[i]) != "")
+		quoted = opens || (quoted && !inHTML && strings.TrimSpace(raw[i]) != "")
 		text := linkURL.ReplaceAllString(line, " ")
 		for _, w := range word.FindAllString(text, -1) {
 			if sup[strings.ToLower(w)] {
@@ -296,6 +307,15 @@ var alertRE = regexp.MustCompile(`^>\s*\[!(?i:note|tip|important|warning|caution
 
 // quoteRE is a line of a top-level blockquote.
 var quoteRE = regexp.MustCompile(`^ {0,3}>`)
+
+// htmlRE starts a raw HTML block, where CommonMark renders a line as text.
+// It errs wide: a tag that opens no block only stops an alert marker from
+// being skipped, so the check refuses rather than accepts.
+var htmlRE = regexp.MustCompile(`^ {0,3}<[A-Za-z/!?]`)
+
+// htmlTextRE starts a raw HTML block that only its closing tag ends; a blank
+// line ends the others.
+var htmlTextRE = regexp.MustCompile(`^ {0,3}<(?i)(pre|script|style|textarea)\b`)
 
 // stop words carry no Feature name.
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "from": true, "your": true, "our": true,

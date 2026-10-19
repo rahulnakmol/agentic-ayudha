@@ -234,8 +234,9 @@ Positioning line; keep it to one page. Never write the artefact's name into the 
   No marketing. A `changelog` entry is `## <version>` and the date, the summary sentence, then the same parts as
   bullets, without the reader block. The team stage sets the depth, never the evidence. The reader the request names
   comes first. Otherwise, at a startup the reader on their own comes first, the block is at most three short lines,
-  and the page is at most 400 words (when the parts do not fit, keep every Feature, step, and break, and shorten
-  the other parts; the reference says which go first); at a scaleup or an enterprise the team reader comes first,
+  and the page is at most 400 words (when the parts do not fit, keep every step and break, shorten each Feature to
+  its heading and what changed, and count any Feature still left out; the reference gives the order); at a scaleup
+  or an enterprise the team reader comes first,
   and each step's who and each solo-or-team difference gets its own sentence.
 - `guide` and `docs`: one page of one kind: a how-to (one task), a tutorial (learning by doing), a reference, or an
   explanation. A how-to has a title that names the task; one paragraph on when to use it, with the Feature's link;

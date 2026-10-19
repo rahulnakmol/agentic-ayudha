@@ -48,9 +48,11 @@ it once. None of this needs an adjective.
 
 At a startup stage this fits on one page. With no step and no break, it is the title, the summary, the short reader
 block when readers need different sections, one section per proven Feature, and the count, in at most 400
-words. When the parts do not fit, keep every proven Feature with what changed and its link, and cut first the
-limits, then the solo and team lines, then how to start. Never drop a Feature, a step, or a break to fit: if the
-page is still over 400 words, keep it complete, and say in your reply how long it is and why.
+words. When the parts do not fit, keep every step and every break, and keep every proven Feature with its linked
+heading and what changed; cut first the limits, then the solo and team lines, then how to start, then who it helps.
+The cap holds: if the page is still over 400 words, keep the Features that fit in the usual order, end with one line
+that counts the proven Features left out, and name them in your reply so the human can publish the full notes at a
+larger stage. Never drop a step or a break to fit.
 
 ## Readers: from one person to a medium team
 
