@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -625,14 +626,23 @@ func TestSplitDiffFillsBeforeDropping(t *testing.T) {
 		h := "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,1 @@\n+"
 		return h + strings.Repeat("z", n-len(h)-1) + "\n"
 	}
-	diff := section("a.go", 10000) + section("b.go", 120000) + section("c.go", 90000) + section("d.go", 30000)
-	parts, out := splitDiff(diff, maxDiffBytes, maxParts)
-	var sizes []int
-	for _, p := range parts {
-		sizes = append(sizes, len(p))
-	}
-	if len(out) != 0 || !slices.Equal(sizes, []int{10000, 120000, 120000}) {
-		t.Fatalf("parts %v, left out %v", sizes, out)
+	// It counts whole files, not bytes: 84, 6, 120, and 40 kB fit as 90 / 120 / 40.
+	for _, c := range []struct{ in, want []int }{
+		{[]int{10000, 120000, 90000, 30000}, []int{10000, 120000, 120000}},
+		{[]int{84000, 6000, 120000, 40000}, []int{90000, 120000, 40000}},
+	} {
+		var diff string
+		for i, n := range c.in {
+			diff += section("f"+strconv.Itoa(i)+".go", n)
+		}
+		parts, out := splitDiff(diff, maxDiffBytes, maxParts)
+		var sizes []int
+		for _, p := range parts {
+			sizes = append(sizes, len(p))
+		}
+		if len(out) != 0 || !slices.Equal(sizes, c.want) {
+			t.Errorf("%v: parts %v, left out %v", c.in, sizes, out)
+		}
 	}
 }
 

@@ -151,11 +151,11 @@ func splitDiff(diff string, limit, maxParts int) (parts []string, out map[string
 		return []string{diff}, nil
 	}
 	out = map[string]string{}
-	secs := diffSections(diff)
+	var fit []string // the sections that fit a part, in diff order
 	total := 0
-	for _, s := range secs {
+	for _, s := range diffSections(diff) {
 		if len(s) <= limit {
-			total += len(s)
+			fit, total = append(fit, s), total+len(s)
 			continue
 		}
 		for _, f := range ParseDiff(s) {
@@ -164,19 +164,14 @@ func splitDiff(diff string, limit, maxParts int) (parts []string, out map[string
 	}
 	target := total / min(max((total+limit-1)/limit, 1), maxParts)
 	var cur strings.Builder
-	left := total // the fitting bytes not yet in a part
-	for _, s := range secs {
-		if len(s) > limit {
-			continue
-		}
+	for k, s := range fit {
 		// A part closes when the next file would not fit, or at the balancing
-		// target while the files left still fit in the parts left after it.
+		// target while the files left still pack into the parts left after it.
 		full := cur.Len()+len(s) > limit
-		balanced := cur.Len() >= target && left <= (maxParts-len(parts)-1)*limit
+		balanced := cur.Len() >= target && packs(fit[k:], limit) <= maxParts-len(parts)-1
 		if cur.Len() > 0 && (full || balanced) {
 			parts, cur = append(parts, cur.String()), strings.Builder{}
 		}
-		left -= len(s)
 		if len(parts) == maxParts {
 			for _, f := range ParseDiff(s) {
 				out[f.Path] = fmt.Sprintf("it comes after the review's %d parts of %d bytes: a person or a reviewer app reviews it", maxParts, limit)
@@ -189,6 +184,19 @@ func splitDiff(diff string, limit, maxParts int) (parts []string, out map[string
 		parts = append(parts, cur.String())
 	}
 	return parts, out
+}
+
+// packs is the fewest parts of at most limit bytes that hold secs in order:
+// filling each part before the next is optimal when the order is kept.
+func packs(secs []string, limit int) int {
+	n, cur := 0, limit
+	for _, s := range secs {
+		if cur+len(s) > limit {
+			n, cur = n+1, 0
+		}
+		cur += len(s)
+	}
+	return n
 }
 
 // Weakening is a check the PR made weaker: fewer assertions, a skipped test,
