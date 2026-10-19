@@ -53,14 +53,17 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 - **Where it works:** GitHub repositories, with Claude Code, Codex, Cursor, or Amp. Use your existing repository: if you
   only have a `main` branch, aayudha works with it and renames nothing.
 - **To start (Level 1):** no keys, no CI changes, about an hour. Your agent's own model does the interviewing.
-- **For proof on every pull request (Level 2):** one AI key in your CI, for a review model you choose. It
-  lives in the repository's `code-review` environment. The model reviews only when its family differs from the
-  builder's and the author has write access; otherwise CodeRabbit or Greptile, when listed, or the approver reviews,
-  and the gate skips a listed Codex, Claude, or Cursor, which review only when a person asks them. You choose the model and pay for its calls; `[budget]
-  per_pr_inspect_max` caps each pull request at 5 USD by default; a diff over 120 kB can go past it by the review parts
-  already started ([known limits](../releases/v0.3.0.md#known-limits)). A review app, such as CodeRabbit or Codex, can
-  review instead, billed through your own subscription to it. The checks take about 10 CI minutes per push in this
-  repository.
+- **For proof on every pull request (Level 2):** one AI key in your CI, for a review model you choose, kept in the
+  repository's `code-review` environment. You pay for its calls, and `[budget] per_pr_inspect_max` caps each pull
+  request at 5 USD by default. A diff over 120 kB can go past the cap by the review parts already started
+  ([known limits](../releases/v0.3.0.md#known-limits)).
+
+  The model reviews only when its family differs from the builder's and the author has write access. Otherwise
+  CodeRabbit or Greptile, when listed, or the approver reviews; the gate skips a listed Codex, Claude, or Cursor,
+  which review only when asked.
+
+  A review app, such as CodeRabbit or Codex, can review instead, billed through your own subscription to it. The
+  checks take about 10 CI minutes per push in this repository.
 - **Your code:** the checks run in your own CI. The review model or app you choose sees the pull requests it reviews.
 - **Changed your mind?** `aayu uninit` removes what aayudha set up.
 
