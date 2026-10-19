@@ -243,8 +243,8 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 	quoted := false // the previous line is inside a top-level blockquote, a lazy continuation line included
 	for i, line := range proseLines(md) {
 		opens := quoteRE.MatchString(raw[i])
-		if opens && !quoted { // a marker counts only on the blockquote's first line
-			line = alertRE.ReplaceAllString(line, "")
+		if opens && !quoted && alertRE.MatchString(raw[i]) { // only alone on the blockquote's first line, code spans included
+			line = ""
 		}
 		quoted = opens || (quoted && strings.TrimSpace(raw[i]) != "")
 		text := linkURL.ReplaceAllString(line, " ")
