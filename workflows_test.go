@@ -77,11 +77,13 @@ func TestEveryWorkflowJobStartsWithHaltCheck(t *testing.T) {
 	}
 }
 
-// TestDevInstallRunsNoGitMaintenance: installing aayudha at dev fetches the module with git (GOPROXY=direct). Each
+// TestDevInstallRunsNoGitMaintenance: installing aayudha at dev fetches the module with git (GOPRIVATE). Each
 // git fetch in Go's module cache starts a detached `git maintenance run --auto`, whose repack rewrites .git/shallow
 // while Go's next fetch reads it, so the install failed at random with "fatal: shallow file has changed since we
 // read it". Every such step, here and in the templates `init --gates` installs, turns auto-maintenance off for the
-// git that go install runs: the script is run with a stand-in go that prints the git config it would see.
+// git that go install runs: the script is run with a stand-in go that prints the git config it would see. Only
+// this module goes direct: GOPROXY=direct also sent every dependency to its origin, so a go.googlesource.com 503
+// failed the gate's install (inspect on #638, run 39295786919).
 func TestDevInstallRunsNoGitMaintenance(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash steps")
@@ -114,7 +116,10 @@ func TestDevInstallRunsNoGitMaintenance(t *testing.T) {
 		}
 		for name, job := range wf.Jobs {
 			for _, s := range job.Steps {
-				if !strings.Contains(s.Run, "GOPROXY=direct") || !strings.Contains(s.Run, "go install") {
+				if strings.Contains(s.Run, "GOPROXY=direct") {
+					t.Errorf("%s: job %s sends every module to its origin (GOPROXY=direct); set GOPRIVATE for this module only", f, name)
+				}
+				if !strings.Contains(s.Run, "GOPRIVATE=github.com/rahulnakmol/agentic-ayudha") || !strings.Contains(s.Run, "go install") {
 					continue
 				}
 				found++

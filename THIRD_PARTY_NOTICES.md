@@ -33,8 +33,8 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/danieljoos/wincred` | v1.2.3 | MIT | Windows Credential Manager, via go-keyring | <https://github.com/danieljoos/wincred> |
 | `filippo.io/age` | v1.3.2 | BSD-3-Clause | Encrypted secrets file (WP1.3) and token broker hand-over (WP1.4), direct | <https://github.com/FiloSottile/age> |
 | `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | <https://github.com/FiloSottile/hpke> |
-| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://go.googlesource.com/crypto> |
-| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://go.googlesource.com/sys> |
+| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://github.com/golang/crypto> |
+| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://github.com/golang/sys> |
 | `go.opentelemetry.io/otel` | v1.46.0 | Apache-2.0 | Traces of verb runs (WP1.8), direct; with `otel/sdk` and `otel/trace` | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/sdk` | v1.46.0 | Apache-2.0 | Tracer provider (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/trace` | v1.46.0 | Apache-2.0 | Trace API (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
@@ -53,9 +53,9 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/segmentio/encoding` | v0.5.4 | MIT | JSON codec, via go-sdk | <https://github.com/segmentio/encoding> |
 | `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | <https://github.com/segmentio/asm> |
 | `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | <https://github.com/yosida95/uritemplate> |
-| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://go.googlesource.com/oauth2> |
-| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
-| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
+| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://github.com/golang/oauth2> |
+| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://github.com/golang/sync> |
+| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://github.com/golang/time> |
 | `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
 | `github.com/yuin/goldmark` | v1.8.6 | MIT | Markdown drafts of `brief` parsed and rendered to HTML (WP7.3), direct | <https://github.com/yuin/goldmark> |
 | `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
