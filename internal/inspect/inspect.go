@@ -532,22 +532,24 @@ func (r Runner) reviewOne(ctx context.Context, in Input, mode string) (Result, e
 }
 
 // partNote tells the reviewer of part i of a split diff what the part is.
+// The instructions are aayudha's own; the file paths are the PR author's, so
+// they go in untrusted blocks, never into the instruction sentence.
 func partNote(i int, parts []string) string {
 	var mine, others []string
 	for k, p := range parts {
 		for _, f := range ParseDiff(p) {
 			if k == i {
-				mine = append(mine, ident(f.Path))
+				mine = append(mine, f.Path)
 			} else {
-				others = append(others, ident(f.Path))
+				others = append(others, f.Path)
 			}
 		}
 	}
 	return fmt.Sprintf("The diff is too large for one review, so it is reviewed in %d parts, each against the same story, criteria, and plan. "+
-		"This call reviews part %d, which holds: %s. The other parts are reviewed in separate calls; they hold: %s. "+
+		"This call reviews part %d; its files are in the first block below, and the other parts' files, reviewed in separate calls, in the second. "+
 		"Raise findings only on this part's files. Judge a criterion from this part only when it shows the criterion's code or tests; "+
-		"when it shows none of them, answer unclear with the evidence \"not in this part\".\n",
-		len(parts), i+1, strings.Join(mine, ", "), strings.Join(others, ", "))
+		"when it shows none of them, answer unclear with the evidence \"not in this part\".\n\n%s\n\n%s\n",
+		len(parts), i+1, triage.Untrusted("this part's files", strings.Join(mine, "\n")), triage.Untrusted("the other parts' files", strings.Join(others, "\n")))
 }
 
 // partCriteria merges the verdicts of two parts of a split diff: a criterion

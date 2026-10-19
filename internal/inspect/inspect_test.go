@@ -564,6 +564,10 @@ func TestCoverageManifest(t *testing.T) {
 		t.Errorf("past %d parts: %d calls, %+v", maxParts, calls.Load(), res5.Coverage)
 	}
 	for _, p := range prompts {
+		// The PR author's paths are data: each part's file lists sit in untrusted blocks (inspect's P1 on #714).
+		if !strings.Contains(p, "<untrusted source=\"this part's files\">\ninternal/") || !strings.Contains(p, "<untrusted source=\"the other parts' files\">\ninternal/") {
+			t.Errorf("a part's file lists are not marked untrusted")
+		}
 		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {
 			t.Errorf("each part's prompt names its part and holds one file's diff (%d bytes)", len(p))
 		}
