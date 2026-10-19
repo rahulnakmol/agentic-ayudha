@@ -1,0 +1,10 @@
+# Which tests prove Bug #723's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # apps ["codex","coderabbit"], the CI review declined in the gate: the inspect comment waits for coderabbit and names codex as skipped
+tests = ["internal/cli:TestInspectPaidReviewer"]
+
+[[criterion]]
+id = 2 # apps ["codex"], the CI review declined in the gate: a human review, then merge at rung human after the approver's --approve
+tests = ["internal/cli:TestInspectPaidReviewer"]
