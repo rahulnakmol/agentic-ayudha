@@ -112,6 +112,7 @@ for this release.
 - `aayu install --env --apply` installs a pre-push hook that runs the `[[gate]]` checks in `.aayudha/env.toml`, one local gate that mirrors your required CI jobs (#418).
 - The `triage-daily` loop runs at 09:00, 13:00, 17:00, and 21:00 each weekday instead of once each morning, and a loop scheduled by weekday whose local hour falls on the next day in UTC now runs in every timezone; a day-of-month schedule still refuses such an hour (#682).
 - A new intake issue is triaged when it opens in Amp and Cursor, through the new `triage-opened` loop, and `triage-daily` still covers Claude Code and Codex (#684).
+- In a shell with an agent marker, such as an orb's Terminal tab, `aayu install --loops --apply` asks the person at the terminal for a GitHub device code instead of refusing; with no terminal, or under `AAYU_AGENT=1` or `--ci`, it still refuses (#698, #702).
 - `aayu build` has a 60 USD cost limit that applies only to metered spend, and pauses at a subscription's usage limit (#490).
 - UI review runs on Gemini 4 Argon through GitHub Copilot when Copilot is signed in, and on Gemini 3.8 Flash at high effort through the AI gateway otherwise (#434, #460, #548).
 - `[hosts.cursor] plan` picks lane defaults that your Cursor plan includes (#535).
