@@ -1561,13 +1561,15 @@ func TestInspectReviewerFallback(t *testing.T) {
 	// A transient failure (a 503) is retried once, after a pause, within the
 	// same call budget; a deadline cut is not, since a retry would hit it again.
 	// A stream reset by the peer is retried too, and no retry spends past the PR's [budget] per_pr_inspect_max (Codex's P2s on #697).
+	// An overload error event inside the stream is retried; another stream error is not.
 	for _, c := range []struct {
 		err   error
 		calls int
 		code  int
 		spent string
 	}{{&models.StatusError{Code: 503, Body: "upstream busy"}, 2, 0, ""}, {context.DeadlineExceeded, 1, ExitBlocked, ""},
-		{fmt.Errorf("read chat stream: %w", syscall.ECONNRESET), 2, 0, ""}, {&models.StatusError{Code: 503, Body: "upstream busy"}, 1, ExitBlocked, "4.995"}} {
+		{fmt.Errorf("read chat stream: %w", syscall.ECONNRESET), 2, 0, ""}, {&models.StatusError{Code: 503, Body: "upstream busy"}, 1, ExitBlocked, "4.995"},
+		{&models.StreamError{Type: "overloaded_error", Message: "Overloaded"}, 2, 0, ""}, {&models.StreamError{Type: "invalid_request_error", Message: "bad"}, 1, ExitBlocked, ""}} {
 		g, env, opts, prN, model = setup()
 		if c.spent != "" {
 			addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":"+c.spent+",\"hashes\":[]} -->\n")
@@ -1581,6 +1583,19 @@ func TestInspectReviewerFallback(t *testing.T) {
 			(c.code == 0 && (res.Rung != inspect.RungB || !strings.Contains(errOut, "; retrying once in 10s"))) {
 			t.Fatalf("rung B after %v: exit %d rung %q, %d calls, pauses %v %s", c.err, code, res.Rung, flaky.calls, paused, errOut)
 		}
+	}
+
+	// The review's calls share what is left of the budget: a schema retry that
+	// fails after a costly first reply is not retried once the first reply spent
+	// the margin (CodeRabbit's minor on #697). 5 - 4.985 USD left, less 0.0084.
+	g, env, opts, prN, model = setup()
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":4.985,\"hashes\":[]} -->\n")
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	model.Replies = append([]models.Response{{Model: "grok-4.7", Text: "not JSON", TokensIn: 1200, TokensOut: 300}}, model.Replies...)
+	shared := &flakyClient{err: &models.StatusError{Code: 503, Body: "upstream busy"}, at: 2, next: model}
+	opts.ModelClient = func(models.Route, string) models.Client { return shared }
+	if code, _, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || shared.calls != 2 {
+		t.Fatalf("a retry past the shared budget: exit %d, %d calls %s", code, shared.calls, errOut)
 	}
 
 	// Each call gets its own CallTimeout: a schema retry after a slow first
@@ -1869,15 +1884,17 @@ func TestInspectReviewTools(t *testing.T) {
 	}
 }
 
-// flakyClient fails its first call with err, then answers as next does.
+// flakyClient fails call number at (the first when at is 0) with err, and
+// answers the others as next does.
 type flakyClient struct {
 	err   error
+	at    int
 	calls int
 	next  models.Client
 }
 
 func (f *flakyClient) Complete(ctx context.Context, r models.Request) (models.Response, error) {
-	if f.calls++; f.calls == 1 {
+	if f.calls++; f.calls == max(f.at, 1) {
 		return models.Response{}, f.err
 	}
 	return f.next.Complete(ctx, r)

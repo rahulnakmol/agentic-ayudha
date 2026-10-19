@@ -600,9 +600,10 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})
 			return err
 		}}
-	var served []string // the service tier of each reply ("" when it states none)
+	var served []string                                     // the service tier of each reply ("" when it states none)
+	left := l.Config.Budget.PerPRInspectMax - prev.SpentUSD // shared by every call of this review, peers and cross-checks included
 	for _, m := range picked {
-		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, l.Config.Budget.PerPRInspectMax-prev.SpentUSD, &served)})
+		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, &left, &served)})
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
@@ -1010,8 +1011,9 @@ func reviewEffort(model string, ic config.Inspect) string {
 // reviewEffort; an endpoint without tiers ignores the ask. The call is
 // charged at the priority rate whatever tier the reply states, so
 // per_pr_inspect_max holds. Each reply's tier is appended to *served, which
-// the caller turns into a note with tierNote.
-func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, left float64, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
+// the caller turns into a note with tierNote. Each attempt's cost comes off
+// *left, the PR's budget that this review's calls share.
+func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, left *float64, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
 	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
 	return func(ctx context.Context, req models.Request) (models.Response, float64, error) {
 		// A call and its retry share one CallTimeout, so the retry never
@@ -1027,6 +1029,7 @@ func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story st
 			resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
 			usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
 			spent += usd
+			*left -= usd
 			if err == nil {
 				*served = append(*served, resp.ServiceTier)
 				// The run's log shows what the review was served at and used; a
@@ -1036,10 +1039,10 @@ func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story st
 				return resp, spent, nil
 			}
 			// One retry for a transient failure, when time is left for a review
-			// and the PR's budget ([budget] per_pr_inspect_max, left of it before
-			// this review) still covers a second attempt as costly as the first.
+			// and what is left of the PR's budget ([budget] per_pr_inspect_max)
+			// after every call so far still covers a second attempt as costly as the first.
 			wait, why := transient(err)
-			if attempt > 1 || why == "" || time.Until(deadline) < wait+retryFloor || left-spent < max(spent, 0.01) {
+			if attempt > 1 || why == "" || time.Until(deadline) < wait+retryFloor || *left < max(spent, 0.01) {
 				return resp, spent, err
 			}
 			fmt.Fprintf(e.Err, "inspect: %s failed (%s); retrying once in %s\n", model, why, wait)
@@ -1055,13 +1058,22 @@ const retryFloor = 3 * time.Minute
 
 // transient says whether a failed model call is worth one retry: a 429 or
 // 5xx reply (a proxy's 524 included), after its Retry-After capped at 30
-// seconds, or a stream that ended early or was reset. why names it without the endpoint;
+// seconds, a stream error event that reports overload or a server failure, or
+// a stream that ended early or was reset. why names it without the endpoint;
 // "" means no retry (a deadline cut would hit the same limit again).
 func transient(err error) (time.Duration, string) {
 	if se := (*models.StatusError)(nil); errors.As(err, &se) && (se.Code == http.StatusTooManyRequests || se.Code >= 500) {
 		return min(cmp.Or(se.RetryAfter, 10*time.Second), 30*time.Second), fmt.Sprintf("status %d", se.Code)
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return 0, ""
+	}
+	// An endpoint that accepted the call can still report overload in the stream.
+	if se := (*models.StreamError)(nil); errors.As(err, &se) {
+		switch se.Type {
+		case "overloaded_error", "api_error", "rate_limit_error", "server_error", "rate_limit_exceeded":
+			return 10 * time.Second, "stream error " + se.Type
+		}
 		return 0, ""
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
