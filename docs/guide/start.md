@@ -136,7 +136,8 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    > who reviews, or make the repository public or upgrade.
 
    **You should see** `AAYU_REVIEW_MODEL_KEY` under **Environment secrets** on the `code-review` page. `aayu doctor`
-   cannot read the environment, so the gate's first run is where a wrong key shows. With a review app instead, the
+   cannot read the environment, so the gate's first run is where a wrong key shows: if it fails, see
+   [the merge gate in troubleshooting](troubleshooting.md#merge-gate). With a review app instead, the
    `reviewer-apps` row of `aayu doctor` passes, and the app's installation page lists this repository: doctor cannot
    tell whether the app is installed. With `human`, `aayu config show` lists your `[inspect] reviewer` and
    `[autonomy] approver`.

@@ -62,6 +62,15 @@ commit, or replied in a way aayu cannot read. Run `aayu inspect <pr>` yourself, 
 people who connected them. Check `aayu doctor`'s `reviewer-apps` row: the app must be installed and listed in
 `[inspect] apps`.
 
+**Under `reviewer = "ci"`, `aayudha/inspect` fails and names a missing setting.** The `code-review` environment
+lacks the endpoint, the model, or the secret `AAYU_REVIEW_MODEL_KEY`. Add it in **Settings → Environments →
+code-review**, then push again or rerun the job. A URL with a key or a query in it is refused; use the base URL only
+([when something is missing](how-review.md#when-something-is-missing)).
+
+**The inspect comment says "fallback: rung B … failed".** The review call reached the endpoint and failed, for example
+with a wrong key or an overloaded endpoint. The note gives the reason, and an installed app or a person reviews
+instead. Fix the key or the model in the `code-review` environment; the next push tries the model again.
+
 **`reviewer-apps` says it is "falling back to a human review".** No listed app comes from a different vendor than
 the builder. Install one (Claude, Codex, or Cursor) and add it to `[inspect] apps`, or let a person review.
 
