@@ -509,7 +509,7 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 		// finding of its own does not stand once every criterion is met.
 		lift := res.Disposition == Fix && len(res.Criteria) > 0 && !slices.ContainsFunc(res.Criteria, func(v Verdict) bool { return v.Verdict != "met" })
 		for _, o := range outs {
-			lift = lift && (o.Disposition != Fix || len(o.Findings) == 0)
+			lift = lift && !partFixStands(o, in.Files)
 		}
 		if lift {
 			res.Disposition = Merge
@@ -546,6 +546,28 @@ func (r Runner) reviewOne(ctx context.Context, in Input, mode string) (Result, e
 		out.Findings, out.Dropped = keep, dropped
 	}
 	return out, nil
+}
+
+// partFixStands reports whether a part's fix rests on a finding of its
+// own: one it kept, or one the noise rules dropped for a reason that keeps a
+// fix (liftFix). A finding on a file another part holds is not its own.
+func partFixStands(o Result, files []DiffFile) bool {
+	if o.Disposition != Fix {
+		return false
+	}
+	if len(o.Findings) > 0 {
+		return true
+	}
+	for _, d := range o.Dropped {
+		switch {
+		case d.Severity == "P3":
+		case d.Why == DropRefuted, d.Why == DropDismissed, d.Why == DropTestGap, d.Why == DropTestValue, d.Why == DropPreExisting, d.Why == DropDuplicate:
+		case d.Why == DropOutsideDiff && slices.ContainsFunc(files, func(f DiffFile) bool { return f.Path == d.File }):
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // partNote tells the reviewer of part i of a split diff what the part is.

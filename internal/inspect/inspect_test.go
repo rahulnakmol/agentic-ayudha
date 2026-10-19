@@ -539,16 +539,22 @@ func TestCoverageManifest(t *testing.T) {
 	// criterion met (Codex's P1 on #714). A fix with a finding stands. A
 	// finding on another part's file is dropped, and one raised by both
 	// parts is kept once (CodeRabbit's minor on #714).
+	// A finding the noise rules dropped as low-confidence keeps its part's fix,
+	// as liftFix keeps one (Codex's P1 on #714).
 	for _, c := range []struct {
 		finding bool
+		low     bool
 		want    string
-	}{{false, Merge}, {true, Fix}} {
+	}{{false, false, Merge}, {true, false, Fix}, {false, true, Fix}} {
 		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
 			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
 			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
 				fs := []map[string]any{finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9)}
 				if c.finding {
 					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A bug in b", 0.9))
+				}
+				if c.low {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A guess about b", 0.1))
 				}
 				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
 					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": "not in this part"}}}
@@ -557,7 +563,7 @@ func TestCoverageManifest(t *testing.T) {
 			return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
 		}}
 		in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
-		res, _, err := Runner{Reviewers: []Reviewer{split}}.Run(context.Background(), in, State{})
+		res, _, err := Runner{Reviewers: []Reviewer{split}, Filter: Filter{MinConfidence: 0.5}}.Run(context.Background(), in, State{})
 		var fs []string
 		for _, f := range res.Findings {
 			fs = append(fs, f.File+" "+f.Title)
@@ -567,7 +573,7 @@ func TestCoverageManifest(t *testing.T) {
 			want = append(want, "internal/b/b.go A bug in b")
 		}
 		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
-			t.Errorf("part 2 says fix (its own finding %t): %s, findings %v, err %v", c.finding, res.Disposition, fs, err)
+			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t): %s, findings %v, err %v", c.finding, c.low, res.Disposition, fs, err)
 		}
 	}
 
@@ -608,6 +614,25 @@ func TestCoverageManifest(t *testing.T) {
 		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {
 			t.Errorf("each part's prompt names its part and holds one file's diff (%d bytes)", len(p))
 		}
+	}
+}
+
+// splitDiff fills a part before it drops a file: a part closes early for
+// balance only while the files left still fit in the parts left (Codex's P2
+// on #714). 10 kB, 120 kB, 90 kB, and 30 kB fit in three parts.
+func TestSplitDiffFillsBeforeDropping(t *testing.T) {
+	section := func(p string, n int) string {
+		h := "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,1 @@\n+"
+		return h + strings.Repeat("z", n-len(h)-1) + "\n"
+	}
+	diff := section("a.go", 10000) + section("b.go", 120000) + section("c.go", 90000) + section("d.go", 30000)
+	parts, out := splitDiff(diff, maxDiffBytes, maxParts)
+	var sizes []int
+	for _, p := range parts {
+		sizes = append(sizes, len(p))
+	}
+	if len(out) != 0 || !slices.Equal(sizes, []int{10000, 120000, 120000}) {
+		t.Fatalf("parts %v, left out %v", sizes, out)
 	}
 }
 
