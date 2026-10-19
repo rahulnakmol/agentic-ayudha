@@ -272,7 +272,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
 		}
 		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && sinceErr != nil {
-			err = fmt.Errorf("%w: %s has not replied, and the gate cannot time its wait: %v", inspect.ErrUnavailable, c.App, sinceErr)
+			err = fmt.Errorf("%w: %s has not replied, and the gate cannot time its wait: %s", inspect.ErrUnavailable, c.App, oneLineErr(sinceErr))
 		}
 		return rep, err
 	}
