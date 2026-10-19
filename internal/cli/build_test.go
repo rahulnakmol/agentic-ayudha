@@ -333,13 +333,17 @@ func TestShipPassRules(t *testing.T) {
 	g.Mu.Lock()
 	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Mu.Unlock()
+	g.Reset()
 	if code, out := ship(); code != 0 || !strings.Contains(out, "human pass: review by reviewer2") {
 		t.Fatalf("ship: %d %s", code, out)
+	}
+	if n := closedPullLists(g); n != 0 { // an approving review settles the pass: the streak is not read (#701)
+		t.Errorf("a review-pass ship read the merged-PR history for the streak: %d list(s)", n)
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
 	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
-		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || len(sr.Streak.Layers) != 2 {
+		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || sr.Streak.Skipped != "the human pass is settled: review" {
 		t.Fatalf("ship record: %+v", sr)
 	}
 	if contains(g.LabelNames(2), LeaseLabel) || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released -->"), "shipped in #"+strconv.Itoa(prN)) {

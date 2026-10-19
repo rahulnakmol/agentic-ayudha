@@ -23,6 +23,7 @@ type StreakState struct {
 	Never      []string       `json:"never_layers,omitempty"`
 	Autonomous bool           `json:"autonomous"`
 	Error      string         `json:"error,omitempty"`
+	Skipped    string         `json:"skipped,omitempty"` // why it was not computed: the human pass was already settled
 }
 
 // PassRule is who may give a story's human pass (WP5.5): the Engineering

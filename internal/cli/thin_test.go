@@ -136,6 +136,20 @@ func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head s
 	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
 
+// closedPullLists counts the list requests for merged PRs, which only the
+// autonomy streak makes in ship.
+func closedPullLists(g *fake.GitHub) int {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	n := 0
+	for _, r := range g.Requests {
+		if r.Method == "GET" && r.Path == "/repos/o/r/pulls" {
+			n++
+		}
+	}
+	return n
+}
+
 func review(login, typ, state, commit string) fake.Review {
 	return fake.Review{ID: int64(len(login) + len(state)), User: fake.Account{Login: login, Type: typ}, State: state, CommitID: commit}
 }
@@ -300,8 +314,14 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	if merged {
 		t.Fatal("a refused solo bypass merged the PR")
 	}
-	// A person in a terminal outside any host: accepted as before.
+	// A person in a terminal outside any host: accepted as before, without
+	// reading the merged-PR history for the streak, which cannot change a
+	// settled pass (#701).
+	g.Reset()
 	code, out := ship("--solo-bypass")
+	if n := closedPullLists(g); n != 0 {
+		t.Errorf("a solo-bypass ship read the merged-PR history for the streak: %d list(s)", n)
+	}
 	if code != 0 || !strings.Contains(out, "human pass: solo-bypass by founder") {
 		t.Fatalf("solo bypass: %d %s", code, out)
 	}
@@ -313,7 +333,7 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("Complete section:\n%s", body)
 	}
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
-	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
+	if !strings.Contains(rec, `"skipped": "the human pass is settled: solo-bypass"`) || !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
 		t.Fatalf("ship record: %s", rec)
 	}
 }
