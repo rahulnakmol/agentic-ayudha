@@ -183,11 +183,17 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	}
 	// A repository with no dev branch: aayu init maps [branches] dev in the
 	// default branch's committed config, and the branch it maps is trusted.
+	// main's config names no bucket, so the push succeeds only when it
+	// follows the mapping to trunk's config.
+	mainSHA, trunkSHA := strings.Repeat("a", 40), strings.Repeat("b", 40)
 	fgh.Mu.Lock()
 	base, def := fgh.Pulls[prN].Base, fgh.Default
 	fgh.Pulls[prN].Base.Ref, fgh.Default = "trunk", "main"
-	fgh.Refs["heads/main"], fgh.Refs["heads/trunk"] = base.SHA, base.SHA
-	fgh.Files[".aayudha/config.toml"] = cfg + "[branches]\ndev = \"trunk\"\n"
+	fgh.Refs["heads/main"], fgh.Refs["heads/trunk"] = mainSHA, trunkSHA
+	fgh.RefFiles = map[string]map[string]string{
+		mainSHA:  {".aayudha/config.toml": "version = 1\n[branches]\ndev = \"trunk\"\n"},
+		trunkSHA: {".aayudha/config.toml": cfg + "[branches]\ndev = \"trunk\"\n"},
+	}
 	fgh.Fail, fgh.FailAfter = "GET /repos/o/r", 0
 	fgh.Mu.Unlock()
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, "500") {
@@ -203,7 +209,7 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	fgh.Pulls[prN].Base, fgh.Default = base, def
 	delete(fgh.Refs, "heads/main")
 	delete(fgh.Refs, "heads/trunk")
-	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.RefFiles = nil
 	fgh.Mu.Unlock()
 	// Pushing again replaces the comment in place.
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
