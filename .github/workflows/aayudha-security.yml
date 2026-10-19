@@ -4,9 +4,13 @@
 # The merge gate scans each pull request; this scans every commit that reaches dev, rolling, main by any route (a
 # merge, a promotion, a direct or admin push), and nightly scans each of their tips again, so a new advisory against
 # an unchanged dependency is found too. It runs `aayudha verify --security --ci`: verify's sast (semgrep), secrets
-# (gitleaks, the pushed commits; nightly the whole history), and deps (osv-scanner) floors, with the merge gate's
-# pinned tools. Each failing finding files or updates one Bug labelled aayudha:security; an open one seen on rolling
-# or main blocks the next `aayu release` until it is fixed or a person accepts a floor waiver on it.
+# (gitleaks, the pushed commits; nightly the whole history), deps (osv-scanner), and dast floors, with the merge
+# gate's pinned tools. dast (Decision #485) runs the pinned ZAP image under the runner's Docker against a deployed
+# environment's url (AAYU_ENV) for a web or api product. It never runs `[verify] seed`: that is repository code, and
+# this job holds the token that writes the Bugs, so a loopback target, or none, shows a non-blocking `skipped: dast`
+# in the job summary (a story's verify scans the app the seed starts). Each failing finding files or updates one
+# Bug labelled aayudha:security; an open one seen on rolling or main blocks the next `aayu release` until it is fixed
+# or a person accepts a floor waiver on it.
 #
 # No AI key, no bot App, no secret: the workflow token writes the Bugs (issues: write).
 name: aayudha-security

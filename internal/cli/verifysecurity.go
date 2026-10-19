@@ -86,7 +86,7 @@ func (e *Env) verifySecurity(ctx context.Context, root string, l *config.Loaded,
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Now: e.Now, Env: e.Getenv, CI: e.CI,
-		Sandbox: &verify.Sandbox{Getenv: e.Getenv, Home: home}, Work: work}
+		Sandbox: &verify.Sandbox{Getenv: e.Getenv, Home: home}, Work: work, NoSeed: true}
 	rep := verify.Execute(ctx, r, verify.SecurityFloors())
 	res.Checks, res.Hold = rep.Checks, rep.Hold
 	if rep.Findings != nil {

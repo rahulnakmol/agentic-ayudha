@@ -122,6 +122,7 @@ var Checks = []Check{
 	{"review-rung", checkReviewRung},
 	{"retired-workflows", checkRetiredWorkflows},
 	{"security-workflow", checkSecurityWorkflow},
+	{"dast", checkDAST},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
 	{"feedback-layers", checkFeedbackLayers},

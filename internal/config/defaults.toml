@@ -7,13 +7,17 @@
 
 # Floors run by `verify` (rule 7: no model disposition can override a floor miss).
 [verify]
-dast = false # ZAP baseline runs only when a product opts in (WP4.6)
+# DAST on by default for web and api platforms (Decision #485): active rules only against an app verify starts itself.
+dast = true
 # P5 (founder decision 2026-10-15): a Bug story's proving tests rerun on the base commit; one that passes there
 # fails the gate from this date, four weeks after the decision. Before it, the red-on-base check is advisory.
 red_on_base_blocking_from = "2026-11-13"
 # WP4.5b (founder decision 2026-10-16): feature-map drift is a warning in the merge gate until this date, four weeks
 # after the decision, and fails the gate from it.
 drift_blocking_from = "2026-11-13"
+# Decision #480 (accepted 2026-10-17): the new floors and defaults report a miss as advisory until this date, four
+# weeks after the decision, and fail from it.
+new_floors_blocking_from = "2026-11-14"
 
 [verify.floors.coverage]
 min_diff_percent = 90.0
@@ -44,6 +48,7 @@ max_missing_phrases = 0
 
 [verify.floors.dast]
 max_high = 0
+skipped_blocks_ship = true
 
 [verify.floors.mobile]
 skipped_blocks_ship = true

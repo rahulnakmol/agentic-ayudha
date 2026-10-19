@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -330,7 +331,7 @@ func (in Integration) StoredKey() bool { return in.Auth == "" || in.Auth == "key
 
 // Verify is [verify].
 type Verify struct {
-	DAST           bool                   `koanf:"dast" jsonschema_description:"Run the ZAP baseline floor (WP4.6)."`
+	DAST           bool                   `koanf:"dast" jsonschema_description:"Run the ZAP floor for web and api platforms (Decision #485)."`
 	Platforms      []string               `koanf:"platforms" jsonschema_description:"Platforms the product ships on, e.g. web, ios, android."`
 	UpstreamChecks []string               `koanf:"upstream_checks" jsonschema_description:"Existing product CI check names the merge gate also requires."`
 	Seed           []string               `koanf:"seed" jsonschema_description:"Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."`
@@ -341,6 +342,7 @@ type Verify struct {
 	// founder decision 4); before it the red-on-base check is advisory.
 	// DriftBlockingFrom is the date (UTC, YYYY-MM-DD) from which feature-map
 	// drift fails the merge gate (WP4.5b, founder decision 2026-10-16).
+	NewFloorsBlockingFrom string `koanf:"new_floors_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which the floors Decision #480 added fail; before it, or empty, their misses are advisory."`
 	DriftBlockingFrom     string `koanf:"drift_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which feature-map drift fails the merge gate's feature-map floor; before it, or empty, drift is a warning."`
 	RedOnBaseBlockingFrom string `koanf:"red_on_base_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."`
 	Maintainer            string `koanf:"maintainer" jsonschema:"enum=amp,enum=claude,enum=codex,enum=cursor" jsonschema_description:"Agent app the feature maps' maintain brief @-mentions (WP4.5b.4): claude, codex, or cursor, installed on the repository; amp has no mention, so its scheduled loop thread reads the brief. Unset: the brief mentions no app."`
@@ -350,6 +352,7 @@ type Verify struct {
 type Environment struct {
 	URL        string `koanf:"url" jsonschema_description:"Base URL of the running app."`
 	Production bool   `koanf:"production" jsonschema_description:"A production environment: verify refuses to capture it (exit 4), and any target on its host."`
+	ActiveScan bool   `koanf:"active_scan" jsonschema_description:"Let the DAST floor run its active rules against this URL although verify did not start the app on a loopback host (Decision #485); read only from .aayudha/config.toml."`
 }
 
 // Floors is [verify.floors]: the deterministic floors (rule 7).
@@ -384,7 +387,8 @@ type Floors struct {
 		MaxTBTMs float64 `koanf:"max_tbt_ms" jsonschema:"minimum=0"`
 	} `koanf:"perf" jsonschema_description:"Lighthouse budgets on every Completion Goal state (WP4.5)."`
 	DAST struct {
-		MaxHigh int `koanf:"max_high" jsonschema:"minimum=0"`
+		MaxHigh           int  `koanf:"max_high" jsonschema:"minimum=0"`
+		SkippedBlocksShip bool `koanf:"skipped_blocks_ship"`
 	} `koanf:"dast"`
 	API struct {
 		Script string `koanf:"script" jsonschema_description:"k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."`
@@ -445,6 +449,13 @@ var (
 func (c *Config) Validate() error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+
+	// Empty means advisory; a malformed date must not make the new floors advisory forever.
+	if d := c.Verify.NewFloorsBlockingFrom; d != "" {
+		if _, err := time.Parse(time.DateOnly, d); err != nil {
+			bad("[verify] new_floors_blocking_from = %q is not a YYYY-MM-DD date", d)
+		}
+	}
 
 	for name, s := range c.Seats {
 		if _, ok := verbs.FindSeat(verbs.SeatID(name)); !ok {

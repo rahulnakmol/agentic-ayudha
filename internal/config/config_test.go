@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -430,5 +431,82 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof",
 			"delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget"}) {
 		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)
+	}
+}
+
+// Decision #485 G1: an active DAST scan of a URL verify did not start is the
+// protected repository config's call alone; every other layer is refused.
+func TestActiveScanKey(t *testing.T) {
+	key := "[verify.environments.staging]\nurl = \"https://staging.example.test\"\nactive_scan = true\n"
+	for _, tt := range []struct {
+		name     string
+		files    map[string]string
+		env, set []string
+	}{
+		{"user config", map[string]string{"home/.config/aayudha/config.toml": "version = 1\n" + key}, nil, nil},
+		{"local config", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n" + key}, nil, nil},
+		// The repository's JSON config loads as the repo layer too, but CODEOWNERS protects only the TOML.
+		{"repo JSON config", map[string]string{"repo/.aayudha/config.json": `{"version": 1, "verify": {"environments": {"staging": {"url": "https://staging.example.test", "active_scan": true}}}}`}, nil, nil},
+		{"environment", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__ACTIVE_SCAN=true"}, nil},
+		{"--set", nil, nil, []string{"verify.environments.staging.active_scan=true"}},
+		// CodeRabbit on #509: the decoder matches a key whatever its case, so a case variant is refused too.
+		// The repository names the url but does not opt in; the local file must not opt it in.
+		{"local config, another case", map[string]string{
+			"repo/.aayudha/config.toml":       "version = 1\n[verify.environments.staging]\nurl = \"https://staging.example.test\"\n",
+			"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nActive_Scan = true\n"}, nil, nil},
+	} {
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(strings.ToLower(err.Error()), "verify.environments.staging.active_scan is read only from .aayudha/config.toml") {
+			t.Errorf("%s: err = %v", tt.name, err)
+		}
+	}
+	// The local layer may still set an environment's URL; the repository config may opt it in.
+	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n" + key,
+		"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.local]\nurl = \"http://127.0.0.1:9000\"\n"}))
+	if err != nil || !l.Config.Verify.Environments["staging"].ActiveScan || l.Config.Verify.Environments["local"].URL != "http://127.0.0.1:9000" {
+		t.Fatalf("repository config: %v %+v", err, l.Config.Verify.Environments)
+	}
+	// Codex review of #509: the approval covers the url the protected config names; a later layer cannot repoint it.
+	for _, tt := range []struct {
+		name     string
+		files    map[string]string
+		env, set []string
+	}{
+		{"local url", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://victim.example.test\"\n"}, nil, nil},
+		{"environment url", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__URL=https://victim.example.test"}, nil},
+		{"--set url", nil, nil, []string{"verify.environments.staging.url=https://victim.example.test"}},
+	} {
+		tt.files = maps.Clone(tt.files)
+		if tt.files == nil {
+			tt.files = map[string]string{}
+		}
+		tt.files["repo/.aayudha/config.toml"] = "version = 1\n" + key
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), `[verify.environments.staging] url "https://victim.example.test": active_scan = true approves only the url`) {
+			t.Errorf("%s: err = %v", tt.name, err)
+		}
+	}
+	// An approval with no url of its own approves nothing, whichever layer supplies one.
+	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify.environments.staging]\nactive_scan = true\n",
+		"home/.config/aayudha/config.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://victim.example.test\"\n"})); err == nil || !strings.Contains(err.Error(), "approves only the url") {
+		t.Errorf("url from the user config: err = %v", err)
+	}
+	// A base revision's config.toml, given as text the way ship reads it, may opt in too.
+	if b, err := Load(Sources{RepoTOML: []byte("version = 1\n" + key), RepoSource: ".aayudha/config.toml at 18aca3b"}); err != nil || !b.Config.Verify.Environments["staging"].ActiveScan {
+		t.Fatalf("base config.toml: %v", err)
+	}
+	if l.Config.Verify.DAST != true || l.Config.Verify.NewFloorsBlockingFrom != "2026-11-14" || !l.Config.Verify.Floors.DAST.SkippedBlocksShip {
+		t.Fatalf("defaults: %+v", l.Config.Verify)
+	}
+	// Empty means advisory; a typo must not make the new floors advisory forever (CodeRabbit on #509).
+	for _, d := range []string{"2026-11-31", "2026/11/14"} {
+		if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify]\nnew_floors_blocking_from = \"" + d + "\"\n"})); err == nil || !strings.Contains(err.Error(), "is not a YYYY-MM-DD date") {
+			t.Errorf("%s: err = %v", d, err)
+		}
+	}
+	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify]\nnew_floors_blocking_from = \"\"\n"})); err != nil {
+		t.Errorf("empty date: %v", err)
 	}
 }

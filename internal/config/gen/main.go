@@ -41,8 +41,9 @@ var sections = []section{
 		heading: "Floors",
 		roots:   []string{"verify"},
 		rows: []row{
-			{"verify.dast", "Run the ZAP baseline DAST floor against the running app.", "WP4.6 (opt-in)"},
+			{"verify.dast", "Run the ZAP DAST floor against the running app when `[verify] platforms` has web or api. Its active cross-site scripting and injection rules run only against an app `[verify] seed` started on a loopback host (one that did not answer before the seed ran); any other URL gets a passive scan unless its environment sets `active_scan = true` (read only from `.aayudha/config.toml`). ZAP runs under Docker or Podman; with neither, a local run skips and a CI run is blocked.", "founder decision 2026-10-17 (DAST)"},
 			{"verify.red_on_base_blocking_from", "Date (UTC) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate (red-on-base, P5). Before it the check is advisory: four weeks after the founder decision of 2026-10-15.", "0.2 (P5)"},
+			{"verify.new_floors_blocking_from", "Date (UTC) from which the floors and defaults of the founder decision of 2026-10-17 on proof floors fail the merge gate; before it a miss is advisory: four weeks after that decision.", "founder decision 2026-10-17 (floors)"},
 			{"verify.drift_blocking_from", "Date (UTC) from which feature-map drift (`aayu verify --map`) fails the merge gate's feature-map floor. Before it drift is a warning: four weeks after the founder decision of 2026-10-16.", "0.2 (WP4.5b)"},
 			{"verify.floors.coverage.min_diff_percent", "Minimum coverage of changed lines (lcov, cobertura, or Go coverprofile). 89.9 fails, 90.0 passes.", "WP4.3"},
 			{"verify.floors.sast.max_critical", "Critical semgrep findings allowed.", "WP4.4"},
@@ -60,6 +61,7 @@ var sections = []section{
 			{"verify.floors.screen_reader.layers", "Story footprints that run the VoiceOver and NVDA floor (on label or nightly).", "WP4.7"},
 			{"verify.floors.screen_reader.max_missing_phrases", "Expected phrases from the Ready snapshot that may be missing from the transcript.", "WP4.7"},
 			{"verify.floors.dast.max_high", "High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules).", proposed},
+			{"verify.floors.dast.skipped_blocks_ship", "A web or api story with no runnable target (no `[verify.environments.<env>] url`, or `dast = false`) records `skipped: dast`, which blocks `ship` unless a floor-waiver Decision exists. A run with no story, such as the security workflow's, records it without blocking.", "founder decision 2026-10-17 (DAST)"},
 			{"verify.floors.mobile.skipped_blocks_ship", "A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists.", "WP4.9"},
 		},
 		note: "Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). " +

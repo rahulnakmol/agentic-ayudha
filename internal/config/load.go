@@ -164,6 +164,18 @@ func Load(src Sources) (*Loaded, error) {
 				}
 			}
 		}
+		// An active scan of a URL verify did not start is the protected repository config's call (Decision #485):
+		// .aayudha/config.json loads as the repo layer too but is not code-owned; config.toml, read from the
+		// checkout or given as a base revision's text (Sources.RepoTOML), is.
+		if name != LayerDefault && (name != LayerRepo || filepath.Ext(source) == ".json") {
+			for _, key := range k.Keys() {
+				// The decoder matches a field whatever its case, so Active_Scan sets it too.
+				if lk := strings.ToLower(key); strings.HasPrefix(lk, "verify.environments.") && strings.HasSuffix(lk, ".active_scan") {
+					errs = append(errs, fmt.Errorf("%s: %s is read only from .aayudha/config.toml, a protected path", source, key))
+					return
+				}
+			}
+		}
 		l.layers = append(l.layers, layer{name, source, k})
 		if err := l.merged.Merge(k); err != nil {
 			errs = append(errs, err)
@@ -214,6 +226,22 @@ func Load(src Sources) (*Loaded, error) {
 	}
 	if err := decode(l.merged, &l.Config); err != nil {
 		return nil, err
+	}
+	// The protected config's active_scan approves the url it names, so no other
+	// layer may point that environment somewhere else (Decision #485, G1).
+	for name, env := range l.Config.Verify.Environments {
+		if !env.ActiveScan {
+			continue
+		}
+		approved := ""
+		for _, ly := range l.layers {
+			if ly.name == LayerRepo && filepath.Ext(ly.source) != ".json" {
+				approved = ly.k.String("verify.environments." + name + ".url")
+			}
+		}
+		if approved == "" || strings.TrimRight(env.URL, "/") != strings.TrimRight(approved, "/") {
+			return nil, fmt.Errorf("[verify.environments.%s] url %q: active_scan = true approves only the url .aayudha/config.toml, a protected path, names (%q); set the url there, or drop active_scan", name, env.URL, approved)
+		}
 	}
 	if err := l.Config.Validate(); err != nil {
 		return nil, err

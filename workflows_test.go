@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 // TestEveryWorkflowJobStartsWithHaltCheck holds the WP5.7 rule that `aayu halt` stops every workflow (Bug #173):
@@ -699,6 +700,14 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("no jq")
 	}
+	// The floors verify --security runs (Decision #485 adds dast): a dropped scanner fails here.
+	var floors []string
+	for _, f := range verify.SecurityFloors() {
+		floors = append(floors, f.Name())
+	}
+	if got := strings.Join(floors, ","); got != "sast,secrets,deps,dast" {
+		t.Fatalf("verify --security floors %q", got)
+	}
 	raw := initrepo.GateWorkflows("dev")[initrepo.SecurityWorkflow]
 	var wf struct {
 		On struct {
@@ -746,7 +755,7 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 		"python3": "#!/bin/sh\nmkdir -p \"$3/bin\"\nprintf '#!/bin/sh\\necho \"$*\" >> \"$LOG/pip\"\\nwhile [ $# -gt 0 ]; do [ \"$1\" = -r ] && cp \"$2\" \"$LOG/lock\"; shift; done\\n' > \"$3/bin/pip\"\nchmod +x \"$3/bin/pip\"\n",
 		"sudo":    "#!/bin/sh\nexit 0\n",
 		"go":      "#!/bin/sh\necho \"$@\" >> \"$LOG/go\"\n",
-		"aayudha": "#!/bin/sh\necho \"$@\" > \"$LOG/aayudha\"\necho '{\"branch\":\"dev\",\"head\":\"0123456789\",\"checks\":[{\"floor\":\"sast\",\"result\":\"fail\",\"detail\":\"1 high\"}],\"bugs\":[{\"number\":12,\"action\":\"filed\",\"fingerprint\":\"sast r main.go\"}]}'\nexit 3\n",
+		"aayudha": "#!/bin/sh\necho \"$@\" > \"$LOG/aayudha\"\necho '{\"branch\":\"dev\",\"head\":\"0123456789\",\"checks\":[{\"floor\":\"sast\",\"result\":\"fail\",\"detail\":\"1 high\"},{\"floor\":\"dast\",\"result\":\"skipped\",\"detail\":\"skipped: dast: no runnable target\"}],\"bugs\":[{\"number\":12,\"action\":\"filed\",\"fingerprint\":\"sast r main.go\"}]}'\nexit 3\n",
 	}
 	run := func(t *testing.T, before string, pins map[string]string) (map[string]string, error) {
 		t.Helper()
@@ -818,7 +827,7 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 	if want := "verify --security --ci --repo o/r --json --since " + before + "\n"; got["aayudha"] != want {
 		t.Errorf("aayudha %q, want %q", got["aayudha"], want)
 	}
-	if !strings.Contains(got["summary"], "| sast | fail | 1 high |") || !strings.Contains(got["summary"], "- Bug #12 filed: sast r main.go") {
+	if !strings.Contains(got["summary"], "| sast | fail | 1 high |") || !strings.Contains(got["summary"], "| dast | skipped | skipped: dast: no runnable target |") || !strings.Contains(got["summary"], "- Bug #12 filed: sast r main.go") {
 		t.Errorf("job summary: %q", got["summary"])
 	}
 	// The nightly run (no before): the whole history, so no --since.

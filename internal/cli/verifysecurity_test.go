@@ -277,6 +277,15 @@ func TestVerifySecurityText(t *testing.T) {
 	if code, out, errOut := run(t, env, opts, "verify", "--security", "--since", strings.Repeat("0", 40)); code != 0 || !strings.Contains(out, "(secrets: the whole history)") {
 		t.Fatalf("%d\n%s\n%s", code, out, errOut)
 	}
+	// Codex security review of #509: the workflow's job holds the Bug-writing
+	// token, so verify --security never runs [verify] seed, the repository's code.
+	ran := filepath.Join(t.TempDir(), "seed-ran")
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[verify]\nplatforms = [\"web\"]\nseed = [\"sh\", \"-c\", \": > '"+ran+"'\"]\n[verify.environments.local]\nurl = \"http://127.0.0.1:9\"\n"), 0o644)
+	code, out, errOut = run(t, env, opts, "verify", "--security")
+	if _, err := os.Stat(ran); err == nil || code != 0 || !strings.Contains(out, "never runs [verify] seed") {
+		t.Fatalf("the seed ran (%v) or dast did not say why: %d\n%s\n%s", err == nil, code, out, errOut)
+	}
 }
 
 // Story #487: a scan whose Bug writes fail is an external error (exit 5),
