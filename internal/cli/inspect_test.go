@@ -1574,6 +1574,15 @@ func TestInspectPaidReviewer(t *testing.T) {
 			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "codex") {
 				t.Fatalf("an asked Codex: exit %d %q %s", code, res.Review, errOut)
 			}
+			// Silent past inspect.ReplyWait from its request, Codex gives way to
+			// CodeRabbit, whose wait started with that request too, then a person.
+			g.Mu.Lock()
+			last.CreatedAt, last.UpdatedAt = opts.Now().Add(-inspect.ReplyWait-time.Minute), opts.Now().Add(-inspect.ReplyWait-time.Minute)
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "fallback to coderabbit") }) {
+				t.Fatalf("an asked Codex, silent: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+			}
 			continue
 		}
 		head = g.Pulls[prN].Head.SHA
