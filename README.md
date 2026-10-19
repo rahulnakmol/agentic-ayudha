@@ -25,8 +25,9 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   ([known limits](docs/releases/v0.3.0.md#known-limits)). Every bypass is recorded
   ([sources](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
 
-**New in v0.3.0:** a story's pull request can merge on its own once its checks and proof pass and its review ends at `merge` from an allowed rung, and each project
-names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
+**New in v0.3.0:** with merge on proof turned on, a story's pull request can merge on its own once its checks and proof
+pass and its review ends at `merge` from an allowed rung, unless it touches the narrow set of files and settings that
+always wait for a person. Each project names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
 does.
