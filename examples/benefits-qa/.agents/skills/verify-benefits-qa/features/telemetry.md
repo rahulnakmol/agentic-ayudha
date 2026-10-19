@@ -9,7 +9,8 @@ environment (`deployment.environment.name`, from `-environment`). A handler that
 ```feature
 {"id": "telemetry", "layers": ["L02", "L08"],
  "sources": ["examples/benefits-qa/api/observe.go", "examples/benefits-qa/cmd/benefits-qa/main.go",
-             "internal/telemetry/telemetry.go", "examples/benefits-qa/deploy/deploy.sh"],
+             "internal/telemetry/telemetry.go", "examples/benefits-qa/deploy/deploy.sh",
+             "examples/benefits-qa/deploy/serve.sh"],
  "verified_at": "2f4cbb57b32c55835a2267885ccdc9fb8f876885"}
 ```
 

@@ -7,7 +7,7 @@ metrics are computed from these events.
 ```feature
 {"id": "product-events", "layers": ["L03", "L08"],
  "sources": ["examples/benefits-qa/ask/ask.go", "examples/benefits-qa/analytics/analytics.go",
-             "examples/benefits-qa/cmd/benefits-qa/main.go"],
+             "examples/benefits-qa/cmd/benefits-qa/main.go", "examples/benefits-qa/deploy/serve.sh"],
  "verified_at": "2f4cbb57b32c55835a2267885ccdc9fb8f876885"}
 ```
 
