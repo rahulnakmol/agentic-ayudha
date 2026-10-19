@@ -1464,6 +1464,16 @@ func TestInspectPaidReviewer(t *testing.T) {
 			t.Fatalf("apps [%s], the CI review declined: exit %d %s %q, notes %q, %d model calls %s", c.apps, code, res.Disposition, res.Review, res.Notes, len(model.Requests), errOut)
 		}
 		if c.want != "a human review" {
+			// The check runs cannot be read (a private repository whose inspect
+			// job lacks checks: read): the wait has no start, so a person reviews
+			// rather than none (Codex's P1 on #724).
+			g.Mu.Lock()
+			g.Fail = "GET /repos/o/r/commits/" + g.Pulls[prN].Head.SHA + "/check-runs"
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "checks: read") }) {
+				t.Fatalf("check runs unreadable: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+			}
 			// CodeRabbit has no request on the head, so its wait starts at the
 			// head's first inspect run: past inspect.ReplyWait with no review, a
 			// person reviews (Codex's P1 on #724).

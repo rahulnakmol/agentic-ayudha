@@ -172,10 +172,13 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return own, first
 	}
 	var since time.Time
+	// sinceErr is why the gate could not read when a service it turned to
+	// began to wait: it then waits no longer, so a person reviews.
+	var sinceErr error
 	// switchTo makes c the reviewer: outside CI it posts c's own request under
 	// the person's account when there is none, and its wait starts now.
 	switchTo := func(c inspect.Choice) error {
-		choice = c
+		choice, sinceErr = c, nil
 		own, first := requested(c)
 		since = own
 		if c.Family == inspect.FamilyService {
@@ -183,9 +186,11 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			// A service the gate turned to with no request on the head at all
 			// (the CI review declined) waits from the head's first inspect run,
 			// so a service that never reviews it still gives way to a person
-			// (Codex's P1 on #724).
+			// (Codex's P1 on #724). When the check runs cannot be read (a
+			// private repository whose inspect job lacks checks: read), the
+			// wait has no start, and a person reviews rather than none.
 			if since.IsZero() && e.CI {
-				since = firstInspectRun(ctx, a.c, owner, name, head)
+				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head)
 			}
 		}
 		if !own.IsZero() {
@@ -259,6 +264,10 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
 			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
+		}
+		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && sinceErr != nil {
+			e.Logf("inspect: listing the check runs of %s: %v", short(head), sinceErr)
+			err = fmt.Errorf("%w: %s has not replied, and the gate cannot read this head's check runs to time its wait (the inspect job needs checks: read)", inspect.ErrUnavailable, c.App)
 		}
 		return rep, err
 	}
@@ -365,18 +374,18 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 
 // firstInspectRun is when the head's first aayudha/inspect check run started
 // (zero when none says).
-func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string) time.Time {
+func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string) (time.Time, error) {
 	var first time.Time
 	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
 	if err != nil {
-		return first
+		return first, err
 	}
 	for _, r := range runs.CheckRuns {
 		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && (first.IsZero() || at.Before(first)) {
 			first = at
 		}
 	}
-	return first
+	return first, nil
 }
 
 // replyEvent reports whether this is the merge gate's run on a reply (a PR
