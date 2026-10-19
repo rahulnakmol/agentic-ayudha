@@ -214,7 +214,9 @@ func (r *scopeRun) load(ctx context.Context) error {
 	}
 	r.titles = nil
 	for _, m := range mss {
-		r.titles = append(r.titles, m.GetTitle())
+		if m.GetState() == "open" { // a closed milestone is a shipped release: never the next one
+			r.titles = append(r.titles, m.GetTitle())
+		}
 		if m.GetTitle() == r.version {
 			r.ms = m
 		}
@@ -543,7 +545,10 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	}
 	r.items = next
 	rep = r.report()
-	rep.Done = fmt.Sprintf("%s #%d (%s)", map[string]string{"add": "added", "drop": "dropped"}[op], n, r.version)
+	rep.Done = fmt.Sprintf("added #%d (%s)", n, r.version)
+	if op == "drop" {
+		rep.Done = fmt.Sprintf("dropped #%d from %s; it rides %s", n, r.version, or(scope.Next(r.version, r.titles), "the backlog (no later release is planned)"))
+	}
 	return r.emit(rep)
 }
 
@@ -556,7 +561,16 @@ func (r *scopeRun) apply(ctx context.Context, op string, it scope.Item) error {
 		}
 		return setMilestone(ctx, r.c, r.repo, it.Number, ms.GetNumber())
 	}
-	return setMilestone(ctx, r.c, r.repo, it.Number, 0)
+	// A dropped item rides the next release; with none planned yet, the backlog.
+	next := 0
+	if v := scope.Next(r.version, r.titles); v != "" {
+		n, err := r.milestoneNumber(ctx, v)
+		if err != nil {
+			return err
+		}
+		next = n
+	}
+	return setMilestone(ctx, r.c, r.repo, it.Number, next)
 }
 
 // milestone is the milestone titled version, created when missing.

@@ -181,7 +181,8 @@ func TestScope(t *testing.T) {
 		t.Fatalf("--to next with none: exit %d: %s", code, out)
 	}
 	g.Mu.Lock()
-	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 2, Title: "v0.10.0", State: "open"}, &fake.Milestone{Number: 3, Title: "v0.4.0", State: "open"})
+	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 2, Title: "v0.10.0", State: "open"}, &fake.Milestone{Number: 3, Title: "v0.4.0", State: "open"},
+		&fake.Milestone{Number: 4, Title: "v0.3.5", State: "closed"}) // a shipped release is never the next one
 	g.Mu.Unlock()
 	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != 0 || milestone(6) != "v0.4.0" || !slices.Contains(g.LabelNames(6), "horizon:next") || slices.Contains(g.LabelNames(6), "horizon:now") {
 		t.Fatalf("--to next: exit %d, %q %v: %s", code, milestone(6), g.LabelNames(6), out)
@@ -219,5 +220,9 @@ func TestScope(t *testing.T) {
 	g.Mu.Unlock()
 	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 3 {
 		t.Fatalf("hand-off: links %q, %d comments\n%s", links, comments, release.Body)
+	}
+	// A dropped item rides the next open release, not the backlog.
+	if code, rep, out := scopeRun(agent, "--drop", "5"); code != 0 || milestone(5) != "v0.4.0" || !strings.Contains(rep.Done, "it rides v0.4.0") {
+		t.Fatalf("--drop with a later release: exit %d, milestone %q: %s", code, milestone(5), out)
 	}
 }
