@@ -220,16 +220,23 @@ func (r *scopeRun) load(ctx context.Context) error {
 		return Wrap(ExitExternal, err)
 	}
 	r.titles, r.ms = nil, nil // a reload (after the device code) finds the milestone again
+	closed := false
 	for _, m := range mss {
 		if m.GetState() == "open" { // a closed milestone is a shipped release: never the next one
 			r.titles = append(r.titles, m.GetTitle())
 		}
-		if m.GetTitle() == r.version {
-			if m.GetState() != "open" { // a closed milestone is a shipped release: never planned into again
-				return Errorf(ExitBlocked, "scope: milestone %s is closed; reopen it or rename it before Release #%d plans into it", r.version, r.n)
-			}
+		switch {
+		case m.GetTitle() != r.version:
+		case m.GetState() != "open": // a shipped release with this title, beside the open one or alone
+			closed = true
+		case r.ms != nil:
+			return Errorf(ExitBlocked, "scope: two open milestones are titled %s; close or rename one before Release #%d plans into it", r.version, r.n)
+		default:
 			r.ms = m
 		}
+	}
+	if r.ms == nil && closed { // a closed milestone is a shipped release: never planned into again
+		return Errorf(ExitBlocked, "scope: milestone %s is closed; reopen it or rename it before Release #%d plans into it", r.version, r.n)
 	}
 	if r.ms != nil {
 		if m := milestoneOwnerRE.FindStringSubmatch(r.ms.GetDescription()); m != nil && m[1] != strconv.Itoa(r.n) {
@@ -590,18 +597,25 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	case op == "add" && in, op == "drop" && !in:
 		// A retry after the milestone changed but the drift write failed: the
 		// drift record catches up, so an old Decision never outlives its change.
-		if d := r.measure(r.items); d != nil && (r.drift == nil || !sameDrift(*d, *r.drift)) {
+		// Drift over budget that no Decision holds (an edit by hand) is never
+		// written over the accepted record, and never published: a person decides.
+		d := r.measure(r.items)
+		if d != nil {
+			if err := r.held(d); err != nil {
+				return err
+			}
+		}
+		if r.handed && d != nil {
+			if err := r.handoffReady(r.items); err != nil {
+				return err
+			}
+		}
+		if d != nil && (r.drift == nil || !sameDrift(*d, *r.drift)) {
 			if err := r.writeDrift(ctx, *d, fmt.Sprintf("%s #%d", op, n)); err != nil {
 				return err
 			}
 		}
-		if d := r.measure(r.items); r.handed && d != nil { // and the links, if that run stopped before them
-			if err := r.handoffReady(r.items); err != nil {
-				return err
-			}
-			if err := r.held(d); err != nil { // a Story planned by hand, over budget, waits for a person
-				return err
-			}
+		if r.handed && d != nil { // and the links, if that run stopped before them
 			if _, err := r.publish(ctx, d); err != nil {
 				return err
 			}

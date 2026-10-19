@@ -43,7 +43,8 @@ func TestScope(t *testing.T) {
 	for _, s := range []*fake.Issue{m, l, xs} {
 		feature.Subs, s.Parent = append(feature.Subs, s.Number), feature.Number
 	}
-	g.Milestones = []*fake.Milestone{{Number: 1, Title: "v0.3.0", Description: "made by hand", State: "open"}} // no owner yet
+	g.Milestones = []*fake.Milestone{{Number: 1, Title: "v0.3.0", Description: "made by hand", State: "open"}, // no owner yet
+		{Number: 11, Title: "v0.3.0", State: "closed"}} // a shipped one with the same title: the open one is the plan
 	dir, bare := ledgerCheckout(t)
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": filepath.Join(dir, "state")}
 	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": filepath.Join(dir, "state")} // a terminal with no agent marker
@@ -300,6 +301,14 @@ func TestScope(t *testing.T) {
 	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(epic.Number), "--decision", "7"); code != ExitBlocked || !strings.Contains(out, "no Decision holds") {
 		t.Fatalf("a request beside drift no Decision holds: exit %d: %s", code, out)
 	}
+	// A retried --add of an item already in the plan neither clears the Decision nor says "nothing to do".
+	if code, _, out := scopeRun(agent, "--add", "4"); code != ExitBlocked || !strings.Contains(out, "no accepted Decision holds") {
+		t.Fatalf("a no-op --add beside a resize by hand: exit %d: %s", code, out)
+	}
+	var kept scope.Drift
+	if ledgerJSON(scope.DriftPath("v0.3.0"), &kept); kept.OverBudgetDecision != 7 {
+		t.Fatalf("the no-op --add cleared the Decision: %+v", kept)
+	}
 	// A change that cuts that drift but leaves it over budget still needs a person.
 	if code, _, out := scopeRun(agent, "--drop", "5"); code != ExitBlocked || !strings.Contains(out, "no Decision holds") || milestone(5) != "v0.3.0" {
 		t.Fatalf("a cut that stays over budget: exit %d, #5 in %q: %s", code, milestone(5), out)
@@ -320,6 +329,16 @@ func TestScope(t *testing.T) {
 	if code, _, errOut := run(t, agent, opts, "scope", strconv.Itoa(shipped.Number), "--repo", "o/r", "--add", "3"); code != ExitBlocked || !strings.Contains(errOut, "milestone v0.5.0 is closed") || milestone(3) != "" {
 		t.Fatalf("a closed version milestone: exit %d: %s", code, errOut)
 	}
+	// Two open milestones with the release's title: scope does not guess which one is the plan.
+	g.Mu.Lock()
+	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 12, Title: "v0.3.0", State: "open"})
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent); code != ExitBlocked || !strings.Contains(out, "two open milestones") {
+		t.Fatalf("two open v0.3.0 milestones: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Milestones = g.Milestones[:len(g.Milestones)-1]
+	g.Mu.Unlock()
 	// One version, one Release: a second Release for v0.3.0 cannot use the first one's records.
 	twin := g.AddIssue("v0.3.0 again", fixtureBody(t, "release", func(f map[string]string) { f["version"], f[workitems.FieldLinks] = "v0.3.0", "" }), "type:release")
 	if code, _, errOut := run(t, agent, opts, "scope", strconv.Itoa(twin.Number), "--repo", "o/r", "--add", "3"); code != ExitBlocked || !strings.Contains(errOut, "belongs to Release #1") || milestone(3) != "" {
