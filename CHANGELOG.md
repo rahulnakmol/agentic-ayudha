@@ -23,7 +23,8 @@ that is not docs-only now gets a review once it is ready for review and its chec
 choose in your own CI, and the merge gate records how independent that review was (#466, #577, #657, #483). You approve the
 human-only steps agents queue for you from any device, one at a time in `aayu inbox`, and can accept several Decisions with one
 reply (#442, #467, #678, #501). No Feature is claimed as proven for this release: none of its Features has an authoritative
-proof pack yet.
+proof pack yet. If you already use aayu, do the six upgrade steps on the
+[release page](docs/releases/v0.3.0.md#upgrade) first; each says how to check it and who does it.
 
 ### New verbs and skills
 
@@ -52,6 +53,7 @@ proof pack yet.
 - `aayu retro` lists unclassified Feedback and labels each fix Story with the layer it fixes (#340).
 - `aayu evolve` classifies each correction by the layer that fixes it for good (#323).
 - `aayu tell` refuses a draft that names a Feature without proof packs or uses a superlative (#284).
+- `aayu tell` writes release notes in one shape: upgrade steps first, each with a check and who can do it, breaking changes in one table, a "Read this if you are…" block when readers need different sections, and each part only where a source supports it (#666).
 - `aayu install --loops` sets up a product's verify sweep from the lockfile it finds (#322).
 - `aayu build` stops before taking a Ready story that you did not ask an agent to build, and says what to ask you (#280).
 - The Founder twin weighs operations, technology, and product, and counsels you rather than deciding (#309, #394).
@@ -144,9 +146,9 @@ proof pack yet.
 
 ### Breaking changes
 
-- `[inspect] reviewer = "auto"` and `"amp"` are removed with no deprecation release: a repository left on either gets a person's review on every pull request that is not docs-only, once it is ready for review and its checks and proof pass, and `aayu install --apply` asks for a tool again (#641, #657).
-- A repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app in the pull request that commits the new merge gate (#657).
-- In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
+- Removed: `[inspect] reviewer = "auto"` and `"amp"`, with no deprecation release: a repository left on either gets a person's review on every pull request that is not docs-only, once it is ready for review and its checks and proof pass, and `aayu install --apply` asks for a tool again (#641, #657).
+- Changed: a repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app in the pull request that commits the new merge gate (#657).
+- Changed: in inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes
 
@@ -156,6 +158,7 @@ proof pack yet.
 - `aayu install --loops --host amp --apply` now records an Amp event loop's subscription: the setup thread updates and enables an existing equivalent subscription with the current instructions, and install waits up to five minutes for the thread's final reply and takes the subscription ID only from it (#710).
 - A re-install with `aayu install --loops --host amp --apply` no longer leaves a scheduled loop running on two threads: the new setup thread is asked to pause the old schedule that `loops/active.json` recorded once its own is set, install names that old thread and says nothing confirms the pause, and a recorded ID that names no thread gets a step to pause it by hand (#718).
 - When the CI review fails on a head, the inspect comment and the job log now say why, with the gateway's address shown as `<endpoint>` (#689).
+- `aayu tell`'s draft check no longer reads a GitHub alert marker, such as `> [!NOTE]`, as an exclamation mark; a `!` in the alert's text is still refused (#666).
 - When a reviewer app or a person reviews, the inspect comment's footer now shows the pull request's `[budget] per_pr_inspect_max` cap instead of "of 0.00 USD"; only the footer changed, and a diff reviewed in parts can still spend past the cap (#781, #714).
 - A CI review that fails for a passing reason (a 429 or 5xx reply, an overload or server error in the stream, or a stream that ends early or is reset) is retried once, within the same call time limit and the per-PR budget; the failure note hides IP addresses and names the model that failed (#697).
 - CodeRabbit's summary block in a PR body no longer changes inspect's cache key, so its edit does not make the gate pay for a second CI review of the same head (#696).
@@ -230,9 +233,9 @@ none of its Features has an authoritative proof pack yet.
 
 ### Breaking changes
 
-- The merge gate no longer calls a model or needs an AI key: `aayu inspect` asks an installed agent app of another family for the review, and falls back to your approver when there is none (#225).
-- `aayu init --gates` no longer installs the triage workflow and offers to remove it; triage runs from your agent (#243).
-- Loops run on schedules only, in the one tool you pick; the event loops added earlier in this cycle (#247) were removed before release (#261).
+- Changed: the merge gate no longer calls a model or needs an AI key: `aayu inspect` asks an installed agent app of another family for the review, and falls back to your approver when there is none (#225).
+- Removed: the triage workflow from `aayu init --gates`, which now offers to remove an installed one; triage runs from your agent (#243).
+- Changed: loops run on schedules only, in the one tool you pick; the event loops added earlier in this cycle (#247) were removed before release (#261).
 
 ### Fixes
 
@@ -321,7 +324,7 @@ example product the thin-slice run built:
 
 ### Breaking changes
 
-- Proof packs are kept as merge-gate run artifacts and `aayu ship` lands the pack on the ledger; `aayu proof purge` is removed, and a merge gate from an earlier snapshot must be rendered again with `aayu init --gates` (#206).
+- Changed: proof packs are kept as merge-gate run artifacts and `aayu ship` lands the pack on the ledger; `aayu proof purge` is removed, and a merge gate from an earlier snapshot must be rendered again with `aayu init --gates` (#206).
 
 ### Fixes
 
