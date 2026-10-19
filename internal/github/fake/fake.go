@@ -147,7 +147,8 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
-	App        *App   `json:"app,omitempty"` // the GitHub App that made it
+	StartedAt  string `json:"started_at,omitempty"` // RFC 3339
+	App        *App   `json:"app,omitempty"`        // the GitHub App that made it
 	Suite      *Suite `json:"check_suite,omitempty"`
 }
 

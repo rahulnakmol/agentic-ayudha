@@ -80,9 +80,6 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	}
 	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
-	if len(cannotAsk) > 0 {
-		notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
-	}
 	if a.fallback != "" {
 		notes = append(notes, a.fallback)
 	}
@@ -97,6 +94,23 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	posts, err := prPosts(ctx, a.c, owner, name, n)
 	if err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	// An app someone already asked for this head can answer: it is not skipped
+	// (Codex's P2 on #724).
+	if len(cannotAsk) > 0 {
+		asked := func(app string) bool {
+			return slices.ContainsFunc(posts, func(p inspect.Post) bool {
+				rs, ok := inspect.ParseRequest(p.Body)
+				return ok && p.Kind == "comment" && rs.Head == head && rs.Reviewer == app
+			})
+		}
+		if cannotAsk = slices.DeleteFunc(cannotAsk, asked); len(cannotAsk) > 0 {
+			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
+		}
+		if c := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...); c.Kind() != choice.Kind() {
+			choice = c
+			notes[1] = "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"
+		}
 	}
 	replyEvent := e.replyEvent()
 	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
@@ -166,6 +180,13 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		since = own
 		if c.Family == inspect.FamilyService {
 			since = cmp.Or(own, first)
+			// A service the gate turned to with no request on the head at all
+			// (the CI review declined) waits from the head's first inspect run,
+			// so a service that never reviews it still gives way to a person
+			// (Codex's P1 on #724).
+			if since.IsZero() && e.CI {
+				since = firstInspectRun(ctx, a.c, owner, name, head)
+			}
 		}
 		if !own.IsZero() {
 			return nil
@@ -340,6 +361,22 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
+}
+
+// firstInspectRun is when the head's first aayudha/inspect check run started
+// (zero when none says).
+func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string) time.Time {
+	var first time.Time
+	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
+	if err != nil {
+		return first
+	}
+	for _, r := range runs.CheckRuns {
+		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && (first.IsZero() || at.Before(first)) {
+			first = at
+		}
+	}
+	return first
 }
 
 // replyEvent reports whether this is the merge gate's run on a reply (a PR

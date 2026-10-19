@@ -1464,6 +1464,25 @@ func TestInspectPaidReviewer(t *testing.T) {
 			t.Fatalf("apps [%s], the CI review declined: exit %d %s %q, notes %q, %d model calls %s", c.apps, code, res.Disposition, res.Review, res.Notes, len(model.Requests), errOut)
 		}
 		if c.want != "a human review" {
+			// CodeRabbit has no request on the head, so its wait starts at the
+			// head's first inspect run: past inspect.ReplyWait with no review, a
+			// person reviews (Codex's P1 on #724).
+			g.Mu.Lock()
+			g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: opts.Now().Add(-inspect.ReplyWait - time.Minute).Format(time.RFC3339)}}
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") {
+				t.Fatalf("CodeRabbit silent past the wait: exit %d %q %s", code, res.Review, errOut)
+			}
+			// A Codex request someone posted for the head keeps Codex: its reply can come (Codex's P2 on #724).
+			g, env, opts, prN, _ = setup(c.apps, "google-key")
+			g.Mu.Lock()
+			g.Pulls[prN].User.Login = "contributor"
+			g.Permissions = map[string]string{"contributor": "read"}
+			g.Mu.Unlock()
+			addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+g.Pulls[prN].Head.SHA+`","reviewer":"codex"} -->`)
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "codex") {
+				t.Fatalf("an asked Codex: exit %d %q %s", code, res.Review, errOut)
+			}
 			continue
 		}
 		head = g.Pulls[prN].Head.SHA
