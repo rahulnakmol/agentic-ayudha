@@ -150,14 +150,20 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
 
-**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. The review
-runs only after the checks and proof pass; if they fail, the inspect check is skipped and the gate names the failure. The inspect
-comment's **Review:** field, under its heading, names the review model, for example `different-family review (B, paid): grok-4.7 (xai)`. The
-model reviews only when its family differs from the builder's and the author has write access. Otherwise the comment
-names the app or person that reviews instead, and any listed Codex, Claude, or Cursor it skipped, since those review
-only when a person asks them. If a setting is missing, the gate fails
-and names it: see [Merge gate problems](troubleshooting.md#merge-gate). [A pull request is ready](guide-review.md)
-walks you through it.
+**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict.
+[A pull request is ready](guide-review.md) walks you through it.
+
+The review runs only after the checks and proof pass. If they fail, the inspect check is skipped and the gate names
+the failure.
+
+The inspect comment's **Review:** field, under its heading, names the review model, for example
+`different-family review (B, paid): grok-4.7 (xai)`. The model reviews only when its family differs from the
+builder's and the author has write access.
+
+Otherwise the comment names the app or person that reviews instead. It also names any listed Codex, Claude, or Cursor
+it skipped, since those review only when asked.
+
+If a setting is missing, the gate fails and names it: see [Merge gate problems](troubleshooting.md#merge-gate).
 
 ## What's next
 
