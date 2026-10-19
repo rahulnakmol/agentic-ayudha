@@ -16,14 +16,15 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   review from the builder's own family is labelled rung C, and it never counts toward the streak
   ([sources](docs/releases/v0.3.0.md#merge-and-review)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
-  by default, merges a story's pull request once its checks, proof, and review pass. A long correction-free streak on
+  by default, merges a story's pull request once its checks and proof pass and its review ends at `merge` from a rung
+  that `[autonomy] proof_rungs` lists. A long correction-free streak on
   every layer it touches also lets it merge, when none of those layers is in `[autonomy] never` and its current head
   has a review of another family (rung A or B). With merge on
   proof on, the narrow set of files and settings always waits for a person. The streak path does not check it
   ([known limits](docs/releases/v0.3.0.md#known-limits)). Every bypass is recorded
   ([sources](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
 
-**New in v0.3.0:** a story's pull request can merge on its own once its checks, proof, and review pass, and each project
+**New in v0.3.0:** a story's pull request can merge on its own once its checks and proof pass and its review ends at `merge` from an allowed rung, and each project
 names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
