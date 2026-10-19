@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestInspectCutsLongSummary"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestInspectCutsLongSummary","Output":"=== RUN   TestInspectCutsLongSummary\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestInspectCutsLongSummary","Output":"--- PASS: TestInspectCutsLongSummary (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestInspectCutsLongSummary"}

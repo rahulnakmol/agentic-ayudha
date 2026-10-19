@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer","Output":"=== RUN   TestInspectPaidReviewer\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit","Output":"=== RUN   TestInspectPaidReviewer/codex_and_coderabbit\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit","Output":"--- PASS: TestInspectPaidReviewer/codex_and_coderabbit (1.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_alone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_alone","Output":"=== RUN   TestInspectPaidReviewer/codex_alone\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_alone","Output":"--- PASS: TestInspectPaidReviewer/codex_alone (0.39s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_alone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer","Output":"--- PASS: TestInspectPaidReviewer (3.39s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer"}
