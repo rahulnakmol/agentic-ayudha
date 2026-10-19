@@ -534,6 +534,43 @@ func TestCoverageManifest(t *testing.T) {
 		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
 		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
 	}
+	// A part that does not hold criterion 1 says unclear and fix; with no
+	// finding of its own, its fix does not stand once part 1 shows the
+	// criterion met (Codex's P1 on #714). A fix with a finding stands. A
+	// finding on another part's file is dropped, and one raised by both
+	// parts is kept once (CodeRabbit's minor on #714).
+	for _, c := range []struct {
+		finding bool
+		want    string
+	}{{false, Merge}, {true, Fix}} {
+		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
+			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
+				fs := []map[string]any{finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9)}
+				if c.finding {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A bug in b", 0.9))
+				}
+				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
+					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": "not in this part"}}}
+			}
+			b, _ := json.Marshal(r)
+			return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+		}}
+		in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+		res, _, err := Runner{Reviewers: []Reviewer{split}}.Run(context.Background(), in, State{})
+		var fs []string
+		for _, f := range res.Findings {
+			fs = append(fs, f.File+" "+f.Title)
+		}
+		want := []string{"internal/a/a.go Shared title"}
+		if c.finding {
+			want = append(want, "internal/b/b.go A bug in b")
+		}
+		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
+			t.Errorf("part 2 says fix (its own finding %t): %s, findings %v, err %v", c.finding, res.Disposition, fs, err)
+		}
+	}
+
 	// An oversized file first and one part after it: the reviewer is sent
 	// only the part, never the oversized file truncated (Codex's P1 on #714).
 	in.Diff = big + pkgDiff

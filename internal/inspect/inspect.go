@@ -446,6 +446,9 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	for i, p := range parts {
 		pin := in
 		pin.Diff = p // the whole diff when it fits; a split part never sends a file another part or none holds
+		if p != in.Diff {
+			pin.Files = ParseDiff(p) // a part's findings stand only on the files it showed
+		}
 		if len(parts) > 1 {
 			pin.part = partNote(i, parts)
 		}
@@ -498,6 +501,20 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	if len(parts) > 1 {
 		res.Notes = append(res.Notes, fmt.Sprintf("the diff (%d bytes) is over the %d-byte prompt cap: reviewed in %d parts of whole files, in parallel, each with the same plan and criteria (%s USD)",
 			len(in.Diff), maxDiffBytes, len(parts), strings.Join(costs, " + ")))
+		var dups []Dropped
+		res.Findings, dups = Dedupe(res.Findings)
+		res.Dropped = append(res.Dropped, dups...)
+		// A part judges its criteria without the other parts' files, so its fix
+		// can rest only on a criterion another part shows met. A fix with no
+		// finding of its own does not stand once every criterion is met.
+		lift := res.Disposition == Fix && len(res.Criteria) > 0 && !slices.ContainsFunc(res.Criteria, func(v Verdict) bool { return v.Verdict != "met" })
+		for _, o := range outs {
+			lift = lift && (o.Disposition != Fix || len(o.Findings) == 0)
+		}
+		if lift {
+			res.Disposition = Merge
+			res.Notes = append(res.Notes, "fix lifted to merge: the parts that said fix raised no finding, and every criterion is met across the parts")
+		}
 	}
 	for _, err := range errs {
 		if err != nil {
@@ -548,7 +565,8 @@ func partNote(i int, parts []string) string {
 	return fmt.Sprintf("The diff is too large for one review, so it is reviewed in %d parts, each against the same story, criteria, and plan. "+
 		"This call reviews part %d; its files are in the first block below, and the other parts' files, reviewed in separate calls, in the second. "+
 		"Raise findings only on this part's files. Judge a criterion from this part only when it shows the criterion's code or tests; "+
-		"when it shows none of them, answer unclear with the evidence \"not in this part\".\n\n%s\n\n%s\n",
+		"when it shows none of them, answer unclear with the evidence \"not in this part\". "+
+		"A criterion that is unclear only because it is not in this part does not make the disposition fix: judge the disposition on this part's files.\n\n%s\n\n%s\n",
 		len(parts), i+1, triage.Untrusted("this part's files", strings.Join(mine, "\n")), triage.Untrusted("the other parts' files", strings.Join(others, "\n")))
 }
 
