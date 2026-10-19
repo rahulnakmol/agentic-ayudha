@@ -1,0 +1,21 @@
+{
+  "covered": 71,
+  "executable": 76,
+  "percent": 93.42105263157895,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/evals/cmd/eval/main.go": [
+      329,
+      330
+    ],
+    "internal/loops/gen/main.go": [
+      34
+    ],
+    "internal/ratchet/cmd/ratchet/main.go": [
+      149,
+      150
+    ]
+  },
+  "format": "go coverprofile"
+}

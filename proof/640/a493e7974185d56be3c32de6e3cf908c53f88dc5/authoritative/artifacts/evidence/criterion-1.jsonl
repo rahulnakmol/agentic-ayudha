@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestProtectedOnlyKeysFromTOML"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestProtectedOnlyKeysFromTOML","Output":"=== RUN   TestProtectedOnlyKeysFromTOML\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestProtectedOnlyKeysFromTOML","Output":"--- PASS: TestProtectedOnlyKeysFromTOML (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestProtectedOnlyKeysFromTOML"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestCaseVariantKeysRefused"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestCaseVariantKeysRefused","Output":"=== RUN   TestCaseVariantKeysRefused\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestCaseVariantKeysRefused","Output":"--- PASS: TestCaseVariantKeysRefused (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestCaseVariantKeysRefused"}

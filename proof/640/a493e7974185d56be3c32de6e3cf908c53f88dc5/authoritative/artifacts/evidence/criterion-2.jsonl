@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestLocalConfigIgnoredInCI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestLocalConfigIgnoredInCI","Output":"=== RUN   TestLocalConfigIgnoredInCI\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestLocalConfigIgnoredInCI","Output":"--- PASS: TestLocalConfigIgnoredInCI (0.02s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestLocalConfigIgnoredInCI"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalConfigIgnoredInCI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalConfigIgnoredInCI","Output":"=== RUN   TestLocalConfigIgnoredInCI\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalConfigIgnoredInCI","Output":"--- PASS: TestLocalConfigIgnoredInCI (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalConfigIgnoredInCI"}
