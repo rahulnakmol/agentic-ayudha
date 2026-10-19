@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,11 +105,17 @@ func TestInspectDocsOnlyChecksPRBody(t *testing.T) {
 // TestEvolveBodyPassesTheFloor: aayu evolve labels its PR agent-authored and
 // no agent edits the body later, so the body it writes must pass the check.
 func TestEvolveBodyPassesTheFloor(t *testing.T) {
-	b := evolveBody(&EvolveResult{Skill: "tell", Feedback: 12, Cases: []EvolveCase{{ID: "tell-12"}}, Evidence: []int{12, 15}})
+	// Many cases and Feedback issues never make a sentence too long.
+	res := &EvolveResult{Skill: "tell", Feedback: 12}
+	for i := range 25 {
+		res.Cases = append(res.Cases, EvolveCase{ID: fmt.Sprintf("tell-%d", i)})
+		res.Evidence = append(res.Evidence, 100+i)
+	}
+	b := evolveBody(res)
 	if block, _ := prbody.Check(b, nil, true); len(block) > 0 {
 		t.Fatalf("the evolve body blocks: %v\n%s", block, b)
 	}
-	if !strings.Contains(b, "`evals/cases/tell-12`") || !strings.Contains(b, "#12, #15") || !strings.Contains(b, "Refs #12") {
+	if !strings.Contains(b, "`evals/cases/tell-24`") || !strings.Contains(b, "- #124\n") || !strings.Contains(b, "Refs #12") {
 		t.Errorf("the evolve body lost its cases, evidence, or reference:\n%s", b)
 	}
 }

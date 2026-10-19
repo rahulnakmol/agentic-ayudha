@@ -241,7 +241,7 @@ func TestEvolveVerb(t *testing.T) {
 	if !strings.Contains(labels, "agent-authored") || !strings.Contains(labels, "aayu:evolve") {
 		t.Fatalf("PR labels: %s", labels)
 	}
-	if body := g.Pulls[prN].Body; !strings.Contains(body, "Evidence: #5, #8") {
+	if body := g.Pulls[prN].Body; !strings.Contains(body, "- #5\n- #8\n") {
 		t.Fatalf("PR body does not cite both Feedback issues: %s", body)
 	}
 	g.Mu.Lock()

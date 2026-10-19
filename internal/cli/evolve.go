@@ -310,12 +310,13 @@ func or(s, def string) string {
 // evolveBody is the evolve PR's description in the pull request format
 // (internal/prbody), every section written, since no agent edits it later.
 func evolveBody(res *EvolveResult) string {
-	var ids, ev []string
+	// One bullet per id, so no sentence grows with the lists.
+	var ids, ev strings.Builder
 	for _, x := range res.Cases {
-		ids = append(ids, "`evals/cases/"+x.ID+"`")
+		fmt.Fprintf(&ids, "  - `evals/cases/%s`\n", x.ID)
 	}
 	for _, x := range res.Evidence {
-		ev = append(ev, fmt.Sprintf("#%d", x))
+		fmt.Fprintf(&ev, "- #%d\n", x)
 	}
 	return fmt.Sprintf(`## What this does
 
@@ -323,13 +324,14 @@ This changes the %[1]s skill so that agents stop making the mistake that Feedbac
 
 ## Why
 
-People corrected the same prose mistake in the %[1]s skill at least two times. The accepted Feedback is %[3]s.
+People corrected the same prose mistake in the %[1]s skill at least two times. This accepted Feedback reports it:
 
+%[3]s
 ## What changed
 
 - The %[1]s skill has new or changed instructions.
-- New eval cases repeat the mistake: %[4]s.
-
+- New eval cases repeat the mistake:
+%[4]s
 ## How we know it works
 
 - The new eval cases fail on the current %[1]s skill and pass with this change.
@@ -344,12 +346,12 @@ The risk is low. The change is to skill text only. A person who owns `+"`skills/
 
 <details><summary>Technical detail</summary>
 
-Opened by `+"`aayu evolve`"+` (WP7.7), eval-first: each case's `+"`before/`"+` run fails tier 1 on the current skill. Evidence: %[3]s, each classified as a prose correction. Never auto-merged: `+"`skills/`"+` is a protected path.
+Opened by `+"`aayu evolve`"+` (WP7.7), eval-first: each case's `+"`before/`"+` run fails tier 1 on the current skill. Each Feedback in Why is classified as a prose correction. Never auto-merged: `+"`skills/`"+` is a protected path.
 
 </details>
 
 Refs #%[2]d
-`, res.Skill, res.Feedback, strings.Join(ev, ", "), strings.Join(ids, ", "))
+`, res.Skill, res.Feedback, ev.String(), ids.String())
 }
 
 // openEvolvePR opens the evolve PR (or finds the open one) and labels it

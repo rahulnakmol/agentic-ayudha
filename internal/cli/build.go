@@ -556,7 +556,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			// rather than a single family that hides the others.
 			msg += "\n" + cm.Trailers()
 			model = oneFamily(cm.Models)
-		case host == string(verbs.HostAmp) && e.Getenv("AAYU_MODEL") == "" && e.Getenv("AMP_THREAD_ID") != "":
+		case dlg == nil && host == string(verbs.HostAmp) && e.Getenv("AAYU_MODEL") == "" && e.Getenv("AMP_THREAD_ID") != "":
 			// Amp picks the model and says which only through its CLI: one
 			// line per Agent model of the thread (else the lane's, as before),
 			// and its agent mode as the effort unless AAYU_EFFORT names one.
