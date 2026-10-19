@@ -97,7 +97,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			st := a.prev
 			cp := res
 			st.Stopped, st.Result, st.Human = head, &cp, "" // a stopped review is the capped card's, not a human wait
-			if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
+			if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, a.cfg.Budget.PerPRInspectMax), actions.Action{Kind: "github.comment.inspect",
 				Payload: map[string]any{"disposition": res.Disposition, "reviewer": choice.Kind()}}); err != nil {
 				return err
 			}
@@ -311,7 +311,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
 	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel || a.record) {
-		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
+		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, a.cfg.Budget.PerPRInspectMax), actions.Action{Kind: "github.comment.inspect",
 			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind(), "rung": res.Rung}}); err != nil {
 			return err
 		}

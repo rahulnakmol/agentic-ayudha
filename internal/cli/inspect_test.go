@@ -632,6 +632,10 @@ func TestInspectConverges(t *testing.T) {
 	if code != 0 || res.Round != 1 || !strings.Contains(lastInspect(t, g, prN), "**class:** unguarded division; fix every instance: `internal/report/percent.go:5`, `internal/report/sum.go:3`") {
 		t.Fatalf("round 1: exit %d round %d %s\n%s", code, res.Round, errOut, lastInspect(t, g, prN))
 	}
+	// The footer states the PR's cap, [budget] per_pr_inspect_max, not 0.00 (#707's comment).
+	if !strings.Contains(lastInspect(t, g, prN), "of 5.00 USD on this PR") {
+		t.Fatalf("round 1: the footer does not state the cap:\n%s", lastInspect(t, g, prN))
+	}
 
 	// Round 2: the request names H1 and the earlier finding; a reworded
 	// repeat P2 is dropped, a similar P0 security finding is kept.
