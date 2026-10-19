@@ -257,6 +257,7 @@ tags: [type/principle]
 		{"a link in an indented code block is text", good, "Short.\n\n    See [[No such note]].\n", ""},
 		{"a link in a fence inside a quote is text", good, "> ~~~text\n> See [[No such note]].\n> ~~~\n", ""},
 		{"a backtick in a fence's info string opens no fence", good, "````md`example`\nSee [[No such note]].\n", "link [[No such note]] does not resolve"},
+		{"an open comment in a fence hides no link", good, "```text\n<!-- BEGIN aayudha:brain:history\n```\n\nSee [[No such note]].\n\n<!-- a person's note -->\n", "link [[No such note]] does not resolve"},
 		{"a comment marker in code hides no link", good, "Write `<!--` to open a comment. See [[No such note]]. Close it with `-->`.\n", "link [[No such note]] does not resolve"},
 		{"a key twice", strings.Replace(good, "status: current", "status: current\nstatus: done", 1), "Short.\n", `frontmatter frontmatter: key "status" appears twice`},
 		{"up is a template", strings.Replace(good, "[[Principles]]", "[[Principle template]]", 1), "Short.\n", "orphan up link [[Principle template]] does not resolve to another note"},

@@ -331,11 +331,11 @@ func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.W
 // reported and does not fail it; `aayu brain checkpoint` runs it again.
 func (e *Env) releaseCheckpoint(ctx context.Context, c *github.Client, tok identity.Token) {
 	w, err := e.Ledger(ctx, tok, "human", "")
-	if err != nil {
-		return
+	var cp brain.Checkpoint
+	if err == nil {
+		w.Branch = brain.Branch
+		cp, _, err = e.checkpointBrain(ctx, c, w)
 	}
-	w.Branch = brain.Branch
-	cp, _, err := e.checkpointBrain(ctx, c, w)
 	switch {
 	case err == nil:
 		e.Logf("brain checkpoint: %d notes changed", len(cp.Paths))
