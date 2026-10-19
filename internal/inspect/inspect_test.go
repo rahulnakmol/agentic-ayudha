@@ -499,7 +499,8 @@ func TestCoverageManifest(t *testing.T) {
 	// A diff over the cap whose files each fit is reviewed in two parts, in
 	// parallel, with the same plan and criteria: coverage is complete and the
 	// findings of both parts are kept. Part 1 shows criterion 1 met; part 2
-	// shows none of it, so its unclear does not undo the met.
+	// shows none of it, so its unclear does not undo the met; each part's evidence
+	// and cost are kept.
 	file := func(p string) string {
 		return "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,701 @@\n+package parts\n" +
 			strings.Repeat("+// "+strings.Repeat("y", 96)+"\n", 700)
@@ -528,7 +529,8 @@ func TestCoverageManifest(t *testing.T) {
 	}
 	if err != nil || len(prompts) != 2 || res3.Coverage.State != "complete" || len(res3.Coverage.Unreviewed()) != 0 ||
 		!slices.Equal(files, []string{"internal/a/a.go", "internal/b/b.go"}) || res3.Disposition != Merge || res3.CostUSD != 1 || st3.SpentUSD != 1 ||
-		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || !strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts") {
+		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): e" ||
+		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
 		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
 	}
 	for _, p := range prompts {

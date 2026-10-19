@@ -441,9 +441,6 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	// PR's budget through the reviewers' Complete.
 	parts, over := splitDiff(in.Diff, maxDiffBytes)
 	in.oversized = over
-	if len(parts) > 1 {
-		res.Notes = append(res.Notes, fmt.Sprintf("the diff (%d bytes) is over the %d-byte prompt cap: reviewed in %d parts of whole files, in parallel, each with the same plan and criteria", len(in.Diff), maxDiffBytes, len(parts)))
-	}
 	outs, errs := make([]Result, len(parts)), make([]error, len(parts))
 	var wg sync.WaitGroup
 	for i, p := range parts {
@@ -457,8 +454,17 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	a := r.Reviewers[0]
 	res.Model, res.Reviewers = a.Model, []string{a.Model}
 	shown := map[string]bool{}
+	var costs []string
 	for i, o := range outs {
 		res.CostUSD += o.CostUSD
+		costs = append(costs, fmt.Sprintf("%.2f", o.CostUSD))
+		if len(parts) > 1 {
+			// Each verdict keeps its part, so a reader sees which part showed it.
+			o.Criteria = slices.Clone(o.Criteria)
+			for k, v := range o.Criteria {
+				o.Criteria[k].Evidence = fmt.Sprintf("part %d (%s): %s", i+1, v.Verdict, v.Evidence)
+			}
+		}
 		for _, m := range o.Reviewers {
 			if !slices.Contains(res.Reviewers, m) {
 				res.Reviewers = append(res.Reviewers, m)
@@ -487,6 +493,10 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 		for _, f := range ParseDiff(parts[i]) {
 			shown[f.Path] = shown[f.Path] || fits(f.Path)
 		}
+	}
+	if len(parts) > 1 {
+		res.Notes = append(res.Notes, fmt.Sprintf("the diff (%d bytes) is over the %d-byte prompt cap: reviewed in %d parts of whole files, in parallel, each with the same plan and criteria (%s USD)",
+			len(in.Diff), maxDiffBytes, len(parts), strings.Join(costs, " + ")))
 	}
 	for _, err := range errs {
 		if err != nil {
@@ -541,16 +551,19 @@ func partNote(i int, parts []string) string {
 
 // partCriteria merges the verdicts of two parts of a split diff: a criterion
 // is unmet when a part says so, met when a part shows it met, else unclear.
+// The evidence of every part is kept.
 func partCriteria(a, b []Verdict) []Verdict {
 	out := slices.Clone(a)
 	for _, v := range b {
 		i := slices.IndexFunc(out, func(x Verdict) bool { return x.ID == v.ID })
-		switch {
-		case i < 0:
+		if i < 0 {
 			out = append(out, v)
-		case v.Verdict == "unmet" || (v.Verdict == "met" && out[i].Verdict == "unclear"):
-			out[i] = v
+			continue
 		}
+		if v.Verdict == "unmet" || (v.Verdict == "met" && out[i].Verdict == "unclear") {
+			out[i].Verdict = v.Verdict
+		}
+		out[i].Evidence += "; " + v.Evidence
 	}
 	slices.SortFunc(out, func(x, y Verdict) int { return x.ID - y.ID })
 	return out
