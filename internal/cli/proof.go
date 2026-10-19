@@ -10,6 +10,7 @@ import (
 	"os"
 	osuser "os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -194,13 +195,32 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 
 // accountHome is the home directory of the account running aayu, from the
 // system's user database (os/user), which the run's HOME does not change.
+// Outside Windows and macOS a build without cgo (every release binary)
+// reads /etc/passwd, and when the UID has no entry there os/user falls back
+// to $HOME and $USER, which the run sets. So the home must be the one
+// /etc/passwd gives the UID, or no user config is trusted.
 func accountHome() (string, error) {
 	u, err := osuser.Current()
 	if err != nil {
 		return "", err
 	}
-	return u.HomeDir, nil
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return u.HomeDir, nil
+	}
+	b, err := os.ReadFile(passwdFile)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if f := strings.Split(line, ":"); len(f) >= 7 && f[2] == u.Uid && f[5] == u.HomeDir {
+			return u.HomeDir, nil
+		}
+	}
+	return "", fmt.Errorf("%s gives UID %s no home %q, so it came from the environment", passwdFile, u.Uid, u.HomeDir)
 }
+
+// passwdFile is the user database that confirms accountHome (a variable for tests).
+var passwdFile = "/etc/passwd"
 
 // inMergeGate reports whether this process is the base-branch merge gate in
 // CI (WP4.8): a pull_request_target run (the base branch's copy of the file,

@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	osuser "os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -341,5 +343,32 @@ func TestAccountHomeIgnoresHOME(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "agent-home"))
 	if h, err := accountHome(); err != nil || h == "" || h == os.Getenv("HOME") {
 		t.Fatalf("accountHome() = %q, %v; HOME is %q", h, err, os.Getenv("HOME"))
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return
+	}
+	// A static build falls back to $HOME for a UID /etc/passwd does not
+	// list (an unmapped container UID): that home is never trusted.
+	u, err := osuser.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := passwdFile
+	t.Cleanup(func() { passwdFile = old })
+	passwdFile = filepath.Join(t.TempDir(), "passwd")
+	for _, c := range []struct {
+		db string
+		ok bool
+	}{
+		{"root:x:0:0:root:/root:/bin/sh\n", u.Uid == "0" && u.HomeDir == "/root"},
+		{"agent:x:" + u.Uid + ":0::/tmp/elsewhere:/bin/sh\n", false},
+		{"root:x:0:0:root:/root:/bin/sh\nme:x:" + u.Uid + ":0::" + u.HomeDir + ":/bin/sh\n", true},
+	} {
+		if err := os.WriteFile(passwdFile, []byte(c.db), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if h, err := accountHome(); (err == nil) != c.ok || c.ok && h != u.HomeDir {
+			t.Errorf("accountHome() with %q = %q, %v; want ok %t", c.db, h, err, c.ok)
+		}
 	}
 }
