@@ -58,16 +58,20 @@ const (
 // line of the frame is built from these, so each column, the pane divider,
 // the group headers, and the key bar start at the same cell on every row.
 const (
-	inboxPad    = 1   // inner padding: the left and right edge of each pane, and of the head, status, and key lines
-	inboxGutter = 2   // between two columns of the list
-	inboxWide   = 100 // at this width and above the list and the card sit side by side; below it they stack
-	inboxShare  = 62  // the list pane's share of a wide frame, in per cent
-	inboxMarkW  = 5   // the cursor ›, a space, and the mark: [ ] [x] for housekeeping, ✓ ✗ - ! and the write's spinner
-	inboxIconW  = 2   // the kind's icon
-	inboxWhyW   = 22  // why it waits, in a few words
-	inboxAgeW   = 3   // how long since it changed: 12m, 3h, 2d
-	inboxWhyMin = 60  // the list's content width that has room for the why column
-	inboxAgeMin = 48  // and for the age column
+	inboxPad     = 1   // inner padding: the left and right edge of each pane, and of the head, status, and key lines
+	inboxGutter  = 2   // between two columns of the list
+	inboxWide    = 100 // at this width and above the list and the card sit side by side; below it they stack
+	inboxShare   = 59  // the list pane's share of a wide frame, in per cent
+	inboxMarkW   = 5   // the cursor ›, a space, and the mark: [ ] [x] for housekeeping, ✓ ✗ - ! and the write's spinner
+	inboxIconW   = 2   // the kind's icon
+	inboxWhyW    = 22  // why it waits, in a few words
+	inboxAgeW    = 3   // how long since it changed: 12m, 3h, 2d
+	inboxWhyMin  = 60  // the list's content width that has room for the why column
+	inboxAgeMin  = 48  // and for the age column
+	inboxWordCut = 6   // a list cell cut short ends at a word when that drops no more than this many cells
+
+	inboxCursorW = 2             // a card choice's cursor: "› "
+	inboxTag     = "recommended" // the tag of the recommended choice, right-aligned at the card's edge
 )
 
 // inboxTUI reports whether `aayu inbox` runs the full-screen inbox.
@@ -89,8 +93,8 @@ func (e *Env) inboxTUI(cfg *config.Config) bool {
 // runInboxTUI runs the full-screen inbox. Each step's output (what decide,
 // ship, and the inbox's own steps print) is shown in the status line as it
 // comes, and printed in full once the inbox closes.
-func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSource, login string, work *inboxWork) error {
-	out, errOut, repo := e.Out, e.Err, src.repo
+func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSource, login string) error {
+	out, repo := e.Out, src.repo
 	var mu sync.Mutex
 	var send func(tea.Msg)
 	sink := &lineSink{send: func(s string) {
@@ -102,7 +106,6 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		}
 	}}
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
-	m.work = work
 	m.now, m.opened = e.Now, e.Now()
 	m.recordDone = func(key string, d inboxDone) { e.recordInboxDone(repo, login, key, d) }
 	src.progress = func(what string, done, total int) {
@@ -138,13 +141,19 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		return inboxGatheredMsg{items: items, changed: changed, err: err, calls: after.Calls() - before.Calls(), notModified: after.NotChanged - before.NotChanged, at: at}
 	}
 	m.open, m.twin = e.openURL, e.twin
-	m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) {
-		sink.buf.Reset()
-		e.Out, e.Err, e.out, e.talk = sink, sink, nil, nil
-		defer func() { e.Out, e.Err, e.out, e.talk = out, errOut, nil, nil }()
-		fresh, err := e.inboxApply(ctx, cfg, src, login, it, a)
-		sink.flush()
-		return fresh, sink.buf.String(), err
+	// Writes run in the background, up to inboxParallel at once: each on
+	// its own copy of the Env with its own output, its GitHub requests
+	// tagged with its own work (inboxWatch). What they share is safe to
+	// share: the client serializes writes, the actions log and the ledger
+	// lock, and the approval was taken once, above.
+	_, _ = e.Actions()
+	m.act = func(it InboxItem, a InboxAction, w *inboxWork) (InboxItem, string, error) {
+		ws := &lineSink{send: sink.send}
+		we := *e
+		we.Out, we.Err, we.out, we.talk = ws, ws, nil, nil
+		fresh, err := we.inboxApply(context.WithValue(ctx, inboxWorkKey{}, w), cfg, src, login, it, a)
+		ws.flush()
+		return fresh, ws.buf.String(), err
 	}
 	run := e.TUI
 	if run == nil {
@@ -172,18 +181,21 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 	for _, l := range m.log {
 		fmt.Fprintln(out, l)
 	}
-	done, skipped, gone := 0, 0, 0
-	for _, s := range m.state {
-		switch s {
-		case "done":
-			done++
+	done, skipped, left := 0, 0, 0
+	for _, it := range m.items {
+		switch k := it.key(); m.state[k] {
+		case "done": // a completion from an earlier session is not this session's work
+			if !m.done[k].At.Before(m.opened) {
+				done++
+			}
+		case "gone":
 		case "skipped":
 			skipped++
-		case "gone":
-			gone++
+		default:
+			left++
 		}
 	}
-	return finishInbox(out, done, skipped, len(m.items)-done-skipped-gone)
+	return finishInbox(out, done, skipped, left)
 }
 
 // ago is how long since t, in round words.
@@ -254,9 +266,24 @@ type (
 
 // inboxJob is one write the person asked for.
 type inboxJob struct {
-	it InboxItem
-	a  InboxAction
+	it    InboxItem
+	a     InboxAction
+	batch int        // the jobs asked for together, under one confirmation or one Enter
+	w     *inboxWork // the write under way; nil while it waits its turn
 }
+
+// inboxBatch is how far a bulk write has got, for the "4 of 17 done" line.
+type inboxBatch struct{ total, done, failed int }
+
+// inboxParallel is how many writes run at once; the rest wait their turn.
+const inboxParallel = 2
+
+// How the inbox quits while writes run: never mid-write.
+const (
+	quitNo      = iota
+	quitCurrent // once the writes running now finish; the queued ones are not started
+	quitAll     // once every write, the queued ones too, has finished
+)
 
 // inboxAsk is a confirmation on screen: what Enter does, in words.
 type inboxAsk struct {
@@ -266,6 +293,7 @@ type inboxAsk struct {
 	// prompt, when set, asks for the person's one line (InboxAction.Ask)
 	// first: text is what they typed, and Enter with none writes nothing.
 	prompt, text string
+	quit         bool // the question q asks while writes run
 }
 
 // inboxHit is one line of the finder: an item (or the housekeeping line), or
@@ -291,7 +319,7 @@ type inboxZone struct {
 type inboxModel struct {
 	repo, login string
 	gather      func() inboxGatheredMsg
-	act         func(InboxItem, InboxAction) (InboxItem, string, error)
+	act         func(InboxItem, InboxAction, *inboxWork) (InboxItem, string, error)
 	open        func(string)
 	twin        func(verbs.SeatID) string
 	now         func() time.Time
@@ -299,10 +327,13 @@ type inboxModel struct {
 	items      []InboxItem       // needs you first, then housekeeping
 	state      map[string]string // by key: "done", "skipped", "not done", "relisted" (done, and GitHub read since still lists it)
 	done       map[string]inboxDone
-	work       *inboxWork              // the write under way, as its GitHub requests show it
 	recordDone func(string, inboxDone) // keeps a done write for later sessions
 	rows       []int                   // the list: item indices, group by group (inboxGroups)
 	selected   map[string]bool         // housekeeping picked with x or X for one bulk action; never a needs-you item
+	batch      int                     // the last batch of jobs started
+	fails      map[string]inboxFail    // the writes that stopped this session, by item
+	batches    map[int]*inboxBatch     // the bulk writes under way
+	workTick   bool                    // the once-a-second redraw of the writes runs
 	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
@@ -323,9 +354,7 @@ type inboxModel struct {
 	err                 error
 
 	queue      []inboxJob
-	total      int
-	failed     int
-	quitting   bool
+	quitting   int // quitNo, quitCurrent, or quitAll
 	status     string
 	log        []string
 	refreshLog string // the last refresh, in words: calls and 304s
@@ -359,7 +388,7 @@ type inboxModel struct {
 func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 	p := ui.New(nil, ui.Signals{TTY: true, NoColor: noColor, Theme: theme})
 	p.Theme = ui.ThemeFor(theme, true)
-	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, selected: map[string]bool{}, work: &inboxWork{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
+	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, selected: map[string]bool{}, fails: map[string]inboxFail{}, batches: map[int]*inboxBatch{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, theme: theme, dirty: true, now: time.Now,
 		flash: map[string]time.Time{}, spring: harmonica.NewSpring(harmonica.FPS(120), 30, 1)}
 }
@@ -653,7 +682,7 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 			m.find()
 		}
 	case spinner.TickMsg:
-		if !m.motion || !m.loading && !m.refreshing && len(m.queue) == 0 {
+		if !m.motion || !m.loading && !m.refreshing && m.writing() == 0 {
 			return nil
 		}
 		var cmd tea.Cmd
@@ -670,7 +699,8 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 		m.refreshing, m.dirty = true, true
 		return tea.Batch(m.spinTick(), m.gatherCmd())
 	case inboxWorkTickMsg:
-		if len(m.queue) > 0 && m.timer {
+		m.workTick = len(m.queue) > 0 && m.timer
+		if m.workTick {
 			m.dirty = true
 			return tea.Tick(time.Second, func(time.Time) tea.Msg { return inboxWorkTickMsg{} })
 		}
@@ -731,7 +761,7 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	}
 	m.live = true
 	m.relist(msg.items, msg.at)
-	if m.quitting {
+	if m.quitting != quitNo && m.writing() == 0 {
 		return tea.Quit
 	}
 	switch {
@@ -743,21 +773,29 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	return m.tick()
 }
 
-// finished records one write and starts the next.
+// finished records one write, then starts what waits for its slot.
 func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	for _, l := range strings.Split(strings.TrimRight(msg.out, "\n"), "\n") {
 		if strings.TrimSpace(l) != "" {
 			m.log = append(m.log, l)
 		}
 	}
-	job := m.queue[0]
-	m.queue = m.queue[1:]
+	at := slices.IndexFunc(m.queue, func(j inboxJob) bool { return j.w != nil && j.it.key() == msg.key })
+	if at < 0 {
+		return nil
+	}
+	job := m.queue[at]
+	m.queue = slices.Delete(m.queue, at, at+1)
+	b := m.batches[job.batch]
+	if b == nil {
+		b = &inboxBatch{total: 1}
+	}
 	num := job.it.Number
 	var ch errInboxChanged
 	switch {
 	case errors.As(msg.err, &ch):
-		m.work.end()
-		m.failed++
+		job.w.end()
+		b.failed++
 		delete(m.selected, msg.key)
 		if ch.Item.Number == 0 { // it no longer waits: it stays, marked gone
 			m.state[msg.key] = "gone"
@@ -769,52 +807,153 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 				}
 			}
 		}
-		m.sel, m.armed = 0, false
+		if i := m.item(); i >= 0 && m.items[i].key() == msg.key {
+			m.sel, m.armed = 0, false
+		}
 		m.refuse(fmt.Sprintf("#%d: %v.", num, msg.err))
-		m.queue = nil // the rest were asked for against what the person read
+		// The rest of its batch was asked for against what the person read;
+		// an item queued on its own still runs.
+		n := len(m.queue)
+		m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil && j.batch == job.batch })
+		b.failed += n - len(m.queue)
 	case msg.err != nil:
-		_, stage, _, _ := m.work.snapshot()
-		wrote := m.work.end()
+		_, stage, _, _ := job.w.snapshot()
+		wrote := job.w.end()
 		m.state[msg.key] = "not done"
-		m.failed++
+		m.fails[msg.key] = inboxFail{stage: stage, err: msg.err.Error(), wrote: wrote, a: job.a}
+		b.failed++
 		if len(wrote) > 0 { // part of it landed: say what, so a retry is a choice made knowing it
 			msg.err = fmt.Errorf("%w (stopped while %s, after it %s)", msg.err, stage, strings.Join(wrote, ", "))
 		}
-		m.refuse(fmt.Sprintf("#%d not done: %v", num, msg.err))
+		m.refuse(fmt.Sprintf("✗ #%d not done; the card says why.", num)) // the whole error is on the card, never cut here
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
 	default:
 		m.state[msg.key] = "done"
 		delete(m.selected, msg.key)
-		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: m.work.end()}
+		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end()}
 		m.done[msg.key] = d
 		m.recordDone(msg.key, d)
 		if m.motion {
 			m.flash[msg.key] = m.now()
 		}
-		m.status = fmt.Sprintf("Done: #%d, %s. It is written to GitHub%s.", num, job.a.Label, wroteSuffix(d.Wrote))
-		if i := m.item(); i >= 0 && m.items[i].key() == msg.key && len(m.queue) == 0 {
-			m.next()
-		}
+		b.done++
+		m.status = "✓ " + inboxDoingFor(job.it, job.a).did + "."
 		m.relayout()
 	}
-	if m.quitting {
-		m.queue = nil
-		return tea.Quit
-	}
-	if len(m.queue) > 0 {
-		return m.run()
-	}
-	if m.total > 1 {
-		m.status = fmt.Sprintf("Applied %d: %d done, %d not done. Written changes are not undone here.", m.total, m.total-m.failed, m.failed)
-		if m.item() < 0 || m.state[m.items[m.item()].key()] != "" {
-			m.next()
+	if b.total > 1 && b.done+b.failed >= b.total {
+		delete(m.batches, job.batch)
+		m.status = fmt.Sprintf("Applied %d: %d done, %d not done. Written changes are not undone here.", b.total, b.done, b.failed)
+		if i := m.item(); i >= 0 && m.state[m.items[i].key()] != "" {
+			m.next() // the bulk is over: on to what still waits
 		}
 	}
-	m.total, m.failed = 0, 0
+	if m.quitting == quitCurrent {
+		m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil })
+	}
+	if m.quitting != quitNo && m.writing() == 0 && (m.quitting == quitCurrent || len(m.queue) == 0) {
+		return tea.Quit
+	}
+	return m.pump()
+}
+
+// writing counts the writes under way.
+func (m *inboxModel) writing() int {
+	n := 0
+	for _, j := range m.queue {
+		if j.w != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// inboxTouches are the issue and pull request numbers a write on it may
+// change: the item, its pull request, and its Story.
+func inboxTouches(it InboxItem) []int {
+	var out []int
+	for _, n := range []int{it.Number, it.PR, it.f.story} {
+		if n > 0 && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// blocker is the write under way that touches what j would, or nil: two
+// writes on the same pull request or issue never run at once.
+func (m *inboxModel) blocker(j inboxJob) *inboxJob {
+	for k, r := range m.queue {
+		if r.w != nil && r.it.key() != j.it.key() && slices.ContainsFunc(inboxTouches(r.it), func(n int) bool { return slices.Contains(inboxTouches(j.it), n) }) {
+			return &m.queue[k]
+		}
+	}
 	return nil
 }
 
-// next moves to the next item still waiting, after the cursor, wrapping.
+// pump starts the writes that wait, in order, while fewer than
+// inboxParallel run; one that touches what a running write touches waits.
+func (m *inboxModel) pump() tea.Cmd {
+	var cmds []tea.Cmd
+	for k := range m.queue {
+		if m.writing() >= inboxParallel || m.quitting == quitCurrent {
+			break
+		}
+		j := &m.queue[k]
+		if j.w != nil || m.blocker(*j) != nil {
+			continue
+		}
+		j.w = &inboxWork{}
+		j.w.begin(j.it.key(), m.now())
+		delete(m.fails, j.it.key())
+		job, act := *j, m.act
+		cmds = append(cmds, func() tea.Msg {
+			fresh, out, err := act(job.it, job.a, job.w)
+			return inboxDoneMsg{job.it.key(), fresh, out, err}
+		})
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	cmds = append(cmds, m.spinTick())
+	if m.timer && !m.workTick {
+		m.workTick = true
+		cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg { return inboxWorkTickMsg{} }))
+	}
+	return tea.Batch(cmds...)
+}
+
+// start queues jobs and starts what can run now: the writes run in the
+// background, so the person goes on acting meanwhile. After one Enter the
+// cursor moves on to the next item that waits for them.
+func (m *inboxModel) start(jobs []inboxJob) tea.Cmd {
+	m.batch++
+	if len(jobs) > 1 {
+		m.batches[m.batch] = &inboxBatch{total: len(jobs)}
+	}
+	for k := range jobs {
+		jobs[k].batch = m.batch
+		delete(m.selected, jobs[k].it.key())
+	}
+	m.queue = append(m.queue, jobs...)
+	cmd := m.pump()
+	j := jobs[0]
+	switch running, _ := m.queued(j.it.key()); {
+	case len(jobs) > 1:
+		m.status = fmt.Sprintf("Applying %d %s in the background; you can go on meanwhile.", len(jobs), plural(len(jobs), "item", "items"))
+	case running:
+		m.status = inboxDoingFor(j.it, j.a).doing + "… it runs in the background."
+	case m.blocker(j) != nil:
+		m.status = fmt.Sprintf("Queued #%d: it waits for the write on #%d, which touches the same pull request or issue.", j.it.Number, m.blocker(j).it.Number)
+	default:
+		m.status = fmt.Sprintf("Queued #%d: it starts when one of the %d writes under way ends.", j.it.Number, inboxParallel)
+	}
+	if i := m.item(); len(jobs) == 1 && i >= 0 && m.items[i].key() == j.it.key() {
+		m.moveOn(j.it.kind().Housekeeping)
+	}
+	return cmd
+}
+
+// next moves to the next item still to do.
 func (m *inboxModel) next() {
 	m.sel, m.armed = 0, false
 	for d := 1; d <= len(m.rows); d++ {
@@ -826,48 +965,38 @@ func (m *inboxModel) next() {
 	}
 }
 
-// run starts the first queued write.
-func (m *inboxModel) run() tea.Cmd {
-	j, act := m.queue[0], m.act
-	m.work.begin(j.it.key(), m.now())
-	var redraw tea.Cmd
-	if m.timer {
-		redraw = tea.Tick(time.Second, func(time.Time) tea.Msg { return inboxWorkTickMsg{} })
+// moveOn moves the cursor to the next item that waits and has no write on
+// it: a needs-you item after a needs-you write, else the next such row.
+func (m *inboxModel) moveOn(house bool) {
+	for d := 1; d < len(m.rows); d++ {
+		r := (m.cur + d) % len(m.rows)
+		it := m.items[m.rows[r]]
+		running, waiting := m.queued(it.key())
+		if m.state[it.key()] == "" && !running && !waiting && (house || !it.kind().Housekeeping) {
+			m.cur, m.sel, m.armed = r, 0, false
+			return
+		}
 	}
-	m.status = fmt.Sprintf("Applying #%d…", j.it.Number)
-	if m.total > 1 {
-		m.status = fmt.Sprintf("Applying %d of %d: #%d…", m.total-len(m.queue)+1, m.total, j.it.Number)
-	}
-	return tea.Batch(m.spinTick(), redraw, func() tea.Msg {
-		fresh, out, err := act(j.it, j.a)
-		return inboxDoneMsg{j.it.key(), fresh, out, err}
-	})
 }
 
-// start queues jobs; with none under way, the first starts now. A job asked
-// for while another runs waits its turn: the screen stays live meanwhile.
-func (m *inboxModel) start(jobs []inboxJob) tea.Cmd {
-	for _, j := range jobs {
-		delete(m.selected, j.it.key())
-	}
-	if len(m.queue) > 0 {
-		m.queue = append(m.queue, jobs...)
-		m.total = max(m.total, 1) + len(jobs)
-		m.status = fmt.Sprintf("Queued #%d; it runs after the write under way.", jobs[0].it.Number)
-		return nil
-	}
-	m.queue, m.total, m.failed = jobs, len(jobs), 0
-	return m.run()
-}
-
-// queued reports whether key is the write under way or waits in the queue.
+// queued reports whether key has a write under way, or one waiting its turn.
 func (m *inboxModel) queued(key string) (running, waiting bool) {
-	for i, j := range m.queue {
+	for _, j := range m.queue {
 		if j.it.key() == key {
-			return i == 0, i > 0
+			return j.w != nil, j.w == nil
 		}
 	}
 	return false, false
+}
+
+// job is the write on key, running or waiting, or nil.
+func (m *inboxModel) job(key string) *inboxJob {
+	for k := range m.queue {
+		if m.queue[k].it.key() == key {
+			return &m.queue[k]
+		}
+	}
+	return nil
 }
 
 func wroteSuffix(w []string) string {
@@ -882,11 +1011,32 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	busy := m.loading && len(m.items) == 0
 	writing := len(m.queue) > 0
 	switch {
-	case (busy || writing) && (k == "ctrl+c" || k == "q") && m.ask == nil && !m.finding && !m.help:
-		// Bubble Tea does not wait for a running command when it quits: the
-		// write (or read) under way finishes, the rest are not started.
-		m.quitting = true
-		m.status = "Quitting after the step under way; the rest are not done."
+	case m.ask != nil && m.ask.quit:
+		switch k {
+		case "w", "enter":
+			m.ask, m.quitting = nil, quitAll
+			m.status = fmt.Sprintf("Quitting once every write has finished: %d to go.", len(m.queue))
+		case "q", "ctrl+c":
+			m.ask, m.quitting = nil, quitCurrent
+			m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil })
+			m.status = fmt.Sprintf("Quitting once the %d %s under way %s; nothing else is started.", m.writing(), plural(m.writing(), "write", "writes"), plural(m.writing(), "finishes", "finish"))
+		case "esc", "n":
+			m.ask, m.status = nil, "Staying; the writes go on."
+		}
+		return nil
+	case writing && (k == "ctrl+c" || k == "q" && m.ask == nil && !m.finding && !m.help):
+		// Bubble Tea does not wait for a running command when it quits, so
+		// the inbox never quits mid-write: it asks whether to wait for all.
+		n, queued := m.writing(), len(m.queue)-m.writing()
+		m.ask = &inboxAsk{quit: true, title: fmt.Sprintf("%d %s under way. Quit?", n, plural(n, "write is", "writes are")), lines: []string{
+			fmt.Sprintf("w   wait for every write%s, then quit", map[bool]string{true: fmt.Sprintf(", the %d queued too", queued), false: ""}[queued > 0]),
+			fmt.Sprintf("q   quit once the %d under way %s%s", n, plural(n, "finishes", "finish"), map[bool]string{true: fmt.Sprintf("; the %d queued are not started", queued), false: ""}[queued > 0]),
+			"Esc stay in the inbox",
+			"", "A write is never stopped half done: each one under way finishes and is reported."}}
+		return nil
+	case busy && (k == "ctrl+c" || k == "q"):
+		m.quitting = quitCurrent // the first read finishes, then the inbox quits
+		m.status = "Quitting after the read under way."
 		return nil
 	case k == "ctrl+c":
 		return tea.Quit
@@ -986,7 +1136,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.cycle(-1)
 	case "R":
 		if writing {
-			m.status = "A refresh waits for the write under way; it reads GitHub again after it."
+			m.status = "A refresh waits for the writes under way; it reads GitHub again after them."
 		} else if !m.refreshing {
 			m.refreshing, m.status = true, "Reading what changed on GitHub…"
 			return tea.Batch(m.spinTick(), m.gatherCmd())
@@ -1064,14 +1214,14 @@ func (m *inboxModel) enter() tea.Cmd {
 		m.open(it.URL)
 		m.status = "Opened " + it.URL
 	case c.Ask != "":
-		m.ask = &inboxAsk{title: fmt.Sprintf("%s #%d: %s", it.kind().Word, it.Number, it.button(c)), lines: []string{inboxEffect(it, c)}, jobs: []inboxJob{{it, c}}, prompt: c.Ask}
+		m.ask = &inboxAsk{title: fmt.Sprintf("%s #%d: %s", it.kind().Word, it.Number, it.button(c)), lines: []string{inboxEffect(it, c)}, jobs: []inboxJob{{it: it, a: c}}, prompt: c.Ask}
 		m.status = "Nothing is written until you type what you checked and press Enter."
 	case (!c.Recommended || it.OneWay) && !m.armed:
 		m.armed = true
 		m.status = "Nothing is written until you press Enter again."
 	default:
 		m.armed = false
-		return m.start([]inboxJob{{it, c}})
+		return m.start([]inboxJob{{it: it, a: c}})
 	}
 	return nil
 }
@@ -1098,7 +1248,7 @@ func (m *inboxModel) askJobs(items []InboxItem, title string) {
 	var lines []string
 	for _, it := range items {
 		if running, waiting := m.queued(it.key()); it.tidy() && !running && !waiting {
-			jobs = append(jobs, inboxJob{it, *it.recommended()})
+			jobs = append(jobs, inboxJob{it: it, a: *it.recommended()})
 			lines = append(lines, fmt.Sprintf("%s #%d: %s", it.kind().Icon, it.Number, it.recommended().Label))
 		}
 	}
@@ -1434,6 +1584,9 @@ func (m *inboxModel) render() string {
 		}
 	default:
 		listH := min(len(m.listLines()), max(body/2-1, 4))
+		if i := m.item(); i >= 0 && (m.actionView(m.items[i], inner, body) != nil || m.state[m.items[i].key()] == "not done") {
+			listH = min(listH, max(body/3-1, 4)) // the action's progress needs the room; the list stays in view
+		}
 		lines = append(lines, m.columnsHead(inner))
 		lines = append(lines, m.listView(inner, listH, inboxPad, 2)...)
 		lines = append(lines, m.style(ui.Muted, strings.Repeat("─", inner)))
@@ -1480,6 +1633,22 @@ func cell(s string, width int) string {
 	return s + strings.Repeat(" ", max(width-ansi.StringWidth(s), 0))
 }
 
+// wordCell is cell for words: a cut ends at the last word that fits when that
+// drops at most inboxWordCut cells, else mid-word as cell does. The width is
+// the same either way.
+func wordCell(s string, width int) string {
+	if width > 1 && ansi.StringWidth(s) > width {
+		t := ansi.Truncate(s, width-1, "") // room for the …
+		if rest := s[len(t):]; strings.HasPrefix(rest, " ") {
+			return cell(strings.TrimRight(t, " ,;:·")+"…", width)
+		}
+		if i := strings.LastIndexByte(t, ' '); i > 0 && ansi.StringWidth(t[i:]) <= inboxWordCut {
+			return cell(strings.TrimRight(t[:i], " ,;:·")+"…", width)
+		}
+	}
+	return cell(s, width)
+}
+
 // rcell is cell, aligned right.
 func rcell(s string, width int) string {
 	if ansi.StringWidth(s) > width {
@@ -1515,9 +1684,9 @@ func (m *inboxModel) cols(w int) inboxCols {
 // row joins the cells of one list row, each fitted to its column.
 func (c inboxCols) row(mark, icon, num, title, why, age string) string {
 	gap := strings.Repeat(" ", inboxGutter)
-	r := cell(mark, inboxMarkW) + gap + cell(icon, inboxIconW) + gap + rcell(num, c.num) + gap + cell(title, max(c.title, 1))
+	r := cell(mark, inboxMarkW) + gap + cell(icon, inboxIconW) + gap + rcell(num, c.num) + gap + wordCell(title, max(c.title, 1))
 	if c.why > 0 {
-		r += gap + cell(why, c.why)
+		r += gap + wordCell(why, c.why)
 	}
 	if c.age > 0 {
 		r += gap + rcell(age, c.age)
@@ -1525,9 +1694,12 @@ func (c inboxCols) row(mark, icon, num, title, why, age string) string {
 	return r
 }
 
-// columnsHead names the list's columns, in the list's own cells.
+// columnsHead names the list's columns, in the list's own cells, each name
+// at the first cell of its column (the number and the age are right-aligned
+// in their rows, so their names are padded to the column's width).
 func (m *inboxModel) columnsHead(w int) string {
-	return m.style(ui.Muted, m.cols(w).row("", "", "#", "TITLE", "WHY IT WAITS", "AGE"))
+	c := m.cols(w)
+	return m.style(ui.Muted, c.row("", "", cell("#", c.num), "TITLE", "WHY IT WAITS", cell("AGE", c.age)))
 }
 
 // inboxLine is one line of the list: a group's header, the blank line
@@ -1671,7 +1843,12 @@ func (m *inboxModel) rowState(i int) (mark, why string, role ui.Role) {
 		if m.motion {
 			frame = strings.TrimSpace(ansi.Strip(m.spin.View()))
 		}
-		return " " + frame + " ", "writing now", ui.Warn
+		why := "writing now"
+		if j := m.job(k); j != nil {
+			_, stage, _, started := j.w.snapshot()
+			why = shortElapsed(m.now().Sub(started)) + " · " + inboxStepOf(stage).line
+		}
+		return " " + frame + " ", why, ui.Warn
 	case waiting:
 		return "...", "queued", ui.Muted
 	case st == "done":
@@ -1698,6 +1875,14 @@ func (m *inboxModel) rowState(i int) (mark, why string, role ui.Role) {
 
 // inboxText is no role: the row keeps the text colour.
 const inboxText ui.Role = -1
+
+// shortElapsed is a write's running time in a few cells: 6s, 2m05s.
+func shortElapsed(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+}
 
 // shortAgo is how long since t in at most three cells: 12m, 3h, 2d.
 func shortAgo(now, t time.Time) string {
@@ -1747,13 +1932,18 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 			tag += " · " + st
 		}
 	}
+	if i >= 0 {
+		if v := m.actionView(it, w, h); v != nil {
+			return v
+		}
+	}
 	wrapTo := m.wrap
 	top := []string{m.style(ui.Muted, tag)}
 	for _, l := range wrapTo(title, w) {
 		top = append(top, inboxBold.Render(l))
 	}
 	top = append(top, wrapTo(kind.Line, w)...) // what it means, in the text colour: it is read, not skimmed
-	var whyLines, writes []string              // the list's why-it-waits column, in full; the write on it
+	var whyLines, writes []string              // the list's why-it-waits column, in full; a write that stopped
 	if it.Why != "" {
 		whyLines = m.wrapStyled(ui.Muted, "Why it waits: "+it.Why, w)
 	}
@@ -1769,48 +1959,52 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		}
 	}
 	var choiceLines []string
-	choiceAt := map[int]int{} // a choice's first line
+	choiceAt, choiceEnd := map[int]int{}, map[int]int{} // a choice's first and last line
 	if i >= 0 {
-		writes = m.writeLines(it, w)
+		writes = m.failLines(it, w)
 	}
 	choiceLines = append(choiceLines, "")
+	// Each choice spans the card's width exactly: the cursor, its number,
+	// its label (wrapped under its own text when it is long), and the tag
+	// in a fixed column at the right edge, on the first line.
+	numW, tagW := 0, 0
+	for _, c := range m.choices() {
+		numW = max(numW, ansi.StringWidth(c.ref())+inboxGutter)
+		if c.Recommended {
+			tagW = len(inboxTag)
+		}
+	}
+	room := w - inboxCursorW - numW
+	if tagW > 0 {
+		room -= inboxGutter + tagW
+	}
 	for ci, c := range m.choices() {
 		label := c.Label
 		if i >= 0 {
 			label = it.button(c)
 		}
-		tail := ""
-		if c.Recommended {
-			tail = "recommended"
-		}
-		room := w - 7
-		ls := wrapTo(label, room)
-		under := false // the tail on its own line, under the label
-		if last := ls[len(ls)-1]; tail != "" && ansi.StringWidth(last)+2+len(tail) > room {
-			ls, under = append(ls, tail), true
-		}
 		choiceAt[ci] = len(choiceLines)
-		for li, l := range ls {
-			num := "   "
+		for li, l := range wrapTo(label, max(room, 1)) {
+			cursor, num, tag := strings.Repeat(" ", inboxCursorW), "", ""
 			if li == 0 {
-				num = fmt.Sprintf("%-3s", c.ref())
+				num = c.ref()
+				if c.Recommended {
+					tag = inboxTag
+				}
+				if ci == m.sel {
+					cursor = cell("›", inboxCursorW)
+				}
 			}
-			pad := room - ansi.StringWidth(l)
-			if li == len(ls)-1 && tail != "" && !under {
-				l += strings.Repeat(" ", pad-len(tail)) + tail
-				pad = 0
+			row := cursor + cell(num, numW) + cell(l, max(room, 1))
+			if tagW > 0 {
+				row += strings.Repeat(" ", inboxGutter) + rcell(tag, tagW)
 			}
-			row := num + l + strings.Repeat(" ", max(pad, 0)) + " "
-			switch {
-			case ci == m.sel && li == 0:
-				row = reverse("› " + row)
-			case ci == m.sel:
-				row = reverse("  " + row)
-			default:
-				row = "  " + row
+			if ci == m.sel {
+				row = reverse(row)
 			}
 			choiceLines = append(choiceLines, row)
 		}
+		choiceEnd[ci] = len(choiceLines) - 1
 	}
 	if m.armed && i >= 0 {
 		c := m.choices()[min(m.sel, len(m.choices())-1)]
@@ -1823,6 +2017,9 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	// Fit: the counsel gives way, then the full why; the choices and what
 	// the selected one does always show.
 	extra := func() int { return len(top) + len(whyLines) + len(writes) + len(counselLines) + len(choiceLines) - h }
+	if len(writes) > 0 && extra() > 0 {
+		counselLines = nil // a write that stopped matters more than the counsel
+	}
 	if extra() > 0 && len(counselLines) > 3 {
 		keep := max(len(counselLines)-extra()-1, 3)
 		if keep < len(counselLines) {
@@ -1840,45 +2037,145 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	base := y + len(top) + len(counselLines)
 	for ci, at := range choiceAt {
 		if at+len(top)+len(counselLines) < h {
-			m.zones = append(m.zones, inboxZone{x0: x, x1: x + w, y0: base + at, y1: base + at, row: -1, choice: ci, hit: -1})
+			m.zones = append(m.zones, inboxZone{x0: x, x1: x + w, y0: base + at, y1: base + choiceEnd[ci], row: -1, choice: ci, hit: -1})
 		}
 	}
 	return out
 }
 
-// writeLines is what the card says about a write on its item: while it runs,
-// its steps as a checklist; once done, who did it, when, and what it wrote.
-func (m *inboxModel) writeLines(it InboxItem, w int) []string {
+// actionView is the card's body while a write on its item runs or waits,
+// and once it is done: a headline in plain words, what is happening now,
+// the steps as a checklist, how long it usually takes, and what the person
+// can do meanwhile; then what changed on GitHub and what happens next. It is
+// nil for an item with no write this session (and for one that stopped,
+// whose card keeps its choices under failLines).
+func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 	k := it.key()
-	if running, _ := m.queued(k); running {
-		_, _, calls, started := m.work.snapshot()
-		steps, cur := m.work.steps()
-		out := []string{"", m.style(ui.Warn, cell(fmt.Sprintf("Writing now · %d GitHub %s · %s", calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started))), w))}
-		frame := "*"
-		if m.motion {
-			frame = strings.TrimSpace(ansi.Strip(m.spin.View()))
-		}
-		for j, st := range steps {
-			if j == cur {
-				out = append(out, m.style(ui.Warn, cell(frame+" "+st, w)))
-			} else {
-				out = append(out, m.style(ui.OK, "✓ ")+cell(st, w-2))
-			}
-		}
-		return append(out, m.wrapStyled(ui.Muted, "You can move and read meanwhile; Enter on another item queues it.", w)...)
-	}
-	d, ok := m.done[k]
-	if !ok {
+	running, waiting := m.queued(k)
+	d, done := m.done[k]
+	if !running && !waiting && (!done || m.state[k] != "done") {
 		return nil
 	}
-	if m.state[k] == "relisted" {
+	var a InboxAction
+	job := m.job(k)
+	if job != nil {
+		a = job.a
+	}
+	if done && a.Label == "" {
+		for _, c := range it.choices() {
+			if it.button(c) == d.Choice {
+				a = c
+			}
+		}
+	}
+	do := inboxDoingFor(it, a)
+	frame := "*"
+	if m.motion {
+		frame = strings.TrimSpace(ansi.Strip(m.spin.View()))
+	}
+	head := func(role ui.Role, s string) []string {
+		out := []string{}
+		for _, l := range m.wrap(s, w) {
+			out = append(out, m.style(role, inboxBold.Render(l)))
+		}
+		return out
+	}
+	sub := []string{m.style(ui.Muted, cell(it.kind().Icon+" "+it.Title, w))}
+	if job != nil {
+		if b := m.batches[job.batch]; b != nil {
+			sub = append(sub, m.style(ui.Accent, m.bar(b.done+b.failed, b.total, min(12, max(w/6, 4)))+" ")+
+				cell(fmt.Sprintf("%d of %d housekeeping done", b.done+b.failed, b.total), w-min(12, max(w/6, 4))-1))
+		}
+	}
+	switch {
+	case waiting:
+		out := append(head(ui.Accent, do.doing+": queued"), sub...)
+		why := fmt.Sprintf("It starts when one of the %d writes under way ends.", inboxParallel)
+		if bl := m.blocker(*job); bl != nil {
+			why = fmt.Sprintf("It waits for the write on #%d, which touches the same pull request or issue; two writes on one never run at once.", bl.it.Number)
+		}
+		out = append(append(out, ""), m.wrap(why, w)...)
+		return append(append(out, ""), m.wrapStyled(ui.Muted, "You can act on other items meanwhile.", w)...)
+	case running:
+		_, stage, calls, started := job.w.snapshot()
+		seen, cur := job.w.steps()
+		steps := []string{}
+		for j, st := range seen {
+			switch {
+			case j < cur:
+				steps = append(steps, m.style(ui.OK, "✓ ")+cell(inboxStepOf(st).line, w-2))
+			case j == cur:
+				steps = append(steps, m.style(ui.Warn, cell(frame+" "+inboxStepOf(st).line, w)))
+			}
+		}
+		for _, st := range do.plan {
+			if !slices.Contains(seen, st) {
+				steps = append(steps, m.style(ui.Muted, cell("○ "+inboxStepOf(st).line, w)))
+			}
+		}
+		out := append(append(head(ui.Warn, do.doing), sub...), "")
+		out = append(out, m.wrapStyled(ui.Warn, frame+" Now: "+inboxStepOf(stage).now+".", w)...)
+		out = append(out, "")
+		tail := []string{""}
+		tail = append(tail, m.wrapStyled(ui.Muted, fmt.Sprintf("%s; %d GitHub %s so far, %s.", upperFirst(do.usually), calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started))), w)...)
+		tail = append(append(tail, ""), m.wrapStyled(ui.Muted, fmt.Sprintf("It runs in the background: you can act on other items meanwhile (up to %d writes run at once).", inboxParallel), w)...)
+		// Fit: the finished steps fold into one line, then the steps still
+		// to come; what happens now and the time always show.
+		if room := h - len(out) - len(tail); len(steps) > room {
+			done := min(cur, len(steps)-room+1)
+			if done > 1 {
+				steps = append([]string{m.style(ui.OK, "✓ ") + cell(fmt.Sprintf("%d steps done", done), w-2)}, steps[done:]...)
+			}
+			if len(steps) > room && room > 1 {
+				more := len(steps) - room + 1
+				steps = append(steps[:room-1], m.style(ui.Muted, cell(fmt.Sprintf("○ and %d more", more), w)))
+			}
+		}
+		return append(append(out, steps...), tail...)
+	}
+	out := append(head(ui.OK, "✓ "+do.did), sub[0])
+	out = append(out, m.style(ui.Muted, cell(fmt.Sprintf("by @%s at %s", d.By, d.when(m.now())), w)), "", inboxBold.Render("What changed on GitHub"))
+	if len(d.Wrote) == 0 {
+		out = append(out, cell("  "+d.Choice, w))
+	}
+	for _, wr := range d.Wrote {
+		out = append(out, "  "+m.style(ui.OK, "✓ ")+cell(upperFirst(wr), w-4))
+	}
+	if it.URL != "" {
+		out = append(out, "  "+m.style(ui.Muted, cell(it.URL, w-2)))
+	}
+	if do.next != "" {
+		out = append(append(out, "", inboxBold.Render("What happens next")), m.wrap(do.next, w)...)
+	}
+	return append(append(out, ""), m.wrapStyled(ui.Muted, "It moves to Done this session; Tab goes to the next item that needs you.", w)...)
+}
+
+// failLines is what the card says above its choices about a write that
+// stopped: the step, why, and what GitHub had already answered as written;
+// and for an item listed again after a write, that write.
+func (m *inboxModel) failLines(it InboxItem, w int) []string {
+	k := it.key()
+	if f, ok := m.fails[k]; ok && m.state[k] == "not done" {
+		do := inboxDoingFor(it, f.a)
+		out := []string{""}
+		for _, l := range m.wrap(fmt.Sprintf("✗ %s stopped at: %s", do.doing, strings.ToLower(inboxStepOf(f.stage).line)), w) {
+			out = append(out, m.style(ui.Fail, inboxBold.Render(l)))
+		}
+		out = append(out, m.wrapStyled(ui.Fail, f.err, w)...)
+		if len(f.wrote) == 0 {
+			out = append(out, m.style(ui.Muted, cell("Nothing was written on GitHub.", w)))
+		} else {
+			out = append(out, inboxBold.Render("Already written on GitHub"))
+			for _, wr := range f.wrote {
+				out = append(out, "  "+m.style(ui.Warn, "✓ ")+cell(upperFirst(wr), w-4))
+			}
+		}
+		return append(out, m.wrapStyled(ui.Muted, "Enter tries it again; o opens it on GitHub to check.", w)...)
+	}
+	if d, ok := m.done[k]; ok && m.state[k] == "relisted" {
 		return append([]string{""}, m.wrapStyled(ui.Warn, upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+". GitHub, read since, still lists it, so it may still need you: Enter asks before doing it again.", w)...)
 	}
-	out := append([]string{""}, m.wrapStyled(ui.OK, "✓ "+upperFirst(d.line(m.now())), w)...)
-	for _, wr := range d.Wrote {
-		out = append(out, "  "+m.style(ui.OK, "✓ ")+cell(wr, w-4))
-	}
-	return out
+	return nil
 }
 
 func (m *inboxModel) wrapStyled(r ui.Role, s string, w int) []string {
@@ -1907,6 +2204,9 @@ func (m *inboxModel) askView(w, h int) []string {
 	}
 	for _, l := range lines {
 		out = append(out, m.wrap(l, w)...)
+	}
+	if a.quit {
+		return out
 	}
 	if a.prompt != "" {
 		return append(out, "", inboxBold.Render(a.prompt+" ")+a.text+"█", "", inboxBold.Render("Enter applies it · Esc cancels"))
@@ -1985,16 +2285,20 @@ func (m *inboxModel) statusLine(w int) string {
 	if len(m.queue) > 0 || m.loading && len(m.items) > 0 {
 		left = m.spinner() + left
 	}
-	if len(m.queue) > 0 && m.refusal != left {
-		_, stage, calls, started := m.work.snapshot()
-		left = fmt.Sprintf("Writing #%d: %s · %d %s · %s", m.queue[0].it.Number, stage, calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started)))
-		left = m.spinner() + left
+	if n := m.writing(); n > 0 && (m.refusal == "" || m.status != m.refusal) && !strings.HasPrefix(m.status, "Quitting") {
+		left = m.spinner() + fmt.Sprintf("%d %s in the background", n, plural(n, "write", "writes"))
+		if q := len(m.queue) - n; q > 0 {
+			left += fmt.Sprintf(" · %d queued", q)
+		}
 	}
 	right := ""
 	switch {
-	case m.total > 1 && len(m.queue) > 0:
-		done := m.total - len(m.queue)
-		right = fmt.Sprintf("%s %d/%d", m.bar(done, m.total, min(12, max(w/8, 4))), done, m.total)
+	case len(m.batches) > 0:
+		total, done := 0, 0
+		for _, b := range m.batches {
+			total, done = total+b.total, done+b.done+b.failed
+		}
+		right = fmt.Sprintf("%s %d/%d", m.bar(done, total, min(12, max(w/8, 4))), done, total)
 	case m.refreshing && !m.loading:
 		right = m.spinner() + "refreshing"
 	case !m.fresh.IsZero():
@@ -2017,6 +2321,8 @@ func (m *inboxModel) keysLine(w int) string {
 	switch {
 	case len(m.rows) == 0:
 		keys = []kb{{"q", "quit", 0}}
+	case m.ask != nil && m.ask.quit:
+		keys = []kb{{"w", "wait for all", 0}, {"q", "quit after the running ones", 0}, {"Esc", "stay", 0}}
 	case m.ask != nil && m.ask.prompt != "":
 		keys = []kb{{"type", "what you checked", 1}, {"Enter", "apply it", 0}, {"Esc", "cancel", 0}}
 	case m.ask != nil:
@@ -2028,7 +2334,7 @@ func (m *inboxModel) keysLine(w int) string {
 	case m.armed:
 		keys = []kb{{"Enter", "apply it", 0}, {"Esc", "back", 0}, {"1-9", "pick another", 1}}
 	case len(m.queue) > 0:
-		keys = []kb{{"Tab", "next item", 1}, {"j/k", "read others", 0}, {"Enter", "queue it", 1}, {"?", "help", 2}, {"q", "quit after this write", 0}}
+		keys = []kb{{"Enter", "do it too", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"/", "find", 2}, {"?", "help", 1}, {"q", "quit (asks)", 0}}
 	case len(m.selected) > 0:
 		n := len(m.selected)
 		keys = []kb{{strconv.Itoa(n), "selected", 0}, {"Enter", fmt.Sprintf("do all %d", n), 0}, {"x", "toggle", 1}, {"X", "all/none", 2}, {"Esc", "clear", 0}}

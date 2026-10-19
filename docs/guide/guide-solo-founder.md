@@ -80,7 +80,9 @@ The card says what the item is in one plain line, then the counsel of the seat's
 a pull request, Vidhi for the housekeeping): what it is, the one link it rests on, what it recommends and why, labelled
 counsel, not approval. Atri's counsel is the one posted on the Decision with `aayu counsel --post`; every other counsel
 is written from the facts the inbox read, never by a model, so the inbox opens at once. Below it are numbered choices,
-the recommendation first and selected: Enter does it, and the next card appears. A digit selects another choice and
+the recommendation first and selected: Enter starts it in the background and the next card appears at once, so you
+can act on the next item while it runs. Go back to it and its card shows what is happening now, its steps, and how
+long it usually takes; once it is done, what changed on GitHub and what happens next. A digit selects another choice and
 Enter does it after saying what it writes; a one-way door also asks for Enter again. `s` skips to the next card, `j`
 and `k` move, Tab goes to the next item that needs you, `/` (or Ctrl+K) finds any item or choice by typing, `x` and
 `X` select housekeeping (never an item that needs you) and `C` clears all of it after one confirmation, `?` explains

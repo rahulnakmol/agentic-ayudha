@@ -2,15 +2,20 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -674,7 +679,7 @@ func TestInboxTUI(t *testing.T) {
 			"Enter do it · Tab next"},
 		{"This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door", "Nothing is written until you press Enter again."},
 		{"🧭 Decision · #2 · provisional", "The call: Which engine runs the rules", "› 2 Accept: B", "Selected; click it again, or press Enter, to do it."},
-		{"aayu inbox · 2 need you", "› ✋ #9 fix(cli): capped", "Waiting on the review cap (1)", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub"},
+		{"aayu inbox · 2 need you", "› ✋ #9 fix(cli): capped", "Waiting on the review cap (1)", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "✓ Recorded your answer on Decision #2."},
 		{"Find: bug", "🐞 #7 A bug · Bug fixed, still open · Drona"},
 		{"› [ ] 🐞 #7 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
 		{"Clear all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
@@ -757,8 +762,9 @@ func TestInboxTUI(t *testing.T) {
 	if code, out, _ := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 || out != "o/r: nothing waits for you.\n" {
 		t.Errorf("empty inbox: exit %d: %q", code, out)
 	}
-	// Ctrl-C while the housekeeping's writes run quits after the write under
-	// way, not in the middle of it, and starts none of the rest.
+	// Ctrl-C while the housekeeping's writes run asks; q then quits once the
+	// writes under way (two at once) are done, never in the middle of one,
+	// and starts none of the rest.
 	g = fake.New(t, "o/r", "User")
 	three := moreUnshipped(t, g, 3)
 	opts.GitHubAPI = g.URL()
@@ -767,21 +773,20 @@ func TestInboxTUI(t *testing.T) {
 		teaDrive(m, m.Init())
 		teaKeys(m, "A")
 		_, write := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // the first write, not yet run
-		if _, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil {
-			if _, quit := cmd().(tea.QuitMsg); quit {
-				t.Error("ctrl+c quit while a write was under way")
-			}
+		if _, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil || m.ask == nil || !m.ask.quit {
+			t.Error("ctrl+c during writes did not ask whether to wait for them")
 		}
+		teaKeys(m, "q")
 		if !teaDrive(m, write) {
-			t.Error("the inbox did not quit once the write under way was done")
+			t.Error("the inbox did not quit once the writes under way were done")
 		}
 		return nil
 	}
-	if code, out, _ := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 || !strings.HasSuffix(out, "inbox: 1 done, 0 skipped, 2 left\n") {
+	if code, out, _ := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 || !strings.HasSuffix(out, "inbox: 2 done, 0 skipped, 1 left\n") {
 		t.Errorf("ctrl+c during tidy: exit %d:\n%s", code, out)
 	}
 	for i, n := range three {
-		if merged := slices.Contains(g.LabelNames(n), "status:merged"); merged != (i == 0) {
+		if merged := slices.Contains(g.LabelNames(n), "status:merged"); merged != (i < inboxParallel) {
 			t.Errorf("#%d status:merged %v after ctrl+c during the first write", n, merged)
 		}
 	}
@@ -847,7 +852,7 @@ func TestInboxMotion(t *testing.T) {
 	newModel := func(motion bool) *inboxModel {
 		m := newInboxModel("o/r", "o", "auto", false)
 		m.now, m.motion = func() time.Time { return clock }, motion
-		m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) { return it, "", nil }
+		m.act = func(it InboxItem, a InboxAction, _ *inboxWork) (InboxItem, string, error) { return it, "", nil }
 		m.merge(items)
 		m.loading = false
 		m.Update(tea.WindowSizeMsg{Width: 64, Height: 30})
@@ -951,10 +956,11 @@ func inboxScene(clock time.Time) *inboxModel {
 		return m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n })].key()
 	}
 	m.selected[key(640)], m.selected[key(642)] = true, true
-	m.queue = []inboxJob{{m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 644 })], InboxAction{}}, {m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 646 })], InboxAction{}}}
-	m.work.begin(key(644), clock.Add(-4*time.Second))
-	m.work.stages = append(m.work.stages, "posting a comment")
-	m.work.cur = 1
+	w := &inboxWork{}
+	w.begin(key(644), clock.Add(-4*time.Second))
+	w.saw(httptest.NewRequest(http.MethodPost, "/repos/o/r/issues/644/comments", nil))
+	m.queue = []inboxJob{{it: m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 644 })], batch: 1, w: w},
+		{it: m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 646 })], batch: 1}}
 	m.state[key(648)], m.done[key(648)] = "done", inboxDone{By: "rahulnakmol", At: clock.Add(-time.Minute), Choice: "1"}
 	m.state[key(650)] = "not done"
 	m.state[key(652)] = "gone"
@@ -1037,6 +1043,24 @@ func TestInboxAlignment(t *testing.T) {
 		}
 		return -1
 	}
+	// A list cell cut short ends at a word when that drops at most 6
+	// cells, else mid-word; either way it is exactly its width.
+	for _, c := range []struct {
+		s    string
+		w    int
+		want string
+	}{
+		{"Which paths need a person before an agent merges?", 23, "Which paths need a…    "},
+		{"fix(cli): skip the autonomy streak", 23, "fix(cli): skip the…    "},
+		{"needs a human review, now", 21, "needs a human review…"},
+		{"feat(inspect): fallbacktothenextreviewer", 23, "feat(inspect): fallbac…"},
+		{"🚢 shipping the release", 12, "🚢 shipping…"},
+		{"short", 8, "short   "},
+	} {
+		if got := wordCell(c.s, c.w); got != c.want || ansi.StringWidth(got) != c.w {
+			t.Errorf("wordCell(%q, %d) = %q (%d cells), want %q", c.s, c.w, got, ansi.StringWidth(got), c.want)
+		}
+	}
 	for _, size := range [][2]int{{120, 34}, {72, 30}} {
 		w, h := size[0], size[1]
 		m := inboxScene(clock)
@@ -1059,7 +1083,8 @@ func TestInboxAlignment(t *testing.T) {
 				}
 			}
 			head := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "TITLE") })
-			title, why, age := col(lines[head], "TITLE"), col(lines[head], "WHY IT WAITS"), col(lines[head], "AGE")+len("AGE")-1
+			num, title, why, ageAt := col(lines[head], "#"), col(lines[head], "TITLE"), col(lines[head], "WHY IT WAITS"), col(lines[head], "AGE")
+			age := ageAt + len("AGE") - 1 // the age column is three cells: the header fills it
 			divider := -1
 			if w >= 100 {
 				divider = col(lines[head], "│")
@@ -1069,7 +1094,7 @@ func TestInboxAlignment(t *testing.T) {
 					}
 				}
 			}
-			rows, icon := 0, -1
+			rows, icon, widest := 0, -1, 0
 			for _, l := range lines[head+1 : h-2] {
 				left := l
 				if divider > 0 {
@@ -1093,6 +1118,14 @@ func TestInboxAlignment(t *testing.T) {
 				if !strings.ContainsAny(at(left, title-3), "0123456789") || at(left, age-3) != " " {
 					t.Errorf("%dx%d: the number or the age is not in its column: %q", w, h, left)
 				}
+				if c := col(left, "#"); c < num || at(left, num-1) != " " { // numbers are right-aligned; the widest starts at the header's #
+					t.Errorf("%dx%d: a number starts left of the # header at %d: %q", w, h, num, left)
+				} else if c == num {
+					widest++
+				}
+				if at(left, ageAt-1) != " " {
+					t.Errorf("%dx%d: an age starts left of the AGE header at %d: %q", w, h, ageAt, left)
+				}
 				ic := slices.IndexFunc([]rune(left), func(r rune) bool { return ansi.StringWidth(string(r)) == 2 })
 				ic = ansi.StringWidth(string([]rune(left)[:max(ic, 0)]))
 				if icon < 0 {
@@ -1101,10 +1134,372 @@ func TestInboxAlignment(t *testing.T) {
 					t.Errorf("%dx%d: an icon at column %d, not %d: %q", w, h, ic, icon, left)
 				}
 			}
+			if widest == 0 {
+				t.Errorf("%dx%d: no number starts at the # header's column %d: the header is not over its column", w, h, num)
+			}
 			if rows < 6 {
 				t.Errorf("%dx%d: only %d list rows checked:\n%s", w, h, rows, strings.Join(lines, "\n"))
 			}
 		}
+	}
+
+	// The card's choices: each is exactly the card's width on every line
+	// and highlighted to that width; the tag sits at the right edge on the
+	// first line; a long label wraps under its own text, never under the
+	// number. The help's key descriptions wrap under the description.
+	for _, w := range []int{120, 72} {
+		m := inboxScene(clock)
+		m.queue = nil
+		m.items[0].Options[0].Label = "ship PR #703 (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)"
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 34})
+		m.dirty = true
+		lines := strings.Split(m.View().Content, "\n")
+		cardAt := 1 // where the card's text starts on a line
+		if w >= 100 {
+			_, rw := m.panes(w)
+			cardAt = w - 1 - rw
+		}
+		card := func(l string) string { return ansi.Cut(l, cardAt, w-1) }
+		first := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(ansi.Strip(l), "› 1  Ship PR #703") })
+		if first < 0 {
+			t.Fatalf("%d: no first choice:\n%s", w, ansi.Strip(m.View().Content))
+		}
+		if l := ansi.Strip(card(lines[first])); !strings.HasSuffix(l, "  recommended") {
+			t.Errorf("%d: the tag is not at the card's right edge on the choice's first line: %q", w, l)
+		}
+		label := col(ansi.Strip(lines[first]), "Ship")
+		wrapped := 0
+		for _, l := range lines[first+1:] {
+			plain := ansi.Strip(l)
+			if strings.Contains(plain, "2  Open it on GitHub") {
+				break
+			}
+			wrapped++
+			if at(plain, label) == " " || strings.TrimSpace(ansi.Cut(plain, cardAt, label)) != "" || strings.Contains(plain, "recommended") {
+				t.Errorf("%d: a wrapped label line does not continue under the label at %d, or repeats the tag: %q", w, label, plain)
+			}
+		}
+		if wrapped == 0 {
+			t.Errorf("%d: the long label did not wrap", w)
+		}
+		var words []string
+		for _, l := range lines[first : first+1+wrapped] {
+			words = append(words, strings.Fields(strings.TrimSuffix(strings.TrimSpace(ansi.Strip(card(l))), "recommended"))...)
+		}
+		if got := strings.Join(words, " "); got != "› 1 "+upperFirst(m.items[0].Options[0].Label) {
+			t.Errorf("%d: the wrapped label lost text: %q", w, got)
+		}
+		for _, l := range lines[first : first+1+wrapped] {
+			c := card(l)
+			if r := strings.Index(c, "\x1b[7m"); r < 0 || ansi.StringWidth(c[:r]) != 0 || !strings.HasSuffix(c, "\x1b[27m") || ansi.StringWidth(c) != w-1-cardAt {
+				t.Errorf("%d: a line of the selected choice is not highlighted across the card's width: %q", w, c)
+			}
+		}
+		m.items[0].Options[0].Label = "ship PR #703 with your pass"
+		m.dirty = true
+		lines = strings.Split(ansi.Strip(m.View().Content), "\n")
+		first = slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "› 1  Ship PR #703 with your pass") })
+		if first < 0 || !strings.HasSuffix(ansi.Cut(lines[first], cardAt, w-1), "  recommended") || !strings.Contains(lines[first+1], "2  Open it on GitHub") {
+			t.Errorf("%d: a short choice is not one line with its tag at the right edge:\n%s", w, strings.Join(lines, "\n"))
+		}
+
+		teaKeys(m, "?")
+		m.dirty = true
+		lines = strings.Split(ansi.Strip(m.View().Content), "\n")
+		keys := slices.IndexFunc(lines, func(l string) bool { return strings.TrimSpace(ansi.Cut(l, cardAt, w)) == "Keys" })
+		if keys < 0 {
+			t.Fatalf("%d: no Keys in the help:\n%s", w, strings.Join(lines, "\n"))
+		}
+		desc, cont := cardAt+8, 0
+		for _, l := range lines[keys+1 : len(lines)-2] {
+			c := ansi.Cut(l, cardAt, w-1)
+			if strings.TrimSpace(c) == "" || strings.HasPrefix(strings.TrimSpace(c), "Last refresh") {
+				continue
+			}
+			if at(l, desc) == " " {
+				t.Errorf("%d: a key's description does not start at column %d: %q", w, desc, l)
+			}
+			if strings.TrimSpace(ansi.Cut(l, cardAt, desc)) == "" {
+				cont++ // a wrapped description: nothing under the key
+			}
+		}
+		if w >= 100 && cont == 0 {
+			t.Errorf("%d: no key description wrapped, so its indent went unchecked", w)
+		}
+	}
+}
+
+// When a write fails, the person is told the truth: an item that changed
+// on GitHub stops only the rest of its own batch, never an item queued on
+// its own; a write that stopped part-way names only what GitHub answered as
+// written (and what may have landed without an answer); a refusal shows in
+// the status line while a write runs; and Ctrl-C waits for the write under
+// way even with the help open.
+func TestInboxWriteFailures(t *testing.T) {
+	clock := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	m := inboxScene(clock)
+	m.queue = nil
+	clear(m.state)
+	clear(m.selected)
+	m.relayout()
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+	byNum := func(n int) InboxItem {
+		return m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n })]
+	}
+	reply := func(code int, err error) http.RoundTripper {
+		return roundTrip(func(r *http.Request) (*http.Response, error) {
+			if err != nil {
+				return nil, err
+			}
+			return &http.Response{StatusCode: code, Body: http.NoBody, Request: r}, nil
+		})
+	}
+	call := func(w *inboxWork, rt http.RoundTripper, method, path string) {
+		req, _ := http.NewRequestWithContext(context.WithValue(context.Background(), inboxWorkKey{}, w), method, "https://api.github.com"+path, nil)
+		_, _ = (&inboxWatch{next: rt}).RoundTrip(req) //nolint:bodyclose // no body
+	}
+	var ran []int
+	m.act = func(it InboxItem, a InboxAction, w *inboxWork) (InboxItem, string, error) {
+		ran = append(ran, it.Number)
+		switch it.Number {
+		case 640: // changed on GitHub since it was read
+			return it, "", errInboxChanged{Item: it}
+		case 654: // refused before anything was written
+			return it, "", errors.New("403 Resource not accessible by integration")
+		case 644: // labels changed, a comment rejected, then the connection drops on the next write
+			call(w, reply(200, nil), http.MethodPost, "/repos/o/r/issues/644/labels")
+			call(w, reply(422, nil), http.MethodPost, "/repos/o/r/issues/644/comments")
+			call(w, reply(0, errors.New("connection reset")), http.MethodPatch, "/repos/o/r/issues/644")
+			return it, "", errors.New("connection reset")
+		}
+		return it, "", nil
+	}
+	job := func(n int) inboxJob { it := byNum(n); return inboxJob{it: it, a: *it.recommended()} }
+	first := m.start([]inboxJob{job(640), job(642), job(650)}) // one confirmed batch: #640 and #642 run, #650 waits
+	m.start([]inboxJob{job(644)})                              // queued on its own
+	m.start([]inboxJob{job(646)})
+	m.start([]inboxJob{job(654)})
+
+	// While #640 is written: Enter on it again is refused, and the status
+	// line says so instead of the writes' count; Ctrl-C with the help open
+	// asks instead of quitting mid-write, and Esc stays.
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 640 })
+	teaKeys(m, "enter")
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "#640 is being written now") {
+		t.Errorf("a refusal during a write is not shown:\n%s", v)
+	}
+	for _, c := range []struct {
+		n         int
+		key, want string
+	}{{640, "x", "#640 is being written already"}, {650, "enter", "#650 is queued already"}, {650, "R", "A refresh waits for the writes under way"}} {
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == c.n })
+		teaKeys(m, c.key)
+		if !strings.Contains(m.status, c.want) {
+			t.Errorf("%s on #%d during the writes: %q, want %q", c.key, c.n, m.status, c.want)
+		}
+	}
+	teaKeys(m, "?")
+	if _, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}); cmd != nil || m.ask == nil || !m.ask.quit {
+		t.Errorf("Ctrl-C with the help open during a write: quit at once %v, asks %v", cmd != nil, m.ask != nil)
+	}
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "2 writes are under way. Quit?") || !strings.Contains(v, "wait for every write, the 4 queued too") || !strings.Contains(v, "w wait for all") {
+		t.Errorf("the quit question does not say what each key does:\n%s", v)
+	}
+	teaKeys(m, "esc")
+	m.help = false
+
+	teaDrive(m, first)
+	slices.Sort(ran)
+	if !slices.Equal(ran, []int{640, 642, 644, 646, 654}) {
+		t.Errorf("ran %v; want #640 and #642 (running when #640 failed), and #644, #646, and #654 queued on their own, not #650 (#640's batch, waiting)", ran)
+	}
+	if st := m.state[byNum(650).key()]; st != "" {
+		t.Errorf("#650, waiting in #640's batch, is %q; want not started", st)
+	}
+	if st := m.state[byNum(646).key()]; st != "done" {
+		t.Errorf("#646, queued on its own, is %q; want done", st)
+	}
+	var failed string
+	for _, l := range m.log {
+		if strings.Contains(l, "#644") {
+			failed = l
+		}
+	}
+	if !strings.Contains(failed, "after it changed labels, may have updated the issue") || strings.Contains(failed, "posted a comment") {
+		t.Errorf("the part-way write of #644 is reported as %q", failed)
+	}
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 644 })
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✗ Closing #644 as fixed stopped") || !strings.Contains(v, "Already written on GitHub") ||
+		!strings.Contains(v, "✓ Changed labels") || !strings.Contains(v, "✓ May have updated the issue") || !strings.Contains(v, "Enter tries it again") {
+		t.Errorf("#644's card does not say where it stopped and what was written:\n%s", v)
+	}
+
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 654 })
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "403 Resource not accessible by integration") || !strings.Contains(v, "Nothing was written on GitHub.") {
+		t.Errorf("#654's card does not say nothing was written:\n%s", v)
+	}
+	if strings.Contains(m.status+m.refusal, "403") || strings.Contains(m.status+m.refusal, "#644 not done:") {
+		t.Errorf("a failure's error is in the status line, where it is cut: %q / %q", m.status, m.refusal)
+	}
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 646 })
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ Marked #646 merged without proof") || !strings.Contains(v, "What happens next") {
+		t.Errorf("#646's card body is not its result:\n%s", v)
+	}
+}
+
+// Writes run in the background: after Enter on a slow write the cursor
+// moves on, a write on another item runs alongside it and finishes first,
+// and the person keeps acting meanwhile. A second write on the same pull
+// request never runs at the same time as the first: it waits, and Enter on
+// the item being written is refused.
+func TestInboxWritesInBackground(t *testing.T) {
+	clock := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	m := inboxScene(clock)
+	m.queue = nil
+	clear(m.state)
+	clear(m.selected)
+	same := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Kind == InboxHumanReview })]
+	same.Number, same.Title = 703, "the same pull request, waiting at the human rung"
+	m.merge(append(slices.Clone(m.items), same))
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+
+	release, started := make(chan struct{}), make(chan struct{})
+	var mu sync.Mutex
+	active, most, mostSame := map[int]int{}, 0, 0
+	m.act = func(it InboxItem, a InboxAction, w *inboxWork) (InboxItem, string, error) {
+		mu.Lock()
+		active[it.Number]++
+		mostSame = max(mostSame, active[it.Number])
+		n := 0
+		for _, c := range active {
+			n += c
+		}
+		most = max(most, n)
+		mu.Unlock()
+		if it.Kind == InboxReady {
+			close(started)
+			<-release // a slow ship
+		}
+		mu.Lock()
+		active[it.Number]--
+		mu.Unlock()
+		return it, "", nil
+	}
+	msgs := make(chan tea.Msg, 16)
+	var launch func(tea.Cmd)
+	launch = func(c tea.Cmd) {
+		if c != nil {
+			go func() {
+				msg := c()
+				if b, ok := msg.(tea.BatchMsg); ok {
+					for _, x := range b {
+						launch(x)
+					}
+					return
+				}
+				msgs <- msg
+			}()
+		}
+	}
+	var last tea.Cmd
+	await := func(key string) {
+		t.Helper()
+		for {
+			select {
+			case msg := <-msgs:
+				d, ok := msg.(inboxDoneMsg)
+				if !ok {
+					continue
+				}
+				_, cmd := m.Update(d)
+				last = cmd
+				launch(cmd)
+				if d.key == key {
+					return
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatalf("no answer for %s", key)
+			}
+		}
+	}
+	enter := func() { _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); launch(cmd) }
+	to := func(key string) {
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].key() == key })
+	}
+	ship, review, sameKey := "ready#703", "human-review#697", "human-review#703"
+
+	to(ship)
+	enter()
+	if running, _ := m.queued(ship); !running || m.items[m.item()].key() == ship || m.items[m.item()].kind().Housekeeping {
+		t.Fatalf("Enter on #703: running %v, cursor on %s; want it running and the cursor on the next item that needs you", running, m.items[m.item()].key())
+	}
+	<-started
+	to(review)
+	enter()
+	await(review)
+	if running, _ := m.queued(ship); m.state[review] != "done" || !running {
+		t.Errorf("the write on #697 did not finish while #703's ship ran: #697 %q, #703 running %v", m.state[review], running)
+	}
+	to(sameKey)
+	enter()
+	if running, waiting := m.queued(sameKey); running || !waiting || !strings.Contains(m.status, "waits for the write on #703") {
+		t.Errorf("a second write on PR #703 while it ships: running %v, waiting %v, status %q", running, waiting, m.status)
+	}
+	to(sameKey)
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "queued") || !strings.Contains(v, "It waits for the write on #703") {
+		t.Errorf("the waiting write's card does not say what it waits for:\n%s", v)
+	}
+	to(ship)
+	enter()
+	if !strings.Contains(m.status, "#703 is being written now") || m.refusal != m.status {
+		t.Errorf("Enter on the item being written: %q", m.status)
+	}
+	// On a short narrow terminal the progress still shows without
+	// scrolling: the steps fold, what happens now and the time stay.
+	for _, p := range []string{"/repos/o/r/actions/runs", "/repos/o/r/actions/jobs/1/logs", "/repos/o/r/commits/a/check-runs", "/repos/o/r/pulls/703/files"} {
+		m.job(ship).w.saw(httptest.NewRequest(http.MethodGet, p, nil))
+	}
+	m.Update(tea.WindowSizeMsg{Width: 72, Height: 24})
+	m.dirty = true
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	if v := strings.Join(lines, "\n"); !strings.Contains(v, "Now: Reading the reviews and commits") || !strings.Contains(v, "steps done") || !strings.Contains(v, "GitHub calls so far") {
+		t.Errorf("at 72x24 the ship's progress does not fit:\n%s", v)
+	}
+	for _, l := range lines {
+		if ansi.StringWidth(l) != 72 {
+			t.Errorf("at 72x24 a line is %d cells wide: %q", ansi.StringWidth(l), l)
+		}
+	}
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+	// q while writes run asks; w waits for every write, the queued one too,
+	// then quits.
+	teaKeys(m, "q")
+	if m.ask == nil || !m.ask.quit {
+		t.Fatal("q during writes did not ask")
+	}
+	teaKeys(m, "w")
+	if m.quitting != quitAll || m.ask != nil {
+		t.Errorf("w: quitting %d", m.quitting)
+	}
+	close(release)
+	await(ship)
+	await(sameKey)
+	if last == nil {
+		t.Error("the inbox did not quit once every write was done")
+	} else if _, quit := last().(tea.QuitMsg); !quit {
+		t.Error("the inbox did not quit once every write was done")
+	}
+	if m.state[ship] != "done" || m.state[sameKey] != "done" || len(m.queue) != 0 {
+		t.Errorf("after the ship: #703 %q, its review %q, %d still queued", m.state[ship], m.state[sameKey], len(m.queue))
+	}
+	if most != 2 || mostSame != 1 {
+		t.Errorf("writes at once: at most %d (want 2), on one pull request at most %d (want 1)", most, mostSame)
 	}
 }
 
@@ -1266,7 +1661,10 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
 		g.Mu.Unlock()
 		teaKeys(m, "read the diff", "enter")
-		moved = m.status
+		moved = m.status // short: the whole error is on the card
+		for _, f := range m.fails {
+			moved += "\n" + f.err
+		}
 		g.Mu.Lock()
 		g.Pulls[prA].Head.SHA = headA
 		g.Mu.Unlock()
@@ -1274,7 +1672,7 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		return nil
 	}
 	if code, out, errOut := runIn(t, marked, person, "", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(refused, "Say what you checked first; nothing was written.") ||
-		!strings.Contains(refused, "What did you check?") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" {
+		!strings.Contains(refused, "What did you check?") || !strings.HasPrefix(moved, "✗ #") || !strings.Contains(moved, "not done; the card says why.\n") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" {
 		t.Fatalf("empty answer or moved head: exit %d\n%s\nstatus %q\nledger %q\n%s\n%s", code, refused, moved, approvals(), out, errOut)
 	}
 
@@ -1345,27 +1743,26 @@ func TestInboxAcrossWrites(t *testing.T) {
 		if write == nil {
 			t.Fatal("Enter on #2 started no write")
 		}
-		if v := view(m); !strings.Contains(v, "Writing #2:") || !strings.Contains(v, "writing now") || !strings.Contains(v, "Writing now · ") || !strings.Contains(v, "reading it again from GitHub") {
-			t.Errorf("while #2 is written, no stage or no checklist of its steps:\n%s", v)
-		}
-		teaKeys(m, "j")
 		if at(m) == 2 {
-			t.Error("j while a write runs did not move")
+			t.Error("Enter did not move the cursor on while #2 is written in the background")
 		}
-		teaKeys(m, "j", "enter") // the housekeeping's recommendation: it waits its turn
-		if len(m.queue) != 2 || !strings.HasPrefix(m.status, "Queued #") {
-			t.Errorf("Enter on another item while a write runs: %q, %d in the queue", m.status, len(m.queue))
+		if v := view(m); !strings.Contains(v, "1 write in the background") || !strings.Contains(v, "· Read it again…") {
+			t.Errorf("while #2 is written, the status line or its row does not say so:\n%s", v)
 		}
-		m.queue, m.total = m.queue[:1], 1 // only #2 runs in this test
-		teaKeys(m, "k")
-		teaKeys(m, "k", "enter")
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 2 })
+		if v := view(m); !strings.Contains(v, "Recording your answer on Decision #2") || !strings.Contains(v, "Now: Checking nothing changed on GitHub") ||
+			!strings.Contains(v, "Read it again from GitHub") || !strings.Contains(v, "○ Post the record on GitHub") {
+			t.Errorf("#2's card body is not its write's progress:\n%s", v)
+		}
+		teaKeys(m, "enter")
 		if !strings.Contains(m.status, "#2 is being written now") || len(m.queue) != 1 {
 			t.Errorf("Enter on the item being written: %q, %d queued", m.status, len(m.queue))
 		}
 		teaDrive(m, write)
-		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].Number == 2 })
-		if v := view(m); !strings.Contains(v, "✓ Done by @o at") || !strings.Contains(v, ": changed labels, updated the issue.") {
-			t.Errorf("after #2 is done, its card lacks who did it and what it wrote:\n%s", v)
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 2 })
+		if v := view(m); !strings.Contains(v, "✓ Recorded your answer on") || !strings.Contains(v, "by @o at") || !strings.Contains(v, "What changed on GitHub") ||
+			!strings.Contains(v, "✓ Changed labels") || !strings.Contains(v, "✓ Updated the issue") || !strings.Contains(v, "What happens next") {
+			t.Errorf("after #2 is done, its card body is not the result:\n%s", v)
 		}
 		teaKeys(m, "q")
 		return nil
@@ -1392,8 +1789,8 @@ func TestInboxAcrossWrites(t *testing.T) {
 		teaKeys(m, "q")
 		return nil
 	}
-	if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
-		t.Fatalf("second session: exit %d: %s\n%s", code, errOut, out)
+	if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "inbox: 0 done,") {
+		t.Fatalf("second session: exit %d, or it counts the first session's write as its own: %s\n%s", code, errOut, out)
 	}
 	if w := g.Writes(); len(w) != 0 {
 		t.Errorf("the second session wrote: %v", w)
@@ -1409,7 +1806,7 @@ func TestInboxRelisted(t *testing.T) {
 	m := newInboxModel("o/r", "o", "auto", false)
 	m.now = func() time.Time { return clock }
 	ran := 0
-	m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) { ran++; return it, "", nil }
+	m.act = func(it InboxItem, a InboxAction, _ *inboxWork) (InboxItem, string, error) { ran++; return it, "", nil }
 	it := InboxItem{Kind: InboxDecision, Number: 4, Title: "Pick", Seat: verbs.Founder, Options: []InboxAction{{N: 1, Label: "Accept: A", Recommended: true, Command: "aayu decide 4 --accept 1"}}}
 	m.done[it.key()], m.state[it.key()] = inboxDone{By: "o", At: clock.Add(-time.Minute), Choice: "Accept: A"}, "done"
 	m.Update(inboxGatheredMsg{items: []InboxItem{it}, changed: true, at: clock.Add(-2 * time.Minute)})

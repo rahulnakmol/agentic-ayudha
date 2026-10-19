@@ -936,13 +936,13 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	}
 	// The full-screen inbox watches its own GitHub requests, to name the
 	// stage of a write while it runs; the watch only reports, never alters.
-	tui, work := e.inboxTUI(&l.Config), &inboxWork{}
+	tui := e.inboxTUI(&l.Config)
 	if tui {
 		hc := http.Client{}
 		if e.HTTP != nil {
 			hc = *e.HTTP
 		}
-		hc.Transport = &inboxWatch{next: hc.Transport, work: work}
+		hc.Transport = &inboxWatch{next: hc.Transport}
 		e.HTTP = &hc
 	}
 	// Once per session, before anything is read or done: every later step
@@ -953,7 +953,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
 	if tui {
-		return e.runInboxTUI(ctx, &l.Config, src, login, work)
+		return e.runInboxTUI(ctx, &l.Config, src, login)
 	}
 	items, err := src.gather(ctx)
 	if err != nil {

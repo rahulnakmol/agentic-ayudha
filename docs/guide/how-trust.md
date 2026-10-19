@@ -305,8 +305,10 @@ does. Status is always words (done, skipped, not done), never colour or a symbol
 
 Only housekeeping can be selected: `x` selects one item, `X` all of it, and Enter then does each one's recommendation;
 `C` clears all the housekeeping. Each asks once, listing every item and saying it is written as you and not undone
-later. A step that needs you is never selected or done in bulk: `x` on one says so and selects nothing. Each item is still one `inboxAct` call, under the one approval the session started with. Before every
-write the inbox reads that item again (`inboxSource.reread`): if anything it showed changed, it writes nothing and
+later. A step that needs you is never selected or done in bulk: `x` on one says so and selects nothing. Each item is
+still one `inboxAct` call, under the one approval the session started with. Writes run in the background, two at a
+time, and never two on the same pull request or issue at once; `q` while they run asks whether to wait for all of them
+or only for the ones under way, so no write is stopped half done. Before every write the inbox reads that item again (`inboxSource.reread`): if anything it showed changed, it writes nothing and
 shows the card as it is now. A refresh asks GitHub only what changed since the last read (one issues query with
 `since`, then each changed pull request) through the client's ETag cache, so a refresh with nothing changed is one
 call. The last read is kept per user outside the repository, and nothing is ever done from it.
