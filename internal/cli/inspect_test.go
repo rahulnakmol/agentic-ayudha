@@ -701,6 +701,21 @@ func TestInspectConverges(t *testing.T) {
 		t.Fatalf("past the cap, in the gate: exit %d %s, state %+v", code, res.Disposition, st)
 	}
 
+	// Bug #800: on a comment (the gate's reply job), a review stopped at
+	// this head re-runs the head's inspect job only for a person's reopen,
+	// not for the reviewer's reply, a bot's reopen, or a read-only one's.
+	reruns := 0
+	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 601, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: h4, Event: "pull_request_target", Status: "completed", Conclusion: "failure"})
+	g.CheckRuns[h4] = []fake.CheckRun{{Name: "aayudha/inspect", Status: "completed", Conclusion: "failure"}, {Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}}
+	g.OnRerun = func(*fake.WorkflowRun) { reruns++ }
+	g.Mu.Unlock()
+	onComment := maps.Clone(env)
+	onComment["GITHUB_EVENT_NAME"] = "issue_comment"
+	if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || reruns != 0 {
+		t.Fatalf("a reply at the cap: exit %d, %d reruns %s", code, reruns, errOut)
+	}
+
 	// A bot's reopen counts for nothing; a person's reopens review: the
 	// request is posted and the reply judged as round 4.
 	now = now.Add(time.Minute)
@@ -713,10 +728,16 @@ func TestInspectConverges(t *testing.T) {
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); res.Disposition != inspect.StepBack {
 		t.Fatalf("a read-only person's reopen: exit %d %s", code, res.Disposition)
 	}
+	if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || reruns != 0 {
+		t.Fatalf("a bot's and a read-only person's reopen, on their comments: exit %d, %d reruns %s", code, reruns, errOut)
+	}
 	g.Mu.Lock()
 	g.Permissions = map[string]string{"founder": "write"}
 	g.Mu.Unlock()
 	comment("founder", "User", inspect.ReopenCommand+"\nthe approach changed")
+	if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || reruns != 1 {
+		t.Fatalf("a person's reopen, on its comment: exit %d, %d reruns %s", code, reruns, errOut)
+	}
 	now = now.Add(time.Minute)
 	if code, res, _ = inspectApp(t, env, opts, prN); res.Disposition == inspect.StepBack || len(requests()) != n+1 || !strings.Contains(requests()[n], "This is review round 1 of 3.") {
 		t.Fatalf("a person's reopen, outside CI: exit %d %s, %d new requests", code, res.Disposition, len(requests())-n)

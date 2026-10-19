@@ -847,3 +847,26 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 		t.Fatalf("an osv-scanner download that does not match its SHA-256 was accepted: %v", err)
 	}
 }
+
+// TestReplyJobRunsOnAReopen holds Bug #800: a person's `/aayu review again` on a PR whose review stopped at the
+// round cap starts the merge gate's reply job, in this repository's gate and the template, so aayu (which checks who
+// wrote it) re-runs the head's inspect job without a push.
+func TestReplyJobRunsOnAReopen(t *testing.T) {
+	own, err := os.ReadFile(".github/workflows/aayudha-merge-gate.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, b := range map[string][]byte{"the template": initrepo.GateWorkflows("dev")["aayudha-merge-gate.yml"], "this repository's": own} {
+		var wf struct {
+			Jobs map[string]struct {
+				If string `yaml:"if"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(b, &wf); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(wf.Jobs["reply"].If, "startsWith(github.event.comment.body, '/aayu review again')") {
+			t.Errorf("%s merge gate: the reply job does not run on a person's /aayu review again: %s", name, wf.Jobs["reply"].If)
+		}
+	}
+}

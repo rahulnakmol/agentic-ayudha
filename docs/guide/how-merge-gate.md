@@ -252,7 +252,8 @@ State drives three limits:
 - **Round cap.** A round is one judged review of a distinct head. After three rounds since the last reopen, the next
   head gets no review request and no judged reply: the disposition is `step-back`, inspect exits 4, and the builder
   reconsiders the approach. A comment whose first line is `/aayu review again`, from a person with write or admin
-  access to the repository, reopens review for three more rounds; a bot's or a read-only account's does not. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
+  access to the repository, reopens review for three more rounds and re-runs the head's inspect job at once, with no
+  push; a bot's or a read-only account's does not, and while the re-run reviews it the inbox lists the PR as not ready yet. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
   lists the earlier findings under "do not repeat". A reply that repeats an earlier P2 or P3 in the same file and
   class has it dropped as `repeat`; a repeated P0 or P1 still blocks but is not posted inline again. A finding that
   names a `class` lists every instance and asks for all of them to be fixed.
@@ -348,7 +349,8 @@ jobs:
     name: aayudha/inspect-reply
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.state == 'open' &&
-      (endsWith(github.event.comment.user.login, '[bot]') || contains(github.event.comment.body, 'aayudha-review'))) ||
+      (endsWith(github.event.comment.user.login, '[bot]') || contains(github.event.comment.body, 'aayudha-review') ||
+      startsWith(github.event.comment.body, '/aayu review again'))) ||
       (github.event_name == 'pull_request_review' && github.event.pull_request.state == 'open')
     permissions:
       actions: write

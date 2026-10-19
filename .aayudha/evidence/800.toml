@@ -1,0 +1,13 @@
+# Which tests prove Bug #800's Completion Goal.
+
+[[criterion]]
+id = 1 # a person's /aayu review again on a PR stopped at the cap: the reply job runs and re-runs the head's inspect job
+tests = [".:TestReplyJobRunsOnAReopen", "internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 2 # the same comment from a bot or a read-only account: nothing is re-run, and the inbox card stays at the cap
+tests = ["internal/cli:TestInspectConverges", "internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 3 # once reopened the PR leaves the review-cap card (not ready while the gate reviews it), and the fresh review clears the stop
+tests = ["internal/cli:TestInboxNotReady", "internal/cli:TestInspectConverges"]
