@@ -670,6 +670,7 @@ func codes(vs []string) []string {
 func (c *cp) timeline() {
 	type ev struct{ date, line string }
 	var evs []ev
+	src := []string{} // each event's evidence, in event order
 	if c.r.Inception != "" {
 		evs = append(evs, ev{c.r.Inception, "Inception: the repository " + c.r.Repo + " is created."})
 	}
@@ -678,12 +679,14 @@ func (c *cp) timeline() {
 		if versionRE.MatchString(t.Name) {
 			tagged[t.Name] = true
 			evs = append(evs, ev{t.Date, "[[" + t.Name + "]] is released (tag " + t.Name + ")."})
+			src = append(src, "tag "+t.Name)
 		}
 	}
 	for _, g := range c.r.Rungs { // a version on main without a GitHub Release
 		if g.Target == "main" && versionRE.MatchString(g.Version) && !tagged[g.Version] && g.Date != "" {
 			tagged[g.Version] = true
 			evs = append(evs, ev{g.Date, fmt.Sprintf("[[%s]] is released (promoted to main by Release #%d).", g.Version, g.Release)})
+			src = append(src, "ledger "+g.Path)
 		}
 	}
 	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
@@ -697,18 +700,13 @@ func (c *cp) timeline() {
 				continue
 			}
 			evs = append(evs, ev{c.r.Issues[num].Closed, Link(p) + " is decided in #" + strconv.Itoa(num) + "."})
+			src = append(src, "issue #"+strconv.Itoa(num))
 		}
 	}
 	slices.SortStableFunc(evs, func(a, b ev) int { return strings.Compare(a.date+a.line, b.date+b.line) })
 	var lines []string
 	for _, e := range evs {
 		lines = append(lines, "- "+e.date+": "+e.line)
-	}
-	src := []string{}
-	for _, t := range c.r.Tags {
-		if versionRE.MatchString(t.Name) {
-			src = append(src, "tag "+t.Name)
-		}
 	}
 	if c.r.Repo != "" {
 		src = append(src, "https://github.com/"+c.r.Repo)

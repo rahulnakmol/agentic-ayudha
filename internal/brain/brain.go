@@ -268,12 +268,26 @@ func Parse(p string, src []byte) (*Note, error) {
 	if !strings.HasPrefix(s, "---\n") {
 		return &Note{Path: p, Body: s}, ErrNoFrontmatter
 	}
-	end := strings.Index(s[4:], "\n---")
+	end := -1 // the closing delimiter is a line of exactly ---
+	for i := 4; i <= len(s)-3; {
+		j := strings.IndexByte(s[i:], '\n')
+		line := s[i:]
+		if j >= 0 {
+			line = s[i : i+j]
+		}
+		if line == "---" {
+			end = i
+			break
+		}
+		if j < 0 {
+			break
+		}
+		i += j + 1
+	}
 	if end < 0 {
 		return &Note{Path: p, Body: s}, ErrNoFrontmatter
 	}
-	fm, body := s[4:4+end+1], s[4+end+4:]
-	body = strings.TrimPrefix(body, "\n")
+	fm, body := s[4:end], strings.TrimPrefix(s[end+3:], "\n")
 	n := &Note{Path: p, Body: body}
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(fm), &doc); err != nil {

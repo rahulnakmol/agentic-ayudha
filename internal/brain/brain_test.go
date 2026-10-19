@@ -126,7 +126,7 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(third.Files["Timeline/Timeline.md"]), "[[v0.3.0]] is released (promoted to main by Release #300).") {
+	if tl := string(third.Files["Timeline/Timeline.md"]); !strings.Contains(tl, "[[v0.3.0]] is released (promoted to main by Release #300).") || !strings.Contains(tl, "ledger releases/300/main.json") {
 		t.Errorf("the timeline lacks a version released on main without a GitHub Release:\n%s", third.Files["Timeline/Timeline.md"])
 	}
 	if n, _ := Parse("", third.Files["Releases/v0.3.0.md"]); n.Str("status") != "released" {
@@ -285,6 +285,11 @@ tags: [type/principle]
 				t.Fatalf("want %q, got:\n%s", tc.rule, got)
 			}
 		})
+	}
+	files := skeleton(t) // a closing line of ---suffix is not the delimiter, so the note has no frontmatter
+	files["Principles/Evidence first.md"] = []byte("---\n" + good + "---suffix\nShort.\n")
+	if got := rules(Check(files)); !strings.Contains(got, "frontmatter no YAML frontmatter") {
+		t.Errorf("a ---suffix line closed the frontmatter:\n%s", got)
 	}
 }
 
