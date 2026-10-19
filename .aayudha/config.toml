@@ -47,6 +47,11 @@ apps = ["coderabbit"]      # installed; reviews only when the CI review cannot
 paid_reviewer = "grok-4.7" # when the environment names no model
 paid_effort = "high"
 
+# The paid CI review's cap on one PR, across all its rounds (@rahulnakmol, 2026-10-19: "max budget for inspect is
+# 15USD per run"); the default is 5.0. #676 spent 5.07 of 5.00 and lost rung B.
+[budget]
+per_pr_inspect_max = 15.0
+
 # Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rungs A, B, and C count, as the default now
 # says (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"] this should be default"). The narrow set always needs a person per PR, because a
 # change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
