@@ -1407,17 +1407,21 @@ func TestInboxWriteFailures(t *testing.T) {
 		if !dry {
 			continue
 		}
-		var bulk []inboxJob // a dry-run bulk says it was planned, not applied
+		var bulk []inboxJob // a dry-run bulk says what it planned, not that it applied it
 		for _, it := range m.items {
 			if it.kind().Housekeeping && m.state[it.key()] == "" && len(bulk) < 2 {
 				bulk = append(bulk, inboxJob{it: it, a: *it.recommended()})
 			}
 		}
 		m.start(bulk)
-		for _, j := range bulk {
-			teaDrive(m, m.finished(inboxDoneMsg{key: j.it.key(), fresh: j.it}))
+		for i, j := range bulk {
+			var err error
+			if i == 1 {
+				err = errors.New("the item changed")
+			}
+			teaDrive(m, m.finished(inboxDoneMsg{key: j.it.key(), fresh: j.it, err: err}))
 		}
-		if m.status != "Planned 2 (dry run): nothing was written to GitHub." {
+		if m.status != "Planned 1 of 2 (dry run), 1 not planned: nothing was written to GitHub." {
 			t.Errorf("a dry-run bulk ends with %q", m.status)
 		}
 	}
