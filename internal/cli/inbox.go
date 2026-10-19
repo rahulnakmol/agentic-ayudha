@@ -1461,7 +1461,11 @@ func (e *Env) listInbox(ctx context.Context) error {
 		if len(waiting) > 0 {
 			k := inboxKinds[InboxNotReady]
 			fmt.Fprintf(w, "\n**%s %s** (nothing for you yet; no action offered):\n\n", k.Icon, k.Word)
-			for _, it := range waiting {
+			for i, it := range waiting {
+				if i == inboxListLines {
+					fmt.Fprintf(w, "- and %d more, in `aayu inbox`\n", len(waiting)-i)
+					break
+				}
 				fmt.Fprintf(w, "- [#%d](%s) %s · %s Next: %s\n", it.Number, it.URL, mdText(it.Title), mdText(it.Why), mdText(it.Next))
 			}
 		}

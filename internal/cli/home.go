@@ -143,6 +143,9 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	}
 	if items, err := gatherInbox(ctx, c, repo, e.devBranch(), id); err == nil {
 		for _, it := range items {
+			if it.waiting() { // a Not ready yet card waits on its builder, not a person
+				continue
+			}
 			s.Inbox = append(s.Inbox, journey.Item{Number: it.Number, Title: it.Title, Detail: it.Kind})
 		}
 	}

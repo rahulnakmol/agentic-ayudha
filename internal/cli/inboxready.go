@@ -44,8 +44,10 @@ func (s *inboxSource) pull(ctx context.Context, n int) (*gh.PullRequest, error) 
 // requiredOf is every required status check of the base branch: its rules
 // and its classic protection, read once a refresh, so a rule added while the
 // inbox is open counts from the next one. It also notes whether they require
-// a PR to be up to date with the base (s.strict). A branch with no classic
-// protection answers 404, which requires nothing.
+// a PR to be up to date with the base (s.strict). Classic protection is read
+// from the branch, as ship reads it, because its own endpoint needs an admin
+// token; the branch does not say whether classic protection is strict, so
+// only the rules' strict policy counts.
 func (s *inboxSource) requiredOf(ctx context.Context, base string) ([]*gh.RuleStatusCheck, error) {
 	if s.required != nil {
 		return s.required, nil
@@ -92,7 +94,8 @@ func joinWords(ws []string) string {
 // branch. The protected-paths one may also have failed, which only a person's
 // pass merges past (the reason the card waits for a person at all); running
 // or missing, it is not ready like any other. It returns the checks by
-// state, and one line per check for the card's details.
+// state, and for the card's details every check by name and result,
+// grouped by result with anything not green first.
 func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, missing, running, details []string, err error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
 		r, resp, err := s.c.REST.Checks.ListCheckRunsForRef(ctx, s.owner, s.name, head, &gh.ListCheckRunsOptions{ListOptions: o})
@@ -143,14 +146,18 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 		}
 		judge(sc.Context, st)
 	}
-	green := 0
+	var results []string              // each result once, in the order first seen, green last
+	byResult := map[string][]string{} // the checks of each result, named
 	for _, name := range names {
 		st := state[name]
-		if st == "success" {
-			green++
-		} else {
-			details = append(details, checkName(name)+": "+st)
+		res := st
+		if person && name == seats.GateCheck {
+			res = "failure, which only your pass merges past"
 		}
+		if byResult[res] == nil && res != "success" {
+			results = append(results, res)
+		}
+		byResult[res] = append(byResult[res], checkName(name))
 		switch st {
 		case "success":
 		case "missing":
@@ -161,14 +168,11 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 			failed = append(failed, checkName(name))
 		}
 	}
-	switch {
-	case len(details) == 0:
-		details = []string{fmt.Sprintf("all %d green", green)}
-	case green > 0:
-		details = append(details, fmt.Sprintf("%d others green", green))
+	if byResult["success"] != nil {
+		results = append(results, "success")
 	}
-	if person {
-		details = append(details, seats.GateCheck+" failed, which only your pass merges past")
+	for _, res := range results {
+		details = append(details, strings.Join(byResult[res], ", ")+": "+res)
 	}
 	return failed, missing, running, details, nil
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 )
 
 // Story #796: a Ready to ship card shows its pull request as it is now. Each
@@ -211,7 +213,9 @@ func TestInboxNotReady(t *testing.T) {
 		}
 		teaKeys(tm, "d")
 		flat = words(view())
-		for _, want := range []string{"Details", "GitHub: mergeable false, mergeable state dirty", "Head commit aaaaaaa", "Merged into dev since: #7", "d hide details"} {
+		for _, want := range []string{"Details", "GitHub: mergeable false, mergeable state dirty", "Head commit aaaaaaa", "Merged into dev since: #7", "d hide details",
+			// each required check by name and result, anything not green first (criterion 7)
+			"Checks on aaaaaaa: protected-paths: failure, which only your pass merges past · merge-gate, inspect, pack, build, lint, docs: success"} {
 			if !strings.Contains(flat, want) {
 				t.Errorf("%dx%d after d: no %q:\n%s", size[0], size[1], want, flat)
 			}
@@ -245,6 +249,28 @@ func TestInboxNotReady(t *testing.T) {
 		t.Errorf("--list --json: exit %d: %s", code, out)
 	} else if it := card(l.Items, a.Number); it.Kind != InboxNotReady || it.Next == "" || len(it.Details) == 0 || len(it.Options) != 0 {
 		t.Errorf("--list --json card for A: %+v", it)
+	}
+	// A Not ready yet card waits on its builder: the home screen (and so
+	// aayu next) counts in the inbox only what needs a person (C), not A or B.
+	dir := gitInit(t, "dev", map[string]string{".aayudha/config.toml": "version = 1\n"})
+	var home journey.State
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1}, "--json", "--repo", "o/r"); code != 0 ||
+		json.Unmarshal([]byte(out), &home) != nil || len(home.Inbox) != 1 || home.Inbox[0].Number != c.Number {
+		t.Errorf("home with two not-ready cards: exit %d: %s", code, out)
+	}
+	// --list stays about a screen: past six not-ready cards it counts the rest.
+	for i := range 7 {
+		story := g.AddIssue("Story x", "x", "type:story", "status:in-progress")
+		head := fmt.Sprintf("%040x", 0xd0+i) // a hex head, as the Ready marker records
+		pr := g.AddPR("feat: x", fmt.Sprintf("Refs #%d", story.Number), "o", fmt.Sprintf("feat/x%d", i), head, "dev")
+		g.Mu.Lock()
+		pr.Mergeable, pr.MergeableState = &no, "dirty"
+		mark(pr, head, marked)
+		checks(head, "success")
+		g.Mu.Unlock()
+	}
+	if code, out, _ := run(t, env, opts, "inbox", "--list", "--repo", "o/r"); code != 0 || !strings.Contains(out, "- and 3 more, in `aayu inbox`") || strings.Count(out, "Next: its builder") != inboxListLines {
+		t.Errorf("--list with nine not-ready cards: exit %d:\n%s", code, out)
 	}
 
 	// GitHub still computing whether C can merge (null, unknown): not ready
