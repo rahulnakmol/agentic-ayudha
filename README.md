@@ -11,8 +11,9 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
   the builder's. Otherwise, or for an author without write access, the gate skips Codex, Claude, and Cursor, which
   review only when a person asks them. CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`; when
-  neither is listed, or it has not replied within 30 minutes, the approver approves with
-  `aayu inspect <pr> --approve --reason "<what you checked>"` or in `aayu inbox`. A
+  neither is listed, or it has still not replied when inspect runs again 30 minutes or more later (on a push, a
+  comment, or a rerun), the approver approves with `aayu inspect <pr> --approve --reason "<what you checked>"`, or in
+  `aayu inbox` once that run has put the pull request there. A
   review from the builder's own family is labelled rung C, and it never counts toward the streak
   ([sources](docs/releases/v0.3.0.md#merge-and-review)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
@@ -82,7 +83,8 @@ What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the rel
    that is not docs-only when its family differs from the builder's and the author has write access
    ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise the gate skips Codex, Claude, and Cursor, and
    CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`, or the approver approves when neither is
-   listed or it has not replied within 30 minutes ([what's new](docs/releases/v0.3.0.md#whats-new)).
+   listed or it has still not replied when inspect runs again 30 minutes or more later
+   ([what's new](docs/releases/v0.3.0.md#whats-new)).
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 
