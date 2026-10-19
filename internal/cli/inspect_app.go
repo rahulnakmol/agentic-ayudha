@@ -64,7 +64,21 @@ type appInspect struct {
 func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	n, head := a.pr.GetNumber(), a.pr.GetHead().GetSHA()
 	owner, name, _ := github.SplitRepo(a.repo)
-	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
+	// In the gate under reviewer = "ci" with its model declined on this head
+	// (not failed), no one can ask an app that answers only a person's
+	// mention: CI holds no person's account, and `aayu inspect` asks an app
+	// only after a failed CI review (#691). The gate skips those apps for a
+	// review service, which reviews every head unasked, else a person, whose
+	// `aayu inspect --approve` counts. Outside CI the order is unchanged.
+	var cannotAsk []string
+	if e.CI && a.cfg.Inspect.Reviewer == inspect.ReviewerCI && a.prev.PaidFailed != head {
+		for _, app := range inspect.Apps {
+			if slices.Contains(a.cfg.Inspect.Apps, app.Name) && app.Family != inspect.FamilyService {
+				cannotAsk = append(cannotAsk, app.Name)
+			}
+		}
+	}
+	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
 	if a.fallback != "" {
 		notes = append(notes, a.fallback)
@@ -119,6 +133,23 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
 		floor = a.in.Reopened
 	}
+	// An app someone already asked for this head, in this review window, can
+	// answer: it is not skipped (Codex's P2 on #724).
+	if len(cannotAsk) > 0 {
+		asked := func(app string) bool {
+			return slices.ContainsFunc(posts, func(p inspect.Post) bool {
+				rs, ok := inspect.ParseRequest(p.Body)
+				return ok && p.Kind == "comment" && rs.Head == head && rs.Reviewer == app && p.Updated.After(floor)
+			})
+		}
+		if cannotAsk = slices.DeleteFunc(cannotAsk, asked); len(cannotAsk) > 0 {
+			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
+		}
+		if c := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...); c.Kind() != choice.Kind() {
+			choice = c
+			notes[1] = "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"
+		}
+	}
 	// Each reviewer's wait starts from its own review request for the head. A
 	// review service with none of its own starts from the head's first
 	// request, since it reviews every head unasked; a mention-only app with
@@ -141,14 +172,32 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return own, first
 	}
 	var since time.Time
+	// sinceErr is why the gate could not read when a service it turned to
+	// began to wait: it then waits no longer, so a person reviews.
+	var sinceErr error
 	// switchTo makes c the reviewer: outside CI it posts c's own request under
 	// the person's account when there is none, and its wait starts now.
 	switchTo := func(c inspect.Choice) error {
-		choice = c
+		choice, sinceErr = c, nil
 		own, first := requested(c)
 		since = own
 		if c.Family == inspect.FamilyService {
 			since = cmp.Or(own, first)
+			// A service the gate turned to with no request on the head at all
+			// (the CI review declined) waits from the head's first inspect run,
+			// so a service that never reviews it still gives way to a person
+			// (Codex's P1 on #724). When the check runs cannot be read (a
+			// private repository whose inspect job lacks checks: read), the
+			// wait has no start, and a person reviews rather than none.
+			if since.IsZero() && e.CI {
+				// The head the review stopped at waits from its reopen too: the
+				// stopped run asked no one (Codex's P1 on #724).
+				runs := floor
+				if a.prev.Stopped == head && runs.IsZero() {
+					runs = a.in.Reopened
+				}
+				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, runs)
+			}
 		}
 		if !own.IsZero() {
 			return nil
@@ -222,12 +271,15 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
 			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
 		}
+		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && sinceErr != nil {
+			err = fmt.Errorf("%w: %s has not replied, and the gate cannot time its wait: %s", inspect.ErrUnavailable, c.App, oneLineErr(sinceErr))
+		}
 		return rep, err
 	}
 	rep, rerr := read(choice)
 	// The chosen app cannot review this head: the next installed app in the
 	// fixed order (inspect.Apps) reviews in its place, then rung B, then a person.
-	for skip := []string{}; errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
+	for skip := slices.Clone(cannotAsk); errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
 		skip = append(skip, choice.App)
 		next := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, skip...)
 		if next.App == "" {
@@ -323,6 +375,31 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
+}
+
+// firstInspectRun is when the head's first aayudha/inspect check run at or
+// after floor (a reopen) started. An error says why there is no such start:
+// the runs cannot be read, or none started in the window (inspect's P1 on
+// #724), so the wait cannot be timed and a person reviews.
+func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string, floor time.Time) (time.Time, error) {
+	var first time.Time
+	// filter=all: by default GitHub lists only the newest run, a rerun's.
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
+		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), Filter: gh.Ptr("all"), ListOptions: o})
+		return r.GetCheckRuns(), resp, err
+	})
+	if err != nil {
+		return first, fmt.Errorf("the inspect job needs checks: read (%s)", oneLineErr(err))
+	}
+	for _, r := range runs {
+		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && !at.Before(floor) && (first.IsZero() || at.Before(first)) {
+			first = at
+		}
+	}
+	if first.IsZero() {
+		return first, errors.New("no aayudha/inspect run on this head has started in this review window")
+	}
+	return first, nil
 }
 
 // replyEvent reports whether this is the merge gate's run on a reply (a PR

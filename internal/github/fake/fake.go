@@ -147,7 +147,8 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
-	App        *App   `json:"app,omitempty"` // the GitHub App that made it
+	StartedAt  string `json:"started_at,omitempty"` // RFC 3339
+	App        *App   `json:"app,omitempty"`        // the GitHub App that made it
 	Suite      *Suite `json:"check_suite,omitempty"`
 }
 
@@ -916,9 +917,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(201, is)
 	case m == "GET" && reCheckRuns.MatchString(p):
-		runs := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]]
-		if runs == nil {
-			runs = []CheckRun{}
+		// GitHub lists only the newest run of each name unless filter=all.
+		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[string]int64{}
+		for _, c := range all {
+			newest[c.Name] = max(newest[c.Name], c.ID)
+		}
+		runs := []CheckRun{}
+		for _, c := range all {
+			if r.URL.Query().Get("filter") == "all" || c.ID == newest[c.Name] {
+				runs = append(runs, c)
+			}
 		}
 		total := len(runs)
 		if per := g.CheckRunsPerPage; per > 0 {

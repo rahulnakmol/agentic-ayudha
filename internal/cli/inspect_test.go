@@ -1450,6 +1450,174 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a read-only author's PR: exit %d rung %q, %d model calls", code, res.Rung, len(model.Requests))
 	}
 
+	// With the CI review declined (a read-only author), the gate cannot ask an
+	// app that answers only a person's mention, and nothing outside CI asks it
+	// (#691). It skips Codex: CodeRabbit, which reviews every head unasked,
+	// reviews; with Codex alone a person does, and the approver's
+	// `aayu inspect --approve` counts (Codex's P1 on #638).
+	// approved checks that a human review waits on the approver (the inbox
+	// offers the head), and that the approver's `aayu inspect --approve` makes
+	// the gate's next run merge at rung human with no model call.
+	approved := func(t *testing.T, what string) {
+		t.Helper()
+		head := g.Pulls[prN].Head.SHA
+		if st := inspect.ParseState(lastInspect(t, g, prN)); st.Human != head || !strings.Contains(res.Next, "--approve") {
+			t.Fatalf("%s: the inbox does not offer the head (%q), next %q", what, st.Human, res.Next)
+		}
+		g.Mu.Lock()
+		g.Viewer = "founder"
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+		g.Mu.Unlock()
+		person := opts
+		person.IsTerminal, person.DevicePoll = stdinTTY, time.Millisecond
+		if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff", "--repo", "o/r"); code != 0 {
+			t.Fatalf("%s: the approver's --approve: %d %s", what, code, errOut)
+		}
+		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman || len(model.Requests) != 0 {
+			t.Fatalf("%s, approved: exit %d %s rung %q, %d model calls %s", what, code, res.Disposition, res.Rung, len(model.Requests), errOut)
+		}
+	}
+	// Bug #723's criteria: each is a subtest, the evidence for its criterion.
+	for _, c := range []struct{ name, apps, want string }{{"codex_and_coderabbit", `"codex", "coderabbit"`, "coderabbit"}, {"codex_alone", `"codex"`, "a human review"}} {
+		t.Run(c.name, func(t *testing.T) {
+			g, env, opts, prN, model = setup(c.apps, "google-key")
+			env["AAYU_AUTONOMY__APPROVER"] = "founder"
+			g.Mu.Lock()
+			g.Pulls[prN].User.Login = "contributor" // not the approver, who reviews
+			g.Permissions = map[string]string{"contributor": "read"}
+			// The gate's own inspect run, which starts a service's wait.
+			g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "in_progress", StartedAt: opts.Now().Format(time.RFC3339)}}
+			g.Mu.Unlock()
+			code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+			if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, c.want) ||
+				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "the gate skips codex") }) {
+				t.Fatalf("apps [%s], the CI review declined: exit %d %s %q, notes %q, %d model calls %s", c.apps, code, res.Disposition, res.Review, res.Notes, len(model.Requests), errOut)
+			}
+			if c.want != "a human review" {
+				// The check runs cannot be read (a private repository whose inspect
+				// job lacks checks: read): the wait has no start, so a person reviews
+				// rather than none (Codex's P1 on #724).
+				g.Mu.Lock()
+				g.Fail = "GET /repos/o/r/commits/" + g.Pulls[prN].Head.SHA + "/check-runs"
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+					!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "checks: read") }) {
+					t.Fatalf("check runs unreadable: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+				}
+				// No inspect run with a start in the window: the wait has no start,
+				// so a person reviews rather than none (inspect's P1 on #724).
+				g.Mu.Lock()
+				g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "queued"}}
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+					!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "started in this review window") }) {
+					t.Fatalf("no inspect run started: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+				}
+				// CodeRabbit has no request on the head, so its wait starts at the
+				// head's first inspect run: past inspect.ReplyWait with no review, a
+				// person reviews (Codex's P1 on #724).
+				g.Mu.Lock()
+				// A rerun started now is the newest run; the first one still counts.
+				g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 2, Name: "aayudha/inspect", Status: "in_progress", StartedAt: opts.Now().Format(time.RFC3339)},
+					{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: opts.Now().Add(-inspect.ReplyWait - time.Minute).Format(time.RFC3339)}}
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") {
+					t.Fatalf("CodeRabbit silent past the wait: exit %d %q %s", code, res.Review, errOut)
+				}
+				approved(t, "CodeRabbit silent past the wait")
+				// After a person reopens a capped review, a head judged before the
+				// reopen starts a new window: a Codex request and an inspect run from
+				// before it neither keep Codex nor start CodeRabbit's wait (CodeRabbit's
+				// and Codex's findings on #724).
+				// The head may have a judged round, or be the head the review stopped at.
+				for _, stopped := range []bool{false, true} {
+					g, env, opts, prN, _ = setup(c.apps, "google-key")
+					now := opts.Now()
+					at := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
+					g.Mu.Lock()
+					g.Pulls[prN].User.Login = "contributor"
+					g.Permissions = map[string]string{"contributor": "read", "founder": "admin"}
+					h := g.Pulls[prN].Head.SHA
+					// The step-back or judged run before the reopen, and the gate's run after it.
+					g.CheckRuns[h] = []fake.CheckRun{{ID: 2, Name: "aayudha/inspect", Status: "in_progress", StartedAt: at(0)},
+						{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: at(150 * time.Minute)}}
+					g.Mu.Unlock()
+					last, stop := h, ""
+					if stopped {
+						last, stop = strings.Repeat("d", 40), `,"stopped":"`+h+`"`
+					}
+					addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"rounds\":["+
+						`{"head":"`+strings.Repeat("a", 40)+`","at":"`+at(4*time.Hour)+`","disposition":"fix"},`+
+						`{"head":"`+strings.Repeat("b", 40)+`","at":"`+at(3*time.Hour)+`","disposition":"fix"},`+
+						`{"head":"`+last+`","at":"`+at(2*time.Hour)+`","disposition":"fix"}]`+stop+`} -->`+"\n")
+					if !stopped { // a stopped head was never asked
+						addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+h+`","reviewer":"codex"} -->`)
+					}
+					addComment(g, prN, "founder", "User", inspect.ReopenCommand)
+					g.Mu.Lock()
+					for _, c := range g.Issues[prN].Comments {
+						d := time.Hour // the reopen
+						switch {
+						case strings.Contains(c.Body, inspect.Marker):
+							d = 4 * time.Hour
+						case strings.Contains(c.Body, inspect.RequestMarker):
+							d = 150 * time.Minute
+						}
+						c.CreatedAt, c.UpdatedAt = now.Add(-d), now.Add(-d)
+					}
+					g.Mu.Unlock()
+					// The reopen comment's reply-event run sees no inspect run since
+					// the reopen: it re-runs the head's inspect job, which starts one.
+					reruns := 0
+					g.Mu.Lock()
+					g.Runs = append(g.Runs, fake.WorkflowRun{ID: 501, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: h, Event: "pull_request_target", Status: "completed", Conclusion: "failure"})
+					pre := g.CheckRuns[h]
+					g.CheckRuns[h] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", Conclusion: "failure", StartedAt: at(150 * time.Minute)},
+						{ID: 3, Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}}
+					g.OnRerun = func(*fake.WorkflowRun) { reruns++ }
+					g.Mu.Unlock()
+					ev := maps.Clone(env)
+					ev["GITHUB_EVENT_NAME"] = "issue_comment"
+					if code, _, errOut := inspectApp(t, ev, opts, prN, "--ci"); code != 0 || reruns != 1 {
+						t.Fatalf("the reopen's reply-event run (stopped %v): exit %d, %d reruns %s", stopped, code, reruns, errOut)
+					}
+					g.Mu.Lock()
+					g.CheckRuns[h] = pre
+					g.Mu.Unlock()
+					if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "coderabbit") ||
+						!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "the gate skips codex") }) {
+						t.Fatalf("a head judged or stopped (%v) before the reopen: exit %d %q, notes %q %s", stopped, code, res.Review, res.Notes, errOut)
+					}
+				}
+				// A Codex request someone posted for the head keeps Codex: its reply can come (Codex's P2 on #724).
+				g, env, opts, prN, _ = setup(c.apps, "google-key")
+				g.Mu.Lock()
+				g.Pulls[prN].User.Login = "contributor"
+				g.Permissions = map[string]string{"contributor": "read"}
+				g.Mu.Unlock()
+				addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+g.Pulls[prN].Head.SHA+`","reviewer":"codex"} -->`)
+				g.Mu.Lock()
+				last := g.Issues[prN].Comments[len(g.Issues[prN].Comments)-1]
+				last.CreatedAt, last.UpdatedAt = opts.Now(), opts.Now()
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "codex") {
+					t.Fatalf("an asked Codex: exit %d %q %s", code, res.Review, errOut)
+				}
+				// Silent past inspect.ReplyWait from its request, Codex gives way to
+				// CodeRabbit, whose wait started with that request too, then a person.
+				g.Mu.Lock()
+				last.CreatedAt, last.UpdatedAt = opts.Now().Add(-inspect.ReplyWait-time.Minute), opts.Now().Add(-inspect.ReplyWait-time.Minute)
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+					!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "fallback to coderabbit") }) {
+					t.Fatalf("an asked Codex, silent: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+				}
+				return
+			}
+			approved(t, "apps [codex], the CI review declined")
+		})
+	}
+
 	// Outside CI the code-review key is out of reach: the local run defers to
 	// the gate's CI review. It asks no app, and an app request an earlier run
 	// posted, unanswered past inspect.ReplyWait, does not make it ask a person.
