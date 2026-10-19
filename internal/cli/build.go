@@ -279,7 +279,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR}
+		// A loop's build stays the loop's: its PR still counts toward [build] in_flight.
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR, Loop: st.Loop, Claim: st.Claim}
 	}
 	if st.StartedAt == "" {
 		st.StartedAt = now.Format(time.RFC3339)
@@ -1032,6 +1033,10 @@ func (e *Env) stopBuild(ctx context.Context, c *github.Client, bot identity.Bot,
 	}
 	if me := leaseHolder(bot.Login); cur != nil && cur.Holder != me && cur.Expires.After(e.Now()) {
 		return Errorf(ExitBlocked, "build #%d --stop: %s holds a live lease on it until %s, not %s; only its builder stops it", n, cur.Holder, cur.Expires.UTC().Format(time.RFC3339), me)
+	}
+	if c.DryRun() {
+		// blockBuild pages, and a page records itself in notify.json.
+		return Errorf(ExitBlocked, "build #%d --stop --dry-run: would block it (stopped by its builder: %s) and page its owner", n, why)
 	}
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 	if err != nil {

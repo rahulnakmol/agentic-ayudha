@@ -207,6 +207,14 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].PR != pr.Number {
 		t.Fatalf("a blocked story's open PR left the in-flight count: %d %s", code, out)
 	}
+	// A person makes it Ready again and its build resumes: it is still the
+	// loop's build, and its PR is the loop's to ship again.
+	readyAll(t, env, opts, older.Number)
+	person := map[string]string{"AAYU_GITHUB_TOKEN": env["AAYU_GITHUB_TOKEN"], "PATH": env["PATH"]}
+	_, _, _ = run(t, person, opts, "build", strconv.Itoa(older.Number), "--repo", "o/r", "--resume")
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number {
+		t.Fatalf("a resumed loop build left the loop: %d %s", code, out)
+	}
 	// [build] in_flight 0 stops the picks.
 	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "in_flight is 0") {
 		t.Fatalf("in_flight 0: %d %+v", code, pick)
@@ -272,6 +280,14 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 		t.Fatalf("--stop over another's live lease: %d %s", code, out)
 	}
 	setLease(g, low.Number, "other@laptop", time.Now().Add(-time.Minute))
+	// A dry run of --stop says what it would do, and blocks and pages nothing.
+	before, _ = os.ReadFile(notifyState)
+	if code, _, _, out := next(nil, "7", "--stop", "not yet", "--dry-run"); code != ExitBlocked || !strings.Contains(out, "would block") || contains(g.LabelNames(low.Number), "status:blocked") {
+		t.Fatalf("--stop --dry-run: %d %s", code, out)
+	}
+	if after, _ := os.ReadFile(notifyState); string(after) != string(before) {
+		t.Fatalf("--stop --dry-run wrote the notification state:\n%s", after)
+	}
 	// The builder gives up on #7: --stop blocks it with the reason, and it leaves the in-flight count.
 	if code, _, _, out := next(nil, "7", "--stop", "the tests need a database this machine lacks"); code != ExitBlocked || !strings.Contains(out, "stopped by its builder: the tests need a database") {
 		t.Fatalf("--stop: %d %s", code, out)
