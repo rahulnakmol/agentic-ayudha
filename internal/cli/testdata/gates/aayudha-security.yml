@@ -85,11 +85,12 @@ jobs:
       - name: Install aayudha v0.4.0
         run: |
           set -euo pipefail
-          # dev is a branch: fetch it from GitHub directly rather than a possibly stale proxy copy. Go then runs git in
+          # dev is a branch: fetch this module (GOPRIVATE) from GitHub directly rather than a possibly stale proxy copy; its
+          # dependencies still come through the module proxy, so a go.googlesource.com outage cannot fail the install. Go runs git in
           # its module cache, and each git fetch starts a detached `git maintenance run --auto` whose repack rewrites
           # .git/shallow while Go's next fetch reads it ("fatal: shallow file has changed since we read it"). No maintenance.
           if [ "$AAYU_VERSION" = dev ]; then
-            export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha
+            export GOPRIVATE=github.com/rahulnakmol/agentic-ayudha
             export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
           fi
           go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
