@@ -198,14 +198,14 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "loops", "amp", "triage-opened.json"), []byte("{}\n"), 0o644)
 	const thread = "T-01a152c0-d5d9-76b2-a75c-9f165feca52c"
 	start := time.Date(2026, 10, 19, 6, 2, 0, 0, time.UTC)
-	now, prompt, replyAt, polls := start, "", 0, 0
+	now, prompt, replyAt, polls, started := start, "", 0, 0, "https://ampcode.com/threads/"+thread
 	opts := Options{Dir: dir, Now: func() time.Time { return now },
 		Sleep:    func(_ context.Context, d time.Duration) error { now = now.Add(d); return nil },
 		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
 		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
 			if slices.Contains(args, "-ox") {
 				prompt = args[len(args)-1]
-				return "https://ampcode.com/threads/" + thread, nil
+				return started, nil
 			}
 			if strings.Join(args, " ") != "threads markdown "+thread {
 				return "", errors.New("unexpected: " + strings.Join(args, " "))
@@ -237,9 +237,20 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 		!strings.Contains(prompt, "reply with exactly one line, `subscription <its ID>`") || !strings.Contains(prompt, "If a call fails, reply with its error instead") {
 		t.Errorf("prompt: %s", prompt)
 	}
+	// amp printed no thread ID: there is nothing to wait on.
+	started = "amp: could not start the thread"
+	if r = report(); r.States[0].Status != loops.Missing || polls != 0 || now != start {
+		t.Errorf("no thread: %d looks, waited %s: %+v", polls, now.Sub(start), r.States)
+	}
+	started = "https://ampcode.com/threads/" + thread
 	replyAt = 3
 	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 5d10ad31-52c8-42ef-9860-3d874655784f") || polls != 3 {
 		t.Errorf("reply on the third look (%d looks): %+v", polls, r.States)
+	}
+	// A CLI that waits for the reply prints it: recorded with no look.
+	started = "Done.\nsubscription 395a6071-c14a-4fae-87bf-2d18da7f5bad"
+	if r = report(); !strings.Contains(r.States[0].Detail, "subscription 395a6071-c14a-4fae-87bf-2d18da7f5bad") || polls != 0 {
+		t.Errorf("reply printed by amp (%d looks): %+v", polls, r.States)
 	}
 }
 
