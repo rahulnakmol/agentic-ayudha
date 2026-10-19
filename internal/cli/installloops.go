@@ -86,8 +86,14 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if r := in.String("record"); in.Has("record") {
 		return e.recordLoops(root, ls, rec, r, repo, branch, tz)
 	}
-	if sig := e.agentSignal(); (in.Bool("apply") || in.String("run-now") != "") && sig != "" {
-		return Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (agent lane: %s)", sig)
+	// --apply and --run-now start runs that act as the person. In a shell with
+	// an agent marker (an orb's Terminal tab inherits one) a person may still be
+	// at the terminal, so they approve it through the device flow; with no
+	// terminal nobody can, so it is refused (Bug #698).
+	acts, sig := in.Bool("apply") || in.String("run-now") != "", e.agentSignal()
+	refusal := Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (agent lane: %s)", sig)
+	if acts && sig != "" && !e.isTerminal(e.In) {
+		return refusal
 	}
 	rep := loopsReport{Repo: repo, Added: added}
 	files, err := loops.Files(ls, repo, branch, tz, initrepo.GuardVersion(e.Build.Version), Implemented)
@@ -121,6 +127,11 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	mine := toolLoops(ls, tool)
+	if p := loopsPending(tool, in.Bool("apply"), in.String("run-now"), mine, repo); sig != "" && len(p.Effect) > 0 {
+		if _, err := e.presenceCheck(ctx, p, AccessWrite, refusal); err != nil {
+			return err
+		}
+	}
 	for _, l := range ls {
 		if !l.NeedsAgent() {
 			rep.Actions = append(rep.Actions, l.Name)
@@ -268,6 +279,33 @@ func (e *Env) printLoops(w io.Writer, rep loopsReport) {
 	for _, s := range rep.States {
 		fmt.Fprintf(w, "  %-18s %-7s %s\n", s.Loop, s.Status, s.Detail)
 	}
+}
+
+// loopsPending is what approving --apply or --run-now starts: the loops,
+// in the tool, acting as the person. Claude Code and Codex have no --apply
+// (aayu prints their prompts), so --apply alone starts nothing there.
+func loopsPending(tool string, apply bool, runNow string, mine []loops.Loop, repo string) Pending {
+	names := make([]string, len(mine))
+	for i, l := range mine {
+		names[i] = l.Name
+	}
+	p := Pending{What: "install --loops"}
+	if apply {
+		p.What += " --apply"
+		switch tool {
+		case loops.HostAmp:
+			if len(mine) > 0 { // with no loop to set up, no thread starts: nothing to approve
+				p.Effect = append(p.Effect, fmt.Sprintf("Starts one headless Amp thread per loop in orbs of the %s project, to set up %s. They act as you, with your Amp and GitHub accounts.", repo, strings.Join(names, ", ")))
+			}
+		case loops.HostCursor:
+			p.Effect = append(p.Effect, fmt.Sprintf("Runs terraform apply of %s/cursor/aayudha-loops.tf with your CURSOR_TOKEN, which creates a Cursor automation per loop (%s) that runs as you.", loops.Dir, strings.Join(names, ", ")))
+		}
+	}
+	if runNow != "" {
+		p.What += " --run-now"
+		p.Effect = append(p.Effect, fmt.Sprintf("Runs the loop %s once now with %s's CLI in this checkout. It acts as you.", runNow, tool))
+	}
+	return p
 }
 
 // toolLoops are the loops tool runs.
