@@ -2072,6 +2072,56 @@ func TestInboxLoginScreen(t *testing.T) {
 		t.Errorf("after the approval: signed in %q, login screen still up %v", signed, m.signin != nil)
 	}
 
+	// In a real program the countdown ticks while GitHub waits, and the
+	// approval shows on the screen before the inbox replaces it.
+	m.timer = true
+	m.signin = &inboxSignin{run: func() tea.Msg { return nil }}
+	m.signinCmd()
+	if teaKeys(m, "c") || strings.Join(m.signinKeys(), " ") != "q quit" {
+		t.Errorf("before the code arrives, the keys are %q", m.signinKeys())
+	}
+	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri}, clock.Add(time.Minute)})
+	if _, tick := m.Update(inboxSecondMsg{}); tick == nil {
+		t.Error("the countdown stops ticking while GitHub waits")
+	}
+	m.Update(inboxSignedMsg{login: "o"})
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ Approved by @o") || strings.Contains(v, "W D J B") || m.signinKeys() != nil {
+		t.Errorf("approved: keys %q, screen:\n%s", m.signinKeys(), v)
+	}
+	if _, tick := m.Update(inboxSecondMsg{}); tick != nil {
+		t.Error("the countdown still ticks after the approval")
+	}
+	m.Update(inboxApprovedMsg{})
+	if m.signin != nil {
+		t.Error("the approval screen stays up instead of the inbox")
+	}
+	m.timer = false
+
+	// A refusal before any code ends aayu inbox with it, as the check did before.
+	refused := Errorf(ExitBlocked, "no GitHub token")
+	m.signin = &inboxSignin{run: func() tea.Msg { return nil }}
+	if _, cmd := m.Update(inboxSignedMsg{err: refused}); cmd == nil || fmt.Sprint(cmd()) != fmt.Sprint(tea.Quit()) || !errors.Is(m.signin.err, refused) {
+		t.Errorf("a refusal before any code: err %v", m.signin.err)
+	}
+
+	// A display without xdg-open has no browser aayu can open; tmux's own
+	// set-clipboard is read when aayu runs inside tmux.
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+	if runtime.GOOS == "linux" && browserHere(func(k string) string { return map[string]string{"DISPLAY": ":0"}[k] }) {
+		t.Error("a display without xdg-open counts as a browser")
+	}
+	if err := os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\necho external\n"), 0o755); err != nil { // #nosec G306 -- a test's fake tmux
+		t.Fatal(err)
+	}
+	if got := tmuxClipboard(func(k string) string { return map[string]string{"TMUX": "/tmp/tmux-1/default,1,0"}[k] }); runtime.GOOS != "windows" && got != "external" {
+		t.Errorf("inside tmux, set-clipboard reads %q; want external", got)
+	}
+	if got := tmuxClipboard(func(string) string { return "" }); got != "" {
+		t.Errorf("outside tmux, set-clipboard reads %q", got)
+	}
+
 	// q on the login screen quits, unapproved.
 	m.signin = &inboxSignin{run: func() tea.Msg { return nil }}
 	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri}, clock.Add(time.Minute)})
