@@ -131,8 +131,11 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    The review model must come from a vendor other than the one that builds; change `AAYU_REVIEW_MODEL_URL` and
    `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting. A review
    app, such as Codex, CodeRabbit, or Greptile, can review instead: set `[inspect] reviewer` to its name and list it
-   in `[inspect] apps`. The gate reads `.aayudha/config.toml` from your base branch. A later pull request is checked
-   with the default `ci`, which fails without the key, so make this change in step 1's pull request.
+   in `[inspect] apps`. CodeRabbit and Greptile review every pull request on their own. Codex, Claude, and Cursor
+   review only when asked: `aayu build` asks after each push, and for a pull request it did not open, run
+   `aayu inspect <pr>` in your own terminal. The gate reads `.aayudha/config.toml` from your base branch. A later
+   pull request is checked with the default `ci`, which fails without the key, so make this change in step 1's pull
+   request.
 
    > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
    > not create `code-review`. Choose a review app as above, or `human` with `[autonomy] approver` set to the person
