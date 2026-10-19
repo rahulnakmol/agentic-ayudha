@@ -111,6 +111,11 @@ func TestRefreshSections(t *testing.T) {
 	if !strings.HasSuffix(got, tail) {
 		t.Errorf("the appended blocks moved:\n%s", got)
 	}
+	// An open marker whose close was deleted is text: kept, and the refresh ends.
+	open := got + "\n<!-- aayudha:pr:detail -->\nA person's note.\n"
+	if r := refreshSections(open, storyBody(chk, issue, "", nil, cps, "Nakul")); !strings.HasSuffix(r, "<!-- aayudha:pr:detail -->\nA person's note.\n") {
+		t.Errorf("an unclosed marker:\n%s", r)
+	}
 	if again := refreshSections(got, storyBody(chk, issue, "", nil, cps, "Nakul")); again != got {
 		t.Errorf("a second refresh with the same inputs changed the body:\n%s", again)
 	}

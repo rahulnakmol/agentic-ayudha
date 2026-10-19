@@ -533,9 +533,10 @@ func (e *Env) prBodyFloor(res *inspect.Result, pr *gh.PullRequest, prev *inspect
 	if !pr.GetDraft() {
 		// An agent's PR declares itself: by label, or by the Aayudha-Host
 		// line build writes when it opens the PR (so a failed label call
-		// still blocks). A bot author alone (Dependabot, a cloud agent's own
-		// PR) only warns: it cannot rewrite its body.
-		agent := hostTrailer.MatchString(pr.GetBody()) || slices.ContainsFunc(pr.Labels, func(l *gh.Label) bool {
+		// still blocks), outside code and comments. A bot author alone
+		// (Dependabot, a cloud agent's own PR) only warns: it cannot rewrite
+		// its body.
+		agent := hostTrailer.MatchString(prbody.Visible(pr.GetBody())) || slices.ContainsFunc(pr.Labels, func(l *gh.Label) bool {
 			return l.GetName() == workitems.LabelAgentAuthored || l.GetName() == workitems.LabelHumanFallback
 		})
 		words, _ := e.steWords() // without the list, sentence length is still checked

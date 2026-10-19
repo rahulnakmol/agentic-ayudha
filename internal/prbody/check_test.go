@@ -107,7 +107,9 @@ func TestCheckPRBodyBlocksAnAgentPR(t *testing.T) {
 		"long sentence": {strings.Replace(goodPRBody, "The risk is low.", thirty, 1), "Risk and rollback"},
 		"long callout":  {strings.Replace(goodPRBody, "> Agents must write every section before the merge.", "> "+thirty, 1), "Risk and rollback"},
 		// A second copy of a section never hides an unfilled one.
-		"second copy":          {strings.Replace(goodPRBody, "## For reviewers", "## Risk and rollback\n\n"+Placeholder+"\n\n## For reviewers", 1), "Risk and rollback"},
+		"second copy": {strings.Replace(goodPRBody, "## For reviewers", "## Risk and rollback\n\n"+Placeholder+"\n\n## For reviewers", 1), "Risk and rollback"},
+		// An unclosed comment hides the rest of the body on GitHub.
+		"unclosed comment":     {strings.Replace(goodPRBody, "## For reviewers", "<!-- note\n\n## For reviewers", 1), "For reviewers"},
 		"heading in a comment": {strings.Replace(goodPRBody, "## Why\n", "<!--\n## Why\n-->\n", 1), "Why"},
 		"empty deviation": {strings.Replace(goodPRBody, "## For reviewers", "## Deviation from the plan:\n\n<!-- none -->\n\n## For reviewers", 1),
 			Deviation},

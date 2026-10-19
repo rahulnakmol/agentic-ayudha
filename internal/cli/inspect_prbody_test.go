@@ -78,6 +78,12 @@ func TestPRBodyFloor(t *testing.T) {
 	if e.prBodyFloor(&declaredRes, &gh.PullRequest{Body: &declared}, nil); declaredRes.Disposition != inspect.Fix {
 		t.Errorf("an unlabelled PR that declares its host: %s", declaredRes.Disposition)
 	}
+	// A host line in a fenced example is not a declaration.
+	example := bad + "\n```text\nAayudha-Host: amp\n```\n"
+	exampleRes := inspect.Result{Disposition: inspect.Merge}
+	if e.prBodyFloor(&exampleRes, &gh.PullRequest{Body: &example}, nil); exampleRes.Disposition != inspect.Merge {
+		t.Errorf("a person's PR with a fenced host example: %s", exampleRes.Disposition)
+	}
 	bot := inspect.Result{Disposition: inspect.Merge}
 	if e.prBodyFloor(&bot, &gh.PullRequest{Body: &bad, User: &gh.User{Login: gh.Ptr("dependabot[bot]"), Type: gh.Ptr("Bot")}}, nil); bot.Disposition != inspect.Merge || !hasNote(bot, prBodyWarns, `"Why"`) {
 		t.Errorf("a bot's PR with no declaration: %s %v", bot.Disposition, bot.Notes)

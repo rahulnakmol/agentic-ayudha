@@ -61,9 +61,7 @@ type prSection struct{ name, text string }
 // reviewers detail may have headings of its own.
 func prSplit(body string) []prSection {
 	var out []prSection
-	body = htmlComment.ReplaceAllStringFunc(strings.ReplaceAll(body, "\r\n", "\n"), func(c string) string {
-		return strings.Repeat("\n", strings.Count(c, "\n")) // keep the lines, drop the text
-	})
+	body = uncomment(body)
 	fence, details := "", 0
 	for _, line := range strings.Split(body, "\n") {
 		t := strings.TrimSpace(line)
@@ -87,6 +85,37 @@ func prSplit(body string) []prSection {
 		}
 	}
 	return out
+}
+
+// uncomment drops the text of body's HTML comments and keeps their lines. An
+// unclosed comment hides the rest of the body, as it does on GitHub.
+func uncomment(body string) string {
+	body = htmlComment.ReplaceAllStringFunc(strings.ReplaceAll(body, "\r\n", "\n"), func(c string) string {
+		return strings.Repeat("\n", strings.Count(c, "\n"))
+	})
+	if i := strings.Index(body, "<!--"); i >= 0 {
+		body = body[:i]
+	}
+	return body
+}
+
+// Visible is body as a reader sees it outside code: no HTML comments and no
+// fenced blocks, so an example line there declares nothing.
+func Visible(body string) string {
+	var b strings.Builder
+	fence := ""
+	for _, line := range strings.Split(uncomment(body), "\n") {
+		t := strings.TrimSpace(line)
+		switch m := fenceLine.FindString(t); {
+		case fence == "" && m != "":
+			fence = m
+		case fence != "" && strings.HasPrefix(t, fence) && strings.Trim(t, fence[:1]) == "":
+			fence = ""
+		case fence == "":
+			b.WriteString(line + "\n")
+		}
+	}
+	return b.String()
 }
 
 // prName folds a heading for comparison: case and a trailing colon do not count.
