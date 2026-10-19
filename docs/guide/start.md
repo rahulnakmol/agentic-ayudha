@@ -122,8 +122,8 @@ winget, self-update only prints that tool's upgrade command, so run that command
 
 Until 0.3 is released, install the integration build with
 `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`. Go leaves your installed `aayu` as it was, so
-point `aayu` at the new build for this shell: `alias aayu="$(go env GOPATH)/bin/aayudha"`, or `$GOBIN/aayudha` if you
-set `GOBIN`.
+point `aayu` at the new build for this shell: `alias aayu="$(go env GOPATH)/bin/aayudha"`. If `go env GOBIN` prints a
+folder, use `alias aayu="$(go env GOBIN)/aayudha"` instead.
 
 1. `aayu init --gates` adds the merge gate workflow and creates the `code-review` environment, with Grok 4.7 at
    `https://api.x.ai/v1` filled in. Commit the workflow through a pull request and merge it. The gate runs from your
