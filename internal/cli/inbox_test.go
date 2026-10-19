@@ -1404,6 +1404,22 @@ func TestInboxWriteFailures(t *testing.T) {
 		case dry && (kept != 0 || m.state[it.key()] != "" || done || !strings.Contains(m.status, "Planned #697 (dry run)")):
 			t.Errorf("a dry-run write: kept %d, state %q, done %v, status %q", kept, m.state[it.key()], done, m.status)
 		}
+		if !dry {
+			continue
+		}
+		var bulk []inboxJob // a dry-run bulk says it was planned, not applied
+		for _, it := range m.items {
+			if it.kind().Housekeeping && m.state[it.key()] == "" && len(bulk) < 2 {
+				bulk = append(bulk, inboxJob{it: it, a: *it.recommended()})
+			}
+		}
+		m.start(bulk)
+		for _, j := range bulk {
+			teaDrive(m, m.finished(inboxDoneMsg{key: j.it.key(), fresh: j.it}))
+		}
+		if m.status != "Planned 2 (dry run): nothing was written to GitHub." {
+			t.Errorf("a dry-run bulk ends with %q", m.status)
+		}
 	}
 
 	// The writes end while the quit question is open: w and q then quit at

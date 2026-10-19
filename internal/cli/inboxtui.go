@@ -872,6 +872,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	if b.total > 1 && b.done+b.failed >= b.total {
 		delete(m.batches, job.batch)
 		m.status = fmt.Sprintf("Applied %d: %d done, %d not done. Written changes are not undone here.", b.total, b.done, b.failed)
+		if m.dryRun {
+			m.status = fmt.Sprintf("Planned %d (dry run): nothing was written to GitHub.", b.total)
+		}
 		if i := m.item(); i >= 0 && m.state[m.items[i].key()] != "" {
 			m.next() // the bulk is over: on to what still waits
 		}
