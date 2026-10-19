@@ -9,10 +9,10 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   pull request that is ready for review, other than a change to documents only, to a review model in your CI. A draft
   is not reviewed until you mark it ready. Its one key lives in your repository's `code-review` environment
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
-  the builder's. Otherwise, or for an author without write access, CodeRabbit or Greptile reviews when it is listed in
-  `[inspect] apps` and Codex is not; with no app listed, the approver approves with
-  `aayu inspect <pr> --approve --reason "<what you checked>"` or in `aayu inbox`. A listed Codex, Claude, or Cursor is not asked then, and the change waits
-  ([known limits](docs/releases/v0.3.0.md#known-limits)). A
+  the builder's. Otherwise, or for an author without write access, the gate skips Codex, Claude, and Cursor, which
+  review only when a person asks them. CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`; when
+  neither is listed, or it has not replied within 30 minutes, the approver approves with
+  `aayu inspect <pr> --approve --reason "<what you checked>"` or in `aayu inbox`. A
   review from the builder's own family is labelled rung C, and it never counts toward the streak
   ([sources](docs/releases/v0.3.0.md#merge-and-review)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
