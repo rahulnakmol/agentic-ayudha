@@ -145,7 +145,7 @@ func TestInstallLoopsApplyPresence(t *testing.T) {
 			}
 			return "schedule s-1 on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
 		}}
-	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AMP_THREAD_ID": "T-0000", "XDG_STATE_HOME": t.TempDir()}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AMP_THREAD_ID": "T-0000", "XDG_STATE_HOME": t.TempDir(), "CURSOR_TOKEN": "k"}
 	apply := func(outcome string) (int, string) {
 		t.Helper()
 		g.Mu.Lock()
@@ -163,6 +163,20 @@ func TestInstallLoopsApplyPresence(t *testing.T) {
 		!strings.Contains(errOut, "Approving: Starts one headless Amp thread per loop in orbs of the o/r project, to set up triage-daily. They act as you") ||
 		!strings.Contains(errOut, "Approved by @founder") {
 		t.Fatalf("approved: exit %d, %d threads: %s", code, threads, errOut)
+	}
+	// --run-now and Cursor's --apply name what they start as the person; Claude Code's --apply starts nothing, so it asks nothing.
+	for _, tt := range []struct{ args, want string }{
+		{"--host amp --run-now triage-daily", "Approving: Runs the loop triage-daily once now with amp's CLI in this checkout. It acts as you."},
+		{"--host cursor --apply", "Approving: Runs terraform apply of loops/cursor/aayudha-loops.tf with your CURSOR_TOKEN, which creates a Cursor automation per loop (triage-daily) that runs as you."},
+		{"--host claude --apply", ""},
+	} {
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "approve"}
+		g.Mu.Unlock()
+		code, _, errOut := run(t, env, opts, append([]string{"install", "--loops", "--repo", "o/r"}, strings.Fields(tt.args)...)...)
+		if asked := strings.Contains(errOut, "needs a person's approval"); code != 0 || asked != (tt.want != "") || !strings.Contains(errOut, tt.want) {
+			t.Errorf("%s: exit %d: %s", tt.args, code, errOut)
+		}
 	}
 	opts.IsTerminal = func(any) bool { return false }
 	code, errOut = apply("approve")

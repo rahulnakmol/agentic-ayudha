@@ -190,7 +190,8 @@ a product's.
 `--run-now <loop>` runs one loop's prompt once with the chosen tool's CLI in this checkout, marked as a test so the
 guard's `not due` does not stop it, and the terminal offers it after setup. `--apply` and `--run-now` act as you. In a
 shell with an agent marker, such as an orb's Terminal tab, they ask for your approval through GitHub's device flow
-and name the loops they start; with no terminal they are refused.
+and name the loops they start. With no terminal, or in aayu's own agent lane (`AAYU_AGENT=1`) or `--ci`, they are
+refused and no code is issued (`presenceCheck` in [internal/cli/presence.go](../../internal/cli/presence.go)).
 
 The Actions fallback never calls a model. A job checks out the repository, installs aayudha, runs the guard, and
 only then the command.

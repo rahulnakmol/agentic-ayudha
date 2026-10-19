@@ -127,8 +127,8 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	mine := toolLoops(ls, tool)
-	if acts && sig != "" {
-		if _, err := e.presenceCheck(ctx, loopsPending(tool, in.Bool("apply"), in.String("run-now"), mine, repo), AccessWrite, refusal); err != nil {
+	if p := loopsPending(tool, in.Bool("apply"), in.String("run-now"), mine, repo); sig != "" && len(p.Effect) > 0 {
+		if _, err := e.presenceCheck(ctx, p, AccessWrite, refusal); err != nil {
 			return err
 		}
 	}
@@ -282,7 +282,8 @@ func (e *Env) printLoops(w io.Writer, rep loopsReport) {
 }
 
 // loopsPending is what approving --apply or --run-now starts: the loops,
-// in the tool, acting as the person.
+// in the tool, acting as the person. Claude Code and Codex have no --apply
+// (aayu prints their prompts), so --apply alone starts nothing there.
 func loopsPending(tool string, apply bool, runNow string, mine []loops.Loop, repo string) Pending {
 	names := make([]string, len(mine))
 	for i, l := range mine {
@@ -296,8 +297,6 @@ func loopsPending(tool string, apply bool, runNow string, mine []loops.Loop, rep
 			p.Effect = append(p.Effect, fmt.Sprintf("Starts one headless Amp thread per loop in orbs of the %s project, to set up %s. They act as you, with your Amp and GitHub accounts.", repo, strings.Join(names, ", ")))
 		case loops.HostCursor:
 			p.Effect = append(p.Effect, fmt.Sprintf("Runs terraform apply of %s/cursor/aayudha-loops.tf with your CURSOR_TOKEN, which creates a Cursor automation per loop (%s) that runs as you.", loops.Dir, strings.Join(names, ", ")))
-		default:
-			p.Effect = append(p.Effect, fmt.Sprintf("Sets up nothing in %s, which has no --apply: aayu prints the steps.", tool))
 		}
 	}
 	if runNow != "" {
