@@ -162,13 +162,16 @@ func splitDiff(diff string, limit, maxParts int) (parts []string, out map[string
 			out[f.Path] = fmt.Sprintf("its diff alone is over the %d-byte prompt cap: a person or a reviewer app reviews it", limit)
 		}
 	}
-	target := total / min(max((total+limit-1)/limit, 1), maxParts)
+	// The fewest parts that hold the files in order; balancing never adds one,
+	// since every part is another call that can fail (#707, job 117991827277).
+	n := max(min(packs(fit, limit), maxParts), 1)
+	target := total / n
 	var cur strings.Builder
 	for k, s := range fit {
 		// A part closes when the next file would not fit, or at the balancing
 		// target while the files left still pack into the parts left after it.
 		full := cur.Len()+len(s) > limit
-		balanced := cur.Len() >= target && packs(fit[k:], limit) <= maxParts-len(parts)-1
+		balanced := cur.Len() >= target && packs(fit[k:], limit) <= n-len(parts)-1
 		if cur.Len() > 0 && (full || balanced) {
 			parts, cur = append(parts, cur.String()), strings.Builder{}
 		}

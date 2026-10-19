@@ -639,6 +639,8 @@ func TestSplitDiffFillsBeforeDropping(t *testing.T) {
 	for _, c := range []struct{ in, want []int }{
 		{[]int{10000, 120000, 90000, 30000}, []int{10000, 120000, 120000}},
 		{[]int{84000, 6000, 120000, 40000}, []int{90000, 120000, 40000}},
+		// #707's diff: two parts hold it, so balancing never adds a third (job 117991827277).
+		{[]int{72000, 87000, 5600}, []int{72000, 92600}},
 	} {
 		var diff string
 		for i, n := range c.in {
