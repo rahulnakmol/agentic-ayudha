@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	osuser "os/user"
 	"path/filepath"
@@ -119,6 +120,13 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, `media_secret "other"`) {
 		t.Fatalf("push with a user config XDG_CONFIG_HOME points into the checkout: %d %s", code, errOut)
 	}
+	// An account the system's user database does not list (an LDAP or
+	// container UID) has no trusted user config, and the refusal says so.
+	noHome := opts
+	noHome.UserHome = func() (string, error) { return "", errors.New("uid 54321 is not in /etc/passwd") }
+	if code, _, errOut := run(t, env, noHome, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "(no user config is trusted: uid 54321 is not in /etc/passwd)") {
+		t.Fatalf("push when the account's home is unknown: %d %s", code, errOut)
+	}
 	delete(env, "XDG_CONFIG_HOME")
 	// dev's config that cannot be read, or does not load, trusts nothing.
 	for _, f := range []struct{ fail, file, want string }{
@@ -178,13 +186,25 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has read access to o/r, so its committed config cannot name the proof media bucket") || len(s3.Objects) != 0 {
 		t.Fatalf("push to a repository the account cannot push to: %d %s, %d objects", code, errOut, len(s3.Objects))
 	}
+	// A GitHub App installation token has no account (GET /user refuses
+	// it): the repository must be one its installation was granted.
 	fgh.Mu.Lock()
 	fgh.Permissions[fgh.Viewer] = "maintain" // reported as write
+	fgh.InstallationTokens = map[string][]string{"human-token": {"o/other"}}
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the GitHub App installation behind this token was not granted o/r") || len(s3.Objects) != 0 {
+		t.Fatalf("push with an installation token not granted the repository: %d %s, %d objects", code, errOut, len(s3.Objects))
+	}
+	fgh.Mu.Lock()
+	fgh.InstallationTokens["human-token"] = []string{"o/other", "O/R"}
 	fgh.Mu.Unlock()
 	code, out, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r", "--json")
 	if code != 0 {
-		t.Fatalf("push: %d %s %s", code, out, errOut)
+		t.Fatalf("push with an installation token granted the repository: %d %s %s", code, out, errOut)
 	}
+	fgh.Mu.Lock()
+	fgh.InstallationTokens = nil
+	fgh.Mu.Unlock()
 	var pushed proof.PushResult
 	_ = json.Unmarshal([]byte(out), &pushed)
 	if pushed.Authority != proof.Advisory || pushed.Path != "proof/2/"+headA+"/advisory/pack.json" || len(s3.Objects) != 1 || s3.Rejected != 0 {

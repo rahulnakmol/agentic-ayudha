@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	osuser "os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -125,12 +127,14 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 	// The user config is the account's (~/.config/aayudha), found from the
 	// system's user database: XDG_CONFIG_HOME and HOME are the run's
 	// environment, which could name a directory in the checkout.
-	var userDir string
+	var userDir, skipped string
 	home := e.UserHome
 	if home == nil {
 		home = accountHome
 	}
-	if h, err := home(); err == nil && h != "" {
+	if h, err := home(); err != nil {
+		skipped = fmt.Sprintf(" (no user config is trusted: %v)", err)
+	} else if h != "" {
 		userDir = filepath.Join(h, ".config", "aayudha")
 	}
 	user, err := config.Load(config.Sources{UserDir: userDir})
@@ -193,25 +197,56 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 	// committed on dev. A bucket is trusted only from a repository the
 	// account aayu acts as can push to, as the person's own repositories are.
 	if t.Media != "" {
-		me, _, err := c.REST.Users.Get(ctx, "")
+		why, err := cannotPush(ctx, c, owner, name)
 		if err != nil {
-			return config.Proof{}, Wrap(ExitExternal, err)
+			return config.Proof{}, err
 		}
-		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, me.GetLogin())
-		if err != nil {
-			return config.Proof{}, Wrap(ExitExternal, err)
-		}
-		if p := permissionOf(perm); p != "admin" && p != "write" {
-			return config.Proof{}, Errorf(ExitBlocked, "@%s has %s access to %s, so its committed config cannot name the proof media bucket that receives your secret; "+
-				"check the checkout's origin remote, or pass --repo with the repository you push to", me.GetLogin(), p, repo)
+		if why != "" {
+			return config.Proof{}, Errorf(ExitBlocked, "%s, so its committed config cannot name the proof media bucket that receives your secret; "+
+				"check the checkout's origin remote, or pass --repo with the repository you push to", why)
 		}
 	}
 	if r.Media != t.Media || t.Media != "" && (r.MediaSecret != t.MediaSecret || r.RetentionDays != t.RetentionDays) {
-		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket, its secret, and its retention are read only from the user config and %s's committed .aayudha/config.toml; "+
+		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket, its secret, and its retention are read only from the user config and %s's committed .aayudha/config.toml%s; "+
 			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q, media_secret %q and retention_days %d, not %q, %q and %d; "+
-			"remove those settings, or change %s through a reviewed PR", branch, r.Media, r.MediaSecret, r.RetentionDays, t.Media, t.MediaSecret, t.RetentionDays, branch)
+			"remove those settings, or change %s through a reviewed PR", branch, skipped, r.Media, r.MediaSecret, r.RetentionDays, t.Media, t.MediaSecret, t.RetentionDays, branch)
 	}
 	return t, nil
+}
+
+// cannotPush says why the token behind c cannot push to owner/name ("" when
+// it can). A person's token needs write or admin access for its account. A
+// GitHub App installation token has no account (GET /user refuses it with
+// 403), so the repository must be one its installation was granted.
+func cannotPush(ctx context.Context, c *github.Client, owner, name string) (string, error) {
+	me, resp, err := c.REST.Users.Get(ctx, "")
+	if err == nil {
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, me.GetLogin())
+		if err != nil {
+			return "", Wrap(ExitExternal, err)
+		}
+		if p := permissionOf(perm); p != "admin" && p != "write" {
+			return fmt.Sprintf("@%s has %s access to %s/%s", me.GetLogin(), p, owner, name), nil
+		}
+		return "", nil
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		return "", Wrap(ExitExternal, err)
+	}
+	repos, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Repository, *gh.Response, error) {
+		l, resp, err := c.REST.Apps.ListRepos(ctx, &o)
+		if err != nil {
+			return nil, resp, err
+		}
+		return l.Repositories, resp, nil
+	})
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	if !slices.ContainsFunc(repos, func(r *gh.Repository) bool { return strings.EqualFold(r.GetFullName(), owner+"/"+name) }) {
+		return fmt.Sprintf("the GitHub App installation behind this token was not granted %s/%s", owner, name), nil
+	}
+	return "", nil
 }
 
 // accountHome is the home directory of the account running aayu, from the
