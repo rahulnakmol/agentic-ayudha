@@ -253,15 +253,17 @@ type GitHub struct {
 	Commits     map[string]map[string]any   // sha -> commit
 	Issues      map[int]*Issue
 	Milestones  []*Milestone
-	Pulls       map[int]*PR
-	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
-	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
-	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
-	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
-	Runs        []WorkflowRun           // Actions workflow runs
-	Artifacts   map[int64][]ArtifactZip // run ID -> artifacts
-	Releases    map[string]*Release     // tag -> GitHub Release
-	Workflows   []string                // workflow file names GET actions/workflows lists
+	// AuthorOnlyEdits makes a comment edit by anyone but its author a 403, as on GitHub.
+	AuthorOnlyEdits bool
+	Pulls           map[int]*PR
+	CheckRuns       map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
+	Statuses        map[string][]Status     // commit SHA -> legacy commit statuses, newest first
+	JobLogs         map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
+	RunJobs         map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
+	Runs            []WorkflowRun           // Actions workflow runs
+	Artifacts       map[int64][]ArtifactZip // run ID -> artifacts
+	Releases        map[string]*Release     // tag -> GitHub Release
+	Workflows       []string                // workflow file names GET actions/workflows lists
 	// OnDispatch, when set, describes the run a workflow_dispatch starts (the
 	// fake assigns its ID, path, and event). OnRerun re-runs a run's failed
 	// jobs. Both run with Mu held and must not lock it.
@@ -1322,6 +1324,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		for _, is := range g.Issues {
 			for _, c := range is.Comments {
 				if c.ID == id {
+					if m == "PATCH" && g.AuthorOnlyEdits && !strings.EqualFold(c.User.Login, g.Viewer) {
+						reply(403, map[string]any{"message": "Resource not accessible: only the author edits a comment"})
+						return
+					}
 					if m == "PATCH" {
 						c.Body, c.UpdatedAt = str("body"), time.Now().UTC().Add(time.Second)
 					}

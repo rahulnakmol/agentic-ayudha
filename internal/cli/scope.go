@@ -218,6 +218,9 @@ func (r *scopeRun) load(ctx context.Context) error {
 			r.titles = append(r.titles, m.GetTitle())
 		}
 		if m.GetTitle() == r.version {
+			if m.GetState() != "open" { // a closed milestone is a shipped release: never planned into again
+				return Errorf(ExitBlocked, "scope: milestone %s is closed; reopen it or rename it before Release #%d plans into it", r.version, r.n)
+			}
 			r.ms = m
 		}
 	}
@@ -365,7 +368,7 @@ func sameDrift(a, b scope.Drift) bool {
 // or fewer, and never a change made after it.
 func within(d, recorded scope.Drift) bool {
 	has := func(list []scope.Item, it scope.Item) bool {
-		return slices.ContainsFunc(list, func(x scope.Item) bool { return x.Number == it.Number && x.Effort == it.Effort })
+		return slices.ContainsFunc(list, func(x scope.Item) bool { return x.Number == it.Number && x.Type == it.Type && x.Effort == it.Effort })
 	}
 	for _, it := range d.Added {
 		if !has(recorded.Added, it) {
@@ -1007,6 +1010,9 @@ func (r *scopeRun) accept(ctx context.Context) error {
 		return err
 	}
 	body := fmt.Sprintf("%s\n**Accepted (aayu scope):** %s, by @%s on %s.\n", ScopeRequestMarker, q.describe(r.version), login, r.e.Now().UTC().Format("2006-01-02"))
+	if !strings.EqualFold(cm.GetUser().GetLogin(), login) {
+		cm = nil // only its author edits a comment: a new marker without a request closes it
+	}
 	if err := r.writeComment(ctx, cm, body, "github.comment.scope-request"); err != nil {
 		return err
 	}

@@ -165,10 +165,29 @@ func TestScope(t *testing.T) {
 	}
 	g.Mu.Lock()
 	l.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
+	// The bot posted this request: the person cannot edit it, so the acceptance is a new comment.
+	g.AuthorOnlyEdits = true
+	var asked *fake.Comment
+	for _, c := range release.Comments {
+		if strings.Contains(c.Body, `"decision":7`) {
+			asked = c
+		}
+	}
+	asked.User.Login, asked.User.Type = "aayudha-r[bot]", "Bot"
+	askedBody := asked.Body
 	g.Mu.Unlock()
 	approve()
 	if code, _, out := scopeRun(person, "--accept"); code != 0 || milestone(3) != "" || started() != 1 {
 		t.Fatalf("person accepts the drop: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	newest := release.Comments[len(release.Comments)-1]
+	g.Mu.Unlock()
+	if asked.Body != askedBody || !strings.Contains(newest.Body, "Accepted (aayu scope)") || newest.User.Login != "founder" {
+		t.Fatalf("acceptance of a bot's request: asked %q, newest by %s %q", asked.Body, newest.User.Login, newest.Body)
+	}
+	if code, _, out := scopeRun(person, "--accept"); code != ExitBlocked || !strings.Contains(out, "nothing waits") {
+		t.Fatalf("the bot's request still waits: exit %d: %s", code, out)
 	}
 	var drift scope.Drift
 	ledgerJSON(scope.DriftPath("v0.3.0"), &drift)
@@ -209,6 +228,14 @@ func TestScope(t *testing.T) {
 	if code, _, out := scopeRun(agent, "--handoff"); code != 0 {
 		t.Fatalf("--handoff: exit %d: %s", code, out)
 	}
+	// A closed milestone is a shipped release: scope never plans into it.
+	g.Mu.Lock()
+	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 5, Title: "v0.5.0", State: "closed"})
+	g.Mu.Unlock()
+	shipped := g.AddIssue("v0.5.0", fixtureBody(t, "release", func(f map[string]string) { f["version"], f[workitems.FieldLinks] = "v0.5.0", "" }), "type:release")
+	if code, _, errOut := run(t, agent, opts, "scope", strconv.Itoa(shipped.Number), "--repo", "o/r", "--add", "3"); code != ExitBlocked || !strings.Contains(errOut, "milestone v0.5.0 is closed") || milestone(3) != "" {
+		t.Fatalf("a closed version milestone: exit %d: %s", code, errOut)
+	}
 	// One version, one Release: a second Release for v0.3.0 cannot use the first one's records.
 	twin := g.AddIssue("v0.3.0 again", fixtureBody(t, "release", func(f map[string]string) { f["version"], f[workitems.FieldLinks] = "v0.3.0", "" }), "type:release")
 	if code, _, errOut := run(t, agent, opts, "scope", strconv.Itoa(twin.Number), "--repo", "o/r", "--add", "3"); code != ExitBlocked || !strings.Contains(errOut, "belongs to Release #1") || milestone(3) != "" {
@@ -218,11 +245,24 @@ func TestScope(t *testing.T) {
 	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
 	links, comments := rel.Fields[workitems.FieldLinks], len(release.Comments)
 	g.Mu.Unlock()
-	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 3 {
+	if strings.TrimSpace(links) != "includes #4\nincludes #5" || comments != 4 {
 		t.Fatalf("hand-off: links %q, %d comments\n%s", links, comments, release.Body)
 	}
 	// A dropped item rides the next open release, not the backlog.
 	if code, rep, out := scopeRun(agent, "--drop", "5"); code != 0 || milestone(5) != "v0.4.0" || !strings.Contains(rep.Done, "it rides v0.4.0") {
 		t.Fatalf("--drop with a later release: exit %d, milestone %q: %s", code, milestone(5), out)
+	}
+}
+
+// A Decision covers the changes accepted with it: a zero-point Feature retyped
+// as a Story with the same effort is a new change, not one the Decision held.
+func TestScopeDecisionCoversOnlyItsChanges(t *testing.T) {
+	recorded := scope.Drift{Added: []scope.Item{{Number: 8, Type: "feature", Effort: "S"}, {Number: 9, Type: "story", Effort: "L", Points: 5}}}
+	now := scope.Drift{Added: []scope.Item{{Number: 8, Type: "story", Effort: "S", Points: 2}, {Number: 9, Type: "story", Effort: "L", Points: 5}}}
+	if within(now, recorded) {
+		t.Fatal("a retyped Feature rode the Decision accepted for the Story")
+	}
+	if !within(scope.Drift{Added: recorded.Added[1:]}, recorded) {
+		t.Fatal("a subset of the accepted changes lost its Decision")
 	}
 }
