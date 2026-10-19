@@ -272,8 +272,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
 		}
 		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && sinceErr != nil {
-			e.Logf("inspect: listing the check runs of %s: %v", short(head), sinceErr)
-			err = fmt.Errorf("%w: %s has not replied, and the gate cannot read this head's check runs to time its wait (the inspect job needs checks: read)", inspect.ErrUnavailable, c.App)
+			err = fmt.Errorf("%w: %s has not replied, and the gate cannot time its wait: %v", inspect.ErrUnavailable, c.App, sinceErr)
 		}
 		return rep, err
 	}
@@ -378,8 +377,10 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	return nil
 }
 
-// firstInspectRun is when the head's first aayudha/inspect check run after
-// floor (a reopen) started (zero when none says).
+// firstInspectRun is when the head's first aayudha/inspect check run at or
+// after floor (a reopen) started. An error says why there is no such start:
+// the runs cannot be read, or none started in the window (inspect's P1 on
+// #724), so the wait cannot be timed and a person reviews.
 func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string, floor time.Time) (time.Time, error) {
 	var first time.Time
 	// filter=all: by default GitHub lists only the newest run, a rerun's.
@@ -388,12 +389,15 @@ func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head st
 		return r.GetCheckRuns(), resp, err
 	})
 	if err != nil {
-		return first, err
+		return first, fmt.Errorf("the inspect job needs checks: read (%s)", oneLineErr(err))
 	}
 	for _, r := range runs {
-		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && at.After(floor) && (first.IsZero() || at.Before(first)) {
+		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && !at.Before(floor) && (first.IsZero() || at.Before(first)) {
 			first = at
 		}
+	}
+	if first.IsZero() {
+		return first, errors.New("no aayudha/inspect run on this head has started in this review window")
 	}
 	return first, nil
 }

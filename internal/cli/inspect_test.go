@@ -1457,6 +1457,8 @@ func TestInspectPaidReviewer(t *testing.T) {
 		g.Mu.Lock()
 		g.Pulls[prN].User.Login = "contributor" // not the approver, who reviews
 		g.Permissions = map[string]string{"contributor": "read"}
+		// The gate's own inspect run, which starts a service's wait.
+		g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "in_progress", StartedAt: opts.Now().Format(time.RFC3339)}}
 		g.Mu.Unlock()
 		code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
 		if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, c.want) ||
@@ -1473,6 +1475,15 @@ func TestInspectPaidReviewer(t *testing.T) {
 			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
 				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "checks: read") }) {
 				t.Fatalf("check runs unreadable: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+			}
+			// No inspect run with a start in the window: the wait has no start,
+			// so a person reviews rather than none (inspect's P1 on #724).
+			g.Mu.Lock()
+			g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "queued"}}
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") ||
+				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "started in this review window") }) {
+				t.Fatalf("no inspect run started: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
 			}
 			// CodeRabbit has no request on the head, so its wait starts at the
 			// head's first inspect run: past inspect.ReplyWait with no review, a
@@ -1498,7 +1509,9 @@ func TestInspectPaidReviewer(t *testing.T) {
 				g.Pulls[prN].User.Login = "contributor"
 				g.Permissions = map[string]string{"contributor": "read", "founder": "admin"}
 				h := g.Pulls[prN].Head.SHA
-				g.CheckRuns[h] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: at(150 * time.Minute)}}
+				// The step-back or judged run before the reopen, and the gate's run after it.
+				g.CheckRuns[h] = []fake.CheckRun{{ID: 2, Name: "aayudha/inspect", Status: "in_progress", StartedAt: at(0)},
+					{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: at(150 * time.Minute)}}
 				g.Mu.Unlock()
 				last, stop := h, ""
 				if stopped {
