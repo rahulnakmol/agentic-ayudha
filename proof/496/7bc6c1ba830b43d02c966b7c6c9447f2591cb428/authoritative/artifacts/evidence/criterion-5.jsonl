@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name","Output":"=== RUN   TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name","Output":"--- PASS: TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestContainerRuntime/macOS_and_Windows_reach_the_host_by_name"}

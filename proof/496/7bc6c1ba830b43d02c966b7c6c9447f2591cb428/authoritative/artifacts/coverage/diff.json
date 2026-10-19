@@ -1,0 +1,29 @@
+{
+  "covered": 268,
+  "executable": 281,
+  "percent": 95.37366548042705,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/doctor/security.go": [
+      156,
+      157,
+      229,
+      230
+    ],
+    "internal/verify/dast.go": [
+      234,
+      235,
+      318,
+      319,
+      322,
+      323
+    ],
+    "internal/verify/web.go": [
+      215,
+      235,
+      236
+    ]
+  },
+  "format": "go coverprofile"
+}
