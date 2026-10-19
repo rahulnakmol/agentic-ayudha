@@ -251,7 +251,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 		return m.signin.err
 	}
 	if m.err != nil && len(m.items) == 0 {
-		return Wrap(ExitExternal, m.err)
+		return WithNext(Errorf(ExitExternal, "aayu inbox could not read GitHub (%s), so nothing was shown or changed: %w", plainCause(m.err), m.err), "aayu inbox")
 	}
 	if len(m.items) == 0 {
 		fmt.Fprintf(out, "%s: nothing waits for you.\n", repo)
@@ -420,6 +420,7 @@ type inboxModel struct {
 	selected   map[string]bool                    // housekeeping picked with x or X for one bulk action; never a needs-you item
 	batch      int                                // the last batch of jobs started
 	fails      map[string]inboxFail               // the writes that stopped this session, by item
+	notes      map[string]string                  // an item that changed on GitHub before its write: how, in words
 	batches    map[int]*inboxBatch                // the bulk writes under way
 	workTick   bool                               // the once-a-second redraw of the writes runs
 	readAfter  bool                               // R was pressed during writes: read GitHub again once they end
@@ -483,7 +484,7 @@ type inboxModel struct {
 func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 	p := ui.New(nil, ui.Signals{TTY: true, NoColor: noColor, Theme: theme})
 	p.Theme = ui.ThemeFor(theme, true)
-	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, selected: map[string]bool{}, fails: map[string]inboxFail{}, batches: map[int]*inboxBatch{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
+	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, selected: map[string]bool{}, fails: map[string]inboxFail{}, notes: map[string]string{}, batches: map[int]*inboxBatch{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, theme: theme, dirty: true, now: time.Now,
 		flash: map[string]time.Time{}, spring: harmonica.NewSpring(harmonica.FPS(120), 30, 1)}
 }
@@ -704,12 +705,19 @@ func (m *inboxModel) house() []InboxItem {
 	return out
 }
 
-// choices are the choices of the item under the cursor.
+// choices are the choices of the item under the cursor, without one that
+// failed in a way pressing it again cannot fix.
 func (m *inboxModel) choices() []InboxAction {
-	if i := m.item(); i >= 0 {
-		return m.items[i].choices()
+	i := m.item()
+	if i < 0 {
+		return nil
 	}
-	return nil
+	it := m.items[i]
+	f, failed := m.fails[it.key()]
+	if !failed || m.state[it.key()] != "not done" || f.why.Retry {
+		return it.choices()
+	}
+	return slices.DeleteFunc(it.choices(), func(c InboxAction) bool { return c.Command == f.a.Command })
 }
 
 func (m *inboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -871,7 +879,8 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 			m.every = min(m.every*2, 10*time.Minute)
 			m.status = fmt.Sprintf("GitHub is limiting requests; the next refresh is in %s.", m.every)
 		default:
-			m.status = "Could not refresh: " + msg.err.Error() + ". R tries again."
+			m.status = "Not refreshed: " + plainCause(msg.err) + ". R tries again."
+			m.log = append(m.log, "  refresh failed: "+msg.err.Error())
 		}
 		return m.tick()
 	}
@@ -919,6 +928,11 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	}
 	num := job.it.Number
 	var ch errInboxChanged
+	var why inboxWhy // a failure in a person's words
+	if msg.err != nil && !errors.As(msg.err, &ch) {
+		stage, wrote := job.w.sofar()
+		why = explainFailure(job.it, job.a, msg.err, stage, wrote)
+	}
 	switch {
 	case errors.As(msg.err, &ch):
 		job.w.end()
@@ -937,23 +951,44 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		if i := m.item(); i >= 0 && m.items[i].key() == msg.key {
 			m.sel, m.armed = 0, false
 		}
-		m.refuse(fmt.Sprintf("#%d: %v.", num, msg.err))
+		m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; the card shows it as it is now.", num, changedWords(job.it, ch.Item))
 		// The rest of its batch was asked for against what the person read;
 		// an item queued on its own still runs.
 		n := len(m.queue)
 		m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil && j.batch == job.batch })
 		b.failed += n - len(m.queue)
+		status := fmt.Sprintf("#%d changed on GitHub; nothing was written. The card says how.", num)
+		if dropped := n - len(m.queue); dropped > 0 {
+			status = fmt.Sprintf("#%d changed on GitHub; nothing was written, and the %d picked with it did not start.", num, dropped)
+		}
+		m.refuse(status)
+	case why.Landed:
+		// The merge landed; a step after it did not: done, with a warning.
+		m.state[msg.key] = "done"
+		delete(m.selected, msg.key)
+		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end(), Warning: []string{why.What, "Next: " + why.Next}}
+		m.done[msg.key] = d
+		sv := &inboxSave{key: msg.key, d: d}
+		m.saves = append(m.saves, sv)
+		record := m.recordDone
+		save = func() tea.Msg { sv.once.Do(func() { record(sv.key, sv.d) }); return nil }
+		b.done++
+		m.status = fmt.Sprintf("✓ #%d is merged; one step after it didn't finish. The card says which.", num)
+		m.log = append(m.log, "  merged, then stopped: #"+strconv.Itoa(num)+": "+msg.err.Error())
+		m.relayout()
 	case msg.err != nil:
 		_, stage, _, _ := job.w.snapshot()
 		wrote := job.w.end()
 		m.state[msg.key] = "not done"
-		m.fails[msg.key] = inboxFail{stage: stage, err: msg.err.Error(), wrote: wrote, a: job.a}
+		m.fails[msg.key] = inboxFail{stage: stage, err: msg.err.Error(), wrote: wrote, a: job.a, why: why}
 		b.failed++
 		if len(wrote) > 0 { // part of it landed: say what, so a retry is a choice made knowing it
 			msg.err = fmt.Errorf("%w (stopped while %s, after it %s)", msg.err, stage, strings.Join(wrote, ", "))
 		}
-		m.refuse(fmt.Sprintf("✗ #%d not done; the card says why.", num)) // the whole error is on the card, never cut here
+		did, _ := inboxVerb(job.it, job.a)
+		m.refuse(fmt.Sprintf("✗ #%d not %s; the card says why.", num, did)) // the whole story is on the card, never cut here
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
+		m.readAfter = true // GitHub's view of it likely moved: the card should show it as it is now
 	case m.dryRun: // planned, not written: the item still waits, and no later session sees it done
 		job.w.end()
 		b.done++
@@ -1004,7 +1039,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 // deferredRead is the read R asked for during the writes, once they have
 // ended and no other read is under way; else nil.
 func (m *inboxModel) deferredRead() tea.Cmd {
-	if len(m.queue) > 0 || !m.readAfter || m.refreshing {
+	if len(m.queue) > 0 || !m.readAfter || m.refreshing || m.gather == nil {
 		return nil
 	}
 	m.readAfter, m.refreshing = false, true
@@ -1062,6 +1097,7 @@ func (m *inboxModel) pump() tea.Cmd {
 		j.w = &inboxWork{}
 		j.w.begin(j.it.key(), m.now())
 		delete(m.fails, j.it.key())
+		delete(m.notes, j.it.key())
 		job, act := *j, m.act
 		cmds = append(cmds, func() tea.Msg {
 			fresh, out, err := act(job.it, job.a, job.w)
@@ -2036,8 +2072,10 @@ func (m *inboxModel) rowState(i int) (mark, why string, role ui.Role) {
 			who = "@" + d.By
 		}
 		return " ✓ ", "done by " + who + " " + d.when(m.now()), ui.OK
-	case st == "not done":
+	case st == "not done" && m.fails[k].why.Retry:
 		return " ✗ ", "failed: Enter retries", ui.Fail
+	case st == "not done":
+		return " ✗ ", "not done: see the card", ui.Fail
 	case st == "gone":
 		return " - ", "gone from GitHub", ui.Muted
 	case st == "relisted":
@@ -2333,8 +2371,16 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 		}
 		return append(append(out, steps...), tail...)
 	}
-	out := append(head(ui.OK, "✓ "+do.did), sub[0])
-	out = append(out, m.style(ui.Muted, cell(fmt.Sprintf("by @%s at %s", d.By, d.when(m.now())), w)), "", inboxBold.Render("What changed on GitHub"))
+	did := do.did
+	if len(d.Warning) > 0 && it.PR > 0 { // merged, but not every step of ship finished
+		did = fmt.Sprintf("Merged #%d into %s", it.Number, or(it.f.devBr, "dev"))
+	}
+	out := append(head(ui.OK, "✓ "+did), sub[0])
+	out = append(out, m.style(ui.Muted, cell(fmt.Sprintf("by @%s at %s", d.By, d.when(m.now())), w)))
+	for _, l := range d.Warning { // a step after the main change did not finish
+		out = append(out, m.wrapStyled(ui.Warn, l, w)...)
+	}
+	out = append(out, "", inboxBold.Render("What changed on GitHub"))
 	if len(d.Wrote) == 0 {
 		out = append(out, cell("  "+d.Choice, w))
 	}
@@ -2369,21 +2415,26 @@ func (m *inboxModel) detailLines(it InboxItem, w int) []string {
 func (m *inboxModel) failLines(it InboxItem, w int) []string {
 	k := it.key()
 	if f, ok := m.fails[k]; ok && m.state[k] == "not done" {
-		do := inboxDoingFor(it, f.a)
 		out := []string{""}
-		for _, l := range m.wrap(fmt.Sprintf("✗ %s stopped at: %s", do.doing, strings.ToLower(inboxStepOf(f.stage).line)), w) {
+		for _, l := range m.wrap("✗ "+f.why.What, w) {
 			out = append(out, m.style(ui.Fail, inboxBold.Render(l)))
 		}
-		out = append(out, m.wrapStyled(ui.Fail, f.err, w)...)
-		if len(f.wrote) == 0 {
-			out = append(out, m.style(ui.Muted, cell("Nothing was written on GitHub.", w)))
-		} else {
-			out = append(out, inboxBold.Render("Already written on GitHub"))
-			for _, wr := range f.wrote {
-				out = append(out, "  "+m.style(ui.Warn, "✓ ")+cell(upperFirst(wr), w-4))
+		changed := ui.Muted
+		if len(f.wrote) > 0 {
+			changed = ui.Warn
+		}
+		out = append(out, m.wrapStyled(changed, f.why.Changed, w)...)
+		out = append(out, m.wrapStyled(ui.Accent, "Next: "+f.why.Next, w)...)
+		if m.details {
+			out = append(out, m.style(ui.Muted, inboxBold.Render("Details")+" (d hides them)"))
+			for _, d := range f.why.Detail {
+				out = append(out, m.wrapStyled(ui.Muted, "· "+d, w)...)
 			}
 		}
-		return append(out, m.wrapStyled(ui.Muted, "Enter tries it again; o opens it on GitHub to check.", w)...)
+		return out
+	}
+	if note := m.notes[k]; note != "" {
+		return append([]string{""}, m.wrapStyled(ui.Warn, note, w)...)
 	}
 	if d, ok := m.done[k]; ok && m.state[k] == "relisted" {
 		return append([]string{""}, m.wrapStyled(ui.Warn, upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+". GitHub, read since, still lists it, so it may still need you: Enter asks before doing it again.", w)...)

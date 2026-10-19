@@ -232,7 +232,7 @@ func TestInbox(t *testing.T) {
 	}
 	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r")
 	g.Hook = nil
-	if code != 0 || !strings.Contains(out, "  > a\n  not done: #2: it changed on GitHub since you read it (its title changed), so nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
+	if code != 0 || !strings.Contains(out, "  > a\n  #2 changed on GitHub since you opened it: its title was edited. Nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
 		len(g.Writes()) != 0 {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
 	}
@@ -291,7 +291,7 @@ func TestInbox(t *testing.T) {
 			"  > n\n  not applied. Enter = 2",
 		"  > y\n#2 accepted: Drop it, by @o",
 		"[3/4] At the review cap #6",
-		"  > 2\n  This will ship PR #6 now (ship's gates still apply), instead of the recommendation (option 1, open it and review it). Apply it? y = yes · n = no, go back\n  > y\n  not done: #6: ship #6: ",
+		"  > 2\n  This will ship PR #6 now (ship's gates still apply), instead of the recommendation (option 1, open it and review it). Apply it? y = yes · n = no, go back\n  > y\n  ✗ #6 wasn't shipped: the merge gate's proof for its latest commit is missing or expired.\n  Nothing was changed on GitHub.\n  Next: its builder re-runs the merge gate (a push or a re-run); nothing for you yet.\n    Detail: Stopped at: Find the merge gate's run; Error: ship #6: no merge gate pack for the head ",
 		"[4/4] Housekeeping: 1 item\n",
 		"inbox: 1 done, 2 skipped, 0 left",
 	} {
@@ -1413,7 +1413,7 @@ func TestInboxWriteFailures(t *testing.T) {
 		case 640: // changed on GitHub since it was read
 			return it, "", errInboxChanged{Item: it}
 		case 654: // refused before anything was written
-			return it, "", errors.New("403 Resource not accessible by integration")
+			return it, "", ghRefusal(http.MethodPost, "/repos/o/r/issues/654/comments", 403, "Resource not accessible by integration")
 		case 644: // labels changed, a comment rejected, then the connection drops on the next write
 			call(w, reply(200, nil), http.MethodPost, "/repos/o/r/issues/644/labels")
 			call(w, reply(422, nil), http.MethodPost, "/repos/o/r/issues/644/comments")
@@ -1494,14 +1494,16 @@ func TestInboxWriteFailures(t *testing.T) {
 	}
 	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 644 })
 	m.dirty = true
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✗ Closing #644 as fixed stopped") || !strings.Contains(v, "Already written on GitHub") ||
-		!strings.Contains(v, "✓ Changed labels") || !strings.Contains(v, "✓ May have updated the issue") || !strings.Contains(v, "Enter tries it again") {
+	if v := flatView(m); !strings.Contains(v, "✗ #644 wasn't done: the connection to GitHub dropped in the middle.") ||
+		!strings.Contains(v, "Already on GitHub: it changed labels; GitHub didn't answer one more, so it may also have updated the issue.") ||
+		!strings.Contains(v, "Next: you open it on GitHub (o) to check what landed, then Enter finishes the rest.") {
 		t.Errorf("#644's card does not say where it stopped and what was written:\n%s", v)
 	}
 
 	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return m.items[i].Number == 654 })
 	m.dirty = true
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "403 Resource not accessible by integration") || !strings.Contains(v, "Nothing was written on GitHub.") {
+	if v := flatView(m); !strings.Contains(v, "✗ #654 wasn't done: your GitHub account isn't allowed to do this here.") || !strings.Contains(v, "Nothing was changed on GitHub.") ||
+		strings.Contains(v, "403") || strings.Contains(v, "Resource not accessible") {
 		t.Errorf("#654's card does not say nothing was written:\n%s", v)
 	}
 	if strings.Contains(m.status+m.refusal, "403") || strings.Contains(m.status+m.refusal, "#644 not done:") {
@@ -1953,7 +1955,7 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		return nil
 	}
 	if code, out, errOut := runIn(t, marked, person, "", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(refused, "Say what you checked first; nothing was written.") ||
-		!strings.Contains(refused, "What did you check?") || !strings.HasPrefix(moved, "✗ #") || !strings.Contains(moved, "not done; the card says why.\n") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" ||
+		!strings.Contains(refused, "What did you check?") || !strings.HasPrefix(moved, "✗ #") || !strings.Contains(moved, "not approved; the card says why.\n") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" ||
 		strings.Contains(out+errOut, "WDJB-MJHT") { // the full-screen inbox shows the device code on its own screen, never in its output
 		t.Fatalf("empty answer or moved head: exit %d\n%s\nstatus %q\nledger %q\n%s\n%s", code, refused, moved, approvals(), out, errOut)
 	}
@@ -2260,7 +2262,7 @@ func TestInboxLoginScreen(t *testing.T) {
 	// The code expires: Enter asks for a new one.
 	m.Update(inboxSignedMsg{err: WithNext(Errorf(ExitBlocked, "inbox was not approved: the code expired; nothing was done"), "ask for the command again to get a new code: aayu inbox")})
 	m.dirty = true
-	if v := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " "); !strings.Contains(v, "✗ Inbox was not approved: the code expired") || !strings.Contains(v, "Enter new code · q quit") {
+	if v := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " "); !strings.Contains(v, "✗ The code expired before it was approved. Nothing was done.") || !strings.Contains(v, "Enter new code · q quit") {
 		t.Errorf("the expired code:\n%s", v)
 	}
 	before := runs
@@ -2666,7 +2668,7 @@ func TestInboxReadTimeout(t *testing.T) {
 			g.Fail, g.FailAfter = "GET /repos/o/r/pulls/9", 0
 			g.Mu.Unlock()
 			teaKeys(m, "R") // cut off before #9's pull request is read
-			if !strings.HasPrefix(m.status, "Could not refresh") {
+			if !strings.HasPrefix(m.status, "Not refreshed:") {
 				t.Errorf("the injected failure did not stop the refresh: %q", m.status)
 			}
 			teaKeys(m, "R")
