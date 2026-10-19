@@ -223,8 +223,9 @@ func Check(files map[string][]byte) Report {
 	}
 	for name, ps := range v.names {
 		slices.Sort(ps)
-		if len(ps) > 1 && strings.HasSuffix(ps[0], ".md") {
-			fail(ps[0], "unique-name", "%d notes share the name %q (%s): a wikilink to it is ambiguous", len(ps), name, strings.Join(ps, ", "))
+		// an attachment can share a note's name and sort first: any note in the set makes the link ambiguous
+		if i := slices.IndexFunc(ps, func(p string) bool { return strings.HasSuffix(p, ".md") }); len(ps) > 1 && i >= 0 {
+			fail(ps[i], "unique-name", "%d notes share the name %q (%s): a wikilink to it is ambiguous", len(ps), name, strings.Join(ps, ", "))
 		}
 	}
 	for _, p := range v.unsafe {
@@ -318,8 +319,8 @@ func Check(files map[string][]byte) Report {
 				fail(p, "link", "[[%s]] does not resolve", l)
 			}
 		}
-		if k := dupBlock(n.Body); k != "" {
-			fail(p, "block", "two generated %s blocks: a checkpoint refreshes one, so delete the other", k)
+		if prob := blockProblem(n.Body); prob != "" {
+			fail(p, "block", "%s: a checkpoint refreshes one whole block per name, so fix or delete the markers", prob)
 		}
 		human := prose(n.Body)
 		units := proseUnits(human)

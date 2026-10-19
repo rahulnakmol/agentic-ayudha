@@ -182,16 +182,35 @@ func blockSpans(body string) [][]int {
 	return out
 }
 
-// dupBlock returns the name of a generated block that body holds twice, or "":
-// a checkpoint refreshes one block per name, so a copy would go stale.
-func dupBlock(body string) string {
+// markerRE matches a generated block's BEGIN or END marker on a line of its own.
+var markerRE = regexp.MustCompile(`(?m)^<!-- (BEGIN|END) aayudha:brain:([a-z0-9-]+) -->$`)
+
+// blockProblem describes generated-block markers a checkpoint cannot refresh,
+// or "": a name used twice, an END that names another block, or a marker
+// without its pair. A checkpoint refreshes one whole block per name, so the
+// text such markers hold would go stale.
+func blockProblem(body string) string {
 	seen := map[string]bool{}
-	for _, m := range blockSpans(body) {
-		if k := body[m[2]:m[3]]; seen[k] {
-			return k
-		} else {
-			seen[k] = true
+	open := ""
+	for _, m := range markerRE.FindAllStringSubmatch(maskCode(body), -1) {
+		kind, k := m[1], m[2]
+		switch {
+		case kind == "BEGIN" && open != "":
+			return fmt.Sprintf("the generated %s block has no END marker", open)
+		case kind == "BEGIN" && seen[k]:
+			return fmt.Sprintf("two generated %s blocks", k)
+		case kind == "BEGIN":
+			open, seen[k] = k, true
+		case open == "":
+			return fmt.Sprintf("an END marker of a generated %s block has no BEGIN marker", k)
+		case k != open:
+			return fmt.Sprintf("the generated %s block ends with the END marker of %s", open, k)
+		default:
+			open = ""
 		}
+	}
+	if open != "" {
+		return fmt.Sprintf("the generated %s block has no END marker", open)
 	}
 	return ""
 }

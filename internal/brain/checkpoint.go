@@ -188,8 +188,8 @@ func (c *cp) upsert(p string, create func() *Note, meta map[string]any, blocks m
 			c.err = fmt.Errorf("%s: %w; fix it and run the checkpoint again", p, err)
 			return
 		}
-		if k := dupBlock(n.Body); k != "" {
-			c.err = fmt.Errorf("%s: two generated %s blocks; delete one and run the checkpoint again", p, k)
+		if prob := blockProblem(n.Body); prob != "" {
+			c.err = fmt.Errorf("%s: %s; fix the markers and run the checkpoint again", p, prob)
 			return
 		}
 	} else if create != nil {
