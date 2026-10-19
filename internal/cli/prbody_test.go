@@ -59,6 +59,20 @@ func TestStoryBodyStructure(t *testing.T) {
 	if strings.Contains(body, "| Type | Item |") {
 		t.Errorf("a Story without dependencies got an empty RAID table:\n%s", body)
 	}
+	// A Story's Summary never adds a section or a long sentence to the body,
+	// and a label's pipe never breaks the table.
+	tricky := "### Summary\n\nThe cart is\n#### What changed\nshort.\n\n" + strings.Repeat("word ", 25) + "end.\n"
+	b = storyBody(chk, tricky, "high|now", nil, cps, "x")
+	if strings.Count(b, "\n## What changed") != 1 || strings.Contains(b, "\n#### ") {
+		t.Errorf("the Summary added a section:\n%s", b)
+	}
+	if strings.Contains(b, "word word") || !strings.Contains(b, "The cart is #### What changed short.") || !strings.Contains(b, `| Risk | high\|now |`) {
+		t.Errorf("Summary or risk cell:\n%s", b)
+	}
+	filledTricky := strings.ReplaceAll(b, prbody.Placeholder, "The cart shows the total.")
+	if block, _ := prbody.Check(filledTricky, nil, true); len(block) > 0 {
+		t.Errorf("a filled body from a tricky Summary blocks: %v", block)
+	}
 	chk.Type = "bug"
 	if b := storyBody(chk, issue, "", nil, cps, "x"); !strings.Contains(b, "| Bug | #42 |") || !strings.Contains(b, "| Type | fix |") {
 		t.Errorf("a Bug's body:\n%s", b)

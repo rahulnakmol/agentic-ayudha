@@ -42,21 +42,19 @@ func storyBody(chk ready.Result, issueBody, risk string, deps []prDependency, cp
 		kind, typ = "Bug", "fix"
 	}
 	_, fields := workitems.Sections(issueBody)
-	summary := strings.TrimSpace(fields["Summary"])
-	if workitems.Empty(summary) {
-		summary = ""
-	}
+	sentences := storySentences(fields["Summary"])
+	summary := strings.Join(sentences, " ")
 	title := strings.TrimSuffix(workitems.BareTitle(chk.Title), ".")
 	first := ""
-	if s := brief.Sentences([]brief.Unit{{Text: oneLine(summary)}}); len(s) > 0 {
-		first = " " + s[0].Text
+	if len(sentences) > 0 {
+		first = " " + sentences[0]
 	}
 	ph := prbody.Placeholder
 	var b strings.Builder
 	b.WriteString("## What this does\n\n")
 	fmt.Fprintf(&b, "**%s.**%s\n", title, first)
 	fmt.Fprintf(&b, "\n| At a glance | |\n|---|---|\n| %s | #%d |\n| Type | %s |\n| Who it helps | %s |\n| Risk | %s |\n| Breaking | %s |\n",
-		kind, chk.Issue, typ, ph, cmp.Or(risk, ph), ph)
+		kind, chk.Issue, typ, ph, prCell(cmp.Or(risk, ph)), ph)
 	b.WriteString("\n## Why\n\n")
 	why := fmt.Sprintf("%s #%d asks for this change.\n", kind, chk.Issue)
 	if summary != "" {
@@ -97,6 +95,23 @@ func storyBody(chk ready.Result, issueBody, risk string, deps []prDependency, cp
 	b.WriteString(prMarked("detail", detail.String()))
 	fmt.Fprintf(&b, "\n</details>\n\nRefs #%d\n", chk.Issue)
 	return b.String()
+}
+
+// storySentences are the sentences of a Story's Summary that the PR body may
+// quote: on one line, so no line of it starts a section of the body, and
+// each within brief.MaxSTEWords, so the Story's words never make the body
+// fail its own check.
+func storySentences(summary string) []string {
+	if workitems.Empty(summary) {
+		return nil
+	}
+	var out []string
+	for _, s := range brief.Sentences([]brief.Unit{{Text: oneLine(summary)}}) {
+		if len(s.Words) <= brief.MaxSTEWords {
+			out = append(out, s.Text)
+		}
+	}
+	return out
 }
 
 // prDependency is a depends-on link of the Story: the issue it waits for,

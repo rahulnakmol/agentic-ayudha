@@ -141,15 +141,24 @@ func Check(body string, words *brief.Words, agent bool) (block, warn []workitems
 		plain[prName(s)] = true
 	}
 	secs := prSplit(body)
+	// Every copy of a section counts: a second "## What changed" (pasted from
+	// a Story, say) never hides an unfilled one.
 	for _, want := range Sections {
-		i := slices.IndexFunc(secs, func(s prSection) bool { return prName(s.name) == prName(want) })
-		switch {
-		case i < 0:
+		found := false
+		for _, sec := range secs {
+			if prName(sec.name) != prName(want) {
+				continue
+			}
+			found = true
+			switch {
+			case strings.Contains(sec.text, Placeholder):
+				hard(want, "the section still holds a placeholder: write it")
+			case !prFilled(want, sec.text):
+				hard(want, "the section is empty: comments and table headings alone do not count")
+			}
+		}
+		if !found {
 			hard(want, "the section is missing: add a \"## "+want+"\" heading and write it")
-		case strings.Contains(secs[i].text, Placeholder):
-			hard(want, "the section still holds a placeholder: write it")
-		case !prFilled(want, secs[i].text):
-			hard(want, "the section is empty: comments and table headings alone do not count")
 		}
 	}
 	for _, s := range secs {
