@@ -379,7 +379,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 	if bin == "" {
 		bin = "amp"
 	}
-	var applied, steps, pending []string
+	var applied, steps, pending, paused []string
 	async := false
 	today := e.Now().UTC().Format(time.DateOnly)
 	for _, l := range ls {
@@ -394,7 +394,8 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		old := rec[loops.HostAmp][l.Name].ID
 		oldThread := threadID.FindString(old)
 		if !l.IsEvent() && oldThread != "" {
-			prompt = "Call Amp's set_schedule on this thread with exactly this input. Then call update_schedule with thread: " + oldThread + " and enabled: false, which pauses this loop's previous schedule. Do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
+			prompt = "Call Amp's set_schedule on this thread with exactly this input. Only if it succeeds, call update_schedule with thread: " + oldThread + " and enabled: false, which pauses this loop's previous schedule. " +
+				"Do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`. If a call fails, reply with its error instead, and say that the schedule on " + oldThread + " still runs.\n\n" + string(in)
 		} else if !l.IsEvent() && old != "" {
 			steps = append(steps, fmt.Sprintf("%s: %s records %q, which names no thread: pause that schedule in Amp by hand, or the loop runs twice.", l.Name, loops.RecordFile, old))
 		}
@@ -428,6 +429,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
 		if !l.IsEvent() && oldThread != "" {
 			id += "; its thread pauses the old schedule on " + oldThread
+			paused = append(paused, l.Name+" ("+oldThread+")")
 		}
 		applied = append(applied, l.Name+": "+id)
 	}
@@ -438,6 +440,10 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		if async {
 			// amp -ox returns the thread before its agent runs (Appendix B D-7.1f).
 			steps = append(steps, "Each Amp thread sets its schedule a few seconds after it starts: open each one to check it holds the schedule, then record the schedule ID with `aayu install --loops --host amp --record <loop>=schedule <ID> on <thread>`.")
+		}
+		if len(paused) > 0 {
+			// The thread's reply comes after amp -ox returns, so whether a pause worked is not known here; the old threads stay named.
+			steps = append(steps, fmt.Sprintf("The new threads pause the old schedules of %s once their own is set. Open each new thread to check: one that failed says so, and its loop's old schedule still runs until you pause it (update_schedule with that thread and enabled: false).", strings.Join(paused, ", ")))
 		}
 		for _, n := range pending {
 			steps = append(steps, fmt.Sprintf("%s is not recorded: its thread had not replied with a subscription ID. Open the thread, check that Amp shows the GitHub subscription, then record it with `aayu install --loops --host amp --record %s=subscription <ID>`.", n, n))

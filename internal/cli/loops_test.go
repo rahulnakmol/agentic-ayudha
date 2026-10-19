@@ -369,7 +369,11 @@ func TestInstallLoops(t *testing.T) {
 	calls = nil
 	code, r, errOut = report("", "--host", "amp", "--apply")
 	if code != 0 || states(r) != "digest=amp:active triage-daily=amp:active" ||
-		!strings.Contains(prompt("digest"), "Then call update_schedule with thread: T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c and enabled: false") ||
+		!strings.Contains(prompt("digest"), "Only if it succeeds, call update_schedule with thread: T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c and enabled: false") ||
+		!strings.Contains(prompt("digest"), "If a call fails, reply with its error instead, and say that the schedule on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c still runs") ||
+		!slices.ContainsFunc(r.Steps, func(s string) bool {
+			return strings.HasPrefix(s, "The new threads pause the old schedules of digest (T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c) once their own is set.")
+		}) ||
 		!slices.Contains(r.Applied, "digest: schedule s-digest on T-01a14215-c759-72bf-9a65-d2317a72a878; its thread pauses the old schedule on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c") ||
 		strings.Contains(prompt("triage-daily"), "update_schedule") ||
 		!slices.Contains(r.Steps, `triage-daily: loops/active.json records "sched-1", which names no thread: pause that schedule in Amp by hand, or the loop runs twice.`) {
