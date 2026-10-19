@@ -23,7 +23,8 @@ response. `aayu investigate` reads this export.
 ## How to reach it
 
 - Not visible to the employee. An operator reads the export, through `aayu investigate <incident> --telemetry <dir>`.
-- `deploy/deploy.sh <revision>` (the ops catalog's deploy and rollback actions) starts the app with `-telemetry`.
+- `deploy/deploy.sh <revision>`, a manual deploy script, starts the app with `-telemetry`. The repository's ops
+  catalog (`ops/actions.toml`) has no action that runs it.
 
 ## Behaviour checks
 
@@ -37,7 +38,7 @@ response. `aayu investigate` reads this export.
 
 ## Gotchas
 
-- `deploy/serve.sh` starts the app without `-telemetry`, and `deploy/deploy.sh` is a person-approved catalog action,
+- `deploy/serve.sh` starts the app without `-telemetry`, and `deploy/deploy.sh` deploys a production-like service,
   not a seed, so this check is unreachable through the `[verify] seed` launch.
 - Nothing proves this capability today: no Go test in `examples/benefits-qa` starts the command with `-telemetry` or
   exercises `api.Observe` (`internal/cli/investigate_test.go` builds its own export with its own tracer). Until the
