@@ -133,7 +133,7 @@ proof pack yet.
 ### Breaking changes
 
 - `[inspect] reviewer = "auto"` and `"amp"` are removed with no deprecation release: a repository left on either gets a person's review on every pull request that is not docs-only, and `aayu install --apply` asks for a tool again (#641, #657).
-- A repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app (#657).
+- A repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app in the pull request that commits the new merge gate (#657).
 - In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes

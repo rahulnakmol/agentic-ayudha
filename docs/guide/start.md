@@ -121,7 +121,8 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
 
 1. `aayu init --gates` adds the merge gate workflow and creates the `code-review` environment, with Grok 4.7 at
    `https://api.x.ai/v1` filled in. Commit the workflow through a pull request and merge it. The gate runs from your
-   base branch's copy, so it starts checking from the next pull request.
+   base branch's copy, so it starts checking from the next pull request. If a review app or a person will review
+   instead of the CI model, put that choice from step 2 in this same pull request.
 
    **You should see** an `environment code-review` line in init's report, and the workflow file in the merged pull
    request. If the line is missing, read the note below step 2.
@@ -129,12 +130,12 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    The review model must come from a vendor other than the one that builds; change `AAYU_REVIEW_MODEL_URL` and
    `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting. A review
    app, such as Codex, CodeRabbit, or Greptile, can review instead: set `[inspect] reviewer` to its name and list it
-   in `[inspect] apps`. The gate reads `.aayudha/config.toml` from your base branch, so merge that change through a
-   pull request before step 3.
+   in `[inspect] apps`. The gate reads `.aayudha/config.toml` from your base branch. A later pull request is checked
+   with the default `ci`, which fails without the key, so make this change in step 1's pull request.
 
    > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
    > not create `code-review`. Choose a review app as above, or `human` with `[autonomy] approver` set to the person
-   > who reviews, or make the repository public or upgrade. Merge these settings before step 3, as above.
+   > who reviews, or make the repository public or upgrade. Put these settings in step 1's pull request, as above.
 
    **You should see** `AAYU_REVIEW_MODEL_KEY` under **Environment secrets** on the `code-review` page. `aayu doctor`
    cannot read the environment, so the gate's first run is where a wrong key shows: if it fails, see

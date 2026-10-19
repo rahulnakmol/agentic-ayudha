@@ -53,7 +53,8 @@ evidence".
 
 > **Needs setup:** the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in **Settings → Environments →
 > code-review**, which `aayu init --gates` creates ([code review in the merge gate](how-review.md)). Or a review app
-> installed on your account, named in `[inspect] reviewer` and `[inspect] apps`. A private repository on GitHub Free
+> installed on your account, named in `[inspect] reviewer` and `[inspect] apps` in the pull request that adds the
+> merge gate. A private repository on GitHub Free
 > has no environments, so there init cannot create `code-review`: choose a review app, or make the repository public
 > or upgrade. Proof needs no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the
 > pull request, and `ship` checks it came from that run and records it under your name.
@@ -102,7 +103,7 @@ switched on.
 | From | To | Run |
 |---|---|---|
 | Nothing | Level 1 | `aayu tour` (it runs `aayu init`, then `aayu install --host <your host> --apply`) |
-| Level 1 | Level 2 | `aayu init --gates`, commit the new workflows through a pull request, and add `AAYU_REVIEW_MODEL_KEY` to the `code-review` environment (or name a review app in `[inspect] reviewer` and `[inspect] apps`) |
+| Level 1 | Level 2 | `aayu init --gates`, commit the new workflows through a pull request, and add `AAYU_REVIEW_MODEL_KEY` to the `code-review` environment (or name a review app in `[inspect] reviewer` and `[inspect] apps` in that same pull request) |
 | Level 2 | Level 3 | `aayu init --identity`, `aayu install --loops`, then `aayu init --integrations` for the services you use |
 
 Every step is idempotent: running it again changes nothing. And `aayu uninit` removes what `init` created.
