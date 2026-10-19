@@ -378,14 +378,29 @@ func buildable(is *gh.Issue) bool {
 // one, and nothing outside it; otherwise every status:ready Story and Bug by
 // priority, then age. It returns 0 when it picked nothing; runBuild then
 // claims the pick with the lease, as for any build.
-func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, l *config.Loaded, repo, root, mode string) (*BuildPick, int, error) {
-	if ls, err := loops.Load(root); err != nil {
-		return nil, 0, Wrap(ExitUsage, err)
-	} else if _, ok := loops.Find(ls, BuildLoop); !ok {
-		return nil, 0, Errorf(ExitUsage, "build --next runs only for the %s loop: this repository has no loops/%s.toml (`aayu install --loops` writes it)", BuildLoop, BuildLoop)
-	}
+func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, l *config.Loaded, repo, mode string) (*BuildPick, int, error) {
+	// The loop's definition and its [build] in_flight are a person's standing
+	// ask, so they are read from the integration branch's tip on GitHub, as
+	// ship reads its policy: never from the checkout, AAYU_* or --set, which
+	// the agent running the loop controls. A local in_flight may only lower it.
 	owner, name, _ := github.SplitRepo(repo)
-	p := &BuildPick{Mode: mode, Limit: l.Config.Build.InFlight, InFlight: []LoopItem{}, Ship: []LoopItem{}}
+	dev := e.devBranch()
+	pol, err := basePolicy(ctx, c, owner, name, dev)
+	if err != nil {
+		return nil, 0, err
+	}
+	def, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, "loops/"+BuildLoop+".toml", &gh.RepositoryContentGetOptions{Ref: pol.Tip})
+	if github.NotFound(err) {
+		return nil, 0, Errorf(ExitUsage, "build --next runs only for the %s loop: %s has no loops/%s.toml at %s (`aayu install --loops` writes it; a person merges it)", BuildLoop, dev, BuildLoop, short(pol.Tip))
+	} else if err != nil {
+		return nil, 0, Wrap(ExitExternal, err)
+	}
+	if text, err := def.GetContent(); err != nil {
+		return nil, 0, Wrap(ExitExternal, err)
+	} else if _, err := loops.Parse(BuildLoop, []byte(text)); err != nil {
+		return nil, 0, Errorf(ExitUsage, "loops/%s.toml on %s at %s: %v", BuildLoop, dev, short(pol.Tip), err)
+	}
+	p := &BuildPick{Mode: mode, Limit: min(l.Config.Build.InFlight, pol.Config.Build.InFlight), InFlight: []LoopItem{}, Ship: []LoopItem{}}
 	prs, err := openStoryPRs(ctx, c, owner, name)
 	if err != nil {
 		return nil, 0, Wrap(ExitExternal, err)

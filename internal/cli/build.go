@@ -234,7 +234,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		if pick, n, err = e.pickNext(ctx, c, pw, l, repo, root, mode); err != nil {
+		if pick, n, err = e.pickNext(ctx, c, pw, l, repo, mode); err != nil {
 			return err
 		}
 		if n == 0 || c.DryRun() {

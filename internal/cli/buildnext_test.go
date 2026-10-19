@@ -24,6 +24,14 @@ func buildLoopFixture(t *testing.T, g *fake.GitHub) (next func(extra map[string]
 	}
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), b, 0o644)
+	// The loop's definition and [build] are read from dev's tip on GitHub.
+	g.Mu.Lock()
+	g.Refs["heads/dev"] = devTip
+	if g.RefFiles == nil {
+		g.RefFiles = map[string]map[string]string{}
+	}
+	g.RefFiles[devTip] = map[string]string{"loops/" + BuildLoop + ".toml": string(b)}
+	g.Mu.Unlock()
 	// An agent session: the asked gate holds every story the person did not name.
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": "loop-run"}
 	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
@@ -47,6 +55,19 @@ func buildLoopFixture(t *testing.T, g *fake.GitHub) (next func(extra map[string]
 		return code, res, pick, out + errOut
 	}
 	return next, env, opts, dir, bare
+}
+
+const devTip = "d0000000000000000000000000000000000000de"
+
+// commitOnDev sets a file at dev's tip, as merged; "" removes it.
+func commitOnDev(g *fake.GitHub, path, content string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	if content == "" {
+		delete(g.RefFiles[devTip], path)
+		return
+	}
+	g.RefFiles[devTip][path] = content
 }
 
 func readyAll(t *testing.T, env map[string]string, opts Options, ns ...int) {
@@ -83,13 +104,14 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	next, env, opts, dir, bare := buildLoopFixture(t, g)
 
-	// Without the loop's definition there is no standing ask: --next refuses.
-	_ = os.Remove(filepath.Join(dir, "loops", BuildLoop+".toml"))
-	if code, _, _, out := next(nil, "--next", "pick"); code != ExitUsage || !strings.Contains(out, "no loops/build-ready.toml") {
-		t.Fatalf("--next without the loop: %d %s", code, out)
-	}
+	// Without the loop's definition on dev there is no standing ask: --next
+	// refuses, though the checkout has the file.
 	b, _ := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
-	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), b, 0o644)
+	commitOnDev(g, "loops/"+BuildLoop+".toml", "")
+	if code, _, _, out := next(nil, "--next", "pick"); code != ExitUsage || !strings.Contains(out, "dev has no loops/build-ready.toml") {
+		t.Fatalf("--next without the loop on dev: %d %s", code, out)
+	}
+	commitOnDev(g, "loops/"+BuildLoop+".toml", string(b))
 
 	readyAll(t, env, opts, low.Number, newer.Number, older.Number, drifted.Number, withPR.Number, claimed.Number)
 	g.Mu.Lock()
@@ -124,9 +146,11 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	// --dry-run previews the pick on a ledger with no claims file yet, and
 	// claims nothing.
-	if code, _, pick, out := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}, "--next", "pick", "--dry-run"); code != 0 || pick.Picked != older.Number || contains(g.LabelNames(older.Number), LeaseLabel) {
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
+	if code, _, pick, out := next(nil, "--next", "pick", "--dry-run"); code != 0 || pick.Picked != older.Number || contains(g.LabelNames(older.Number), LeaseLabel) {
 		t.Fatalf("--next pick --dry-run: %d %s", code, out)
 	}
+	commitOnDev(g, ".aayudha/config.toml", "")
 	// The ledger orders picks across machines: a recent claim line of another
 	// pick holds the one slot, and one for the same story was first.
 	claimLine := func(story int, at time.Time) string {
@@ -220,7 +244,13 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 		t.Fatalf("in_flight 0: %d %+v", code, pick)
 	}
 
+	// The cap is dev's committed in_flight: a local AAYU_* or --set may lower
+	// it, never raise it.
 	two := map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}
+	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
+		t.Fatalf("a local in_flight raised the committed cap: %d %s", code, out)
+	}
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
 	if code, res, _, out := next(two, "--next", "pick"); code != 0 || res.Issue != newer.Number {
 		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)
 	}
@@ -333,6 +363,7 @@ func TestBuildNextFollowsTheCurrentBaseline(t *testing.T) {
 	putLedger(t, bare, "releases/v0.3.0/baseline-1.json", baseline("v0.3.0", rel.Number, 1, outside.Number))
 	putLedger(t, bare, "releases/v0.3.0/baseline-2.json", baseline("v0.3.0", rel.Number, 2, second.Number, first.Number))
 
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 3\n")
 	three := map[string]string{"AAYU_BUILD__IN_FLIGHT": "3"}
 	for _, want := range []int{second.Number, first.Number} {
 		code, res, pick, out := next(three, "--next", "pick")

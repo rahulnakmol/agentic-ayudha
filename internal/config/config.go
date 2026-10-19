@@ -70,7 +70,7 @@ type Approvals struct {
 
 // Build is [build]: the build-ready loop's limit.
 type Build struct {
-	InFlight int `koanf:"in_flight" jsonschema:"minimum=0" jsonschema_description:"Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks."`
+	InFlight int `koanf:"in_flight" jsonschema:"minimum=0" jsonschema_description:"Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__IN_FLIGHT or --set may only lower it."`
 }
 
 // Delegate is [delegate] (WP5.5b).

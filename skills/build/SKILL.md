@@ -184,6 +184,8 @@ of step 1. The binary picks; you never choose the story.
    another way: a pull request that needs a person waits in `aayu inbox`.
 2. `aayu build --next pick` blocks the loop's stale claims, then claims at most one item under `[build] in_flight`:
    the current release's accepted baseline in its order, else priority, then age. When it claims nothing, stop.
+   The loop's definition and `[build] in_flight` are read from dev's tip on GitHub, as merged. A file in your
+   checkout, `AAYU_BUILD__IN_FLIGHT`, or `--set` never adds the loop or raises the cap; a local value may only lower it.
 3. When it claims an item, it cuts the worktree. Continue from step 2 above for that issue only, until
    `aayu build <n>` opens or updates the pull request. Pick no second item in the same run.
 4. When the build cannot reach a pull request, run `aayu build <n> --stop "<why>"`. The item goes to
