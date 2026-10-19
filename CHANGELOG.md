@@ -105,6 +105,8 @@ proof pack yet.
 - The host guard covers PostHog and Sentry calls under GitHub Copilot, and a Copilot shell call that exits non-zero is logged as failed (#537, #556).
 - `aayu doctor` tries each PostHog and Sentry capability with one cheap read and names the exact fix (#499).
 - A checkout's config can no longer send a stored integration key to another host (#602).
+- A pull request can no longer change protected settings through `.aayudha/config.json` or a committed `.aayudha/config.local.toml` or `config.local.json`: in CI the local files are skipped with a notice, `[decisions] solo_provisional_after_hours` and `[integrations.<p>] allow_pii` count only from `.aayudha/config.toml`, and the `.aayudha/.gitignore` that `aayu init` writes also ignores `config.local.json` (#660).
+- Config keys now match only in their exact case, so a case variant such as `Allow_PII` is refused as an unknown key instead of setting the setting (#660).
 - inspect reads its own state only from a comment its trusted writer posted, in every reader (#605).
 - `aayu init --identity` stops at once in a remote shell, such as an orb's Terminal tab or SSH, and creates no App; on this machine it exits 4 with a next step when no redirect arrives within 10 minutes (#603).
 - `aayu init --identity` prints no Install link and writes no secret when the App's conversion fails, and refuses an App with another owner, an unrequested permission or event, or another webhook (#603).
