@@ -349,6 +349,36 @@ func TestInstallLoops(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "loops", "active.json")); !strings.Contains(string(b), `"id": "schedule s-digest on T-01a14215`) {
 		t.Errorf("active.json:\n%s", b)
 	}
+	// Bug #715: re-applied, each new thread pauses the schedule that active.json records on an older thread, and
+	// install says so; a recorded ID that names no thread gets the step to pause it by hand.
+	prompt := func(loop string) string {
+		i := slices.IndexFunc(calls, func(c string) bool { return strings.Contains(c, "--title aayudha loop: "+loop+" ") })
+		if i < 0 {
+			return ""
+		}
+		return calls[i]
+	}
+	if strings.Contains(prompt("digest"), "update_schedule") {
+		t.Errorf("first apply, nothing recorded: %s", prompt("digest"))
+	}
+	for _, rec := range []string{"digest=schedule s-old on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c", "triage-daily=sched-1"} {
+		if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", rec); code != 0 {
+			t.Fatalf("record %s: exit %d: %s", rec, code, errOut)
+		}
+	}
+	calls = nil
+	code, r, errOut = report("", "--host", "amp", "--apply")
+	if code != 0 || states(r) != "digest=amp:active triage-daily=amp:active" ||
+		!strings.Contains(prompt("digest"), "Only if it succeeds, call update_schedule with thread: T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c and enabled: false") ||
+		!strings.Contains(prompt("digest"), "If a call fails, reply with its error instead, and say that the schedule on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c still runs") ||
+		!slices.ContainsFunc(r.Steps, func(s string) bool {
+			return strings.HasPrefix(s, "The new threads are asked to pause the old schedules of digest (T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c) once their own is set; nothing confirms it here.")
+		}) ||
+		!slices.Contains(r.Applied, "digest: schedule s-digest on T-01a14215-c759-72bf-9a65-d2317a72a878; its thread is asked to pause the old schedule on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c") ||
+		strings.Contains(prompt("triage-daily"), "update_schedule") ||
+		!slices.Contains(r.Steps, `triage-daily: loops/active.json recorded "sched-1", which names no thread: once its new thread holds the schedule, pause that old one in Amp by hand, or the loop runs twice.`) {
+		t.Errorf("re-apply: exit %d %s, applied %q, steps %q, digest prompt %s: %s", code, states(r), r.Applied, r.Steps, prompt("digest"), errOut)
+	}
 	// Recording triage-daily in Codex as well: it would run twice, so both say so.
 	if code, out, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage-daily=task-1"); code != 0 || !strings.Contains(out, "triage-daily is also recorded in amp: it runs twice") {
 		t.Errorf("double record: exit %d: %s", code, out)
