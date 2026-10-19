@@ -5,29 +5,15 @@ idea into clear promises, checks every change against them before it merges, and
 It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), on your GitHub repository.
 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
-- **Proof before merge.** A merge gate runs fixed checks in your CI. When they and the proof pass, it sends each
-  pull request that is ready for review, other than a change to documents only, to a review model in your CI. A draft
-  is not reviewed until you mark it ready. Its one key lives in your repository's `code-review` environment
-  ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
-  the builder's. Otherwise, or for an author without write access, the gate skips Codex, Claude, and Cursor, which
-  review only when a person asks them. CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`; when
-  neither is listed, or it has still not replied when inspect runs again 30 minutes or more later (on a push, a
-  submitted review, or a rerun of the merge gate), the approver approves with `aayu inspect <pr> --approve --reason "<what you checked>"`, or in
-  `aayu inbox` once that run has put the pull request there. A
-  review from the builder's own family is labelled rung C, and it never counts toward the streak
-  ([sources](docs/releases/v0.3.0.md#merge-and-review)).
-- **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
-  by default, merges a story's pull request once its checks and proof pass and its review ends at `merge` from a rung
-  that `[autonomy] proof_rungs` lists. A long correction-free streak on
-  every layer it touches also lets it merge, when none of those layers is in `[autonomy] never` and its current head
-  has a review of another family (rung A or B). With merge on
-  proof on, the narrow set of files and settings always waits for a person. The streak path does not check it
-  ([known limits](docs/releases/v0.3.0.md#known-limits)). Every bypass is recorded
-  ([sources](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
+- **Proof before merge.** A merge gate runs fixed checks in your CI, then sends each ready pull request that is not
+  docs-only for review, by default to a review model you choose, with one key in your CI
+  ([who reviews when](docs/releases/v0.3.0.md#whats-new)).
+- **A person decides.** An agent's change merges without a person only on proof, which is off by default, or on a long
+  correction-free streak, and every bypass is recorded
+  ([how a change joins](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
 
-**New in v0.3.0:** with merge on proof turned on, a story's pull request can merge on its own once its checks and proof
-pass and its review ends at `merge` from an allowed rung, unless it touches the narrow set of files and settings that
-always wait for a person. Each project names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
+**New in v0.3.0:** a story's pull request can merge on proof, and each project names one review tool. Read
+[what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
 does.
@@ -79,13 +65,9 @@ What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the rel
 ## Adopt at your own pace
 
 1. **Level 1, clear work items.** Free, no keys, no CI changes: what the tour sets up.
-2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI. Once a pull request
-   is ready for review and its checks and proof pass, a review model you choose, with one key, reviews each change
-   that is not docs-only when its family differs from the builder's and the author has write access
-   ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise the gate skips Codex, Claude, and Cursor, and
-   CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`, or the approver approves when neither is
-   listed or it has still not replied when inspect runs again 30 minutes or more later
-   ([what's new](docs/releases/v0.3.0.md#whats-new)).
+2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI, and a review model
+   you choose, with one key, reviews each ready change that is not docs-only
+   ([who reviews when](docs/releases/v0.3.0.md#whats-new)).
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 
