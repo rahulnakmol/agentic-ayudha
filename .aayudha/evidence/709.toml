@@ -1,0 +1,14 @@
+# Which tests prove Bug #709's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # amp -ox prints only the thread URL; the reply, with a sentence after the ID, is read and recorded as active
+tests = ["internal/cli:TestInstallLoopsEventSubscription"]
+
+[[criterion]]
+id = 2 # the prompt asks to update and enable an existing equivalent subscription and to reply with exactly one line
+tests = ["internal/cli:TestInstallLoopsEventSubscription"]
+
+[[criterion]]
+id = 3 # no reply within the wait: unrecorded, missing, and the step to record it by hand
+tests = ["internal/cli:TestInstallLoopsEventSubscription"]
