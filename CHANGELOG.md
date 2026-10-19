@@ -137,6 +137,7 @@ for this release.
 
 - Every model gateway call gets the 12-minute `CallTimeout`, even when the caller passes the CLI's general 5-minute client, so a CI review that streams past 5 minutes is no longer cut off and left to a review app (#688).
 - When the CI review fails on a head, the inspect comment and the job log now say why, with the gateway's address shown as `<endpoint>` (#689).
+- A CI review that fails for a passing reason (a 429 or 5xx reply, an overload or server error in the stream, or a stream that ends early or is reset) is retried once, within the same call time limit and the per-PR budget; the failure note hides IP addresses and names the model that failed (#697).
 - CodeRabbit's summary block in a PR body no longer changes inspect's cache key, so its edit does not make the gate pay for a second CI review of the same head (#696).
 - With `reviewer = "ci"`, an `aayu inspect` or `aayu build` run outside CI no longer asks a review app or a person under your account; inspect reports the merge gate's verdict for the head, or `no-reply` until the gate has one; once the gate records that the CI review failed on that head, a local run asks the fallback app, then a person (#691).
 - The chart and measure skills check each number against its own source, name its population and window, and keep a startup note to one page (#312, #315, #341, #348, #356, #369, #373, #377, #385, #386, #402, #411, #420, #423, #425, #429, #437, #456, #464, #472, #528, #534, #539, #559, #573, #581, #591, #600).
