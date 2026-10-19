@@ -1,0 +1,96 @@
+{
+  "story": 618,
+  "body_hash": "436164fed49775da900cba847c65e90eb76f11d56f8443034db46006df8db2ce",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L06"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "ship and inbox: every merge with no person's pass (proof or autonomous) writes autonomy/audit/\u003cpr\u003e.json and the aayu:audit label; the inbox audit card records looks right or correction (sample in autonomy/samples.jsonl, aayu:correction label, revert PR into dev with Refs #\u003cstory\u003e); ship judges the human pass by the base branch's committed policy, not the checkout",
+      "contracts": [
+        "internal/cli/ship.go: audited when HumanPass.Kind is proof or autonomous; aayu:audit added after the pack lands and before the last PR and base-tip reads; the audit entry goes to the ledger with the ship record; a reviewed merge removes a stale aayu:audit label",
+        "internal/cli/shipproof.go basePolicy: .aayudha/config.toml and LAYERS.md read at the base branch tip through the contents API; ship stops (exit 4) when the checkout, user config, AAYU_* or --set loosen it, or when the base holds .aayudha/config.json or config.local.*; a read error stops ship (exit 5)",
+        "internal/cli/inbox.go: inbox kind audit, listed after replaced; cards come from aayu:audit labels and from ledger entries whose label was removed",
+        "internal/cli/inboxaudit.go auditAct: human identity with device approval only; looks right appends {pr, correction:false, by} and deletes the entry; correction adds aayu:correction, opens or reuses the look's revert PR, appends {correction:true}, then deletes the entry"
+      ],
+      "tests": [
+        "internal/cli:TestShipOnProof",
+        "internal/cli:TestShipAutonomousFootprint",
+        "internal/cli:TestShipEMSeatApprover",
+        "internal/cli:TestShipLoosens",
+        "internal/cli:TestShipRefusals"
+      ],
+      "instrumentation": [
+        "ship.json on the ledger records the human pass kind, the base policy tip, and whether the merge was audited",
+        "every GitHub and ledger write goes through the actions log (github.issue.label, github.pull.revert, ledger commits)"
+      ],
+      "rollback": "revert the PR; audit entries and samples on the ledger stay as records and nothing reads them after the revert; remove any aayu:audit labels by hand",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Work items: the aayu:audit label is defined with the other aayu labels, so init and the label sync create it",
+      "contracts": [
+        "internal/workitems/labels.go: LabelAudit = \"aayu:audit\" in the label definitions",
+        "work-items/README.md names the label"
+      ],
+      "tests": [
+        "internal/cli:TestShipOnProof"
+      ],
+      "rollback": "revert the PR; the label stays on GitHub and is harmless",
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L04",
+      "title": "LAYERS.md parsing split from file reading: verify.ParseLayers(text) parses layer globs from text, ReadLayers(root) reads the file and calls it, and autonomy.LayersFrom(text) uses it, so ship computes the footprint and the never layers from LAYERS.md at the base branch tip rather than from the PR's own checkout. This touches L04 (internal/verify) only to move the parsing behind a text input; the rows it accepts and the globs it returns are unchanged, and no floor, threshold, or verify check changes",
+      "contracts": [
+        "verify.ParseLayers(text string) LayerGlobs: the same rows and globs ReadLayers returned for the same file",
+        "verify.ReadLayers(root string): unchanged behaviour, now ReadFile plus ParseLayers",
+        "autonomy.LayersFrom(text string): ParseLayers, or the registry's layers when the text names none"
+      ],
+      "tests": [
+        "internal/verify:TestFootprintFromLayers",
+        "internal/planning:TestCheckPlan",
+        "internal/cli:TestShipEMSeatApprover"
+      ],
+      "rollback": "revert the PR; ReadLayers keeps its signature, so no caller changes",
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L06",
+      "title": "The GitHub fake serves what the audit needs: merged_at and labels on listed PRs, node IDs, and the revertPullRequest GraphQL mutation (refused for a PR that is not merged)",
+      "contracts": [
+        "internal/github/fake: PR.MergedAt, PR.Labels, PR.NodeID; graphql revertPullRequest opens a PR by the viewer with the given title and body"
+      ],
+      "tests": [
+        "internal/cli:TestShipOnProof"
+      ],
+      "rollback": "revert the PR; test-only code",
+      "criteria": [
+        4
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L04"
+    ]
+  },
+  "planned_at": "2026-10-19T07:00:31Z",
+  "planned_by": "human-fallback"
+}
