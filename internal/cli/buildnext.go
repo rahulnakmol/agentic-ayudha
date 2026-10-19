@@ -583,7 +583,10 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			skip(n, why)
 			continue
 		}
-		if why, err := e.admitClaim(ctx, w, p, n); err != nil {
+		// A dry run writes no claim line, so it has none to order: it previews
+		// the pick as admitted.
+		if c.DryRun() {
+		} else if why, err := e.admitClaim(ctx, w, p, n); err != nil {
 			return nil, 0, err
 		} else if why != "" {
 			p.Reason = why

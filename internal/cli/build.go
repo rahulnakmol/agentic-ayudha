@@ -237,8 +237,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if pick, n, err = e.pickNext(ctx, c, pw, l, repo, root, mode); err != nil {
 			return err
 		}
-		if n == 0 {
-			return e.emitPick(pick)
+		if n == 0 || c.DryRun() {
+			return e.emitPick(pick) // a dry run previews the pick and builds nothing
 		}
 		// The loop a person set up is the ask (D-5.5c.20): its words go to
 		// the actions log like a person's.

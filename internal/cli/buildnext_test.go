@@ -122,6 +122,11 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	claimed.Labels = slices.DeleteFunc(claimed.Labels, func(l fake.Label) bool { return l.Name == "status:ready" })
 	claimed.Labels = append(claimed.Labels, fake.Label{Name: labelInProgress}) // its builder took it
 	g.Mu.Unlock()
+	// --dry-run previews the pick on a ledger with no claims file yet, and
+	// claims nothing.
+	if code, _, pick, out := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}, "--next", "pick", "--dry-run"); code != 0 || pick.Picked != older.Number || contains(g.LabelNames(older.Number), LeaseLabel) {
+		t.Fatalf("--next pick --dry-run: %d %s", code, out)
+	}
 	// The ledger orders picks across machines: a recent claim line of another
 	// pick holds the one slot, and one for the same story was first.
 	claimLine := func(story int, at time.Time) string {
