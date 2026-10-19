@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -899,6 +900,17 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	// The full-screen inbox watches its own GitHub requests, to name the
+	// stage of a write while it runs; the watch only reports, never alters.
+	tui, work := e.inboxTUI(&l.Config), &inboxWork{}
+	if tui {
+		hc := http.Client{}
+		if e.HTTP != nil {
+			hc = *e.HTTP
+		}
+		hc.Transport = &inboxWatch{next: hc.Transport, work: work}
+		e.HTTP = &hc
+	}
 	// Once per session, before anything is read or done: every later step
 	// is covered by this approval (presence.go), and none weakens it.
 	c, login, err := humanCaller(ctx, e, &l.Config, "inbox")
@@ -906,8 +918,8 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	if e.inboxTUI(&l.Config) {
-		return e.runInboxTUI(ctx, &l.Config, src, login)
+	if tui {
+		return e.runInboxTUI(ctx, &l.Config, src, login, work)
 	}
 	items, err := src.gather(ctx)
 	if err != nil {
@@ -1451,7 +1463,15 @@ type inboxCache struct {
 	Login string      `json:"login"`
 	At    time.Time   `json:"at"`
 	Items []InboxItem `json:"items"`
+	// Done are the writes made from the inbox, by item key, kept while a
+	// read of GitHub still lists the item: a later session shows it done
+	// rather than offering it again before GitHub has caught up.
+	Done map[string]inboxDone `json:"done,omitempty"`
 }
+
+// inboxCacheMu orders the cache's writes: a refresh and a done write can
+// land at once.
+var inboxCacheMu sync.Mutex
 
 func (e *Env) inboxCachePath(repo string) string {
 	dir := e.Getenv("XDG_STATE_HOME")
@@ -1480,8 +1500,42 @@ func (e *Env) readInboxCache(repo, login string) *inboxCache {
 	return &c
 }
 
-// writeInboxCache keeps a gather, readable by the user alone.
+// writeInboxCache keeps a gather, readable by the user alone, with the done
+// writes whose items the gather still lists (a done write whose item is gone
+// has settled on GitHub).
 func (e *Env) writeInboxCache(c inboxCache) {
+	inboxCacheMu.Lock()
+	defer inboxCacheMu.Unlock()
+	if old := e.readInboxCache(c.Repo, c.Login); old != nil {
+		for k, d := range old.Done {
+			if slices.ContainsFunc(c.Items, func(it InboxItem) bool { return it.key() == k }) {
+				if c.Done == nil {
+					c.Done = map[string]inboxDone{}
+				}
+				c.Done[k] = d
+			}
+		}
+	}
+	e.saveInboxCache(c)
+}
+
+// recordInboxDone keeps a done write in the cache at once, so a session
+// opened right after it shows the item done.
+func (e *Env) recordInboxDone(repo, login, key string, d inboxDone) {
+	inboxCacheMu.Lock()
+	defer inboxCacheMu.Unlock()
+	c := e.readInboxCache(repo, login)
+	if c == nil {
+		c = &inboxCache{Repo: repo, Login: login}
+	}
+	if c.Done == nil {
+		c.Done = map[string]inboxDone{}
+	}
+	c.Done[key] = d
+	e.saveInboxCache(*c)
+}
+
+func (e *Env) saveInboxCache(c inboxCache) {
 	p := e.inboxCachePath(c.Repo)
 	if p == "" || os.MkdirAll(filepath.Dir(p), 0o700) != nil {
 		return

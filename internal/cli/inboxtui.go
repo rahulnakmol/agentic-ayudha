@@ -73,7 +73,7 @@ func (e *Env) inboxTUI(cfg *config.Config) bool {
 // runInboxTUI runs the full-screen inbox. Each step's output (what decide,
 // ship, and the inbox's own steps print) is shown in the status line as it
 // comes, and printed in full once the inbox closes.
-func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSource, login string) error {
+func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSource, login string, work *inboxWork) error {
 	out, errOut, repo := e.Out, e.Err, src.repo
 	var mu sync.Mutex
 	var send func(tea.Msg)
@@ -86,6 +86,9 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		}
 	}}
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
+	m.work = work
+	m.now, m.opened = e.Now, e.Now()
+	m.recordDone = func(key string, d inboxDone) { e.recordInboxDone(repo, login, key, d) }
 	src.progress = func(what string, done, total int) {
 		mu.Lock()
 		f := send
@@ -96,12 +99,16 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 	}
 	defer func() { src.progress = nil }()
 	if c := e.readInboxCache(repo, login); c != nil {
+		for k, d := range c.Done { // written from an earlier session: done until GitHub, read since, still lists it
+			m.done[k], m.state[k] = d, "done"
+		}
 		m.merge(c.Items)
 		m.loading, m.fresh = false, c.At
 		m.status = "From the last read, " + ago(e.Now(), c.At) + "; reading what changed…"
 	}
 	m.now = e.Now
 	m.gather = func() inboxGatheredMsg {
+		at := e.Now()
 		before := src.c.Stats()
 		changed, err := src.refresh(ctx)
 		var items []InboxItem
@@ -112,7 +119,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		if err == nil {
 			e.writeInboxCache(inboxCache{Repo: repo, Login: login, At: e.Now(), Items: items})
 		}
-		return inboxGatheredMsg{items: items, changed: changed, err: err, calls: after.Calls() - before.Calls(), notModified: after.NotChanged - before.NotChanged}
+		return inboxGatheredMsg{items: items, changed: changed, err: err, calls: after.Calls() - before.Calls(), notModified: after.NotChanged - before.NotChanged, at: at}
 	}
 	m.open, m.twin = e.openURL, e.twin
 	m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) {
@@ -209,6 +216,7 @@ type (
 		changed            bool
 		err                error
 		calls, notModified int
+		at                 time.Time // when the read began
 	}
 	inboxDoneMsg struct {
 		key   string
@@ -217,6 +225,7 @@ type (
 		err   error
 	}
 	inboxLogMsg      string
+	inboxWorkTickMsg struct{} // redraws a write's stage once a second, also without motion
 	inboxTickMsg     struct{}
 	inboxFrameMsg    time.Time
 	inboxProgressMsg struct {
@@ -269,10 +278,13 @@ type inboxModel struct {
 	twin        func(verbs.SeatID) string
 	now         func() time.Time
 
-	items    []InboxItem       // needs you first, then housekeeping
-	state    map[string]string // by key: "done", "skipped", "not done"
-	rows     []int             // the list: item indices, then -1 for the housekeeping line
-	expanded bool              // the housekeeping shown one item per row
+	items      []InboxItem       // needs you first, then housekeeping
+	state      map[string]string // by key: "done", "skipped", "not done", "relisted" (done, and GitHub read since still lists it)
+	done       map[string]inboxDone
+	work       *inboxWork              // the write under way, as its GitHub requests show it
+	recordDone func(string, inboxDone) // keeps a done write for later sessions
+	rows       []int                   // the list: item indices, then -1 for the housekeeping line
+	expanded   bool                    // the housekeeping shown one item per row
 
 	cur, sel  int // the list row, and the choice selected on its card
 	armed     bool
@@ -284,6 +296,7 @@ type inboxModel struct {
 	hit       int
 	findTotal int
 
+	opened              time.Time // when the session began
 	loading, refreshing bool
 	fresh               time.Time // when the items were last read from GitHub
 	every               time.Duration
@@ -327,7 +340,7 @@ type inboxModel struct {
 func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 	p := ui.New(nil, ui.Signals{TTY: true, NoColor: noColor, Theme: theme})
 	p.Theme = ui.ThemeFor(theme, true)
-	return &inboxModel{repo: repo, login: login, state: map[string]string{}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
+	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, work: &inboxWork{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, theme: theme, dirty: true, now: time.Now,
 		flash: map[string]time.Time{}, spring: harmonica.NewSpring(harmonica.FPS(120), 30, 1)}
 }
@@ -391,7 +404,7 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 		k := it.key()
 		if f, ok := byKey[k]; ok {
 			out, seen[k] = append(out, f), true
-		} else if m.state[k] == "done" {
+		} else if m.state[k] == "done" && !m.done[k].At.Before(m.opened) { // done this session: it stays, marked
 			out, seen[k] = append(out, it), true
 		}
 	}
@@ -415,13 +428,29 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 	}
 }
 
+// relist marks a done item that a read begun after its write still lists:
+// it may still need a person, so it is offered again, after a confirmation
+// that names the earlier write.
+func (m *inboxModel) relist(fresh []InboxItem, at time.Time) {
+	changed := false
+	for _, it := range fresh {
+		k := it.key()
+		if d, ok := m.done[k]; ok && m.state[k] == "done" && !at.IsZero() && at.After(d.At) {
+			m.state[k], changed = "relisted", true
+		}
+	}
+	if changed {
+		m.relayout()
+	}
+}
+
 // layoutRows lists the needs-you items, the housekeeping one by one when
 // expanded, and the housekeeping line.
 // A done item leaves the list, after its ✓ when there is motion.
 func (m *inboxModel) layoutRows() {
 	m.rows = m.rows[:0]
 	house := 0
-	shown := func(it InboxItem) bool { return m.state[it.key()] != "done" || m.flashing(it.key()) }
+	shown := func(it InboxItem) bool { return m.state[it.key()] != "done" || m.flashing(it.key()) } // done rows come last
 	for i, it := range m.items {
 		switch {
 		case !shown(it):
@@ -440,6 +469,11 @@ func (m *inboxModel) layoutRows() {
 	}
 	if house > 0 {
 		m.rows = append(m.rows, -1)
+	}
+	for i, it := range m.items { // done, after the rest: who did it and when, never offered again
+		if m.state[it.key()] == "done" && !m.flashing(it.key()) {
+			m.rows = append(m.rows, i)
+		}
 	}
 }
 
@@ -611,6 +645,11 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 		}
 		m.refreshing, m.dirty = true, true
 		return tea.Batch(m.spinTick(), m.gatherCmd())
+	case inboxWorkTickMsg:
+		if len(m.queue) > 0 && m.timer {
+			m.dirty = true
+			return tea.Tick(time.Second, func(time.Time) tea.Msg { return inboxWorkTickMsg{} })
+		}
 	case inboxLogMsg:
 		if s := strings.TrimSpace(string(msg)); s != "" {
 			m.status, m.dirty = s, true
@@ -666,6 +705,7 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	if msg.changed || first {
 		m.merge(msg.items)
 	}
+	m.relist(msg.items, msg.at)
 	if m.quitting {
 		return tea.Quit
 	}
@@ -691,6 +731,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	var ch errInboxChanged
 	switch {
 	case errors.As(msg.err, &ch):
+		m.work.end()
 		m.failed++
 		if ch.Item.Number == 0 { // it no longer waits
 			m.items = slices.DeleteFunc(m.items, func(it InboxItem) bool { return it.key() == msg.key })
@@ -707,16 +748,24 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.refuse(fmt.Sprintf("#%d: %v.", num, msg.err))
 		m.queue = nil // the rest were asked for against what the person read
 	case msg.err != nil:
+		_, stage, _, _ := m.work.snapshot()
+		wrote := m.work.end()
 		m.state[msg.key] = "not done"
 		m.failed++
+		if len(wrote) > 0 { // part of it landed: say what, so a retry is a choice made knowing it
+			msg.err = fmt.Errorf("%w (stopped while %s, after it %s)", msg.err, stage, strings.Join(wrote, ", "))
+		}
 		m.refuse(fmt.Sprintf("#%d not done: %v", num, msg.err))
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
 	default:
 		m.state[msg.key] = "done"
+		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: m.work.end()}
+		m.done[msg.key] = d
+		m.recordDone(msg.key, d)
 		if m.motion {
 			m.flash[msg.key] = m.now()
 		}
-		m.status = fmt.Sprintf("Done: #%d, %s. It is written to GitHub.", num, job.a.Label)
+		m.status = fmt.Sprintf("Done: #%d, %s. It is written to GitHub%s.", num, job.a.Label, wroteSuffix(d.Wrote))
 		if i := m.item(); i >= 0 && m.items[i].key() == msg.key && len(m.queue) == 0 {
 			m.next()
 		}
@@ -755,26 +804,57 @@ func (m *inboxModel) next() {
 // run starts the first queued write.
 func (m *inboxModel) run() tea.Cmd {
 	j, act := m.queue[0], m.act
+	m.work.begin(j.it.key(), m.now())
+	var redraw tea.Cmd
+	if m.timer {
+		redraw = tea.Tick(time.Second, func(time.Time) tea.Msg { return inboxWorkTickMsg{} })
+	}
 	m.status = fmt.Sprintf("Applying #%d…", j.it.Number)
 	if m.total > 1 {
 		m.status = fmt.Sprintf("Applying %d of %d: #%d…", m.total-len(m.queue)+1, m.total, j.it.Number)
 	}
-	return tea.Batch(m.spinTick(), func() tea.Msg {
+	return tea.Batch(m.spinTick(), redraw, func() tea.Msg {
 		fresh, out, err := act(j.it, j.a)
 		return inboxDoneMsg{j.it.key(), fresh, out, err}
 	})
 }
 
+// start queues jobs; with none under way, the first starts now. A job asked
+// for while another runs waits its turn: the screen stays live meanwhile.
 func (m *inboxModel) start(jobs []inboxJob) tea.Cmd {
+	if len(m.queue) > 0 {
+		m.queue = append(m.queue, jobs...)
+		m.total = max(m.total, 1) + len(jobs)
+		m.status = fmt.Sprintf("Queued #%d; it runs after the write under way.", jobs[0].it.Number)
+		return nil
+	}
 	m.queue, m.total, m.failed = jobs, len(jobs), 0
 	return m.run()
 }
 
+// queued reports whether key is the write under way or waits in the queue.
+func (m *inboxModel) queued(key string) (running, waiting bool) {
+	for i, j := range m.queue {
+		if j.it.key() == key {
+			return i == 0, i > 0
+		}
+	}
+	return false, false
+}
+
+func wroteSuffix(w []string) string {
+	if len(w) == 0 {
+		return ""
+	}
+	return ": " + strings.Join(w, ", ")
+}
+
 func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
-	busy := m.loading && len(m.items) == 0 || len(m.queue) > 0
+	busy := m.loading && len(m.items) == 0
+	writing := len(m.queue) > 0
 	switch {
-	case busy && (k == "ctrl+c" || k == "q"):
+	case (busy || writing) && (k == "ctrl+c" || k == "q") && m.ask == nil && !m.finding && !m.help:
 		// Bubble Tea does not wait for a running command when it quits: the
 		// write (or read) under way finishes, the rest are not started.
 		m.quitting = true
@@ -783,7 +863,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case k == "ctrl+c":
 		return tea.Quit
 	case busy:
-		return nil // a running write finishes; keys wait for it
+		return nil // nothing to act on before the first read
 	case m.ask != nil && m.ask.prompt != "":
 		switch k {
 		case "enter":
@@ -860,8 +940,14 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.open(m.items[i].URL)
 			m.status = "Opened " + m.items[i].URL
 		}
+	case "tab":
+		m.cycle(1)
+	case "shift+tab":
+		m.cycle(-1)
 	case "R":
-		if !m.refreshing {
+		if writing {
+			m.status = "A refresh waits for the write under way; it reads GitHub again after it."
+		} else if !m.refreshing {
 			m.refreshing, m.status = true, "Reading what changed on GitHub…"
 			return tea.Batch(m.spinTick(), m.gatherCmd())
 		}
@@ -879,6 +965,23 @@ func (m *inboxModel) move(n int) {
 	if c != m.cur {
 		m.cur, m.sel, m.armed = c, 0, false
 	}
+}
+
+// cycle moves to the next (or previous) item that needs you and is not done,
+// wrapping: Tab and Shift-Tab.
+func (m *inboxModel) cycle(dir int) {
+	n := len(m.rows)
+	for d := 1; d <= n; d++ {
+		r := ((m.cur+dir*d)%n + n) % n
+		i := m.rows[r]
+		if i >= 0 && !m.items[i].kind().Housekeeping && m.state[m.items[i].key()] != "done" {
+			if r != m.cur {
+				m.cur, m.sel, m.armed = r, 0, false
+			}
+			return
+		}
+	}
+	m.status = "Nothing else needs you; the housekeeping and done items stay in the list."
 }
 
 // pick selects the choice numbered n; Enter then does it.
@@ -916,9 +1019,18 @@ func (m *inboxModel) enter() tea.Cmd {
 		return nil
 	}
 	it := m.items[i]
+	running, waiting := m.queued(it.key())
+	d, acted := m.done[it.key()]
 	switch {
+	case running:
+		m.refuse(fmt.Sprintf("#%d is being written now; it is not started twice.", it.Number))
+	case waiting:
+		m.refuse(fmt.Sprintf("#%d is queued already; it runs after the write under way.", it.Number))
 	case m.state[it.key()] == "done":
-		m.refuse(fmt.Sprintf("#%d is done; it is written to GitHub and not undone here.", it.Number))
+		m.refuse(fmt.Sprintf("#%d is %s; it is written to GitHub and not offered again.", it.Number, d.line(m.now())))
+	case acted && c.Command != "open" && !m.armed: // relisted: GitHub still lists it after the write
+		m.armed = true
+		m.status = fmt.Sprintf("You already did this: %s. GitHub still lists #%d. Enter again does it again.", d.line(m.now()), it.Number)
 	case c.Command == "open":
 		m.open(it.URL)
 		m.status = "Opened " + it.URL
@@ -1321,10 +1433,17 @@ func (m *inboxModel) listView(w, h, x, y int) []string {
 		} else {
 			it := m.items[i]
 			icon, text, num = it.kind().Icon, it.Title, "#"+strconv.Itoa(it.Number)
-			switch st := m.state[it.key()]; st {
-			case "done":
-				text, done = "✓ done · "+text, true
-			case "":
+			running, waiting := m.queued(it.key())
+			switch st := m.state[it.key()]; {
+			case running:
+				text = m.spinner() + "writing · " + text
+			case waiting:
+				text, muted = "queued · "+text, true
+			case st == "done":
+				text, done = "✓ "+m.done[it.key()].line(m.now())+" · "+text, true
+			case st == "relisted":
+				text, muted = "still listed after you acted · "+text, true
+			case st == "":
 			default:
 				text, muted = st+" · "+text, true
 			}
@@ -1368,7 +1487,15 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		if it.Provisional {
 			tag += " · provisional"
 		}
-		if st := m.state[it.key()]; st != "" {
+		running, waiting := m.queued(it.key())
+		switch st := m.state[it.key()]; {
+		case running:
+			tag += " · writing now"
+		case waiting:
+			tag += " · queued"
+		case st == "relisted":
+			tag += " · still listed after you acted"
+		case st != "":
 			tag += " · " + st
 		}
 	} else {
@@ -1401,6 +1528,9 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	}
 	var choiceLines []string
 	choiceAt := map[int]int{} // a choice's first line
+	if i >= 0 {
+		top = append(top, m.writeLines(it, w)...)
+	}
 	choiceLines = append(choiceLines, "")
 	for ci, c := range m.choices() {
 		label := c.Label
@@ -1464,6 +1594,43 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	return out
 }
 
+// writeLines is what the card says about a write on its item: its stage while
+// it runs, or who did it, when, and what it wrote.
+func (m *inboxModel) writeLines(it InboxItem, w int) []string {
+	k := it.key()
+	if running, _ := m.queued(k); running {
+		_, stage, calls, started := m.work.snapshot()
+		return append([]string{""}, m.wrapStyled(ui.Warn, fmt.Sprintf("%sWriting now: %s · %d GitHub %s · %s. You can read and move meanwhile.",
+			m.spinner(), stage, calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started))), w)...)
+	}
+	d, ok := m.done[k]
+	if !ok {
+		return nil
+	}
+	role, say := ui.OK, "✓ "+upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+"."
+	if m.state[k] == "relisted" {
+		role, say = ui.Warn, upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+". GitHub, read since, still lists it, so it may still need you: Enter asks before doing it again."
+	}
+	return append([]string{""}, m.wrapStyled(role, say, w)...)
+}
+
+func (m *inboxModel) wrapStyled(r ui.Role, s string, w int) []string {
+	var out []string
+	for _, l := range m.wrap(s, w) {
+		out = append(out, m.style(r, l))
+	}
+	return out
+}
+
+// elapsed is a short duration in words: 8 s, 1 min 24 s.
+func elapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%d s", int(d.Seconds()))
+	}
+	return fmt.Sprintf("%d min %d s", int(d.Minutes()), int(d.Seconds())%60)
+}
+
 func (m *inboxModel) askView(w, h int) []string {
 	a := m.ask
 	out := []string{"", inboxBold.Render(a.title), ""}
@@ -1492,7 +1659,7 @@ func (m *inboxModel) helpView(w int) []string {
 	out = append(out, wrapTo(k.Explain)...)
 	out = append(out, m.style(ui.Muted, "Glossary: "+strings.Join(k.Terms, ", ")+" in GLOSSARY.md"), "", inboxBold.Render("Keys"))
 	for _, l := range []string{"Enter   do the selected choice (another choice or a", "        one-way door asks for Enter again)", "1-9     select a choice", "s       skip to the next card",
-		"j/k     move (↓/↑ and the mouse wheel too)", "/       find any item or choice (Ctrl+K too)", "A       tidy all housekeeping, after one confirmation",
+		"Tab     next item that needs you (Shift-Tab: previous)", "j/k     move (↓/↑ and the mouse wheel too)", "/       find any item or choice (Ctrl+K too)", "A       tidy all housekeeping, after one confirmation",
 		"o       open on GitHub     R  refresh now     q  quit"} {
 		out = append(out, ansi.Truncate(l, w, "…"))
 	}
@@ -1540,6 +1707,11 @@ func (m *inboxModel) statusLine(w int) string {
 	if len(m.queue) > 0 || m.loading && len(m.items) > 0 {
 		left = m.spinner() + left
 	}
+	if len(m.queue) > 0 && m.refusal != left {
+		_, stage, calls, started := m.work.snapshot()
+		left = fmt.Sprintf("Writing #%d: %s · %d %s · %s", m.queue[0].it.Number, stage, calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started)))
+		left = m.spinner() + left
+	}
 	right := ""
 	switch {
 	case m.total > 1 && len(m.queue) > 0:
@@ -1577,8 +1749,10 @@ func (m *inboxModel) keysLine(w int) string {
 		keys = []kb{{"type", "to find", 1}, {"↑↓", "move", 2}, {"Enter", "jump", 0}, {"Esc", "back", 0}}
 	case m.armed:
 		keys = []kb{{"Enter", "apply it", 0}, {"Esc", "back", 0}, {"1-9", "pick another", 1}}
+	case len(m.queue) > 0:
+		keys = []kb{{"Tab", "next item", 1}, {"j/k", "read others", 0}, {"Enter", "queue it", 1}, {"?", "help", 2}, {"q", "quit after this write", 0}}
 	default:
-		keys = []kb{{"Enter", "do it", 0}, {"1-9", "pick", 1}, {"s", "skip", 1}, {"j/k", "move", 3}, {"/", "find", 2}, {"A", "tidy", 4}, {"?", "help", 1}, {"q", "quit", 0}}
+		keys = []kb{{"Enter", "do it", 0}, {"Tab", "next", 1}, {"1-9", "pick", 2}, {"s", "skip", 2}, {"j/k", "move", 3}, {"/", "find", 2}, {"A", "tidy", 4}, {"?", "help", 1}, {"q", "quit", 0}}
 		if m.houseLeft() == 0 {
 			keys = slices.DeleteFunc(keys, func(k kb) bool { return k.key == "A" })
 		}

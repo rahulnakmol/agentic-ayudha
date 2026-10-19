@@ -671,10 +671,10 @@ func TestInboxTUI(t *testing.T) {
 	for i, want := range [][]string{
 		{"aayu inbox · 3 need you · 5 housekeeping", "› 🧭 Waive the eval-bar floor on #10", "🧹 5 housekeeping · A tidies all", "🧭 Decision · #1 · one-way door",
 			inboxKinds[InboxDecision].Line, "🧘 Atri, counsel, not approval", "▏ Evidence: https://github.com/o/r/issues/1", "› 2 Accept: Don't waive recommended", "1 Accept: Waive", "3 Open #1 on GitHub",
-			"Enter do it · 1-9 pick · s skip"},
+			"Enter do it · Tab next"},
 		{"This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door", "Enter again applies it · Esc goes back"},
 		{"🧭 Decision · #2 · provisional", "The call: Which engine runs the rules", "› 2 Accept: B", "Selected; click it again, or press Enter, to do it."},
-		{"aayu inbox · 2 need you", "› ✋ fix(cli): capped", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub."},
+		{"aayu inbox · 2 need you", "› ✋ fix(cli): capped", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub"},
 		{"Find: bug", "🐞 #7 A bug · Bug fixed, still open · Drona"},
 		{"› 🐞 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
 		{"Tidy all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
@@ -692,8 +692,8 @@ func TestInboxTUI(t *testing.T) {
 			}
 		}
 	}
-	if strings.Contains(views[3], "Choose the rules engine") {
-		t.Errorf("a done item stays in the list:\n%s", views[3])
+	if !strings.Contains(views[3], "✓ done by @o at") {
+		t.Errorf("the done item is not listed as done, with who did it:\n%s", views[3])
 	}
 	g.Mu.Lock()
 	if g.Issues[2].State != "closed" || !strings.Contains(g.Issues[2].Body, "A, accepted by @o") || g.Issues[1].State != "open" {
@@ -885,12 +885,12 @@ func TestInboxMotion(t *testing.T) {
 		t.Errorf("the highlight did not reach #2: %q", listRow(m))
 	}
 	teaKeys(m, "enter")
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ done · Pick the queue") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ done by @o at 09:00") {
 		t.Errorf("no ✓ on the done item:\n%s", v)
 	}
 	frames(m, 300*time.Millisecond)
-	if v := ansi.Strip(m.View().Content); strings.Contains(v, "Pick the queue") || !strings.Contains(v, "› 🧭 Pick the engine") {
-		t.Errorf("the done item stays after its ✓:\n%s", v)
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "› 🧭 Pick the engine") || strings.Index(v, "✓ done by @o") < strings.Index(v, "Pick the engine") {
+		t.Errorf("after its ✓ the done item does not move below the rest, or the cursor did not move on:\n%s", v)
 	}
 	teaKeys(m, "9")
 	clock = clock.Add(40 * time.Millisecond)
@@ -1117,5 +1117,116 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 	if code, res, errOut := inspectApp(t, env, opts, prA, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman ||
 		!strings.Contains(lastInspect(t, g, prA), "recorded on the ledger (`inspect/approved.jsonl`)") {
 		t.Fatalf("the gate after the inbox approval: %d %+v %s", code, res, errOut)
+	}
+}
+
+// The inbox across writes and sessions: Tab and Shift-Tab cycle the items
+// that need you; while a write runs the screen stays live (move, read, and
+// a second Enter on the same item is refused) and names the write's stage;
+// a done item says who did it, when, and what it wrote; and a later session
+// opened from the last read shows it done and never runs it again, until a
+// read of GitHub begun after the write still lists it.
+func TestInboxAcrossWrites(t *testing.T) {
+	g := inboxRepo(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+	view := func(m *inboxModel) string {
+		m.dirty = true
+		return strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " ")
+	}
+	at := func(m *inboxModel) int { return m.items[m.item()].Number }
+	opts.TUI = func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		teaDrive(m, m.Init())
+		m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		teaKeys(m, "j", "j", "j") // past the needs-you items, onto the housekeeping line
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		if at := m.item(); at < 0 || m.items[at].Number != 1 {
+			t.Errorf("Tab from the housekeeping line: not on #1 (row %d)", m.cur)
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		if m.item() < 0 || at(m) != 2 {
+			t.Errorf("Tab, Shift-Tab, Tab from #1: on row %d, want #2", m.cur)
+			m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].Number == 2 })
+		}
+		_, write := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // #2's recommendation, not yet run
+		if write == nil {
+			t.Fatal("Enter on #2 started no write")
+		}
+		if v := view(m); !strings.Contains(v, "Writing #2:") || !strings.Contains(v, "writing now") {
+			t.Errorf("while #2 is written, no stage:\n%s", v)
+		}
+		teaKeys(m, "j")
+		if at(m) == 2 {
+			t.Error("j while a write runs did not move")
+		}
+		teaKeys(m, "k", "enter")
+		if !strings.Contains(m.status, "#2 is being written now") || len(m.queue) != 1 {
+			t.Errorf("Enter on the item being written: %q, %d queued", m.status, len(m.queue))
+		}
+		teaDrive(m, write)
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].Number == 2 })
+		if v := view(m); !strings.Contains(v, "✓ Done by @o at") || !strings.Contains(v, ": changed labels, updated the issue.") {
+			t.Errorf("after #2 is done, its card lacks who did it and what it wrote:\n%s", v)
+		}
+		teaKeys(m, "q")
+		return nil
+	}
+	if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		t.Fatalf("first session: exit %d: %s\n%s", code, errOut, out)
+	}
+
+	// The next session opens from the last read, before GitHub answers: #2
+	// is listed done, and Enter on it writes nothing.
+	opts.TUI = func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		r := slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].Number == 2 })
+		if r < 0 {
+			t.Fatalf("the done #2 is not listed:\n%s", view(m))
+		}
+		m.cur = r
+		g.Reset()
+		_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		if cmd != nil || len(m.queue) != 0 || !strings.Contains(m.status, "#2 is done by @o at") {
+			t.Errorf("Enter on #2, done in an earlier session: a write started (%v), status %q", cmd != nil, m.status)
+		}
+		teaKeys(m, "q")
+		return nil
+	}
+	if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		t.Fatalf("second session: exit %d: %s\n%s", code, errOut, out)
+	}
+	if w := g.Writes(); len(w) != 0 {
+		t.Errorf("the second session wrote: %v", w)
+	}
+
+}
+
+// A done item that a read begun after its write still lists may still need
+// a person: it is offered again, but only after an Enter that names the
+// earlier write. A read begun before the write changes nothing.
+func TestInboxRelisted(t *testing.T) {
+	clock := time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)
+	m := newInboxModel("o/r", "o", "auto", false)
+	m.now = func() time.Time { return clock }
+	ran := 0
+	m.act = func(it InboxItem, a InboxAction) (InboxItem, string, error) { ran++; return it, "", nil }
+	it := InboxItem{Kind: InboxDecision, Number: 4, Title: "Pick", Seat: verbs.Founder, Options: []InboxAction{{N: 1, Label: "Accept: A", Recommended: true, Command: "aayu decide 4 --accept 1"}}}
+	m.done[it.key()], m.state[it.key()] = inboxDone{By: "o", At: clock.Add(-time.Minute), Choice: "Accept: A"}, "done"
+	m.Update(inboxGatheredMsg{items: []InboxItem{it}, changed: true, at: clock.Add(-2 * time.Minute)})
+	m.cur = slices.Index(m.rows, 0)
+	if teaKeys(m, "enter"); ran != 0 || m.state[it.key()] != "done" {
+		t.Errorf("a read begun before the write lists it: ran %d, state %q", ran, m.state[it.key()])
+	}
+	m.Update(inboxGatheredMsg{items: []InboxItem{it}, changed: true, at: clock})
+	m.cur = slices.Index(m.rows, 0)
+	if teaKeys(m, "enter"); ran != 0 || !strings.Contains(m.status, "You already did this: done by @o at 08:59: Accept: A") {
+		t.Errorf("relisted, first Enter: ran %d, status %q", ran, m.status)
+	}
+	if teaKeys(m, "enter"); ran != 1 {
+		t.Errorf("relisted, second Enter: ran %d", ran)
 	}
 }
