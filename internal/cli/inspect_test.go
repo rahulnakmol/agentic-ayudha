@@ -2,8 +2,10 @@ package cli
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1377,12 +1380,12 @@ func TestInspectPaidReviewer(t *testing.T) {
 	// live on #583) leaves the PR to the reviewer app: its reply is judged,
 	// and without one the gate fails closed with no-reply, not an error.
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
-	model.Err = errors.New(`Post "https://gw.example/v1/chat/completions": dial tcp: lookup gw.example: i/o timeout`)
+	model.Err = errors.New(`Post "https://gw.example/v1/chat/completions": dial tcp: lookup gw.example on 10.1.0.4:53: i/o timeout, then [2001:db8::1]:443 refused`)
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 1 {
 		t.Fatalf("a failed paid review, no reply: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
 	}
 	// The comment says why rung B did not review, without --verbose, and never names the endpoint's URL.
-	if body := lastInspect(t, g, prN); !strings.Contains(body, `fallback: rung B ([inspect] paid_reviewer gemini-3.8-flash) failed on this head (Post "<endpoint>/chat/completions": dial tcp: lookup <endpoint host>: i/o timeout`) ||
+	if body := lastInspect(t, g, prN); !strings.Contains(body, `fallback: rung B ([inspect] paid_reviewer gemini-3.8-flash) failed on this head (Post "<endpoint>/chat/completions": dial tcp: lookup <endpoint host> on <address>: i/o timeout`) ||
 		strings.Contains(body, "gw.example") {
 		t.Errorf("the inspect comment does not say why rung B failed, or names the endpoint:\n%s", body)
 	}
@@ -1394,7 +1397,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
 	}
 	// The final comment, the record people read, still says why rung B failed.
-	if body := lastInspect(t, g, prN); !strings.Contains(body, "lookup <endpoint host>: i/o timeout") || strings.Contains(body, "gw.example") {
+	if body := lastInspect(t, g, prN); !strings.Contains(body, "lookup <endpoint host> on <address>: i/o timeout") || strings.Contains(body, "gw.example") || strings.Contains(body, "10.1.0.4") || strings.Contains(body, "2001:db8") || strings.Contains(body, ":443") {
 		t.Errorf("the app's judgement lost why rung B failed:\n%s", body)
 	}
 
@@ -1554,6 +1557,59 @@ func TestInspectReviewerFallback(t *testing.T) {
 	if want := (1200*2.0 + 300*6.0) * 2 / 1e6; math.Abs(res.CostUSD-want) > 1e-12 {
 		t.Errorf("the fallback review cost %.6f USD, want %.6f at the priority rate", res.CostUSD, want)
 	}
+
+	// A transient failure (a 503) is retried once, after a pause, within the
+	// same call budget; a deadline cut is not, since a retry would hit it again.
+	// A stream reset by the peer is retried too, and no retry spends past the PR's [budget] per_pr_inspect_max (Codex's P2s on #697).
+	// An overload error event inside the stream is retried; another stream error is not.
+	for _, c := range []struct {
+		err   error
+		calls int
+		code  int
+		spent string
+	}{{&models.StatusError{Code: 503, Body: "upstream busy"}, 2, 0, ""}, {context.DeadlineExceeded, 1, ExitBlocked, ""},
+		{fmt.Errorf("read chat stream: %w", syscall.ECONNRESET), 2, 0, ""}, {&models.StatusError{Code: 503, Body: "upstream busy"}, 1, ExitBlocked, "4.995"},
+		{&models.StreamError{Type: "overloaded_error", Message: "Overloaded"}, 2, 0, ""}, {&models.StreamError{Type: "invalid_request_error", Message: "bad"}, 1, ExitBlocked, ""}} {
+		g, env, opts, prN, model = setup()
+		if c.spent != "" {
+			addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":"+c.spent+",\"hashes\":[]} -->\n")
+		}
+		addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+		flaky := &flakyClient{err: c.err, next: model}
+		opts.ModelClient = func(models.Route, string) models.Client { return flaky }
+		var paused []time.Duration
+		opts.Sleep = func(_ context.Context, d time.Duration) error { paused = append(paused, d); return nil }
+		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != c.code || flaky.calls != c.calls || len(paused) != c.calls-1 ||
+			(c.code == 0 && (res.Rung != inspect.RungB || !strings.Contains(errOut, "; retrying once in 10s"))) {
+			t.Fatalf("rung B after %v: exit %d rung %q, %d calls, pauses %v %s", c.err, code, res.Rung, flaky.calls, paused, errOut)
+		}
+	}
+
+	// The review's calls share what is left of the budget: a schema retry that
+	// fails after a costly first reply is not retried once the first reply spent
+	// the margin (CodeRabbit's minor on #697). 5 - 4.985 USD left, less 0.0084.
+	g, env, opts, prN, model = setup()
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":4.985,\"hashes\":[]} -->\n")
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	model.Replies = append([]models.Response{{Model: "grok-4.7", Text: "not JSON", TokensIn: 1200, TokensOut: 300}}, model.Replies...)
+	shared := &flakyClient{err: &models.StatusError{Code: 503, Body: "upstream busy"}, at: 2, next: model}
+	opts.ModelClient = func(models.Route, string) models.Client { return shared }
+	if code, _, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || shared.calls != 2 {
+		t.Fatalf("a retry past the shared budget: exit %d, %d calls %s", code, shared.calls, errOut)
+	}
+
+	// Each call gets its own CallTimeout: a schema retry after a slow first
+	// reply is not cut by the first call's deadline (CodeRabbit's minor on #697).
+	defer func(d time.Duration) { models.CallTimeout = d }(models.CallTimeout)
+	models.CallTimeout = 300 * time.Millisecond
+	g, env, opts, prN, model = setup()
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	slow := &slowClient{wait: 200 * time.Millisecond, replies: []models.Response{{Model: "grok-4.7", Text: "not JSON"}, model.Replies[0]}}
+	opts.ModelClient = func(models.Route, string) models.Client { return slow }
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || slow.calls != 2 {
+		t.Fatalf("a schema retry after a slow reply: exit %d rung %q, %d calls %s", code, res.Rung, slow.calls, errOut)
+	}
+	models.CallTimeout = 12 * time.Minute
 
 	// Rung B fails too (the gateway's 524): a human reviews, and the gate
 	// fails closed until one replies; the next run makes no second paid call.
@@ -1825,5 +1881,38 @@ func TestInspectReviewTools(t *testing.T) {
 	addComment(g, prN, "coderabbitai[bot]", "Bot", strings.Replace(statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"gpt-6.1-sol","disposition":`, 1))
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || !strings.Contains(res.Review, "coderabbit with gpt-6.1-sol") {
 		t.Fatalf("coderabbit naming its model: exit %d rung %q %q %s", code, res.Rung, res.Review, errOut)
+	}
+}
+
+// flakyClient fails call number at (the first when at is 0) with err, and
+// answers the others as next does.
+type flakyClient struct {
+	err   error
+	at    int
+	calls int
+	next  models.Client
+}
+
+func (f *flakyClient) Complete(ctx context.Context, r models.Request) (models.Response, error) {
+	if f.calls++; f.calls == max(f.at, 1) {
+		return models.Response{}, f.err
+	}
+	return f.next.Complete(ctx, r)
+}
+
+// slowClient takes wait to answer each call, or ends with the call's context.
+type slowClient struct {
+	wait    time.Duration
+	replies []models.Response
+	calls   int
+}
+
+func (c *slowClient) Complete(ctx context.Context, _ models.Request) (models.Response, error) {
+	c.calls++
+	select {
+	case <-time.After(c.wait):
+		return c.replies[min(c.calls, len(c.replies))-1], nil
+	case <-ctx.Done():
+		return models.Response{}, ctx.Err()
 	}
 }
