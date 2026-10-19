@@ -294,7 +294,9 @@ func loopsPending(tool string, apply bool, runNow string, mine []loops.Loop, rep
 		p.What += " --apply"
 		switch tool {
 		case loops.HostAmp:
-			p.Effect = append(p.Effect, fmt.Sprintf("Starts one headless Amp thread per loop in orbs of the %s project, to set up %s. They act as you, with your Amp and GitHub accounts.", repo, strings.Join(names, ", ")))
+			if len(mine) > 0 { // with no loop to set up, no thread starts: nothing to approve
+				p.Effect = append(p.Effect, fmt.Sprintf("Starts one headless Amp thread per loop in orbs of the %s project, to set up %s. They act as you, with your Amp and GitHub accounts.", repo, strings.Join(names, ", ")))
+			}
 		case loops.HostCursor:
 			p.Effect = append(p.Effect, fmt.Sprintf("Runs terraform apply of %s/cursor/aayudha-loops.tf with your CURSOR_TOKEN, which creates a Cursor automation per loop (%s) that runs as you.", loops.Dir, strings.Join(names, ", ")))
 		}
