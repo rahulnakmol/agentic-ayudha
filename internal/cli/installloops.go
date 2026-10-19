@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -347,9 +348,16 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 	return nil
 }
 
-// subscriptionID is the reply of a thread that created an event loop's Amp
-// GitHub subscription: `subscription <ID>`.
-var subscriptionID = regexp.MustCompile(`^subscription [0-9A-Za-z][0-9A-Za-z-]{7,}$`)
+// subscriptionID finds `subscription <ID>`, the reply of a thread that set up
+// an event loop's Amp GitHub subscription, at the start of any line of the
+// reply: a thread may add a sentence after it (Bug #709). A mention inside a
+// sentence, such as "could not update subscription <ID>" in a failure
+// reply, is not the reply.
+var subscriptionID = regexp.MustCompile("(?im)^[ \\t>*`]*subscription:?\\s+`?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b")
+
+// subscriptionWait is how long install --loops --apply waits for an event
+// loop's thread to reply with its subscription ID, and how often it looks.
+const subscriptionWait, subscriptionPoll = 5 * time.Minute, 10 * time.Second
 
 // threadID finds an Amp thread ID in a CLI's output.
 var threadID = regexp.MustCompile(`T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
@@ -358,8 +366,9 @@ var threadID = regexp.MustCompile(`T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 // agent tool (set_schedule) and one thread holds one schedule, so it starts
 // one headless Amp thread per loop in an orb of the project (`amp -ox`),
 // which calls set_schedule with the rendered input and keeps the schedule
-// (for an event loop, create_github_subscription: an orb spawner), and
-// records the loop. Without --apply it returns the steps.
+// (for an event loop, create_github_subscription: an orb spawner, updated
+// and enabled when Amp returns an equivalent one that exists), and records
+// the loop. Without --apply it returns the steps.
 func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec loops.Record, ls []loops.Loop, repo, branch, tz string) ([]string, []string) {
 	if !apply {
 		return nil, []string{
@@ -381,7 +390,11 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		}
 		prompt := "Call Amp's set_schedule on this thread with exactly this input, and do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
 		if l.IsEvent() {
-			prompt = "Call Amp's create_github_subscription with exactly this input, adding project_id: the ID of this thread's Amp project, for " + repo + ". Do nothing else. Then reply with one line: `subscription <its ID>`.\n\n" + string(in)
+			// Amp returns an equivalent subscription that exists instead of a new
+			// one, keeping its own title, instructions, and paused state (Bug #709).
+			prompt = "Call Amp's create_github_subscription with exactly this input, adding project_id: the ID of this thread's Amp project, for " + repo + ". " +
+				"If Amp returns an existing subscription whose title or instructions differ from this input, or that is not enabled, call update_github_subscription with its subscription_id, every field of this input, that project_id, and enabled: true. " +
+				"Do nothing else. Then reply with exactly one line, `subscription <its ID>`, and nothing else. If a call fails, reply with its error instead, with no line starting `subscription`.\n\n" + string(in)
 		}
 		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha loop: "+l.Name, "-x", prompt)
 		if err != nil {
@@ -389,11 +402,15 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			continue
 		}
 		id := lastLine(out)
-		if l.IsEvent() && !subscriptionID.MatchString(id) {
-			// No subscription ID yet: the spawner is not ready until the thread has set it up, so nothing is recorded.
-			pending = append(pending, l.Name)
-			applied = append(applied, l.Name+": pending on "+threadID.FindString(out))
-			continue
+		if l.IsEvent() {
+			sub := e.awaitSubscription(ctx, root, bin, l.Name, out)
+			if sub == "" {
+				// No subscription ID: the spawner is not ready until the thread has set it up, so nothing is recorded.
+				pending = append(pending, l.Name)
+				applied = append(applied, l.Name+": pending on "+threadID.FindString(out))
+				continue
+			}
+			id = "subscription " + sub
 		}
 		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) && !l.IsEvent() {
 			id = "schedule on " + t
@@ -416,6 +433,54 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		steps = append(steps, "Commit "+loops.RecordFile+".")
 	}
 	return applied, steps
+}
+
+// awaitSubscription is the subscription ID that an event loop's setup thread
+// replied with, or "" if it does not. amp -ox returns when the thread starts,
+// before its agent replies (Bug #709), so unless out holds the ID it reads
+// the thread with `amp threads export` until the agent's turn has ended, and
+// takes the ID only from its final message: a message written mid-turn, such
+// as "subscription <ID> is paused; enabling it", is not the reply. It gives
+// up after subscriptionWait.
+func (e *Env) awaitSubscription(ctx context.Context, root, bin, name, out string) string {
+	if m := subscriptionID.FindStringSubmatch(out); m != nil {
+		return m[1]
+	}
+	t := threadID.FindString(out)
+	if t == "" {
+		return ""
+	}
+	fmt.Fprintf(e.Err, "install --loops: waiting up to %s for the %s thread %s to reply with its subscription ID …\n", subscriptionWait, name, t)
+	for deadline := e.Now().Add(subscriptionWait); ; {
+		look, cancel := context.WithTimeout(ctx, 3*subscriptionPoll) // a stalled look cannot stretch the wait
+		js, err := e.run(look, root, bin, "threads", "export", t)
+		cancel()
+		var th struct {
+			Meta struct {
+				LastKnownAgentState struct{ State string } `json:"lastKnownAgentState"`
+			} `json:"meta"`
+			Messages []struct {
+				Role    string                        `json:"role"`
+				Content []struct{ Type, Text string } `json:"content"`
+			} `json:"messages"`
+		}
+		if err == nil && json.Unmarshal([]byte(js), &th) == nil && th.Meta.LastKnownAgentState.State == "idle" &&
+			len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "assistant" {
+			var reply strings.Builder
+			for _, c := range th.Messages[len(th.Messages)-1].Content {
+				if c.Type == "text" {
+					reply.WriteString(c.Text + "\n")
+				}
+			}
+			if m := subscriptionID.FindStringSubmatch(reply.String()); m != nil {
+				return m[1]
+			}
+			return "" // the turn ended with no subscription reply, such as an error
+		}
+		if !e.Now().Before(deadline) || e.pauseFor(ctx, subscriptionPoll) != nil {
+			return ""
+		}
+	}
 }
 
 // cursorLoops applies loops/cursor/aayudha-loops.tf with Terraform when asked

@@ -185,24 +185,50 @@ func TestInstallLoopsApplyPresence(t *testing.T) {
 	}
 }
 
-// WP7.1b: Amp's --apply records an event loop only once its thread replies
-// with a subscription ID; a thread ID alone leaves it unrecorded, with the
-// step that records it.
+// WP7.1b, Bug #709: amp -ox returns when the thread starts, before its agent
+// replies, so Amp's --apply waits for an event loop's thread to end its turn
+// and takes the subscription ID from a line of its final message, then
+// records it. The thread is asked to update and enable an equivalent
+// subscription that Amp returns. With no reply in time, or a final message
+// with no subscription line, nothing is recorded, and the step that records
+// it by hand is printed.
 func TestInstallLoopsEventSubscription(t *testing.T) {
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops", "amp"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-opened.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "amp", "triage-opened.json"), []byte("{}\n"), 0o644)
-	reply := "Started T-01a14215-c759-72bf-9a65-d2317a72a878"
-	var prompt string
-	opts := Options{Dir: dir,
+	const thread = "T-01a152c0-d5d9-76b2-a75c-9f165feca52c"
+	start := time.Date(2026, 10, 19, 6, 2, 0, 0, time.UTC)
+	now, prompt, replyAt, polls, started := start, "", 0, 0, "https://ampcode.com/threads/"+thread
+	final := "subscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled."
+	opts := Options{Dir: dir, Now: func() time.Time { return now },
+		Sleep:    func(_ context.Context, d time.Duration) error { now = now.Add(d); return nil },
 		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
 		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
-			prompt = args[len(args)-1]
-			return reply, nil
+			if slices.Contains(args, "-ox") {
+				prompt = args[len(args)-1]
+				return started, nil
+			}
+			if strings.Join(args, " ") != "threads export "+thread {
+				return "", errors.New("unexpected: " + strings.Join(args, " "))
+			}
+			// The thread as amp threads export prints it. Mid-turn, a message may
+			// start with the ID before the update is done: that is not the reply.
+			polls++
+			state, last := "running", "subscription 5d10ad31-52c8-42ef-9860-3d874655784f is paused; I am enabling it now."
+			if replyAt > 0 && polls >= replyAt {
+				state, last = "idle", final
+			}
+			msg := func(role, text string) map[string]any {
+				return map[string]any{"role": role, "content": []map[string]string{{"type": "thinking", "thinking": "…"}, {"type": "text", "text": text}}}
+			}
+			b, _ := json.Marshal(map[string]any{"meta": map[string]any{"lastKnownAgentState": map[string]string{"state": state}},
+				"messages": []any{msg("user", prompt), msg("assistant", last)}})
+			return string(b), nil
 		}}
 	report := func() loopsReport {
 		t.Helper()
+		now, polls = start, 0
 		code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "", "install", "--loops", "--repo", "o/r", "--json", "--host", "amp", "--apply")
 		var r loopsReport
 		if err := json.Unmarshal([]byte(out), &r); err != nil || code != 0 {
@@ -211,12 +237,32 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 		return r
 	}
 	r := report()
-	if !strings.Contains(prompt, "create_github_subscription") || r.States[0].Status != loops.Missing || !strings.Contains(strings.Join(r.Steps, "\n"), "--record triage-opened=subscription <ID>") {
-		t.Errorf("thread ID only: %+v, steps %q", r.States, r.Steps)
+	if r.States[0].Status != loops.Missing || now.Sub(start) != 5*time.Minute || !strings.Contains(strings.Join(r.Steps, "\n"), "--record triage-opened=subscription <ID>") {
+		t.Errorf("no reply: waited %s: %+v, steps %q", now.Sub(start), r.States, r.Steps)
 	}
-	reply = "Done.\nsubscription 395a6071-c14a-4fae-87bf-2d18da7f5bad"
-	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 395a6071") {
-		t.Errorf("subscription ID: %+v", r.States)
+	if !strings.Contains(prompt, "create_github_subscription") || !strings.Contains(prompt, "update_github_subscription with its subscription_id, every field of this input, that project_id, and enabled: true") ||
+		!strings.Contains(prompt, "reply with exactly one line, `subscription <its ID>`") || !strings.Contains(prompt, "If a call fails, reply with its error instead") {
+		t.Errorf("prompt: %s", prompt)
+	}
+	// amp printed no thread ID: there is nothing to wait on.
+	started = "amp: could not start the thread"
+	if r = report(); r.States[0].Status != loops.Missing || polls != 0 || now != start {
+		t.Errorf("no thread: %d looks, waited %s: %+v", polls, now.Sub(start), r.States)
+	}
+	started = "https://ampcode.com/threads/" + thread
+	// The turn ends in an error that names the subscription: not recorded, with no further wait.
+	replyAt, final = 1, "Could not update subscription 5d10ad31-52c8-42ef-9860-3d874655784f: permission denied."
+	if r = report(); r.States[0].Status != loops.Missing || polls != 1 || now != start {
+		t.Errorf("failure reply: %d looks, waited %s: %+v", polls, now.Sub(start), r.States)
+	}
+	replyAt, final = 3, "subscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled."
+	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 5d10ad31-52c8-42ef-9860-3d874655784f") || polls != 3 {
+		t.Errorf("reply on the third look (%d looks): %+v", polls, r.States)
+	}
+	// A CLI that waits for the reply prints it: recorded with no look.
+	started = "Done.\nsubscription 395a6071-c14a-4fae-87bf-2d18da7f5bad"
+	if r = report(); !strings.Contains(r.States[0].Detail, "subscription 395a6071-c14a-4fae-87bf-2d18da7f5bad") || polls != 0 {
+		t.Errorf("reply printed by amp (%d looks): %+v", polls, r.States)
 	}
 }
 
