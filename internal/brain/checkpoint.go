@@ -188,6 +188,10 @@ func (c *cp) upsert(p string, create func() *Note, meta map[string]any, blocks m
 			c.err = fmt.Errorf("%s: %w; fix it and run the checkpoint again", p, err)
 			return
 		}
+		if k := dupBlock(n.Body); k != "" {
+			c.err = fmt.Errorf("%s: two generated %s blocks; delete one and run the checkpoint again", p, k)
+			return
+		}
 	} else if create != nil {
 		n = create()
 	} else {
@@ -749,7 +753,7 @@ func (c *cp) timeline() {
 		}
 		for _, s := range n.List("issues") {
 			num, ok := issueNum(s)
-			if !ok || c.r.Issues[num].Closed == "" {
+			if is := c.r.Issues[num]; !ok || is.Type != "decision" || is.Closed == "" { // a related Story is not the decision
 				continue
 			}
 			evs = append(evs, ev{c.r.Issues[num].Closed, Link(p) + " is decided in #" + strconv.Itoa(num) + "."})

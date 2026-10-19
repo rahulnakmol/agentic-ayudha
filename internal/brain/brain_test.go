@@ -2,6 +2,7 @@ package brain
 
 import (
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -277,6 +278,7 @@ tags: [type/principle]
 		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},
 		{"owner is a person", strings.Replace(good, "owner: founder", "owner: rahulnakmol", 1), "Short.\n", `owner "rahulnakmol" is not a seat slug`},
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},
+		{"a generated block twice", good, Block("record", "- a") + "\n\n" + Block("record", "- b") + "\n", "block two generated record blocks"},
 		{"issues as a mapping", strings.Replace(good, "owner: founder", "owner: founder\nissues: {1: 2}", 1), "Short.\n", `frontmatter: "issues" holds a mapping`},
 		{"objectives links a note of another type", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Decisions]]\"]", 1), "Short.\n", "objectives: [[Decisions]] has type moc; objectives links a note of type objective"},
 		{"pasted criterion", good, "1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
@@ -299,8 +301,12 @@ tags: [type/principle]
 	}
 	files := skeleton(t) // a file name that closes a wikilink fails check, and no generated map links it
 	files["Principles/x]] ![t](t.png).md"] = note(good, "Short.\n")
-	if got := rules(Check(files)); !strings.Contains(got, "name the file name \"x]] ![t](t.png)\" has a character that breaks a wikilink") {
-		t.Errorf("check passed a file name that breaks a wikilink:\n%s", got)
+	files["Principles/ Evidence first.md"] = note(strings.Replace(good, "principle-evidence", "principle-spaced", 1), "Short.\n") // [[ Evidence first]] would reach the other note
+	got := rules(Check(files))
+	for _, name := range []string{"x]] ![t](t.png)", " Evidence first"} {
+		if !strings.Contains(got, "name the file name \""+name+"\" breaks a wikilink") {
+			t.Errorf("check passed the file name %q:\n%s", name, got)
+		}
 	}
 	if cp, err := Run(files, Records{Repo: "o/r"}, today, true); err != nil || strings.Contains(string(cp.Files["Principles/Principles.md"]), "![t]") {
 		t.Errorf("a checkpoint linked a file name that breaks a wikilink (%v):\n%s", err, cp.Files["Principles/Principles.md"])
@@ -393,6 +399,9 @@ func TestCheckpointFindsMovedNotesAndClearsGoneRecords(t *testing.T) {
 	files["Releases/2026/V0.2.0.md"] = []byte(strings.Replace(string(files["Releases/v0.2.0.md"]), Block("plan", ""), "", 1))
 	delete(files, "Releases/v0.2.0.md")
 
+	// A decision note lists its Decision and a related Story: only the Decision dates the choice.
+	files["Decisions/Use goldmark.md"] = note("id: decision-goldmark\ntype: decision\ntitle: Use goldmark\nowner: founder\nstatus: accepted\nupdated: 2026-10-18\nsources: [\"issue #5\"]\nup: \"[[Decisions]]\"\nissues: [5, 6]\ntags: [type/decision]\n", "# Use goldmark\n")
+	r.Issues = map[int]Issue{5: {Number: 5, Type: "decision", Title: "Use goldmark", Closed: "2026-10-10"}, 6: {Number: 6, Type: "story", Title: "Mask code", Closed: "2026-10-11"}}
 	r.Tags = r.Tags[1:] // v0.1.0 and Old Seat leave the records
 	r.Seats = []Seat{seat("founder", "Founder", "../not a login")}
 	second, err := Run(files, r, today, true)
@@ -417,6 +426,14 @@ func TestCheckpointFindsMovedNotesAndClearsGoneRecords(t *testing.T) {
 	}
 	if b := blocks("Releases/v0.1.0.md"); strings.TrimSpace(b["record"]) != "" {
 		t.Errorf("a release the records no longer name keeps its record: %q", b["record"])
+	}
+	if tl := string(files["Timeline/Timeline.md"]); !strings.Contains(tl, "[[Use goldmark]] is decided in #5.") || strings.Contains(tl, "decided in #6") {
+		t.Errorf("the timeline dates a decision by a related Story, or not by its Decision:\n%s", tl)
+	}
+	twice := maps.Clone(files) // a copied generated block is refused, not left stale
+	twice["Seats/Founder.md"] = append(slices.Clone(files["Seats/Founder.md"]), []byte("\n"+Block("facts", "- old")+"\n")...)
+	if _, err := Run(twice, r, today, true); err == nil || !strings.Contains(err.Error(), "two generated facts blocks") {
+		t.Errorf("a checkpoint over a note with two facts blocks: err %v", err)
 	}
 	if b := blocks("Seats/Old Seat.md"); strings.TrimSpace(b["facts"]) != "" {
 		t.Errorf("a seat the records no longer name keeps its facts: %q", b["facts"])

@@ -59,7 +59,7 @@ func Load(files map[string][]byte) *Vault {
 		if !strings.HasSuffix(p, ".md") || isTemplate(p) {
 			continue
 		}
-		if unsafeName.MatchString(Base(p)) { // [[x]] ![t](u)]] would close the link and render the rest
+		if b := Base(p); unsafeName.MatchString(b) || b == "" || strings.TrimSpace(b) != b { // [[x]] ![t](u)]] would close the link; [[ A]] reaches A
 			v.unsafe = append(v.unsafe, p)
 			continue
 		}
@@ -219,7 +219,7 @@ func Check(files map[string][]byte) Report {
 		}
 	}
 	for _, p := range v.unsafe {
-		fail(p, "name", "the file name %q has a character that breaks a wikilink (one of [ ] # ^ | \\ : * ? \" < >): rename the note", Base(p))
+		fail(p, "name", "the file name %q breaks a wikilink (a character of [ ] # ^ | \\ : * ? \" < >, or space at an end): rename the note", Base(p))
 	}
 	ids := map[string]string{}
 	for _, p := range slices.Sorted(mapKeys(v.Notes)) {
@@ -308,6 +308,9 @@ func Check(files map[string][]byte) Report {
 			if v.Resolve(l) == "" {
 				fail(p, "link", "[[%s]] does not resolve", l)
 			}
+		}
+		if k := dupBlock(n.Body); k != "" {
+			fail(p, "block", "two generated %s blocks: a checkpoint refreshes one, so delete the other", k)
 		}
 		human := prose(n.Body)
 		units := proseUnits(human)

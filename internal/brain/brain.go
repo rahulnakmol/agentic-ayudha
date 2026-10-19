@@ -182,6 +182,20 @@ func blockSpans(body string) [][]int {
 	return out
 }
 
+// dupBlock returns the name of a generated block that body holds twice, or "":
+// a checkpoint refreshes one block per name, so a copy would go stale.
+func dupBlock(body string) string {
+	seen := map[string]bool{}
+	for _, m := range blockSpans(body) {
+		if k := body[m[2]:m[3]]; seen[k] {
+			return k
+		} else {
+			seen[k] = true
+		}
+	}
+	return ""
+}
+
 // Blocks returns the generated blocks of a note body, by name.
 func Blocks(body string) map[string]string {
 	out := map[string]string{}
