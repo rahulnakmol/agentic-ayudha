@@ -151,8 +151,8 @@ runs only after the checks and proof pass; if they fail, the inspect check is sk
 comment's **Review:** field, under its heading, names the review model, for example `different-family review (B, paid): grok-4.7 (xai)`. The
 model reviews only when its family differs from the builder's and the author has write access. Otherwise the comment
 names the app or person that reviews instead, which is also a working setup. If a setting is missing, the gate fails
-and names it. [A pull request is ready](guide-review.md) walks you
-through it.
+and names it: see [Merge gate problems](troubleshooting.md#merge-gate). [A pull request is ready](guide-review.md)
+walks you through it.
 
 ## What's next
 
