@@ -154,6 +154,34 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	delete(fgh.Files, ".aayudha/config.toml/x")
 	fgh.Files[".aayudha/config.toml"] = cfg
 	fgh.Mu.Unlock()
+	// The push-access check that cannot be read trusts nothing either: the
+	// account (the identity lookup also reads GET /user once first), its
+	// permission, or an installation token's repositories.
+	fgh.Mu.Lock()
+	viewer := fgh.Viewer
+	fgh.Mu.Unlock()
+	for _, f := range []struct {
+		fail         string
+		after        int
+		installation bool
+	}{
+		{"GET /user", 1, false},
+		{"GET /repos/o/r/collaborators/" + viewer + "/permission", 0, false},
+		{"GET /installation/repositories", 0, true},
+	} {
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.FailAfter = f.fail, f.after
+		if f.installation {
+			fgh.InstallationTokens = map[string][]string{"human-token": {"o/r"}}
+		}
+		fgh.Mu.Unlock()
+		if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "500") {
+			t.Fatalf("push when %q fails: %d %s", f.fail, code, errOut)
+		}
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.InstallationTokens = "", nil
+		fgh.Mu.Unlock()
+	}
 	// The account's own user config that does not load trusts nothing.
 	badHome := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(badHome, ".config", "aayudha"), 0o755); err != nil {
@@ -419,5 +447,10 @@ func TestAccountHomeIgnoresHOME(t *testing.T) {
 		if h, err := accountHome(); (err == nil) != c.ok || c.ok && h != u.HomeDir {
 			t.Errorf("accountHome() with %q = %q, %v; want ok %t", c.db, h, err, c.ok)
 		}
+	}
+	// A user database that cannot be read trusts no home.
+	passwdFile = filepath.Join(t.TempDir(), "missing")
+	if h, err := accountHome(); err == nil {
+		t.Errorf("accountHome() with no user database = %q, want an error", h)
 	}
 }
