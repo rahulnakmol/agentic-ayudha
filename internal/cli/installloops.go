@@ -396,8 +396,6 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		if !l.IsEvent() && oldThread != "" {
 			prompt = "Call Amp's set_schedule on this thread with exactly this input. Only if it succeeds, call update_schedule with thread: " + oldThread + " and enabled: false, which pauses this loop's previous schedule. " +
 				"Do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`. If a call fails, reply with its error instead, and say that the schedule on " + oldThread + " still runs.\n\n" + string(in)
-		} else if !l.IsEvent() && old != "" {
-			steps = append(steps, fmt.Sprintf("%s: %s records %q, which names no thread: pause that schedule in Amp by hand, or the loop runs twice.", l.Name, loops.RecordFile, old))
 		}
 		if l.IsEvent() {
 			// Amp returns an equivalent subscription that exists instead of a new
@@ -427,9 +425,13 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		}
 		async = async || !strings.HasPrefix(id, "schedule ") && !l.IsEvent()
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
-		if !l.IsEvent() && oldThread != "" {
-			id += "; its thread pauses the old schedule on " + oldThread
+		switch {
+		case l.IsEvent():
+		case oldThread != "":
+			id += "; its thread is asked to pause the old schedule on " + oldThread
 			paused = append(paused, l.Name+" ("+oldThread+")")
+		case old != "":
+			steps = append(steps, fmt.Sprintf("%s: %s recorded %q, which names no thread: once its new thread holds the schedule, pause that old one in Amp by hand, or the loop runs twice.", l.Name, loops.RecordFile, old))
 		}
 		applied = append(applied, l.Name+": "+id)
 	}
@@ -443,7 +445,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		}
 		if len(paused) > 0 {
 			// The thread's reply comes after amp -ox returns, so whether a pause worked is not known here; the old threads stay named.
-			steps = append(steps, fmt.Sprintf("The new threads pause the old schedules of %s once their own is set. Open each new thread to check: one that failed says so, and its loop's old schedule still runs until you pause it (update_schedule with that thread and enabled: false).", strings.Join(paused, ", ")))
+			steps = append(steps, fmt.Sprintf("The new threads are asked to pause the old schedules of %s once their own is set; nothing confirms it here. Open each new thread to check: one that failed says so, and its loop's old schedule still runs until you pause it (update_schedule with that thread and enabled: false).", strings.Join(paused, ", ")))
 		}
 		for _, n := range pending {
 			steps = append(steps, fmt.Sprintf("%s is not recorded: its thread had not replied with a subscription ID. Open the thread, check that Amp shows the GitHub subscription, then record it with `aayu install --loops --host amp --record %s=subscription <ID>`.", n, n))
