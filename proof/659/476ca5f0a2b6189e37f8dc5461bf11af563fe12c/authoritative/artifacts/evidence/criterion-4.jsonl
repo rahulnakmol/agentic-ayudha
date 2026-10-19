@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSessionReviewRefusesSameFamily"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSessionReviewRefusesSameFamily","Output":"=== RUN   TestBuildSessionReviewRefusesSameFamily\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSessionReviewRefusesSameFamily","Output":"--- PASS: TestBuildSessionReviewRefusesSameFamily (1.02s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSessionReviewRefusesSameFamily"}
