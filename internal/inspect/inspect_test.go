@@ -515,12 +515,12 @@ func TestCoverageManifest(t *testing.T) {
 		mu.Lock()
 		prompts = append(prompts, p)
 		mu.Unlock()
-		f, v := "internal/a/a.go", "met"
+		f, v, ev := "internal/a/a.go", "met", "e"
 		if strings.Contains(p, "b/internal/b/b.go") {
-			f, v = "internal/b/b.go", "unclear"
+			f, v, ev = "internal/b/b.go", "unclear", "Not in this part."
 		}
 		r := reply("merge", finding("P2", "maintainability", f, "package parts", "Package name in "+f, 0.9))
-		r["criteria"] = []map[string]any{{"id": 1, "verdict": v, "evidence": "e"}}
+		r["criteria"] = []map[string]any{{"id": 1, "verdict": v, "evidence": ev}}
 		b, _ := json.Marshal(r)
 		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
 	}}
@@ -531,7 +531,7 @@ func TestCoverageManifest(t *testing.T) {
 	}
 	if err != nil || len(prompts) != 2 || res3.Coverage.State != "complete" || len(res3.Coverage.Unreviewed()) != 0 ||
 		!slices.Equal(files, []string{"internal/a/a.go", "internal/b/b.go"}) || res3.Disposition != Merge || res3.CostUSD != 1 || st3.SpentUSD != 1 ||
-		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): e" ||
+		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): Not in this part." ||
 		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
 		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
 	}
@@ -543,12 +543,16 @@ func TestCoverageManifest(t *testing.T) {
 	// A finding the noise rules dropped as low-confidence keeps its part's fix,
 	// as liftFix keeps one (Codex's P1 on #714).
 	// So does a P3 the noise rules counted as a nit, as in an unsplit review.
+	// An unclear for a reason of its own, not "not in this part", keeps the
+	// criterion unclear and the fix (Codex's P1 on #714).
 	for _, c := range []struct {
 		finding bool
 		low     bool
 		nit     bool
+		why     string
 		want    string
-	}{{false, false, false, Merge}, {true, false, false, Fix}, {false, true, false, Fix}, {false, false, true, Fix}} {
+	}{{false, false, false, "not in this part", Merge}, {true, false, false, "not in this part", Fix}, {false, true, false, "not in this part", Fix},
+		{false, false, true, "not in this part", Fix}, {false, false, false, "no test shows Percent(0, 0)", Fix}} {
 		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
 			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
 			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
@@ -563,7 +567,7 @@ func TestCoverageManifest(t *testing.T) {
 					fs = append(fs, finding("P3", "maintainability", "internal/b/b.go", "package parts", "A nit in b", 0.9))
 				}
 				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
-					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": "not in this part"}}}
+					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": c.why}}}
 			}
 			b, _ := json.Marshal(r)
 			return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
@@ -579,7 +583,7 @@ func TestCoverageManifest(t *testing.T) {
 			want = append(want, "internal/b/b.go A bug in b")
 		}
 		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
-			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t, a nit %t): %s, findings %v, err %v", c.finding, c.low, c.nit, res.Disposition, fs, err)
+			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t, a nit %t, unclear: %s): %s, findings %v, err %v", c.finding, c.low, c.nit, c.why, res.Disposition, fs, err)
 		}
 	}
 

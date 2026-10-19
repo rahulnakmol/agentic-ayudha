@@ -464,9 +464,14 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 		costs = append(costs, fmt.Sprintf("%.2f", o.CostUSD))
 		if len(parts) > 1 {
 			// Each verdict keeps its part, so a reader sees which part showed it.
+			// An unclear that only says the part does not hold the criterion is
+			// absent, the weakest verdict (partCriteria).
 			o.Criteria = slices.Clone(o.Criteria)
 			for k, v := range o.Criteria {
 				o.Criteria[k].Evidence = fmt.Sprintf("part %d (%s): %s", i+1, v.Verdict, v.Evidence)
+				if v.Verdict == "unclear" && strings.EqualFold(strings.Trim(strings.TrimSpace(v.Evidence), `."`), notInPart) {
+					o.Criteria[k].Verdict = verdictAbsent
+				}
 			}
 		}
 		for _, m := range o.Reviewers {
@@ -501,6 +506,11 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	if len(parts) > 1 {
 		res.Notes = append(res.Notes, fmt.Sprintf("the diff (%d bytes) is over the %d-byte prompt cap: reviewed in %d parts of whole files, in parallel, each with the same plan and criteria (%s USD)",
 			len(in.Diff), maxDiffBytes, len(parts), strings.Join(costs, " + ")))
+		for k, v := range res.Criteria {
+			if v.Verdict == verdictAbsent {
+				res.Criteria[k].Verdict = "unclear" // no part showed it
+			}
+		}
 		var dups []Dropped
 		res.Findings, dups = Dedupe(res.Findings)
 		res.Dropped = append(res.Dropped, dups...)
@@ -587,15 +597,24 @@ func partNote(i int, parts []string) string {
 	return fmt.Sprintf("The diff is too large for one review, so it is reviewed in %d parts, each against the same story, criteria, and plan. "+
 		"This call reviews part %d; its files are in the first block below, and the other parts' files, reviewed in separate calls, in the second. "+
 		"Raise findings only on this part's files. Judge a criterion from this part only when it shows the criterion's code or tests; "+
-		"when it shows none of them, answer unclear with the evidence \"not in this part\". "+
+		"when it shows none of them, answer unclear with the evidence \""+notInPart+"\". "+
 		"A criterion that is unclear only because it is not in this part does not make the disposition fix: judge the disposition on this part's files.\n\n%s\n\n%s\n",
 		len(parts), i+1, triage.Untrusted("this part's files", strings.Join(mine, "\n")), triage.Untrusted("the other parts' files", strings.Join(others, "\n")))
 }
 
+// notInPart is the evidence a part's reviewer gives for a criterion the part
+// does not hold; verdictAbsent is that unclear while the parts are merged.
+const (
+	notInPart     = "not in this part"
+	verdictAbsent = "absent"
+)
+
 // partCriteria merges the verdicts of two parts of a split diff: a criterion
-// is unmet when a part says so, met when a part shows it met, else unclear.
-// The evidence of every part is kept.
+// is unmet when a part says so, unclear when a part judged it and could not
+// tell, met when a part shows it met and no part says otherwise, and absent
+// when no part holds it. The evidence of every part is kept.
 func partCriteria(a, b []Verdict) []Verdict {
+	rank := map[string]int{verdictAbsent: 0, "met": 1, "unclear": 2, "unmet": 3}
 	out := slices.Clone(a)
 	for _, v := range b {
 		i := slices.IndexFunc(out, func(x Verdict) bool { return x.ID == v.ID })
@@ -603,7 +622,7 @@ func partCriteria(a, b []Verdict) []Verdict {
 			out = append(out, v)
 			continue
 		}
-		if v.Verdict == "unmet" || (v.Verdict == "met" && out[i].Verdict == "unclear") {
+		if rank[v.Verdict] > rank[out[i].Verdict] {
 			out[i].Verdict = v.Verdict
 		}
 		out[i].Evidence += "; " + v.Evidence
