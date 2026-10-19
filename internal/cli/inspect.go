@@ -582,8 +582,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})
 			return err
 		}}
-	var served []string                                     // the service tier of each reply ("" when it states none)
-	left := l.Config.Budget.PerPRInspectMax - prev.SpentUSD // shared by every call of this review, peers and cross-checks included
+	var served []string                                                  // the service tier of each reply ("" when it states none)
+	left := l.Config.Budget.PerPRInspectMax - prev.SpentUSD - sessionUSD // shared by every call of this review, peers and cross-checks included, and the build session's
 	for _, m := range picked {
 		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, &left, &served)})
 	}

@@ -258,14 +258,15 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	// The merge gate's own review call: fast serving where the endpoint has
 	// it, the founder's effort per model, and the cost at the rate asked.
 	var served []string
-	// The merge gate's inspect spends from the same per-PR cap.
-	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax, SpentElsewhere: a.ciSpent,
-		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
-		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &served)}}}
 	// The spend outlives the worktree: a resumed build on another machine
 	// starts from what the build's ledger record says was spent, so
 	// per_pr_inspect_max still caps the PR.
 	s.State.SpentUSD = max(s.State.SpentUSD, a.st.ReviewUSD)
+	// The merge gate's inspect spends from the same per-PR cap, its retry included.
+	left := cfg.Budget.PerPRInspectMax - s.State.SpentUSD - a.ciSpent
+	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax, SpentElsewhere: a.ciSpent,
+		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
+		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &left, &served)}}}
 	// inspect's cache key leaves out the builder's declarations: a result
 	// another reviewer gave, before a declaration changed the pick, is not
 	// this reviewer's.
