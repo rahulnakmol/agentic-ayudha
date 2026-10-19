@@ -111,6 +111,8 @@ func TestCheckPRBodyBlocksAnAgentPR(t *testing.T) {
 		"heading in a comment": {strings.Replace(goodPRBody, "## Why\n", "<!--\n## Why\n-->\n", 1), "Why"},
 		"empty deviation": {strings.Replace(goodPRBody, "## For reviewers", "## Deviation from the plan:\n\n<!-- none -->\n\n## For reviewers", 1),
 			Deviation},
+		"deviation placeholder": {strings.Replace(goodPRBody, "## For reviewers", "## Deviation from the plan:\n\n"+Placeholder+"\n\n## For reviewers", 1),
+			Deviation},
 	} {
 		t.Run(name, func(t *testing.T) {
 			block, _ := Check(tc.body, nil, true)

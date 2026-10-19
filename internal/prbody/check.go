@@ -162,7 +162,11 @@ func Check(body string, words *brief.Words, agent bool) (block, warn []workitems
 		}
 	}
 	for _, s := range secs {
-		if prName(s.name) == prName(Deviation) && !prFilled(s.name, s.text) {
+		switch {
+		case prName(s.name) != prName(Deviation):
+		case strings.Contains(s.text, Placeholder):
+			hard(Deviation, "the section still holds a placeholder: write it")
+		case !prFilled(s.name, s.text):
 			hard(Deviation, "the section is empty: say what the plan assumed, what you found, and what you built instead")
 		}
 	}

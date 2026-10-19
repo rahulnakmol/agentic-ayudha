@@ -398,7 +398,21 @@ func TestDelegateLocalFallback(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(errOut, "Codex's cloud agent is not connected") || !strings.Contains(errOut, "add `--local`") {
 		t.Fatalf("no silent fallback to the CLI: %d %s", code, errOut)
 	}
+	// From an Amp thread, a delegated checkpoint names its receiver, never the
+	// thread's own model: aayu does not ask Amp which model the thread ran.
+	env["AMP_THREAD_ID"] = "T-1"
+	probe := opts.Exec
+	var asked []string
+	opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+		if name == "amp" {
+			asked = append(asked, strings.Join(args, " "))
+		}
+		return probe(ctx, dir, name, args...)
+	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if len(asked) > 0 {
+		t.Errorf("a delegated build asked Amp for the thread's model: %q", asked)
+	}
 	wt := delegate.Worktree(dir, 2, "codex", 2)
 	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" {
 		t.Fatalf("local: %d %+v %s", code, res, errOut)
