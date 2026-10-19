@@ -289,12 +289,25 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if pick != nil {
 		st.Loop, st.Claim = BuildLoop, pick.Claim
 	}
-	b := l.Config.Autonomy.Budget
+	b, perStory := l.Config.Autonomy.Budget, l.Config.Budget.PerStoryUSD
+	if st.Loop != "" {
+		// No person asked for a loop's build, so its limits are the committed
+		// policy at dev's tip, as for in_flight: AAYU_* or --set may tighten
+		// one, never loosen it or turn it off.
+		owner, name, _ := github.SplitRepo(repo)
+		pol, err := basePolicy(ctx, c, owner, name, dev)
+		if err != nil {
+			return err
+		}
+		cb := pol.Config.Autonomy.Budget
+		b = config.AutonomyBudget{WallHours: tighter(b.WallHours, cb.WallHours), CostUSD: tighter(b.CostUSD, cb.CostUSD), Attempts: tighter(b.Attempts, cb.Attempts)}
+		perStory = tighter(perStory, pol.Config.Budget.PerStoryUSD)
+	}
 	// A story's spend is capped by the lower of the build budget and the
 	// breaker's per-story limit, so a config that keeps a lower per_story_usd
 	// is reported, and blocks, at the limit that actually stops it. A cap of 0
 	// is off on purpose and stays off.
-	if p := l.Config.Budget.PerStoryUSD; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
+	if p := perStory; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
 		b.CostUSD = p
 	}
 	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
@@ -1049,6 +1062,15 @@ func (e *Env) stopBuild(ctx context.Context, c *github.Client, bot identity.Bot,
 	st.Story = n
 	res := BuildResult{Issue: n, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, e.Now())}
 	return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, "stopped by its builder: "+why)
+}
+
+// tighter is the stricter of a local and a committed limit, where 0 is off:
+// a local value may lower a committed limit, never raise it or turn it off.
+func tighter[T int | float64](local, committed T) T {
+	if committed > 0 && (local <= 0 || local > committed) {
+		return committed
+	}
+	return local
 }
 
 const progressMarker = "<!-- aayudha:progress -->"

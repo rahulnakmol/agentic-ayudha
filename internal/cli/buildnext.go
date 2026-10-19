@@ -417,6 +417,13 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	now := e.Now()
 	for _, st := range states {
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		// A block counts when the ledger or the story's label records it: the
+		// label is set first, so a failed ledger write still leaves it.
+		blocked := st.Blocked != "" || contains(github.IssueLabels(is), "status:blocked")
 		// The loop's own PR is the one on the branch it built, in this
 		// repository; any other PR that names the story is never shipped here.
 		// It holds its slot while it is open, even if its story closed or its
@@ -428,19 +435,12 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			pr := prs[st.Story][i]
 			it := LoopItem{Story: st.Story, PR: pr.GetNumber(), URL: pr.GetHTMLURL()}
 			p.InFlight = append(p.InFlight, it)
-			if st.Blocked == "" {
+			if !blocked {
 				p.Ship = append(p.Ship, it)
 			}
 			continue
 		}
-		if st.Blocked != "" {
-			continue
-		}
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
-		if err != nil {
-			return nil, 0, Wrap(ExitExternal, err)
-		}
-		if is.GetState() != "open" {
+		if blocked || is.GetState() != "open" {
 			continue
 		}
 		labels := github.IssueLabels(is)

@@ -169,9 +169,15 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 		}
 	}
 	putLedger(t, bare, LoopClaimsPath, claimLine(99, time.Now().Add(-time.Hour))) // a pick that died long ago holds nothing
-	code, res, pick, out := next(nil, "--next", "pick")
+	// A loop build takes its budget from dev's committed config: a local
+	// override may tighten a limit, never loosen or turn it off.
+	loosen := map[string]string{"AAYU_AUTONOMY__BUDGET__WALL_HOURS": "0", "AAYU_AUTONOMY__BUDGET__ATTEMPTS": "9", "AAYU_AUTONOMY__BUDGET__COST_USD": "1"}
+	code, res, pick, out := next(loosen, "--next", "pick")
 	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
 		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
+	}
+	if res.Budget.MaxWall != 8 || res.Budget.MaxAttempts != 3 || res.Budget.MaxCost != 1 {
+		t.Fatalf("a local override loosened the loop build's committed budget: %+v", res.Budget)
 	}
 	for _, want := range []struct {
 		n   int
@@ -212,6 +218,17 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, _, pick, out := next(nil, "--next", "pick"); code != 0 || pick.Picked != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].PR != pr.Number {
 		t.Fatalf("the loop's open PR counts in flight: %d %s", code, out)
 	}
+	// Its story is status:blocked though the ledger did not record the block
+	// (the write failed): the PR is not shipped, and it keeps its slot.
+	g.Mu.Lock()
+	g.Issues[older.Number].Labels = append(g.Issues[older.Number].Labels, fake.Label{Name: "status:blocked"})
+	g.Mu.Unlock()
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 0 || len(pick.InFlight) != 1 {
+		t.Fatalf("a status:blocked story's PR was listed to ship: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Issues[older.Number].Labels = slices.DeleteFunc(g.Issues[older.Number].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	g.Mu.Unlock()
 	// Its story closed while the PR is open: the PR is still the loop's to
 	// ship, and still in flight.
 	g.Mu.Lock()
