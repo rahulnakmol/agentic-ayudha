@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof","Output":"=== RUN   TestShipOnProof\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof","Output":"--- PASS: TestShipOnProof (5.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipOnProof"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipAutonomousFootprint"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipAutonomousFootprint","Output":"=== RUN   TestShipAutonomousFootprint\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipAutonomousFootprint","Output":"--- PASS: TestShipAutonomousFootprint (1.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipAutonomousFootprint"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipEMSeatApprover"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipEMSeatApprover","Output":"=== RUN   TestShipEMSeatApprover\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipEMSeatApprover","Output":"--- PASS: TestShipEMSeatApprover (1.09s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipEMSeatApprover"}
