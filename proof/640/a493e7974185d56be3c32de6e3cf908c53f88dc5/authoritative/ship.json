@@ -1,0 +1,73 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 640,
+  "pr": 660,
+  "pr_head_sha": "a493e7974185d56be3c32de6e3cf908c53f88dc5",
+  "merge_commit": "26e35e452af60a113d621fc04e2f3b0063a90409",
+  "pack": "proof/640/a493e7974185d56be3c32de6e3cf908c53f88dc5/authoritative/pack.json",
+  "pack_landed": "artifact 12183893958 of run 39247137951 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/39247137951), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 39247137951,
+  "artifact": 12183893958,
+  "pack_sha256": "5de2a1dc68019cee70c556a830ca6c63b05df46dc349abf5953a505b68646946",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/660#issuecomment-6268719963",
+    "commit": "a493e7974185d56be3c32de6e3cf908c53f88dc5",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02",
+    "L03",
+    "L05",
+    "L07",
+    "L09"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver",
+    "never_layers": [
+      "L07",
+      "L09"
+    ],
+    "never_paths": [
+      ".github/CODEOWNERS",
+      "internal/config/config_test.go",
+      "internal/config/layers_test.go",
+      "internal/config/load.go",
+      "internal/identity/cmd/protected-paths-gate/main.go",
+      "internal/identity/cmd/protected-paths-gate/main_test.go"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "never_layers": [
+      "L07",
+      "L09"
+    ],
+    "autonomous": false,
+    "skipped": "the human pass is settled: solo-bypass"
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L07",
+      "L09"
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-19T13:36:13Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/640#issuecomment-6268506668",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"
+    }
+  },
+  "actions_segment": "actions/2026-10-19/cli-20261019T133627Z.jsonl",
+  "shipped_at": "2026-10-19T13:45:46Z",
+  "shipped_by": "rahulnakmol"
+}
