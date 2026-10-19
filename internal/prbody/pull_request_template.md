@@ -5,15 +5,16 @@ by their GitHub login. -->
 
 ## What this does
 
-<!-- One line: what the change does for the person who uses it. Then fill the table. -->
+<!-- One line: what the change does for the person who uses it. Then fill the table: Story or Bug (#n); Type
+(feature, fix, or docs); who it helps; Risk (low, medium, or high); Breaking (yes or no). Replace every _(to write)_. -->
 
 | At a glance | |
 |---|---|
-| Story or Bug | #n |
-| Type | feature, fix or docs |
-| Who it helps | |
-| Risk | low, medium or high |
-| Breaking | yes or no |
+| Story or Bug | _(to write)_ |
+| Type | _(to write)_ |
+| Who it helps | _(to write)_ |
+| Risk | _(to write)_ |
+| Breaking | _(to write)_ |
 
 ## Why
 

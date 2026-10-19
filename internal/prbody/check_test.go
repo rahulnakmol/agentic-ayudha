@@ -179,9 +179,10 @@ func TestPRTemplate(t *testing.T) {
 	if string(repo) != string(Template()) {
 		t.Error(".github/pull_request_template.md differs from internal/workitems/pull_request_template.md; copy it")
 	}
-	// Unfilled, the template is empty where the author writes.
+	// Unfilled, the template is empty where the author writes, and its At a
+	// glance table, whose rows look filled, holds placeholders.
 	block, _ := Check(string(Template()), nil, true)
-	if want := []string{"Why", "What changed", "How we know it works", "Risk and rollback", "For reviewers"}; !slices.Equal(fields(block), want) {
+	if want := []string{"What this does", "Why", "What changed", "How we know it works", "Risk and rollback", "For reviewers"}; !slices.Equal(fields(block), want) {
 		t.Errorf("the empty template blocks %v, want %q", fields(block), want)
 	}
 }

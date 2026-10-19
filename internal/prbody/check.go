@@ -32,9 +32,10 @@ const Reviewers = "For reviewers"
 // differs from the plan, with that exact wording.
 const Deviation = "Deviation from the plan:"
 
-// Placeholder marks what `aayu build` leaves for the agent to write. A
+// Placeholder marks what the author still has to write: in the template's
+// At a glance table, and where `aayu build` cannot know the answer. A
 // section that still holds it is unfilled.
-const Placeholder = "_(to write: aayu build cannot know this)_"
+const Placeholder = "_(to write)_"
 
 var (
 	prHeading    = regexp.MustCompile(`^##\s+(.+?)\s*#*\s*$`)
@@ -146,7 +147,7 @@ func Check(body string, words *brief.Words, agent bool) (block, warn []workitems
 		case i < 0:
 			hard(want, "the section is missing: add a \"## "+want+"\" heading and write it")
 		case strings.Contains(secs[i].text, Placeholder):
-			hard(want, "the section still holds the placeholder aayu build left: write it")
+			hard(want, "the section still holds a placeholder: write it")
 		case !prFilled(want, secs[i].text):
 			hard(want, "the section is empty: comments and table headings alone do not count")
 		}
