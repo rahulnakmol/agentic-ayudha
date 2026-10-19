@@ -53,8 +53,9 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 - **Where it works:** GitHub repositories, with Claude Code, Codex, Cursor, or Amp. Use your existing repository: if you
   only have a `main` branch, aayudha works with it and renames nothing.
 - **To start (Level 1):** no keys, no CI changes, about an hour. Your agent's own model does the interviewing.
-- **For proof on every pull request (Level 2):** one AI key in your CI, for a review model from another vendor. It
-  lives in the repository's `code-review` environment. You choose the model and pay for its calls; `[budget]
+- **For proof on every pull request (Level 2):** one AI key in your CI, for a review model you choose. It
+  lives in the repository's `code-review` environment. The model reviews only when its family differs from the
+  builder's; otherwise an app or a person reviews. You choose the model and pay for its calls; `[budget]
   per_pr_inspect_max` caps each pull request at 5 USD by default. A review app, such as CodeRabbit or Codex, can
   review instead, billed through your own subscription to it. The checks take about 10 CI minutes per push in this
   repository.
