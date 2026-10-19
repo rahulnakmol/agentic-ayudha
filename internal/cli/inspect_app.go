@@ -376,11 +376,15 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 // (zero when none says).
 func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string) (time.Time, error) {
 	var first time.Time
-	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
+	// filter=all: by default GitHub lists only the newest run, a rerun's.
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
+		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), Filter: gh.Ptr("all"), ListOptions: o})
+		return r.GetCheckRuns(), resp, err
+	})
 	if err != nil {
 		return first, err
 	}
-	for _, r := range runs.CheckRuns {
+	for _, r := range runs {
 		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && (first.IsZero() || at.Before(first)) {
 			first = at
 		}

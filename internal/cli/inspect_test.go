@@ -1478,7 +1478,9 @@ func TestInspectPaidReviewer(t *testing.T) {
 			// head's first inspect run: past inspect.ReplyWait with no review, a
 			// person reviews (Codex's P1 on #724).
 			g.Mu.Lock()
-			g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: opts.Now().Add(-inspect.ReplyWait - time.Minute).Format(time.RFC3339)}}
+			// A rerun started now is the newest run; the first one still counts.
+			g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 2, Name: "aayudha/inspect", Status: "in_progress", StartedAt: opts.Now().Format(time.RFC3339)},
+				{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: opts.Now().Add(-inspect.ReplyWait - time.Minute).Format(time.RFC3339)}}
 			g.Mu.Unlock()
 			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") {
 				t.Fatalf("CodeRabbit silent past the wait: exit %d %q %s", code, res.Review, errOut)
