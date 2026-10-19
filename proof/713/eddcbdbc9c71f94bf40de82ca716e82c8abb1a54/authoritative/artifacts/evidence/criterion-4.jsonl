@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxSelectsOnlyHousekeeping"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxSelectsOnlyHousekeeping","Output":"=== RUN   TestInboxSelectsOnlyHousekeeping\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxSelectsOnlyHousekeeping","Output":"--- PASS: TestInboxSelectsOnlyHousekeeping (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxSelectsOnlyHousekeeping"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxTUI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxTUI","Output":"=== RUN   TestInboxTUI\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxTUI","Output":"--- PASS: TestInboxTUI (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxTUI"}

@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 713,
+  "pr": 707,
+  "pr_head_sha": "eddcbdbc9c71f94bf40de82ca716e82c8abb1a54",
+  "base_sha": "c2725c60b9ddae5077f5dbcb929c1256e62c9fb4",
+  "seat": "ai-native-engineer",
+  "host": "cli",
+  "model": "claude-opus-5-5",
+  "identity": "ci",
+  "authority": {
+    "kind": "authoritative",
+    "workflow": ".github/workflows/aayudha-merge-gate.yml",
+    "run_id": 39239481081,
+    "writer": "rahulnakmol (aayu ship)"
+  },
+  "completion_goal_hash": "84f005f65565c318b9b4c51da9b1f04c130734d4c20008671b9be82bf9b69016",
+  "footprint": [
+    "L02",
+    "L03",
+    "L06"
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "evidence": [
+        "screens/1.png",
+        "evidence/criterion-1.jsonl"
+      ]
+    },
+    {
+      "id": 2,
+      "evidence": [
+        "screens/2.png",
+        "evidence/criterion-2.jsonl"
+      ]
+    },
+    {
+      "id": 3,
+      "evidence": [
+        "evidence/criterion-3.jsonl"
+      ]
+    },
+    {
+      "id": 4,
+      "evidence": [
+        "evidence/criterion-4.jsonl"
+      ]
+    },
+    {
+      "id": 5,
+      "evidence": [
+        "evidence/criterion-5.jsonl"
+      ]
+    },
+    {
+      "id": 6,
+      "evidence": [
+        "screens/6.png",
+        "evidence/criterion-6.jsonl"
+      ]
+    },
+    {
+      "id": 7,
+      "evidence": [
+        "evidence/criterion-7.jsonl"
+      ]
+    },
+    {
+      "id": 8,
+      "evidence": [
+        "evidence/criterion-8.jsonl"
+      ]
+    },
+    {
+      "id": 9,
+      "evidence": [
+        "evidence/criterion-9.jsonl"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "coverage/diff.json",
+      "kind": "metric",
+      "sha256": "e6a2b7963d67f69e23559dd29068c0c2ab2f1e765769f09668dbbb254caca720",
+      "size": 1205,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-1.jsonl",
+      "kind": "api-trace",
+      "sha256": "5b44dca4123a27b0405edecd4c14df288459dba12d50366f963abfa900b6f276",
+      "size": 1026,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-2.jsonl",
+      "kind": "api-trace",
+      "sha256": "5b44dca4123a27b0405edecd4c14df288459dba12d50366f963abfa900b6f276",
+      "size": 1026,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-3.jsonl",
+      "kind": "metric",
+      "sha256": "00bfaa9be369f9aa3fa76ed05ba454f68d5eccd7f1a1086cad78c7db6cbecbd1",
+      "size": 531,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-4.jsonl",
+      "kind": "api-trace",
+      "sha256": "0252a9e70f64b67516941a2c5799c9b76f062686aed3aaf6752182686bd52e2b",
+      "size": 1110,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-5.jsonl",
+      "kind": "api-trace",
+      "sha256": "d7da0e1c0bcca3452c8b0dc070d1a0d6be97612ac7b3d04d6714e4003afd6f7c",
+      "size": 1140,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-6.jsonl",
+      "kind": "api-trace",
+      "sha256": "74329ed4c1bb0829610c6af8488165dc10e167feace276fb1a96f0e005d8a0a5",
+      "size": 1689,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-7.jsonl",
+      "kind": "api-trace",
+      "sha256": "44dfbf08eaa0b4f459ce77a56569ae0e3ff3c7adb84e6826240fe5a54e7ec665",
+      "size": 1635,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-8.jsonl",
+      "kind": "api-trace",
+      "sha256": "657434f902394f173a14f7544ca9ff0dec0dbf3459756c8b37cfd2316ee72252",
+      "size": 1074,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-9.jsonl",
+      "kind": "api-trace",
+      "sha256": "3a0f40611389ccbd2385b72f64900881b49d6955f925ecbcdfea3cb9863a6429",
+      "size": 549,
+      "store": "git"
+    },
+    {
+      "path": "reports/a11y.json",
+      "kind": "report",
+      "sha256": "4de2b739b4f22fa8c98c584ffcbe50329458ae0a68a4abab90e951912a0305e8",
+      "size": 1079,
+      "store": "git"
+    },
+    {
+      "path": "reports/feature-map.json",
+      "kind": "report",
+      "sha256": "02839b69630823a2f61f98f56d75e4f90a1fde44288bb9438379c5c5ec46d3dd",
+      "size": 1035,
+      "store": "git"
+    },
+    {
+      "path": "reports/gitleaks.json",
+      "kind": "report",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3,
+      "store": "git"
+    },
+    {
+      "path": "reports/osv-scanner.json",
+      "kind": "report",
+      "sha256": "f5aad51596612fdc0d352296c3c0e561d182b49d0aff1680c1e738bb9ab3baf2",
+      "size": 10541,
+      "store": "git"
+    },
+    {
+      "path": "reports/perf.json",
+      "kind": "metric",
+      "sha256": "b431684757c55b86147312274da5940f1d9bc04410d7e3f9b38d8e8e1acf9205",
+      "size": 118,
+      "store": "git"
+    },
+    {
+      "path": "reports/screenshot-review.json",
+      "kind": "report",
+      "sha256": "359d85dd7ca8a97deafe95aea260788c364baf5c3b8303d1adf017282c50bfe7",
+      "size": 123,
+      "store": "git"
+    },
+    {
+      "path": "reports/semgrep.json",
+      "kind": "report",
+      "sha256": "4b82337de8c55d20661d8c82c1179e15da2cb915f8a6613c7707c97de7ac7134",
+      "size": 51464,
+      "store": "git"
+    },
+    {
+      "path": "screens/1.png",
+      "kind": "screenshot",
+      "sha256": "0cdb73e626ba09267884b4198e2535062fcb1c4ad013982bdc8ae440246d1173",
+      "size": 62290,
+      "store": "none"
+    },
+    {
+      "path": "screens/2.png",
+      "kind": "screenshot",
+      "sha256": "80c5418f096364b65efa71eb41b0e2e25b41053b7f24eeb8e4ec620e284dc81b",
+      "size": 62286,
+      "store": "none"
+    },
+    {
+      "path": "screens/6.png",
+      "kind": "screenshot",
+      "sha256": "0cdb73e626ba09267884b4198e2535062fcb1c4ad013982bdc8ae440246d1173",
+      "size": 62290,
+      "store": "none"
+    }
+  ],
+  "checks": [
+    {
+      "floor": "coverage",
+      "result": "pass",
+      "value": 92.5,
+      "threshold": 90,
+      "tool": "aayudha diff coverage (go test -coverprofile)",
+      "version": "go1.25.14",
+      "detail": "1001 of 1081 changed executable lines covered (go coverprofile)",
+      "network": "isolated"
+    },
+    {
+      "floor": "sast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "semgrep",
+      "version": "1.180.0",
+      "detail": "p/golang p/javascript p/typescript p/python p/kotlin p/ruby p/php p/swift p/github-actions: 0 critical, 0 high, 3 medium, 0 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "secrets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "detail": "0 findings",
+      "network": "isolated"
+    },
+    {
+      "floor": "deps",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "osv-scanner",
+      "version": "2.6.0",
+      "detail": "go.mod pnpm-lock.yaml: 0 critical, 0 high, 0 medium, 0 low (3 more not called, by osv-scanner's call analysis)",
+      "network": "allowed"
+    },
+    {
+      "floor": "a11y",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright + axe-core",
+      "version": "playwright 1.64.0, axe-core 4.14.0",
+      "detail": "WCAG 2.2 AA: 0 critical, 0 serious",
+      "network": "allowed"
+    },
+    {
+      "floor": "keyboard",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "controls not reachable by Tab: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "reduced-motion",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "animations running with prefers-reduced-motion: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "text-scale",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "text clipped at 200 %: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "targets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 44,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "targets under 44x44 px: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "redaction",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha PII scan",
+      "version": "1",
+      "detail": "DOM scan; OCR unavailable (tesseract not installed)"
+    },
+    {
+      "floor": "perf",
+      "result": "pass",
+      "value": 100,
+      "threshold": 90,
+      "tool": "lighthouse",
+      "version": "13.5.0",
+      "detail": "1 URL(s) within budget",
+      "network": "allowed"
+    },
+    {
+      "floor": "screen-reader",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no-L01"
+    },
+    {
+      "floor": "dast",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: [verify] dast is off"
+    },
+    {
+      "floor": "api",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no k6 script ([verify.floors.api] script)"
+    },
+    {
+      "floor": "mobile",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no ios or android in [verify] platforms"
+    },
+    {
+      "floor": "feature-map",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha feature map",
+      "version": "1",
+      "detail": "in sync; 1 feature changed since verified_at"
+    },
+    {
+      "floor": "behaviour",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no behaviour check for this change (it touches no mapped feature, and no criterion maps a check)"
+    },
+    {
+      "floor": "parity",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no criterion runs `aayu survey --parity` or `--compat`"
+    }
+  ],
+  "cost": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "usd": 0
+  },
+  "links": {
+    "issue": "rahulnakmol/agentic-ayudha#713",
+    "pr": "rahulnakmol/agentic-ayudha#707",
+    "ready_snapshot": "specs/713/ready.md"
+  },
+  "created_at": "2026-10-19T10:55:20Z"
+}

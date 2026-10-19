@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxAcrossWrites"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxAcrossWrites","Output":"=== RUN   TestInboxAcrossWrites\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxAcrossWrites","Output":"--- PASS: TestInboxAcrossWrites (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxAcrossWrites"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWriteFailures"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWriteFailures","Output":"=== RUN   TestInboxWriteFailures\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWriteFailures","Output":"--- PASS: TestInboxWriteFailures (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWriteFailures"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWritesInBackground"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWritesInBackground","Output":"=== RUN   TestInboxWritesInBackground\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWritesInBackground","Output":"--- PASS: TestInboxWritesInBackground (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxWritesInBackground"}
