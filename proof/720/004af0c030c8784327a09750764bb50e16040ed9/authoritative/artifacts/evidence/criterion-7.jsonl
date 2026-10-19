@@ -1,0 +1,56 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow","Output":"=== RUN   TestPresenceCheckDeviceFlow\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve","Output":"=== RUN   TestPresenceCheckDeviceFlow/approve\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve","Output":"--- PASS: TestPresenceCheckDeviceFlow/approve (0.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID","Output":"=== RUN   TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID","Output":"--- PASS: TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/approve_through_the_App's_client_ID"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/deny"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/deny","Output":"=== RUN   TestPresenceCheckDeviceFlow/deny\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/deny","Output":"--- PASS: TestPresenceCheckDeviceFlow/deny (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/deny"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/timeout"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/timeout","Output":"=== RUN   TestPresenceCheckDeviceFlow/timeout\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/timeout","Output":"--- PASS: TestPresenceCheckDeviceFlow/timeout (1.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/timeout"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/bot_approver"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/bot_approver","Output":"=== RUN   TestPresenceCheckDeviceFlow/bot_approver\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/bot_approver","Output":"--- PASS: TestPresenceCheckDeviceFlow/bot_approver (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/bot_approver"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/configured_bot_login"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/configured_bot_login","Output":"=== RUN   TestPresenceCheckDeviceFlow/configured_bot_login\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/configured_bot_login","Output":"--- PASS: TestPresenceCheckDeviceFlow/configured_bot_login (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/configured_bot_login"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/under-permissioned_approver"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/under-permissioned_approver","Output":"=== RUN   TestPresenceCheckDeviceFlow/under-permissioned_approver\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/under-permissioned_approver","Output":"--- PASS: TestPresenceCheckDeviceFlow/under-permissioned_approver (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/under-permissioned_approver"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/wrong_account"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/wrong_account","Output":"=== RUN   TestPresenceCheckDeviceFlow/wrong_account\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/wrong_account","Output":"--- PASS: TestPresenceCheckDeviceFlow/wrong_account (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/wrong_account"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/default_client_ID"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/default_client_ID","Output":"=== RUN   TestPresenceCheckDeviceFlow/default_client_ID\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/default_client_ID","Output":"--- PASS: TestPresenceCheckDeviceFlow/default_client_ID (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/default_client_ID"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/aayu's_own_agent_lane"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/aayu's_own_agent_lane","Output":"=== RUN   TestPresenceCheckDeviceFlow/aayu's_own_agent_lane\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/aayu's_own_agent_lane","Output":"--- PASS: TestPresenceCheckDeviceFlow/aayu's_own_agent_lane (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/aayu's_own_agent_lane"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/in_CI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/in_CI","Output":"=== RUN   TestPresenceCheckDeviceFlow/in_CI\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/in_CI","Output":"--- PASS: TestPresenceCheckDeviceFlow/in_CI (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow/in_CI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow","Output":"--- PASS: TestPresenceCheckDeviceFlow (1.14s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckDeviceFlow"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckAccess"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckAccess","Output":"=== RUN   TestPresenceCheckAccess\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckAccess","Output":"--- PASS: TestPresenceCheckAccess (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckAccess"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckBootstrapAndRecord"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckBootstrapAndRecord","Output":"=== RUN   TestPresenceCheckBootstrapAndRecord\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckBootstrapAndRecord","Output":"--- PASS: TestPresenceCheckBootstrapAndRecord (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPresenceCheckBootstrapAndRecord"}
