@@ -1089,7 +1089,13 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 		if r.base != nil && r.base.Hash == q.Hash && r.draft != nil && r.draft.Hash == q.Hash && r.draft.BudgetPct == r.base.BudgetPct &&
 			slices.Equal(r.draft.EffortPoints, r.base.EffortPoints) {
 			effect = fmt.Sprintf("Closes the request on Release #%d: baseline %d of %s already holds the drafted plan; nothing else changes.", r.n, r.base.Baseline, r.version)
-			commit = func(string) (string, error) {
+			commit = func(login string) (string, error) {
+				if d := r.measure(r.items); r.handed && d != nil { // and the links, if that run stopped before them
+					r.who = login
+					if _, err := r.publish(ctx, d); err != nil {
+						return "", err
+					}
+				}
 				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
 			}
 			break
@@ -1123,9 +1129,17 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 				EffortPoints: r.draft.EffortPoints, Items: r.items}
 			d := scope.Measure(b, r.items, r.cfg.Scope.EffortPoints)
 			d.MeasuredAt = now
-			err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
-				map[string]any{scope.BaselinePath(r.version, n): b, scope.DriftPath(r.version): d})
-			return fmt.Sprintf("baseline %d accepted by @%s: ledger %s", n, login, scope.BaselinePath(r.version, n)), err
+			if err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
+				map[string]any{scope.BaselinePath(r.version, n): b, scope.DriftPath(r.version): d}); err != nil {
+				return "", err
+			}
+			if r.handed { // execution reads the plan: aayu release ships the new baseline, never the old links
+				r.base, r.drift, r.who = &b, &d, login
+				if _, err := r.publish(ctx, &d); err != nil {
+					return "", err
+				}
+			}
+			return fmt.Sprintf("baseline %d accepted by @%s: ledger %s", n, login, scope.BaselinePath(r.version, n)), nil
 		}
 	case "add", "drop":
 		if q.Decision == 0 { // asked for only over budget, so it always rests on a Decision

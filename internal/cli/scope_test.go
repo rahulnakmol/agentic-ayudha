@@ -657,4 +657,26 @@ func TestScopeRequestWalk(t *testing.T) {
 	if code, _, out := scopeRun(bot); code != ExitExternal {
 		t.Fatalf("a failed comments read: exit %d: %s", code, out)
 	}
+	// #4 taken out by hand after hand-off, and that plan accepted as a new baseline:
+	// what aayu release ships follows the new baseline, not the old links.
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Issues[4].Milestone = nil
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(bot, "--draft"); code != 0 {
+		t.Fatalf("re-draft without #4: exit %d: %s", code, out)
+	}
+	accept()
+	g.Mu.Lock()
+	rel, _ = workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
+	plan := ""
+	for _, c := range release.Comments {
+		if strings.Contains(c.Body, ScopePlanMarker) {
+			plan = c.Body
+		}
+	}
+	g.Mu.Unlock()
+	if links := strings.TrimSpace(rel.Fields[workitems.FieldLinks]); links != "includes #2\nincludes #3" || !strings.Contains(plan, "Baseline 3,") || strings.Contains(plan, "| #4 |") {
+		t.Fatalf("after a new baseline past hand-off: links %q, plan:\n%s", links, plan)
+	}
 }
