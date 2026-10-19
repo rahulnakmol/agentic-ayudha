@@ -251,6 +251,13 @@ func inboxDoingFor(it InboxItem, a InboxAction) inboxDoing {
 	case it.Kind == InboxFixed:
 		return inboxDoing{fmt.Sprintf("Closing #%d as fixed", n), fmt.Sprintf("Closed #%d as fixed", n), "usually a few seconds",
 			"The Bug is closed; reopen it on GitHub if that was wrong.", []string{"reading it again from GitHub", "posting a comment", "updating the issue"}}
+	case it.Kind == InboxAudit && a.N == 2:
+		return inboxDoing{fmt.Sprintf("Recording a correction on #%d", n), fmt.Sprintf("Recorded a correction on #%d", n), "usually under a minute",
+			"The correction label is on it, a PR that reverts it is open, and the sample is on the ledger.",
+			[]string{"reading it again from GitHub", "updating labels"}}
+	case it.Kind == InboxAudit:
+		return inboxDoing{fmt.Sprintf("Recording #%d as looks right", n), fmt.Sprintf("Recorded #%d as looks right", n), "usually a few seconds",
+			"A clean sample is on the ledger, and the look is done.", []string{"reading it again from GitHub", "updating labels"}}
 	case it.Kind == InboxReplaced:
 		return inboxDoing{fmt.Sprintf("Closing #%d as replaced", n), fmt.Sprintf("Closed #%d as replaced", n), "usually a few seconds",
 			"It is closed as not planned; its replacement carries the work.", []string{"reading it again from GitHub", "posting a comment", "updating the issue"}}

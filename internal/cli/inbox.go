@@ -114,12 +114,12 @@ var inboxKinds = map[string]inboxKind{
 			"Closing it as completed adds a note that links the fix, so the board shows the bug as solved. Nothing in the code changes. " +
 			"If you leave it, the bug keeps counting as open in every list and report.",
 		Terms: []string{"Work item"}},
-	InboxAudit: {Icon: "🔍", Word: "Merged unreviewed, to audit", Seat: verbs.EngineeringManager,
+	InboxAudit: {Icon: "🧾", Word: "Merged unreviewed, to audit", Seat: verbs.EngineeringManager,
 		Line: "An agent's change merged with no person's review; a quick look after the fact keeps that honest.",
 		Explain: "aayu merged this pull request into dev without a person's review, because every check was green, the proof held, and " +
-			"the reviewer said merge. Every such merge comes to you afterwards. If it looks right, say so and it counts as a clean " +
-			"sample. If it is wrong, mark it a correction: that resets the streak of the layers it touched and opens a pull request that " +
-			"reverts it. If you leave it, nothing changes; the merge stays.",
+			"the reviewer said merge. Every such merge comes to you afterwards for a look. If it looks right, say so and it counts as a clean " +
+			"sample; if it is wrong, mark it a correction, which resets the streak of the layers it touched and opens a pull request that " +
+			"reverts it. If you leave it, nothing changes and the merge stays.",
 		Terms: []string{"Proof pack", "Streak"}},
 	InboxReplaced: {Icon: "🔁", Word: "Replaced, still open", Seat: verbs.ProductStrategist, Housekeeping: true,
 		Line: "A newer issue replaces this one, and this one is still open.",
@@ -229,6 +229,8 @@ func (it InboxItem) short() string {
 		return fmt.Sprintf("fixed in #%d", it.PR)
 	case InboxReplaced:
 		return fmt.Sprintf("replaced by #%d", it.ReplacedBy)
+	case InboxAudit:
+		return "merged; look it over"
 	}
 	return ""
 }
