@@ -334,6 +334,7 @@ type inboxModel struct {
 	fails      map[string]inboxFail    // the writes that stopped this session, by item
 	batches    map[int]*inboxBatch     // the bulk writes under way
 	workTick   bool                    // the once-a-second redraw of the writes runs
+	readAfter  bool                    // R was pressed during writes: read GitHub again once they end
 	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
@@ -853,6 +854,10 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	if m.quitting != quitNo && m.writing() == 0 && (m.quitting == quitCurrent || len(m.queue) == 0) {
 		return tea.Quit
 	}
+	if len(m.queue) == 0 && m.readAfter && !m.refreshing { // the refresh R asked for during the writes
+		m.readAfter, m.refreshing = false, true
+		return tea.Batch(m.spinTick(), m.gatherCmd())
+	}
 	return m.pump()
 }
 
@@ -1015,10 +1020,16 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		switch k {
 		case "w", "enter":
 			m.ask, m.quitting = nil, quitAll
+			if len(m.queue) == 0 { // every write ended while the question was open
+				return tea.Quit
+			}
 			m.status = fmt.Sprintf("Quitting once every write has finished: %d to go.", len(m.queue))
 		case "q", "ctrl+c":
 			m.ask, m.quitting = nil, quitCurrent
 			m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil })
+			if m.writing() == 0 {
+				return tea.Quit
+			}
 			m.status = fmt.Sprintf("Quitting once the %d %s under way %s; nothing else is started.", m.writing(), plural(m.writing(), "write", "writes"), plural(m.writing(), "finishes", "finish"))
 		case "esc", "n":
 			m.ask, m.status = nil, "Staying; the writes go on."
@@ -1136,7 +1147,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.cycle(-1)
 	case "R":
 		if writing {
-			m.status = "A refresh waits for the writes under way; it reads GitHub again after them."
+			m.readAfter, m.status = true, "A refresh waits for the writes under way; it reads GitHub again after them."
 		} else if !m.refreshing {
 			m.refreshing, m.status = true, "Reading what changed on GitHub…"
 			return tea.Batch(m.spinTick(), m.gatherCmd())

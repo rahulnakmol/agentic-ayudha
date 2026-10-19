@@ -1274,6 +1274,8 @@ func TestInboxWriteFailures(t *testing.T) {
 		}
 		return it, "", nil
 	}
+	reads := 0 // R during the writes reads GitHub once, after them
+	m.gather = func() inboxGatheredMsg { reads++; return inboxGatheredMsg{items: slices.Clone(m.items)} }
 	job := func(n int) inboxJob { it := byNum(n); return inboxJob{it: it, a: *it.recommended()} }
 	first := m.start([]inboxJob{job(640), job(642), job(650)}) // one confirmed batch: #640 and #642 run, #650 waits
 	m.start([]inboxJob{job(644)})                              // queued on its own
@@ -1310,7 +1312,13 @@ func TestInboxWriteFailures(t *testing.T) {
 	teaKeys(m, "esc")
 	m.help = false
 
+	if reads != 0 {
+		t.Errorf("R during the writes read GitHub %d times before they ended", reads)
+	}
 	teaDrive(m, first)
+	if reads != 1 || m.readAfter {
+		t.Errorf("R during the writes: %d reads after they ended, still pending %v; want 1", reads, m.readAfter)
+	}
 	slices.Sort(ran)
 	if !slices.Equal(ran, []int{640, 642, 644, 646, 654}) {
 		t.Errorf("ran %v; want #640 and #642 (running when #640 failed), and #644, #646, and #654 queued on their own, not #650 (#640's batch, waiting)", ran)
@@ -1349,6 +1357,24 @@ func TestInboxWriteFailures(t *testing.T) {
 	m.dirty = true
 	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ Marked #646 merged without proof") || !strings.Contains(v, "What happens next") {
 		t.Errorf("#646's card body is not its result:\n%s", v)
+	}
+
+	// The writes end while the quit question is open: w and q then quit at
+	// once, with nothing left to wait for.
+	for _, key := range []string{"w", "q"} {
+		m := inboxScene(clock)
+		m.queue = nil
+		m.act = func(it InboxItem, _ InboxAction, _ *inboxWork) (InboxItem, string, error) { return it, "", nil }
+		it := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 697 })]
+		write := m.start([]inboxJob{{it: it, a: *it.recommended()}})
+		teaKeys(m, "q")
+		teaDrive(m, write)
+		_, cmd := m.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
+		if cmd == nil {
+			t.Errorf("%s once the writes ended under the quit question: the inbox stays open", key)
+		} else if _, quit := cmd().(tea.QuitMsg); !quit {
+			t.Errorf("%s once the writes ended under the quit question: no quit", key)
+		}
 	}
 }
 
