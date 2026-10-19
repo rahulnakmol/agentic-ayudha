@@ -1380,6 +1380,14 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Errorf("the gate's log does not show the review's tier and usage: %s", errOut)
 	}
 
+	// A paid review whose summary runs over its 1200 characters is still the
+	// gate's review: it is cut, not discarded for a person (Bug #807, #686).
+	_, env, opts, prN, model = setup(`"claude"`, "google-key")
+	model.Replies[0].Text = strings.Replace(model.Replies[0].Text, `"summary":"s"`, `"summary":"`+strings.Repeat("long ", 260)+`"`, 1)
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || res.Disposition != inspect.Merge || len(model.Requests) != 1 || len([]rune(res.Summary)) > 1200 {
+		t.Fatalf("a long paid summary: exit %d rung %q %s, %d model calls, %d characters %s", code, res.Rung, res.Disposition, len(model.Requests), len([]rune(res.Summary)), errOut)
+	}
+
 	// A paid review that fails (here the gateway's 524, as a large diff gave
 	// live on #583) leaves the PR to the reviewer app: its reply is judged,
 	// and without one the gate fails closed with no-reply, not an error.

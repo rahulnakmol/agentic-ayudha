@@ -131,6 +131,31 @@ func TestGeneralModeFilters(t *testing.T) {
 	}
 }
 
+// A summary over its 1200 characters is cut, and the paid review's verdict and
+// findings are kept (Bug #807); every other limit still rejects the reply.
+func TestInspectCutsLongSummary(t *testing.T) {
+	long := reply("fix", finding("P1", "bug", "internal/report/percent.go", "return float64(covered) / float64(total) * 100", "divides by zero", 0.9))
+	long["summary"] = strings.Repeat("wordy ", 216) + "end" // 1299 characters
+	a, calls := scripted("grok-4.7", long, long)
+	res, _, err := Runner{Reviewers: []Reviewer{a}}.Run(context.Background(), testInput(""), State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len([]rune(res.Summary)); n > 1200 || !strings.HasSuffix(res.Summary, "wordy…") || *calls != 1 {
+		t.Fatalf("summary of %d characters ending %q, %d calls", n, res.Summary[len(res.Summary)-12:], *calls)
+	}
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Title != "divides by zero" {
+		t.Fatalf("%s, findings %+v", res.Disposition, res.Findings)
+	}
+
+	bad := reply("merge", finding("P2", "bug", "internal/report/percent.go", "return 0", strings.Repeat("t", 201), 0.9))
+	b, _ := scripted("grok-4.7", bad, bad)
+	_, _, err = Runner{Reviewers: []Reviewer{b}}.Run(context.Background(), testInput(""), State{})
+	if err == nil || !strings.Contains(err.Error(), "$.findings[0].title: longer than 200 characters") {
+		t.Fatalf("an over-long title: %v", err)
+	}
+}
+
 // The model reads the PR's title and body, so an edit of either reaches it
 // again; a changed Aayudha-Model declaration does not (the rung is relabelled).
 func TestRunCacheKeyCoversPRText(t *testing.T) {
