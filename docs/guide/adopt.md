@@ -55,8 +55,8 @@ evidence".
 > code-review**, which `aayu init --gates` creates ([code review in the merge gate](how-review.md)). Or a review app
 > installed on your account, named in `[inspect] reviewer` and `[inspect] apps` in the pull request that adds the
 > merge gate. A private repository on GitHub Free
-> has no environments, so there init cannot create `code-review`: choose a review app, or `human` with
-> `[autonomy] approver` set to the person who reviews, or make the repository public or upgrade. Proof needs no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the
+> has no environments, so there init cannot create `code-review`: choose a review app, or set `[inspect] reviewer = "human"`
+> with `[autonomy] approver` set to the person who reviews, or make the repository public or upgrade. Proof needs no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the
 > pull request, and `ship` checks it came from that run and records it under your name.
 
 **Good for:** teams that let agents write real code and need to know it is safe to merge.

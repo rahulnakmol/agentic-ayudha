@@ -148,8 +148,8 @@ point `aayu` at the new build for this shell:
    request.
 
    > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
-   > not create `code-review`. Choose a review app as above, or `human` with `[autonomy] approver` set to the person
-   > who reviews, or make the repository public or upgrade. Put these settings in step 1's pull request, as above.
+   > not create `code-review`. Choose a review app as above, or set `[inspect] reviewer = "human"` with `[autonomy] approver`
+   > set to the person who reviews, or make the repository public or upgrade. Put these settings in step 1's pull request, as above.
 
    **You should see** `AAYU_REVIEW_MODEL_KEY` under **Environment secrets** on the `code-review` page. `aayu doctor`
    cannot read the environment, so the gate's first run is where a wrong key shows: if it fails, see
