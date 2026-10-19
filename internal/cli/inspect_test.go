@@ -1485,6 +1485,35 @@ func TestInspectPaidReviewer(t *testing.T) {
 			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") {
 				t.Fatalf("CodeRabbit silent past the wait: exit %d %q %s", code, res.Review, errOut)
 			}
+			// After a person reopens a capped review, a head judged before the
+			// reopen starts a new window: a Codex request and an inspect run from
+			// before it neither keep Codex nor start CodeRabbit's wait (CodeRabbit's
+			// and Codex's findings on #724).
+			g, env, opts, prN, _ = setup(c.apps, "google-key")
+			now := opts.Now()
+			at := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
+			g.Mu.Lock()
+			g.Pulls[prN].User.Login = "contributor"
+			g.Permissions = map[string]string{"contributor": "read", "founder": "admin"}
+			h := g.Pulls[prN].Head.SHA
+			g.CheckRuns[h] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: at(150 * time.Minute)}}
+			g.Mu.Unlock()
+			addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"rounds\":["+
+				`{"head":"`+strings.Repeat("a", 40)+`","at":"`+at(4*time.Hour)+`","disposition":"fix"},`+
+				`{"head":"`+strings.Repeat("b", 40)+`","at":"`+at(3*time.Hour)+`","disposition":"fix"},`+
+				`{"head":"`+h+`","at":"`+at(2*time.Hour)+`","disposition":"fix"}]} -->`+"\n")
+			addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+h+`","reviewer":"codex"} -->`)
+			addComment(g, prN, "founder", "User", inspect.ReopenCommand)
+			g.Mu.Lock()
+			cs := g.Issues[prN].Comments
+			for i, d := range []time.Duration{4 * time.Hour, 150 * time.Minute, time.Hour} {
+				cs[len(cs)-3+i].CreatedAt, cs[len(cs)-3+i].UpdatedAt = now.Add(-d), now.Add(-d)
+			}
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "coderabbit") ||
+				!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "the gate skips codex") }) {
+				t.Fatalf("a head judged before the reopen: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+			}
 			// A Codex request someone posted for the head keeps Codex: its reply can come (Codex's P2 on #724).
 			g, env, opts, prN, _ = setup(c.apps, "google-key")
 			g.Mu.Lock()
@@ -1492,6 +1521,10 @@ func TestInspectPaidReviewer(t *testing.T) {
 			g.Permissions = map[string]string{"contributor": "read"}
 			g.Mu.Unlock()
 			addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+g.Pulls[prN].Head.SHA+`","reviewer":"codex"} -->`)
+			g.Mu.Lock()
+			last := g.Issues[prN].Comments[len(g.Issues[prN].Comments)-1]
+			last.CreatedAt, last.UpdatedAt = opts.Now(), opts.Now()
+			g.Mu.Unlock()
 			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "codex") {
 				t.Fatalf("an asked Codex: exit %d %q %s", code, res.Review, errOut)
 			}

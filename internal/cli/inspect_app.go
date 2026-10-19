@@ -95,23 +95,6 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	// An app someone already asked for this head can answer: it is not skipped
-	// (Codex's P2 on #724).
-	if len(cannotAsk) > 0 {
-		asked := func(app string) bool {
-			return slices.ContainsFunc(posts, func(p inspect.Post) bool {
-				rs, ok := inspect.ParseRequest(p.Body)
-				return ok && p.Kind == "comment" && rs.Head == head && rs.Reviewer == app
-			})
-		}
-		if cannotAsk = slices.DeleteFunc(cannotAsk, asked); len(cannotAsk) > 0 {
-			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
-		}
-		if c := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...); c.Kind() != choice.Kind() {
-			choice = c
-			notes[1] = "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"
-		}
-	}
 	replyEvent := e.replyEvent()
 	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
@@ -149,6 +132,23 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	var floor time.Time
 	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
 		floor = a.in.Reopened
+	}
+	// An app someone already asked for this head, in this review window, can
+	// answer: it is not skipped (Codex's P2 on #724).
+	if len(cannotAsk) > 0 {
+		asked := func(app string) bool {
+			return slices.ContainsFunc(posts, func(p inspect.Post) bool {
+				rs, ok := inspect.ParseRequest(p.Body)
+				return ok && p.Kind == "comment" && rs.Head == head && rs.Reviewer == app && p.Updated.After(floor)
+			})
+		}
+		if cannotAsk = slices.DeleteFunc(cannotAsk, asked); len(cannotAsk) > 0 {
+			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
+		}
+		if c := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...); c.Kind() != choice.Kind() {
+			choice = c
+			notes[1] = "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"
+		}
 	}
 	// Each reviewer's wait starts from its own review request for the head. A
 	// review service with none of its own starts from the head's first
@@ -190,7 +190,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			// private repository whose inspect job lacks checks: read), the
 			// wait has no start, and a person reviews rather than none.
 			if since.IsZero() && e.CI {
-				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head)
+				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, floor)
 			}
 		}
 		if !own.IsZero() {
@@ -372,9 +372,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	return nil
 }
 
-// firstInspectRun is when the head's first aayudha/inspect check run started
-// (zero when none says).
-func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string) (time.Time, error) {
+// firstInspectRun is when the head's first aayudha/inspect check run after
+// floor (a reopen) started (zero when none says).
+func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string, floor time.Time) (time.Time, error) {
 	var first time.Time
 	// filter=all: by default GitHub lists only the newest run, a rerun's.
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
@@ -385,7 +385,7 @@ func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head st
 		return first, err
 	}
 	for _, r := range runs {
-		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && (first.IsZero() || at.Before(first)) {
+		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && at.After(floor) && (first.IsZero() || at.Before(first)) {
 			first = at
 		}
 	}
