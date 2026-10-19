@@ -69,7 +69,7 @@ for this release.
 - A review from CodeRabbit or Greptile counts as rung A whatever the builder's model family (#641).
 - When the chosen tool answers with a usage-limit or quota message, or still has not replied when inspect runs again at least 30 minutes after the request (on a push, a rerun, or a new comment or review), the next installed app in a fixed order reviews (Codex, CodeRabbit, Greptile, Claude, Cursor), then the CI review, then a person; when the CI review is the chosen tool and cannot review, the apps review in that order, then a person; the comment names the tool that took over and why (#634, #641, #657).
 - Every review call asks for fast (priority) serving where the endpoint offers it, and the review budget charges the priority rate for xAI models (#634, #657).
-- inspect makes one paid review call per head commit, and none on a reply event (#623).
+- inspect runs one paid review per head commit, and none on a reply event; a malformed reply is retried once, within the per-PR budget (#623).
 - inspect reviews a pull request for at most three rounds, then stops until a person reopens the review, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
