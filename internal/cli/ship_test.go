@@ -266,8 +266,9 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "injected failure") {
 		t.Fatalf("ship when the reviews cannot be read: %d %s", code, out)
 	}
-	if code, out := shipCmd(t, env, opts, prN); code != ExitBlocked || !strings.Contains(out, "no human pass: no approving review") {
-		t.Fatalf("ship without a review below the streak: %d %s", code, out)
+	g.Reset()
+	if code, out := shipCmd(t, env, opts, prN); code != ExitBlocked || !strings.Contains(out, "no human pass: no approving review") || closedPullLists(g) == 0 {
+		t.Fatalf("ship without a review below the streak (the streak must be read): %d %s", code, out)
 	}
 	autonomous := []string{"--set", "autonomy.streak=0"}
 	// A same-family inspect review (rung C) never lets an agent merge without

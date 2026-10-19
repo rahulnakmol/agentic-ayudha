@@ -289,7 +289,6 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		rec.PlanReview = &plan.Review
 	}
-	rec.Streak = e.shipStreak(ctx, c, repo, root, &l.Config, rec.Footprint, rec.Pass.Never)
 	reviews, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequestReview, *gh.Response, error) {
 		return c.REST.PullRequests.ListReviews(ctx, owner, name, n, &o)
 	})
@@ -325,6 +324,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "proof", Login: me.Login, Commit: head, Note: note}
 	} else if rec.HumanPass.Kind == "" && proofWhy != "" {
 		why = append(why, "no merge on proof: "+proofWhy)
+	}
+	// The streak can only give an autonomous pass, so it is read (about two
+	// minutes of GitHub history) only when no human pass is settled (#701).
+	switch {
+	case rec.HumanPass.Kind != "":
+		rec.Streak = StreakState{Threshold: l.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: " + rec.HumanPass.Kind}
+	case in.Bool("solo-bypass"):
+		rec.Streak = StreakState{Threshold: l.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: solo-bypass"}
+	default:
+		rec.Streak = e.shipStreak(ctx, c, repo, root, &l.Config, rec.Footprint, rec.Pass.Never)
 	}
 	// Only a different-family review (A, or B through a paid key) lets an
 	// agent merge without a person; a same-family review or none refuses.
