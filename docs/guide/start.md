@@ -173,6 +173,10 @@ builder's and the author has write access.
 Otherwise the comment names the app or person that reviews instead. It also names any listed Codex, Claude, or Cursor
 it skipped, since those review only when asked.
 
+With `human`, a GitHub review alone does not count, so the gate stays at `no-reply`. The `[autonomy] approver`
+reviews the pull request, then runs `aayu inspect <pr> --approve --reason "<what you checked>"`, or approves its card
+in `aayu inbox`.
+
 If a setting is missing, the gate fails and names it: see [Merge gate problems](troubleshooting.md#merge-gate).
 
 ## What's next
