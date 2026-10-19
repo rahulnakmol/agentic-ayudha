@@ -1382,6 +1382,30 @@ func TestInboxWriteFailures(t *testing.T) {
 		}
 	}
 
+	// A done write is kept in the cache off the update loop: finished
+	// returns the file write as a command. With --dry-run nothing is done:
+	// the item still waits and nothing is kept.
+	for _, dry := range []bool{false, true} {
+		m := inboxScene(clock)
+		m.queue, m.dryRun = nil, dry
+		clear(m.state)
+		kept := 0
+		m.recordDone = func(string, inboxDone) { kept++ }
+		it := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 697 })]
+		m.start([]inboxJob{{it: it, a: *it.recommended()}})
+		cmd := m.finished(inboxDoneMsg{key: it.key(), fresh: it})
+		if kept != 0 {
+			t.Errorf("dry run %v: the cache was written inside the update", dry)
+		}
+		teaDrive(m, cmd)
+		switch _, done := m.done[it.key()]; {
+		case !dry && (kept != 1 || m.state[it.key()] != "done" || !done):
+			t.Errorf("a done write: kept %d, state %q", kept, m.state[it.key()])
+		case dry && (kept != 0 || m.state[it.key()] != "" || done || !strings.Contains(m.status, "Planned #697 (dry run)")):
+			t.Errorf("a dry-run write: kept %d, state %q, done %v, status %q", kept, m.state[it.key()], done, m.status)
+		}
+	}
+
 	// The writes end while the quit question is open: w and q then quit at
 	// once, with nothing left to wait for.
 	for _, key := range []string{"w", "q"} {

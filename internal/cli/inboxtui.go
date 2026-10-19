@@ -106,7 +106,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		}
 	}}
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
-	m.now, m.opened = e.Now, e.Now()
+	m.now, m.opened, m.dryRun = e.Now, e.Now(), e.DryRun
 	m.recordDone = func(key string, d inboxDone) { e.recordInboxDone(repo, login, key, d) }
 	src.progress = func(what string, done, total int) {
 		mu.Lock()
@@ -335,6 +335,7 @@ type inboxModel struct {
 	batches    map[int]*inboxBatch     // the bulk writes under way
 	workTick   bool                    // the once-a-second redraw of the writes runs
 	readAfter  bool                    // R was pressed during writes: read GitHub again once they end
+	dryRun     bool                    // --dry-run: a write is planned, never done
 	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
@@ -790,6 +791,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	}
 	job := m.queue[at]
 	m.queue = slices.Delete(m.queue, at, at+1)
+	var save tea.Cmd // the done write's record in the cache
 	b := m.batches[job.batch]
 	if b == nil {
 		b = &inboxBatch{total: 1}
@@ -831,12 +833,19 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		}
 		m.refuse(fmt.Sprintf("✗ #%d not done; the card says why.", num)) // the whole error is on the card, never cut here
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
+	case m.dryRun: // planned, not written: the item still waits, and no later session sees it done
+		job.w.end()
+		b.done++
+		m.status = fmt.Sprintf("Planned #%d (dry run): nothing was written to GitHub.", num)
 	default:
 		m.state[msg.key] = "done"
 		delete(m.selected, msg.key)
 		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end()}
 		m.done[msg.key] = d
-		m.recordDone(msg.key, d)
+		// The cache is a file: it is written off the update loop, unless
+		// the inbox quits now and would not wait for it.
+		record, key := m.recordDone, msg.key
+		save = func() tea.Msg { record(key, d); return nil }
 		if m.motion {
 			m.flash[msg.key] = m.now()
 		}
@@ -855,12 +864,15 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.queue = slices.DeleteFunc(m.queue, func(j inboxJob) bool { return j.w == nil })
 	}
 	if m.quitting != quitNo && m.writing() == 0 && (m.quitting == quitCurrent || len(m.queue) == 0) {
+		if save != nil {
+			save()
+		}
 		return tea.Quit
 	}
 	if read := m.deferredRead(); read != nil {
-		return read
+		return tea.Batch(save, read)
 	}
-	return m.pump()
+	return tea.Batch(save, m.pump())
 }
 
 // deferredRead is the read R asked for during the writes, once they have
