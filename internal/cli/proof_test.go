@@ -222,10 +222,24 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
 		t.Fatalf("push in a repository whose default branch maps dev: %d %s", code, errOut)
 	}
+	// main maps no branch: a dev branch an agent pushed, with its bucket
+	// committed, is not trusted for being called dev.
+	devSHA := strings.Repeat("c", 40)
+	fgh.Mu.Lock()
+	oldDev := fgh.Refs["heads/dev"]
+	fgh.Refs["heads/dev"] = devSHA
+	fgh.RefFiles[mainSHA] = map[string]string{".aayudha/config.toml": "version = 1\n"}
+	fgh.RefFiles[devSHA] = map[string]string{".aayudha/config.toml": cfg}
+	objs := len(s3.Objects)
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "main's committed .aayudha/config.toml") || len(s3.Objects) != objs {
+		t.Fatalf("push with a bucket only a branch named dev commits: %d %s, %d new objects", code, errOut, len(s3.Objects)-objs)
+	}
 	fgh.Mu.Lock()
 	fgh.Pulls[prN].Base, fgh.Default = base, def
 	delete(fgh.Refs, "heads/main")
 	delete(fgh.Refs, "heads/trunk")
+	fgh.Refs["heads/dev"] = oldDev
 	fgh.RefFiles = nil
 	fgh.Mu.Unlock()
 	// Pushing again replaces the comment in place.

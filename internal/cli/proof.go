@@ -114,9 +114,9 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 // the system's user database), and the integration branch's
 // committed .aayudha/config.toml at its tip (only the defaults and the user
 // config when that file cannot be found). The integration branch is the
-// user config's [branches] dev, else a dev branch, else the one the
-// default branch's committed config maps (aayu init writes [branches] dev
-// there when a repository has no dev), else the default branch.
+// user config's [branches] dev, else the one the default branch's committed
+// config maps (aayu init writes [branches] dev there when a repository has
+// no dev), else the default branch.
 // The checkout, config.local, AAYU_* variables and --set may belong to an
 // agent whose branch the person has checked out, and naming a bucket there
 // would send the person's local secret to it, so a run whose values differ
@@ -168,18 +168,21 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 		}
 		return l, true, nil
 	}
-	branch := or(user.Config.Branches.Dev, "dev")
-	trusted, found, err := load(branch)
-	if err == nil && !found && user.Config.Branches.Dev == "" {
-		var r *gh.Repository
-		if r, _, err = c.REST.Repositories.Get(ctx, owner, name); err != nil {
+	// A branch is trusted only by name from the user config or the default
+	// branch's committed config, never because it is called dev: an agent
+	// that can push a branch could create one where none exists.
+	branch := user.Config.Branches.Dev
+	if branch == "" {
+		r, _, err := c.REST.Repositories.Get(ctx, owner, name)
+		if err != nil {
 			return config.Proof{}, Wrap(ExitExternal, err)
 		}
 		branch = r.GetDefaultBranch()
-		if trusted, _, err = load(branch); err == nil && trusted.Config.Branches.Dev != "" && trusted.Config.Branches.Dev != branch {
-			branch = trusted.Config.Branches.Dev
-			trusted, _, err = load(branch)
-		}
+	}
+	trusted, _, err := load(branch)
+	if err == nil && user.Config.Branches.Dev == "" && trusted.Config.Branches.Dev != "" && trusted.Config.Branches.Dev != branch {
+		branch = trusted.Config.Branches.Dev
+		trusted, _, err = load(branch)
 	}
 	if err != nil {
 		return config.Proof{}, err
