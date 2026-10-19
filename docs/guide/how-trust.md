@@ -97,6 +97,13 @@ default L04, L07, and L09) also needs a CODEOWNER of every changed path in that 
 footprint whose layers all have a long enough correction-free streak needs no review; `ship` records it as
 `autonomous`.
 
+`ship` reads this policy from the base branch's committed `.aayudha/config.toml` and `LAYERS.md` at its tip:
+the bot logins, the approver, the never layers, the paired seats, the streak, and the CODEOWNERS of never-layer
+paths. Your checkout, your user config, `AAYU_*` variables, and `--set` do not change it. When one of them sets a
+looser value, `ship` stops and names it; change the policy through a reviewed pull request instead. The footprint
+is the merge gate's and the base layers' over the pull request's files, so a pull request cannot drop a never layer
+by editing its own `LAYERS.md`.
+
 With `[autonomy] proof` on, `ship` merges a pull request into the integration branch on proof, with no review. Every
 required check of the base branch must be green, the pack must verify with its floors holding, and inspect must be at
 `merge` with a fresh judgement at a rung in `proof_rungs`, and both from merge gate runs GitHub lists as for this
@@ -346,6 +353,7 @@ Every card offers its choices and `s` to skip, so no card is a forced choice. Th
 | Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |
 | Bug with its fix merged | a PR merged into dev that links the open Bug | close it as completed | `status:done`, a "Fixed in #PR" comment, closed |
 | Replaced | another issue's body says "Replaces #N", and #N is still open | close it as not planned | `status:cancelled`, a "Replaced by #M" comment, closed |
+| Merged unreviewed, to audit | `aayu ship` merged a PR with no person's review, on proof or on an autonomous footprint (every such merge is audited): an entry under `autonomy/audit/` on the ledger and the `aayu:audit` label, which ship adds before it merges (no label, no merge) | looks right (another: correction) | looks right appends a clean sample to `autonomy/samples.jsonl` and removes the entry and the label; a correction records the sample, adds the `aayu:correction` label (which resets the streak of each layer an agent's PR touched; a person's own PR has no streak), and opens a PR into dev that reverts it; a look run again after a failure reuses its sample and its revert PR while that is open or merged |
 
 A PR links an item as `ship` and `audit` read it: a `story/<n>-` branch, or `Refs`, `Closes`, `Fixes`, or `Resolves #n`
 in its body. `inbox` refuses agents (`AAYU_AGENT=1`) and needs a terminal, and the host hooks block `aayu inbox` in an

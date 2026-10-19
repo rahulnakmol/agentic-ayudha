@@ -21,6 +21,7 @@ const (
 	LabelProvisional   = "decision:provisional"    // V8: a reversible Decision's recommendation applied after its SLA
 	LabelWaiver        = "decision:waiver"         // a floor-waiver Decision (decide --waiver, WP5.6); audit counts them
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
+	LabelAudit         = "aayu:audit"              // a PR merged with no person's pass, waiting for a look after merge (#618)
 	LabelAgentAuthored = "agent-authored"          // PRs opened by an agent lane (evolve, WP7.7)
 	LabelScreenReader  = "aayudha:screen-reader"   // runs the screen-reader floor on a PR (macOS and Windows runners, WP4.7)
 	LabelSecurity      = "aayudha:security"        // a Bug aayudha-security.yml filed for a finding on dev, rolling, or main
@@ -82,6 +83,7 @@ func Labels() []LabelDef {
 		LabelDef{LabelProvisional, "d93f0b", "Recommendation applied provisionally after the Decision SLA (V8)"},
 		LabelDef{LabelWaiver, "d93f0b", "Floor-waiver Decision (decide --waiver); never applied provisionally"},
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
+		LabelDef{LabelAudit, "fbca04", "Merged with no person's review; waits for a look after merge in aayu inbox"},
 		LabelDef{LabelAgentAuthored, "c5def5", "Opened by an agent lane"},
 		LabelDef{LabelScreenReader, "5319e7", "Run the VoiceOver and NVDA screen-reader floor on this PR"},
 		LabelDef{LabelSecurity, "b60205", "Filed by aayudha-security.yml for a finding on dev, rolling, or main"},

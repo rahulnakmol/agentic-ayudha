@@ -83,16 +83,22 @@ type Issue struct {
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
 type PR struct {
-	Number int     `json:"number"`
-	Title  string  `json:"title"`
-	Body   string  `json:"body"`
-	State  string  `json:"state"`
-	Draft  bool    `json:"draft"`
-	Merged bool    `json:"merged"`
-	URL    string  `json:"html_url"`
-	User   Account `json:"user"`
-	Head   Branch  `json:"head"`
-	Base   Branch  `json:"base"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	// MergedAt is set when the PR merges through the fake; the list
+	// endpoint carries it, not Merged.
+	MergedAt time.Time `json:"merged_at,omitzero"`
+	URL      string    `json:"html_url"`
+	User     Account   `json:"user"`
+	Head     Branch    `json:"head"`
+	Base     Branch    `json:"base"`
+	// Labels and NodeID are served from the PR's issue and number.
+	Labels []Label `json:"labels"`
+	NodeID string  `json:"node_id"`
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
@@ -571,6 +577,25 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	// GraphQL: just Projects v2.
 	case m == "POST" && p == "/graphql":
 		q, _ := body["query"].(string)
+		if strings.Contains(q, "revertPullRequest") {
+			in, _ := body["variables"].(map[string]any)["input"].(map[string]any)
+			id, _ := in["pullRequestId"].(string)
+			orig := g.Pulls[atoi(strings.TrimPrefix(id, "PR_"))]
+			if orig == nil || !orig.Merged {
+				reply(200, map[string]any{"errors": []any{map[string]any{"message": "pull request not found or not merged"}}})
+				return
+			}
+			title, _ := in["title"].(string)
+			text, _ := in["body"].(string)
+			is := g.addIssue(title, text, nil)
+			pr := &PR{Number: is.Number, Title: title, Body: text, State: "open", User: Account{Login: g.Viewer, Type: "User"},
+				Head: Branch{Ref: fmt.Sprintf("revert-%d-%s", orig.Number, orig.Head.Ref)}, Base: orig.Base, CreatedAt: time.Now().UTC()}
+			url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, pr.Number)
+			pr.URL = url
+			g.Pulls[is.Number] = pr
+			reply(200, map[string]any{"data": map[string]any{"revertPullRequest": map[string]any{"revertPullRequest": map[string]any{"url": url}}}})
+			return
+		}
 		if strings.Contains(q, "createProjectV2") {
 			in, _ := body["variables"].(map[string]any)["input"].(map[string]any)
 			g.seq++
@@ -1053,6 +1078,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		out := []*PR{}
 		q := r.URL.Query()
 		for _, pr := range g.Pulls {
+			g.servePR(pr)
 			if st := q.Get("state"); (st == "all" || pr.State == st || (st == "" && pr.State == "open")) && (q.Get("head") == "" || q.Get("head") == g.Owner+":"+pr.Head.Ref) {
 				out = append(out, pr)
 			}
@@ -1069,6 +1095,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			notFound()
 			return
 		}
+		g.servePR(pr)
 		switch {
 		case sm[2] == "" && m == "GET":
 			if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
@@ -1125,7 +1152,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
 				return
 			}
-			pr.Merged, pr.State = true, "closed"
+			pr.Merged, pr.State, pr.MergedAt = true, "closed", time.Now().UTC()
 			pr.MergeCommitSHA = g.nextSHA(body)
 			if is := g.Issues[pr.Number]; is != nil {
 				is.State = "closed"
@@ -1369,5 +1396,15 @@ func (g *GitHub) serveDevice(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		reply(map[string]any{"error": "bad_verification_code"})
+	}
+}
+
+// servePR fills a PR's labels from its issue and its node ID, as GitHub
+// serves them.
+func (g *GitHub) servePR(pr *PR) {
+	pr.NodeID = fmt.Sprintf("PR_%d", pr.Number)
+	pr.Labels = nil
+	if is := g.Issues[pr.Number]; is != nil {
+		pr.Labels = is.Labels
 	}
 }

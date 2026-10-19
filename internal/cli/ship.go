@@ -162,6 +162,18 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "ship #%d: no story (Refs #n in the PR body); ship proves a story", n)
 	}
 	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
+	// Who may pass the PR, and how, is the base branch's committed policy at
+	// its tip now (#645), never this run's config: the checkout, the user
+	// config, AAYU_* variables and --set are the agent's to set. A run whose
+	// config would loosen the pass is refused rather than quietly overruled.
+	pol, err := basePolicy(ctx, c, owner, name, pr.GetBase().GetRef())
+	if err != nil {
+		return err
+	}
+	if loose := loosens(l, pol.Config); len(loose) > 0 {
+		return Errorf(ExitBlocked, "ship #%d: the human pass is judged by %s's committed .aayudha/config.toml at %s, and this run's config (the checkout, the user config, AAYU_* variables, or --set) would loosen it: %s; commit a policy change to %s through a reviewed PR instead",
+			n, pr.GetBase().GetRef(), short(pol.Tip), strings.Join(loose, "; "), pr.GetBase().GetRef())
+	}
 
 	// 1. The pack the merge gate built for this head, from the artifact of a
 	// run of the base branch's workflow (S-4.2b): never a pack on the ledger,
@@ -251,7 +263,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		proofRung = "cached " + proofRung
 	}
 	// Merge on proof (Decision #593): with it, no human pass is needed.
-	proofOK, proofWhy, needsPerson, err := e.proofPass(ctx, c, owner, name, pr, proofRung, gateState)
+	proofOK, proofWhy, needsPerson, err := e.proofPass(ctx, c, owner, name, pr, pol, proofRung, gateState)
 	if err != nil {
 		return err
 	}
@@ -264,15 +276,21 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// layer also needs a CODEOWNER's approval, whatever the streak, and the
 	// EM's plan-time review. A footprint the streak makes autonomous needs no
 	// review.
-	root := config.RepoRoot(e.Dir)
-	rec.Footprint = gp.pack.Footprint
+	// The footprint is the gate pack's and the base layers' over the PR's
+	// files: the pack's was computed from the PR's own LAYERS.md, which the
+	// PR could edit to leave a never layer out.
+	files, err := shipFiles(ctx, c, owner, name, pr)
+	if err != nil {
+		return err
+	}
+	rec.Footprint = slices.Compact(slices.Sorted(slices.Values(append(slices.Clone(gp.pack.Footprint), pol.Layers.Footprint(files)...))))
 	if rec.Footprint == nil {
 		rec.Footprint = []string{}
 	}
-	rec.Pass = passRule(&l.Config)
-	rec.Pass.Never = intersect(rec.Footprint, l.Config.Autonomy.Never)
+	rec.Pass = passRule(pol.Config)
+	rec.Pass.Never = intersect(rec.Footprint, pol.Config.Autonomy.Never)
 	if len(rec.Pass.Never) > 0 && proofOK == nil {
-		if err := rec.Pass.neverOwners(ctx, c, owner, name, pr, root); err != nil {
+		if err := rec.Pass.neverOwners(ctx, c, owner, name, files, pol); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		var plan PlanRecord
@@ -303,7 +321,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	var why []string
 	for _, r := range identity.LatestReviews(rs) {
-		if err := identity.HumanPass(r, pr.GetUser().GetLogin(), head, l.Config.Identity.BotLogins); err != nil {
+		if err := identity.HumanPass(r, pr.GetUser().GetLogin(), head, pol.Config.Identity.BotLogins); err != nil {
 			why = append(why, err.Error())
 			continue
 		}
@@ -329,11 +347,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// minutes of GitHub history) only when no human pass is settled (#701).
 	switch {
 	case rec.HumanPass.Kind != "":
-		rec.Streak = StreakState{Threshold: l.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: " + rec.HumanPass.Kind}
+		rec.Streak = StreakState{Threshold: pol.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: " + rec.HumanPass.Kind}
 	case in.Bool("solo-bypass"):
-		rec.Streak = StreakState{Threshold: l.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: solo-bypass"}
+		rec.Streak = StreakState{Threshold: pol.Config.Autonomy.Streak, Layers: map[string]int{}, Never: rec.Pass.Never, Skipped: "the human pass is settled: solo-bypass"}
 	default:
-		rec.Streak = e.shipStreak(ctx, c, repo, root, &l.Config, rec.Footprint, rec.Pass.Never)
+		rec.Streak = e.shipStreak(ctx, c, repo, pol, rec.Footprint, rec.Pass.Never)
 	}
 	// Only a different-family review (A, or B through a paid key) lets an
 	// agent merge without a person; a same-family review or none refuses.
@@ -362,7 +380,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			}
 			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in a person's `aayu inbox`", refusal), "aayu inbox (a person)")
 		}
-		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, &l.Config)
+		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config)
 		if err != nil {
 			return err
 		}
@@ -381,6 +399,26 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.Pack = landed.Path
 		rec.PackLanded = fmt.Sprintf("artifact %d of run %d of the base branch's %s (%s), checked and landed by %s through aayu ship", gp.artifact, gp.run.GetID(), MergeGateWorkflow, gp.run.GetHTMLURL(), me.Login)
 	}
+	// A merge with no person's pass (on proof, or an autonomous footprint)
+	// waits for a person's look after merge: every one is audited, so the
+	// paths that judge later PRs (internal/models, inspect, verify, proof,
+	// evals) never go unseen (founder, 2026-10-18). The inbox finds the look
+	// by its label, so the label goes on before the merge, and before
+	// ship's last reads of the PR and the base: a merge the inbox would miss
+	// never happens.
+	// A person's pass merges with no look, so the label an earlier ship
+	// added, then did not merge, goes first: left on a reviewed merge, the
+	// inbox would offer a correction that reverts it.
+	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
+	if audited && !c.DryRun() {
+		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: the %s label, by which the inbox finds the look after merge, was not added: %v", n, AuditLabel, err)
+		}
+	} else if !c.DryRun() && prLabelled(pr, AuditLabel) {
+		if err := removeLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: a person passed it, but the %s label an earlier ship added was not removed, and the inbox would offer to revert it: %v", n, AuditLabel, err)
+		}
+	}
 	// A merge on proof was judged by the base branch's policy at its tip
 	// then; GitHub's merge guards only the head, so a base that moved since
 	// (a tightened narrow set, say) stops it.
@@ -393,14 +431,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if now.GetState() != "open" || now.GetHead().GetSHA() != head || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
 		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
 	}
-	if rec.Proof != nil {
-		tip, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
-		if err != nil {
-			return err
-		}
-		if tip != rec.Proof.Policy {
-			return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR on proof; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(rec.Proof.Policy), short(tip))
-		}
+	// Any pass, a person's included, was judged by the policy at that tip.
+	tip, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
+	if err != nil {
+		return err
+	}
+	if tip != pol.Tip {
+		return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(pol.Tip), short(tip))
 	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
@@ -430,7 +467,12 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
-	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: map[string][]byte{res.Record: append(b, '\n')}}); err != nil {
+	written := map[string][]byte{res.Record: append(b, '\n')}
+	if audited {
+		ab, _ := json.MarshalIndent(AuditEntry{PR: n, Story: story, Head: head, Merge: rec.MergeCommit, Footprint: rec.Footprint, Pass: rec.HumanPass.Kind, MergedAt: rec.ShippedAt}, "", "  ")
+		written[AuditLedgerPath(n)] = append(ab, '\n')
+	}
+	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: written}); err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	if ref := pr.GetHead().GetRef(); pr.GetHead().GetRepo().GetFullName() == repo || pr.GetHead().GetRepo() == nil {
@@ -449,7 +491,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if _, err := e.releaseLease(ctx, c, repo, story, fmt.Sprintf("shipped in #%d", n)); err != nil {
 		fmt.Fprintf(e.Err, "aayu: warning: the build lease on #%d was not released: %v\n", story, err)
 	}
-	if root != "" {
+	if root := config.RepoRoot(e.Dir); root != "" {
 		if wt := BuildWorktree(root, story); dirExists(wt) {
 			_, _ = run2(ctx, root, "git", "worktree", "remove", "--force", wt)
 			_, _ = run2(ctx, root, "git", "branch", "-D", pr.GetHead().GetRef())

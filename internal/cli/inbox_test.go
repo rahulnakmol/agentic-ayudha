@@ -327,7 +327,7 @@ func TestInboxWords(t *testing.T) {
 	}
 	sentence := regexp.MustCompile(`[.!?](\s|$)`)
 	for name, k := range map[string]inboxKind{"needs": inboxNeedsYou, "tidy": inboxTidy, InboxDecision: inboxKinds[InboxDecision], InboxReady: inboxKinds[InboxReady], InboxHumanReview: inboxKinds[InboxHumanReview],
-		InboxCapped: inboxKinds[InboxCapped], InboxUnshipped: inboxKinds[InboxUnshipped], InboxFixed: inboxKinds[InboxFixed], InboxReplaced: inboxKinds[InboxReplaced]} {
+		InboxCapped: inboxKinds[InboxCapped], InboxUnshipped: inboxKinds[InboxUnshipped], InboxFixed: inboxKinds[InboxFixed], InboxReplaced: inboxKinds[InboxReplaced], InboxAudit: inboxKinds[InboxAudit]} {
 		if n := len(sentence.FindAllString(k.Explain, -1)); k.Word == "" || k.Line == "" || n < 2 || n > 4 {
 			t.Errorf("%s: word %q, line %q, explainer of %d sentences", name, k.Word, k.Line, n)
 		}
@@ -356,7 +356,11 @@ func TestInboxWords(t *testing.T) {
 	_, house := splitInbox(items)
 	ready := InboxItem{Kind: InboxReady, Number: 590, PR: 590, f: inboxFacts{story: 586, head: strings.Repeat("3", 40)}}
 	human := InboxItem{Kind: InboxHumanReview, Number: 591, f: inboxFacts{head: strings.Repeat("4", 40)}}
-	for _, text := range append([]string{tidyCounsel(house), inboxCounsel(ready), inboxCounsel(human)}, func() (out []string) {
+	audit := InboxItem{Kind: InboxAudit, Number: 592, PR: 592, mergeSHA: strings.Repeat("5", 40)}
+	if audit.short() == "" || ansi.StringWidth(audit.short()) > inboxWhyW {
+		t.Errorf("the audit card's list column: %q", audit.short())
+	}
+	for _, text := range append([]string{tidyCounsel(house), inboxCounsel(ready), inboxCounsel(human), inboxCounsel(audit)}, func() (out []string) {
 		for _, it := range items {
 			if it.CounselFrom == "facts" {
 				out = append(out, it.Counsel)
