@@ -1,0 +1,30 @@
+# Which tests prove story #720's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # the login screen at 120x34 and 72x34: the code large, the OSC 8 link, the countdown, the key bar, every line the width
+tests = ["internal/cli:TestInboxLoginScreen"]
+
+[[criterion]]
+id = 2 # the code only on the screen: not in stdout, stderr, the status line, the actions log, the cache, or the ledger
+tests = ["internal/cli:TestInboxLoginScreen", "internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 3 # Enter or o opens GitHub, or says there is no browser; c copies through OSC 52 and says Copied once
+tests = ["internal/cli:TestInboxLoginScreen"]
+
+[[criterion]]
+id = 4 # inside tmux with set-clipboard not on, the screen says how to let the copy through
+tests = ["internal/cli:TestInboxLoginScreen"]
+
+[[criterion]]
+id = 5 # an expired code, Enter for a new one, Approved by @login, q quits unapproved
+tests = ["internal/cli:TestInboxLoginScreen", "internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 6 # no agent marker: no login screen, the inbox opens from its last read; --plain prints the code as before
+tests = ["internal/cli:TestInboxTUI", "internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 7 # the approval refuses a bot, another account, or too little access exactly as before, and is recorded
+tests = ["internal/cli:TestPresenceCheckDeviceFlow", "internal/cli:TestPresenceCheckAccess", "internal/cli:TestPresenceCheckBootstrapAndRecord"]

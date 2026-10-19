@@ -196,12 +196,18 @@ func (e *Env) presenceCheck(ctx context.Context, p Pending, need Access, refusal
 			return nil, err
 		}
 	}
-	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  Command: %s\n", what, on, termText(e.commandLine()))
-	for _, line := range p.Effect {
-		fmt.Fprintf(e.Err, "  Approving: %s\n", termText(line))
+	if e.showCode != nil { // the caller shows the code itself, to the person at this terminal only
+		if err := e.showCode(ctx, code, expires); err != nil {
+			return nil, err
+		}
+	} else {
+		fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  Command: %s\n", what, on, termText(e.commandLine()))
+		for _, line := range p.Effect {
+			fmt.Fprintf(e.Err, "  Approving: %s\n", termText(line))
+		}
+		fmt.Fprintf(e.Err, "  On any device, open %s and enter %s (expires in %d minutes, at %s).\n  Approve only if you asked for this command. Waiting...\n",
+			code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1), expires.UTC().Format("15:04 UTC"))
 	}
-	fmt.Fprintf(e.Err, "  On any device, open %s and enter %s (expires in %d minutes, at %s).\n  Approve only if you asked for this command. Waiting...\n",
-		code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1), expires.UTC().Format("15:04 UTC"))
 	again := "ask for the command again to get a new code: " + e.commandLine()
 	devTok, err := e.deviceToken(ctx, client, code)
 	switch {
@@ -256,7 +262,9 @@ func (e *Env) presenceCheck(ctx context.Context, p Pending, need Access, refusal
 	if access == "" {
 		access = "no repository"
 	}
-	fmt.Fprintf(e.Err, "Approved by @%s (%s, %s access).\n", a.Login, a.Via, access)
+	if e.showCode == nil {
+		fmt.Fprintf(e.Err, "Approved by @%s (%s, %s access).\n", a.Login, a.Via, access)
+	}
 	e.approval = a
 	return a, nil
 }

@@ -93,39 +93,70 @@ func (e *Env) inboxTUI(cfg *config.Config) bool {
 // runInboxTUI runs the full-screen inbox. Each step's output (what decide,
 // ship, and the inbox's own steps print) is shown in the status line as it
 // comes, and printed in full once the inbox closes.
-func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSource, login string) error {
-	out, repo := e.Out, src.repo
+func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, signin func(context.Context) (*inboxSource, string, error)) error {
+	out := e.Out
 	var mu sync.Mutex
 	var send func(tea.Msg)
-	sink := &lineSink{send: func(s string) {
+	post := func(msg tea.Msg) {
 		mu.Lock()
 		f := send
 		mu.Unlock()
 		if f != nil {
-			f(inboxLogMsg(s))
+			f(msg)
 		}
-	}}
+	}
+	sink := &lineSink{send: func(s string) { post(inboxLogMsg(s)) }}
+	// The session is approved inside the inbox, on its first screen: the
+	// presence check shows its code there instead of on stderr, and the
+	// inbox is read once it is approved.
+	var src *inboxSource
+	login := ""
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
 	m.now, m.opened, m.dryRun = e.Now, e.Now(), e.DryRun
-	m.recordDone = func(key string, d inboxDone) { e.recordInboxDone(repo, login, key, d) }
-	src.progress = func(what string, done, total int) {
-		mu.Lock()
-		f := send
-		mu.Unlock()
-		if f != nil {
-			f(inboxProgressMsg{what, done, total})
+	sctx, cancel := context.WithCancel(ctx)
+	defer cancel() // a quit from the login screen stops the wait for GitHub
+	e.showCode = func(_ context.Context, code deviceCodeReply, expires time.Time) error {
+		post(inboxCodeMsg{code, expires})
+		return nil
+	}
+	defer func() { e.showCode = nil }()
+	m.signin = &inboxSignin{browser: browserHere(e.Getenv), tmuxClip: tmuxClipboard(e.Getenv), run: func() tea.Msg {
+		s, l, err := signin(sctx)
+		return inboxSignedMsg{s, l, err}
+	}}
+	defer func() {
+		if src != nil {
+			src.progress = nil
+		}
+	}()
+	setup := func(s *inboxSource, l string) {
+		src, login, m.login = s, l, l
+		m.recordDone = func(key string, d inboxDone) { e.recordInboxDone(repo, login, key, d) }
+		src.progress = func(what string, done, total int) { post(inboxProgressMsg{what, done, total}) }
+		if c := e.readInboxCache(repo, login); c != nil {
+			for k, d := range c.Done { // written from an earlier session: done until GitHub, read since, still lists it
+				m.done[k], m.state[k] = d, "done"
+			}
+			m.merge(c.Items)
+			m.loading, m.fresh = false, c.At
+			m.status = "From the last read, " + ago(e.Now(), c.At) + "; reading what changed…"
 		}
 	}
-	defer func() { src.progress = nil }()
-	if c := e.readInboxCache(repo, login); c != nil {
-		for k, d := range c.Done { // written from an earlier session: done until GitHub, read since, still lists it
-			m.done[k], m.state[k] = d, "done"
-		}
-		m.merge(c.Items)
-		m.loading, m.fresh = false, c.At
-		m.status = "From the last read, " + ago(e.Now(), c.At) + "; reading what changed…"
+	m.signedIn = func(s *inboxSource, l string) tea.Cmd {
+		setup(s, l)
+		m.refreshing = true
+		return m.gatherCmd()
 	}
-	m.now = e.Now
+	// A terminal with no agent marker needs no code: the session is
+	// approved at once and the inbox opens from its last read, as before.
+	if e.approval != nil || e.agentSignal() == "" && e.isTerminal(e.In) {
+		s, l, err := signin(ctx)
+		if err != nil {
+			return err
+		}
+		setup(s, l)
+		m.signin = nil
+	}
 	m.gather = func() inboxGatheredMsg {
 		at := e.Now()
 		before := src.c.Stats()
@@ -151,6 +182,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		ws := &lineSink{send: sink.send}
 		we := *e
 		we.Out, we.Err, we.out, we.talk = ws, ws, nil, nil
+		we.showCode = nil // a write never takes over the screen; the session's approval covers it
 		fresh, err := we.inboxApply(context.WithValue(ctx, inboxWorkKey{}, w), cfg, src, login, it, a)
 		ws.flush()
 		return fresh, ws.buf.String(), err
@@ -174,6 +206,9 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 	}
 	if err != nil {
 		return err
+	}
+	if m.signin != nil && m.signin.err != nil {
+		return m.signin.err
 	}
 	if m.err != nil && len(m.items) == 0 {
 		return Wrap(ExitExternal, m.err)
@@ -340,17 +375,19 @@ type inboxModel struct {
 	items      []InboxItem       // needs you first, then housekeeping
 	state      map[string]string // by key: "done", "skipped", "not done", "relisted" (done, and GitHub read since still lists it)
 	done       map[string]inboxDone
-	recordDone func(string, inboxDone) // keeps a done write for later sessions
-	rows       []int                   // the list: item indices, group by group (inboxGroups)
-	selected   map[string]bool         // housekeeping picked with x or X for one bulk action; never a needs-you item
-	batch      int                     // the last batch of jobs started
-	fails      map[string]inboxFail    // the writes that stopped this session, by item
-	batches    map[int]*inboxBatch     // the bulk writes under way
-	workTick   bool                    // the once-a-second redraw of the writes runs
-	readAfter  bool                    // R was pressed during writes: read GitHub again once they end
-	dryRun     bool                    // --dry-run: a write is planned, never done
-	saves      []*inboxSave            // the done writes' records in the cache, written once each before aayu exits
-	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
+	recordDone func(string, inboxDone)            // keeps a done write for later sessions
+	rows       []int                              // the list: item indices, group by group (inboxGroups)
+	selected   map[string]bool                    // housekeeping picked with x or X for one bulk action; never a needs-you item
+	batch      int                                // the last batch of jobs started
+	fails      map[string]inboxFail               // the writes that stopped this session, by item
+	batches    map[int]*inboxBatch                // the bulk writes under way
+	workTick   bool                               // the once-a-second redraw of the writes runs
+	readAfter  bool                               // R was pressed during writes: read GitHub again once they end
+	dryRun     bool                               // --dry-run: a write is planned, never done
+	saves      []*inboxSave                       // the done writes' records in the cache, written once each before aayu exits
+	signin     *inboxSignin                       // the session's approval, while it is asked for (inboxlogin.go); nil once approved
+	signedIn   func(*inboxSource, string) tea.Cmd // sets the session up for the approved login and reads GitHub
+	live       bool                               // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
 	armed     bool
@@ -410,6 +447,9 @@ func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 }
 
 func (m *inboxModel) Init() tea.Cmd {
+	if m.signin != nil { // the inbox is read once the session is approved
+		return tea.Batch(m.spinTick(), m.signinCmd(), tea.RequestBackgroundColor)
+	}
 	m.refreshing = true
 	return tea.Batch(m.spinTick(), m.gatherCmd(), tea.RequestBackgroundColor)
 }
@@ -681,6 +721,17 @@ func (m *inboxModel) step() {
 }
 
 func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
+	if cmd, ok := m.signinUpdate(msg); ok {
+		return cmd
+	}
+	if s := m.signin; s != nil && (s.running || s.screen() && s.approved == "") {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			return m.signinKey(msg.String())
+		case tea.MouseMsg:
+			return nil
+		}
+	}
 	switch msg := msg.(type) {
 	case inboxFrameMsg:
 		m.ticking, m.dirty = false, true
@@ -1607,6 +1658,8 @@ func (m *inboxModel) render() string {
 		return out
 	}
 	switch {
+	case m.signin.screen():
+		lines = padded(m.signinView(inner, body))
 	case m.loading && len(m.items) == 0:
 		lines = padded(m.skeleton(inner, body))
 	case len(m.rows) == 0:
@@ -2377,6 +2430,11 @@ func (m *inboxModel) keysLine(w int) string {
 	}
 	var keys []kb
 	switch {
+	case m.signin.screen():
+		ks := m.signinKeys()
+		for i := 0; i+1 < len(ks); i += 2 {
+			keys = append(keys, kb{ks[i], ks[i+1], 0})
+		}
 	case len(m.rows) == 0:
 		keys = []kb{{"q", "quit", 0}}
 	case m.ask != nil && m.ask.quit:

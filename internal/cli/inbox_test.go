@@ -2,14 +2,17 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -1790,8 +1793,21 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		return nil
 	}
 	if code, out, errOut := runIn(t, marked, person, "", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(refused, "Say what you checked first; nothing was written.") ||
-		!strings.Contains(refused, "What did you check?") || !strings.HasPrefix(moved, "✗ #") || !strings.Contains(moved, "not done; the card says why.\n") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" {
+		!strings.Contains(refused, "What did you check?") || !strings.HasPrefix(moved, "✗ #") || !strings.Contains(moved, "not done; the card says why.\n") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" ||
+		strings.Contains(out+errOut, "WDJB-MJHT") { // the full-screen inbox shows the device code on its own screen, never in its output
 		t.Fatalf("empty answer or moved head: exit %d\n%s\nstatus %q\nledger %q\n%s\n%s", code, refused, moved, approvals(), out, errOut)
+	}
+	// Nor in the actions log, the inbox cache, or the ledger.
+	_ = filepath.WalkDir(marked["XDG_STATE_HOME"], func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if b, _ := os.ReadFile(p); bytes.Contains(b, []byte("WDJB-MJHT")) {
+				t.Errorf("the device code is in %s", p)
+			}
+		}
+		return nil
+	})
+	if exec.Command("git", "-C", opts.Dir, "grep", "-q", "WDJB-MJHT", "origin/ledger").Run() == nil {
+		t.Error("the device code is on the ledger")
 	}
 
 	// Line by line, input that ends before the answer writes nothing.
@@ -1968,5 +1984,94 @@ func TestInboxKeepsDoneOnQuit(t *testing.T) {
 	var c inboxCache
 	if err := json.Unmarshal(b, &c); err != nil || c.Done[key].By != "o" {
 		t.Errorf("the done write of %s is not in the cache after a quick quit: %v %s", key, err, b)
+	}
+}
+
+// The inbox's first screen when the session needs a person's approval: the
+// device code large in the inbox's frame, the link as an OSC 8 hyperlink,
+// Enter to open it (or why not), c to copy the code through OSC 52, the
+// countdown, a tmux hint when set-clipboard drops the copy, an expired code
+// that Enter replaces, and q that quits unapproved. The code never reaches
+// the status line.
+func TestInboxLoginScreen(t *testing.T) {
+	clock := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	const code, uri = "WDJB-MJHT", "https://github.com/login/device"
+	runs, opened := 0, ""
+	m := newInboxModel("o/r", "", "auto", false)
+	m.now, m.open = func() time.Time { return clock }, func(u string) { opened = u }
+	m.signin = &inboxSignin{browser: true, tmuxClip: "external", run: func() tea.Msg { runs++; return nil }}
+	var signed string
+	m.signedIn = func(_ *inboxSource, l string) tea.Cmd { signed = l; return nil }
+	m.Init()
+	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri, ExpiresIn: 900}, clock.Add(14*time.Minute + 32*time.Second)})
+	for _, w := range []int{120, 72} {
+		m.Update(tea.WindowSizeMsg{Width: w, Height: 34})
+		m.dirty = true
+		raw := m.View().Content
+		v := strings.Join(strings.Fields(ansi.Strip(raw)), " ")
+		for _, want := range []string{"Approve this session on GitHub", "Go to " + uri, "Enter opens it in your browser", "W D J B - M J H T", "c copies it",
+			"Waiting for GitHub", "Expires in 14:32 (at 09:14 UTC).", "set-clipboard on (it is external)", "Enter open GitHub · c copy the code · q quit"} {
+			if !strings.Contains(v, want) {
+				t.Errorf("%d: the login screen lacks %q:\n%s", w, want, ansi.Strip(raw))
+			}
+		}
+		if !strings.Contains(raw, ansi.SetHyperlink(uri)+uri+ansi.ResetHyperlink()) {
+			t.Errorf("%d: the link is not an OSC 8 hyperlink", w)
+		}
+		for _, l := range strings.Split(raw, "\n") {
+			if ansi.StringWidth(l) != w {
+				t.Errorf("%d: a line is %d cells wide: %q", w, ansi.StringWidth(l), ansi.Strip(l))
+			}
+		}
+	}
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	if cmd == nil || fmt.Sprint(cmd()) != code {
+		t.Fatalf("c does not copy the code through OSC 52")
+	}
+	m.dirty = true
+	if n := strings.Count(ansi.Strip(m.View().Content), "Copied"); n != 1 {
+		t.Errorf("after c, Copied shows %d times; want once, next to the code", n)
+	}
+	teaKeys(m, "enter")
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); opened != uri || !strings.Contains(v, "✓ Copied") || strings.Contains(m.status, code) {
+		t.Errorf("after c and Enter: opened %q, status %q:\n%s", opened, m.status, v)
+	}
+	m.signin.tmuxClip = "on" // tmux lets the copy through: no hint
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); strings.Contains(v, "set-clipboard") {
+		t.Errorf("with set-clipboard on, the tmux hint still shows:\n%s", v)
+	}
+	m.signin.browser = false
+	opened = ""
+	teaKeys(m, "o")
+	if opened != "" || !strings.Contains(m.status, "No browser here") {
+		t.Errorf("o with no browser: opened %q, status %q", opened, m.status)
+	}
+
+	// The code expires: Enter asks for a new one.
+	m.Update(inboxSignedMsg{err: WithNext(Errorf(ExitBlocked, "inbox was not approved: the code expired; nothing was done"), "ask for the command again to get a new code: aayu inbox")})
+	m.dirty = true
+	if v := strings.Join(strings.Fields(ansi.Strip(m.View().Content)), " "); !strings.Contains(v, "✗ Inbox was not approved: the code expired") || !strings.Contains(v, "Enter new code · q quit") {
+		t.Errorf("the expired code:\n%s", v)
+	}
+	before := runs
+	teaKeys(m, "enter")
+	if runs != before+1 || m.signin.code != nil || m.signin.failed != "" {
+		t.Errorf("Enter on the expired code: %d new checks, code kept %v", runs-before, m.signin.code != nil)
+	}
+
+	// Approved: the code leaves memory and the inbox is read for the login.
+	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri, ExpiresIn: 900}, clock.Add(15 * time.Minute)})
+	m.Update(inboxSignedMsg{login: "o"})
+	if signed != "o" || m.signin != nil {
+		t.Errorf("after the approval: signed in %q, login screen still up %v", signed, m.signin != nil)
+	}
+
+	// q on the login screen quits, unapproved.
+	m.signin = &inboxSignin{run: func() tea.Msg { return nil }}
+	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri}, clock.Add(time.Minute)})
+	if !teaKeys(m, "q") || !errors.Is(m.signin.err, errNotApproved) {
+		t.Errorf("q on the login screen: err %v", m.signin.err)
 	}
 }

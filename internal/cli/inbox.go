@@ -951,15 +951,22 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		e.writes = &github.WriteGate{}
 	}
 	// Once per session, before anything is read or done: every later step
-	// is covered by this approval (presence.go), and none weakens it.
+	// is covered by this approval (presence.go), and none weakens it. The
+	// full-screen inbox asks for it on its own first screen.
+	if tui {
+		return e.runInboxTUI(ctx, &l.Config, repo, func(ctx context.Context) (*inboxSource, string, error) {
+			c, login, err := humanCaller(ctx, e, &l.Config, "inbox")
+			if err != nil {
+				return nil, "", err
+			}
+			return newInboxSource(c, repo, e.devBranch(), l.Config.Identity), login, nil
+		})
+	}
 	c, login, err := humanCaller(ctx, e, &l.Config, "inbox")
 	if err != nil {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	if tui {
-		return e.runInboxTUI(ctx, &l.Config, src, login)
-	}
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
