@@ -1,0 +1,130 @@
+{
+  "story": 496,
+  "body_hash": "4b74f47ca0dd44d5b7796e96457316a57aa3aa7e772dce6de08e8cdaf658b566",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L07",
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L04",
+      "title": "Never layer L04 (Quality Architect's floors): the dast floor runs by default for web and api platforms. Why: Decision #485 makes DAST a default floor under guardrails G1-G3. What changes: internal/verify/dast.go runs the pinned ZAP image under Docker or Podman; it runs the active XSS and injection rules only against an app the seed started on loopback, or a URL the protected config opts in (G1); with no runnable target it records `skipped: dast: no runnable target`, which blocks the floors until a floor waiver (G3); a high alert is advisory before verify.new_floors_blocking_from (Decision #480) and fails from it. verify.SecurityFloors() adds DAST, and Run.NoSeed lets `verify --security` scan without running the seed. internal/proof/pack.go: a `skipped: dast:` check blocks ship until a floor waiver, as a skipped mobile floor does. CONSTRAINTS.md is regenerated from defaults.toml. No other floor or threshold changes",
+      "contracts": [
+        "internal/verify/dast.go DAST.Run: n/a off the web and api platforms; HTTPURL refuses a target that is not an absolute http(s) URL before any skip; ContainerRuntime picks docker, then podman; none is a non-blocking skip locally and a failure with --ci",
+        "internal/verify/dast.go: active = started (seeded, not up before the seed, loopback) or an active_scan opt-in that the base revision's .aayudha/config.toml already names for the same environment and url (approvedAtBase)",
+        "internal/verify/dast.go: docker.io/zaproxy/zap-stable pinned by sha256 digest; --network host on Linux, host.docker.internal or host.containers.internal elsewhere; a nonzero ZAP exit without a report blocks",
+        "internal/verify/verify.go: SecurityFloors() = sast, secrets, deps, dast; Run.NoSeed",
+        "internal/verify/web.go: the dast target resolves as the web floors resolve theirs and still refuses a production environment",
+        "internal/proof/pack.go: SkippedDAST; BlocksShip(check) is true for a skipped dast check whose detail starts `skipped: dast:`"
+      ],
+      "tests": [
+        "internal/verify:TestDASTGuardrails",
+        "internal/verify:TestContainerRuntime",
+        "internal/verify:TestDASTAndAPIFloors",
+        "internal/verify:TestResolveTargetRefusesProduction",
+        "internal/cli:TestVerifyDASTWaiver"
+      ],
+      "instrumentation": [
+        "the dast check detail in the proof pack says active or passive, names the runtime and the image digest, and names the fix on a skip",
+        "an advisory miss before the blocking date names the date and the alert"
+      ],
+      "rollback": "revert the PR, or set [verify] dast = false in .aayudha/config.toml; packs already written keep their dast checks as records",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "layer": "L07",
+      "title": "Never layer L07 (operational config): new config keys, and active_scan read only from the protected file. Why: an active scan attacks a running app, so who may turn it on is policy (Decision #485, G1), and the new defaults need a dated rollout (Decision #480). What changes: defaults.toml sets [verify] dast = true and new_floors_blocking_from = \"2026-11-14\", and [verify.floors.dast] skipped_blocks_ship = true; config.go adds Verify.NewFloorsBlockingFrom (validated as YYYY-MM-DD), Floors.DAST.SkippedBlocksShip, and Environment.ActiveScan; load.go refuses verify.environments.\u003cenv\u003e.active_scan, in any letter case, from every layer except .aayudha/config.toml, and refuses an active_scan whose url another layer changed. This repository's .aayudha/config.toml sets [verify] platforms = [\"cli\", \"web\", \"api\"], so benefits-qa is scanned",
+      "contracts": [
+        "internal/config/load.go: active_scan from the user, local, env, --set or config.json layer fails the load naming .aayudha/config.toml, a protected path",
+        "internal/config/load.go: an environment with active_scan = true must keep the url .aayudha/config.toml names",
+        "internal/config/config.go Validate: a malformed new_floors_blocking_from fails, so the new floors are never advisory forever",
+        "internal/config/schema.json and CONSTRAINTS.md regenerate from the structs and defaults.toml (internal/config/gen rows for the new keys)"
+      ],
+      "tests": [
+        "internal/config:TestActiveScanKey",
+        "internal/config:TestRepositoryMergesOnProof"
+      ],
+      "instrumentation": [
+        "aayu config show --origin names the layer each new key comes from"
+      ],
+      "rollback": "revert the PR, then remove any of the new keys a config file sets, because the loader refuses unknown keys (ErrorUnused); no ledger or stored state changes",
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L09",
+      "title": "Never layer L09 (platform): aayudha-security.yml runs the dast floor on every push to dev, rolling and main, and nightly. Why: Decision #485 puts DAST in the security floors, and this job is where the floors run outside a story. What changes: only the workflow's header comment; the job already runs `aayu verify --security`, which now includes dast. It never runs [verify] seed, because the job holds the token that writes aayudha:security Bugs and the seed is repository code; so it scans a deployed environment's url (AAYU_ENV) and shows a non-blocking `skipped: dast` for a loopback target or none. No permission, secret, trigger or pinned action changes. The init template (internal/initrepo/aayudha-security.yml) and its golden copy change the same way",
+      "contracts": [
+        ".github/workflows/aayudha-security.yml: only the header comment changes; permissions, triggers, steps and action SHAs are unchanged; the dast result appears in the job summary that verify --security already writes",
+        "internal/initrepo/aayudha-security.yml is what `aayu init --gates` renders; internal/cli/testdata/gates/aayudha-security.yml is its golden copy"
+      ],
+      "tests": [
+        ".:TestSecurityWorkflowSteps",
+        "internal/doctor:TestSecurityWorkflowRow"
+      ],
+      "rollback": "revert the PR; the workflow returns to sast, secrets and deps",
+      "criteria": [
+        7
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "CLI: `aayu verify --security` runs with NoSeed, and the waiver path releases a blocking dast skip; doctor shows the container runtime and the dast fix. LAYERS.md maps internal/doctor to no layer, so its rows are listed here, beside the verbs that print them",
+      "contracts": [
+        "internal/cli/verifysecurity.go: the security run sets verify.Run.NoSeed",
+        "internal/cli verify: an accepted floor-waiver Decision naming dast releases `skipped: dast: no runnable target`",
+        "internal/doctor/security.go: a container-runtime row (docker, podman, or none) and the dast target row with the same fix verify prints",
+        "internal/mcp/schemas/verify.json regenerates from the registry"
+      ],
+      "tests": [
+        "internal/cli:TestVerifyDASTWaiver",
+        "internal/cli:TestVerifySecurityText",
+        "internal/doctor:TestContainerRuntimeRow",
+        "internal/doctor:TestChecksGolden"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Workflow text: the verify --security flag description and the verify and grill skills say DAST is a default floor for web and api products",
+      "contracts": [
+        "internal/verbs/registry.go: the security flag lists sast, secrets, deps, dast; the generated docs, skill frontmatter and MCP schema follow it",
+        "skills/verify/SKILL.md and skills/grill/references/vague/security.md: DAST applies to every story of a web or api product"
+      ],
+      "tests": [
+        "internal/verbs:TestRegistry",
+        "generate-drift: go generate ./... leaves no diff"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        7
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L04",
+      "L07",
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-19T08:18:33Z",
+  "planned_by": "human-fallback"
+}
