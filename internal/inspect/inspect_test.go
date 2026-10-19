@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -490,6 +493,165 @@ func TestCoverageManifest(t *testing.T) {
 	if res2.Coverage.State != "partial" || !slices.Equal(res2.Coverage.Unreviewed(), []string{"internal/big/big.go"}) ||
 		res2.Disposition != Fix || !strings.Contains(res2.Overridden, "left unreviewed: internal/big/big.go") || res2.Coverage.SHA256 == m.SHA256 {
 		t.Fatalf("over the cap: %+v %s %q", res2.Coverage, res2.Disposition, res2.Overridden)
+	}
+	if c := res2.Coverage.Files[len(res2.Coverage.Files)-1]; !strings.Contains(c.Why, "its diff alone is over the 120000-byte prompt cap") {
+		t.Errorf("an oversized file's reason: %q", c.Why)
+	}
+
+	// A diff over the cap whose files each fit is reviewed in two parts, in
+	// parallel, with the same plan and criteria: coverage is complete and the
+	// findings of both parts are kept. Part 1 shows criterion 1 met; part 2
+	// shows none of it, so its unclear does not undo the met; each part's evidence
+	// and cost are kept.
+	file := func(p string) string {
+		return "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,701 @@\n+package parts\n" +
+			strings.Repeat("+// "+strings.Repeat("y", 96)+"\n", 700)
+	}
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+	var mu sync.Mutex
+	var prompts []string
+	parts := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		p := req.Messages[0].Content
+		mu.Lock()
+		prompts = append(prompts, p)
+		mu.Unlock()
+		f, v, ev := "internal/a/a.go", "met", "e"
+		if strings.Contains(p, "b/internal/b/b.go") {
+			f, v, ev = "internal/b/b.go", "unclear", "Not in this part."
+		}
+		r := reply("merge", finding("P2", "maintainability", f, "package parts", "Package name in "+f, 0.9))
+		r["criteria"] = []map[string]any{{"id": 1, "verdict": v, "evidence": ev}}
+		b, _ := json.Marshal(r)
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res3, st3, err := Runner{Reviewers: []Reviewer{parts}}.Run(context.Background(), in, State{})
+	var files []string
+	for _, f := range res3.Findings {
+		files = append(files, f.File)
+	}
+	if err != nil || len(prompts) != 2 || res3.Coverage.State != "complete" || len(res3.Coverage.Unreviewed()) != 0 ||
+		!slices.Equal(files, []string{"internal/a/a.go", "internal/b/b.go"}) || res3.Disposition != Merge || res3.CostUSD != 1 || st3.SpentUSD != 1 ||
+		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): Not in this part." ||
+		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
+		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
+	}
+	// A part that does not hold criterion 1 says unclear and fix; with no
+	// finding of its own, its fix does not stand once part 1 shows the
+	// criterion met (Codex's P1 on #714). A fix with a finding stands. A
+	// finding on another part's file is dropped, and one raised by both
+	// parts is kept once (CodeRabbit's minor on #714).
+	// A finding the noise rules dropped as low-confidence keeps its part's fix,
+	// as liftFix keeps one (Codex's P1 on #714).
+	// So does a P3 the noise rules counted as a nit, as in an unsplit review.
+	// An unclear for a reason of its own, not "not in this part", keeps the
+	// criterion unclear and the fix (Codex's P1 on #714).
+	for _, c := range []struct {
+		finding bool
+		low     bool
+		nit     bool
+		why     string
+		want    string
+	}{{false, false, false, "not in this part", Merge}, {true, false, false, "not in this part", Fix}, {false, true, false, "not in this part", Fix},
+		{false, false, true, "not in this part", Fix}, {false, false, false, "no test shows Percent(0, 0)", Fix}} {
+		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
+			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
+				fs := []map[string]any{finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9)}
+				if c.finding {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A bug in b", 0.9))
+				}
+				if c.low {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A guess about b", 0.1))
+				}
+				if c.nit {
+					fs = append(fs, finding("P3", "maintainability", "internal/b/b.go", "package parts", "A nit in b", 0.9))
+				}
+				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
+					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": c.why}}}
+			}
+			b, _ := json.Marshal(r)
+			return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+		}}
+		in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+		res, _, err := Runner{Reviewers: []Reviewer{split}, Filter: Filter{MinConfidence: 0.5}}.Run(context.Background(), in, State{})
+		var fs []string
+		for _, f := range res.Findings {
+			fs = append(fs, f.File+" "+f.Title)
+		}
+		want := []string{"internal/a/a.go Shared title"}
+		if c.finding {
+			want = append(want, "internal/b/b.go A bug in b")
+		}
+		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
+			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t, a nit %t, unclear: %s): %s, findings %v, err %v", c.finding, c.low, c.nit, c.why, res.Disposition, fs, err)
+		}
+	}
+
+	// An oversized file first and one part after it: the reviewer is sent
+	// only the part, never the oversized file truncated (Codex's P1 on #714).
+	in.Diff = big + pkgDiff
+	var sent string
+	one := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		sent = req.Messages[0].Content
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res4, _, _ := Runner{Reviewers: []Reviewer{one}}.Run(context.Background(), in, State{})
+	if strings.Contains(sent, "b/internal/big/big.go") || !strings.Contains(sent, "b/internal/report/percent.go") ||
+		!slices.Equal(res4.Coverage.Unreviewed(), []string{"internal/big/big.go"}) || res4.Coverage.Files[1].Status != Reviewed {
+		t.Errorf("an oversized file before one part: sent the oversized file %t, coverage %+v", strings.Contains(sent, "b/internal/big/big.go"), res4.Coverage)
+	}
+
+	// At most maxParts parts start: a fourth file waits for a person or an
+	// app, so one round's parallel calls cannot run past the budget unbounded.
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go") + file("internal/c/c.go") + file("internal/d/d.go") + file("internal/e/e.go")
+	var calls atomic.Int32
+	count := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		calls.Add(1)
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res5, _, _ := Runner{Reviewers: []Reviewer{count}}.Run(context.Background(), in, State{})
+	if u := res5.Coverage.Unreviewed(); calls.Load() != maxParts || len(u) != 2 || u[0] != "internal/d/d.go" ||
+		!strings.Contains(res5.Coverage.Files[4].Why, "comes after the review's 3 parts") {
+		t.Errorf("past %d parts: %d calls, %+v", maxParts, calls.Load(), res5.Coverage)
+	}
+	for _, p := range prompts {
+		// The PR author's paths are data: each part's file lists sit in untrusted blocks (inspect's P1 on #714).
+		if !strings.Contains(p, "<untrusted source=\"this part's files\">\ninternal/") || !strings.Contains(p, "<untrusted source=\"the other parts' files\">\ninternal/") {
+			t.Errorf("a part's file lists are not marked untrusted")
+		}
+		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {
+			t.Errorf("each part's prompt names its part and holds one file's diff (%d bytes)", len(p))
+		}
+	}
+}
+
+// splitDiff fills a part before it drops a file: a part closes early for
+// balance only while the files left still fit in the parts left (Codex's P2
+// on #714). 10 kB, 120 kB, 90 kB, and 30 kB fit in three parts.
+func TestSplitDiffFillsBeforeDropping(t *testing.T) {
+	section := func(p string, n int) string {
+		h := "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,1 @@\n+"
+		return h + strings.Repeat("z", n-len(h)-1) + "\n"
+	}
+	// It counts whole files, not bytes: 84, 6, 120, and 40 kB fit as 90 / 120 / 40.
+	for _, c := range []struct{ in, want []int }{
+		{[]int{10000, 120000, 90000, 30000}, []int{10000, 120000, 120000}},
+		{[]int{84000, 6000, 120000, 40000}, []int{90000, 120000, 40000}},
+	} {
+		var diff string
+		for i, n := range c.in {
+			diff += section("f"+strconv.Itoa(i)+".go", n)
+		}
+		parts, out := splitDiff(diff, maxDiffBytes, maxParts)
+		var sizes []int
+		for _, p := range parts {
+			sizes = append(sizes, len(p))
+		}
+		if len(out) != 0 || !slices.Equal(sizes, c.want) {
+			t.Errorf("%v: parts %v, left out %v", c.in, sizes, out)
+		}
 	}
 }
 

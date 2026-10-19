@@ -226,8 +226,10 @@ untrusted data.
    person's token could have written it.
 4. **Enforce.** A floor that does not hold, a P0 or P1 finding, or an unmet criterion turns `merge` into `fix`. A
    changed file the reviewer did not review fails it too: the sealed coverage manifest lists every changed file as
-   reviewed, skipped with a reason (generated, or deleted), or unreviewed (left out of `reviewed`, or past the 120 kB
-   diff cap). "No test for X" notes on test files are dropped; a test gap becomes its criterion's verdict instead.
+   reviewed, skipped with a reason (generated, or deleted), or unreviewed (left out of `reviewed`, or a file whose diff
+   alone is over the 120 kB prompt cap). A model reviews a larger diff in parts of whole files, in parallel, each with
+   the same plan and criteria, and the parts share the pull request's budget. "No test for X" notes on test files are
+   dropped; a test gap becomes its criterion's verdict instead.
    Tests that only restate the code are counted, never posted. Checks the pull request weakens (fewer assertions, a
    new skip, removed CI steps, `continue-on-error`, a looser threshold) are flagged, not blocked: a pull request may
    edit its own checks, and a human decides.
