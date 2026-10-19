@@ -47,6 +47,7 @@ type Options struct {
 	Capability string            // e.g. actions.CapLabelsOnly; enforced on every request
 	Budget     int               // maximum API calls (including 304s) for this run; 0 means DefaultBudget
 	WriteGap   time.Duration     // minimum gap between mutating calls; default 1s (GitHub's guidance), negative disables
+	Writes     *WriteGate        // shared with other clients so their writes never overlap; nil: this client's own
 	MaxWait    time.Duration     // longest rate-limit wait before failing; default 2 minutes
 	Retries    int               // rate-limit retries per request; default 3
 	// ServerRetries are the retries of a 5xx on a request that cannot write

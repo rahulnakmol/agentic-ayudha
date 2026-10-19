@@ -16,7 +16,7 @@ func (e *Env) newGitHub(tok identity.Token, ident, capability string) (*github.C
 	if err != nil {
 		return nil, err
 	}
-	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, WriteGap: e.GitHubGap}
+	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, WriteGap: e.GitHubGap, Writes: e.writes}
 	if e.GitHubGap < 0 {
 		o.ServerRetries = -1 // tests without write gaps inject one-shot 5xx failures and want them seen
 	}

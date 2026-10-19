@@ -179,6 +179,30 @@ func TestWritesAreSerialized(t *testing.T) {
 	}
 }
 
+// Two clients that share a write gate keep one gap between all their writes;
+// two that do not each keep their own.
+func TestSharedWriteGate(t *testing.T) {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{}`))
+	}
+	ctx := context.Background()
+	for _, shared := range []bool{true, false} {
+		var gate *WriteGate
+		if shared {
+			gate = &WriteGate{}
+		}
+		a, clk := newTest(t, h, Options{WriteGap: time.Second, Writes: gate})
+		b, _ := newTest(t, h, Options{WriteGap: time.Second, Writes: gate})
+		b.opts.Now, b.opts.Sleep = clk.Now, clk.Sleep // one clock for both
+		_ = label(ctx, a)
+		_ = label(ctx, b)
+		if want := map[bool]int{true: 1, false: 0}[shared]; len(clk.sleeps) != want {
+			t.Errorf("shared %v: a write on each client slept %v, want %d gaps", shared, clk.sleeps, want)
+		}
+	}
+}
+
 func TestBudgetDryRunAndCapability(t *testing.T) {
 	ctx := context.Background()
 	hits := 0

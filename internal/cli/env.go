@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -125,7 +126,10 @@ type Env struct {
 	actions *actions.Log   // opened on first use by Actions
 
 	approval *Approval // a person's device-flow approval for this command (presence.go)
-	args     []string  // the command line after the binary's name, for the person approving it (presence.go)
+	// writes, when set, is the write gate every GitHub client of this run
+	// shares, so writes running at once (the inbox's) keep one gap.
+	writes *github.WriteGate
+	args   []string // the command line after the binary's name, for the person approving it (presence.go)
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 

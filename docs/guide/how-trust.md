@@ -297,14 +297,18 @@ then `gh pr merge --squash --admin`, and `aayu audit` reports one whose comment 
 A solo founder should not be the bottleneck on human-only steps, but no switch turns those gates off: in solo mode an
 agent could flip such a switch through the admin bypass. Instead `aayu inbox` lists every human-only step that waits
 for you as a short queue of cards, each with its twin's counsel, and you act on each with one keypress. The cards
-that need a person come first; the housekeeping (merged without ship, a bug whose fix merged, a replaced issue) is
-folded into one card. On a person's terminal it is full screen, one card with a slim list beside it; with `--plain`,
+that need a person come first; the housekeeping (merged without ship, a bug whose fix merged, a replaced issue) has
+its own group. On a person's terminal it is full screen: the grouped list on the left and the item's card on the right
+(the card below the list on a narrow terminal); with `--plain`,
 `TERM=dumb`, or `[ui] plain` the same cards come line by line, and once at the top a line says in words what every key
 does. Status is always words (done, skipped, not done), never colour or a symbol alone, and every icon has its word.
 
-`A` tidies all the housekeeping after one confirmation that lists each item and says it is written as you and not
-undone later. Each item is still one `inboxAct` call, under the one approval the session started with. Before every
-write the inbox reads that item again (`inboxSource.reread`): if anything it showed changed, it writes nothing and
+Only housekeeping can be selected: `x` selects one item, `X` all of it, and Enter then does each one's recommendation;
+`C` clears all the housekeeping. Each asks once, listing every item and saying it is written as you and not undone
+later. A step that needs you is never selected or done in bulk: `x` on one says so and selects nothing. Each item is
+still one `inboxAct` call, under the one approval the session started with. Writes run in the background, two at a
+time, and never two on the same pull request or issue at once; `q` while they run asks whether to wait for all of them
+or only for the ones under way, so no write is stopped half done. Before every write the inbox reads that item again (`inboxSource.reread`): if anything it showed changed, it writes nothing and
 shows the card as it is now. A refresh asks GitHub only what changed since the last read (one issues query with
 `since`, then each changed pull request) through the client's ETag cache, so a refresh with nothing changed is one
 call. The last read is kept per user outside the repository, and nothing is ever done from it.

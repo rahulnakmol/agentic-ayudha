@@ -72,16 +72,21 @@ stories that another story replaced. It does not list a pull request waiting for
 waiting for `plan --approve`; with a bot App installed, find those in GitHub's review requests. Every write is yours,
 under your own token, and logged.
 
-**You should see** one card at a time with a slim list beside it (above it on a phone-width terminal). The list has
-one line per item, its icon, title, and number, with what needs you first and the housekeeping folded into one line.
+**You should see** the list on the left and the selected item's card on the right (the list above the card on a
+narrow terminal). The list is grouped: Needs you now, Waiting on the review cap, Housekeeping, and Done this session,
+each with its count. Each row has the item's icon, number, title, why it waits, and how long since it changed, in
+columns that line up on every row.
 The card says what the item is in one plain line, then the counsel of the seat's twin (Atri for a Decision, Drona for
 a pull request, Vidhi for the housekeeping): what it is, the one link it rests on, what it recommends and why, labelled
 counsel, not approval. Atri's counsel is the one posted on the Decision with `aayu counsel --post`; every other counsel
 is written from the facts the inbox read, never by a model, so the inbox opens at once. Below it are numbered choices,
-the recommendation first and selected: Enter does it, and the next card appears. A digit selects another choice and
+the recommendation first and selected: Enter starts it in the background and the next card appears at once, so you
+can act on the next item while it runs. Go back to it and its card shows what is happening now, its steps, and how
+long it usually takes; once it is done, what changed on GitHub and what happens next. A digit selects another choice and
 Enter does it after saying what it writes; a one-way door also asks for Enter again. `s` skips to the next card, `j`
-and `k` move, `/` (or Ctrl+K) finds any item or choice by typing, `A` tidies all the housekeeping after one
-confirmation, `?` explains the card in plain words, and `q` quits; the mouse clicks rows and choices. The inbox opens
+and `k` move, Tab goes to the next item that needs you, `/` (or Ctrl+K) finds any item or choice by typing, `x` and
+`X` select housekeeping (never an item that needs you) and `C` clears all of it after one confirmation, `?` explains
+the card in plain words, and `q` quits; the mouse clicks rows and choices. The inbox opens
 from your last read (kept in your user state directory, never in the repository) and refreshes behind the card every
 45 seconds or on `R`; before any write it reads that item again, and if it changed it shows the new card and writes
 nothing. With `--plain`, `TERM=dumb`, or `[ui] plain = true` the same cards come line by line, fitted to the
