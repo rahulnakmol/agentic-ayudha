@@ -114,13 +114,33 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
 	m.now, m.opened, m.dryRun = e.Now, e.Now(), e.DryRun
 	sctx, cancel := context.WithCancel(ctx)
-	defer cancel() // a quit from the login screen stops the wait for GitHub
 	e.showCode = func(_ context.Context, code deviceCodeReply, expires time.Time) error {
 		post(inboxCodeMsg{code, expires})
 		return nil
 	}
-	defer func() { e.showCode = nil }()
+	// Bubble Tea does not wait for a sign-in still under way when it quits.
+	// A quit stops it, waits for it to end, and only then takes the hook
+	// away, so the presence check never falls back to printing the code; a
+	// sign-in that starts after the inbox closed does not run.
+	var signing sync.WaitGroup
+	closed := false
+	defer func() {
+		cancel()
+		mu.Lock()
+		closed = true
+		mu.Unlock()
+		signing.Wait()
+		e.showCode = nil
+	}()
 	m.signin = &inboxSignin{browser: browserHere(e.Getenv), tmuxClip: tmuxClipboard(e.Getenv), run: func() tea.Msg {
+		mu.Lock()
+		if closed {
+			mu.Unlock()
+			return inboxSignedMsg{err: errNotApproved}
+		}
+		signing.Add(1)
+		mu.Unlock()
+		defer signing.Done()
 		s, l, err := signin(sctx)
 		return inboxSignedMsg{s, l, err}
 	}}

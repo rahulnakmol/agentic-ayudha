@@ -1988,6 +1988,42 @@ func TestInboxKeepsDoneOnQuit(t *testing.T) {
 	}
 }
 
+// A quit while the presence check still runs: aayu inbox stops the check
+// and waits for it before it takes the screen's hook away, so the check never
+// falls back to printing the code (Codex's P2 on #725).
+func TestInboxQuitDuringSignin(t *testing.T) {
+	var errOut bytes.Buffer
+	e, err := newEnv(IO{In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &errOut}, Options{Dir: t.TempDir(), Getenv: func(k string) string { return map[string]string{"AAYU_AGENT": "1"}[k] }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, ended := make(chan struct{}), make(chan struct{})
+	e.TUI = func(tm tea.Model) error {
+		check := tm.(*inboxModel).signinCmd()
+		go check() // Bubble Tea does not wait for it when the person quits
+		<-started
+		return nil
+	}
+	signin := func(ctx context.Context) (*inboxSource, string, error) {
+		defer close(ended)
+		close(started)
+		<-ctx.Done()
+		if e.showCode == nil { // as presenceCheck does with no hook: the code goes to stderr
+			fmt.Fprint(e.Err, "WDJB-MJHT")
+		}
+		return nil, "", ctx.Err()
+	}
+	_ = e.runInboxTUI(context.Background(), &config.Config{}, "o/r", signin)
+	select {
+	case <-ended:
+	default:
+		t.Fatal("aayu inbox returned while its presence check still ran")
+	}
+	if strings.Contains(errOut.String(), "WDJB-MJHT") {
+		t.Errorf("the code fell back to stderr after a quit: %q", errOut.String())
+	}
+}
+
 // The inbox's first screen when the session needs a person's approval: the
 // device code large in the inbox's frame, the link as an OSC 8 hyperlink,
 // Enter to open it (or why not), c to copy the code through OSC 52, the
