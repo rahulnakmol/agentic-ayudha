@@ -2,9 +2,9 @@
 # the run it makes, to the criteria).
 
 [[criterion]]
-id = 1 # apps ["codex","coderabbit"], the CI review declined in the gate: the inspect comment waits for coderabbit and names codex as skipped
-tests = ["internal/cli:TestInspectPaidReviewer"]
+id = 1 # apps ["codex","coderabbit"], the CI review declined in the gate: the comment waits for coderabbit and names codex as skipped
+tests = ["internal/cli:TestInspectPaidReviewer/codex_and_coderabbit"]
 
 [[criterion]]
 id = 2 # apps ["codex"], the CI review declined in the gate: a human review, then merge at rung human after the approver's --approve
-tests = ["internal/cli:TestInspectPaidReviewer"]
+tests = ["internal/cli:TestInspectPaidReviewer/codex_alone"]
