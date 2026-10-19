@@ -80,9 +80,9 @@ What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the rel
 2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI. Once a pull request
    is ready for review and its checks and proof pass, a review model you choose, with one key, reviews each change
    that is not docs-only when its family differs from the builder's and the author has write access
-   ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise CodeRabbit or Greptile reviews when it is listed in
-   `[inspect] apps` and Codex is not, or the approver approves when no app is listed
-   ([known limits](docs/releases/v0.3.0.md#known-limits)).
+   ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise the gate skips Codex, Claude, and Cursor, and
+   CodeRabbit or Greptile reviews when it is listed in `[inspect] apps`, or the approver approves when neither is
+   listed or it has not replied within 30 minutes ([what's new](docs/releases/v0.3.0.md#whats-new)).
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 
