@@ -3,8 +3,9 @@
 Started with `-telemetry <dir>`, the app writes every request except `GET /healthz` as an OpenTelemetry server span
 (`traces.jsonl`, OTLP JSON) and one JSON log line (`logs.jsonl`) that carries the span's `trace_id` and `span_id`.
 Both name the deployed revision (`service.version`, from `-revision`); only the spans' resource names the
-environment (`deployment.environment.name`, from `-environment`). A handler that panics answers 500 and leaves an
-`exception` event on its span. `aayu investigate` reads this export.
+environment (`deployment.environment.name`, from `-environment`). A handler that panics leaves an `exception` event
+on its span and a 500 in the span and the log; the client gets a 500 only if the handler had not yet written a
+response. `aayu investigate` reads this export.
 
 ```feature
 {"id": "telemetry", "layers": ["L02", "L08"],
@@ -41,6 +42,6 @@ environment (`deployment.environment.name`, from `-environment`). A handler that
 - Nothing proves this capability today: no Go test in `examples/benefits-qa` starts the command with `-telemetry` or
   exercises `api.Observe` (`internal/cli/investigate_test.go` builds its own export with its own tracer). Until the
   seed passes `-telemetry` and `control.mjs` learns the `telemetry` step, treat it as unproven.
-- The panic path (a 500 and an `exception` event on the span) cannot be driven: no route of the app panics, so no
+- The panic path (the `exception` event, and the 500) cannot be driven: no route of the app panics, so no
   check can reach it through the page or the API. `ask-traced` covers the success path only; even once reachable, it
   says nothing about exceptions.
