@@ -13,5 +13,6 @@ storybook-static/
 .aayudha/ledger-outbox/
 .aayudha/state/
 .aayudha/config.local.toml
+.aayudha/config.local.json
 coverage.out
 evals/.docs-cache/

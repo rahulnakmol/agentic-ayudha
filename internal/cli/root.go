@@ -149,7 +149,7 @@ Exit codes:
 				return err
 			}
 			if root := config.RepoRoot(e.Dir); root != "" {
-				if err := upgrade.Check(root, upgrade.Current); err != nil {
+				if err := upgrade.Check(root, upgrade.Current, e.CI || config.InCI(e.Getenv)); err != nil {
 					return Errorf(ExitUsage, "%s: refused: %v (read-only commands still work)", c.Name, err)
 				}
 			}

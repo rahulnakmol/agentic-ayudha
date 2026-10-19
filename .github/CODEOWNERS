@@ -10,6 +10,9 @@
 /CONSTRAINTS.md          @rahulnakmol
 /internal/config/defaults.toml  @rahulnakmol
 /.aayudha/config.toml    @rahulnakmol
+/.aayudha/config.json    @rahulnakmol
+/.aayudha/config.local.toml  @rahulnakmol
+/.aayudha/config.local.json  @rahulnakmol
 /.agents/                @rahulnakmol
 /.claude/                @rahulnakmol
 # The plugin bundle this repository's marketplaces ship: its manifests, hooks, and the Amp plugin run on the

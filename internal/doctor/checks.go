@@ -202,7 +202,7 @@ func checkSchema(_ context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}
 	}
-	changes, err := upgrade.Plan(p.Root, upgrade.Current, upgrade.Default)
+	changes, err := upgrade.Plan(p.Root, upgrade.Current, upgrade.Default, p.CI)
 	if errors.Is(err, upgrade.ErrNewer) {
 		return Result{Status: Fail, Blocking: true, Detail: err.Error()}
 	}

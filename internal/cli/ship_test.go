@@ -472,6 +472,19 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/protected-paths-review.yml"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it touches .github/workflows/protected-paths-review.yml, in the narrow set that always needs a person ([autonomy] always_person: .github/workflows/protected-paths*.yml)")
+	// This repository's own policy: a dependency change alone needs a person,
+	// since it can change the code of everything in the narrow set.
+	ours, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"go.sum", "go.mod"} {
+		g.Mu.Lock()
+		g.RefFiles[base][".aayudha/config.toml"] = string(ours)
+		g.Pulls[prN].Files = []string{f}
+		g.Mu.Unlock()
+		refused("no merge on proof: it touches " + f + ", in the narrow set that always needs a person ([autonomy] always_person: " + f + ")")
+	}
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the comparison's 300 files

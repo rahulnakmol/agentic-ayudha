@@ -145,5 +145,8 @@ func checkWaiver(n int, floor string) error {
 	if err != nil {
 		return err
 	}
+	for _, n := range l.Notices {
+		fmt.Fprintln(os.Stderr, "ratchet:", n)
+	}
 	return ratchet.AcceptedWaiver(is, floor, &l.Config, parentType)
 }

@@ -16,7 +16,7 @@ func runUpgrade(ctx context.Context, e *Env, in Values) error {
 	if root == "" {
 		return Errorf(ExitUsage, "upgrade: not inside a git repository")
 	}
-	changes, err := upgrade.Plan(root, upgrade.Current, upgrade.Default)
+	changes, err := upgrade.Plan(root, upgrade.Current, upgrade.Default, e.CI || config.InCI(e.Getenv))
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}

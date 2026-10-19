@@ -22,7 +22,9 @@ func (e *Env) Config() (*config.Loaded, error) {
 	if e.config != nil {
 		return e.config, nil
 	}
-	l, err := config.Load(config.DefaultSources(e.Getenv, e.Dir, e.Environ, e.Set))
+	src := config.DefaultSources(e.Getenv, e.Dir, e.Environ, e.Set)
+	src.CI = src.CI || e.CI // --ci, parsed before any command loads config
+	l, err := config.Load(src)
 	if err != nil {
 		return nil, Wrap(ExitUsage, fmt.Errorf("config: %w", err))
 	}

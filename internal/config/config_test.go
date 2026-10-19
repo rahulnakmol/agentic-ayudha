@@ -420,7 +420,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
 		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml",
 		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
-		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh",
+		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh", "go.mod", "go.sum",
 		// The config's other files load into the same layers, so they can change the policy too.
 		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
 	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}) {
@@ -449,17 +449,19 @@ func TestActiveScanKey(t *testing.T) {
 		{"repo JSON config", map[string]string{"repo/.aayudha/config.json": `{"version": 1, "verify": {"environments": {"staging": {"url": "https://staging.example.test", "active_scan": true}}}}`}, nil, nil},
 		{"environment", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__ACTIVE_SCAN=true"}, nil},
 		{"--set", nil, nil, []string{"verify.environments.staging.active_scan=true"}},
-		// CodeRabbit on #509: the decoder matches a key whatever its case, so a case variant is refused too.
-		// The repository names the url but does not opt in; the local file must not opt it in.
-		{"local config, another case", map[string]string{
-			"repo/.aayudha/config.toml":       "version = 1\n[verify.environments.staging]\nurl = \"https://staging.example.test\"\n",
-			"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nActive_Scan = true\n"}, nil, nil},
 	} {
 		src := fixture(t, tt.files)
 		src.Environ, src.Sets = tt.env, tt.set
 		if _, err := Load(src); err == nil || !strings.Contains(strings.ToLower(err.Error()), "verify.environments.staging.active_scan is read only from .aayudha/config.toml") {
 			t.Errorf("%s: err = %v", tt.name, err)
 		}
+	}
+	// CodeRabbit on #509: a case variant must not opt in either. The decoder now matches keys exactly (Bug #640),
+	// so the local file's Active_Scan is refused as an unknown key; the repository names the url but does not opt in.
+	if _, err := Load(fixture(t, map[string]string{
+		"repo/.aayudha/config.toml":       "version = 1\n[verify.environments.staging]\nurl = \"https://staging.example.test\"\n",
+		"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nActive_Scan = true\n"})); err == nil || !strings.Contains(err.Error(), "invalid keys: Active_Scan") {
+		t.Errorf("local config, another case: err = %v", err)
 	}
 	// The local layer may still set an environment's URL; the repository config may opt it in.
 	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n" + key,
@@ -508,5 +510,117 @@ func TestActiveScanKey(t *testing.T) {
 	}
 	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify]\nnew_floors_blocking_from = \"\"\n"})); err != nil {
 		t.Errorf("empty date: %v", err)
+	}
+}
+
+// TestProtectedOnlyKeysFromTOML (Bug #640, criterion 1): .aayudha/config.json
+// loads as the repository layer but need not be code-owned, so a protected-only
+// key set there is refused, naming the file; .aayudha/config.toml still sets it.
+func TestProtectedOnlyKeysFromTOML(t *testing.T) {
+	for key, body := range map[string]string{
+		"solo_provisional_after_hours": `{"version": 1, "decisions": {"solo_provisional_after_hours": 24}}`,
+		"allow_pii":                    `{"version": 1, "integrations": {"posthog": {"allow_pii": true, "secret": "posthog", "scope": "read", "project": "1"}}}`,
+	} {
+		src := fixture(t, map[string]string{"repo/.aayudha/config.json": body})
+		_, err := Load(src)
+		file := filepath.Join(src.RepoDir, ".aayudha", "config.json")
+		if err == nil || !strings.Contains(err.Error(), file+": ") || !strings.Contains(err.Error(), key+" is read only from .aayudha/config.toml") {
+			t.Errorf("%s from config.json: err = %v; want a refusal naming %s", key, err, file)
+		}
+	}
+	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[decisions]\nsolo_provisional_after_hours = 12\n" +
+		"[integrations.posthog]\nallow_pii = true\nsecret = \"posthog\"\nscope = \"read\"\nproject = \"1\"\n"}))
+	if err != nil || l.Config.Decisions.SoloProvisional != 12 || !l.Config.Integrations["posthog"].AllowPII {
+		t.Errorf("config.toml: %v; want both keys applied", err)
+	}
+	// A base revision's config.toml, given as text the way ship reads it, is the code-owned file too.
+	l, err = Load(Sources{RepoTOML: []byte("version = 1\n[decisions]\nsolo_provisional_after_hours = 12\n"), RepoSource: ".aayudha/config.toml at 1c978f1"})
+	if err != nil || l.Config.Decisions.SoloProvisional != 12 {
+		t.Errorf("base config.toml: %v; want the key applied", err)
+	}
+}
+
+// TestCaseVariantKeysRefused (Bug #640): keys match the schema with exact
+// case, so a case variant of a key a per-layer rule guards is an unknown key,
+// refused, and never sets the field.
+func TestCaseVariantKeysRefused(t *testing.T) {
+	for _, tt := range []struct{ name, file, body, key string }{
+		{"allow_pii", "config.json", `{"version": 1, "integrations": {"posthog": {"Allow_PII": true, "secret": "posthog", "scope": "read", "project": "1"}}}`, "Allow_PII"},
+		{"solo_provisional_after_hours", "config.json", `{"version": 1, "decisions": {"Solo_Provisional_After_Hours": 12}}`, "Solo_Provisional_After_Hours"},
+		{"solo_provisional_after_hours", "config.local.json", `{"version": 1, "decisions": {"SOLO_PROVISIONAL_AFTER_HOURS": 12}}`, "SOLO_PROVISIONAL_AFTER_HOURS"},
+		{"models.gateway.base_url", "config.local.json", `{"version": 1, "models": {"gateway": {"Base_URL": "https://evil.example.com"}}}`, "Base_URL"},
+	} {
+		l, err := Load(fixture(t, map[string]string{"repo/.aayudha/" + tt.file: tt.body}))
+		if err == nil || !strings.Contains(err.Error(), tt.file+": ") || !strings.Contains(err.Error(), tt.key) {
+			got := ""
+			if l != nil {
+				got = fmt.Sprintf("allow_pii=%v solo=%v base_url=%q", l.Config.Integrations["posthog"].AllowPII, l.Config.Decisions.SoloProvisional, l.Config.Models.Gateway.BaseURL)
+			}
+			t.Errorf("%s as %s in %s: err = %v (%s); want it refused as an unknown key", tt.name, tt.key, tt.file, err, got)
+		}
+	}
+}
+
+// TestCaseVariantFileNamesIgnored (Bug #640): only a directory entry named
+// exactly config.json or config.local.json is read. On macOS and Windows
+// opening config.json finds Config.json, which CODEOWNERS does not own; the
+// case-insensitive readFile below stands in for that filesystem.
+func TestCaseVariantFileNamesIgnored(t *testing.T) {
+	old := readFile
+	t.Cleanup(func() { readFile = old })
+	readFile = func(path string) ([]byte, error) {
+		dir, base := filepath.Split(path)
+		des, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, de := range des {
+			if strings.EqualFold(de.Name(), base) {
+				return os.ReadFile(filepath.Join(dir, de.Name()))
+			}
+		}
+		return nil, os.ErrNotExist
+	}
+	body := `{"version": 1, "budget": {"per_day_usd": 7}}`
+	for _, name := range []string{"Config.json", "CONFIG.LOCAL.JSON"} {
+		for _, ci := range []bool{false, true} {
+			src := fixture(t, map[string]string{"repo/.aayudha/" + name: body})
+			src.CI = ci
+			l, err := Load(src)
+			if err != nil {
+				t.Fatalf("%s, CI=%v: %v", name, ci, err)
+			}
+			if layer, source := l.Origin("budget.per_day_usd"); layer != LayerDefault || len(l.Notices) != 0 {
+				t.Errorf("%s, CI=%v: per_day_usd = %v from %s (%s), notices %q; want the file ignored", name, ci, l.Config.Budget.PerDayUSD, layer, source, l.Notices)
+			}
+		}
+	}
+}
+
+// TestConfigDirUnlistable (Bug #640): files are read only by exact name from
+// the directory's listing, so a config directory that cannot be listed fails
+// the load, naming it, rather than reading as if it held no config.
+func TestConfigDirUnlistable(t *testing.T) {
+	src := fixture(t, map[string]string{"repo/.aayudha": "not a directory\n"})
+	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), filepath.Join(src.RepoDir, ".aayudha")) {
+		t.Fatalf("err = %v; want a failure naming %s", err, filepath.Join(src.RepoDir, ".aayudha"))
+	}
+}
+
+// TestMalformedLocalConfigInCI (Bug #640): CI never parses the local layer,
+// so a committed config.local.toml that is not valid TOML does not fail the
+// load and still gets the notice; outside CI it fails as before.
+func TestMalformedLocalConfigInCI(t *testing.T) {
+	files := map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[budget\nper_day_usd = = 3\n"}
+	src := fixture(t, files)
+	src.CI = true
+	l, err := Load(src)
+	file := filepath.Join(src.RepoDir, ".aayudha", "config.local.toml")
+	if err != nil || len(l.Notices) != 1 || !strings.Contains(l.Notices[0], file+" ignored") {
+		t.Fatalf("CI: err = %v; want no error and one notice naming %s", err, file)
+	}
+	src = fixture(t, files)
+	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "config.local.toml") {
+		t.Fatalf("outside CI: err = %v; want the parse error naming config.local.toml", err)
 	}
 }
