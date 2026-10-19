@@ -151,6 +151,20 @@ resume on rahulnakmol/agentic-ayudha needs a person's approval.
 Approved by @rahulnakmol (device-flow, admin access).
 ```
 
+The full-screen `aayu inbox` shows the same code on its own first screen instead, in the inbox's frame. The code is
+large, the link is a clickable hyperlink, Enter opens it in your browser (when the machine has one), and `c` copies the
+code.
+
+The copy uses the terminal's OSC 52 clipboard sequence, which works over SSH. Inside tmux it reaches your clipboard
+only with `tmux set -s set-clipboard on` (tmux's default, `external`, drops it), and the screen says so. GitHub returns
+no link with the code already in it for aayu's app, so open plus copy is the shortest path.
+
+The screen counts down to the expiry, and Enter asks for a new code once one expires. It turns into "Approved by @you"
+before the inbox loads.
+
+The code is shown only on that screen. It is never logged, never in the ledger, and never in the inbox's cache
+(`TestInboxLoginScreen`, `TestInboxApprovesHumanReviews`).
+
 A command that changes more than one thing adds an `Approving:` line for each change, in plain words, under the
 `Command:` line. You approve on any device, your phone included, signed in to GitHub with your password and second
 factor. aayu then checks the approving account, and refuses unless all of these hold:

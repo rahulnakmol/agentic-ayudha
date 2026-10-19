@@ -129,7 +129,11 @@ type Env struct {
 	// writes, when set, is the write gate every GitHub client of this run
 	// shares, so writes running at once (the inbox's) keep one gap.
 	writes *github.WriteGate
-	args   []string // the command line after the binary's name, for the person approving it (presence.go)
+	// showCode, when set, shows the pending device code to the person in
+	// place of the plain text on stderr (the inbox's login screen); the
+	// approval is the same either way (presence.go).
+	showCode func(ctx context.Context, code deviceCodeReply, expires time.Time) error
+	args     []string // the command line after the binary's name, for the person approving it (presence.go)
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 
