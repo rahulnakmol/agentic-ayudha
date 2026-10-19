@@ -480,8 +480,15 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[6].Labels = slices.DeleteFunc(g.Issues[6].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
 	g.Mu.Unlock()
+	// ship reads the approver from the base branch's config, never --set.
+	g.Mu.Lock()
+	if g.Files == nil {
+		g.Files = map[string]string{}
+	}
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"rahulnakmol\"\n"
+	g.Mu.Unlock()
 	for _, pr := range []int{prA, prB} {
-		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r", "--set", "autonomy.approver=rahulnakmol")
+		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
 		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {
 			t.Fatalf("agent ship #%d: %d %s", pr, code, errOut)
 		}
@@ -495,6 +502,9 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 			t.Fatalf("agent ship #%d does not name the approver: %s", pr, errOut)
 		}
 	}
+	g.Mu.Lock()
+	delete(g.Files, ".aayudha/config.toml")
+	g.Mu.Unlock()
 	g.Mu.Lock()
 	// PR B had hit inspect's cycle cap before its gate went green: ship's
 	// Ready to ship on the current head stands over the cap.
