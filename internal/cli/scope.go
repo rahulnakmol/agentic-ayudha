@@ -357,6 +357,7 @@ func (r *scopeRun) item(ctx context.Context, is *gh.Issue) (scope.Item, error) {
 
 // readLedger reads the newest baseline, the draft, and the drift record.
 func (r *scopeRun) readLedger(ctx context.Context) error {
+	r.base, r.draft, r.drift = nil, nil, nil // a second read (after the device code) never keeps the first one's records
 	t, err := r.w.Read(ctx)
 	if errors.Is(err, ledger.ErrNoLedger) {
 		return nil
@@ -853,7 +854,7 @@ func (r *scopeRun) drafted(ctx context.Context, decision int) error {
 	}
 	who := r.who
 	d := scope.Draft{Schema: scope.DraftSchema, Version: r.version, ReleaseIssue: r.n, DraftedAt: r.e.Now().UTC().Format("2006-01-02T15:04:05Z"), DraftedBy: who,
-		Intent: r.intent, BudgetPct: r.cfg.Scope.BudgetPercent, Points: scope.Total(r.items), Hash: q.Hash, Items: r.items}
+		Intent: r.intent, BudgetPct: r.cfg.Scope.BudgetPercent, Points: scope.Total(r.items), Hash: q.Hash, EffortPoints: r.cfg.Scope.EffortPoints, Items: r.items}
 	if err := r.writeLedger(ctx, fmt.Sprintf("scope: %s draft for Release #%d", r.version, r.n), map[string]any{scope.DraftPath(r.version): d}); err != nil {
 		return err
 	}
@@ -943,8 +944,8 @@ func (r *scopeRun) request(ctx context.Context) (*scopeRequest, *gh.IssueComment
 	}
 	for i := len(comments) - 1; i >= 0; i-- {
 		cm := comments[i]
-		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
-			continue
+		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) || strings.Contains(cm.GetBody(), ScopePlanMarker) {
+			continue // a plan comment is never a request, nor an acceptance
 		}
 		if ok, err := r.trusted(ctx, cm.GetUser()); err != nil || !ok {
 			if err != nil {
@@ -1084,8 +1085,9 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 	case "baseline":
 		hash := scope.Hash(r.intent, r.items)
 		// Applied before, and only its comment was not updated: the baseline holds
-		// the draft's plan and its budget. A new budget on the same plan is a new baseline.
-		if r.base != nil && r.base.Hash == q.Hash && r.draft != nil && r.draft.Hash == q.Hash && r.draft.BudgetPct == r.base.BudgetPct {
+		// the draft's plan, budget, and effort table. A new budget or table on the same plan is a new baseline.
+		if r.base != nil && r.base.Hash == q.Hash && r.draft != nil && r.draft.Hash == q.Hash && r.draft.BudgetPct == r.base.BudgetPct &&
+			slices.Equal(r.draft.EffortPoints, r.base.EffortPoints) {
 			effect = fmt.Sprintf("Closes the request on Release #%d: baseline %d of %s already holds the drafted plan; nothing else changes.", r.n, r.base.Baseline, r.version)
 			commit = func(string) (string, error) {
 				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
@@ -1100,6 +1102,9 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 		case r.draft.BudgetPct != r.cfg.Scope.BudgetPercent: // the budget is part of what the person accepts
 			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: [scope] budget_percent is %.1f%% now, but the plan was drafted with %.1f%%; a person accepts only the budget they see",
 				r.cfg.Scope.BudgetPercent, r.draft.BudgetPct), fmt.Sprintf("aayu scope %d --draft", r.n))
+		case !slices.Equal(r.draft.EffortPoints, r.cfg.Scope.EffortPoints): // and so is every effort weight
+			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the effort table is %v now, but the plan was drafted with %v; a person accepts only the effort table they see",
+				r.cfg.Scope.EffortPoints, r.draft.EffortPoints), fmt.Sprintf("aayu scope %d --draft", r.n))
 		}
 		if d := r.measure(r.items); d != nil && d.Over() && q.Decision == 0 {
 			return nil, nil, "", nil, WithNext(Errorf(ExitBlocked, "scope: the plan is %.1f%% from baseline %d, over budget, and the request names no Decision", d.DriftPct, d.Baseline),
@@ -1115,7 +1120,7 @@ func (r *scopeRun) prepare(ctx context.Context) (*scopeRequest, *gh.IssueComment
 			now := r.e.Now().UTC().Format("2006-01-02T15:04:05Z")
 			b := scope.Baseline{Schema: scope.BaselineSchema, Version: r.version, ReleaseIssue: r.n, Baseline: n, BaselinedAt: now, BaselinedBy: login,
 				Intent: r.intent, BudgetPct: r.draft.BudgetPct, Points: scope.Total(r.items), Hash: hash, Decision: q.Decision,
-				EffortPoints: r.cfg.Scope.EffortPoints, Items: r.items}
+				EffortPoints: r.draft.EffortPoints, Items: r.items}
 			d := scope.Measure(b, r.items, r.cfg.Scope.EffortPoints)
 			d.MeasuredAt = now
 			err := r.writeLedger(ctx, fmt.Sprintf("scope: %s baseline %d for Release #%d, accepted by @%s", r.version, n, r.n, login),
@@ -1309,10 +1314,23 @@ func (r *scopeRun) publish(ctx context.Context, d *scope.Drift) (int, error) {
 		if it.Parent != 0 {
 			parent = "#" + strconv.Itoa(it.Parent)
 		}
-		fmt.Fprintf(&b, "| #%d | %s | %s | %s |\n", it.Number, it.Type, it.Effort, parent)
+		fmt.Fprintf(&b, "| #%d | %s | %s | %s |\n", it.Number, planCell(it.Type), planCell(it.Effort), parent)
 	}
 	fmt.Fprintf(&b, "\nThis is the plan of record, not a promise: a slip moves an item to the next release. A change that takes drift past %.1f%% waits for a person's accepted Decision.\n", d.BudgetPct)
 	return len(lines), r.upsertOwn(ctx, ScopePlanMarker, b.String(), "github.comment.scope-plan")
+}
+
+// planCell keeps text from an issue (a label) out of the plan comment's
+// markup: no newline and no HTML comment, so never a marker a reader trusts.
+func planCell(s string) string {
+	strip := strings.NewReplacer("\r", " ", "\n", " ", "<!--", "", "-->", "")
+	for {
+		t := strip.Replace(s)
+		if t == s {
+			return t
+		}
+		s = t
+	}
 }
 
 func (r *scopeRun) writeDrift(ctx context.Context, d scope.Drift, why string) error {
@@ -1344,8 +1362,8 @@ func (s *inboxSource) scopeItem(ctx context.Context, it *InboxItem) (bool, error
 	}
 	for i := len(comments) - 1; i >= 0; i-- {
 		cm := comments[i]
-		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) {
-			continue
+		if !strings.Contains(cm.GetBody(), ScopeRequestMarker) || strings.Contains(cm.GetBody(), ScopePlanMarker) {
+			continue // a plan comment is never a request, nor an acceptance
 		}
 		if ok, err := scopeTrusted(cm.GetUser(), s.id, func(login string) (bool, error) { return s.canWrite(ctx, login) }); err != nil {
 			return false, err

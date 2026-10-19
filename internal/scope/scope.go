@@ -62,7 +62,10 @@ type Draft struct {
 	BudgetPct    float64 `json:"budget_pct"`
 	Points       int     `json:"points"`
 	Hash         string  `json:"hash"` // Hash(intent, items): what the person accepts
-	Items        []Item  `json:"items"`
+	// EffortPoints is the effort table the plan was drafted with: the person
+	// accepts it too, even a weight for a size no item carries yet.
+	EffortPoints []int  `json:"effort_points"`
+	Items        []Item `json:"items"`
 }
 
 // Baseline is a plan a person accepted: the release's scope freeze.

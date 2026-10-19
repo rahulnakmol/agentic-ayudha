@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -104,6 +106,21 @@ func TestScope(t *testing.T) {
 	// The budget is part of what a person accepts: a budget changed since the draft is refused, before any code.
 	if code, _, out := scopeRun(person, "--accept", "--set", "scope.budget_percent=100"); code != ExitBlocked || !strings.Contains(out, "drafted with 20.0%") {
 		t.Fatalf("--accept with a budget changed since the draft: exit %d: %s", code, out)
+	}
+	// So is the effort table, even a weight for a size the plan does not use, which the plan hash cannot see.
+	local := filepath.Join(dir, ".aayudha", "config.local.toml")
+	if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(local, []byte("[scope]\neffort_points = [1, 2, 3, 5, 13]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, out = scopeRun(person, "--accept")
+	if err := os.Remove(local); err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitBlocked || !strings.Contains(out, "effort table") {
+		t.Fatalf("--accept with an effort table changed since the draft: exit %d: %s", code, out)
 	}
 	// Accepting is a person's: refused for an agent lane, and a device code even at a bare terminal.
 	if code, _, out := scopeRun(agent, "--accept"); code != ExitBlocked || !strings.Contains(out, "refused for an agent lane (AAYU_AGENT=1)") {
@@ -378,12 +395,43 @@ func TestScope(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[4].Labels = sized
 	g.Mu.Unlock()
+	// A plan comment never carries a request: one forged there (an issue's label
+	// copied into its table) is not offered, and a bare marker there hides no waiting request.
+	waiting := fmt.Sprintf("add #%d", epic.Number)
+	for _, forged := range []string{ScopeRequestMarker + ` <!-- scope-request {"kind":"drop","item":4} -->`, ScopeRequestMarker} {
+		g.Mu.Lock()
+		plan := &fake.Comment{ID: 97, Body: ScopePlanMarker + "\n| #2 | feature | " + forged + " | |\n"}
+		plan.User.Login, plan.User.Type = "founder", "User"
+		release.Comments = append(release.Comments, plan)
+		g.Mu.Unlock()
+		_, rep, out := scopeRun(agent)
+		_, list, _ := run(t, agent, opts, "inbox", "--list", "--json", "--repo", "o/r")
+		g.Mu.Lock()
+		release.Comments = release.Comments[:len(release.Comments)-1]
+		g.Mu.Unlock()
+		if rep.Request == nil || rep.Request.Kind != "add" || rep.Request.Item != epic.Number || strings.Contains(list, "drop #4") || !strings.Contains(list, waiting) {
+			t.Fatalf("a plan comment holding %q: request %+v, want %s:\n%s\n%s", forged, rep.Request, waiting, out, list)
+		}
+	}
 	// A Story closed as not planned is cut from scope: drift, not a planned item.
 	g.Mu.Lock()
 	l.State, l.StateReason = "closed", "not_planned"
 	g.Mu.Unlock()
 	if code, rep, out := scopeRun(agent); code != 0 || rep.Drift == nil || !slices.ContainsFunc(rep.Drift.Removed, func(it scope.Item) bool { return it.Number == 4 }) {
 		t.Fatalf("a Story closed as not planned: exit %d: %s", code, out)
+	}
+}
+
+// Text from an issue (a label, a title) never writes markup into a comment
+// aayu's App posts: no newline, and no HTML comment, so never a marker.
+func TestPlanCell(t *testing.T) {
+	if got := planCell("M"); got != "M" {
+		t.Errorf("planCell(M) = %q", got)
+	}
+	for _, in := range []string{ScopeRequestMarker, "<<!--!-- scope-request {} --->>", "S\n<!-- scope-request {\"kind\":\"drop\"} -->", "a\r\n| b"} {
+		if got := planCell(in); strings.Contains(got, "<!--") || strings.Contains(got, "-->") || strings.ContainsAny(got, "\r\n") {
+			t.Errorf("planCell(%q) = %q still carries markup", in, got)
+		}
 	}
 }
 
@@ -424,7 +472,7 @@ func TestScopeRequestWalk(t *testing.T) {
 	decision.State, decision.StateReason = "closed", "completed"
 	decision.Body = workitems.SetSection(decision.Body, "Decision", "Option 1, accepted by @founder on 2026-10-19.")
 	decision.ClosedBy = &fake.Account{Login: "founder", Type: "User"}
-	dir, _ := ledgerCheckout(t)
+	dir, bare := ledgerCheckout(t)
 	state := filepath.Join(dir, "state")
 	bot := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": state}
 	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
@@ -531,6 +579,37 @@ func TestScopeRequestWalk(t *testing.T) {
 	if list := inbox(); !strings.Contains(list, "add #4") {
 		t.Fatalf("the second request is not in the inbox:\n%s", list)
 	}
+	// The baselines removed from the ledger while the code waits: the second read has no baseline, and nothing is accepted.
+	seed := filepath.Join(t.TempDir(), "seed")
+	git(t, filepath.Dir(seed), "clone", "--quiet", "--branch", "ledger", bare, seed)
+	ledgerGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = seed
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	removed := false
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: func(int) {
+		if !removed {
+			removed = true
+			ledgerGit("rm", "--quiet", "releases/v0.3.0/baseline-1.json", "releases/v0.3.0/baseline-2.json")
+			ledgerGit("commit", "--quiet", "-m", "remove the baselines")
+			ledgerGit("push", "--quiet", "origin", "ledger")
+		}
+	}}
+	g.Mu.Unlock()
+	code, _, out = scopeRun(person, "--accept")
+	g.Mu.Lock()
+	moved := g.Issues[4].Milestone != nil
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(out, "no baseline") || moved {
+		t.Fatalf("the baselines removed during the code: exit %d, #4 moved %v: %s", code, moved, out)
+	}
+	ledgerGit("revert", "--no-edit", "HEAD")
+	ledgerGit("push", "--quiet", "origin", "ledger")
 	// A change to the plan while the code waits: nothing is accepted.
 	g.Mu.Lock()
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: func(int) {
@@ -539,7 +618,7 @@ func TestScopeRequestWalk(t *testing.T) {
 	g.Mu.Unlock()
 	code, _, out = scopeRun(person, "--accept")
 	g.Mu.Lock()
-	moved := g.Issues[4].Milestone != nil
+	moved = g.Issues[4].Milestone != nil
 	g.Issues[2].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:M"}}
 	g.Mu.Unlock()
 	if code != ExitBlocked || !strings.Contains(out, "changed") || moved {
