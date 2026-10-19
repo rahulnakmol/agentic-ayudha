@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -350,8 +351,8 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 // subscriptionID finds `subscription <ID>`, the reply of a thread that set up
 // an event loop's Amp GitHub subscription, at the start of any line of the
 // reply: a thread may add a sentence after it (Bug #709). A mention inside a
-// sentence, such as "updating existing subscription <ID>" while the thread
-// still works or in a failure reply, is not the reply.
+// sentence, such as "could not update subscription <ID>" in a failure
+// reply, is not the reply.
 var subscriptionID = regexp.MustCompile("(?im)^[ \\t>*`]*subscription:?\\s+`?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b")
 
 // subscriptionWait is how long install --loops --apply waits for an event
@@ -435,10 +436,12 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 }
 
 // awaitSubscription is the subscription ID that an event loop's setup thread
-// replied with, or "" if it never does. amp -ox returns when the thread
-// starts, before its agent replies (Bug #709), so unless out holds the ID it
-// reads the thread's last assistant message with `amp threads markdown` until
-// the ID is there or subscriptionWait has passed.
+// replied with, or "" if it does not. amp -ox returns when the thread starts,
+// before its agent replies (Bug #709), so unless out holds the ID it reads
+// the thread with `amp threads export` until the agent's turn has ended, and
+// takes the ID only from its final message: a message written mid-turn, such
+// as "subscription <ID> is paused; enabling it", is not the reply. It gives
+// up after subscriptionWait.
 func (e *Env) awaitSubscription(ctx context.Context, root, bin, name, out string) string {
 	if m := subscriptionID.FindStringSubmatch(out); m != nil {
 		return m[1]
@@ -450,12 +453,29 @@ func (e *Env) awaitSubscription(ctx context.Context, root, bin, name, out string
 	fmt.Fprintf(e.Err, "install --loops: waiting up to %s for the %s thread %s to reply with its subscription ID …\n", subscriptionWait, name, t)
 	for deadline := e.Now().Add(subscriptionWait); ; {
 		look, cancel := context.WithTimeout(ctx, 3*subscriptionPoll) // a stalled look cannot stretch the wait
-		md, err := e.run(look, root, bin, "threads", "markdown", t)
+		js, err := e.run(look, root, bin, "threads", "export", t)
 		cancel()
-		if i := strings.LastIndex(md, "\n## Assistant\n"); err == nil && i >= 0 {
-			if m := subscriptionID.FindStringSubmatch(md[i:]); m != nil {
+		var th struct {
+			Meta struct {
+				LastKnownAgentState struct{ State string } `json:"lastKnownAgentState"`
+			} `json:"meta"`
+			Messages []struct {
+				Role    string                        `json:"role"`
+				Content []struct{ Type, Text string } `json:"content"`
+			} `json:"messages"`
+		}
+		if err == nil && json.Unmarshal([]byte(js), &th) == nil && th.Meta.LastKnownAgentState.State == "idle" &&
+			len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "assistant" {
+			var reply strings.Builder
+			for _, c := range th.Messages[len(th.Messages)-1].Content {
+				if c.Type == "text" {
+					reply.WriteString(c.Text + "\n")
+				}
+			}
+			if m := subscriptionID.FindStringSubmatch(reply.String()); m != nil {
 				return m[1]
 			}
+			return "" // the turn ended with no subscription reply, such as an error
 		}
 		if !e.Now().Before(deadline) || e.pauseFor(ctx, subscriptionPoll) != nil {
 			return ""

@@ -186,11 +186,12 @@ func TestInstallLoopsApplyPresence(t *testing.T) {
 }
 
 // WP7.1b, Bug #709: amp -ox returns when the thread starts, before its agent
-// replies, so Amp's --apply waits for an event loop's thread to reply with its
-// subscription ID, found on any line of its last message, and records it. The
-// thread is asked to update and enable an equivalent subscription that Amp
-// returns. With no reply in time nothing is recorded, and the step that
-// records it by hand is printed.
+// replies, so Amp's --apply waits for an event loop's thread to end its turn
+// and takes the subscription ID from a line of its final message, then
+// records it. The thread is asked to update and enable an equivalent
+// subscription that Amp returns. With no reply in time, or a final message
+// with no subscription line, nothing is recorded, and the step that records
+// it by hand is printed.
 func TestInstallLoopsEventSubscription(t *testing.T) {
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops", "amp"), 0o755)
@@ -199,6 +200,7 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 	const thread = "T-01a152c0-d5d9-76b2-a75c-9f165feca52c"
 	start := time.Date(2026, 10, 19, 6, 2, 0, 0, time.UTC)
 	now, prompt, replyAt, polls, started := start, "", 0, 0, "https://ampcode.com/threads/"+thread
+	final := "subscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled."
 	opts := Options{Dir: dir, Now: func() time.Time { return now },
 		Sleep:    func(_ context.Context, d time.Duration) error { now = now.Add(d); return nil },
 		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
@@ -207,17 +209,22 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 				prompt = args[len(args)-1]
 				return started, nil
 			}
-			if strings.Join(args, " ") != "threads markdown "+thread {
+			if strings.Join(args, " ") != "threads export "+thread {
 				return "", errors.New("unexpected: " + strings.Join(args, " "))
 			}
-			// The thread's markdown: the prompt, which names `subscription <its ID>`, then the agent's work, then its reply.
+			// The thread as amp threads export prints it. Mid-turn, a message may
+			// start with the ID before the update is done: that is not the reply.
 			polls++
-			// While it works, it names the subscription in a sentence: that is not its reply.
-			md := "# aayudha loop: triage-opened\n\n## User\n\n" + prompt + "\n\n## Assistant\n\nAmp returned an existing subscription 5d10ad31-52c8-42ef-9860-3d874655784f; updating and enabling it.\n\n**Tool Use:** `code_exec`\n"
+			state, last := "running", "subscription 5d10ad31-52c8-42ef-9860-3d874655784f is paused; I am enabling it now."
 			if replyAt > 0 && polls >= replyAt {
-				md += "\n## Assistant\n\nsubscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled.\n"
+				state, last = "idle", final
 			}
-			return md, nil
+			msg := func(role, text string) map[string]any {
+				return map[string]any{"role": role, "content": []map[string]string{{"type": "thinking", "thinking": "…"}, {"type": "text", "text": text}}}
+			}
+			b, _ := json.Marshal(map[string]any{"meta": map[string]any{"lastKnownAgentState": map[string]string{"state": state}},
+				"messages": []any{msg("user", prompt), msg("assistant", last)}})
+			return string(b), nil
 		}}
 	report := func() loopsReport {
 		t.Helper()
@@ -243,7 +250,12 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 		t.Errorf("no thread: %d looks, waited %s: %+v", polls, now.Sub(start), r.States)
 	}
 	started = "https://ampcode.com/threads/" + thread
-	replyAt = 3
+	// The turn ends in an error that names the subscription: not recorded, with no further wait.
+	replyAt, final = 1, "Could not update subscription 5d10ad31-52c8-42ef-9860-3d874655784f: permission denied."
+	if r = report(); r.States[0].Status != loops.Missing || polls != 1 || now != start {
+		t.Errorf("failure reply: %d looks, waited %s: %+v", polls, now.Sub(start), r.States)
+	}
+	replyAt, final = 3, "subscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled."
 	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 5d10ad31-52c8-42ef-9860-3d874655784f") || polls != 3 {
 		t.Errorf("reply on the third look (%d looks): %+v", polls, r.States)
 	}
