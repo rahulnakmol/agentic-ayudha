@@ -2,12 +2,14 @@
 
 Started with `-telemetry <dir>`, the app writes every request except `GET /healthz` as an OpenTelemetry server span
 (`traces.jsonl`, OTLP JSON) and one JSON log line (`logs.jsonl`) that carries the span's `trace_id` and `span_id`.
-Both name the deployed revision (`service.version`, from `-revision`) and the environment (`-environment`). A handler
-that panics answers 500 and leaves an `exception` event on its span. `aayu investigate` reads this export.
+Both name the deployed revision (`service.version`, from `-revision`); only the spans' resource names the
+environment (`deployment.environment.name`, from `-environment`). A handler that panics answers 500 and leaves an
+`exception` event on its span. `aayu investigate` reads this export.
 
 ```feature
 {"id": "telemetry", "layers": ["L02", "L08"],
- "sources": ["examples/benefits-qa/api/observe.go", "examples/benefits-qa/cmd/benefits-qa/main.go"],
+ "sources": ["examples/benefits-qa/api/observe.go", "examples/benefits-qa/cmd/benefits-qa/main.go",
+             "internal/telemetry/telemetry.go", "examples/benefits-qa/deploy/deploy.sh"],
  "verified_at": "2f4cbb57b32c55835a2267885ccdc9fb8f876885"}
 ```
 
