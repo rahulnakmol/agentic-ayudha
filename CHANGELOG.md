@@ -44,6 +44,7 @@ proof pack yet.
 - `aayu inbox` lists every human-only step waiting for you, with the seat twin's recommendation, and acts on each with one keypress (#442).
 - The inbox shows one card at a time with the seat's counsel, a finder, and a live refresh; `aayu inbox --list` prints the list for agents (#587).
 - The inbox has a loading skeleton, short motion, and colours that follow your terminal theme (#620).
+- The full-screen inbox shows a grouped list on the left (Needs you now, Waiting on the review cap, Housekeeping, Done this session) with aligned columns, and the item's card on the right; Enter starts the write in the background, at most two at a time and never two on one pull request or issue, and the card shows its progress, then what changed on GitHub; only housekeeping can be selected (`x`, `X`) or cleared in one go (`C`); Tab moves to the next item that needs you; and `q` during writes asks whether to wait for all of them or only those under way (#707).
 - Every Decision offers at least two numbered options, and you pick one by its own number (#498, #551).
 - In solo mode, a reversible Decision applies its recommendation provisionally after 24 business hours; a waiver, a seat change, or a human-only step never does (#445).
 - `aayu retro` lists unclassified Feedback and labels each fix Story with the layer it fixes (#340).
