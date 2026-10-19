@@ -281,6 +281,8 @@ tags: [type/principle]
 		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},
 		{"owner is a person", strings.Replace(good, "owner: founder", "owner: rahulnakmol", 1), "Short.\n", `owner "rahulnakmol" is not a seat slug`},
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},
+		{"a link alias that opens a fence hides no pasted criterion", good, "See [[Decisions|\n```\n]].\n1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
+		{"a link alias that opens a fence hides no long sentence", good, "See [[Decisions|\n```\n]].\n" + long + "\n", "ste a sentence has 26 words"},
 		{"a generated block twice", good, Block("record", "- a") + "\n\n" + Block("record", "- b") + "\n", "block two generated record blocks"},
 		{"issues as a mapping", strings.Replace(good, "owner: founder", "owner: founder\nissues: {1: 2}", 1), "Short.\n", `frontmatter: "issues" holds a mapping`},
 		{"objectives links a note of another type", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Decisions]]\"]", 1), "Short.\n", "objectives: [[Decisions]] has type moc; objectives links a note of type objective"},
@@ -301,6 +303,9 @@ tags: [type/principle]
 				t.Fatalf("want %q, got:\n%s", tc.rule, got)
 			}
 		})
+	}
+	if rt, _ := FindType("release"); strings.Contains(string(Template(rt)), "objections") { // check accepts no objection against a release
+		t.Error("the Release template offers an objections key that check can never pass")
 	}
 	files := skeleton(t) // a file name that closes a wikilink fails check, and no generated map links it
 	files["Principles/x]] ![t](t.png).md"] = note(good, "Short.\n")

@@ -188,11 +188,17 @@ func prose(body string) string {
 	return wikilinkRE.ReplaceAllStringFunc(s, func(m string) string {
 		t := wikilinkRE.FindStringSubmatch(m)[1]
 		if _, alias, ok := strings.Cut(t, "|"); ok {
-			return alias
+			return oneLine(alias)
 		}
 		t, _, _ = strings.Cut(t, "#")
-		return path.Base(t)
+		return oneLine(path.Base(t))
 	})
+}
+
+// oneLine is a link's shown text as the prose checks read it: one line with
+// no backtick, so an alias cannot open a code fence that hides the text after it.
+func oneLine(s string) string {
+	return strings.NewReplacer("\n", " ", "\r", " ", "`", " ").Replace(s)
 }
 
 // Check holds the vault to its rules: valid frontmatter, cited sources, links

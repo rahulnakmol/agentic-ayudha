@@ -86,7 +86,7 @@ var Types = []Type{
 		Sections: []string{"Purpose", "Scope", "Start here"}, Color: 0xD1B34F},
 	{Name: "release", Label: "Release", Folder: "Releases", Owner: verbs.ProductStrategist,
 		Statuses: []string{"planned", "released", "archived"},
-		Sections: []string{"Intent", "Objectives served", "Out of scope", "Outcome"}, Keys: []string{"version", "release_issue", "objectives", "objections"}, Color: 0xD17A4F},
+		Sections: []string{"Intent", "Objectives served", "Out of scope", "Outcome"}, Keys: []string{"version", "release_issue", "objectives"}, Color: 0xD17A4F}, // an objection is against a direction, principle, objective, or decision (objectable)
 	{Name: "revenue", Label: "Revenue", Folder: "Revenue", Owner: verbs.RevenueArchitect, Statuses: docStatuses,
 		Sections: []string{"Public facts only"}, Color: 0xD1D14F},
 	{Name: "timeline", Label: "Timeline", Folder: "Timeline", Owner: verbs.ProductStrategist, Statuses: []string{"current"},
