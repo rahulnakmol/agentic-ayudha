@@ -9,9 +9,10 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   pull request that is ready for review, other than a change to documents only, to a review model in your CI. A draft
   is not reviewed until you mark it ready. Its one key lives in your repository's `code-review` environment
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
-  the builder's. Otherwise, or for an author without write access, an installed CodeRabbit or Greptile app reviews, or
-  the approver approves with `aayu inspect <pr> --approve` or in `aayu inbox`. An app that reviews only when mentioned,
-  such as Codex, Claude, or Cursor, is not asked in that case. A
+  the builder's. Otherwise, or for an author without write access, CodeRabbit or Greptile reviews when it is listed in
+  `[inspect] apps` and Codex is not; with no app listed, the approver approves with `aayu inspect <pr> --approve` or in
+  `aayu inbox`. A listed Codex, Claude, or Cursor is not asked then, and the change waits
+  ([known limits](docs/releases/v0.3.0.md#known-limits)). A
   review from the builder's own family is labelled rung C, and it never counts toward the streak
   ([sources](docs/releases/v0.3.0.md#merge-and-review)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
@@ -78,8 +79,9 @@ What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the rel
 2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI. Once a pull request
    is ready for review and its checks and proof pass, a review model you choose, with one key, reviews each change
    that is not docs-only when its family differs from the builder's and the author has write access
-   ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise an installed CodeRabbit or Greptile app reviews, or the
-   approver approves with `aayu inspect <pr> --approve` or in `aayu inbox`.
+   ([what's new](docs/releases/v0.3.0.md#whats-new)). Otherwise CodeRabbit or Greptile reviews when it is listed in
+   `[inspect] apps` and Codex is not, or the approver approves when no app is listed
+   ([known limits](docs/releases/v0.3.0.md#known-limits)).
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 
