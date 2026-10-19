@@ -2159,12 +2159,12 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 		seen, cur := job.w.steps()
 		steps := []string{}
 		for j, st := range seen {
-			switch {
-			case j < cur:
-				steps = append(steps, m.style(ui.OK, "✓ ")+cell(inboxStepOf(st).line, w-2))
-			case j == cur:
+			if j == cur {
 				steps = append(steps, m.style(ui.Warn, cell(frame+" "+inboxStepOf(st).line, w)))
+				continue
 			}
+			// Seen before, or after an earlier sighting of the stage now repeated: done.
+			steps = append(steps, m.style(ui.OK, "✓ ")+cell(inboxStepOf(st).line, w-2))
 		}
 		for _, st := range do.plan {
 			if !slices.Contains(seen, st) {
