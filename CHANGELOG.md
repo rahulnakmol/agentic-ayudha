@@ -83,6 +83,8 @@ proof pack yet.
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A, B, and C, so a same-family review counts for merge on proof but never toward the streak (#617, #657).
 - `aayu ship` refuses to merge while a required check other than `protected-paths` is red, whoever passes it; it reads the checks once, so a check that turns red later can still pass under a bypass identity (#617, #632).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
+- `aayu verify` now runs the DAST floor, a ZAP scan, by default when `[verify] platforms` lists web or api: its active cross-site scripting and injection rules run only against an app that `[verify] seed` started on a loopback host in that run, or a URL whose environment sets `active_scan = true` in a merged `.aayudha/config.toml`, and every other URL gets a passive scan, which cannot see a reflected XSS (#509).
+- The DAST floor runs ZAP under Docker or Podman; a local run with neither skips and leaves the scan to CI, where a missing runtime blocks the floor; a high alert, or a web or api story with no URL to scan, is advisory until `[verify] new_floors_blocking_from` (2026-11-14) and from then blocks ship unless a floor waiver names dast; the security workflow never runs the seed, so it scans only a deployed environment's URL; and `aayu doctor` shows the target, the scan mode, and the runtime (#509).
 - verify takes an advisory UI review of its own screenshots (#479).
 - A floor waiver counts only when the floor-waiver authority accepted it (#624).
 - Agents run `aayu release` behind the full gate; promotion to main needs a person's stable-release request (#443).
