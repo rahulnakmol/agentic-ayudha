@@ -26,6 +26,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -57,6 +58,8 @@ type BuildResult struct {
 	Next       string   `json:"next"`
 	// Delegation is set when another agent builds the story (--delegate, WP5.5b).
 	Delegation *Delegation `json:"delegation,omitempty"`
+	// Review is the session review of the head before its push (Decision #656).
+	Review *SessionReview `json:"session_review,omitempty"`
 }
 
 // Usage is a story's build budget use against [autonomy.budget].
@@ -99,6 +102,12 @@ type BuildState struct {
 	Checkpoints []CheckpointRecord `json:"checkpoints"`
 	Blocked     string             `json:"blocked,omitempty"`
 	Unblocked   []string           `json:"unblocked,omitempty"` // when a human made the story Ready again after a block
+	// ReviewUSD is what the session review spent on the story's PR: on the
+	// ledger, which the PR cannot change, so a resumed build and the merge
+	// gate count it against [budget] per_pr_inspect_max.
+	ReviewUSD float64 `json:"session_review_usd,omitempty"`
+	// ReviewPR is the PR that spend belongs to; 0 before the PR is opened.
+	ReviewPR int `json:"session_review_pr,omitempty"`
 }
 
 // CheckpointRecord is one checkpoint commit and what verify said of it.
@@ -228,7 +237,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints}
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR}
 	}
 	if st.StartedAt == "" {
 		st.StartedAt = now.Format(time.RFC3339)
@@ -299,14 +308,35 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
+		// A checkpoint the session review held is on its own ref: it carries
+		// on from there when the story branch does not hold it yet.
+		held, _ := run2(ctx, root, "git", "ls-remote", "origin", heldRef(res.Branch))
 		switch {
-		case remote != "" && !in.Bool("resume") && dlg == nil:
+		case (remote != "" || held != "") && !in.Bool("resume") && dlg == nil:
 			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
-		case remote != "":
-			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
-				return Wrap(ExitExternal, err)
+		case remote != "" || held != "":
+			from := "origin/" + res.Branch
+			if remote != "" {
+				if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+			} else {
+				// The story branch is not on origin: a tracking ref left from an
+				// earlier one would make the first push's lease refuse.
+				_, _ = run2(ctx, root, "git", "update-ref", "-d", "refs/remotes/origin/"+res.Branch)
 			}
-			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, "origin/"+res.Branch); err != nil {
+			// A checkpoint the session review held is on its own ref: the
+			// resume carries on from there when the story branch, if any, does
+			// not hold it yet.
+			if held != "" {
+				if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+"+heldRef(res.Branch)+":"+heldRef(res.Branch)); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+				if _, err := run2(ctx, root, "git", "merge-base", "--is-ancestor", heldRef(res.Branch), from); remote == "" || err != nil {
+					from = heldRef(res.Branch)
+				}
+			}
+			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, from); err != nil {
 				return Wrap(ExitExternal, err)
 			}
 			res.Resumed = lastTrailer(ctx, res.Worktree, dev)
@@ -378,6 +408,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body
 	}
 
+	// The session review loop's state (Decision #656): the builder's
+	// declines apply to the last round's open items.
+	sr, err := loadSessionReview(ctx, res.Worktree)
+	if err != nil {
+		return Wrap(ExitInternal, fmt.Errorf("build #%d: the session review state: %w", n, err))
+	}
+	if d := in.String("decline"); d != "" {
+		if err := sr.decline(d); err != nil {
+			return Errorf(ExitUsage, "build #%d: %v", n, err)
+		}
+		if err := sr.save(ctx, res.Worktree); err != nil {
+			return Wrap(ExitInternal, err)
+		}
+	}
+
 	// A checkpoint: commit what the agent wrote, then verify it.
 	dirty, err := run2(ctx, res.Worktree, "git", "status", "--porcelain")
 	if err != nil {
@@ -393,6 +438,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		var plan PlanRecord
 		hasPlan, _ := readLedgerJSON(ctx, w, PlanLedgerPath(n), &plan)
 		k, attempt := nextCheckpoint(ctx, st, res.Worktree, dev)
+		if last := len(st.Checkpoints) - 1; sr.Pending != "" && last >= 0 && st.Checkpoints[last].Verify == "hold" {
+			// A fix for the session review is the same checkpoint again, not
+			// a failed attempt: its verify held.
+			k, attempt = st.Checkpoints[last].K, st.Checkpoints[last].Attempt+1
+		}
 		total := max(k, len(lg.Footprint(changedSince(ctx, res.Worktree, dev, names))))
 		if hasPlan && len(plan.Checkpoints) > 0 {
 			total = max(k, len(plan.Checkpoints))
@@ -427,6 +477,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		case model != "":
 			msg += "\nAayudha-Model: " + model
 		}
+		// The effort the host runs its model at, one token (AAYU_EFFORT), once
+		// after the last model line.
+		if ef := strings.Fields(e.Getenv("AAYU_EFFORT")); dlg == nil && len(ef) == 1 && strings.Contains(msg, "\nAayudha-Model: ") {
+			msg += "\nAayudha-Effort: " + ef[0]
+		}
 		// The host that built the checkpoint, so inspect can place a builder
 		// whose host picks the model (Decision #469); a delegated build names
 		// its receiver instead.
@@ -446,7 +501,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			on = " on " + strings.Join(layers, ", ")
 		}
 		vp := e.progress(fmt.Sprintf("Checkpoint %s%s: verifying the floors", res.Checkpoint, on))
-		hold, detail, verr := e.checkpointVerify(ctx, res.Worktree)
+		hold, detail, checks, verr := e.checkpointVerify(ctx, res.Worktree)
+		sr.Checks = checks
 		switch {
 		case verr != nil:
 			vp.Done(ui.StatusWarn, "verify could not run")
@@ -516,8 +572,105 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
+	// The session review (Decision #656): a reviewer of another family reviews
+	// the branch before it is pushed; on fix the push waits for the builder. A
+	// delegated receiver is reviewed by the merge gate's inspect only.
+	if dlg == nil && res.Verify != "miss" {
+		// The checkpoint is committed and verified: any failure from here on
+		// records it first, so the run after the fix continues after it.
+		keep := func(err error) error {
+			if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
+				fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
+			}
+			return err
+		}
+		head, err := run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
+		if err != nil {
+			return keep(Wrap(ExitExternal, err))
+		}
+		pr, err := storyPR(ctx, c, repo, res.Branch)
+		if err != nil {
+			return keep(err)
+		}
+		if st.ReviewPR != 0 && pr.GetNumber() != st.ReviewPR {
+			// The PR the spend belongs to is closed: a new PR has its own cap.
+			st.ReviewUSD, st.ReviewPR, sr.State.SpentUSD = 0, 0, 0
+		}
+		var ciSpent float64
+		if pr != nil {
+			owner, name, _ := github.SplitRepo(repo)
+			comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+				return c.REST.Issues.ListComments(ctx, owner, name, pr.GetNumber(), &gh.IssueListCommentsOptions{ListOptions: o})
+			})
+			if err != nil {
+				return keep(Wrap(ExitExternal, err))
+			}
+			ciSpent = inspectState(comments, viewer(ctx, c), l.Config.Identity).SpentUSD
+		}
+		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, ciSpent: ciSpent, wt: res.Worktree, dev: dev, head: head, st: st})
+		spent := sr.State.SpentUSD > st.ReviewUSD
+		st.ReviewUSD = max(st.ReviewUSD, sr.State.SpentUSD)
+		if pr != nil {
+			st.ReviewPR = pr.GetNumber()
+		}
+		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
+			err = Wrap(ExitInternal, serr)
+		}
+		if err != nil {
+			return keep(err)
+		}
+		if rep.Round > 0 || rep.Skipped != "" {
+			res.Review = &rep
+		}
+		if wait {
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+			// The held checkpoint goes to a ref of its own, never the PR
+			// branch, so --resume elsewhere continues from it.
+			if !c.DryRun() {
+				gw := &ledger.Writer{Dir: root, Token: bot.Token.Value}
+				if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + heldRef(res.Branch), Payload: map[string]any{"ref": heldRef(res.Branch), "commit": head}},
+					func(ctx context.Context) (any, error) {
+						return nil, gw.Exec(ctx, res.Worktree, "push", "--quiet", "--force", "origin", "HEAD:"+heldRef(res.Branch))
+					}); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+			}
+			res.Next = fmt.Sprintf("fix each open item in %s and run `aayu build %d` again, or decline one you judge wrong with `aayu build %d --decline \"<id>: <why>\"`; round %d of at most %d before the push", res.Worktree, n, n, rep.Round, inspect.MaxRounds)
+			_ = e.Emit(res, func(w io.Writer) error {
+				if res.Commit != "" {
+					fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
+				}
+				fmt.Fprintf(w, "#%d: session review round %d by %s: %s; not pushed yet\n", n, rep.Round, rep.Model, rep.Disposition)
+				if rep.Skipped != "" {
+					fmt.Fprintf(w, "  this run's review did not happen (%s); round %d's items stay open\n", rep.Skipped, rep.Round)
+				}
+				for _, it := range rep.Open {
+					at := ""
+					if it.File != "" {
+						at = fmt.Sprintf(" %s:%d", it.File, it.Line)
+					}
+					fmt.Fprintf(w, "  %s %s%s: %s\n    %s\n", it.ID, it.Severity, at, it.Title, it.Detail)
+					if it.Fix != "" {
+						fmt.Fprintf(w, "    fix: %s\n", it.Fix)
+					}
+				}
+				_, err := fmt.Fprintf(w, "  next: %s\n", res.Next)
+				return err
+			})
+			return WithNext(Errorf(ExitBlocked, "build #%d: the session review left %d item(s) to fix or decline before the push", n, len(rep.Open)), fmt.Sprintf("aayu build %d", n))
+		}
+		// The spend reaches the ledger before the push starts the merge gate,
+		// which counts it against the same per-PR cap.
+		if spent {
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+		}
+	}
 	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
-	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res)
+	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res, sr.summary())
 	if perr != nil {
 		pp.Done(ui.StatusFail, perr.Error())
 	} else {
@@ -531,8 +684,18 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		return err
 	}
+	if st.ReviewUSD > 0 {
+		st.ReviewPR = res.PR
+	}
+	// The ledger first: the pushed checkpoint is the record the next run,
+	// anywhere, continues from; the worktree's own state comes second.
 	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 		return err
+	}
+	sr.Pushed, sr.PushedAt, sr.Pending = len(sr.Rounds), e.Now().UTC().Truncate(time.Second), ""
+	sr.PushedHead, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
+	if err := sr.save(ctx, res.Worktree); err != nil {
+		return Wrap(ExitInternal, err)
 	}
 	if dlg != nil {
 		dlg.state.PR = res.PR
@@ -566,8 +729,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	})
 }
 
+// heldRef keeps the head a session review held back from the story branch:
+// not a branch, so no workflow runs and the PR does not change.
+func heldRef(branch string) string { return "refs/aayudha/held/" + branch }
+
 // publishBuild pushes the story branch and finds or opens its PR.
-func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult) error {
+func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult, review string) error {
 	gw := &ledger.Writer{Dir: root, Token: token}
 	if !c.DryRun() {
 		if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + res.Branch, Payload: map[string]any{"branch": res.Branch, "commit": res.Commit}},
@@ -576,14 +743,43 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 			}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
+		// The branch now holds what the session review held: a held ref left
+		// behind would outlive a later rewrite of the branch and send a resume
+		// back to it. Removing it is best effort; a resume checks it anyway.
+		if held, _ := run2(ctx, res.Worktree, "git", "ls-remote", "origin", heldRef(res.Branch)); held != "" {
+			_ = gw.Exec(ctx, res.Worktree, "push", "--quiet", "origin", ":"+heldRef(res.Branch))
+		}
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	open, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", Head: owner + ":" + res.Branch})
+	open, err := storyPR(ctx, c, repo, res.Branch)
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return err
 	}
-	if len(open) > 0 {
-		res.PR, res.PRURL = open[0].GetNumber(), open[0].GetHTMLURL()
+	// The body declares the builder's host and models (AGENTS.md), as its
+	// commits do, and carries the session review's section, replaced in
+	// place; the rest of it, a person's edits and declarations included, is
+	// kept.
+	decl := declarationLines(ctx, res.Worktree, dev)
+	update := func(body string) string {
+		body = withDeclarations(body, decl)
+		if review != "" {
+			body = withSessionSummary(body, review)
+		}
+		return body
+	}
+	if open != nil {
+		res.PR, res.PRURL = open.GetNumber(), open.GetHTMLURL()
+		if body := open.GetBody(); update(body) != body {
+			nb := update(body)
+			if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.update", Target: fmt.Sprintf("%s#%d", repo, res.PR), Story: fmt.Sprintf("#%d", n),
+				Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/pulls/%d", repo, res.PR)}, Payload: map[string]any{"section": "session-review"}},
+				func(ctx context.Context) (any, error) {
+					_, _, err := c.REST.PullRequests.Edit(ctx, owner, name, res.PR, &gh.PullRequest{Body: &nb})
+					return nil, err
+				}); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+		}
 	} else {
 		title := "feat: " + strings.ToLower(chk.Title[:1]) + chk.Title[1:]
 		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
@@ -593,6 +789,7 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 				body += fmt.Sprintf("\n%s\n\n%s's own check, quoted as it reported it (a preview; the merge gate's proof decides):\n\n%s\n", delegate.ProvedHeading, d.Receiver, quoteLines(d.Proved))
 			}
 		}
+		body = update(body)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
@@ -608,6 +805,19 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 	}
 	return nil
+}
+
+// storyPR is the story branch's open pull request, or nil.
+func storyPR(ctx context.Context, c *github.Client, repo, branch string) (*gh.PullRequest, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	open, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", Head: owner + ":" + branch})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	if len(open) == 0 {
+		return nil, nil
+	}
+	return open[0], nil
 }
 
 // changedSince lists the paths the branch changes against origin/dev plus the
@@ -675,9 +885,10 @@ func (e *Env) buildCost(repo string, n int) float64 {
 // checkpointVerify runs verify on a checkpoint in its worktree. A floor that
 // fails only because its tool is not installed here does not count as a miss
 // (the merge gate runs it with the pinned tools); it is named in the detail.
-func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detail string, err error) {
+func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detail string, checks []proof.Check, err error) {
 	if e.CheckpointVerify != nil {
-		return e.CheckpointVerify(ctx, wt)
+		hold, detail, err = e.CheckpointVerify(ctx, wt)
+		return hold, detail, nil, err
 	}
 	sub := *e
 	sub.Dir, sub.config, sub.JSON = wt, nil, true
@@ -687,9 +898,9 @@ func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detai
 	var res VerifyResult
 	if jerr := json.NewDecoder(&out).Decode(&res); jerr != nil {
 		if verr != nil {
-			return false, "", verr
+			return false, "", nil, verr
 		}
-		return false, "", jerr
+		return false, "", nil, jerr
 	}
 	var miss, absent []string
 	for _, ck := range res.Checks {
@@ -710,7 +921,7 @@ func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detai
 	default:
 		detail = "floors hold"
 	}
-	return len(miss) == 0, detail, nil
+	return len(miss) == 0, detail, res.Checks, nil
 }
 
 // blockBuild moves the story to status:blocked, pages, and records why.

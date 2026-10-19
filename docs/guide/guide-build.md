@@ -31,6 +31,54 @@ command.
 **You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
 and budget used.
 
+### The session review loop
+
+Before each push, `build` has a reviewer model of a different family from the builder review the branch's change
+(decision 656). It runs when a reviewer it can call is available and the build is not delegated. It uses inspect's own
+review: the same prompt, schema, and rules as the merge gate's model review.
+
+When the reviewer finds something, the checkpoint is committed but not pushed to the pull request's branch. It goes to
+`refs/aayudha/held/<branch>` instead, so `aayu build --resume` on another machine continues from it.
+
+`build` lists each open item:
+
+- a P0 to P2 finding with its file, line, and fix;
+- an unmet criterion (`C<n>`), or an unclear one when the verdict is not merge;
+- the verdict itself (`D<head>`), when a `fix` or `rebuild` verdict names nothing else.
+
+The agent then does one of two things for each:
+
+- fixes it, and runs `aayu build <story>` again: the fix is the same checkpoint's next attempt, not a failed one;
+- declines it with a reason: `aayu build <story> --decline "<id>: <why>"`, one item a line. A decline answers that
+  round only: a later round that raises the item again asks again.
+
+The loop ends when nothing is left open, or after 3 rounds since the last push. Then `build` pushes.
+
+The pull request's description gets a **Session review (self-attested)** section, replaced in place on each push. It
+lists the rounds, the reviewer, and which items were fixed, declined (with the reason), or left open at the cap.
+
+This section is the builder's own record, not a review that counts. In solo mode a review written in the build session
+cannot be told from the builder's word, so the merge gate's inspect reviews the pull request again and decides.
+
+The reviewer is the one the merge gate uses when it can be called from your machine:
+
+- `AAYU_REVIEW_MODEL`, `AAYU_REVIEW_MODEL_URL`, and `AAYU_REVIEW_MODEL_KEY`, the same names as the `code-review`
+  environment's settings in CI, so you set one thing in both places (or store the key with
+  `aayu auth set-secret review-model-key`);
+- else `[inspect] paid_reviewer` through `[models.gateway]` or its provider's key;
+- else the review lane's model, when its key is here.
+
+It must be of a family the builder cannot be (`AAYU_MODEL`, or the host's build lane). `aayu build` writes the
+builder's `Aayudha-Host`, `Aayudha-Model`, and `Aayudha-Effort` (from `AAYU_EFFORT`) lines into each commit and the PR
+description, and keeps any a person adds there. The reviewer is of none of the families they name.
+
+When no reviewer can be called, the push goes out without a session review, and the section says why. A build
+delegated to another agent is reviewed by the merge gate only.
+
+Each round is metered spend, within `[budget] per_pr_inspect_max`, one cap that the merge gate's review shares. The
+build's record on the ledger keeps what the rounds spent, so a build resumed on another machine and the merge gate
+both count it against that cap. A cap of 0 means no cap to inspect, so the session review does not run.
+
 ## Hand it to another agent
 
 From inside your agent, type the short form, `/codex`, `/cursor`, `/claude`, or `/amp`, with the story number. Or run:

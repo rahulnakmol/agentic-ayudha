@@ -14,9 +14,12 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func misses(context.Context, string) (bool, string, error) { return false, "coverage fail", nil }
@@ -896,5 +899,441 @@ func TestBuilderModelRecordsThePlanDefault(t *testing.T) {
 		if got := e.builderModel(); got != c.want {
 			t.Errorf("%s %q: builder model %q, want %q", c.host, c.set, got, c.want)
 		}
+	}
+}
+
+// sessionReply is a reviewer's reply to a session review: fix with one P1 on
+// a.go quoting `var <word> = 1`, or merge when word is empty; unmet makes a
+// criterion unmet.
+func sessionReply(word string, unmet ...int) models.Response {
+	findings, disp := "[]", "merge"
+	if word != "" {
+		disp = "fix"
+		findings = `[{"severity":"P1","category":"bug","file":"a.go","line":3,"quote":"var ` + word + ` = 1","title":"` + word + ` is wrong","detail":"d","fix":"f","confidence":0.9,"criterion":0}]`
+	}
+	verdict := func(n int) string {
+		if slices.Contains(unmet, n) {
+			return "unmet"
+		}
+		return "met"
+	}
+	return models.Response{Model: "grok-4.7", Text: `{"disposition":"` + disp + `","summary":"s","findings":` + findings + `,"criteria":[{"id":1,"verdict":"` + verdict(1) + `","evidence":"e"},{"id":2,"verdict":"` + verdict(2) + `","evidence":"e"}]}`}
+}
+
+// Decision #656, the session half: before each push build has a reviewer of
+// another family review the branch. A fix holds the push; a decline with a
+// reason releases it and goes into the PR body's self-attested summary; after
+// inspect.MaxRounds rounds a push goes out with what is left open; a review
+// that cannot run lets the push go out, and the summary says why.
+func TestBuildSessionReviewLoop(t *testing.T) {
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
+	model := &models.Fake{}
+	var routes []string
+	opts.ModelClient = func(r models.Route, key string) models.Client {
+		routes = append(routes, r.BaseURL+" "+key)
+		return model
+	}
+	// The same three names as the merge gate's code-review environment.
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	build := func(args ...string) (int, BuildResult, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"build", "2", "--repo", "o/r", "--json"}, args...)...)
+		var res BuildResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, errOut
+	}
+	write := func(word string) {
+		_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar "+word+" = 1\n"), 0o644)
+	}
+	pushed := func() string { return git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list") }
+	body := func() string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Issues[prN].Body != g.Pulls[prN].Body {
+			t.Fatalf("the PR's issue body differs from its pull request body:\n%s", g.Issues[prN].Body)
+		}
+		return g.Pulls[prN].Body
+	}
+
+	// Round 1 finds a P1: the checkpoint is committed but not pushed, and the
+	// builder reads what to fix.
+	model.Replies = []models.Response{sessionReply("first")}
+	before := pushed()
+	write("first")
+	_ = os.MkdirAll(filepath.Join(wt, ".aayudha", "evidence"), 0o755)
+	_ = os.WriteFile(filepath.Join(wt, ".aayudha", "evidence", "2.toml"), []byte("[[criterion]]\nid = 1\ntests = [\"./a:TestA\"]\n"), 0o644)
+	id := inspect.FindingID("a.go", "bug", "first is wrong")
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+	if code != ExitBlocked || pushed() != before || len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" ||
+		!slices.Equal(routes, []string{"https://review.example/v1 review-key"}) || model.Requests[0].ServiceTier != models.TierPriority || model.Requests[0].Effort != "high" ||
+		!strings.Contains(out, "session review round 1 by grok-4.7: fix; not pushed yet") || !strings.Contains(out, "  "+id+" P1 a.go:3: first is wrong") ||
+		!strings.Contains(out, "    fix: f") || !strings.Contains(out, "--decline") || !strings.Contains(model.Requests[0].Messages[0].Content, "criterion 1: ./a:TestA") {
+		t.Fatalf("round 1: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := build("--decline", "nope: why"); code != ExitUsage || !strings.Contains(errOut, "nope is not an open item") {
+		t.Fatalf("decline of an unknown item: %d %s", code, errOut)
+	}
+	if code, _, errOut := build("--decline", id); code != ExitUsage || !strings.Contains(errOut, `write "<id>: <why>", one a line`) {
+		t.Fatalf("decline without a reason: %d %s", code, errOut)
+	}
+	// The decline releases the push without calling the reviewer again.
+	code, res, errOut := build("--decline", id+": the quoted line is the story's own example")
+	if code != 0 || len(model.Requests) != 1 || pushed() == before {
+		t.Fatalf("after the decline: %d %+v %s", code, res.Review, errOut)
+	}
+	b := body()
+	for _, want := range []string{"Session review (self-attested)", "not a review that counts", "| 1 | `", "grok-4.7 (xai)", "**Declined by the builder, with its reason:**", "`" + id + "` P1 first is wrong (a.go:3): the quoted line is the story's own example", "Refs #2"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
+	}
+	// A run on the pushed head has nothing new to review.
+	if code, _, errOut := build(); code != 0 || len(model.Requests) != 1 {
+		t.Fatalf("a run on the pushed head: %d %s, %d calls", code, errOut, len(model.Requests))
+	}
+
+	// Three more rounds after that push: two hold it, the third pushes at the
+	// cap. An unmet criterion is an item to fix too.
+	for i, word := range []string{"second", "third", "fourth"} {
+		model.Replies = []models.Response{sessionReply(word, 2)}
+		before = pushed()
+		write(word)
+		code, res, errOut = build()
+		if i < 2 && (code != ExitBlocked || pushed() != before || !slices.ContainsFunc(res.Review.Open, func(it sessionItem) bool { return it.ID == "C2" })) ||
+			i == 2 && (code != 0 || pushed() == before) {
+			t.Fatalf("round %d (%s): %d %+v %s", i+2, word, code, res.Review, errOut)
+		}
+	}
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 3/3") || !strings.Contains(msg, "Aayudha-Attempt: 3") {
+		t.Fatalf("a review fix is the same checkpoint's next attempt:\n%s", msg)
+	}
+	b = body()
+	if !strings.Contains(b, "| 4 | `") || !strings.Contains(b, "**Left open at the round cap:**\n\n- `C2` criterion criterion 2 unmet\n- `"+inspect.FindingID("a.go", "bug", "fourth is wrong")+"` P1 fourth is wrong") ||
+		!strings.Contains(b, "**Fixed (not raised by a later round):**") || strings.Count(b, sessionReviewStart) != 1 {
+		t.Fatalf("PR body after the cap:\n%s", b)
+	}
+
+	// A review that cannot run does not hold the push.
+	model.Err = errors.New("gateway down")
+	before = pushed()
+	write("fifth")
+	code, res, errOut = build()
+	if code != 0 || pushed() == before || res.Review == nil || !strings.Contains(res.Review.Skipped, "could not run") ||
+		!strings.Contains(body(), "The last push went out without a session review: the review by grok-4.7 could not run") {
+		t.Fatalf("a review that cannot run: %d %+v %s\n%s", code, res.Review, errOut, body())
+	}
+
+	// A rebuild with no finding holds the push too: the builder answers the
+	// verdict itself.
+	model.Err = nil
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[{"id":1,"verdict":"unclear","evidence":"no trace"},{"id":2,"verdict":"met","evidence":"e"}]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != "C1" || res.Review.Open[0].Title != "criterion 1 unclear" {
+		t.Fatalf("a rebuild with an unclear criterion: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].Severity != "verdict" || res.Review.Open[0].Detail != "the approach is wrong" {
+		t.Fatalf("a rebuild with nothing behind it: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", res.Review.Open[0].ID+": the story asks for this approach"); code != 0 {
+		t.Fatalf("declining the verdict: %d %s", code, errOut)
+	}
+	// A decline answers its round only: the first round's declined finding,
+	// raised again on a later head, is open again.
+	model.Replies = []models.Response{sessionReply("first")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("first again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != id {
+		t.Fatalf("a declined finding raised again: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", id+": still the story's own example"); code != 0 || !strings.Contains(body(), "`"+id+"` P1 first is wrong (a.go:3): still the story's own example") {
+		t.Fatalf("declining it again: %d %s\n%s", code, errOut, body())
+	}
+
+	// A P2 that a later round raises again stays open, though inspect does not
+	// post it twice.
+	model.Err = nil
+	p2 := func(word string) models.Response {
+		r := sessionReply(word)
+		r.Text = strings.Replace(r.Text, `"severity":"P1"`, `"severity":"P2"`, 1)
+		return r
+	}
+	model.Replies = []models.Response{p2("sixth")}
+	write("sixth")
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 {
+		t.Fatalf("a P2: %d %+v %s", code, res.Review, errOut)
+	}
+	p2id := res.Review.Open[0].ID
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("unrelated\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id {
+		t.Fatalf("the P2 raised again: %d %+v %s", code, res.Review, errOut)
+	}
+	// A review that cannot run does not release a held push: the open item
+	// still waits for a fix the reviewer sees, or a decline.
+	model.Err = errors.New("gateway down")
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("unseen fix\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || pushed() != before || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id || !strings.Contains(res.Review.Skipped, "could not run") {
+		t.Fatalf("a held push when the review cannot run: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Err = nil
+
+	// The spend the build's ledger record keeps still caps the PR when the
+	// worktree's own state is gone, as on a resume elsewhere, with the merge
+	// gate's spend: no new review call. The PR body's figure is not read.
+	stateFile := filepath.Join(git(t, wt, "rev-parse", "--absolute-git-dir"), sessionReviewFile)
+	_ = os.Remove(stateFile)
+	paid := sessionReply("")
+	paid.TokensIn = 100_000
+	model.Replies = []models.Response{paid}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("paid\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(res.Review.Open) != 0 {
+		t.Fatalf("a paid round that merges: %d %+v %s", code, res.Review, errOut)
+	}
+	var rec BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &rec)
+	spent := rec.ReviewUSD
+	if spent <= 0 || !strings.Contains(body(), "Spent on the session review: ") {
+		t.Fatalf("no session review spend on the ledger (%v) or in the PR body:\n%s", spent, body())
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Body = strings.ReplaceAll(g.Pulls[prN].Body, "Spent on the session review: ", "Spent: ")
+	g.Issues[prN].Body = g.Pulls[prN].Body
+	g.Mu.Unlock()
+	if err := os.Remove(stateFile); err != nil {
+		t.Fatal(err)
+	}
+	// The merge gate's inspect spends from the same cap: 1 USD on its record.
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":1,\"hashes\":[]} -->\n")
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = strconv.FormatFloat(spent+1, 'f', -1, 64)
+	calls := len(model.Requests)
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("resumed\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
+		t.Fatalf("a resume past the PR's review budget: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	// A cap of 0 is no cap to inspect: the session makes no review call at
+	// all, and a review endpoint it would refuse does not stop the push.
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "0"
+	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("uncapped\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max is 0") {
+		t.Fatalf("a zero per-PR cap: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	delete(env, "AAYU_BUDGET__PER_PR_INSPECT_MAX")
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+
+	// A review that trips the budget breaker stops the build: nothing is pushed.
+	costly := sessionReply("")
+	costly.TokensIn = 50_000_000
+	model.Replies = []models.Response{costly}
+	env["AAYU_BUDGET__PER_DAY_USD"] = "1"
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("budget\n"), 0o644)
+	if code, _, errOut := build(); code != ExitBudget || pushed() != before {
+		t.Fatalf("a tripped breaker: %d %s", code, errOut)
+	}
+	// The checkpoint it committed is on the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a review error is not recorded: %v %+v", err, bst.Checkpoints)
+	}
+	delete(env, "AAYU_BUDGET__PER_DAY_USD")
+	_ = os.Remove(filepath.Join(opts.Dir, ".aayudha", "state", "paused"))
+
+	// A review endpoint that is not https is refused before any call.
+	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
+	calls = len(model.Requests)
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("again\n"), 0o644)
+	if code, _, errOut := build(); code != ExitUsage || !strings.Contains(errOut, inspect.ReviewModelURLVar) || len(model.Requests) != calls {
+		t.Fatalf("an http endpoint: %d %s", code, errOut)
+	}
+}
+
+// A checkpoint the session review holds is kept on its own ref, never the PR
+// branch, and --resume on another machine continues from it.
+func TestBuildSessionReviewHeldCheckpointResumes(t *testing.T) {
+	_, env, opts, dir, bare, _, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("held")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	branch := "story/2-show-empty-list"
+	before := git(t, bare, "rev-parse", "refs/heads/"+branch)
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar held = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	head := git(t, wt, "rev-parse", "HEAD")
+	if got := git(t, bare, "rev-parse", heldRef(branch)); got != head || git(t, bare, "rev-parse", "refs/heads/"+branch) != before {
+		t.Fatalf("held ref %s, branch moved: want %s on the held ref only", got, head)
+	}
+	gone := func() {
+		t.Helper()
+		git(t, dir, "worktree", "remove", "--force", wt)
+		git(t, dir, "branch", "-D", branch)
+	}
+	gone()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from the held checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// The story branch was never pushed, only the held ref: a build without
+	// --resume says so, and --resume continues from the held ref.
+	gone()
+	git(t, bare, "update-ref", "-d", "refs/heads/"+branch)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "--resume") {
+		t.Fatalf("a held-only story without --resume: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from a held-only checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// Once the reviewer is satisfied the branch is pushed and the held ref is
+	// gone, so a later rewrite of the branch cannot send a resume back to it.
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar fixed = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || git(t, bare, "rev-parse", "refs/heads/"+branch) != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the push after the hold: %d %s", code, errOut)
+	}
+	if refs := git(t, bare, "for-each-ref", "refs/aayudha/held/"); refs != "" {
+		t.Fatalf("the held ref outlives the push: %s", refs)
+	}
+}
+
+// A reviewer of the builder's family never reviews in the session: the push
+// goes out unreviewed, and the PR body says so.
+func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env["AAYU_MODEL"] = "grok-4.7"
+	env["AAYU_INSPECT__PAID_REVIEWER"] = "grok-4.7"
+	env["AAYU_SECRET_XAI"] = "xai-key"
+	_ = os.WriteFile(filepath.Join(BuildWorktree(opts.Dir, 2), "a.txt"), []byte("x\n"), 0o644)
+	// The open PR cannot be read before the review: nothing is pushed.
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/pulls"
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("the PR list fails: %d %s", code, errOut)
+	}
+	// The verified checkpoint reaches the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil || len(bst.Checkpoints) == 0 ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, BuildWorktree(opts.Dir, 2), "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a PR-list failure is not recorded: %v %+v", err, bst.Checkpoints)
+	}
+	// The PR body cannot be updated: the push went out, and build says so.
+	g.Mu.Lock()
+	g.Fail = "PATCH /repos/o/r/pulls/" + strconv.Itoa(prN)
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "500") {
+		t.Fatalf("a failed body update: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(BuildWorktree(opts.Dir, 2), "a.txt"), []byte("y\n"), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	g.Mu.Lock()
+	b := g.Pulls[prN].Body
+	g.Mu.Unlock()
+	if code != 0 || len(model.Requests) != 0 || res.Review == nil || !strings.Contains(res.Review.Skipped, "no reviewer model of a family other than the builder's") ||
+		!strings.Contains(b, "The last push went out without a session review: no reviewer model of a family other than the builder's") {
+		t.Fatalf("same family: %d %+v %s\n%s", code, res.Review, errOut, b)
+	}
+}
+
+// The PR body declares the builder (AGENTS.md) and the session review picks a
+// reviewer of none of the declared families: build's own Claude line keeps a
+// Claude reviewer out, and a person's added GPT line keeps OpenAI out too. The
+// person's text and line survive the next push, and build's lines come back.
+func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
+	g, env, opts, _, _, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	env[inspect.ReviewModelVar] = "claude-sonnet-5-5" // the builder's family: refused
+	env["AAYU_EFFORT"] = "medium"
+	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
+	if b := body(); !strings.Contains(b, "\nAayudha-Model: claude-opus-5-5\n") {
+		t.Fatalf("the PR body does not declare the builder's model:\n%s", b)
+	}
+	wt := BuildWorktree(opts.Dir, 2)
+	family := func() verbs.Family {
+		t.Helper()
+		if len(model.Requests) == 0 {
+			t.Fatal("no reviewer was called")
+		}
+		return verbs.FamilyOf(model.Requests[len(model.Requests)-1].Model)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("one\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic {
+		t.Fatalf("a Claude-built PR: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	// A person rewrites the body and declares GPT as well.
+	g.Mu.Lock()
+	g.Pulls[prN].Body = "Refs #2\n\nA person's note.\n\nAayudha-Model: gpt-6.1-sol\n"
+	g.Mu.Unlock()
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("two\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic || family() == verbs.FamilyOpenAI {
+		t.Fatalf("Claude and GPT declared: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	b := body()
+	for _, want := range []string{"A person's note.", "\nAayudha-Model: gpt-6.1-sol\n", "\nAayudha-Model: claude-opus-5-5\n", "\nAayudha-Effort: medium\n", "the reviewers are of none of [anthropic openai]"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
+	}
+	// A held round's head, retried after a declaration names the reviewer's
+	// own family, is reviewed again by another reviewer: the first one's
+	// cached result is not the new reviewer's.
+	model.Replies = []models.Response{sessionReply("held")}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("three\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	first, calls := model.Requests[len(model.Requests)-1].Model, len(model.Requests)
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\nAayudha-Model: " + first + "\n"
+	g.Mu.Unlock()
+	model.Replies = []models.Response{sessionReply("")}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || len(model.Requests) != calls+1 || family() == verbs.FamilyOf(first) {
+		t.Fatalf("the held head after %s is declared: %d %s %s, %d new calls, reviewer %v", first, code, out, errOut, len(model.Requests)-calls, family())
+	}
+}
+
+// The review context comes from the committed head only: never a file outside
+// the repository, an uncommitted one, or a symlink.
+func TestGitSourceReadsOnlyCommittedFiles(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet")
+	_ = os.MkdirAll(filepath.Join(dir, "p"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "p", "a.go"), []byte("package p\n"), 0o644)
+	_ = os.Symlink("/etc/hostname", filepath.Join(dir, "p", "link.go"))
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "-m", "c")
+	_ = os.WriteFile(filepath.Join(dir, "p", "new.go"), []byte("package p\n"), 0o644)
+	src, ctx := gitSource(dir), context.Background()
+	if b, err := src.File(ctx, "p/a.go"); err != nil || string(b) != "package p\n" {
+		t.Fatalf("committed file: %q %v", b, err)
+	}
+	for _, p := range []string{"p/link.go", "p/new.go", "../x.go", "/etc/hostname"} {
+		if _, err := src.File(ctx, p); err == nil {
+			t.Fatalf("%s was read", p)
+		}
+	}
+	if fs, err := src.Dir(ctx, "p"); err != nil || !slices.Equal(fs, []string{"p/a.go"}) {
+		t.Fatalf("dir p: %v %v", fs, err)
+	}
+	if fs, err := src.Dir(ctx, "."); err != nil || len(fs) != 0 {
+		t.Fatalf("dir .: %v %v", fs, err)
+	}
+	if _, err := src.Dir(ctx, ".."); err == nil {
+		t.Fatal("a directory outside the repository was listed")
 	}
 }
