@@ -1602,6 +1602,14 @@ func TestInboxWritesInBackground(t *testing.T) {
 	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "Now: Checking the merge gate is still green") || !strings.Contains(v, "✓ Read the reviews and commits") {
 		t.Errorf("after the checks ran again, the checklist lost a step:\n%s", v)
 	}
+	// On a short card the fold counts them too: five stages seen, the
+	// checks current again, so four are done.
+	m.Update(tea.WindowSizeMsg{Width: 72, Height: 24})
+	m.dirty = true
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ 4 steps done") {
+		t.Errorf("at 72x24 after the checks ran again, the fold miscounts the done steps:\n%s", v)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
 	// q while writes run asks; w waits for every write, the queued one too,
 	// then quits.
 	teaKeys(m, "q")
