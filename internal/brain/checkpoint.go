@@ -511,13 +511,7 @@ func (c *cp) group(items []PlanItem) string {
 		}
 		fmt.Fprintf(&b, "- %s\n", strings.Join(head, " / "))
 		for _, it := range groups[k] {
-			line := c.issueLine(it.Number)
-			if _, ok := c.r.Issues[it.Number]; !ok {
-				line = fmt.Sprintf("#%d %s", it.Number, typeLabel(Fact(it.Type)))
-				if it.Title != "" {
-					line += ": " + Fact(it.Title)
-				}
-			}
+			line := c.itemLine(it)
 			if it.Effort != "" {
 				line += " (effort " + Fact(it.Effort) + ")"
 			}
@@ -525,6 +519,20 @@ func (c *cp) group(items []PlanItem) string {
 		}
 	}
 	return b.String()
+}
+
+// itemLine is a plan item as the ledger captured it, so a baseline still
+// matches its ledger file after the issue is renamed or retyped. Only an item
+// with neither a type nor a title falls back to the live issue.
+func (c *cp) itemLine(it PlanItem) string {
+	if it.Type == "" && it.Title == "" {
+		return c.issueLine(it.Number)
+	}
+	line := fmt.Sprintf("#%d %s", it.Number, typeLabel(Fact(it.Type)))
+	if it.Title != "" {
+		line += ": " + Fact(it.Title)
+	}
+	return line
 }
 
 func (c *cp) plan(bl Baseline) string {
@@ -559,7 +567,7 @@ func (c *cp) changes(d Drift) string {
 	if len(d.Resized) > 0 {
 		b.WriteString("\nResized:\n\n")
 		for _, rz := range d.Resized {
-			fmt.Fprintf(&b, "- %s: effort %s to %s", c.issueLine(rz.Number), Fact(rz.From), Fact(rz.To))
+			fmt.Fprintf(&b, "- %s: effort %s to %s", c.itemLine(rz.PlanItem), Fact(rz.From), Fact(rz.To))
 			if rz.FromType != "" {
 				fmt.Fprintf(&b, "; type %s to %s", typeLabel(Fact(rz.FromType)), typeLabel(Fact(rz.Type)))
 			}

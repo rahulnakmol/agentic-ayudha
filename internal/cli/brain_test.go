@@ -105,7 +105,7 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 			t.Errorf("%s over a symlink on the branch: %s", action, out)
 		}
 	}
-	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") || !strings.Contains(out, "git -C ../r-brain merge --ff-only origin/brain") {
+	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") || !strings.Contains(out, "git -C ../r-brain merge --ff-only origin/brain  # ") {
 		t.Errorf("open: %s", out)
 	}
 }

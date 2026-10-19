@@ -204,12 +204,12 @@ func TestCheckpointRendersThePlanAndItsDrift(t *testing.T) {
 	files["Capabilities/Proof.md"] = note(capFM, "# Proof\n")
 	r := Records{
 		Repo:   "o/r",
-		Issues: map[int]Issue{30: {Type: "initiative", Title: "Dogfood"}, 32: {Type: "feature", Title: "M4 Proof", Parent: 30}, 657: {Type: "story", Title: "CI review", Parent: 32}},
+		Issues: map[int]Issue{30: {Type: "initiative", Title: "Dogfood"}, 32: {Type: "feature", Title: "M4 Proof", Parent: 30}, 657: {Type: "initiative", Title: "Review in CI", Parent: 32}}, // renamed and retyped since the baseline
 		Baseline: []Baseline{{Path: "releases/v0.3.0/baseline-2.json", N: 2, Version: "v0.3.0", ReleaseIssue: 700, BaselinedAt: "2026-10-18", BaselinedBy: "rahulnakmol", BudgetPct: 10,
 			Items: []PlanItem{{Number: 657, Type: "story", Title: "CI review", Effort: "S", Parent: 32}}}},
 		Drift: []Drift{{Path: "releases/v0.3.0/drift.json", Version: "v0.3.0", Baseline: 2, BudgetPct: 10, DriftPct: 15, Decision: 701,
 			Added:   []PlanItem{{Number: 702, Type: "bug", Title: "Fix it"}},
-			Resized: []Resize{{PlanItem: PlanItem{Number: 657, Type: "initiative"}, From: "S", To: "L", FromType: "story"}}}},
+			Resized: []Resize{{PlanItem: PlanItem{Number: 657, Type: "initiative", Title: "CI review"}, From: "S", To: "L", FromType: "story"}}}},
 	}
 	cp, err := Run(files, r, today, true)
 	if err != nil {
@@ -217,10 +217,13 @@ func TestCheckpointRendersThePlanAndItsDrift(t *testing.T) {
 	}
 	got := string(cp.Files["Releases/v0.3.0.md"])
 	for _, want := range []string{"Baseline 2 of Release #700, taken 2026-10-18 by @rahulnakmol", "- #30 Initiative: Dogfood / #32 Feature: M4 Proof [[Proof]]",
-		"  - #657 Story: CI review (effort S)", "15% of a 10% budget", "Over the budget: Decision #701.", "  - #702 Bug: Fix it", "- #657 Story: CI review: effort S to L; type Story to Initiative", "status: planned"} {
+		"  - #657 Story: CI review (effort S)", "15% of a 10% budget", "Over the budget: Decision #701.", "  - #702 Bug: Fix it", "- #657 Initiative: CI review: effort S to L; type Story to Initiative", "status: planned"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the release plan lacks %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "Review in CI") {
+		t.Errorf("the plan shows the issue's title today, not the one its baseline captured:\n%s", got)
 	}
 	merged := maps.Clone(files)
 	maps.Copy(merged, cp.Files)
