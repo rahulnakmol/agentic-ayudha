@@ -33,3 +33,4 @@ below.
 3. [Refusals](refusals.md): another person's records and medical or financial advice are refused.
 4. [Ask API](api-ask.md): `POST /api/ask` and its contract, including the errors.
 5. [Product events](product-events.md): visits and questions recorded for analytics.
+6. [Operational telemetry](telemetry.md): traces and logs, tagged with the deployed revision, for `aayu investigate`.

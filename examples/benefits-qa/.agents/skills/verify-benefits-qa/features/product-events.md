@@ -8,7 +8,7 @@ metrics are computed from these events.
 {"id": "product-events", "layers": ["L03", "L08"],
  "sources": ["examples/benefits-qa/ask/ask.go", "examples/benefits-qa/analytics/analytics.go",
              "examples/benefits-qa/cmd/benefits-qa/main.go"],
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "2f4cbb57b32c55835a2267885ccdc9fb8f876885"}
 ```
 
 ## Sub-features
@@ -32,4 +32,7 @@ metrics are computed from these events.
 ## Gotchas
 
 - `deploy/serve.sh` starts the app without `-events`, so this check is unreachable through the `[verify] seed`
-  launch. Until the seed passes `-events`, its proof is the Go tests (`analytics_test.go`), not a drive.
+  launch. Until the seed passes `-events`, its proof is the Go tests (`analytics_test.go`, and `TestRun` in
+  `cmd/benefits-qa/main_test.go`, which starts the command with `-events` and reads the three events back), not a
+  drive. That test does not assert the absence of question text; only `visit-and-ask` does.
+- `-telemetry` (OpenTelemetry traces and logs) is a separate capability: see [Operational telemetry](telemetry.md).
