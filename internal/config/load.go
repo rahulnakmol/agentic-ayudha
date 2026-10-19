@@ -172,10 +172,8 @@ func Load(src Sources) (*Loaded, error) {
 				}
 			}
 		}
-		// An active scan of a URL verify did not start is the protected repository config's call (Decision #485):
-		// .aayudha/config.json loads as the repo layer too but is not code-owned; config.toml, read from the
-		// checkout or given as a base revision's text (Sources.RepoTOML), is.
-		if name != LayerDefault && (name != LayerRepo || filepath.Ext(source) == ".json") {
+		// An active scan of a URL verify did not start is the protected repository config's call (Decision #485).
+		if !protectedSource(name, source) {
 			for _, key := range k.Keys() {
 				// The decoder matches a field whatever its case, so Active_Scan sets it too.
 				if lk := strings.ToLower(key); strings.HasPrefix(lk, "verify.environments.") && strings.HasSuffix(lk, ".active_scan") {
