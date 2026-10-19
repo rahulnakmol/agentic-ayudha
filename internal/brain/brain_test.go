@@ -158,6 +158,15 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if n, _ := Parse("", gone["Capabilities/Proof.md"]); strings.TrimSpace(Blocks(n.Body)["record"]+Blocks(n.Body)["history"]) != "" {
 		t.Errorf("a capability with no issues keeps the removed issue's facts:\n%s", gone["Capabilities/Proof.md"])
 	}
+	unshipped := r // the records no longer name a story for v0.2.0: its Delivered block empties
+	unshipped.Rungs = nil
+	sixth, err := Run(merged, unshipped, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := Parse("", sixth.Files["Releases/v0.2.0.md"]); strings.TrimSpace(Blocks(n.Body)["delivered"]) != "" {
+		t.Errorf("a release keeps stories the records no longer hold:\n%s", sixth.Files["Releases/v0.2.0.md"])
+	}
 	merged["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: [32, not-an-issue]", 1))
 	if _, err := Run(merged, r, today, true); err == nil || !strings.Contains(err.Error(), `"not-an-issue" is not an issue number`) {
 		t.Errorf("a checkpoint over a malformed issues entry: err %v", err)

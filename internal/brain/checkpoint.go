@@ -374,7 +374,9 @@ func (c *cp) releases() {
 				rec = append(rec, fmt.Sprintf("- Promoted to %s as %s by Release #%d (ledger `%s`).", g.Target, g.Tag, g.Release, g.Path))
 			}
 		}
-		blocks := map[string]string{"record": strings.Join(rec, "\n")}
+		// Every block is set, empty when its record is gone, so a note never
+		// keeps a plan, a change, or a story the records no longer hold.
+		blocks := map[string]string{"record": strings.Join(rec, "\n"), "plan": "", "changes": "", "delivered": ""}
 		var bl *Baseline
 		for i := range c.r.Baseline {
 			if c.r.Baseline[i].Version == ver {

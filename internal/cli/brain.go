@@ -507,7 +507,7 @@ func ledgerReleases(ctx context.Context, w *ledger.Writer, r *brain.Records) err
 		case baselineRE.MatchString(p):
 			m := baselineRE.FindStringSubmatch(p)
 			n, _ := strconv.Atoi(m[2])
-			if n <= newest[m[1]] {
+			if prev, ok := newest[m[1]]; ok && n <= prev { // baseline-0 is a baseline too
 				continue
 			}
 			var b struct {
