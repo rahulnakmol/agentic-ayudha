@@ -48,7 +48,7 @@ evidence".
 | Keys | One in CI: the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in the repository's `code-review` environment, which only the base branches and the default branch can reach. A review app can review instead, with no key in CI. Triage runs from your own agent |
 | CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, and an incident runner you trigger by hand |
 | CI minutes | About 10 minutes per push to a story's pull request in this repository (8 for the floors, 2 for the review); yours depend on your tests |
-| Model spend | The review model's calls, billed by its provider to your key. `[budget] per_pr_inspect_max` caps each pull request at 5 USD by default. A review app bills through your own subscription to it instead |
+| Model spend | The review model's calls, billed by its provider to your key. `[budget] per_pr_inspect_max` caps each pull request at 5 USD by default; a diff over 120 kB can go past it by the review parts already started ([known limits](../releases/v0.3.0.md#known-limits)). A review app bills through your own subscription to it instead |
 | Storage | None to set up: screenshots and recordings stay in each CI run's `aayudha-pack` file for `[proof] retention_days` (90 by default, GitHub's limit is 90 days on a public repository), and `ship` copies the pack without them to the ledger. A private bucket (S3, R2, Azure Blob Storage, or Google Cloud Storage) is optional, for longer retention |
 
 > **Needs setup:** the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in **Settings → Environments →

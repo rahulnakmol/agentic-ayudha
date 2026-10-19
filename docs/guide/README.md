@@ -57,7 +57,8 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
   lives in the repository's `code-review` environment. The model reviews only when its family differs from the
   builder's and the author has write access; otherwise CodeRabbit or Greptile, when listed, or the approver reviews,
   and a listed Codex, Claude, or Cursor leaves the change waiting ([known limits](../releases/v0.3.0.md#known-limits)). You choose the model and pay for its calls; `[budget]
-  per_pr_inspect_max` caps each pull request at 5 USD by default. A review app, such as CodeRabbit or Codex, can
+  per_pr_inspect_max` caps each pull request at 5 USD by default; a diff over 120 kB can go past it by the review parts
+  already started ([known limits](../releases/v0.3.0.md#known-limits)). A review app, such as CodeRabbit or Codex, can
   review instead, billed through your own subscription to it. The checks take about 10 CI minutes per push in this
   repository.
 - **Your code:** the checks run in your own CI. The review model or app you choose sees the pull requests it reviews.
