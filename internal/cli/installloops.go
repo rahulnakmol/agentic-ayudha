@@ -348,9 +348,11 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 }
 
 // subscriptionID finds `subscription <ID>`, the reply of a thread that set up
-// an event loop's Amp GitHub subscription, on any line of the reply: a thread
-// may add a sentence after it (Bug #709).
-var subscriptionID = regexp.MustCompile("(?i)\\bsubscription:?\\s+`?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b")
+// an event loop's Amp GitHub subscription, at the start of any line of the
+// reply: a thread may add a sentence after it (Bug #709). A mention inside a
+// sentence, such as "updating existing subscription <ID>" while the thread
+// still works or in a failure reply, is not the reply.
+var subscriptionID = regexp.MustCompile("(?im)^[ \\t>*`]*subscription:?\\s+`?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b")
 
 // subscriptionWait is how long install --loops --apply waits for an event
 // loop's thread to reply with its subscription ID, and how often it looks.
@@ -391,7 +393,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			// one, keeping its own title, instructions, and paused state (Bug #709).
 			prompt = "Call Amp's create_github_subscription with exactly this input, adding project_id: the ID of this thread's Amp project, for " + repo + ". " +
 				"If Amp returns an existing subscription whose title or instructions differ from this input, or that is not enabled, call update_github_subscription with its subscription_id, every field of this input, that project_id, and enabled: true. " +
-				"Do nothing else. Then reply with exactly one line, `subscription <its ID>`, and nothing else.\n\n" + string(in)
+				"Do nothing else. Then reply with exactly one line, `subscription <its ID>`, and nothing else. If a call fails, reply with its error instead, with no line starting `subscription`.\n\n" + string(in)
 		}
 		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha loop: "+l.Name, "-x", prompt)
 		if err != nil {
@@ -447,7 +449,9 @@ func (e *Env) awaitSubscription(ctx context.Context, root, bin, name, out string
 	}
 	fmt.Fprintf(e.Err, "install --loops: waiting up to %s for the %s thread %s to reply with its subscription ID …\n", subscriptionWait, name, t)
 	for deadline := e.Now().Add(subscriptionWait); ; {
-		md, err := e.run(ctx, root, bin, "threads", "markdown", t)
+		look, cancel := context.WithTimeout(ctx, 3*subscriptionPoll) // a stalled look cannot stretch the wait
+		md, err := e.run(look, root, bin, "threads", "markdown", t)
+		cancel()
 		if i := strings.LastIndex(md, "\n## Assistant\n"); err == nil && i >= 0 {
 			if m := subscriptionID.FindStringSubmatch(md[i:]); m != nil {
 				return m[1]

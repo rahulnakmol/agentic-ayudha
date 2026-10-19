@@ -212,7 +212,8 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 			}
 			// The thread's markdown: the prompt, which names `subscription <its ID>`, then the agent's work, then its reply.
 			polls++
-			md := "# aayudha loop: triage-opened\n\n## User\n\n" + prompt + "\n\n## Assistant\n\n**Tool Use:** `code_exec`\n"
+			// While it works, it names the subscription in a sentence: that is not its reply.
+			md := "# aayudha loop: triage-opened\n\n## User\n\n" + prompt + "\n\n## Assistant\n\nAmp returned an existing subscription 5d10ad31-52c8-42ef-9860-3d874655784f; updating and enabling it.\n\n**Tool Use:** `code_exec`\n"
 			if replyAt > 0 && polls >= replyAt {
 				md += "\n## Assistant\n\nsubscription 5d10ad31-52c8-42ef-9860-3d874655784f\n\nAmp returned an existing subscription, which I updated and enabled.\n"
 			}
@@ -233,7 +234,7 @@ func TestInstallLoopsEventSubscription(t *testing.T) {
 		t.Errorf("no reply: waited %s: %+v, steps %q", now.Sub(start), r.States, r.Steps)
 	}
 	if !strings.Contains(prompt, "create_github_subscription") || !strings.Contains(prompt, "update_github_subscription with its subscription_id, every field of this input, that project_id, and enabled: true") ||
-		!strings.Contains(prompt, "reply with exactly one line, `subscription <its ID>`") {
+		!strings.Contains(prompt, "reply with exactly one line, `subscription <its ID>`") || !strings.Contains(prompt, "If a call fails, reply with its error instead") {
 		t.Errorf("prompt: %s", prompt)
 	}
 	replyAt = 3
