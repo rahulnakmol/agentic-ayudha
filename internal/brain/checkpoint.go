@@ -600,9 +600,10 @@ func (c *cp) issueBlocks() {
 func (c *cp) seats() {
 	st, _ := FindType("seat")
 	pt, _ := FindType("person")
-	people := map[string][]string{} // by lower-case login: GitHub logins ignore case
-	if c.r.Approver != "" {
-		people[strings.ToLower(c.r.Approver)] = append(people[strings.ToLower(c.r.Approver)], "the approver ([autonomy] approver)")
+	people := map[string][]string{} // by login: GitHub logins ignore case, and the @ is optional
+	login := func(s string) string { return strings.ToLower(strings.TrimPrefix(s, "@")) }
+	if a := login(c.r.Approver); a != "" {
+		people[a] = append(people[a], "the approver ([autonomy] approver)")
 	}
 	for _, s := range c.r.Seats {
 		facts := []string{
@@ -610,8 +611,9 @@ func (c *cp) seats() {
 			"- Accountable for: " + strings.Join(codes(s.Verbs), ", ") + ".",
 		}
 		if s.Human != "" {
-			facts = append(facts, "- Paired with [["+strings.ToLower(s.Human)+"]].")
-			people[strings.ToLower(s.Human)] = append(people[strings.ToLower(s.Human)], "[["+s.Name+"]]")
+			h := login(s.Human)
+			facts = append(facts, "- Paired with [["+h+"]].")
+			people[h] = append(people[h], "[["+s.Name+"]]")
 		} else {
 			facts = append(facts, "- Solo: the twin runs it alone.")
 		}
@@ -636,24 +638,24 @@ func (c *cp) seats() {
 		if n.Str("type") != "person" {
 			continue
 		}
-		login := strings.ToLower(Base(p))
-		notes[login] = p
-		if people[login] == nil && Blocks(n.Body)["roles"] != "" {
+		l := login(Base(p))
+		notes[l] = p
+		if people[l] == nil && Blocks(n.Body)["roles"] != "" {
 			c.upsert(p, nil, nil, map[string]string{"roles": "- No role in the current records."})
 		}
 	}
-	for _, login := range slices.Sorted(maps.Keys(people)) {
-		p := notes[login]
+	for _, l := range slices.Sorted(maps.Keys(people)) {
+		p := notes[l]
 		if p == "" {
-			p = "People/" + login + ".md"
+			p = "People/" + l + ".md"
 		}
 		c.upsert(p, func() *Note {
-			n := newNote(pt, "person-"+login, login, c.today, nil, "[[People]]")
-			n.Set("people", []string{login})
-			n.Body = "# " + login + "\n\n## Roles\n\n" + Block("roles", "") + "\n\n## Context\n"
+			n := newNote(pt, "person-"+l, l, c.today, nil, "[[People]]")
+			n.Set("people", []string{l})
+			n.Body = "# " + l + "\n\n## Roles\n\n" + Block("roles", "") + "\n\n## Context\n"
 			return n
 		}, map[string]any{"sources": []string{"file .aayudha/config.toml"}},
-			map[string]string{"roles": "- " + strings.Join(people[login], "\n- ")})
+			map[string]string{"roles": "- " + strings.Join(people[l], "\n- ")})
 	}
 }
 

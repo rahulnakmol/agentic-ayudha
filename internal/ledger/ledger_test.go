@@ -159,6 +159,23 @@ func TestNoopDryRunAndErrors(t *testing.T) {
 			t.Errorf("path %q accepted", bad)
 		}
 	}
+	// A symlink a person committed to the branch carries no write outside the worktree.
+	outside := t.TempDir()
+	seed := clone(t, bare)
+	run(t, seed, "fetch", "--quiet", "origin", "ledger")
+	run(t, seed, "checkout", "--quiet", "-b", "l", "FETCH_HEAD")
+	if err := os.Symlink(outside, filepath.Join(seed, "Releases")); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "Releases")
+	run(t, seed, "commit", "--quiet", "-m", "symlink")
+	run(t, seed, "push", "--quiet", "origin", "l:ledger")
+	if _, err := w.Write(ctx, Commit{Message: "s", Files: map[string][]byte{"Releases/v1.md": []byte("x\n")}}); err == nil {
+		t.Error("a write through a symlinked directory succeeded")
+	}
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Errorf("a write followed a committed symlink out of the worktree: %v", ents)
+	}
 	empty := clone(t, bare)
 	run(t, empty, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
 	run(t, filepath.Dir(bare), "init", "--quiet", "--bare", filepath.Join(filepath.Dir(bare), "noledger.git"))

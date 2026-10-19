@@ -389,27 +389,34 @@ func rejected(err error) bool {
 	return false
 }
 
+// apply writes c into the worktree through an os.Root, so a symlink that a
+// person committed to the branch cannot carry a write outside the worktree.
 func apply(wt string, c Commit) error {
+	root, err := os.OpenRoot(wt)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
 	for _, p := range c.Delete {
-		if err := os.Remove(filepath.Join(wt, filepath.FromSlash(p))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := root.Remove(filepath.FromSlash(p)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
 	for p, b := range c.Files {
-		f := filepath.Join(wt, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		f := filepath.FromSlash(p)
+		if err := root.MkdirAll(filepath.Dir(f), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(f, b, 0o644); err != nil {
+		if err := root.WriteFile(f, b, 0o644); err != nil {
 			return err
 		}
 	}
 	for p, b := range c.Append {
-		f := filepath.Join(wt, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		f := filepath.FromSlash(p)
+		if err := root.MkdirAll(filepath.Dir(f), 0o755); err != nil {
 			return err
 		}
-		h, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		h, err := root.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
 		}

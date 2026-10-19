@@ -117,7 +117,7 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	// A main rung releases a version that has no GitHub Release; a person who
 	// lost every role keeps a note that no longer claims one.
 	r.Rungs = append(r.Rungs, Rung{Path: "releases/300/main.json", Release: 300, Version: "v0.3.0", Target: "main", Tag: "v0.3.0", Date: "2026-10-20"})
-	r.Approver = "alice" // her note is People/Alice.md: a login ignores case
+	r.Approver = "@Alice" // her note is People/Alice.md: a login ignores case and its optional @
 	merged["People/Alice.md"] = note("id: person-alice\ntype: person\ntitle: Alice\nowner: founder\nstatus: current\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
 		"# Alice\n\n## Roles\n\n"+Block("roles", "")+"\n")
 	merged["People/olduser.md"] = note("id: person-olduser\ntype: person\ntitle: olduser\nowner: founder\nstatus: alumni\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
@@ -135,7 +135,7 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if got := string(third.Files["People/olduser.md"]); !strings.Contains(got, "- No role in the current records.") || strings.Contains(got, "[[Founder]]") {
 		t.Errorf("a person who lost every role still claims one:\n%s", got)
 	}
-	if _, dup := third.Files["People/alice.md"]; dup || !strings.Contains(string(third.Files["People/Alice.md"]), "the approver") {
+	if _, dup := third.Files["People/@alice.md"]; dup || !strings.Contains(string(third.Files["People/Alice.md"]), "the approver") {
 		t.Errorf("the checkpoint did not reuse People/Alice.md for alice: wrote %v", third.Paths)
 	}
 	hostile := maps.Clone(merged) // a person's title is text in a map, never a marker or an image
