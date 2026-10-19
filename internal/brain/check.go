@@ -108,7 +108,7 @@ var (
 
 // links returns the wikilink targets of text outside code.
 func links(text string) []string {
-	text = maskCode(commentRE.ReplaceAllString(text, ""))
+	text = maskCode(stripComments(text))
 	var out []string
 	for _, m := range wikilinkRE.FindAllStringSubmatch(text, -1) {
 		out = append(out, strings.ReplaceAll(m[1], `\|`, "|")) // a pipe escaped inside a table
@@ -133,6 +133,20 @@ func IsVault(files map[string][]byte) bool {
 	}
 	n, err := Parse(HomePath, files[HomePath])
 	return err == nil && n.Str("type") == "home"
+}
+
+// stripComments removes the HTML comments outside code: a `<!--` or `-->`
+// inside a code span or block is text, so it cannot hide what follows it.
+func stripComments(s string) string {
+	masked := maskCode(s)
+	var b strings.Builder
+	last := 0
+	for _, m := range commentRE.FindAllStringIndex(masked, -1) {
+		b.WriteString(s[last:m[0]])
+		last = m[1]
+	}
+	b.WriteString(s[last:])
+	return b.String()
 }
 
 // isDate reports whether s is a real calendar date written YYYY-MM-DD.
@@ -165,7 +179,7 @@ const MaxSentenceWords = brief.MaxSTEWords
 // comments, with wikilinks replaced by the text they show. brief.Parse skips
 // its code; the copy checks mask it (maskCode).
 func prose(body string) string {
-	s := commentRE.ReplaceAllString(StripBlocks(body), "")
+	s := stripComments(StripBlocks(body))
 	return wikilinkRE.ReplaceAllStringFunc(s, func(m string) string {
 		t := wikilinkRE.FindStringSubmatch(m)[1]
 		if _, alias, ok := strings.Cut(t, "|"); ok {

@@ -83,7 +83,7 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	if out := brainRun(3, "check", "--dir", vault); !strings.Contains(out, "[[Nowhere]] does not resolve") {
 		t.Errorf("check --dir passed a broken link: %s", out)
 	}
-	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") {
+	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") || !strings.Contains(out, "git -C ../r-brain merge --ff-only origin/brain") {
 		t.Errorf("open: %s", out)
 	}
 }

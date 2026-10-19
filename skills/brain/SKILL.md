@@ -105,8 +105,8 @@ unless the founder agrees in writing first. When you are not sure a fact is publ
 
 ## How to write a note
 
-1. Open the vault: `aayu brain open` prints the two commands (a `git worktree add` of the `brain` branch) and the
-   folder to open in Obsidian.
+1. Open the vault: `aayu brain open` prints the commands (a `git worktree add` of the `brain` branch, then a
+   fast-forward to `origin/brain`) and the folder to open in Obsidian.
 2. Start from the type's template in `Templates/` (Obsidian's Templates plugin fills in the title and dates).
 3. Fill the frontmatter: `id` (permanent; never reuse one), `type`, `title`, `owner` (a seat slug), `people`
    (logins), `status`, `updated`, `reviewed`, `sources`, `up` (the folder's map, as `"[[Decisions]]"`), and
