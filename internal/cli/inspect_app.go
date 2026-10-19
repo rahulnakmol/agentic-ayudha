@@ -64,8 +64,25 @@ type appInspect struct {
 func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	n, head := a.pr.GetNumber(), a.pr.GetHead().GetSHA()
 	owner, name, _ := github.SplitRepo(a.repo)
-	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
+	// In the gate under reviewer = "ci" with its model declined on this head
+	// (not failed), no one can ask an app that answers only a person's
+	// mention: CI holds no person's account, and `aayu inspect` asks an app
+	// only after a failed CI review (#691). The gate skips those apps for a
+	// review service, which reviews every head unasked, else a person, whose
+	// `aayu inspect --approve` counts. Outside CI the order is unchanged.
+	var cannotAsk []string
+	if e.CI && a.cfg.Inspect.Reviewer == inspect.ReviewerCI && a.prev.PaidFailed != head {
+		for _, app := range inspect.Apps {
+			if slices.Contains(a.cfg.Inspect.Apps, app.Name) && app.Family != inspect.FamilyService {
+				cannotAsk = append(cannotAsk, app.Name)
+			}
+		}
+	}
+	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
+	if len(cannotAsk) > 0 {
+		notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
+	}
 	if a.fallback != "" {
 		notes = append(notes, a.fallback)
 	}
@@ -227,7 +244,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	rep, rerr := read(choice)
 	// The chosen app cannot review this head: the next installed app in the
 	// fixed order (inspect.Apps) reviews in its place, then rung B, then a person.
-	for skip := []string{}; errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
+	for skip := slices.Clone(cannotAsk); errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
 		skip = append(skip, choice.App)
 		next := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, skip...)
 		if next.App == "" {

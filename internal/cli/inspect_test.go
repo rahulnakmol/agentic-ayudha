@@ -1446,6 +1446,44 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a read-only author's PR: exit %d rung %q, %d model calls", code, res.Rung, len(model.Requests))
 	}
 
+	// With the CI review declined (a read-only author), the gate cannot ask an
+	// app that answers only a person's mention, and nothing outside CI asks it
+	// (#691). It skips Codex: CodeRabbit, which reviews every head unasked,
+	// reviews; with Codex alone a person does, and the approver's
+	// `aayu inspect --approve` counts (Codex's P1 on #638).
+	for _, c := range []struct{ apps, want string }{{`"codex", "coderabbit"`, "coderabbit"}, {`"codex"`, "a human review"}} {
+		g, env, opts, prN, model = setup(c.apps, "google-key")
+		env["AAYU_AUTONOMY__APPROVER"] = "founder"
+		g.Mu.Lock()
+		g.Pulls[prN].User.Login = "contributor" // not the approver, who reviews
+		g.Permissions = map[string]string{"contributor": "read"}
+		g.Mu.Unlock()
+		code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+		if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, c.want) ||
+			!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "the gate skips codex") }) {
+			t.Fatalf("apps [%s], the CI review declined: exit %d %s %q, notes %q, %d model calls %s", c.apps, code, res.Disposition, res.Review, res.Notes, len(model.Requests), errOut)
+		}
+		if c.want != "a human review" {
+			continue
+		}
+		head = g.Pulls[prN].Head.SHA
+		if st := inspect.ParseState(lastInspect(t, g, prN)); st.Human != head || !strings.Contains(res.Next, "--approve") {
+			t.Fatalf("apps [codex], the CI review declined: the inbox does not offer the head (%q), next %q", st.Human, res.Next)
+		}
+		g.Mu.Lock()
+		g.Viewer = "founder"
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+		g.Mu.Unlock()
+		person := opts
+		person.IsTerminal, person.DevicePoll = stdinTTY, time.Millisecond
+		if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff", "--repo", "o/r"); code != 0 {
+			t.Fatalf("the approver's --approve: %d %s", code, errOut)
+		}
+		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman || len(model.Requests) != 0 {
+			t.Fatalf("apps [codex], approved: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
+		}
+	}
+
 	// Outside CI the code-review key is out of reach: the local run defers to
 	// the gate's CI review. It asks no app, and an app request an earlier run
 	// posted, unanswered past inspect.ReplyWait, does not make it ask a person.
