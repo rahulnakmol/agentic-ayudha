@@ -1579,8 +1579,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 
 // shipReady ships a ready-to-ship PR through ship. In solo mode no second
 // person can review, so the person's pick is their solo-mode bypass: the
-// inbox posts their "Solo-mode bypass:" comment (once) and ships with
-// --solo-bypass; otherwise ship needs a person's approving review of the head.
+// inbox ships with --solo-bypass, and ship posts their "Solo-mode bypass:"
+// comment for the head just before it merges, when none names that head; otherwise ship needs a person's approving review of the head.
 func (e *Env) shipReady(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem) error {
 	// The person chose the head the inbox showed: ship only that one.
 	v := Values{"pr": strconv.Itoa(it.Number), shipExpectHead: it.f.head}
@@ -1593,13 +1593,10 @@ func (e *Env) shipReady(ctx context.Context, cfg *config.Config, c *github.Clien
 		return headMoved(it.Number, it.f.head, p.GetHead().GetSHA())
 	}
 	if soloMode(cfg, login, "inbox") == nil {
-		if _, err := soloModeComment(ctx, c, owner, name, it.Number, login, cfg, "inbox", "a PR comment"); err != nil {
-			note := fmt.Sprintf("%s @%s ships this from `aayu inbox`: one human and no bot App, so no second person can review it; the merge gate is green on the head `%s`.", SoloBypassPrefix, login, short(it.f.head))
-			if err := postComment(ctx, c, repo, it.Number, "github.comment.solo-bypass", note); err != nil {
-				return Wrap(ExitExternal, err)
-			}
-		}
+		// Ship posts this only when its checks pass on the head and
+		// it finds no bypass for that head, just before the merge.
 		v["solo-bypass"] = true
+		v[shipBypassNote] = fmt.Sprintf("%s @%s ships this from `aayu inbox`: one human and no bot App, so no second person can review it; the merge gate is green on the head `%s`.", SoloBypassPrefix, login, short(it.f.head))
 	}
 	err = handlers["ship"](ctx, e, v)
 	if err != nil && v["solo-bypass"] == nil {

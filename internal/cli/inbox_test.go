@@ -552,6 +552,29 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	if !moved || !strings.Contains(out, "the head moved to eeeeeee after you chose to ship "+short(headA)+"; nothing was merged") {
 		t.Fatalf("ship after a push to the chosen PR:\n%s", out)
 	}
+	// Bug #799: dev takes another PR after the inbox read A, and A now
+	// conflicts. Ship refuses it before any bypass is posted, so no bypass
+	// is left on a head that never merged.
+	g.Mu.Lock()
+	gets = 0
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/pulls/"+strconv.Itoa(prA) {
+			if gets++; gets == 3 {
+				no := false
+				g.Pulls[prA].Mergeable, g.Pulls[prA].MergeableState = &no, "dirty"
+			}
+		}
+	}
+	g.Mu.Unlock()
+	_, out, _ = runIn(t, agent, opts, "s a q", "inbox", "--repo", "o/r")
+	g.Mu.Lock()
+	refused := !g.Pulls[prA].Merged && !slices.ContainsFunc(g.Issues[prA].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, SoloBypassPrefix) })
+	g.Pulls[prA].Mergeable, g.Pulls[prA].MergeableState, g.Hook = nil, "", nil
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if !refused || !strings.Contains(out, "it conflicts with dev, so GitHub cannot merge it; nothing was merged") {
+		t.Fatalf("ship of a PR that came to conflict with dev:\n%s", out)
+	}
 	// The full-screen inbox: each Ready to ship card with Drona's counsel,
 	// shipped with Enter.
 	var cards []string

@@ -93,8 +93,9 @@ ship**, and they wait in your inbox.
 
 <!-- END GENERATED: skill-human -->
 
-Working alone, first post a pull request comment that starts with `Solo-mode bypass:` and says why, then run
-`aayu ship <pr> --solo-bypass`. The record says "Human pass: none possible", and [`audit`](audit.md) lists every
+Working alone, first post a pull request comment that starts with `Solo-mode bypass:`, names the head commit, and
+says why, then run `aayu ship <pr> --solo-bypass`. A bypass counts only for the commit it names: after a push, post
+one for the new head. The record says "Human pass: none possible", and [`audit`](audit.md) lists every
 bypass. See [the human pass and solo mode](../concepts-human-pass.md).
 
 ## What's next
