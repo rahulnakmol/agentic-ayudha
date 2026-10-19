@@ -655,7 +655,7 @@ func TestInboxTUI(t *testing.T) {
 		if len(m.hits) == 0 || m.hits[0].choice != 0 {
 			t.Errorf("close on the bug's card: %+v", m.hits)
 		}
-		teaKeys(m, "esc", "A")
+		teaKeys(m, "esc", "C")
 		views = append(views, view()) // 6: tidy all
 		teaKeys(m, "enter")
 		views = append(views, view()) // 7: tidied
@@ -669,16 +669,16 @@ func TestInboxTUI(t *testing.T) {
 		t.Fatalf("exit %d, %d views: %s\n%s", code, len(views), errOut, out)
 	}
 	for i, want := range [][]string{
-		{"aayu inbox · 3 need you · 5 housekeeping", "› 🧭 Waive the eval-bar floor on #10", "🧹 5 housekeeping · A tidies all", "🧭 Decision · #1 · one-way door",
-			inboxKinds[InboxDecision].Line, "🧘 Atri, counsel, not approval", "▏ Evidence: https://github.com/o/r/issues/1", "› 2 Accept: Don't waive recommended", "1 Accept: Waive", "3 Open #1 on GitHub",
+		{"aayu inbox · 3 need you · 5 housekeeping", "› 🧭 #1 Waive the eval", "Housekeeping (5) x select · X all · C clear all", "Waive the eval-bar floor on #10", "🧭 Decision · #1 · one-way door",
+			inboxKinds[InboxDecision].Line, "🧘 Atri, counsel, not approval", "› 2 Accept: Don't waive recommended", "1 Accept: Waive", "3 Open #1 on GitHub",
 			"Enter do it · Tab next"},
-		{"This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door", "Enter again applies it · Esc goes back"},
+		{"This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door", "Nothing is written until you press Enter again."},
 		{"🧭 Decision · #2 · provisional", "The call: Which engine runs the rules", "› 2 Accept: B", "Selected; click it again, or press Enter, to do it."},
-		{"aayu inbox · 2 need you", "› ✋ fix(cli): capped", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub"},
+		{"aayu inbox · 2 need you", "› ✋ #9 fix(cli): capped", "Waiting on the review cap (1)", "✋ At the review cap · #9", "🏹 Drona, counsel, not approval", "Done: #2, A. It is written to GitHub"},
 		{"Find: bug", "🐞 #7 A bug · Bug fixed, still open · Drona"},
-		{"› 🐞 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
-		{"Tidy all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
-		{"Applied 5: 5 done, 0 not done.", "› 🧭 Waive the eval-bar floor on #10"},
+		{"› [ ] 🐞 #7 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
+		{"Clear all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
+		{"Applied 5: 5 done, 0 not done.", "› 🧭 #1 Waive the eval"},
 	} {
 		v := strings.Join(strings.Fields(views[i]), " ")
 		for _, w := range want {
@@ -692,8 +692,8 @@ func TestInboxTUI(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(views[3], "✓ done by @o at") {
-		t.Errorf("the done item is not listed as done, with who did it:\n%s", views[3])
+	if v := strings.Join(strings.Fields(views[5]), " "); !strings.Contains(v, "✓ 🧭 #2 Choose the rules") || !strings.Contains(v, "done by you") {
+		t.Errorf("the done item is not listed as done, with who did it:\n%s", views[5])
 	}
 	g.Mu.Lock()
 	if g.Issues[2].State != "closed" || !strings.Contains(g.Issues[2].Body, "A, accepted by @o") || g.Issues[1].State != "open" {
@@ -861,7 +861,7 @@ func TestInboxMotion(t *testing.T) {
 	listRow := func(m *inboxModel) string {
 		m.dirty = true
 		for _, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
-			if strings.HasPrefix(l, "› ") {
+			if strings.HasPrefix(l, " › ") && strings.Contains(l, "🧭") {
 				return l
 			}
 		}
@@ -885,11 +885,11 @@ func TestInboxMotion(t *testing.T) {
 		t.Errorf("the highlight did not reach #2: %q", listRow(m))
 	}
 	teaKeys(m, "enter")
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "✓ done by @o at 09:00") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "done by you 09:00") {
 		t.Errorf("no ✓ on the done item:\n%s", v)
 	}
 	frames(m, 300*time.Millisecond)
-	if v := ansi.Strip(m.View().Content); !strings.Contains(v, "› 🧭 Pick the engine") || strings.Index(v, "✓ done by @o") < strings.Index(v, "Pick the engine") {
+	if v := ansi.Strip(m.View().Content); !strings.Contains(listRow(m), "Pick the engine") || strings.Index(v, "Done this session") < strings.Index(v, "Pick the engine") || strings.Index(v, "done by you") < strings.Index(v, "Done this session") {
 		t.Errorf("after its ✓ the done item does not move below the rest, or the cursor did not move on:\n%s", v)
 	}
 	teaKeys(m, "9")
@@ -913,8 +913,198 @@ func TestInboxMotion(t *testing.T) {
 		t.Errorf("still: a frame %v, shift %d, highlight %q", cmd != nil, still.cardShift(), listRow(still))
 	}
 	teaKeys(still, "enter")
-	if v := ansi.Strip(still.View().Content); strings.Contains(v, "Pick the queue") {
-		t.Errorf("still: the done item stays:\n%s", v)
+	if v := ansi.Strip(still.View().Content); strings.Index(v, "Pick the queue") < strings.Index(v, "Done this session") {
+		t.Errorf("still: the done item does not move to Done this session at once:\n%s", v)
+	}
+}
+
+// inboxScene is an inbox with every kind and every row state: the
+// needs-you items, a capped PR, and housekeeping that is selected, being
+// written, queued, done, failed, gone, and listed again, with titles longer
+// than their column and wide icons.
+func inboxScene(clock time.Time) *inboxModel {
+	opt := func(label string) []InboxAction {
+		return []InboxAction{{N: 1, Label: label, Recommended: true, Command: "x"}, {N: 2, Label: "Open it on GitHub", Command: "open"}}
+	}
+	ago := func(d time.Duration) time.Time { return clock.Add(-d) }
+	items := []InboxItem{
+		{Kind: InboxReady, Number: 703, Title: "fix(cli): skip the autonomy streak when the human pass is settled", PR: 703, Updated: ago(25 * time.Minute), Options: opt("Ship PR #703 with your pass")},
+		{Kind: InboxHumanReview, Number: 697, Title: "feat(inspect): fall back to the next reviewer when one cannot review", Updated: ago(3 * time.Hour), Options: opt("Open it and review it")},
+		{Kind: InboxDecision, Number: 685, Title: "Which paths need a person before an agent merges?", OneWay: true, Updated: ago(26 * time.Hour), Options: opt("The narrow set")},
+		{Kind: InboxDecision, Number: 666, Title: "Pick the release cadence", Provisional: true, Updated: ago(4 * 24 * time.Hour), Options: opt("Weekly")},
+		{Kind: InboxCapped, Number: 690, Title: "fix(gate): keep the rung when a rerun replaces the run", Updated: ago(50 * time.Minute), Options: opt("Open it and review it")},
+	}
+	for n, kind := range []string{InboxUnshipped, InboxUnshipped, InboxFixed, InboxUnshipped, InboxFixed, InboxReplaced, InboxUnshipped, InboxUnshipped} {
+		num := 640 + 2*n
+		items = append(items, InboxItem{Kind: kind, Number: num, Title: fmt.Sprintf("Housekeeping item %d with a title that runs on past its column", num),
+			PR: num + 1, ReplacedBy: num + 1, Updated: ago(time.Duration(n+1) * 9 * time.Hour), Options: opt(map[string]string{InboxUnshipped: fmt.Sprintf("mark #%d merged without proof", num),
+				InboxFixed: fmt.Sprintf("close #%d as completed, fixed in #%d", num, num+1), InboxReplaced: fmt.Sprintf("close #%d as not planned, replaced by #%d", num, num+1)}[kind])})
+	}
+	for i := range items {
+		items[i].Seat, items[i].Counsel, items[i].Why = verbs.EngineeringManager, "counsel", "why"
+	}
+	m := newInboxModel("rahulnakmol/agentic-ayudha", "rahulnakmol", "auto", false)
+	m.now = func() time.Time { return clock }
+	m.merge(items)
+	m.loading, m.fresh = false, clock
+	key := func(n int) string {
+		return m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n })].key()
+	}
+	m.selected[key(640)], m.selected[key(642)] = true, true
+	m.queue = []inboxJob{{m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 644 })], InboxAction{}}, {m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 646 })], InboxAction{}}}
+	m.work.begin(key(644), clock.Add(-4*time.Second))
+	m.work.stages = append(m.work.stages, "posting a comment")
+	m.work.cur = 1
+	m.state[key(648)], m.done[key(648)] = "done", inboxDone{By: "rahulnakmol", At: clock.Add(-time.Minute), Choice: "1"}
+	m.state[key(650)] = "not done"
+	m.state[key(652)] = "gone"
+	m.state[key(654)], m.done[key(654)] = "relisted", inboxDone{By: "someone", At: clock.Add(-time.Hour), Choice: "1"}
+	m.relayout()
+	return m
+}
+
+// A needs-you item is decided on its own card: x on it says why in the
+// status line and selects nothing, X selects every housekeeping item and no
+// needs-you one, and the bulk action asks only about housekeeping.
+func TestInboxSelectsOnlyHousekeeping(t *testing.T) {
+	m := inboxScene(time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC))
+	m.queue = nil
+	clear(m.selected)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+	if it := m.items[m.item()]; it.kind().Housekeeping {
+		t.Fatalf("the cursor starts on housekeeping #%d", it.Number)
+	}
+	for _, k := range []string{"x", "space"} {
+		teaKeys(m, k)
+		if len(m.selected) != 0 || !strings.Contains(m.status, "needs you") || m.refusal != m.status {
+			t.Errorf("%s on #%d: selected %v, status %q", k, m.items[m.item()].Number, m.selected, m.status)
+		}
+	}
+	teaKeys(m, "X")
+	var want []string
+	for _, it := range m.items {
+		if st := m.state[it.key()]; it.kind().Housekeeping && st != "done" && st != "gone" {
+			want = append(want, it.key())
+		}
+	}
+	if got := slices.Sorted(maps.Keys(m.selected)); !slices.Equal(got, slices.Sorted(slices.Values(want))) {
+		t.Errorf("X selected %v; want the housekeeping %v", got, want)
+	}
+	teaKeys(m, "enter")
+	if m.ask == nil {
+		t.Fatal("Enter with a selection does not ask")
+	}
+	for _, j := range m.ask.jobs {
+		if !j.it.kind().Housekeeping {
+			t.Errorf("the bulk action includes needs-you #%d", j.it.Number)
+		}
+	}
+	teaKeys(m, "esc", "C")
+	for _, j := range m.ask.jobs {
+		if !j.it.kind().Housekeeping {
+			t.Errorf("C includes needs-you #%d", j.it.Number)
+		}
+	}
+	teaKeys(m, "esc", "esc")
+	for teaKeys(m, "tab"); !m.items[m.item()].kind().Housekeeping; teaKeys(m, "j") {
+	}
+	teaKeys(m, "x")
+	if len(m.selected) != 1 || !m.selected[m.items[m.item()].key()] {
+		t.Errorf("x on housekeeping #%d: selected %v", m.items[m.item()].Number, m.selected)
+	}
+}
+
+// Every line of the inbox is exactly the terminal's width, and every column
+// starts at the same cell on every row, in every group and state, measured
+// in display cells: the pane divider, the number, the title, why it waits,
+// and the age; the group headers, the head, and the keys start at the pad.
+func TestInboxAlignment(t *testing.T) {
+	clock := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	// at is what starts at display column c of a line, and the column of
+	// each rune boundary, measured independently of the inbox's own cells.
+	at := func(l string, c int) string {
+		for i := range l {
+			if ansi.StringWidth(l[:i]) == c {
+				r := []rune(l[i:])
+				return string(r[0])
+			}
+		}
+		return ""
+	}
+	col := func(l, sub string) int {
+		if i := strings.Index(l, sub); i >= 0 {
+			return ansi.StringWidth(l[:i])
+		}
+		return -1
+	}
+	for _, size := range [][2]int{{120, 34}, {72, 30}} {
+		w, h := size[0], size[1]
+		m := inboxScene(clock)
+		m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+		for _, keys := range [][]string{nil, {"j", "j", "j", "j", "j", "j"}, {"j", "j", "j", "j", "j", "j", "j", "j", "j", "j"}} {
+			teaKeys(m, keys...)
+			m.dirty = true
+			lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+			if len(lines) != h {
+				t.Fatalf("%dx%d: %d lines", w, h, len(lines))
+			}
+			for n, l := range lines {
+				if got := ansi.StringWidth(l); got != w {
+					t.Errorf("%dx%d line %d is %d cells wide: %q", w, h, n, got, l)
+				}
+			}
+			for _, n := range []int{0, h - 1} {
+				if at(lines[n], 0) != " " || at(lines[n], 1) == " " {
+					t.Errorf("%dx%d: line %d does not start at the pad: %q", w, h, n, lines[n])
+				}
+			}
+			head := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "TITLE") })
+			title, why, age := col(lines[head], "TITLE"), col(lines[head], "WHY IT WAITS"), col(lines[head], "AGE")+len("AGE")-1
+			divider := -1
+			if w >= 100 {
+				divider = col(lines[head], "│")
+				for n, l := range lines[1 : h-2] {
+					if at(l, divider) != "│" {
+						t.Errorf("%dx%d: body line %d has no divider at column %d: %q", w, h, n+1, divider, l)
+					}
+				}
+			}
+			rows, icon := 0, -1
+			for _, l := range lines[head+1 : h-2] {
+				left := l
+				if divider > 0 {
+					left = ansi.Cut(l, 0, divider)
+				}
+				if strings.HasPrefix(left, " ─") {
+					break // the narrow frame's card starts here
+				}
+				if !regexp.MustCompile(`#[0-9]+ `).MatchString(left) {
+					if t2 := strings.TrimSpace(left); t2 != "" && at(left, 1) == " " {
+						t.Errorf("%dx%d: a group header does not start at the pad: %q", w, h, left)
+					}
+					continue
+				}
+				rows++
+				for _, c := range []int{title, why} {
+					if at(left, c-1) != " " || at(left, c-2) != " " || at(left, c) == " " {
+						t.Errorf("%dx%d: a column does not start at %d: %q", w, h, c, left)
+					}
+				}
+				if !strings.ContainsAny(at(left, title-3), "0123456789") || at(left, age-3) != " " {
+					t.Errorf("%dx%d: the number or the age is not in its column: %q", w, h, left)
+				}
+				ic := slices.IndexFunc([]rune(left), func(r rune) bool { return ansi.StringWidth(string(r)) == 2 })
+				ic = ansi.StringWidth(string([]rune(left)[:max(ic, 0)]))
+				if icon < 0 {
+					icon = ic
+				} else if ic != icon {
+					t.Errorf("%dx%d: an icon at column %d, not %d: %q", w, h, ic, icon, left)
+				}
+			}
+			if rows < 6 {
+				t.Errorf("%dx%d: only %d list rows checked:\n%s", w, h, rows, strings.Join(lines, "\n"))
+			}
+		}
 	}
 }
 
@@ -1139,10 +1329,10 @@ func TestInboxAcrossWrites(t *testing.T) {
 		m := tm.(*inboxModel)
 		teaDrive(m, m.Init())
 		m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-		teaKeys(m, "j", "j", "j") // past the needs-you items, onto the housekeeping line
+		teaKeys(m, "j", "j", "j") // past the needs-you items, onto the housekeeping
 		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if at := m.item(); at < 0 || m.items[at].Number != 1 {
-			t.Errorf("Tab from the housekeeping line: not on #1 (row %d)", m.cur)
+			t.Errorf("Tab from the housekeeping: not on #1 (row %d)", m.cur)
 		}
 		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
@@ -1155,13 +1345,19 @@ func TestInboxAcrossWrites(t *testing.T) {
 		if write == nil {
 			t.Fatal("Enter on #2 started no write")
 		}
-		if v := view(m); !strings.Contains(v, "Writing #2:") || !strings.Contains(v, "writing now") {
-			t.Errorf("while #2 is written, no stage:\n%s", v)
+		if v := view(m); !strings.Contains(v, "Writing #2:") || !strings.Contains(v, "writing now") || !strings.Contains(v, "Writing now · ") || !strings.Contains(v, "reading it again from GitHub") {
+			t.Errorf("while #2 is written, no stage or no checklist of its steps:\n%s", v)
 		}
 		teaKeys(m, "j")
 		if at(m) == 2 {
 			t.Error("j while a write runs did not move")
 		}
+		teaKeys(m, "j", "enter") // the housekeeping's recommendation: it waits its turn
+		if len(m.queue) != 2 || !strings.HasPrefix(m.status, "Queued #") {
+			t.Errorf("Enter on another item while a write runs: %q, %d in the queue", m.status, len(m.queue))
+		}
+		m.queue, m.total = m.queue[:1], 1 // only #2 runs in this test
+		teaKeys(m, "k")
 		teaKeys(m, "k", "enter")
 		if !strings.Contains(m.status, "#2 is being written now") || len(m.queue) != 1 {
 			t.Errorf("Enter on the item being written: %q, %d queued", m.status, len(m.queue))

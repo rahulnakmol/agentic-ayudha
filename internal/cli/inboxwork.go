@@ -23,12 +23,15 @@ type inboxWork struct {
 	calls   int
 	started time.Time
 	wrote   []string
+	stages  []string // every stage seen, in order; the last one seen is the current one
+	cur     int
 }
 
 func (w *inboxWork) begin(key string, now time.Time) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.key, w.stage, w.calls, w.started, w.wrote = key, "reading it again from GitHub", 0, now, nil
+	w.stages, w.cur = []string{w.stage}, 0
 }
 
 func (w *inboxWork) end() []string {
@@ -37,6 +40,13 @@ func (w *inboxWork) end() []string {
 	wrote := w.wrote
 	w.key, w.wrote = "", nil
 	return wrote
+}
+
+// steps are the stages seen so far and the index of the current one.
+func (w *inboxWork) steps() ([]string, int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.stages), w.cur
 }
 
 // snapshot is the stage, the calls so far, and when it started, for View.
@@ -55,6 +65,9 @@ func (w *inboxWork) saw(req *http.Request) {
 	w.calls++
 	stage, wrote := inboxStage(req.Method, req.URL.Path, req.URL.Query().Get("state"))
 	w.stage = stage
+	if w.cur = slices.Index(w.stages, stage); w.cur < 0 {
+		w.stages, w.cur = append(w.stages, stage), len(w.stages)
+	}
 	if wrote != "" && !slices.Contains(w.wrote, wrote) {
 		w.wrote = append(w.wrote, wrote)
 	}

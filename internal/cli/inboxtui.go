@@ -54,6 +54,22 @@ const (
 	inboxShake = 250 * time.Millisecond // a refused action
 )
 
+// Spacing, in terminal cells (display width: an emoji icon is two). Every
+// line of the frame is built from these, so each column, the pane divider,
+// the group headers, and the key bar start at the same cell on every row.
+const (
+	inboxPad    = 1   // inner padding: the left and right edge of each pane, and of the head, status, and key lines
+	inboxGutter = 2   // between two columns of the list
+	inboxWide   = 100 // at this width and above the list and the card sit side by side; below it they stack
+	inboxShare  = 62  // the list pane's share of a wide frame, in per cent
+	inboxMarkW  = 5   // the cursor ›, a space, and the mark: [ ] [x] for housekeeping, ✓ ✗ - ! and the write's spinner
+	inboxIconW  = 2   // the kind's icon
+	inboxWhyW   = 22  // why it waits, in a few words
+	inboxAgeW   = 3   // how long since it changed: 12m, 3h, 2d
+	inboxWhyMin = 60  // the list's content width that has room for the why column
+	inboxAgeMin = 48  // and for the age column
+)
+
 // inboxTUI reports whether `aayu inbox` runs the full-screen inbox.
 func (e *Env) inboxTUI(cfg *config.Config) bool {
 	if e.Plain || e.Getenv("AAYU_PLAIN") == "1" || cfg.UI.Plain || e.Getenv("TERM") == "dumb" {
@@ -156,16 +172,18 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 	for _, l := range m.log {
 		fmt.Fprintln(out, l)
 	}
-	done, skipped := 0, 0
+	done, skipped, gone := 0, 0, 0
 	for _, s := range m.state {
 		switch s {
 		case "done":
 			done++
 		case "skipped":
 			skipped++
+		case "gone":
+			gone++
 		}
 	}
-	return finishInbox(out, done, skipped, len(m.items)-done-skipped)
+	return finishInbox(out, done, skipped, len(m.items)-done-skipped-gone)
 }
 
 // ago is how long since t, in round words.
@@ -283,8 +301,9 @@ type inboxModel struct {
 	done       map[string]inboxDone
 	work       *inboxWork              // the write under way, as its GitHub requests show it
 	recordDone func(string, inboxDone) // keeps a done write for later sessions
-	rows       []int                   // the list: item indices, then -1 for the housekeeping line
-	expanded   bool                    // the housekeeping shown one item per row
+	rows       []int                   // the list: item indices, group by group (inboxGroups)
+	selected   map[string]bool         // housekeeping picked with x or X for one bulk action; never a needs-you item
+	live       bool                    // the items come from a read of GitHub this session, so one that leaves it is gone
 
 	cur, sel  int // the list row, and the choice selected on its card
 	armed     bool
@@ -340,7 +359,7 @@ type inboxModel struct {
 func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 	p := ui.New(nil, ui.Signals{TTY: true, NoColor: noColor, Theme: theme})
 	p.Theme = ui.ThemeFor(theme, true)
-	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, work: &inboxWork{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
+	return &inboxModel{repo: repo, login: login, state: map[string]string{}, done: map[string]inboxDone{}, selected: map[string]bool{}, work: &inboxWork{}, recordDone: func(string, inboxDone) {}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, theme: theme, dirty: true, now: time.Now,
 		flash: map[string]time.Time{}, spring: harmonica.NewSpring(harmonica.FPS(120), 30, 1)}
 }
@@ -402,10 +421,18 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 	seen := map[string]bool{}
 	for _, it := range m.items {
 		k := it.key()
-		if f, ok := byKey[k]; ok {
+		switch f, ok := byKey[k]; {
+		case ok:
 			out, seen[k] = append(out, f), true
-		} else if m.state[k] == "done" && !m.done[k].At.Before(m.opened) { // done this session: it stays, marked
+			if m.state[k] == "gone" {
+				delete(m.state, k)
+			}
+		case m.state[k] == "done" && !m.done[k].At.Before(m.opened): // done this session: it stays, marked
 			out, seen[k] = append(out, it), true
+		case m.live || m.state[k] == "gone": // it left GitHub's list while the person read it: it stays, marked gone
+			out, seen[k] = append(out, it), true
+			m.state[k] = "gone"
+			delete(m.selected, k)
 		}
 	}
 	for _, it := range fresh {
@@ -444,48 +471,52 @@ func (m *inboxModel) relist(fresh []InboxItem, at time.Time) {
 	}
 }
 
-// layoutRows lists the needs-you items, the housekeeping one by one when
-// expanded, and the housekeeping line.
-// A done item leaves the list, after its ✓ when there is motion.
+// The list's groups, in order: what only a person decides, what agents
+// stopped on, the housekeeping (the only part that can be selected), and what
+// this session settled.
+var inboxGroups = [...]struct{ name, about string }{
+	{"Needs you now", "one at a time"},
+	{"Waiting on the review cap", "agents stopped; you look next"},
+	{"Housekeeping", "x select · X all · C clear all"},
+	{"Done this session", "written here, or gone from GitHub"},
+}
+
+// group is the list group of item i (an index into inboxGroups). A done item
+// keeps its place while its ✓ shows, then moves to the last group.
+func (m *inboxModel) group(i int) int {
+	it := m.items[i]
+	switch st := m.state[it.key()]; {
+	case st == "gone" || st == "done" && !m.flashing(it.key()):
+		return 3
+	case it.kind().Housekeeping:
+		return 2
+	case it.Kind == InboxCapped:
+		return 1
+	}
+	return 0
+}
+
+// layoutRows lists the items group by group.
 func (m *inboxModel) layoutRows() {
 	m.rows = m.rows[:0]
-	house := 0
-	shown := func(it InboxItem) bool { return m.state[it.key()] != "done" || m.flashing(it.key()) } // done rows come last
-	for i, it := range m.items {
-		switch {
-		case !shown(it):
-		case !it.kind().Housekeeping:
-			m.rows = append(m.rows, i)
-		default:
-			house++
-		}
-	}
-	if m.expanded {
-		for i, it := range m.items {
-			if it.kind().Housekeeping && shown(it) {
+	for g := range inboxGroups {
+		for i := range m.items {
+			if m.group(i) == g {
 				m.rows = append(m.rows, i)
 			}
-		}
-	}
-	if house > 0 {
-		m.rows = append(m.rows, -1)
-	}
-	for i, it := range m.items { // done, after the rest: who did it and when, never offered again
-		if m.state[it.key()] == "done" && !m.flashing(it.key()) {
-			m.rows = append(m.rows, i)
 		}
 	}
 }
 
 // relayout lays the list out again with the cursor on the same item.
 func (m *inboxModel) relayout() {
-	was, key, onHouse := m.cur, "", m.item() < 0
+	was, key := m.cur, ""
 	if i := m.item(); i >= 0 {
 		key = m.items[i].key()
 	}
 	m.layoutRows()
 	for r, i := range m.rows {
-		if (i >= 0 && m.items[i].key() == key) || (i < 0 && onHouse) {
+		if m.items[i].key() == key {
 			m.cur = r
 			m.glide += float64(r - was)
 			return
@@ -506,7 +537,7 @@ func (m *inboxModel) refuse(s string) {
 	m.status, m.refusal, m.refusedAt = s, s, m.now()
 }
 
-// item is the item under the cursor, or -1 (the housekeeping line, or none).
+// item is the item under the cursor, or -1 when the list is empty.
 func (m *inboxModel) item() int {
 	if m.cur < 0 || m.cur >= len(m.rows) {
 		return -1
@@ -514,13 +545,13 @@ func (m *inboxModel) item() int {
 	return m.rows[m.cur]
 }
 
-// left counts what still waits: the cards that need a person, and the
+// left counts what still waits: the items that need a person, and the
 // housekeeping. It allocates nothing, for View.
 func (m *inboxModel) left() (needs, house int) {
 	for i := range m.items {
 		it := &m.items[i]
-		switch {
-		case m.state[it.key()] == "done":
+		switch st := m.state[it.key()]; {
+		case st == "done" || st == "gone":
 		case inboxKinds[it.Kind].Housekeeping:
 			house++
 		default:
@@ -536,24 +567,19 @@ func (m *inboxModel) houseLeft() int { _, n := m.left(); return n }
 func (m *inboxModel) house() []InboxItem {
 	var out []InboxItem
 	for _, it := range m.items {
-		if it.kind().Housekeeping && m.state[it.key()] != "done" {
+		if st := m.state[it.key()]; it.kind().Housekeeping && st != "done" && st != "gone" {
 			out = append(out, it)
 		}
 	}
 	return out
 }
 
-// choices are the card's choices: an item's, or the housekeeping line's.
+// choices are the choices of the item under the cursor.
 func (m *inboxModel) choices() []InboxAction {
 	if i := m.item(); i >= 0 {
 		return m.items[i].choices()
 	}
-	_, n := m.left()
-	if n == 0 {
-		return nil
-	}
-	return []InboxAction{{N: 1, Label: fmt.Sprintf("Tidy all %d", n), Command: "tidy", Recommended: true},
-		{N: 2, Label: "Go through them one by one", Command: "expand"}}
+	return nil
 }
 
 func (m *inboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -574,8 +600,6 @@ func (m *inboxModel) animate() tea.Cmd {
 	case len(m.rows) == 0:
 	case i >= 0:
 		key = m.items[i].key()
-	default:
-		key = "housekeeping"
 	}
 	if key != m.cardKey {
 		m.cardKey, m.cardIn = key, now
@@ -705,6 +729,7 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	if msg.changed || first {
 		m.merge(msg.items)
 	}
+	m.live = true
 	m.relist(msg.items, msg.at)
 	if m.quitting {
 		return tea.Quit
@@ -733,10 +758,10 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	case errors.As(msg.err, &ch):
 		m.work.end()
 		m.failed++
-		if ch.Item.Number == 0 { // it no longer waits
-			m.items = slices.DeleteFunc(m.items, func(it InboxItem) bool { return it.key() == msg.key })
-			m.layoutRows()
-			m.cur = min(m.cur, max(len(m.rows)-1, 0))
+		delete(m.selected, msg.key)
+		if ch.Item.Number == 0 { // it no longer waits: it stays, marked gone
+			m.state[msg.key] = "gone"
+			m.relayout()
 		} else {
 			for i := range m.items {
 				if m.items[i].key() == msg.key {
@@ -759,6 +784,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
 	default:
 		m.state[msg.key] = "done"
+		delete(m.selected, msg.key)
 		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: m.work.end()}
 		m.done[msg.key] = d
 		m.recordDone(msg.key, d)
@@ -788,13 +814,12 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	return nil
 }
 
-// next moves to the next card still waiting, after the cursor, wrapping.
+// next moves to the next item still waiting, after the cursor, wrapping.
 func (m *inboxModel) next() {
 	m.sel, m.armed = 0, false
 	for d := 1; d <= len(m.rows); d++ {
 		r := (m.cur + d) % len(m.rows)
-		i := m.rows[r]
-		if (i < 0 && m.houseLeft() > 0) || (i >= 0 && m.state[m.items[i].key()] == "") {
+		if m.state[m.items[m.rows[r]].key()] == "" {
 			m.cur = r
 			return
 		}
@@ -822,6 +847,9 @@ func (m *inboxModel) run() tea.Cmd {
 // start queues jobs; with none under way, the first starts now. A job asked
 // for while another runs waits its turn: the screen stays live meanwhile.
 func (m *inboxModel) start(jobs []inboxJob) tea.Cmd {
+	for _, j := range jobs {
+		delete(m.selected, j.it.key())
+	}
 	if len(m.queue) > 0 {
 		m.queue = append(m.queue, jobs...)
 		m.total = max(m.total, 1) + len(jobs)
@@ -919,18 +947,30 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case "k", "up":
 		m.move(-1)
 	case "esc":
-		if m.armed {
+		switch {
+		case m.armed:
 			m.armed, m.status = false, "Not applied; nothing was written."
+		case len(m.selected) > 0:
+			clear(m.selected)
+			m.status = "Selection cleared; nothing was written."
 		}
 	case "enter":
+		if len(m.selected) > 0 {
+			m.askBulk()
+			return nil
+		}
 		return m.enter()
+	case "x", "space":
+		m.toggle()
+	case "X":
+		m.selectHouse()
 	case "s":
 		if i := m.item(); i >= 0 && m.state[m.items[i].key()] == "" {
 			m.state[m.items[i].key()] = "skipped"
 			m.status = fmt.Sprintf("Skipped #%d for now; j and k come back to it.", m.items[i].Number)
 		}
 		m.next()
-	case "A":
+	case "C", "A":
 		m.askTidy()
 	case "/", "ctrl+k":
 		m.finding, m.query, m.hit = true, "", 0
@@ -974,7 +1014,7 @@ func (m *inboxModel) cycle(dir int) {
 	for d := 1; d <= n; d++ {
 		r := ((m.cur+dir*d)%n + n) % n
 		i := m.rows[r]
-		if i >= 0 && !m.items[i].kind().Housekeeping && m.state[m.items[i].key()] != "done" {
+		if st := m.state[m.items[i].key()]; !m.items[i].kind().Housekeeping && st != "done" && st != "gone" {
 			if r != m.cur {
 				m.cur, m.sel, m.armed = r, 0, false
 			}
@@ -1005,20 +1045,7 @@ func (m *inboxModel) enter() tea.Cmd {
 		return nil
 	}
 	c := cs[min(m.sel, len(cs)-1)]
-	i := m.item()
-	if i < 0 {
-		switch c.Command {
-		case "tidy":
-			m.askTidy()
-		case "expand":
-			m.expanded = true
-			m.layoutRows()
-			m.status = "Housekeeping, one item per card. A still tidies all of it."
-			m.next()
-		}
-		return nil
-	}
-	it := m.items[i]
+	it := m.items[m.item()]
 	running, waiting := m.queued(it.key())
 	d, acted := m.done[it.key()]
 	switch {
@@ -1026,6 +1053,8 @@ func (m *inboxModel) enter() tea.Cmd {
 		m.refuse(fmt.Sprintf("#%d is being written now; it is not started twice.", it.Number))
 	case waiting:
 		m.refuse(fmt.Sprintf("#%d is queued already; it runs after the write under way.", it.Number))
+	case m.state[it.key()] == "gone":
+		m.refuse(fmt.Sprintf("#%d is no longer on GitHub's list of what waits; nothing to do.", it.Number))
 	case m.state[it.key()] == "done":
 		m.refuse(fmt.Sprintf("#%d is %s; it is written to GitHub and not offered again.", it.Number, d.line(m.now())))
 	case acted && c.Command != "open" && !m.armed: // relisted: GitHub still lists it after the write
@@ -1049,43 +1078,115 @@ func (m *inboxModel) enter() tea.Cmd {
 
 // askTidy asks to do every housekeeping recommendation: one confirmation.
 func (m *inboxModel) askTidy() {
+	m.askJobs(m.house(), "Clear all %d housekeeping %s?")
+}
+
+// askBulk asks to do the recommendation of every selected housekeeping item:
+// one confirmation that lists each.
+func (m *inboxModel) askBulk() {
+	var picked []InboxItem
+	for _, i := range m.rows {
+		if it := m.items[i]; m.selected[it.key()] && it.kind().Housekeeping {
+			picked = append(picked, it)
+		}
+	}
+	m.askJobs(picked, "Do the recommendation for %d selected housekeeping %s?")
+}
+
+func (m *inboxModel) askJobs(items []InboxItem, title string) {
 	var jobs []inboxJob
 	var lines []string
-	for _, it := range m.house() {
-		if it.tidy() {
+	for _, it := range items {
+		if running, waiting := m.queued(it.key()); it.tidy() && !running && !waiting {
 			jobs = append(jobs, inboxJob{it, *it.recommended()})
 			lines = append(lines, fmt.Sprintf("%s #%d: %s", it.kind().Icon, it.Number, it.recommended().Label))
 		}
 	}
 	if len(jobs) == 0 {
-		m.refuse("No housekeeping is left to tidy.")
+		m.refuse("No housekeeping is left to clear.")
 		return
 	}
-	m.ask = &inboxAsk{title: fmt.Sprintf("Tidy all %d housekeeping %s?", len(jobs), plural(len(jobs), "item", "items")),
+	m.ask = &inboxAsk{title: fmt.Sprintf(title, len(jobs), plural(len(jobs), "item", "items")),
 		lines: append(lines, "", fmt.Sprintf("Each is written to GitHub as @%s and is not undone here. Nothing in the code changes.", m.login)), jobs: jobs}
 	m.status = "Nothing is written until you press Enter."
 }
 
-// find ranks every item, the housekeeping line, and the card's choices
+// selectable says why item i cannot be selected for a bulk action, or "".
+// Only housekeeping can: a needs-you item is decided on its own.
+func (m *inboxModel) selectable(i int) string {
+	it := m.items[i]
+	running, waiting := m.queued(it.key())
+	switch st := m.state[it.key()]; {
+	case !it.kind().Housekeeping:
+		return fmt.Sprintf("#%d needs you; only housekeeping can be selected.", it.Number)
+	case running || waiting:
+		return fmt.Sprintf("#%d is being written already.", it.Number)
+	case st == "done" || st == "gone":
+		return fmt.Sprintf("#%d is %s; there is nothing to select.", it.Number, st)
+	}
+	return ""
+}
+
+// toggle selects or clears the housekeeping item under the cursor: x.
+func (m *inboxModel) toggle() {
+	i := m.item()
+	if i < 0 {
+		return
+	}
+	if why := m.selectable(i); why != "" {
+		m.refuse(why)
+		return
+	}
+	k := m.items[i].key()
+	if m.selected[k] {
+		delete(m.selected, k)
+	} else {
+		m.selected[k] = true
+	}
+	m.sayPicked()
+}
+
+// selectHouse selects every housekeeping item that can be, or clears them
+// when all are already selected: X. It never selects a needs-you item.
+func (m *inboxModel) selectHouse() {
+	var can []string
+	for _, i := range m.rows {
+		if m.selectable(i) == "" {
+			can = append(can, m.items[i].key())
+		}
+	}
+	all := len(can) > 0
+	for _, k := range can {
+		all = all && m.selected[k]
+	}
+	clear(m.selected)
+	if !all {
+		for _, k := range can {
+			m.selected[k] = true
+		}
+	}
+	m.sayPicked()
+}
+
+func (m *inboxModel) sayPicked() {
+	if n := len(m.selected); n > 0 {
+		m.status = fmt.Sprintf("%d housekeeping %s selected; Enter asks once, then does each.", n, plural(n, "item", "items"))
+		return
+	}
+	m.status = "Nothing selected."
+}
+
+// find ranks every item and the card's choices
 // against the query, fzf-style (sahilm/fuzzy): the best match first and
 // selected. It runs on each keystroke, never in View.
 func (m *inboxModel) find() {
 	var texts []string
 	var base []inboxHit
 	add := func(h inboxHit) { base, texts = append(base, h), append(texts, h.text) }
-	for r, i := range m.rows {
-		if i < 0 {
-			add(inboxHit{row: r, choice: -1, item: -1, icon: inboxTidy.Icon, text: fmt.Sprintf("%d housekeeping · tidy all", m.houseLeft())})
-		} else if !m.items[i].kind().Housekeeping {
-			add(m.itemHit(i))
-		}
+	for _, i := range m.rows {
+		add(m.itemHit(i))
 	}
-	for i, it := range m.items { // every housekeeping item, folded or not
-		if it.kind().Housekeeping {
-			add(m.itemHit(i))
-		}
-	}
-	if i := m.item(); i >= 0 || m.houseLeft() > 0 {
+	if i := m.item(); i >= 0 {
 		for ci, c := range m.choices() {
 			label := c.Label
 			if i >= 0 {
@@ -1180,10 +1281,6 @@ func (m *inboxModel) jump(h int) {
 	}
 	hit := m.hits[h]
 	if hit.item >= 0 {
-		if !m.expanded && m.items[hit.item].kind().Housekeeping {
-			m.expanded = true
-			m.layoutRows()
-		}
 		hit.row = slices.Index(m.rows, hit.item)
 	}
 	if hit.row >= 0 {
@@ -1273,8 +1370,9 @@ var (
 	inboxUnder = lipgloss.NewStyle().Underline(true)
 )
 
-// render draws the frame: the head line, the list and the card side by side
-// (stacked on a narrow terminal), the status line, and the keys.
+// render draws the frame: the head line, the list and the card (side by side
+// on a wide terminal, the list above the card on a narrow one), the status
+// line, and the keys. Every line is exactly the terminal's width.
 func (m *inboxModel) render() string {
 	m.zones = m.zones[:0]
 	w, h := max(m.w, 20), max(m.h, 8)
@@ -1286,94 +1384,193 @@ func (m *inboxModel) render() string {
 			head += fmt.Sprintf(" · %d housekeeping", n)
 		}
 	}
-	if ansi.StringWidth(head)+3+len(m.repo) <= w {
-		head += " · " + m.repo
+	if ansi.StringWidth(head)+3+len(m.repo) <= w-2*inboxPad {
+		head += m.style(ui.Muted, " · "+m.repo)
 	}
 	body := h - 3
+	inner := w - 2*inboxPad
 	var lines []string
-	sh := m.cardShift()
-	shift := strings.Repeat(" ", sh)
+	shift := strings.Repeat(" ", m.cardShift())
+	padded := func(ls []string) []string {
+		var out []string
+		for _, l := range ls {
+			out = append(out, cell(l, inner))
+		}
+		return out
+	}
 	switch {
 	case m.loading && len(m.items) == 0:
-		lines = m.skeleton(w, body)
+		lines = padded(m.skeleton(inner, body))
 	case len(m.rows) == 0:
-		lines = []string{"", m.style(ui.Title, "Nothing waits for you."), "", "Every human-only step is done. q quits."}
-	case m.ask != nil:
-		lines = m.askView(w, body)
-	case m.help:
-		lines = m.helpView(w)
+		lines = padded([]string{"", m.style(ui.Title, "Nothing waits for you."), "", "Every human-only step is done. q quits."})
+	case w < inboxWide && m.ask != nil:
+		lines = padded(m.askView(inner, body))
+	case w < inboxWide && m.help:
+		lines = padded(m.helpView(inner, body))
 	case m.finding:
-		lines = m.findView(w, body)
-	case w >= 100:
-		lw := min(max(w/3, 30), 44)
-		list := m.listView(lw, body, 0, 1)
-		card := m.cardView(w-lw-3, body, lw+3, 1)
+		lines = padded(m.findView(inner, body))
+	case w >= inboxWide:
+		lw, rw := m.panes(w)
+		list := append([]string{m.columnsHead(lw)}, m.listView(lw, body-1, inboxPad, 2)...)
+		var card []string
+		switch {
+		case m.ask != nil: // the confirmation and the help take the card's place; the list stays
+			card = m.askView(rw, body)[1:]
+		case m.help:
+			card = m.helpView(rw, body+1)[1:]
+		default:
+			card = m.cardView(rw, body, lw+3*inboxPad+1, 1)
+		}
+		bar := m.style(ui.Muted, "│")
 		for r := range body {
 			l, c := "", ""
 			if r < len(list) {
 				l = list[r]
 			}
 			if r < len(card) {
-				c = shift + ansi.Truncate(card[r], w-lw-3-sh, "")
+				c = shift + card[r]
 			}
-			lines = append(lines, l+strings.Repeat(" ", max(lw-ansi.StringWidth(l), 0))+" "+m.style(ui.Muted, "│")+" "+c)
+			lines = append(lines, cell(l, lw)+strings.Repeat(" ", inboxPad)+bar+strings.Repeat(" ", inboxPad)+cell(c, rw))
 		}
 	default:
-		n := min(len(m.rows), 5, max(body/4, 2))
-		lines = m.listView(w, n, 0, 1)
-		lines = append(lines, m.style(ui.Muted, strings.Repeat("─", w)))
-		for _, l := range m.cardView(w, body-n-1, 0, n+2) {
-			lines = append(lines, shift+ansi.Truncate(l, w-sh, ""))
+		listH := min(len(m.listLines()), max(body/2-1, 4))
+		lines = append(lines, m.columnsHead(inner))
+		lines = append(lines, m.listView(inner, listH, inboxPad, 2)...)
+		lines = append(lines, m.style(ui.Muted, strings.Repeat("─", inner)))
+		for _, l := range m.cardView(inner, body-len(lines), inboxPad, len(lines)+1) {
+			lines = append(lines, shift+l)
 		}
+		lines = padded(lines)
 	}
 	if len(lines) > body {
 		lines = lines[:body]
 	}
 	for len(lines) < body {
-		lines = append(lines, "")
+		lines = append(lines, strings.Repeat(" ", inner))
 	}
+	edge := strings.Repeat(" ", inboxPad)
 	var b strings.Builder
 	b.Grow(w * (h + 1) * 2)
-	b.WriteString(ansi.Truncate(head, w, "…"))
+	b.WriteString(edge + cell(head, inner) + edge)
 	for _, l := range lines {
-		b.WriteByte('\n')
-		b.WriteString(ansi.Truncate(l, w, "…"))
+		b.WriteString("\n" + edge + cell(l, inner) + edge)
 	}
-	b.WriteByte('\n')
-	b.WriteString(m.statusLine(w))
-	b.WriteByte('\n')
-	b.WriteString(m.keysLine(w))
+	b.WriteString("\n" + edge + cell(m.statusLine(inner), inner) + edge)
+	b.WriteString("\n" + edge + cell(m.keysLine(inner), inner) + edge)
 	return b.String()
 }
 
-// skeleton is the first read's screen: the shape of the list and the card
-// in muted blocks, and how far the read has got.
+// panes are the content widths of the list and the card on a wide frame:
+// with the padding and the divider they fill it exactly.
+func (m *inboxModel) panes(w int) (list, card int) {
+	inner := w - 2*inboxPad
+	list = inner * inboxShare / 100
+	return list, inner - list - 2*inboxPad - 1
+}
+
+// cell is s cut to width display cells (with …) and padded to exactly width:
+// one cell never runs into the next column.
+func cell(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(s) > width {
+		s = ansi.Truncate(s, width, "…")
+	}
+	return s + strings.Repeat(" ", max(width-ansi.StringWidth(s), 0))
+}
+
+// rcell is cell, aligned right.
+func rcell(s string, width int) string {
+	if ansi.StringWidth(s) > width {
+		return cell(s, width)
+	}
+	return strings.Repeat(" ", width-ansi.StringWidth(s)) + s
+}
+
+// inboxCols are the widths of the list's columns for a content width w; a
+// column with no room is 0 and not drawn.
+type inboxCols struct{ num, title, why, age int }
+
+func (m *inboxModel) cols(w int) inboxCols {
+	c := inboxCols{num: 2}
+	for _, it := range m.items {
+		c.num = max(c.num, len(strconv.Itoa(it.Number))+1)
+	}
+	if w >= inboxAgeMin {
+		c.age = inboxAgeW
+	}
+	if w >= inboxWhyMin {
+		c.why = inboxWhyW
+	}
+	c.title = w - inboxMarkW - inboxGutter - inboxIconW - inboxGutter - c.num - inboxGutter
+	for _, extra := range []int{c.why, c.age} {
+		if extra > 0 {
+			c.title -= inboxGutter + extra
+		}
+	}
+	return c
+}
+
+// row joins the cells of one list row, each fitted to its column.
+func (c inboxCols) row(mark, icon, num, title, why, age string) string {
+	gap := strings.Repeat(" ", inboxGutter)
+	r := cell(mark, inboxMarkW) + gap + cell(icon, inboxIconW) + gap + rcell(num, c.num) + gap + cell(title, max(c.title, 1))
+	if c.why > 0 {
+		r += gap + cell(why, c.why)
+	}
+	if c.age > 0 {
+		r += gap + rcell(age, c.age)
+	}
+	return r
+}
+
+// columnsHead names the list's columns, in the list's own cells.
+func (m *inboxModel) columnsHead(w int) string {
+	return m.style(ui.Muted, m.cols(w).row("", "", "#", "TITLE", "WHY IT WAITS", "AGE"))
+}
+
+// inboxLine is one line of the list: a group's header, the blank line
+// between groups, or row r of m.rows.
+type inboxLine struct {
+	group, row int // row is -1 for a header or a blank
+}
+
+// listLines are the list's lines: each group that has rows, its header first,
+// with one blank line between groups.
+func (m *inboxModel) listLines() []inboxLine {
+	var out []inboxLine
+	g := -1
+	for r, i := range m.rows {
+		if gi := m.group(i); gi != g {
+			if g >= 0 {
+				out = append(out, inboxLine{gi, -2})
+			}
+			g = gi
+			out = append(out, inboxLine{g, -1})
+		}
+		out = append(out, inboxLine{g, r})
+	}
+	return out
+}
+
+// skeleton is the first read's screen: the shape of the list in muted blocks,
+// and how far the read has got.
 func (m *inboxModel) skeleton(w, h int) []string {
 	block := func(n int) string { return m.style(ui.Muted, strings.Repeat("░", max(n, 1))) }
-	say := []string{"", m.spinner() + "Reading the issues and pull requests of " + m.repo + "…"}
+	c := m.cols(min(w, max(w*inboxShare/100, 40)))
+	out := []string{"", m.spinner() + "Reading the issues and pull requests of " + m.repo + "…"}
 	switch l := m.load; {
 	case l.total > 0:
-		say = append(say, fmt.Sprintf("%s %d of %d items checked", m.bar(l.done, l.total, 16), l.done, l.total))
+		out = append(out, fmt.Sprintf("%s %d of %d items checked", m.bar(l.done, l.total, 16), l.done, l.total))
 	case l.what != "":
-		say = append(say, l.what+"…")
+		out = append(out, l.what+"…")
 	}
-	list := []string{"  " + block(2) + " " + block(22) + "  " + block(4), "  " + block(2) + " " + block(17), "  " + block(2) + " " + block(25), "  " + block(2) + " " + block(13)}
-	card := []string{block(18), block(34), block(44), "", block(30), block(40), block(36), "", "  " + block(26), "  " + block(18)}
-	var out []string
-	if w >= 100 {
-		lw := min(max(w/3, 30), 44)
-		right := append(slices.Clone(card), say...)
-		for r := range min(len(right), h) {
-			l := ""
-			if r < len(list) {
-				l = list[r]
-			}
-			out = append(out, l+strings.Repeat(" ", max(lw-ansi.StringWidth(l), 0))+" "+m.style(ui.Muted, "│")+" "+right[r])
-		}
-		return out
+	out = append(out, "")
+	for _, n := range []int{22, 17, 25, 13} {
+		out = append(out, c.row("", block(2), block(3), block(min(n, c.title)), block(min(12, c.why)), block(min(2, c.age))))
 	}
-	out = append(append(out, list[:3]...), m.style(ui.Muted, strings.Repeat("─", w)))
-	return append(append(out, card...), say...)
+	return out
 }
 
 // cardShift is how far right the card sits this frame: a short slide as a
@@ -1400,71 +1597,122 @@ func (m *inboxModel) bar(done, total, width int) string {
 	return m.style(ui.OK, strings.Repeat("█", full)) + m.style(ui.Muted, strings.Repeat("░", width-full))
 }
 
-// listView is the list: one row per card, the cursor row reversed (and
-// marked › for a screen reader), the housekeeping folded into one row.
-// x and y place it on the screen, for the mouse.
+// listView is the list: the groups with their counts, and one row per item
+// in fixed columns (the mark, the icon, the number, the title, why it waits,
+// and its age), the cursor row reversed and marked ›. Each line is exactly w
+// cells wide. x and y place it on the screen, for the mouse.
 func (m *inboxModel) listView(w, h, x, y int) []string {
-	off := 0
-	if len(m.rows) > h {
-		off = min(max(m.cur-h/2, 0), len(m.rows)-h)
-	}
-	numW := 0
-	for _, i := range m.rows {
-		if i >= 0 {
-			numW = max(numW, len(strconv.Itoa(m.items[i].Number))+1)
-		}
-	}
+	lines := m.listLines()
+	c := m.cols(w)
 	hi := m.cur // the highlight: on the cursor, or gliding to it
 	if m.motion {
 		hi = min(max(int(math.Round(m.glide)), 0), max(len(m.rows)-1, 0))
 	}
+	at := slices.IndexFunc(lines, func(l inboxLine) bool { return l.row == hi })
+	off := 0
+	if len(lines) > h {
+		off = min(max(at-h/2, 0), len(lines)-h)
+	}
+	counts := map[int]int{}
+	for _, i := range m.rows {
+		counts[m.group(i)]++
+	}
+	shown := lines[off:min(off+h, len(lines))]
+	for len(shown) > 0 && shown[len(shown)-1].row < 0 {
+		shown = shown[:len(shown)-1] // a group's header with none of its rows in view
+	}
 	var out []string
-	for r := off; r < len(m.rows) && r < off+h; r++ {
-		i := m.rows[r]
-		var icon, text, num string
-		muted, done := false, false
-		if i < 0 {
-			icon = inboxTidy.Icon
-			if n := m.houseLeft(); n > 0 {
-				text = fmt.Sprintf("%d housekeeping · A tidies all", n)
-			} else {
-				text, done = "✓ housekeeping done", true
-			}
-		} else {
-			it := m.items[i]
-			icon, text, num = it.kind().Icon, it.Title, "#"+strconv.Itoa(it.Number)
-			running, waiting := m.queued(it.key())
-			switch st := m.state[it.key()]; {
-			case running:
-				text = m.spinner() + "writing · " + text
-			case waiting:
-				text, muted = "queued · "+text, true
-			case st == "done":
-				text, done = "✓ "+m.done[it.key()].line(m.now())+" · "+text, true
-			case st == "relisted":
-				text, muted = "still listed after you acted · "+text, true
-			case st == "":
-			default:
-				text, muted = st+" · "+text, true
-			}
+	for _, l := range shown {
+		switch l.row {
+		case -2:
+			out = append(out, strings.Repeat(" ", w))
+			continue
+		case -1:
+			g := inboxGroups[l.group]
+			name := fmt.Sprintf("%s (%d)", g.name, counts[l.group])
+			out = append(out, cell(m.style(ui.Accent, name)+"  "+m.style(ui.Muted, g.about), w))
+			continue
 		}
-		room := max(w-2-3-numW-1, 4)
-		text = ansi.Truncate(text, room, "…")
-		row := icon + " " + text + strings.Repeat(" ", max(room-ansi.StringWidth(text), 0)) + " " + fmt.Sprintf("%*s", numW, num)
+		it := m.items[m.rows[l.row]]
+		mark, why, role := m.rowState(m.rows[l.row])
+		cursor := " "
 		switch {
-		case r == hi:
-			row = reverse("› " + row)
-		case done:
-			row = "  " + m.style(ui.OK, row)
-		case muted:
-			row = "  " + m.style(ui.Muted, row)
-		default:
-			row = "  " + row
+		case l.row == hi:
+			cursor = "›"
+		case role == ui.Accent: // a selected row: only its [x] is coloured, so the list stays calm
+			mark, role = m.style(ui.Accent, mark), inboxText
 		}
-		m.zones = append(m.zones, inboxZone{x0: x, x1: x + w, y0: y + len(out), y1: y + len(out), row: r, choice: -1, hit: -1})
+		row := c.row(cursor+" "+mark, it.kind().Icon, "#"+strconv.Itoa(it.Number), it.Title, why, shortAgo(m.now(), it.Updated))
+		switch {
+		case l.row == hi:
+			row = reverse(row)
+		case role != inboxText:
+			row = m.style(role, row)
+		}
+		m.zones = append(m.zones, inboxZone{x0: x, x1: x + w, y0: y + len(out), y1: y + len(out), row: l.row, choice: -1, hit: -1})
 		out = append(out, row)
 	}
+	for len(out) < min(h, len(lines)) {
+		out = append(out, strings.Repeat(" ", w))
+	}
 	return out
+}
+
+// rowState is item i's mark (three cells), its why-it-waits words, and the
+// role its row is drawn in (inboxText for the text colour).
+func (m *inboxModel) rowState(i int) (mark, why string, role ui.Role) {
+	it := m.items[i]
+	k := it.key()
+	running, waiting := m.queued(k)
+	d := m.done[k]
+	switch st := m.state[k]; {
+	case running:
+		frame := "*"
+		if m.motion {
+			frame = strings.TrimSpace(ansi.Strip(m.spin.View()))
+		}
+		return " " + frame + " ", "writing now", ui.Warn
+	case waiting:
+		return "...", "queued", ui.Muted
+	case st == "done":
+		who := "you"
+		if d.By != m.login {
+			who = "@" + d.By
+		}
+		return " ✓ ", "done by " + who + " " + d.when(m.now()), ui.OK
+	case st == "not done":
+		return " ✗ ", "failed: Enter retries", ui.Fail
+	case st == "gone":
+		return " - ", "gone from GitHub", ui.Muted
+	case st == "relisted":
+		return " ! ", "listed again after you", ui.Warn
+	case st == "skipped":
+		return "   ", "skipped for now", ui.Muted
+	case !it.kind().Housekeeping:
+		return "   ", it.short(), inboxText
+	case m.selected[k]:
+		return "[x]", it.short(), ui.Accent
+	}
+	return "[ ]", it.short(), inboxText
+}
+
+// inboxText is no role: the row keeps the text colour.
+const inboxText ui.Role = -1
+
+// shortAgo is how long since t in at most three cells: 12m, 3h, 2d.
+func shortAgo(now, t time.Time) string {
+	switch d := now.Sub(t); {
+	case t.IsZero():
+		return ""
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", min(int(d.Hours()/24), 99))
+	}
 }
 
 // cardView is the card for the cursor row: kind and number, the title, its
@@ -1498,16 +1746,6 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		case st != "":
 			tag += " · " + st
 		}
-	} else {
-		house := m.house()
-		kind, seat = inboxTidy, inboxTidy.Seat
-		tag = inboxTidy.Icon + " " + inboxTidy.Word
-		title = fmt.Sprintf("%d housekeeping %s", len(house), plural(len(house), "item", "items"))
-		if len(house) == 0 {
-			title = "Housekeeping is done"
-		} else {
-			counselText = tidyCounsel(house)
-		}
 	}
 	wrapTo := m.wrap
 	top := []string{m.style(ui.Muted, tag)}
@@ -1515,6 +1753,10 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		top = append(top, inboxBold.Render(l))
 	}
 	top = append(top, wrapTo(kind.Line, w)...) // what it means, in the text colour: it is read, not skimmed
+	var whyLines, writes []string              // the list's why-it-waits column, in full; the write on it
+	if it.Why != "" {
+		whyLines = m.wrapStyled(ui.Muted, "Why it waits: "+it.Why, w)
+	}
 	var counselLines []string
 	if counselText != "" {
 		who := seatIcons[seat] + " " + m.twinName(seat) + ", counsel, not approval"
@@ -1529,7 +1771,7 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	var choiceLines []string
 	choiceAt := map[int]int{} // a choice's first line
 	if i >= 0 {
-		top = append(top, m.writeLines(it, w)...)
+		writes = m.writeLines(it, w)
 	}
 	choiceLines = append(choiceLines, "")
 	for ci, c := range m.choices() {
@@ -1543,8 +1785,9 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		}
 		room := w - 7
 		ls := wrapTo(label, room)
+		under := false // the tail on its own line, under the label
 		if last := ls[len(ls)-1]; tail != "" && ansi.StringWidth(last)+2+len(tail) > room {
-			ls = append(ls, "")
+			ls, under = append(ls, tail), true
 		}
 		choiceAt[ci] = len(choiceLines)
 		for li, l := range ls {
@@ -1553,7 +1796,7 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 				num = fmt.Sprintf("%-3s", c.ref())
 			}
 			pad := room - ansi.StringWidth(l)
-			if li == len(ls)-1 && tail != "" {
+			if li == len(ls)-1 && tail != "" && !under {
 				l += strings.Repeat(" ", pad-len(tail)) + tail
 				pad = 0
 			}
@@ -1577,13 +1820,22 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		}
 		choiceLines = append(choiceLines, inboxBold.Render("Enter again applies it · Esc goes back"))
 	}
-	// Fit: the counsel gives way, then the title.
-	if extra := len(top) + len(counselLines) + len(choiceLines) - h; extra > 0 && len(counselLines) > 3 {
-		keep := max(len(counselLines)-extra-1, 3)
+	// Fit: the counsel gives way, then the full why; the choices and what
+	// the selected one does always show.
+	extra := func() int { return len(top) + len(whyLines) + len(writes) + len(counselLines) + len(choiceLines) - h }
+	if extra() > 0 && len(counselLines) > 3 {
+		keep := max(len(counselLines)-extra()-1, 3)
 		if keep < len(counselLines) {
 			counselLines = append(counselLines[:keep], m.style(ui.Muted, "▏ … ? shows all of it"))
 		}
 	}
+	if extra() > 0 {
+		whyLines = whyLines[:max(len(whyLines)-extra(), 0)]
+	}
+	if extra() > 0 {
+		counselLines = nil
+	}
+	top = append(append(top, whyLines...), writes...)
 	out := append(append(top, counselLines...), choiceLines...)
 	base := y + len(top) + len(counselLines)
 	for ci, at := range choiceAt {
@@ -1594,24 +1846,39 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	return out
 }
 
-// writeLines is what the card says about a write on its item: its stage while
-// it runs, or who did it, when, and what it wrote.
+// writeLines is what the card says about a write on its item: while it runs,
+// its steps as a checklist; once done, who did it, when, and what it wrote.
 func (m *inboxModel) writeLines(it InboxItem, w int) []string {
 	k := it.key()
 	if running, _ := m.queued(k); running {
-		_, stage, calls, started := m.work.snapshot()
-		return append([]string{""}, m.wrapStyled(ui.Warn, fmt.Sprintf("%sWriting now: %s · %d GitHub %s · %s. You can read and move meanwhile.",
-			m.spinner(), stage, calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started))), w)...)
+		_, _, calls, started := m.work.snapshot()
+		steps, cur := m.work.steps()
+		out := []string{"", m.style(ui.Warn, cell(fmt.Sprintf("Writing now · %d GitHub %s · %s", calls, plural(calls, "call", "calls"), elapsed(m.now().Sub(started))), w))}
+		frame := "*"
+		if m.motion {
+			frame = strings.TrimSpace(ansi.Strip(m.spin.View()))
+		}
+		for j, st := range steps {
+			if j == cur {
+				out = append(out, m.style(ui.Warn, cell(frame+" "+st, w)))
+			} else {
+				out = append(out, m.style(ui.OK, "✓ ")+cell(st, w-2))
+			}
+		}
+		return append(out, m.wrapStyled(ui.Muted, "You can move and read meanwhile; Enter on another item queues it.", w)...)
 	}
 	d, ok := m.done[k]
 	if !ok {
 		return nil
 	}
-	role, say := ui.OK, "✓ "+upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+"."
 	if m.state[k] == "relisted" {
-		role, say = ui.Warn, upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+". GitHub, read since, still lists it, so it may still need you: Enter asks before doing it again."
+		return append([]string{""}, m.wrapStyled(ui.Warn, upperFirst(d.line(m.now()))+wroteSuffix(d.Wrote)+". GitHub, read since, still lists it, so it may still need you: Enter asks before doing it again.", w)...)
 	}
-	return append([]string{""}, m.wrapStyled(role, say, w)...)
+	out := append([]string{""}, m.wrapStyled(ui.OK, "✓ "+upperFirst(d.line(m.now())), w)...)
+	for _, wr := range d.Wrote {
+		out = append(out, "  "+m.style(ui.OK, "✓ ")+cell(wr, w-4))
+	}
+	return out
 }
 
 func (m *inboxModel) wrapStyled(r ui.Role, s string, w int) []string {
@@ -1648,25 +1915,36 @@ func (m *inboxModel) askView(w, h int) []string {
 }
 
 // helpView is ? : the plain explainer of what is on the card, its glossary
-// terms, and every key.
-func (m *inboxModel) helpView(w int) []string {
+// terms, and every key, in h lines; the explainer gives way to the keys.
+func (m *inboxModel) helpView(w, h int) []string {
 	k := inboxTidy
 	if i := m.item(); i >= 0 {
 		k = m.items[i].kind()
 	}
-	wrapTo := func(s string) []string { return m.wrap(s, w-2) }
-	out := []string{"", inboxBold.Render(strings.TrimSpace(k.Icon + " " + k.Word + ": what this means"))}
-	out = append(out, wrapTo(k.Explain)...)
-	out = append(out, m.style(ui.Muted, "Glossary: "+strings.Join(k.Terms, ", ")+" in GLOSSARY.md"), "", inboxBold.Render("Keys"))
-	for _, l := range []string{"Enter   do the selected choice (another choice or a", "        one-way door asks for Enter again)", "1-9     select a choice", "s       skip to the next card",
-		"Tab     next item that needs you (Shift-Tab: previous)", "j/k     move (↓/↑ and the mouse wheel too)", "/       find any item or choice (Ctrl+K too)", "A       tidy all housekeeping, after one confirmation",
-		"o       open on GitHub     R  refresh now     q  quit"} {
-		out = append(out, ansi.Truncate(l, w, "…"))
+	const keyW = 8 // the key column, and the hanging indent of what it does
+	keys := []string{"", inboxBold.Render("Keys")}
+	for _, kv := range [][2]string{{"Enter", "do the selected choice; a one-way door asks again"}, {"1-9", "select a choice"}, {"s", "skip for now"},
+		{"Tab", "next needs-you item (Shift-Tab back)"}, {"j/k", "move (↓/↑ and the mouse wheel too)"}, {"/", "find any item or choice (Ctrl+K)"},
+		{"x", "select housekeeping; never a needs-you item"}, {"X", "select all housekeeping"}, {"C", "clear all housekeeping, after one confirmation"},
+		{"Esc", "clear the selection, or go back"}, {"o", "open on GitHub"}, {"R", "refresh now"}, {"q", "quit"}} {
+		for li, l := range m.wrap(kv[1], w-keyW) {
+			key := ""
+			if li == 0 {
+				key = kv[0]
+			}
+			keys = append(keys, cell(inboxBold.Render(key), keyW)+l)
+		}
 	}
 	if m.refreshLog != "" {
-		out = append(out, m.style(ui.Muted, "Last refresh: "+m.refreshLog+"."))
+		keys = append(keys, m.style(ui.Muted, cell("Last refresh: "+m.refreshLog+".", w)))
 	}
-	return out
+	explain := m.wrap(k.Explain, w)
+	if room := h - len(keys) - 3; len(explain) > room {
+		explain = append(explain[:max(room-1, 0)], m.style(ui.Muted, "…"))
+	}
+	out := append([]string{"", inboxBold.Render(strings.TrimSpace(k.Icon + " " + k.Word + ": what this means"))}, explain...)
+	out = append(out, m.style(ui.Muted, cell("Glossary: "+strings.Join(k.Terms, ", ")+" in GLOSSARY.md", w)))
+	return append(out, keys...)
 }
 
 // findView is the finder: the query, how many match, and the ranked lines
@@ -1751,10 +2029,13 @@ func (m *inboxModel) keysLine(w int) string {
 		keys = []kb{{"Enter", "apply it", 0}, {"Esc", "back", 0}, {"1-9", "pick another", 1}}
 	case len(m.queue) > 0:
 		keys = []kb{{"Tab", "next item", 1}, {"j/k", "read others", 0}, {"Enter", "queue it", 1}, {"?", "help", 2}, {"q", "quit after this write", 0}}
+	case len(m.selected) > 0:
+		n := len(m.selected)
+		keys = []kb{{strconv.Itoa(n), "selected", 0}, {"Enter", fmt.Sprintf("do all %d", n), 0}, {"x", "toggle", 1}, {"X", "all/none", 2}, {"Esc", "clear", 0}}
 	default:
-		keys = []kb{{"Enter", "do it", 0}, {"Tab", "next", 1}, {"1-9", "pick", 2}, {"s", "skip", 2}, {"j/k", "move", 3}, {"/", "find", 2}, {"A", "tidy", 4}, {"?", "help", 1}, {"q", "quit", 0}}
+		keys = []kb{{"Enter", "do it", 0}, {"Tab", "next", 1}, {"x", "select", 2}, {"X", "all", 3}, {"C", "clear", 3}, {"/", "find", 2}, {"?", "help", 1}, {"q", "quit", 0}}
 		if m.houseLeft() == 0 {
-			keys = slices.DeleteFunc(keys, func(k kb) bool { return k.key == "A" })
+			keys = slices.DeleteFunc(keys, func(k kb) bool { return k.key == "x" || k.key == "X" || k.key == "C" })
 		}
 	}
 	for p := 5; p >= 0; p-- {

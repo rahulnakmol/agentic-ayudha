@@ -176,6 +176,7 @@ type InboxItem struct {
 	Counsel     string        `json:"counsel"`               // the twin's counsel, 75 words at most: posted on the issue, or written from the facts
 	CounselFrom string        `json:"counsel_from"`          // "posted" (aayu counsel --post, a Decision's) or "facts"
 	Evidence    string        `json:"evidence"`              // the one link the counsel rests on
+	Updated     time.Time     `json:"updated,omitzero"`      // when the issue or PR last changed on GitHub
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
@@ -192,6 +193,36 @@ type inboxFacts struct {
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
 
 func (it InboxItem) kind() inboxKind { return inboxKinds[it.Kind] }
+
+// short is why the item waits, in a few words that fit the list's column
+// (inboxWhyW); Why says it in full on the card.
+func (it InboxItem) short() string {
+	switch it.Kind {
+	case InboxDecision:
+		switch {
+		case strings.HasPrefix(it.Why, "not Decision-ready"):
+			return "not ready yet"
+		case it.Provisional:
+			return "provisional: ratify it"
+		case it.OneWay:
+			return "one-way door"
+		}
+		return "a choice only you make"
+	case InboxReady:
+		return "green; needs your pass"
+	case InboxHumanReview:
+		return "needs a human review"
+	case InboxCapped:
+		return "hit the review cap"
+	case InboxUnshipped:
+		return fmt.Sprintf("merged #%d, no ship", it.PR)
+	case InboxFixed:
+		return fmt.Sprintf("fixed in #%d", it.PR)
+	case InboxReplaced:
+		return fmt.Sprintf("replaced by #%d", it.ReplacedBy)
+	}
+	return ""
+}
 
 // key names the item across refreshes.
 func (it InboxItem) key() string { return it.Kind + "#" + strconv.Itoa(it.Number) }
@@ -479,7 +510,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		s.report("Checking", done, total)
 		labels := github.IssueLabels(is)
 		typ, _ := workitems.TypeOf(is.GetType().GetName(), labels)
-		it := InboxItem{Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), labels: labels}
+		it := InboxItem{Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Updated: is.GetUpdatedAt().Time, labels: labels}
 		status := ""
 		for _, l := range labels {
 			if v, ok := strings.CutPrefix(l, "status:"); ok {
@@ -551,7 +582,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			}
 		}
 		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev && !p.GetDraft() {
-			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
+			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
 				Evidence: p.GetHTMLURL(), f: inboxFacts{head: head},
 				Why: fmt.Sprintf("inspect's merge gate waits at the human rung for `%s`: no reviewer app or paid model could review it, so only the [autonomy] approver's recorded review clears it.", short(head)),
 				Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
@@ -565,7 +596,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		if st.Result != nil {
 			disp = st.Result.Disposition
 		}
-		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
+		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
 			Evidence: p.GetHTMLURL(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
 			Why: fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
 			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
@@ -632,7 +663,7 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, by []str
 		s.green[head] = true
 	}
 	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
-	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(),
+	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time,
 		Evidence: p.GetHTMLURL(), f: inboxFacts{story: story, head: head},
 		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
 		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
@@ -866,8 +897,11 @@ func (s *inboxSource) reread(ctx context.Context, it InboxItem) (InboxItem, erro
 		if f.key() != it.key() {
 			continue
 		}
+		was := it
+		f.Updated, was.Updated = time.Time{}, time.Time{} // a comment changes when it was updated, not what it asks
 		a, _ := json.Marshal(f)
-		b, _ := json.Marshal(it)
+		b, _ := json.Marshal(was)
+		f.Updated = items[slices.IndexFunc(items, func(x InboxItem) bool { return x.key() == f.key() })].Updated
 		if string(a) != string(b) {
 			return f, errInboxChanged{f}
 		}
