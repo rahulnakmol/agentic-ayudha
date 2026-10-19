@@ -17,7 +17,7 @@ With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @r
 `aayu ship` merges an agent's Story pull request into dev on proof alone, and on that path a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
-now gets a review, by default from a model you choose in your own CI, and the merge gate records how independent that review was. You approve the human-only steps
+now gets a review once it is ready for review, by default from a model you choose in your own CI, and the merge gate records how independent that review was. You approve the human-only steps
 agents queue for you from any device, one at a time in `aayu inbox`, and can accept several Decisions with one reply. No Feature is claimed as proven
 for this release.
 
@@ -54,7 +54,7 @@ for this release.
 
 ### The merge gate and review
 
-- The merge gate reviews every pull request that is not docs-only, and `aayu build` asks for the review after each push (#466).
+- The merge gate reviews every pull request that is not docs-only once it is marked ready for review (drafts wait), and `aayu build` asks for the review after each push (#466).
 - The merge gate records which model family built a pull request and which rung of the review ladder reviewed it: A for a reviewer app of another family, B for a paid reviewer of another family, C for a labelled same-family review (#483).
 - `aayu doctor` shows the rung your builds get and how to move up a rung (#522).
 - The ship record, `aayu audit`, and `aayu status --streak` record each merge's review rung (#518).
