@@ -190,7 +190,13 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			// private repository whose inspect job lacks checks: read), the
 			// wait has no start, and a person reviews rather than none.
 			if since.IsZero() && e.CI {
-				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, floor)
+				// The head the review stopped at waits from its reopen too: the
+				// stopped run asked no one (Codex's P1 on #724).
+				runs := floor
+				if a.prev.Stopped == head && runs.IsZero() {
+					runs = a.in.Reopened
+				}
+				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, runs)
 			}
 		}
 		if !own.IsZero() {
