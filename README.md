@@ -9,12 +9,14 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   documents only, to a review model in your CI. Its one key lives in your repository's `code-review` environment
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
   the builder's. Otherwise, or for an author without write access, an installed review app or a person reviews. A
-  review from the builder's own family is labelled rung C, and it never counts toward the streak (#510, #657).
+  review from the builder's own family is labelled rung C, and it never counts toward the streak
+  ([sources](docs/releases/v0.3.0.md#merge-and-review)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
-  by default, merges a story's pull request once its checks, proof, and review pass (#617). A long correction-free streak on
-  every layer it touches also lets it merge, when none of those layers is in `[autonomy] never` (#89). With merge on
-  proof on, the narrow set of files and settings always waits for a person (#617). The streak path does not check it
-  (#680). Every bypass is recorded, never as an approval (#118, #121).
+  by default, merges a story's pull request once its checks, proof, and review pass. A long correction-free streak on
+  every layer it touches also lets it merge, when none of those layers is in `[autonomy] never`. With merge on
+  proof on, the narrow set of files and settings always waits for a person. The streak path does not check it
+  ([known limits](docs/releases/v0.3.0.md#known-limits)). Every bypass is recorded
+  ([sources](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
 
 **New in v0.3.0:** a story's pull request can merge on its own once its checks, proof, and review pass, and each project
 names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
