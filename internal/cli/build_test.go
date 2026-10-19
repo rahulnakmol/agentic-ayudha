@@ -314,6 +314,17 @@ func TestShipPassRules(t *testing.T) {
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") {
 		t.Fatalf("never layer without the EM review: %d %s", code, out)
 	}
+	// With proof off, a narrow-set path holds the streak back, and the
+	// refusal says so rather than naming a merge on proof (#680).
+	g.Mu.Lock()
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".aayudha/config.local.json")
+	g.Mu.Unlock()
+	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") || !strings.Contains(out, "; no merge on the streak: it touches .aayudha/config.local.json") || strings.Contains(out, "no merge on proof") {
+		t.Fatalf("never layer without the EM review, a narrow-set path, proof off: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files = g.Pulls[prN].Files[:3]
+	g.Mu.Unlock()
 	// A solo-mode plan-review bypass satisfies the plan check (the human pass is checked next).
 	bypass := PlanRecord{Story: 2, Footprint: []string{"L02", "L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
 		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/c/1"}}}

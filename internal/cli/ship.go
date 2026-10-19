@@ -300,8 +300,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		if !ok || (plan.Review.ApprovedBy == "" && plan.Review.Bypass == nil) {
 			msg := fmt.Sprintf("ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve` (solo mode: `aayu plan %d --solo-bypass`)", n, strings.Join(rec.Pass.Never, ", "), story, story, story)
-			if proofWhy != "" {
+			if proofWhy != "" && pol.Config.Autonomy.Proof {
 				msg += "; no merge on proof: " + proofWhy
+			} else if proofWhy != "" { // proof off: the narrow set still holds the streak back (#680)
+				msg += "; no merge on the streak: " + proofWhy
 			}
 			return Errorf(ExitBlocked, "%s", msg)
 		}
