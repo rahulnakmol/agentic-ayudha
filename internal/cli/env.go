@@ -56,6 +56,9 @@ type Options struct {
 	GitHubAPI   string                                             // default https://api.github.com
 	NotifySink  notify.Sink                                        // replaces the [notify] channel (tests)
 	ModelClient func(route models.Route, key string) models.Client // replaces the model provider (tests)
+	// LedgerAttempt runs as each ledger write reads the branch tip, before it compares and writes (tests:
+	// a push from another writer at that moment).
+	LedgerAttempt func(attempt int, tip string)
 	// AppManifestCode replaces the browser step of init --identity (tests).
 	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
 	GitHubGap       time.Duration                                          // gap between GitHub writes; 0 is the client default (1s), negative none (tests)

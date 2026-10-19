@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
+	"github.com/rahulnakmol/agentic-ayudha/internal/brain"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 )
 
@@ -133,5 +134,65 @@ func TestBrainRefusesAnUnrelatedBranch(t *testing.T) {
 	}
 	if got := git(t, bare, "rev-parse", "refs/heads/brain"); got != tip {
 		t.Errorf("the unrelated brain branch moved to %s", got)
+	}
+}
+
+// TestBrainRetriesAfterAConcurrentPush: a push lands between aayu's read of
+// the brain tip and its write. Each retry reads the tree again and runs every
+// check again. A retry with nothing left to write succeeds. A branch that
+// stopped being a vault gets no commit.
+func TestBrainRetriesAfterAConcurrentPush(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	dir, bare := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+	if code, out, errOut := run(t, env, opts, "brain", "init", "--repo", "o/r"); code != 0 {
+		t.Fatalf("init: exit %d: %s%s", code, out, errOut)
+	}
+	other := filepath.Join(t.TempDir(), "other") // another writer's checkout of the brain branch
+	git(t, filepath.Dir(other), "clone", "--quiet", "--branch", "brain", bare, other)
+	pushOnce := func(change func()) func(int, string) {
+		done := false
+		return func(int, string) {
+			if done {
+				return
+			}
+			done = true
+			git(t, other, "pull", "--quiet", "origin", "brain")
+			change()
+			git(t, other, "add", "--all", ".")
+			git(t, other, "commit", "--quiet", "-m", "a concurrent push")
+			git(t, other, "push", "--quiet", "origin", "HEAD:refs/heads/brain")
+		}
+	}
+
+	// Another init adds the same workstream first: the retry finds it there and succeeds.
+	race := opts
+	race.LedgerAttempt = pushOnce(func() {
+		for p, b := range brain.Workstream("o/r", "ops", "2026-10-19") {
+			_ = os.MkdirAll(filepath.Join(other, filepath.Dir(p)), 0o755)
+			_ = os.WriteFile(filepath.Join(other, p), b, 0o644)
+		}
+	})
+	if code, out, errOut := run(t, env, race, "brain", "init", "--workstream", "ops", "--repo", "o/r"); code != 0 || !strings.Contains(out, "brain: workstream exists") {
+		t.Errorf("init after another init added the workstream: exit %d: %s%s", code, out, errOut)
+	}
+
+	// A person turns the branch into something else meanwhile: the checkpoint writes nothing to it.
+	race.LedgerAttempt = pushOnce(func() {
+		git(t, other, "rm", "--quiet", "-r", brain.MarkerPath, brain.HomePath)
+	})
+	g.AddIssue("Proof packs", "", "type:feature") // a record, so the checkpoint has a note to change
+	_ = os.WriteFile(filepath.Join(other, "Capabilities", "Proof packs.md"), []byte("---\nid: capability-proof\ntype: capability\ntitle: Proof packs\nowner: product-strategist\nstatus: live\nupdated: 2026-10-01\nsources: [\"issue #1\"]\nup: \"[[Capabilities]]\"\nissues: [1]\ntags: [type/capability]\n---\n\n# Proof packs\n"), 0o644)
+	git(t, other, "add", "--all", ".")
+	git(t, other, "commit", "--quiet", "-m", "a capability")
+	git(t, other, "push", "--quiet", "origin", "HEAD:refs/heads/brain")
+	code, out, errOut := run(t, env, race, "brain", "checkpoint", "--repo", "o/r")
+	if code != ExitBlocked || !strings.Contains(errOut, "not an aayudha vault") {
+		t.Errorf("checkpoint after the branch stopped being a vault: exit %d: %s%s", code, out, errOut)
+	}
+	git(t, other, "fetch", "--quiet", "origin", "brain")
+	if msg := git(t, other, "log", "-1", "--format=%s", "FETCH_HEAD"); msg != "a concurrent push" {
+		t.Errorf("the checkpoint wrote to a branch that is not a vault: the tip is %q", msg)
 	}
 }

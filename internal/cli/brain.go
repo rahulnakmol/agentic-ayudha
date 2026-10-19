@@ -152,19 +152,9 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 	outcome := "created"
 	if errors.Is(err, ledger.ErrExists) {
 		outcome = "exists"
-		err = nil
-		// The index rewrites whole notes, so a workstream lands only on the tip it
-		// read: when a person pushes in between, it reads their change and runs again.
-		for attempt := 0; ; attempt++ {
-			existing, tip, rerr := brainFiles(ctx, w)
-			if rerr != nil {
-				return rerr
-			}
-			if err := notVault(existing); err != nil {
-				return err
-			}
+		sha, err = landBrain(ctx, w, func(existing map[string][]byte) (ledger.Commit, error) {
 			if ws == "" {
-				break
+				return ledger.Commit{}, nil
 			}
 			add := map[string][]byte{}
 			for p, b := range brain.Workstream(repo, ws, today) {
@@ -174,20 +164,16 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 			}
 			outcome = "workstream exists"
 			if len(add) == 0 {
-				break
+				return ledger.Commit{}, nil
 			}
 			merged := maps.Clone(existing) // the root Workstreams map and Home list it in the same commit
 			maps.Copy(merged, add)
 			maps.Copy(add, brain.Index(merged, today))
 			outcome = "workstream added"
-			sha, err = w.Write(ctx, ledger.Commit{Message: "brain: add the " + ws + " workstream (aayu brain init)", Files: add, Base: tip})
-			if errors.Is(err, ledger.ErrMoved) && attempt < 4 {
-				continue
-			}
-			if err != nil {
-				return Wrap(ExitExternal, err)
-			}
-			break
+			return ledger.Commit{Message: "brain: add the " + ws + " workstream (aayu brain init)", Files: add}, nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 	if err != nil {
@@ -296,7 +282,7 @@ func (e *Env) brainCheckpoint(ctx context.Context) error {
 // checkpointBrain refreshes the brain branch from the repository's records
 // and writes one commit when anything changed.
 func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.Writer) (brain.Checkpoint, string, error) {
-	files, tip, err := brainFiles(ctx, w) // first: without a brain branch there is nothing to read records for
+	files, _, err := brainFiles(ctx, w) // first: without a brain vault there is nothing to read records for
 	if err != nil {
 		return brain.Checkpoint{}, "", err
 	}
@@ -309,29 +295,47 @@ func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.W
 	}
 	today := brain.Today(e.Now())
 	public := !e.private(ctx, c, w.Repo)
-	// A checkpoint rewrites whole notes, so it lands only on the tip it read:
-	// when a person pushes in between, it reads their change and runs again.
+	var cp brain.Checkpoint
+	sha, err := landBrain(ctx, w, func(files map[string][]byte) (ledger.Commit, error) {
+		var err error
+		if cp, err = brain.Run(files, r, today, public); err != nil {
+			return ledger.Commit{}, Errorf(ExitBlocked, "brain checkpoint: %v", err)
+		}
+		return ledger.Commit{Message: "brain: checkpoint " + today + " (aayu brain checkpoint)", Files: cp.Files}, nil
+	})
+	if err != nil || len(cp.Files) == 0 {
+		return cp, "", err
+	}
+	return cp, sha, nil
+}
+
+// landBrain lands one commit on the brain branch, built from the tip it read.
+// Notes are rewritten whole, so a commit lands only on that tip: when a person
+// pushes in between, it reads again. Every attempt re-reads the tree, refuses
+// a branch that is no longer a vault, and builds the commit afresh; an attempt
+// with nothing to write returns the tip, which already holds the change.
+func landBrain(ctx context.Context, w *ledger.Writer, build func(files map[string][]byte) (ledger.Commit, error)) (string, error) {
 	for attempt := 0; ; attempt++ {
-		if attempt > 0 {
-			if files, tip, err = brainFiles(ctx, w); err != nil {
-				return brain.Checkpoint{}, "", err
-			}
-		}
-		cp, err := brain.Run(files, r, today, public)
+		files, tip, err := brainFiles(ctx, w)
 		if err != nil {
-			return cp, "", Errorf(ExitBlocked, "brain checkpoint: %v", err)
+			return "", err
 		}
-		if len(cp.Files) == 0 {
-			return cp, "", nil
+		if err := notVault(files); err != nil {
+			return "", err
 		}
-		sha, err := w.Write(ctx, ledger.Commit{Message: "brain: checkpoint " + today + " (aayu brain checkpoint)", Files: cp.Files, Base: tip})
+		c, err := build(files)
+		if err != nil || len(c.Files) == 0 {
+			return tip, err
+		}
+		c.Base = tip
+		sha, err := w.Write(ctx, c)
 		if errors.Is(err, ledger.ErrMoved) && attempt < 4 {
 			continue
 		}
 		if err != nil {
-			return cp, "", Wrap(ExitExternal, err)
+			return "", Wrap(ExitExternal, err)
 		}
-		return cp, sha, nil
+		return sha, nil
 	}
 }
 
