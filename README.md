@@ -5,8 +5,9 @@ idea into clear promises, checks every change against them before it merges, and
 It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), on your GitHub repository.
 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
-- **Proof before merge.** A merge gate runs fixed checks in your CI and sends each change, other than a change to
-  documents only, to a review model in your CI. Its one key lives in your repository's `code-review` environment
+- **Proof before merge.** A merge gate runs fixed checks in your CI and sends each pull request that is ready for
+  review, other than a change to documents only, to a review model in your CI. A draft is not reviewed until you mark
+  it ready. Its one key lives in your repository's `code-review` environment
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
   the builder's. Otherwise, or for an author without write access, an installed review app or a person reviews. A
   review from the builder's own family is labelled rung C, and it never counts toward the streak
