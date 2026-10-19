@@ -1,0 +1,118 @@
+{
+  "story": 640,
+  "body_hash": "3fa881a3281e84d9f100580a7c3eb4187b2aff2f78ea789f0b4e0c17775c36c5",
+  "footprint": [
+    "L02",
+    "L03",
+    "L05",
+    "L07",
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Never layer L07 (operational config and identity): a committed local config file never changes policy in CI, and protected-only keys come only from .aayudha/config.toml. Why: only config.toml is code-owned, so a PR could commit .aayudha/config.json or config.local.* and loosen policy in a workflow (Bug #640). What changes: internal/config/load.go skips the local layer when Sources.CI is set (--ci or GITHUB_ACTIONS), with a notice naming the file; protectedSource refuses solo_provisional_after_hours and allow_pii from the JSON repo layer (the active_scan check from #509 now calls the same rule); keys and file names match the schema exactly, so a case variant is refused; a malformed local file in CI is not parsed, so it does not stop the load; an unlistable .aayudha directory fails the load naming it. internal/identity/cmd/protected-paths-gate loads with the CI flag, so the gate never reads a local file. Outside CI the local layer still applies, as it does today",
+      "contracts": [
+        "config.Sources.CI and config.InCI(getenv): the local layer is skipped, with a notice, when either is true",
+        "config.protectedSource(name, source): only the defaults or the repository layer read from config.toml (or a base revision's config.toml text) may set a protected-only key",
+        "config.Load decodes with exact field names and ErrorUnused; readDir reads a file only when the directory has an entry with exactly that name",
+        "protected-paths-gate main: config.Load with CI set from the environment"
+      ],
+      "tests": [
+        "internal/config:TestProtectedOnlyKeysFromTOML",
+        "internal/config:TestCaseVariantKeysRefused",
+        "internal/config:TestCaseVariantFileNamesIgnored",
+        "internal/config:TestLocalConfigIgnoredInCI",
+        "internal/config:TestMalformedLocalConfigInCI",
+        "internal/config:TestConfigDirUnlistable",
+        "internal/config:TestActiveScanKey",
+        "internal/identity/cmd/protected-paths-gate:TestLocalConfigIgnoredInCI"
+      ],
+      "instrumentation": [
+        "the notice that a local file was ignored in CI names the file, on stderr of the command that loaded it"
+      ],
+      "rollback": "revert the PR; config loading reads the local layer in CI again and accepts protected-only keys from config.json; no ledger or stored state changes",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L09",
+      "title": "Never layer L09 (platform): .github/CODEOWNERS owns /.aayudha/config.json, /.aayudha/config.local.toml and /.aayudha/config.local.json, so a PR that commits one needs a code owner. Why: Bug #640's request part (b); the code fix makes these files unable to set protected-only keys, and CODEOWNERS makes a committed one visible to a person. The CODEOWNERS lines are the PR's last commit, kept separate, because CODEOWNERS is in Decision #593's narrow set. Also in the narrow set, and mapped to no layer: .aayudha/config.toml adds go.mod and go.sum to [autonomy] always_person (asked for by @rahulnakmol on 2026-10-18), so a dependency change always needs a person. .gitignore ignores .aayudha/config.local.json beside the TOML local file",
+      "contracts": [
+        ".github/CODEOWNERS: three new lines, all owned by @rahulnakmol; no existing line changes",
+        ".aayudha/config.toml [autonomy] always_person gains \"go.mod\" and \"go.sum\", matched from the repository root"
+      ],
+      "tests": [
+        "internal/cli:TestShipOnProof",
+        "internal/config:TestRepositoryMergesOnProof"
+      ],
+      "rollback": "revert the PR; the three CODEOWNERS lines and the two always_person entries go, and nothing else reads them",
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "CLI: every command loads config with the CI flag (--ci or GITHUB_ACTIONS), so the local layer is skipped in CI for verify, upgrade, doctor and init; aayu upgrade's version check and plan take the flag too. LAYERS.md maps internal/upgrade, internal/doctor, internal/initrepo and internal/ratchet to no layer, so they are listed here, beside the verbs that call them",
+      "contracts": [
+        "internal/cli/root.go: upgrade.Check(root, current, e.CI || config.InCI(e.Getenv))",
+        "internal/upgrade: Check and Plan take the CI flag and skip a newer local file in CI; doctor's schema row passes Probe.CI",
+        "internal/initrepo: the .aayudha/.gitignore that aayu init writes ignores config.local.json too",
+        "internal/ratchet/cmd/ratchet: prints the load's notices, so a skipped local file is visible in the build job"
+      ],
+      "tests": [
+        "internal/cli:TestLocalConfigIgnoredInCI",
+        "internal/cli:TestNewerLocalConfigIgnoredInCI",
+        "internal/upgrade:TestLocalConfigNewerSkippedInCI",
+        "internal/cli:TestInitWithoutRulesets",
+        "internal/doctor:TestCheckStates"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Workflow generators: loops/gen loads config with the CI flag from the environment, so a generator run in CI never reads a person's local file",
+      "contracts": [
+        "internal/loops/gen/main.go: config.Load(config.Sources{RepoDir: root, CI: config.InCI(os.Getenv)})"
+      ],
+      "tests": [
+        "generate-drift: go generate ./... leaves no diff"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        2
+      ]
+    },
+    {
+      "layer": "L05",
+      "title": "Evals: a case's grill assessment loads config with the CI flag (config.InCI), and the eval command prints the load's notices, so a committed local file cannot change grill's verification facts in CI",
+      "contracts": [
+        "internal/evals/conversation.go Case.Assess: passes the CI flag to config.Load",
+        "internal/evals/cmd/eval: prints the load's notices on stderr"
+      ],
+      "tests": [
+        "internal/evals:TestAssessIgnoresLocalConfigInCI"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        2
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07",
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-19T12:12:29Z",
+  "planned_by": "human-fallback"
+}
