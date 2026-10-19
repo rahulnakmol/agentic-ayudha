@@ -203,6 +203,11 @@ func DiffHash(in Input) string {
 	if in.Mode == ModePeer {
 		h.Write([]byte("\x00peer"))
 	}
+	if len(in.Diff) > maxDiffBytes {
+		// A diff over the prompt's cap is reviewed in parts now: a cached
+		// review of it from before left files unreviewed, so it is not reused.
+		h.Write([]byte("\x00parts"))
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
