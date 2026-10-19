@@ -1537,6 +1537,24 @@ func TestInspectPaidReviewer(t *testing.T) {
 					c.CreatedAt, c.UpdatedAt = now.Add(-d), now.Add(-d)
 				}
 				g.Mu.Unlock()
+				// The reopen comment's reply-event run sees no inspect run since
+				// the reopen: it re-runs the head's inspect job, which starts one.
+				reruns := 0
+				g.Mu.Lock()
+				g.Runs = append(g.Runs, fake.WorkflowRun{ID: 501, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: h, Event: "pull_request_target", Status: "completed", Conclusion: "failure"})
+				pre := g.CheckRuns[h]
+				g.CheckRuns[h] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", Conclusion: "failure", StartedAt: at(150 * time.Minute)},
+					{ID: 3, Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}}
+				g.OnRerun = func(*fake.WorkflowRun) { reruns++ }
+				g.Mu.Unlock()
+				ev := maps.Clone(env)
+				ev["GITHUB_EVENT_NAME"] = "issue_comment"
+				if code, _, errOut := inspectApp(t, ev, opts, prN, "--ci"); code != 0 || reruns != 1 {
+					t.Fatalf("the reopen's reply-event run (stopped %v): exit %d, %d reruns %s", stopped, code, reruns, errOut)
+				}
+				g.Mu.Lock()
+				g.CheckRuns[h] = pre
+				g.Mu.Unlock()
 				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "coderabbit") ||
 					!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "the gate skips codex") }) {
 					t.Fatalf("a head judged or stopped (%v) before the reopen: exit %d %q, notes %q %s", stopped, code, res.Review, res.Notes, errOut)
