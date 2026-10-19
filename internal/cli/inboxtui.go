@@ -2157,14 +2157,18 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 	case running:
 		_, stage, calls, started := job.w.snapshot()
 		seen, cur := job.w.steps()
+		// Every stage seen is done but the current one, also one seen after
+		// an earlier sighting of a stage that now repeats: the done steps come
+		// first, so the fold below counts them all.
 		steps := []string{}
 		for j, st := range seen {
-			switch {
-			case j < cur:
+			if j != cur {
 				steps = append(steps, m.style(ui.OK, "✓ ")+cell(inboxStepOf(st).line, w-2))
-			case j == cur:
-				steps = append(steps, m.style(ui.Warn, cell(frame+" "+inboxStepOf(st).line, w)))
 			}
+		}
+		finished := len(steps)
+		if cur < len(seen) {
+			steps = append(steps, m.style(ui.Warn, cell(frame+" "+inboxStepOf(seen[cur]).line, w)))
 		}
 		for _, st := range do.plan {
 			if !slices.Contains(seen, st) {
@@ -2180,7 +2184,7 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 		// Fit: the finished steps fold into one line, then the steps still
 		// to come; what happens now and the time always show.
 		if room := h - len(out) - len(tail); len(steps) > room {
-			done := min(cur, len(steps)-room+1)
+			done := min(finished, len(steps)-room+1)
 			if done > 1 {
 				steps = append([]string{m.style(ui.OK, "✓ ") + cell(fmt.Sprintf("%d steps done", done), w-2)}, steps[done:]...)
 			}
