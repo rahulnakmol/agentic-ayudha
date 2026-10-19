@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -179,6 +180,9 @@ type Input struct {
 	// Voice is the Accountable seat's persona for the summary (the Engineering
 	// Manager twin, WP5.1b) with the evidence rule; empty: no persona.
 	Voice string
+
+	part      string   // which part of a split diff this review reads (Run sets it)
+	oversized []string // the files whose diff alone is over the prompt's cap (Run sets it)
 }
 
 // DiffHash is the cache key of an inspection: the diff, the pack's head and
@@ -432,21 +436,124 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	if in.Mode == ModePeer && len(r.Reviewers) > 1 {
 		res.Mode = ModePeer
 	}
+	// A diff over the prompt's cap is reviewed in parts of whole files, in
+	// parallel, each with the same plan and criteria; the calls share the
+	// PR's budget through the reviewers' Complete.
+	parts, over := splitDiff(in.Diff, maxDiffBytes)
+	in.oversized = over
+	if len(parts) > 1 {
+		res.Notes = append(res.Notes, fmt.Sprintf("the diff (%d bytes) is over the %d-byte prompt cap: reviewed in %d parts of whole files, in parallel, each with the same plan and criteria", len(in.Diff), maxDiffBytes, len(parts)))
+	}
+	outs, errs := make([]Result, len(parts)), make([]error, len(parts))
+	var wg sync.WaitGroup
+	for i, p := range parts {
+		pin := in
+		if len(parts) > 1 {
+			pin.Diff, pin.part = p, partNote(i, parts)
+		}
+		wg.Go(func() { outs[i], errs[i] = r.reviewOne(ctx, pin, res.Mode) })
+	}
+	wg.Wait()
 	a := r.Reviewers[0]
+	res.Model, res.Reviewers = a.Model, []string{a.Model}
+	shown := map[string]bool{}
+	for i, o := range outs {
+		res.CostUSD += o.CostUSD
+		for _, m := range o.Reviewers {
+			if !slices.Contains(res.Reviewers, m) {
+				res.Reviewers = append(res.Reviewers, m)
+			}
+		}
+		if i == 0 {
+			res.Disposition, res.Criteria = o.Disposition, o.Criteria
+		} else {
+			res.Disposition, res.Criteria = worst(res.Disposition, o.Disposition), partCriteria(res.Criteria, o.Criteria)
+		}
+		if o.Mode == ModeGeneral {
+			res.Mode = ModeGeneral
+		}
+		summary := o.Summary
+		if len(parts) > 1 {
+			summary = fmt.Sprintf("Part %d of %d: %s", i+1, len(parts), o.Summary)
+		}
+		res.Summary = strings.TrimSpace(res.Summary + "\n\n" + summary)
+		res.Findings, res.Dropped = append(res.Findings, o.Findings...), append(res.Dropped, o.Dropped...)
+		for _, n := range o.Notes {
+			if !slices.Contains(res.Notes, n) {
+				res.Notes = append(res.Notes, n)
+			}
+		}
+		fits := inPrompt(parts[i], maxDiffBytes)
+		for _, f := range ParseDiff(parts[i]) {
+			shown[f.Path] = shown[f.Path] || fits(f.Path)
+		}
+	}
+	for _, err := range errs {
+		if err != nil {
+			st.SpentUSD += res.CostUSD
+			return res, st, err
+		}
+	}
+	if len(parts) == 0 {
+		res.Disposition, res.Summary = Fix, fmt.Sprintf("every changed file's diff is over the %d-byte prompt cap on its own: no model reviewed it", maxDiffBytes)
+	}
+	return r.finish(in, prev, st, res, func(p string) bool { return shown[p] })
+}
+
+// reviewOne is one review of in by the first reviewer, with the peer review
+// in peer mode: the whole diff, or one part of a split diff.
+func (r Runner) reviewOne(ctx context.Context, in Input, mode string) (Result, error) {
+	a := r.Reviewers[0]
+	out := Result{Mode: mode}
 	replyA, spent, err := review(ctx, a, in)
-	res.CostUSD, res.Model, res.Reviewers = spent, a.Model, []string{a.Model}
+	out.CostUSD, out.Reviewers = spent, []string{a.Model}
 	if err != nil {
-		st.SpentUSD += res.CostUSD
-		return res, st, err
+		return out, err
 	}
 	keep, dropped := r.Filter.Clean(replyA.Findings, in.Files, in.Areas, "A")
-	res.Disposition, res.Summary, res.Criteria = replyA.Disposition, replyA.Summary, replyA.Criteria
-	if res.Mode == ModePeer {
-		res.peer(ctx, r.Reviewers[1], a, in, r.Filter, replyA, keep, dropped)
+	out.Disposition, out.Summary, out.Criteria = replyA.Disposition, replyA.Summary, replyA.Criteria
+	if mode == ModePeer {
+		out.peer(ctx, r.Reviewers[1], a, in, r.Filter, replyA, keep, dropped)
 	} else {
-		res.Findings, res.Dropped = keep, dropped
+		out.Findings, out.Dropped = keep, dropped
 	}
-	return r.finish(in, prev, st, res, inPrompt(in.Diff, maxDiffBytes))
+	return out, nil
+}
+
+// partNote tells the reviewer of part i of a split diff what the part is.
+func partNote(i int, parts []string) string {
+	var mine, others []string
+	for k, p := range parts {
+		for _, f := range ParseDiff(p) {
+			if k == i {
+				mine = append(mine, ident(f.Path))
+			} else {
+				others = append(others, ident(f.Path))
+			}
+		}
+	}
+	return fmt.Sprintf("The diff is too large for one review, so it is reviewed in %d parts, each against the same story, criteria, and plan. "+
+		"This call reviews part %d, which holds: %s. The other parts are reviewed in separate calls; they hold: %s. "+
+		"Raise findings only on this part's files. Judge a criterion from this part only when it shows the criterion's code or tests; "+
+		"when it shows none of them, answer unclear with the evidence \"not in this part\".\n",
+		len(parts), i+1, strings.Join(mine, ", "), strings.Join(others, ", "))
+}
+
+// partCriteria merges the verdicts of two parts of a split diff: a criterion
+// is unmet when a part says so, met when a part shows it met, else unclear.
+func partCriteria(a, b []Verdict) []Verdict {
+	out := slices.Clone(a)
+	for _, v := range b {
+		i := slices.IndexFunc(out, func(x Verdict) bool { return x.ID == v.ID })
+		switch {
+		case i < 0:
+			out = append(out, v)
+		case v.Verdict == "unmet" || (v.Verdict == "met" && out[i].Verdict == "unclear"):
+			out[i] = v
+		}
+	}
+	slices.SortFunc(out, func(x, y Verdict) int { return x.ID - y.ID })
+	return out
 }
 
 // Judge turns a reviewer app's or a human's reply (ReadReply) into the
@@ -577,6 +684,12 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	m := Seal(in.Files, in.Areas, r.Filter, in.Pack != nil && len(in.Pack.Criteria) > 0, func(p string) bool {
 		return covered(p) || before[p] != "" && before[p] == hashes[p]
 	})
+	for i, c := range m.Files {
+		if c.Status == Unreviewed && slices.Contains(in.oversized, c.Path) {
+			m.Files[i].Why = fmt.Sprintf("its diff alone is over the %d-byte prompt cap: a person or a reviewer app reviews it", maxDiffBytes)
+		}
+	}
+	m.seal()
 	res.Coverage = &m
 	reviewed := map[string]string{}
 	for _, c := range m.Files {
@@ -824,12 +937,16 @@ func reviewMaterial(in Input) string {
 		}
 	}
 	b.WriteString("\n## Pull request\n\n" + triage.Untrusted("pull-request", "Title: "+in.Title+"\n\n"+in.Body) + "\n\n")
+	if in.part != "" {
+		b.WriteString("## Part of the diff\n\n" + in.part + "\n")
+	}
 	b.WriteString("## Diff\n\n" + triage.Untrusted("diff", capText(in.Diff, maxDiffBytes)) + "\n")
 	return b.String()
 }
 
-// maxDiffBytes caps the diff in the prompt; a file past it is unreviewed in
-// the coverage manifest, which fails the gate.
+// maxDiffBytes caps the diff in one prompt; Run reviews a larger diff in
+// parts. A file whose diff alone is over it is unreviewed in the coverage
+// manifest, which fails the gate.
 const maxDiffBytes = 120000
 
 var notIdent = regexp.MustCompile(`[^A-Za-z0-9_.$:/ -]`)

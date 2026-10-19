@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -490,6 +491,50 @@ func TestCoverageManifest(t *testing.T) {
 	if res2.Coverage.State != "partial" || !slices.Equal(res2.Coverage.Unreviewed(), []string{"internal/big/big.go"}) ||
 		res2.Disposition != Fix || !strings.Contains(res2.Overridden, "left unreviewed: internal/big/big.go") || res2.Coverage.SHA256 == m.SHA256 {
 		t.Fatalf("over the cap: %+v %s %q", res2.Coverage, res2.Disposition, res2.Overridden)
+	}
+	if c := res2.Coverage.Files[len(res2.Coverage.Files)-1]; !strings.Contains(c.Why, "its diff alone is over the 120000-byte prompt cap") {
+		t.Errorf("an oversized file's reason: %q", c.Why)
+	}
+
+	// A diff over the cap whose files each fit is reviewed in two parts, in
+	// parallel, with the same plan and criteria: coverage is complete and the
+	// findings of both parts are kept. Part 1 shows criterion 1 met; part 2
+	// shows none of it, so its unclear does not undo the met.
+	file := func(p string) string {
+		return "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,701 @@\n+package parts\n" +
+			strings.Repeat("+// "+strings.Repeat("y", 96)+"\n", 700)
+	}
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+	var mu sync.Mutex
+	var prompts []string
+	parts := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		p := req.Messages[0].Content
+		mu.Lock()
+		prompts = append(prompts, p)
+		mu.Unlock()
+		f, v := "internal/a/a.go", "met"
+		if strings.Contains(p, "b/internal/b/b.go") {
+			f, v = "internal/b/b.go", "unclear"
+		}
+		r := reply("merge", finding("P2", "maintainability", f, "package parts", "Package name in "+f, 0.9))
+		r["criteria"] = []map[string]any{{"id": 1, "verdict": v, "evidence": "e"}}
+		b, _ := json.Marshal(r)
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res3, st3, err := Runner{Reviewers: []Reviewer{parts}}.Run(context.Background(), in, State{})
+	var files []string
+	for _, f := range res3.Findings {
+		files = append(files, f.File)
+	}
+	if err != nil || len(prompts) != 2 || res3.Coverage.State != "complete" || len(res3.Coverage.Unreviewed()) != 0 ||
+		!slices.Equal(files, []string{"internal/a/a.go", "internal/b/b.go"}) || res3.Disposition != Merge || res3.CostUSD != 1 || st3.SpentUSD != 1 ||
+		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || !strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts") {
+		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
+	}
+	for _, p := range prompts {
+		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {
+			t.Errorf("each part's prompt names its part and holds one file's diff (%d bytes)", len(p))
+		}
 	}
 }
 

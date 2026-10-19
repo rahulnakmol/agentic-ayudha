@@ -67,10 +67,15 @@ func Seal(files []DiffFile, areas []Area, fl Filter, criteria bool, covered func
 		}
 		m.Files = append(m.Files, c)
 	}
+	m.seal()
+	return m
+}
+
+// seal hashes the manifest's file list.
+func (m *Manifest) seal() {
 	b, _ := json.Marshal(m.Files)
 	s := sha256.Sum256(b)
 	m.SHA256 = hex.EncodeToString(s[:])
-	return m
 }
 
 // FileHash is the hash of one file's patch in a diff: its paths, whether it
@@ -95,11 +100,10 @@ func (m *Manifest) Unreviewed() []string {
 	return out
 }
 
-// inPrompt reports which files' whole diff sections fit in the first limit
-// bytes of diff: the files a model reviewer was shown (Prompt caps the diff).
-func inPrompt(diff string, limit int) func(string) bool {
-	shown := map[string]bool{}
-	starts := []int{}
+// diffSections splits a unified diff into each file's section, from its
+// "diff --git" line to the next; text before the first section is dropped.
+func diffSections(diff string) []string {
+	var starts []int
 	for i := 0; i < len(diff); {
 		j := strings.Index(diff[i:], "diff --git ")
 		if j < 0 {
@@ -110,19 +114,67 @@ func inPrompt(diff string, limit int) func(string) bool {
 		}
 		i += j + 1
 	}
+	out := make([]string, len(starts))
 	for k, s := range starts {
 		end := len(diff)
 		if k+1 < len(starts) {
 			end = starts[k+1]
 		}
-		if end > limit {
+		out[k] = diff[s:end]
+	}
+	return out
+}
+
+// inPrompt reports which files' whole diff sections fit in the first limit
+// bytes of diff: the files a model reviewer was shown (Prompt caps the diff).
+func inPrompt(diff string, limit int) func(string) bool {
+	shown := map[string]bool{}
+	end := strings.Index(diff, "diff --git ")
+	for _, s := range diffSections(diff) {
+		if end += len(s); end > limit {
 			break
 		}
-		for _, f := range ParseDiff(diff[s:end]) {
+		for _, f := range ParseDiff(s) {
 			shown[f.Path] = true
 		}
 	}
 	return func(p string) bool { return shown[p] }
+}
+
+// splitDiff splits a diff over limit bytes into parts of whole files, each
+// at most limit bytes and of about equal size, in diff order. A file whose
+// section alone is over limit is in no part: it is returned in over. A diff
+// within limit is one part, as it is.
+func splitDiff(diff string, limit int) (parts, over []string) {
+	if len(diff) <= limit {
+		return []string{diff}, nil
+	}
+	secs := diffSections(diff)
+	total := 0
+	for _, s := range secs {
+		if len(s) <= limit {
+			total += len(s)
+			continue
+		}
+		for _, f := range ParseDiff(s) {
+			over = append(over, f.Path)
+		}
+	}
+	target := total / max((total+limit-1)/limit, 1)
+	var cur strings.Builder
+	for _, s := range secs {
+		if len(s) > limit {
+			continue
+		}
+		if cur.Len() > 0 && (cur.Len()+len(s) > limit || cur.Len() >= target) {
+			parts, cur = append(parts, cur.String()), strings.Builder{}
+		}
+		cur.WriteString(s)
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, cur.String())
+	}
+	return parts, over
 }
 
 // Weakening is a check the PR made weaker: fewer assertions, a skipped test,
