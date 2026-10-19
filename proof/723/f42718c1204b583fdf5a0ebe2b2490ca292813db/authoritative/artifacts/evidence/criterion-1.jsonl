@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit","Output":"=== RUN   TestInspectPaidReviewer/codex_and_coderabbit\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit","Output":"--- PASS: TestInspectPaidReviewer/codex_and_coderabbit (1.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectPaidReviewer/codex_and_coderabbit"}
