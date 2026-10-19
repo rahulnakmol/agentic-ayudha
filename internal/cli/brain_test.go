@@ -105,8 +105,26 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 			t.Errorf("%s over a symlink on the branch: %s", action, out)
 		}
 	}
-	if out := brainRun(0, "open"); !strings.Contains(out, "git worktree add ../r-brain brain") || !strings.Contains(out, "git -C ../r-brain merge --ff-only origin/brain  # ") {
-		t.Errorf("open: %s", out)
+	// The printed steps open the vault as printed, in a single-branch clone too
+	// (CI and orbs clone one branch, so a bare `git fetch origin brain` makes no origin/brain).
+	single := filepath.Join(t.TempDir(), "single")
+	git(t, filepath.Dir(single), "clone", "--quiet", "--single-branch", "--branch", "dev", bare, single)
+	out := brainRun(0, "open")
+	var steps []string
+	for _, l := range strings.Split(out, "\n") {
+		if _, cmd, ok := strings.Cut(l, ". git "); ok {
+			cmd, _, _ = strings.Cut(cmd, "  #")
+			steps = append(steps, strings.Fields(cmd)...)
+			steps = append(steps, "\x00")
+		}
+	}
+	for _, step := range strings.Split(strings.Join(steps, " "), "\x00") {
+		if args := strings.Fields(step); len(args) > 0 {
+			git(t, single, args...)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(single), "r-brain", brain.HomePath)); err != nil {
+		t.Errorf("the steps of open did not open the vault (%v):\n%s", err, out)
 	}
 }
 

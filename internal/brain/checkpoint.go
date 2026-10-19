@@ -601,8 +601,8 @@ func (c *cp) issueBlocks() {
 			}
 			nums = append(nums, num)
 		}
-		if t, _ := FindType(n.Str("type")); len(nums) == 0 && slices.Contains(t.Keys, "issues") {
-			// the last issue was removed: its generated facts go too
+		if len(nums) == 0 && n.Str("type") != "release" { // releases() owns a release note's record
+			// the last issue was removed: its generated facts go too, whatever the note's type
 			clear := map[string]string{}
 			for k, b := range Blocks(n.Body) {
 				if (k == "record" || k == "history") && b != "" {

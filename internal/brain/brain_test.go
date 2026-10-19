@@ -150,6 +150,21 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if m := string(hostile["Capabilities/Capabilities.md"]); strings.Count(m, "<!-- END aayudha:brain:notes -->") != 1 || strings.Contains(m, "![x]") {
 		t.Errorf("a note title broke out of its map's generated block:\n%s", m)
 	}
+	persona := maps.Clone(merged) // a note whose type does not list issues loses an issue's record too
+	persona["Personas/Founder.md"] = note("id: persona-founder\ntype: persona\ntitle: Founder\nowner: product-strategist\nstatus: current\nupdated: 2026-10-01\nsources: [\"issue #32\"]\nup: \"[[Personas]]\"\nissues: [32]\ntags: [type/persona]\n", "# Founder\n")
+	pcp, err := Run(persona, r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maps.Copy(persona, pcp.Files)
+	persona["Personas/Founder.md"] = []byte(strings.Replace(string(persona["Personas/Founder.md"]), "issues: [32]", "issues: []", 1))
+	if pcp, err = Run(persona, r, today, true); err != nil {
+		t.Fatal(err)
+	}
+	maps.Copy(persona, pcp.Files)
+	if got := string(persona["Personas/Founder.md"]); !strings.Contains(got, "BEGIN aayudha:brain:record") || strings.Contains(got, "Recorded in #32") {
+		t.Errorf("a persona with no issues keeps the removed issue's record:\n%s", got)
+	}
 	gone := maps.Clone(merged) // a person removes the last issue: its generated facts go too
 	gone["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: []", 1))
 	fourth, err := Run(gone, r, today, true)

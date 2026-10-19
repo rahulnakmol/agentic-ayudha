@@ -60,9 +60,11 @@ func (e *Env) brainOpen(ctx context.Context) error {
 	name := repo[strings.LastIndex(repo, "/")+1:]
 	dir := "../" + name + "-brain"
 	steps := []string{
-		"git fetch origin " + brain.Branch,
-		"git worktree add " + dir + " " + brain.Branch,
-		"git -C " + dir + " merge --ff-only origin/" + brain.Branch + "  # a local " + brain.Branch + " branch from an earlier worktree catches up with the remote",
+		// The refspec names origin/brain, so a single-branch clone (CI, an orb) gets it too.
+		"git fetch origin +refs/heads/" + brain.Branch + ":refs/remotes/origin/" + brain.Branch,
+		"git worktree add -b " + brain.Branch + " " + dir + " origin/" + brain.Branch +
+			"  # with a local " + brain.Branch + " branch from an earlier worktree: git worktree add " + dir + " " + brain.Branch +
+			" && git -C " + dir + " merge --ff-only origin/" + brain.Branch,
 		"Open the folder " + dir + " as a vault in Obsidian (Open folder as vault), then open Home.",
 		"Write notes there, run `aayu brain check --dir " + dir + "`, then commit and push to " + brain.Branch + ".",
 	}
