@@ -10,8 +10,8 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   is not reviewed until you mark it ready. Its one key lives in your repository's `code-review` environment
   ([code review in the merge gate](docs/guide/how-review.md)). That model reviews only when its family differs from
   the builder's. Otherwise, or for an author without write access, CodeRabbit or Greptile reviews when it is listed in
-  `[inspect] apps` and Codex is not; with no app listed, the approver approves with `aayu inspect <pr> --approve` or in
-  `aayu inbox`. A listed Codex, Claude, or Cursor is not asked then, and the change waits
+  `[inspect] apps` and Codex is not; with no app listed, the approver approves with
+  `aayu inspect <pr> --approve --reason "<what you checked>"` or in `aayu inbox`. A listed Codex, Claude, or Cursor is not asked then, and the change waits
   ([known limits](docs/releases/v0.3.0.md#known-limits)). A
   review from the builder's own family is labelled rung C, and it never counts toward the streak
   ([sources](docs/releases/v0.3.0.md#merge-and-review)).
