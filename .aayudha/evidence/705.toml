@@ -1,0 +1,13 @@
+# Which tests prove Bug #705's Completion Goal (it replaces #701).
+
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestShipMobileWaiverAndSoloBypass"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestShipAutonomousFootprint"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestShipPassRules"]
