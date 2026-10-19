@@ -429,7 +429,7 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	if entry.PR != prN || entry.Pass != "autonomous" || !contains(g.LabelNames(prN), AuditLabel) {
 		t.Fatalf("an autonomous merge was not sent to the audit: %+v, labels %v", entry, g.LabelNames(prN))
 	}
-	if c := comment(g, 2, "<!-- aayudha:lease-released -->"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
+	if c := comment(g, 2, "<!-- aayudha:lease-released"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease not released:\n%s", c)
 	}
 }

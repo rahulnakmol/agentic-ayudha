@@ -199,6 +199,28 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || len(pick.Stale) != 0 || len(pick.InFlight) != 2 || contains(g.LabelNames(newer.Number), "status:blocked") {
 		t.Fatalf("a claim within the grace period was blocked or lost its slot: %d %s", code, out)
 	}
+	// gc reclaimed a lease that was renewed long after the last checkpoint: the
+	// grace runs from the released lease's expiry, not from the checkpoint.
+	later := opts
+	later.Now = func() time.Time { return time.Now().Add(9 * time.Hour) }
+	setLease(g, newer.Number, "founder@gone", time.Now().Add(6*time.Hour))
+	if code, out, errOut := run(t, env, later, "gc", "--repo", "o/r"); code != 0 || !strings.Contains(out, "lease #8 reclaimed") {
+		t.Fatalf("gc: %d %s %s", code, out, errOut)
+	}
+	envTwo := map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}
+	for k, v := range env {
+		envTwo[k] = v
+	}
+	if code, out, errOut := run(t, envTwo, later, "build", "--repo", "o/r", "--json", "--next", "pick"); code != 0 || strings.Contains(out, "claim ran out") || contains(g.LabelNames(newer.Number), "status:blocked") {
+		t.Fatalf("a claim gc released within the grace period was blocked: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	for _, c := range g.Issues[newer.Number].Comments {
+		if releasedTag.MatchString(c.Body) {
+			c.Body = leaseBody("founder@gone", time.Now())
+		}
+	}
+	g.Mu.Unlock()
 	setLease(g, newer.Number, "founder@gone", time.Now().Add(-StaleGrace-time.Minute))
 	code, res, pick, out = next(two, "--next", "pick")
 	if code != 0 || res.Issue != low.Number || !hasLine(pick.Stale, "#8:", "claim ran out with no pull request") {

@@ -244,7 +244,7 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 		!strings.HasSuffix(out, "--dry-run: nothing was changed\n") {
 		t.Fatalf("gc --dry-run: %d %s %s", code, out, errOut)
 	}
-	if !contains(g.LabelNames(2), LeaseLabel) || !contains(g.LabelNames(stray.Number), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease-released -->") != "" {
+	if !contains(g.LabelNames(2), LeaseLabel) || !contains(g.LabelNames(stray.Number), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease-released") != "" {
 		t.Fatalf("gc --dry-run changed the leases: %v %v", g.LabelNames(2), g.LabelNames(stray.Number))
 	}
 	code, out, errOut = run(t, env, opts, "gc", "--repo", "o/r")
@@ -258,7 +258,7 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 	g.Mu.Lock()
 	assignees := g.Issues[2].Assignees
 	g.Mu.Unlock()
-	if contains(g.LabelNames(2), LeaseLabel) || len(assignees) != 0 || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released -->"), "reclaimed by `aayu gc`") {
+	if contains(g.LabelNames(2), LeaseLabel) || len(assignees) != 0 || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released"), "reclaimed by `aayu gc`") {
 		t.Fatalf("after gc: labels %v assignees %v", g.LabelNames(2), assignees)
 	}
 	if !contains(g.LabelNames(other.Number), LeaseLabel) {
@@ -367,7 +367,7 @@ func TestShipPassRules(t *testing.T) {
 		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || sr.Streak.Skipped != "the human pass is settled: review" {
 		t.Fatalf("ship record: %+v", sr)
 	}
-	if contains(g.LabelNames(2), LeaseLabel) || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released -->"), "shipped in #"+strconv.Itoa(prN)) {
+	if contains(g.LabelNames(2), LeaseLabel) || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released"), "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease after ship: %v", g.LabelNames(2))
 	}
 }

@@ -337,8 +337,8 @@ func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n 
 const StaleGrace = LeaseTTL
 
 // lastActivity is when a build state last moved: its newest checkpoint, else
-// its start. A claim with no lock comment left (gc reclaimed it) is taken to
-// have expired one lease term after it.
+// its start. A claim with no lock comment left is taken to have expired one
+// lease term after it, or at its released lease's expiry when that is later.
 func lastActivity(st BuildState) time.Time {
 	t, _ := time.Parse(time.RFC3339, st.StartedAt)
 	for _, cp := range st.Checkpoints {
@@ -440,6 +440,12 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		expired := lastActivity(st).Add(LeaseTTL)
 		if lease != nil {
 			expired = lease.Expires
+		} else if released, err := releasedLeaseExpiry(ctx, c, owner, name, st.Story); err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		} else if released.After(expired) {
+			// gc reclaimed the lease: a renewal after the last checkpoint moved
+			// the expiry later than the state shows.
+			expired = released
 		}
 		if now.Sub(expired) < StaleGrace {
 			p.InFlight = append(p.InFlight, LoopItem{Story: st.Story, Claim: fmt.Sprintf("lease ran out %s; blocked as stale after %s", expired.UTC().Format(time.RFC3339), expired.Add(StaleGrace).UTC().Format(time.RFC3339))})
