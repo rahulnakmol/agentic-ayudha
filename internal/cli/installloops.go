@@ -389,6 +389,15 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			continue
 		}
 		prompt := "Call Amp's set_schedule on this thread with exactly this input, and do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
+		// The schedule that active.json records on an older thread would run
+		// next to the new one: the new thread pauses it once its own is set (Bug #715).
+		old := rec[loops.HostAmp][l.Name].ID
+		oldThread := threadID.FindString(old)
+		if !l.IsEvent() && oldThread != "" {
+			prompt = "Call Amp's set_schedule on this thread with exactly this input. Then call update_schedule with thread: " + oldThread + " and enabled: false, which pauses this loop's previous schedule. Do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
+		} else if !l.IsEvent() && old != "" {
+			steps = append(steps, fmt.Sprintf("%s: %s records %q, which names no thread: pause that schedule in Amp by hand, or the loop runs twice.", l.Name, loops.RecordFile, old))
+		}
 		if l.IsEvent() {
 			// Amp returns an equivalent subscription that exists instead of a new
 			// one, keeping its own title, instructions, and paused state (Bug #709).
@@ -417,6 +426,9 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		}
 		async = async || !strings.HasPrefix(id, "schedule ") && !l.IsEvent()
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
+		if !l.IsEvent() && oldThread != "" {
+			id += "; its thread pauses the old schedule on " + oldThread
+		}
 		applied = append(applied, l.Name+": "+id)
 	}
 	if len(applied) > 0 {

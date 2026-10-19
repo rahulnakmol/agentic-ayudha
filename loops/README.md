@@ -138,7 +138,9 @@ codex), or takes `--host`, and warns when `loops/active.json` records loops in a
   `create_github_subscription` with the project's ID added; each loop is recorded. When Amp returns an equivalent
   subscription that already exists, which keeps its own title, instructions, and paused state, the thread updates it
   to the rendered input and enables it. aayu waits up to five minutes for an event loop's thread to end its turn
-  (`amp threads export`), and records the subscription ID from its final reply.
+  (`amp threads export`), and records the subscription ID from its final reply. On a re-install, a scheduled loop's new thread
+  pauses the schedule that `loops/active.json` records on its older thread (`update_schedule`, `enabled: false`), and
+  install names that thread; a recorded ID that names no thread gets a step to pause it by hand.
 - Cursor: with `--apply`, `terraform apply` of `loops/cursor/aayudha-loops.tf` when `terraform` and `CURSOR_TOKEN` are
   there, recording each loop; without them, the `/automate` prompts in `loops/cursor/automate.md`.
 - Claude Code and Codex: the prompts in `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to paste.

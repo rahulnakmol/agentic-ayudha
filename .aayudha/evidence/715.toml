@@ -1,0 +1,10 @@
+# Which tests prove Bug #715's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # re-applied with a loop recorded on thread A: the new thread is asked to pause thread A's schedule, and install names it
+tests = ["internal/cli:TestInstallLoops"]
+
+[[criterion]]
+id = 2 # nothing recorded, or a recorded ID with no thread: no update_schedule, and the manual step
+tests = ["internal/cli:TestInstallLoops"]
