@@ -166,6 +166,21 @@ func TestProofPushVerifyCLI(t *testing.T) {
 		t.Fatalf("push without bucket keys: %d %s", code, errOut)
 	}
 	env["AAYU_SECRET_PROOF_MEDIA"] = "ak:sk"
+	// The repository may be one an agent pointed origin at, with its bucket
+	// committed on dev: without push access to it, its config names no
+	// bucket that receives the person's secret.
+	fgh.Mu.Lock()
+	if fgh.Permissions == nil {
+		fgh.Permissions = map[string]string{}
+	}
+	fgh.Permissions[fgh.Viewer] = "read"
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has read access to o/r, so its committed config cannot name the proof media bucket") || len(s3.Objects) != 0 {
+		t.Fatalf("push to a repository the account cannot push to: %d %s, %d objects", code, errOut, len(s3.Objects))
+	}
+	fgh.Mu.Lock()
+	fgh.Permissions[fgh.Viewer] = "maintain" // reported as write
+	fgh.Mu.Unlock()
 	code, out, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r", "--json")
 	if code != 0 {
 		t.Fatalf("push: %d %s %s", code, out, errOut)

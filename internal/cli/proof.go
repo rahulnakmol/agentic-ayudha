@@ -185,6 +185,24 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 		return config.Proof{}, err
 	}
 	t, r := trusted.Config.Proof, run.Config.Proof
+	// Without --repo the repository is the checkout's origin remote, which
+	// an agent can point at a repository it controls, with its bucket
+	// committed on dev. A bucket is trusted only from a repository the
+	// account aayu acts as can push to, as the person's own repositories are.
+	if t.Media != "" {
+		me, _, err := c.REST.Users.Get(ctx, "")
+		if err != nil {
+			return config.Proof{}, Wrap(ExitExternal, err)
+		}
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, me.GetLogin())
+		if err != nil {
+			return config.Proof{}, Wrap(ExitExternal, err)
+		}
+		if p := permissionOf(perm); p != "admin" && p != "write" {
+			return config.Proof{}, Errorf(ExitBlocked, "@%s has %s access to %s, so its committed config cannot name the proof media bucket that receives your secret; "+
+				"check the checkout's origin remote, or pass --repo with the repository you push to", me.GetLogin(), p, repo)
+		}
+	}
 	if r.Media != t.Media || t.Media != "" && (r.MediaSecret != t.MediaSecret || r.RetentionDays != t.RetentionDays) {
 		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket, its secret, and its retention are read only from the user config and %s's committed .aayudha/config.toml; "+
 			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q, media_secret %q and retention_days %d, not %q, %q and %d; "+
