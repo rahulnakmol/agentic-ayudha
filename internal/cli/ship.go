@@ -408,8 +408,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			}
 			// Everything else holds, so the PR waits for a person in the inbox.
 			who := rec.Pass.who()
+			// The author's own review never counts, so an author who is the
+			// only approver ships it from the inbox alone.
+			review := fmt.Sprintf(", or approves the head and runs `aayu ship %d`", n)
+			if strings.EqualFold(who, "@"+pr.GetUser().GetLogin()) {
+				review = ""
+			}
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
-				"%s ships it from `aayu inbox`, or approves the head and runs `aayu ship %d`.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), n)
+				"%s ships it from `aayu inbox`%s.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), review)
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}

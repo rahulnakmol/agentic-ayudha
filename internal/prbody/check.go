@@ -88,15 +88,51 @@ func prSplit(body string) []prSection {
 }
 
 // uncomment drops the text of body's HTML comments and keeps their lines. An
-// unclosed comment hides the rest of the body, as it does on GitHub.
+// unclosed comment hides the rest of the body, as it does on GitHub. An
+// opener in a code span or a fence is text, not a comment.
 func uncomment(body string) string {
-	body = htmlComment.ReplaceAllStringFunc(strings.ReplaceAll(body, "\r\n", "\n"), func(c string) string {
-		return strings.Repeat("\n", strings.Count(c, "\n"))
-	})
-	if i := strings.Index(body, "<!--"); i >= 0 {
-		body = body[:i]
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	masked := codeMask(body)
+	var b strings.Builder
+	last := 0
+	for _, m := range htmlComment.FindAllStringIndex(masked, -1) {
+		b.WriteString(body[last:m[0]])
+		b.WriteString(strings.Repeat("\n", strings.Count(body[m[0]:m[1]], "\n")))
+		last = m[1]
 	}
-	return body
+	if i := strings.Index(masked[last:], "<!--"); i >= 0 {
+		return b.String() + body[last:last+i]
+	}
+	return b.String() + body[last:]
+}
+
+// codeMask is body with its code spans and fenced lines blanked to spaces,
+// at the same offsets.
+func codeMask(body string) string {
+	blank := func(s string) string { return strings.Repeat(" ", len(s)) }
+	var b strings.Builder
+	fence := ""
+	for _, line := range strings.SplitAfter(body, "\n") {
+		text, nl := strings.CutSuffix(line, "\n")
+		t := strings.TrimSpace(text)
+		m := fenceLine.FindString(t)
+		switch {
+		case fence == "" && m != "":
+			fence, text = m, blank(text)
+		case fence != "":
+			if strings.HasPrefix(t, fence) && strings.Trim(t, fence[:1]) == "" {
+				fence = ""
+			}
+			text = blank(text)
+		default:
+			text = inlineCode.ReplaceAllStringFunc(text, blank)
+		}
+		b.WriteString(text)
+		if nl {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
 
 // Visible is body as a reader sees it outside code: no HTML comments and no
