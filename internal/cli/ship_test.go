@@ -355,6 +355,55 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitBlocked || !strings.Contains(out, "the footprint touches never layer(s) L07") {
 		t.Fatalf("ship with a never-layer file the pack left out: %d %s", code, out)
 	}
+	// Bug #680: with [autonomy] proof off, the narrow set still needs a
+	// person, the streak whatever: a change to a listed path (criterion 1) or
+	// to a guarded table of the committed config (criterion 2) waits for one.
+	narrow := func(criterion int, want string) {
+		t.Helper()
+		code, out := shipCmd(t, env, opts, prN, autonomous...)
+		g.Mu.Lock()
+		merged := g.Pulls[prN].Merged
+		g.Mu.Unlock()
+		if code != ExitBlocked || !strings.Contains(out, want) || strings.Contains(out, "human pass: autonomous") || merged ||
+			strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "proof/2/"+head+"/authoritative/ship.json") {
+			t.Fatalf("#680 criterion %d: %d %s", criterion, code, out)
+		}
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files = append(slices.Clone(files), ".aayudha/config.local.json")
+	g.Mu.Unlock()
+	narrow(1, "no merge on the streak: it touches .aayudha/config.local.json, in the narrow set that always needs a person ([autonomy] always_person: .aayudha/config.local.json)")
+	g.Mu.Lock()
+	base := g.Pulls[prN].Base.SHA
+	g.RefFiles = map[string]map[string]string{base: maps.Clone(g.Files), head: maps.Clone(g.Files)}
+	g.RefFiles[head][".aayudha/config.toml"] = g.Files[".aayudha/config.toml"] + "correction_days = 3\n"
+	g.Pulls[prN].Files = append(slices.Clone(files), ".aayudha/config.toml")
+	g.Mu.Unlock()
+	narrow(2, "no merge on the streak: it changes [autonomy] in .aayudha/config.toml")
+	// A file the narrow set must read that cannot be read fails closed.
+	g.Mu.Lock()
+	g.RefFiles = nil
+	g.Pulls[prN].Files = append(slices.Clone(files), ".github/workflows/x.yml")
+	g.Fail, g.FailAfter = "GET /repos/o/r/contents/.github/workflows/x.yml", 0
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitExternal || strings.Contains(out, "human pass: autonomous") {
+		t.Fatalf("ship when a narrow-set file cannot be read: %d %s", code, out)
+	}
+	// Criterion 4: with proof on, the same listed file gets the reason it got
+	// before the fix (dev 70299db); TestShipOnProof's clean PR still merges
+	// on proof.
+	g.Mu.Lock()
+	g.Fail = ""
+	conf := g.Files[".aayudha/config.toml"]
+	g.Files[".aayudha/config.toml"] = conf + "proof = true\n"
+	g.Pulls[prN].Files = append(slices.Clone(files), ".aayudha/config.local.json")
+	g.Mu.Unlock()
+	narrow(4, "no merge on proof: it touches .aayudha/config.local.json, in the narrow set that always needs a person ([autonomy] always_person: .aayudha/config.local.json)")
+	g.Mu.Lock()
+	g.Files[".aayudha/config.toml"] = conf
+	g.Mu.Unlock()
+	// Criterion 3: a PR that touches no narrow-set path still merges on the
+	// streak, as before.
 	g.Mu.Lock()
 	g.Pulls[prN].Files = files
 	g.Mu.Unlock()

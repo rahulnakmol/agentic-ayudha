@@ -300,8 +300,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		if !ok || (plan.Review.ApprovedBy == "" && plan.Review.Bypass == nil) {
 			msg := fmt.Sprintf("ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve` (solo mode: `aayu plan %d --solo-bypass`)", n, strings.Join(rec.Pass.Never, ", "), story, story, story)
-			if proofWhy != "" {
+			if proofWhy != "" && pol.Config.Autonomy.Proof {
 				msg += "; no merge on proof: " + proofWhy
+			} else if proofWhy != "" { // proof off: the narrow set still holds the streak back (#680)
+				msg += "; no merge on the streak: " + proofWhy
 			}
 			return Errorf(ExitBlocked, "%s", msg)
 		}
@@ -340,8 +342,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			note += fmt.Sprintf("; CODEOWNERS paths %s merged with no code owner's review", strings.Join(proofOK.Protected, ", "))
 		}
 		rec.HumanPass = HumanPass{Kind: "proof", Login: me.Login, Commit: head, Note: note}
-	} else if rec.HumanPass.Kind == "" && proofWhy != "" {
+	} else if rec.HumanPass.Kind == "" && proofWhy != "" && pol.Config.Autonomy.Proof {
 		why = append(why, "no merge on proof: "+proofWhy)
+	} else if rec.HumanPass.Kind == "" && proofWhy != "" { // proof off: the narrow set still holds the streak back (#680)
+		why = append(why, "no merge on the streak: "+proofWhy)
 	}
 	// The streak can only give an autonomous pass, so it is read (about two
 	// minutes of GitHub history) only when no human pass is settled (#701).

@@ -248,9 +248,9 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	}
 	policy, cfg := pol.Tip, pol.Config
 	a, dev := cfg.Autonomy, or(cfg.Branches.Dev, "dev")
-	if !a.Proof {
-		return nil, "", false, nil
-	}
+	// The narrow set needs a person on every path, the streak's included, so
+	// it is judged before the proof flag: with proof off, person still says
+	// whether the streak may merge the PR (#680).
 	// The files are the comparison of the captured base and head, never the
 	// live PR's listing, which a push or a base change during ship could
 	// swap for another diff and back. Its first page lists every file, up
@@ -300,6 +300,12 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 				return nil, fmt.Sprintf("it changes %s, a symbolic link, which can point a policy file at a path the narrow set does not judge", en.GetPath()), true, nil
 			}
 		}
+	}
+	if !a.Proof {
+		if readErr != nil { // a file the narrow set judges could not be read
+			return nil, "", false, Wrap(ExitExternal, readErr)
+		}
+		return nil, "", false, nil
 	}
 	// The merge gate judged the diff against the base the PR had when it ran;
 	// a PR whose base was changed could have been judged against another
