@@ -1,0 +1,85 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 496,
+  "pr": 509,
+  "pr_head_sha": "7bc6c1ba830b43d02c966b7c6c9447f2591cb428",
+  "merge_commit": "6b4f506ca7e6f74a153ea7402f87ecf1f38b35ac",
+  "pack": "proof/496/7bc6c1ba830b43d02c966b7c6c9447f2591cb428/authoritative/pack.json",
+  "pack_landed": "artifact 12170458621 of run 39218291109 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/39218291109), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 39218291109,
+  "artifact": 12170458621,
+  "pack_sha256": "9427694dd1b3bc7873a88d14a410fb346fe694cb4c9b381cb4373a283ff29994",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/509#issuecomment-6266094599",
+    "commit": "7bc6c1ba830b43d02c966b7c6c9447f2591cb428",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L07",
+    "L09"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver",
+    "never_layers": [
+      "L04",
+      "L07",
+      "L09"
+    ],
+    "never_paths": [
+      ".github/workflows/aayudha-security.yml",
+      "CONSTRAINTS.md",
+      "internal/config/config.go",
+      "internal/config/config_test.go",
+      "internal/config/defaults.toml",
+      "internal/config/gen/main.go",
+      "internal/config/load.go",
+      "internal/config/schema.json",
+      "internal/proof/pack.go",
+      "internal/verify/dast.go",
+      "internal/verify/dast_test.go",
+      "internal/verify/scanners.go",
+      "internal/verify/verify.go",
+      "internal/verify/web.go",
+      "internal/verify/web_test.go"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "never_layers": [
+      "L04",
+      "L07",
+      "L09"
+    ],
+    "autonomous": false,
+    "skipped": "the human pass is settled: solo-bypass"
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L04",
+      "L07",
+      "L09"
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-19T11:17:49Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/496#issuecomment-6265942953",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"
+    }
+  },
+  "actions_segment": "actions/2026-10-19/cli-20261019T112407Z.jsonl",
+  "shipped_at": "2026-10-19T11:25:56Z",
+  "shipped_by": "rahulnakmol"
+}
