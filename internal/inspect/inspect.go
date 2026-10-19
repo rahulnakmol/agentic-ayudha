@@ -405,6 +405,29 @@ type Runner struct {
 	Page           func(ctx context.Context, subject, body string) error
 }
 
+// maxSummary is the summary's length in Schema. A reviewer is asked for it,
+// but a longer summary only gets cut (Bug #807): on #686, run 39279364439
+// threw away a paid review's findings and verdict for a 1200-character summary.
+const maxSummary = 1200
+
+// reviewSchema is Schema with the summary's maxLength stated, not enforced.
+var reviewSchema = strings.Replace(Schema, `"summary":{"type":"string","maxLength":1200}`,
+	`"summary":{"type":"string","description":"at most 1200 characters"}`, 1)
+
+// cutSummary shortens s to maxSummary characters at a word boundary, and
+// marks the cut with an ellipsis.
+func cutSummary(s string) string {
+	r := []rune(s)
+	if len(r) <= maxSummary {
+		return s
+	}
+	cut := string(r[:maxSummary-1])
+	if i := strings.LastIndexAny(cut, " \n\t"); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " \n\t") + "…"
+}
+
 // review asks one reviewer for its structured reply.
 func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 	sys := System
@@ -418,7 +441,8 @@ func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 		resp, usd, err := r.Complete(ctx, q)
 		spent += usd
 		return resp, err
-	}, req, []byte(Schema), &reply)
+	}, req, []byte(reviewSchema), &reply)
+	reply.Summary = cutSummary(reply.Summary)
 	return reply, spent, err
 }
 
