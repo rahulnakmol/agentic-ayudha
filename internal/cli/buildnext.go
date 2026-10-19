@@ -405,15 +405,9 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		if st.Blocked != "" {
 			continue
 		}
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
-		if err != nil {
-			return nil, 0, Wrap(ExitExternal, err)
-		}
-		if is.GetState() != "open" {
-			continue
-		}
 		// The loop's own PR is the one on the branch it built, in this
 		// repository; any other PR that names the story is never shipped here.
+		// It stays the loop's while it is open, even if its story closed.
 		i := slices.IndexFunc(prs[st.Story], func(pr *gh.PullRequest) bool {
 			return pr.GetHead().GetRef() == st.Branch && strings.EqualFold(pr.GetHead().GetRepo().GetFullName(), repo)
 		})
@@ -421,6 +415,13 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			pr := prs[st.Story][i]
 			it := LoopItem{Story: st.Story, PR: pr.GetNumber(), URL: pr.GetHTMLURL()}
 			p.InFlight, p.Ship = append(p.InFlight, it), append(p.Ship, it)
+			continue
+		}
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if is.GetState() != "open" {
 			continue
 		}
 		labels := github.IssueLabels(is)
@@ -458,6 +459,11 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		why := fmt.Sprintf("the build-ready loop's claim ran out with no pull request (lease expired %s, more than %s ago)", expired.UTC().Format(time.RFC3339), StaleGrace)
 		if lease != nil {
 			why = fmt.Sprintf("the build-ready loop's claim ran out with no pull request (lease of %s expired %s, more than %s ago)", lease.Holder, lease.Expires.UTC().Format(time.RFC3339), StaleGrace)
+		}
+		if c.DryRun() {
+			// markBlocked pages, and a page records itself in notify.json.
+			p.Stale = append(p.Stale, fmt.Sprintf("#%d: %s; would be blocked, owner paged", st.Story, why))
+			continue
 		}
 		st := st
 		res := BuildResult{Issue: st.Story, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, now)}

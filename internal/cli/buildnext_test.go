@@ -188,6 +188,17 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, _, pick, out := next(nil, "--next", "pick"); code != 0 || pick.Picked != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].PR != pr.Number {
 		t.Fatalf("the loop's open PR counts in flight: %d %s", code, out)
 	}
+	// Its story closed while the PR is open: the PR is still the loop's to
+	// ship, and still in flight.
+	g.Mu.Lock()
+	g.Issues[older.Number].State = "closed"
+	g.Mu.Unlock()
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number || len(pick.InFlight) != 1 {
+		t.Fatalf("a closed story's open PR left the loop: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Issues[older.Number].State = "open"
+	g.Mu.Unlock()
 	// [build] in_flight 0 stops the picks.
 	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "in_flight is 0") {
 		t.Fatalf("in_flight 0: %d %+v", code, pick)
@@ -227,6 +238,13 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	}
 	g.Mu.Unlock()
 	setLease(g, newer.Number, "founder@gone", time.Now().Add(-StaleGrace-time.Minute))
+	// A dry run shows the stale claim it would block, and blocks and pages nothing.
+	if code, _, pick, out := next(two, "--next", "pick", "--dry-run"); code != 0 || !hasLine(pick.Stale, "#8:", "would be blocked") || contains(g.LabelNames(newer.Number), "status:blocked") {
+		t.Fatalf("--dry-run over a stale claim: %d %s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".aayudha", "state", "notify.json")); !os.IsNotExist(err) {
+		t.Fatalf("a dry run wrote the notification state: %v", err)
+	}
 	code, res, pick, out = next(two, "--next", "pick")
 	if code != 0 || res.Issue != low.Number || !hasLine(pick.Stale, "#8:", "claim ran out with no pull request") {
 		t.Fatalf("stale claim: want #8 blocked and #%d picked: %d %s", low.Number, code, out)
