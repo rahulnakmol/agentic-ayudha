@@ -85,7 +85,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into your integration branch (`[branches] dev`, `dev` by default) with no person's pass when every required check passes (ship counts a skipped or neutral check as passing) except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
 - The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml` or `action.yaml`), and any changed symbolic link; with merge on proof on, a pull request in it waits for a person, and with it off, ship does not read the narrow set, so a layer's correction-free streak can merge one when its head has a review of another family (rung A or B) (#617, #89, #510).
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A, B, and C, so a same-family review counts for merge on proof but never toward the streak (#617, #657).
-- Every merge `aayu ship` makes with no person's review, on proof or on a correction-free streak, gets the `aayu:audit` label before it merges (no label, no merge) and an entry on the ledger, and comes to `aayu inbox` as a "Merged unreviewed, to audit" card: looks right records a clean sample; a correction records the sample, adds `aayu:correction`, which resets the streak of each layer an agent's pull request touched, and opens a pull request into dev that reverts the change (#661).
+- Every merge `aayu ship` makes with no person's review, on proof or on a correction-free streak, gets the `aayu:audit` label before it merges (no label, no merge) and an entry on the ledger, and comes to `aayu inbox` as a "Merged unreviewed, to audit" card: looks right records a clean sample; a correction records the sample, adds `aayu:correction`, which resets the streak of each layer an agent's pull request touched, and opens a pull request into the branch it merged into that reverts the change (#661).
 - `aayu ship` refuses to merge while a required check other than `protected-paths` is red, whoever passes it; it reads the checks once, so a check that turns red later can still pass under a bypass identity (#617, #632).
 - `aayu init --gates` installs a security workflow that scans every push to the integration, rolling, and main branches that `[branches]` names (`dev`, `rolling`, and `main` by default), and each tip nightly, with verify's security floors (#500).
 - `aayu verify` now runs the DAST floor, a ZAP scan, by default when `[verify] platforms` lists web or api: its active cross-site scripting and injection rules run only against an app that `[verify] seed` started on a loopback host in that run, or a URL whose environment sets `active_scan = true` in a merged `.aayudha/config.toml`, and every other URL gets a passive scan, which cannot see a reflected XSS (#509).
@@ -93,7 +93,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - verify takes an advisory UI review of its own screenshots (#479).
 - A floor waiver counts only when the floor-waiver authority accepted it (#624).
 - Agents run `aayu release` behind the full gate; promotion to main needs a person's stable-release request (#443).
-- `aayu release --to rolling` promotes only a dev commit that already has eval results, and never starts evals itself (#524).
+- `aayu release --to rolling` promotes only a commit on your integration branch (`[branches] dev`) that already has eval results, and never starts evals itself (#524).
 
 ### Identity and trust
 
@@ -104,7 +104,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - `aayu init --gates` protects every host's executable config with CODEOWNERS, and `aayu doctor` fails when it drifts (#538).
 - A host's PostHog or Sentry MCP server or CLI may only read; the host guard sees a CLI behind `sh -c`, `env`, and similar wrappers and a server by its registered name, URL, command, or package, but not a CLI started from a script file or an alias, or a server behind a generic proxy (#489, #525).
 - Each PostHog or Sentry read the host guard recognises is logged and citable like aayu's own queries, with tokens typed inline redacted (#494, #517).
-- Host recordings, replays, and feedback reads need `allow_pii`, which counts only when committed on the dev branch (#523, #531).
+- Host recordings, replays, and feedback reads need `allow_pii`, which counts only when committed on your integration branch (`[branches] dev`) (#523, #531).
 - The host guard covers PostHog and Sentry calls under GitHub Copilot, and a Copilot shell call that exits non-zero is logged as failed (#537, #556).
 - `aayu doctor` tries each PostHog and Sentry capability with one cheap read and names the exact fix (#499).
 - A checkout's config can no longer send a stored integration key to another host (#602).
@@ -148,7 +148,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 
 - Removed: `[inspect] reviewer = "auto"` and `"amp"`, with no deprecation release: a repository left on either gets a person's review on every pull request that is not docs-only, once it is ready for review and its checks and proof pass, and `aayu install --apply` asks for a tool again (#641, #657).
 - Changed: a repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app in the pull request that commits the new merge gate (#657).
-- Changed: in inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
+- Changed: in inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s approval of that exact head counts, through `aayu inspect <pr> --approve --reason "<what you checked>"` or its card in `aayu inbox` (#678), so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes
 
