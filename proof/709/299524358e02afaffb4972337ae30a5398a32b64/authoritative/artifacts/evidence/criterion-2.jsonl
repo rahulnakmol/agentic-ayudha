@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsEventSubscription"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsEventSubscription","Output":"=== RUN   TestInstallLoopsEventSubscription\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsEventSubscription","Output":"--- PASS: TestInstallLoopsEventSubscription (0.02s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsEventSubscription"}
