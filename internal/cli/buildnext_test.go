@@ -199,6 +199,14 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[older.Number].State = "open"
 	g.Mu.Unlock()
+	// Its builder stops it: the open PR is not the loop's to ship any more,
+	// but it still holds its slot until a person settles it.
+	if code, _, _, out := next(nil, strconv.Itoa(older.Number), "--stop", "the PR needs a person"); code != ExitBlocked {
+		t.Fatalf("--stop on the loop's PR story: %d %s", code, out)
+	}
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].PR != pr.Number {
+		t.Fatalf("a blocked story's open PR left the in-flight count: %d %s", code, out)
+	}
 	// [build] in_flight 0 stops the picks.
 	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "in_flight is 0") {
 		t.Fatalf("in_flight 0: %d %+v", code, pick)
@@ -239,11 +247,13 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	setLease(g, newer.Number, "founder@gone", time.Now().Add(-StaleGrace-time.Minute))
 	// A dry run shows the stale claim it would block, and blocks and pages nothing.
+	notifyState := filepath.Join(dir, ".aayudha", "state", "notify.json")
+	before, _ := os.ReadFile(notifyState)
 	if code, _, pick, out := next(two, "--next", "pick", "--dry-run"); code != 0 || !hasLine(pick.Stale, "#8:", "would be blocked") || contains(g.LabelNames(newer.Number), "status:blocked") {
 		t.Fatalf("--dry-run over a stale claim: %d %s", code, out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".aayudha", "state", "notify.json")); !os.IsNotExist(err) {
-		t.Fatalf("a dry run wrote the notification state: %v", err)
+	if after, _ := os.ReadFile(notifyState); string(after) != string(before) {
+		t.Fatalf("a dry run wrote the notification state:\n%s", after)
 	}
 	code, res, pick, out = next(two, "--next", "pick")
 	if code != 0 || res.Issue != low.Number || !hasLine(pick.Stale, "#8:", "claim ran out with no pull request") {

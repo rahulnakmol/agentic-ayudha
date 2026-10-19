@@ -402,19 +402,23 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	now := e.Now()
 	for _, st := range states {
-		if st.Blocked != "" {
-			continue
-		}
 		// The loop's own PR is the one on the branch it built, in this
 		// repository; any other PR that names the story is never shipped here.
-		// It stays the loop's while it is open, even if its story closed.
+		// It holds its slot while it is open, even if its story closed or its
+		// build was blocked; a blocked build's PR waits for a person, unshipped.
 		i := slices.IndexFunc(prs[st.Story], func(pr *gh.PullRequest) bool {
 			return pr.GetHead().GetRef() == st.Branch && strings.EqualFold(pr.GetHead().GetRepo().GetFullName(), repo)
 		})
 		if i >= 0 {
 			pr := prs[st.Story][i]
 			it := LoopItem{Story: st.Story, PR: pr.GetNumber(), URL: pr.GetHTMLURL()}
-			p.InFlight, p.Ship = append(p.InFlight, it), append(p.Ship, it)
+			p.InFlight = append(p.InFlight, it)
+			if st.Blocked == "" {
+				p.Ship = append(p.Ship, it)
+			}
+			continue
+		}
+		if st.Blocked != "" {
 			continue
 		}
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
