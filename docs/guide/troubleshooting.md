@@ -74,6 +74,9 @@ this head now:
 
 - If the note names Codex, Claude, or Cursor, run `aayu inspect <pr>` in your own terminal. The gate does not ask
   those apps from CI, so the head stays at `no-reply` until you do.
+- If the app has not replied 30 minutes after the request, rerun the merge gate or run `aayu inspect <pr>` again.
+  The wait is checked only when inspect runs; then the next app, or a person, reviews. This applies to CodeRabbit and
+  Greptile too.
 - If the note says a person reviews, the `[autonomy] approver` reviews the pull request, then runs
   `aayu inspect <pr> --approve --reason "<what you checked>"`, or approves its card in `aayu inbox`.
 
