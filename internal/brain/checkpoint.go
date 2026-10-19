@@ -733,7 +733,7 @@ func (c *cp) mocs() {
 		for _, ch := range children[p] {
 			line := "- " + Link(ch)
 			if t := c.v.Notes[ch].Str("title"); t != "" && t != Base(ch) {
-				line += ": " + t
+				line += ": " + Fact(t) // a title is text a person wrote, so it cannot end the block or render
 			}
 			lines = append(lines, line)
 		}

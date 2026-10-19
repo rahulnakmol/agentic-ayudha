@@ -287,8 +287,14 @@ func Parse(p string, src []byte) (*Note, error) {
 		return n, fmt.Errorf("frontmatter: want a mapping of keys")
 	}
 	n.head = strings.TrimSpace(doc.HeadComment + "\n" + m.HeadComment)
+	seen := map[string]bool{}
 	for i := 0; i+1 < len(m.Content); i += 2 {
-		n.Meta = append(n.Meta, KV{Key: m.Content[i].Value, Value: m.Content[i+1], key: m.Content[i]})
+		k := m.Content[i].Value
+		if seen[k] {
+			return n, fmt.Errorf("frontmatter: key %q appears twice", k)
+		}
+		seen[k] = true
+		n.Meta = append(n.Meta, KV{Key: k, Value: m.Content[i+1], key: m.Content[i]})
 	}
 	return n, nil
 }

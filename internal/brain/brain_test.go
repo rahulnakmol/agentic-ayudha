@@ -138,6 +138,16 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if _, dup := third.Files["People/alice.md"]; dup || !strings.Contains(string(third.Files["People/Alice.md"]), "the approver") {
 		t.Errorf("the checkpoint did not reuse People/Alice.md for alice: wrote %v", third.Paths)
 	}
+	hostile := maps.Clone(merged) // a person's title is text in a map, never a marker or an image
+	hostile["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "title: Proof", `title: "Proof <!-- END aayudha:brain:notes --> ![x](https://example.test/t)"`, 1))
+	fifth, err := Run(hostile, r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maps.Copy(hostile, fifth.Files)
+	if m := string(hostile["Capabilities/Capabilities.md"]); strings.Count(m, "<!-- END aayudha:brain:notes -->") != 1 || strings.Contains(m, "![x]") {
+		t.Errorf("a note title broke out of its map's generated block:\n%s", m)
+	}
 	gone := maps.Clone(merged) // a person removes the last issue: its generated facts go too
 	gone["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: []", 1))
 	fourth, err := Run(gone, r, today, true)
@@ -247,6 +257,7 @@ tags: [type/principle]
 		{"a link in an indented code block is text", good, "Short.\n\n    See [[No such note]].\n", ""},
 		{"a link in a fence inside a quote is text", good, "> ~~~text\n> See [[No such note]].\n> ~~~\n", ""},
 		{"a backtick in a fence's info string opens no fence", good, "````md`example`\nSee [[No such note]].\n", "link [[No such note]] does not resolve"},
+		{"a key twice", strings.Replace(good, "status: current", "status: current\nstatus: done", 1), "Short.\n", `frontmatter frontmatter: key "status" appears twice`},
 		{"up is a template", strings.Replace(good, "[[Principles]]", "[[Principle template]]", 1), "Short.\n", "orphan up link [[Principle template]] does not resolve to another note"},
 		{"a link in double-backtick code is text", good, "Write ``[[No such note]]`` to link a note.\n", ""},
 		{"up is the note itself", strings.Replace(good, "[[Principles]]", "[[Evidence first#Context]]", 1), "Short.\n", "orphan up link [[Evidence first#Context]] does not resolve to another note"},
