@@ -115,6 +115,11 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if err != nil || len(again.Paths) != 0 {
 		t.Errorf("a second checkpoint with the same records changed %v (%v)", again.Paths, err)
 	}
+	withIssue := maps.Clone(merged) // a person lists the Release issue on its note
+	withIssue["Releases/v0.2.0.md"] = []byte(strings.Replace(rel, "\nup:", "\nissues: [268]\nup:", 1))
+	if listed, err := Run(withIssue, r, today, true); err != nil || len(listed.Paths) != 0 {
+		t.Errorf("a release note that lists its issue was rewritten: %v (%v):\n%s", listed.Paths, err, listed.Files["Releases/v0.2.0.md"])
+	}
 
 	// A main rung releases a version that has no GitHub Release; a person who
 	// lost every role keeps a note that no longer claims one.
@@ -299,6 +304,9 @@ tags: [type/principle]
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},
 		{"a link alias that opens a fence hides no pasted criterion", good, "See [[Decisions|\n```\n]].\n1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
 		{"a link alias that opens a fence hides no long sentence", good, "See [[Decisions|\n```\n]].\n" + long + "\n", "ste a sentence has 26 words"},
+		{"a tilde alias hides no pasted criterion", good, "[[Decisions|~~~]]\n1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
+		{"an HTML alias hides no long sentence", good, "[[Decisions|<pre>]]\n" + long + "\n", "ste a sentence has 27 words"},
+		{"an indented alias hides no long sentence", good, "Text.\n\n[[Decisions|    " + long + "]]\n", "ste a sentence has 26 words"},
 		{"a generated block twice", good, Block("record", "- a") + "\n\n" + Block("record", "- b") + "\n", "block two generated record blocks"},
 		{"issues as a mapping", strings.Replace(good, "owner: founder", "owner: founder\nissues: {1: 2}", 1), "Short.\n", `frontmatter: "issues" holds a mapping`},
 		{"objectives links a note of another type", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Decisions]]\"]", 1), "Short.\n", "objectives: [[Decisions]] has type moc; objectives links a note of type objective"},

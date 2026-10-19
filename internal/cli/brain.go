@@ -62,9 +62,10 @@ func (e *Env) brainOpen(ctx context.Context) error {
 	steps := []string{
 		// The refspec names origin/brain, so a single-branch clone (CI, an orb) gets it too.
 		"git fetch origin +refs/heads/" + brain.Branch + ":refs/remotes/origin/" + brain.Branch,
-		"git worktree add -b " + brain.Branch + " " + dir + " origin/" + brain.Branch +
-			"  # with a local " + brain.Branch + " branch from an earlier worktree: git worktree add " + dir + " " + brain.Branch +
-			" && git -C " + dir + " merge --ff-only origin/" + brain.Branch,
+		// A local brain branch from an earlier worktree is reused and brought up to date.
+		"if git show-ref --verify --quiet refs/heads/" + brain.Branch + "; then git worktree add " + dir + " " + brain.Branch +
+			" && git -C " + dir + " merge --ff-only origin/" + brain.Branch +
+			"; else git worktree add -b " + brain.Branch + " " + dir + " origin/" + brain.Branch + "; fi",
 		"Open the folder " + dir + " as a vault in Obsidian (Open folder as vault), then open Home.",
 		"Write notes there, run `aayu brain check --dir " + dir + "`, then commit and push to " + brain.Branch + ".",
 	}
@@ -90,6 +91,9 @@ func (e *Env) brainWriter(ctx context.Context) (*ledger.Writer, *github.Client, 
 	w.Branch = brain.Branch
 	return w, c, nil
 }
+
+// dryRun reports whether w only plans its pushes, so a write returns no commit.
+func dryRun(w *ledger.Writer) bool { return w.Log != nil && w.Log.DryRun() }
 
 // notVault refuses a brain branch that is not an aayudha vault: a branch of
 // that name someone else made, which aayu must not write to.
@@ -181,7 +185,15 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
+	if sha == "" && dryRun(w) && (outcome == "created" || outcome == "workstream added") {
+		// a planned push returns no commit: the branch or workstream does not exist yet
+		outcome = "planned"
+	}
 	return e.Emit(map[string]any{"branch": brain.Branch, "outcome": outcome, "commit": sha, "workstream": ws}, func(out io.Writer) error {
+		if outcome == "planned" {
+			_, err := fmt.Fprintf(out, "brain: dry run; nothing written to %s.\n", brain.Branch)
+			return err
+		}
 		_, err := fmt.Fprintf(out, "brain: %s (%s %s). Run `aayu brain open` to open it in Obsidian.\n", outcome, brain.Branch, short(sha))
 		return err
 	})
@@ -268,8 +280,13 @@ func (e *Env) brainCheckpoint(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return e.Emit(map[string]any{"commit": sha, "changed": nonNilStrings(cp.Paths), "needs_review": nonNilStrings(cp.Review)}, func(out io.Writer) error {
-		fmt.Fprintf(out, "brain checkpoint: %d notes changed", len(cp.Paths))
+	planned := sha == "" && len(cp.Paths) > 0 && dryRun(w) // a planned push lands no commit
+	return e.Emit(map[string]any{"commit": sha, "changed": nonNilStrings(cp.Paths), "needs_review": nonNilStrings(cp.Review), "dry_run": planned}, func(out io.Writer) error {
+		if planned {
+			fmt.Fprintf(out, "brain checkpoint: dry run; %d notes would change, nothing written", len(cp.Paths))
+		} else {
+			fmt.Fprintf(out, "brain checkpoint: %d notes changed", len(cp.Paths))
+		}
 		if sha != "" {
 			fmt.Fprintf(out, " (%s %s)", brain.Branch, short(sha))
 		}

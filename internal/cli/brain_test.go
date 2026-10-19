@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,6 +46,10 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 		return out + errOut
 	}
 	brainRun(4, "checkpoint") // no brain branch yet
+	if out := brainRun(0, "init", "--dry-run"); !strings.Contains(out, "brain: dry run; nothing written to brain.") {
+		t.Fatalf("a dry-run init claims a write: %s", out)
+	}
+	brainRun(4, "checkpoint") // a dry run creates no branch
 	if out := brainRun(0, "init"); !strings.Contains(out, "brain: created") {
 		t.Fatalf("init: %s", out)
 	}
@@ -67,6 +72,9 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	git(t, vault, "commit", "--quiet", "-m", "a capability")
 	git(t, vault, "push", "--quiet", "origin", "HEAD:refs/heads/brain")
 
+	if out := brainRun(0, "checkpoint", "--dry-run"); !strings.Contains(out, "brain checkpoint: dry run; ") || !strings.Contains(out, "notes would change, nothing written\n") {
+		t.Fatalf("a dry-run checkpoint claims a write: %s", out)
+	}
 	if out := brainRun(0, "checkpoint"); !strings.Contains(out, "needs review: Capabilities/Proof packs.md") {
 		t.Fatalf("checkpoint did not flag the reviewed note whose facts changed: %s", out)
 	}
@@ -110,22 +118,23 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	single := filepath.Join(t.TempDir(), "single")
 	git(t, filepath.Dir(single), "clone", "--quiet", "--single-branch", "--branch", "dev", bare, single)
 	out := brainRun(0, "open")
-	var steps []string
-	for _, l := range strings.Split(out, "\n") {
-		if _, cmd, ok := strings.Cut(l, ". git "); ok {
-			cmd, _, _ = strings.Cut(cmd, "  #")
-			steps = append(steps, strings.Fields(cmd)...)
-			steps = append(steps, "\x00")
+	openVault := func() {
+		t.Helper()
+		for _, l := range strings.Split(out, "\n") {
+			if _, cmd, ok := strings.Cut(l, ". "); ok && (strings.HasPrefix(cmd, "git ") || strings.HasPrefix(cmd, "if ")) {
+				if b, err := exec.Command("sh", "-c", "cd "+single+" && "+cmd).CombinedOutput(); err != nil {
+					t.Fatalf("step %q: %v\n%s", cmd, err, b)
+				}
+			}
+		}
+		if _, err := os.Stat(filepath.Join(filepath.Dir(single), "r-brain", brain.HomePath)); err != nil {
+			t.Errorf("the steps of open did not open the vault (%v):\n%s", err, out)
 		}
 	}
-	for _, step := range strings.Split(strings.Join(steps, " "), "\x00") {
-		if args := strings.Fields(step); len(args) > 0 {
-			git(t, single, args...)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(single), "r-brain", brain.HomePath)); err != nil {
-		t.Errorf("the steps of open did not open the vault (%v):\n%s", err, out)
-	}
+	openVault()
+	// Again, with the local brain branch an earlier worktree left behind.
+	git(t, single, "worktree", "remove", "../r-brain")
+	openVault()
 }
 
 // TestBrainRefusesAnUnrelatedBranch: a branch named brain that is not a vault

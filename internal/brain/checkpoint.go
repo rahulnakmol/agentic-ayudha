@@ -601,7 +601,10 @@ func (c *cp) issueBlocks() {
 			}
 			nums = append(nums, num)
 		}
-		if len(nums) == 0 && n.Str("type") != "release" { // releases() owns a release note's record
+		if n.Str("type") == "release" { // releases() owns a release note's record, issues or not
+			continue
+		}
+		if len(nums) == 0 {
 			// the last issue was removed: its generated facts go too, whatever the note's type
 			clear := map[string]string{}
 			for k, b := range Blocks(n.Body) {
@@ -612,9 +615,6 @@ func (c *cp) issueBlocks() {
 			if len(clear) > 0 {
 				c.upsert(p, nil, nil, clear)
 			}
-			continue
-		}
-		if len(nums) == 0 {
 			continue
 		}
 		var lines []string

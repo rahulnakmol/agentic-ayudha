@@ -196,10 +196,12 @@ func prose(body string) string {
 	})
 }
 
-// oneLine is a link's shown text as the prose checks read it: one line with
-// no backtick, so an alias cannot open a code fence that hides the text after it.
+// oneLine is a link's shown text as the prose checks read it: Obsidian shows
+// it inline, so it is one line with no backtick, tilde, or angle bracket and no
+// leading indent. An alias then cannot open a code fence, an HTML block, or an
+// indented code block that hides text from the checks.
 func oneLine(s string) string {
-	return strings.NewReplacer("\n", " ", "\r", " ", "`", " ").Replace(s)
+	return strings.TrimSpace(strings.NewReplacer("\n", " ", "\r", " ", "`", " ", "~", " ", "<", " ").Replace(s))
 }
 
 // Check holds the vault to its rules: valid frontmatter, cited sources, links
