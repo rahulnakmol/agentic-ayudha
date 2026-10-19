@@ -214,9 +214,9 @@ Positioning line; keep it to one page. Never write the artefact's name into the 
   1. `# <product> <version>`, then the date and a one-sentence summary that names the headline Features and, when
      the grounding gives the earlier release, the version this one follows ("v1.5.0 follows v1.4.0 and adds …").
   2. A short "Read this if you are…" block when readers need different sections (a step that needs an admin or the
-     team's agreement, or a change that a source shows means something different on your own and in a team): one
-     line each for a reader on their own, in a small team, and in a medium team, pointing to the sections that reader
-     needs. A line is a pointer, not a promise: any reason it gives traces like any other claim.
+     team's agreement, or a change that a source shows means something different on your own and in a team): a
+     line for a reader on their own, in a small team, and in a medium team, pointing to the sections that reader
+     needs; readers who need the same sections share one line. A line is a pointer, not a promise: any reason it gives traces like any other claim.
   3. `## Upgrade first`, only when a criterion or an inspect judgement names a step the reader must take: numbered
      steps, one action each, the exact command or setting, how the reader sees that it worked, and who can do it:
      one person alone, an admin, or the team's agreement (a review or an approval). Take who from the source; when no

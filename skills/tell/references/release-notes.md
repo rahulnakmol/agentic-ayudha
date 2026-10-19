@@ -65,8 +65,8 @@ The reader the request or the brief names comes first. Without one, the stage de
 | Stage | Reader first | Reader block | Who on each step | Solo or team difference |
 |---|---|---|---|---|
 | startup | on your own | at most three short lines | a word: "You alone", "Admin", "Team" | a short clause, only where it differs |
-| scaleup | small or medium team | three lines, each with a reason that traces | one sentence: who, and why (the review or the permission) | its own sentence, only where it differs |
-| enterprise | medium team | three lines, each with a reason that traces | one sentence, as at scaleup | its own sentence, only where it differs |
+| scaleup | small or medium team | up to three lines, each with a reason that traces | one sentence: who, and why (the review or the permission) | its own sentence, only where it differs |
+| enterprise | medium team | up to three lines, each with a reason that traces | one sentence, as at scaleup | its own sentence, only where it differs |
 
 ## Each part
 
@@ -85,8 +85,8 @@ The reader the request or the brief names comes first. Without one, the stage de
 - Right after the summary, when readers need different sections: a step that needs an admin or the team's
   agreement, or a change whose meaning differs on your own and in a team, as a source shows. When every reader needs
   the same sections, leave the block out: a block that says the same thing three times is filler.
-- One line for each reader: on your own, in a small team, in a medium team. Leave out a reader whose line would only
-  repeat another's.
+- One line for each set of sections a reader needs: on your own, in a small team, in a medium team. Readers who
+  need the same sections share one line ("On your own or in a small team: …"), so no line repeats another.
 - Each line points to sections: "On your own: read Upgrade first, then Pinned notes." A reason in a line is a claim:
   "because the step needs an admin" needs its source like any other sentence.
 - Never sort readers by how much they will like the release. Sort them by what they must read.
@@ -142,6 +142,9 @@ The reader the request or the brief names comes first. Without one, the stage de
   a Feature. "Two more changes shipped in this release. They are not described here, because their proof is not
   complete yet."
 - Never name, link, or describe those changes, and never say what is next.
+- Proven Features that a startup page leaves out to keep its 400-word cap get their own line after it, with a true
+  reason: "Two more proven Features shipped in this release. They do not fit on this one-page summary." Never give
+  them the proof reason, and name them in your reply.
 
 ### Credits
 
