@@ -13,7 +13,9 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 
 Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
 
-With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @rahulnakmol. With `[autonomy] proof` on,
+With v0.3.0, aayu builds its own repository, agentic-ayudha: agents open its pull requests with the `agent-authored`
+label (AGENTS.md, "Every agent PR declares itself"), and one person, @rahulnakmol, is the recorded approver
+(`[autonomy] approver` in `.aayudha/config.toml`). With `[autonomy] proof` on,
 `aayu ship` merges an agent's Story pull request into dev on proof alone, and on that path a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs (#337, #293), and `aayu survey` maps legacy code (#292). Every pull request
