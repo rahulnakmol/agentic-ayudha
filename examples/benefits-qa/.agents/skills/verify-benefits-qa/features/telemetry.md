@@ -41,3 +41,6 @@ environment (`deployment.environment.name`, from `-environment`). A handler that
 - Nothing proves this capability today: no Go test in `examples/benefits-qa` starts the command with `-telemetry` or
   exercises `api.Observe` (`internal/cli/investigate_test.go` builds its own export with its own tracer). Until the
   seed passes `-telemetry` and `control.mjs` learns the `telemetry` step, treat it as unproven.
+- The panic path (a 500 and an `exception` event on the span) cannot be driven: no route of the app panics, so no
+  check can reach it through the page or the API. `ask-traced` covers the success path only; even once reachable, it
+  says nothing about exceptions.
