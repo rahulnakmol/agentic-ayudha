@@ -1525,6 +1525,22 @@ func TestInspectPaidReviewer(t *testing.T) {
 					t.Fatalf("CodeRabbit silent past the wait: exit %d %q %s", code, res.Review, errOut)
 				}
 				approved(t, "CodeRabbit silent past the wait")
+				// A family [inspect] app_families gives CodeRabbit sets its rung,
+				// not its kind: it is still a service, whose wait runs out
+				// (CodeRabbit's major on #724).
+				g, env, opts, prN, _ = setup(c.apps, "google-key")
+				cfg := filepath.Join(opts.Dir, ".aayudha", "config.toml")
+				if b, err := os.ReadFile(cfg); err != nil || os.WriteFile(cfg, append(b, "\n[inspect.app_families]\ncoderabbit = \"google\"\n"...), 0o644) != nil {
+					t.Fatal(err)
+				}
+				g.Mu.Lock()
+				g.Pulls[prN].User.Login = "contributor"
+				g.Permissions = map[string]string{"contributor": "read"}
+				g.CheckRuns[g.Pulls[prN].Head.SHA] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "completed", StartedAt: opts.Now().Add(-inspect.ReplyWait - time.Minute).Format(time.RFC3339)}}
+				g.Mu.Unlock()
+				if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "a human review") {
+					t.Fatalf("CodeRabbit with an app_families family, silent past the wait: exit %d %q %s", code, res.Review, errOut)
+				}
 				// After a person reopens a capped review, a head judged before the
 				// reopen starts a new window: a Codex request and an inspect run from
 				// before it neither keep Codex nor start CodeRabbit's wait (CodeRabbit's
@@ -1615,6 +1631,22 @@ func TestInspectPaidReviewer(t *testing.T) {
 				return
 			}
 			approved(t, "apps [codex], the CI review declined")
+			// A Codex request someone posted restores Codex, and the comment no
+			// longer says the review fell back to a person (CodeRabbit's minor on #724).
+			g, env, opts, prN, _ = setup(c.apps, "google-key")
+			g.Mu.Lock()
+			g.Pulls[prN].User.Login = "contributor"
+			g.Permissions = map[string]string{"contributor": "read"}
+			g.Mu.Unlock()
+			addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+g.Pulls[prN].Head.SHA+`","reviewer":"codex"} -->`)
+			g.Mu.Lock()
+			cs := g.Issues[prN].Comments
+			cs[len(cs)-1].CreatedAt, cs[len(cs)-1].UpdatedAt = opts.Now(), opts.Now()
+			g.Mu.Unlock()
+			if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || !strings.Contains(res.Review, "codex") ||
+				slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "falling back to a human review") }) {
+				t.Fatalf("apps [codex], an asked Codex: exit %d %q, notes %q %s", code, res.Review, res.Notes, errOut)
+			}
 		})
 	}
 

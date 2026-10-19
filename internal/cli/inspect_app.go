@@ -79,13 +79,17 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 	}
 	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...)
-	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
-	if a.fallback != "" {
-		notes = append(notes, a.fallback)
+	chosen := func(c inspect.Choice) []string {
+		ns := append([]string{a.builder.Note(), "reviewer: " + c.Kind() + "; the gate reads its reply and calls no model for it"}, c.Notes...)
+		if a.fallback != "" {
+			ns = append(ns, a.fallback)
+		}
+		if a.in.Mode == inspect.ModePeer {
+			ns = append(ns, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
+		}
+		return ns
 	}
-	if a.in.Mode == inspect.ModePeer {
-		notes = append(notes, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
-	}
+	notes := chosen(choice)
 	res := inspect.Result{PR: n, Head: head, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: a.builder}
 	if a.in.Draft {
 		res.Disposition, res.Summary = inspect.Skipped, "draft pull request: inspect runs when it is ready for review"
@@ -142,12 +146,14 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 				return ok && p.Kind == "comment" && rs.Head == head && rs.Reviewer == app && p.Updated.After(floor)
 			})
 		}
-		if cannotAsk = slices.DeleteFunc(cannotAsk, asked); len(cannotAsk) > 0 {
-			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
-		}
+		cannotAsk = slices.DeleteFunc(cannotAsk, asked)
 		if c := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, cannotAsk...); c.Kind() != choice.Kind() {
-			choice = c
-			notes[1] = "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"
+			// The restored app's notes replace the first choice's, such as a
+			// fallback to a person (CodeRabbit's minor on #724).
+			choice, notes = c, chosen(c)
+		}
+		if len(cannotAsk) > 0 {
+			notes = append(notes, fmt.Sprintf("the gate skips %s: with the CI review declined, nothing asks an app that answers only a person's mention", strings.Join(cannotAsk, ", ")))
 		}
 	}
 	// Each reviewer's wait starts from its own review request for the head. A
@@ -175,13 +181,19 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	// sinceErr is why the gate could not read when a service it turned to
 	// began to wait: it then waits no longer, so a person reviews.
 	var sinceErr error
+	// A review service is the app's own kind, whatever family [inspect]
+	// app_families gives it for the rung (CodeRabbit's major on #724).
+	service := func(c inspect.Choice) bool {
+		app, ok := inspect.AppByName(c.App)
+		return ok && app.Family == inspect.FamilyService
+	}
 	// switchTo makes c the reviewer: outside CI it posts c's own request under
 	// the person's account when there is none, and its wait starts now.
 	switchTo := func(c inspect.Choice) error {
 		choice, sinceErr = c, nil
 		own, first := requested(c)
 		since = own
-		if c.Family == inspect.FamilyService {
+		if service(c) {
 			since = cmp.Or(own, first)
 			// A service the gate turned to with no request on the head at all
 			// (the CI review declined) waits from the head's first inspect run,
@@ -203,7 +215,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			return nil
 		}
 		if e.CI {
-			if !first.IsZero() && c.Family != inspect.FamilyService {
+			if !first.IsZero() && !service(c) {
 				notes = append(notes, fmt.Sprintf("%s has no review request of its own for this head, so the gate waits for it; `aayu inspect %d` outside CI asks it", c.Kind(), n))
 			}
 			return nil
