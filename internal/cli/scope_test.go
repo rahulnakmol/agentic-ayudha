@@ -195,6 +195,12 @@ func TestScope(t *testing.T) {
 		t.Fatalf("drift: %+v", drift)
 	}
 
+	// Over budget on Decision 7, a change the Decision does not hold asks a person, even one worth zero points.
+	epic := g.AddIssue("Release notes", fixtureBody(t, "feature", nil), "type:feature")
+	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(epic.Number)); code != ExitBlocked || !strings.Contains(out, "a person decides") || milestone(epic.Number) != "" {
+		t.Fatalf("a zero-point add over budget: exit %d, milestone %q: %s", code, milestone(epic.Number), out)
+	}
+
 	// Feedback: by milestone and horizon label, never its body, and not drift.
 	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != ExitBlocked || !strings.Contains(out, "no release milestone after v0.3.0") {
 		t.Fatalf("--to next with none: exit %d: %s", code, out)
@@ -219,6 +225,10 @@ func TestScope(t *testing.T) {
 	g.Mu.Unlock()
 	if code, _, out := scopeRun(agent, "--handoff"); code != ExitBlocked || !strings.Contains(out, "outside aayu scope") {
 		t.Fatalf("--handoff after a resize by hand: exit %d: %s", code, out)
+	}
+	// Nor does a new request sweep that resize under the next person's acceptance.
+	if code, _, out := scopeRun(agent, "--add", strconv.Itoa(epic.Number), "--decision", "7"); code != ExitBlocked || !strings.Contains(out, "no Decision holds") {
+		t.Fatalf("a request beside drift no Decision holds: exit %d: %s", code, out)
 	}
 	g.Mu.Lock()
 	g.Issues[4].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:L"}}
@@ -252,6 +262,13 @@ func TestScope(t *testing.T) {
 	if code, rep, out := scopeRun(agent, "--drop", "5"); code != 0 || milestone(5) != "v0.4.0" || !strings.Contains(rep.Done, "it rides v0.4.0") {
 		t.Fatalf("--drop with a later release: exit %d, milestone %q: %s", code, milestone(5), out)
 	}
+	// A Story closed as not planned is cut from scope: drift, not a planned item.
+	g.Mu.Lock()
+	l.State, l.StateReason = "closed", "not_planned"
+	g.Mu.Unlock()
+	if code, rep, out := scopeRun(agent); code != 0 || rep.Drift == nil || !slices.ContainsFunc(rep.Drift.Removed, func(it scope.Item) bool { return it.Number == 4 }) {
+		t.Fatalf("a Story closed as not planned: exit %d: %s", code, out)
+	}
 }
 
 // A Decision covers the changes accepted with it: a zero-point Feature retyped
@@ -264,5 +281,9 @@ func TestScopeDecisionCoversOnlyItsChanges(t *testing.T) {
 	}
 	if !within(scope.Drift{Added: recorded.Added[1:]}, recorded) {
 		t.Fatal("a subset of the accepted changes lost its Decision")
+	}
+	resized := scope.Drift{Resized: []scope.Resize{{Number: 4, Type: "story", Title: "Baseline it", From: "L", To: "M"}}}
+	if retitled := (scope.Drift{Resized: []scope.Resize{{Number: 4, Type: "story", Title: "Baseline the plan", From: "L", To: "M"}}}); !within(retitled, resized) {
+		t.Fatal("a title edit cost a resize its Decision")
 	}
 }

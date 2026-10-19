@@ -253,6 +253,9 @@ func (r *scopeRun) readPlan(ctx context.Context) error {
 		if is.IsPullRequest() || is.GetNumber() == r.n {
 			continue
 		}
+		if why := is.GetStateReason(); is.GetState() == "closed" && (why == "not_planned" || why == "duplicate") {
+			continue // closed without being done is a cut in scope: drift, never a planned item
+		}
 		it, err := r.item(ctx, is)
 		switch {
 		case err != nil:
@@ -381,7 +384,9 @@ func within(d, recorded scope.Drift) bool {
 		}
 	}
 	for _, z := range d.Resized {
-		if !slices.Contains(recorded.Resized, z) {
+		if !slices.ContainsFunc(recorded.Resized, func(x scope.Resize) bool { // a title edit is not a change in scope
+			return x.Number == z.Number && x.Type == z.Type && x.FromType == z.FromType && x.From == z.From && x.To == z.To
+		}) {
 			return false
 		}
 	}
@@ -516,7 +521,16 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 		next = append(next, it)
 	}
 	cur, d := r.measure(r.items), r.measure(next)
-	if d != nil && d.Over() && d.ChangedPoints > cur.ChangedPoints {
+	// A Decision covers the changes a person accepted with it, never a later
+	// one: over budget, any change it does not hold asks a person, even one
+	// worth zero points. Only a change that cuts drift goes ahead unasked.
+	covered := d != nil && r.drift != nil && r.drift.OverBudgetDecision != 0 && within(*d, *r.drift)
+	if d != nil && d.Over() && !covered && d.ChangedPoints >= cur.ChangedPoints {
+		// A person accepts one change, never drift no Decision holds beside it.
+		if cur.Over() && cur.OverBudgetDecision == 0 {
+			return WithNext(Errorf(ExitBlocked, "scope: %s is already %.1f%% from baseline %d through changes no Decision holds; a person re-baselines before another change over budget",
+				r.version, cur.DriftPct, cur.Baseline), fmt.Sprintf("aayu scope %d --draft --decision <accepted decision>", r.n))
+		}
 		q := scopeRequest{Kind: op, Item: n, Hash: scope.Hash(r.intent, next), DriftPct: d.DriftPct, Over: true, Decision: decision}
 		if decision == 0 {
 			return WithNext(Errorf(ExitBlocked, "scope: %s #%d takes %s to %.1f%% drift from baseline %d, over the %.1f%% budget; a person decides",
@@ -539,8 +553,8 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	}
 	if d != nil {
 		d.OverBudgetDecision = 0
-		if d.Over() && cur != nil {
-			d.OverBudgetDecision = cur.OverBudgetDecision
+		if d.Over() && covered {
+			d.OverBudgetDecision = r.drift.OverBudgetDecision
 		}
 		if err := r.writeDrift(ctx, *d, fmt.Sprintf("%s #%d", op, n)); err != nil {
 			return err
