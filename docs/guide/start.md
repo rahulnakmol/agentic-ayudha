@@ -125,7 +125,8 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    instead of the CI model, put that choice from step 2 in this same pull request.
 
    **You should see** an `environment code-review` line in init's report, and the workflow file in the merged pull
-   request. If the line is missing, read the note below step 2.
+   request. If the line is missing, read the note below step 2. If init stops with an error before its report, such
+   as a failed GitHub call, see [Tour problems](troubleshooting.md#tour), then run `aayu doctor`.
 2. In **Settings → Environments → code-review**, add the secret `AAYU_REVIEW_MODEL_KEY`: your key for that endpoint.
    The review model must come from a vendor other than the one that builds; change `AAYU_REVIEW_MODEL_URL` and
    `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting. A review
