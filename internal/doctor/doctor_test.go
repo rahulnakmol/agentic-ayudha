@@ -825,6 +825,10 @@ func TestApprovals(t *testing.T) {
 		want  string
 	}{
 		{"no approvers", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot"}, nil, "warn approvals: no `[approvals] approvers`, so every batch needs the device code"},
+		// A clean macOS or Windows machine: the OS credential helper holds nothing, so it does not answer. With no
+		// approvers no reply approves anything, so it is listed and the row warns (installers.yml needs no FAIL row).
+		{"no approvers, helper does not answer", nil, []identity.Reach{{Source: "git credential helper (unreadable now)"}},
+			"warn approvals: no `[approvals] approvers`, so every batch needs the device code | git credential helper (unreadable now) -> an account GitHub could not confirm just now"},
 		{"no bot", []string{"approvals.approvers=rahulnakmol"}, nil, "warn approvals: no bot identity, so agents write as a person and every batch needs the device code"},
 		// Replies are off, so an approver's reachable credential forges nothing.
 		{"every batch on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol", "approvals.device_for=all"},

@@ -25,6 +25,7 @@ on:
       - install.sh
       - .goreleaser.yaml
       - .github/workflows/installers.yml
+      - internal/doctor/** # its rows decide the "no FAIL row" check on every OS
 
 permissions:
   contents: read
