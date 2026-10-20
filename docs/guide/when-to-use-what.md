@@ -59,8 +59,11 @@ Guide: [hand work to an agent](guide-build.md). In the story: [the build](journe
 
 ## A pull request is ready
 
-Let the **merge gate** run (it starts by itself), read **`inspect`**'s verdict, then **`ship`**. The review comes
-from an agent app from another vendor installed on your account, so your CI needs no AI key. Run **`verify`**
+Let the **merge gate** run (it starts by itself), read **`inspect`**'s verdict, then **`ship`**. By default the
+gate calls a review model with your `code-review` environment's key ([code review in the merge gate](how-review.md)).
+That model reviews only when its family differs from the builder's and the author has write access; otherwise
+CodeRabbit or Greptile, when listed, or the approver reviews; the gate skips a listed Codex, Claude, or Cursor, which
+review only when a person asks them. Run **`verify`**
 yourself first if you want a quick local check.
 
 **You get back** an authoritative proof pack, a verdict per criterion (`merge`, `fix`, or `rebuild`), and, once you

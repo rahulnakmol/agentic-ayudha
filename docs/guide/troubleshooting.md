@@ -62,6 +62,24 @@ commit, or replied in a way aayu cannot read. Run `aayu inspect <pr>` yourself, 
 people who connected them. Check `aayu doctor`'s `reviewer-apps` row: the app must be installed and listed in
 `[inspect] apps`.
 
+**Under `reviewer = "ci"`, `aayudha/inspect` fails and names a missing setting.** The `code-review` environment
+lacks the endpoint, the model, or the secret `AAYU_REVIEW_MODEL_KEY`. Add it in **Settings → Environments →
+code-review**, then push again or rerun the job. A URL with a key or a query in it is refused; use the base URL only
+([when something is missing](how-review.md#when-something-is-missing)).
+
+**The inspect comment says "fallback: rung B … failed".** The review call reached the endpoint and failed, for example
+with a wrong key or an overloaded endpoint. The note gives the reason, and an installed app or a person reviews
+instead. Fix the key or the model in the `code-review` environment; the next push tries the model again. To clear
+this head now:
+
+- If the note names Codex, Claude, or Cursor, run `aayu inspect <pr>` in your own terminal. The gate does not ask
+  those apps from CI, so the head stays at `no-reply` until you do.
+- If the app has not replied 30 minutes after the request, rerun the merge gate or run `aayu inspect <pr>` again.
+  The wait is checked only when inspect runs; then the next app, or a person, reviews. This applies to CodeRabbit and
+  Greptile too.
+- If the note says a person reviews, the `[autonomy] approver` reviews the pull request, then runs
+  `aayu inspect <pr> --approve --reason "<what you checked>"`, or approves its card in `aayu inbox`.
+
 **`reviewer-apps` says it is "falling back to a human review".** No listed app comes from a different vendor than
 the builder. Install one (Claude, Codex, or Cursor) and add it to `[inspect] apps`, or let a person review.
 
