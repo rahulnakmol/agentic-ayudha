@@ -42,6 +42,10 @@ func TestStoryBodyStructure(t *testing.T) {
 			t.Errorf("body lacks %q:\n%s", want, body)
 		}
 	}
+	// Only the Refs line names the story to StoryOf, so an edit of it is seen.
+	if n := StoryOf(strings.Replace(body, "Refs #42", "Refs #43", 1), "", ""); n != 43 {
+		t.Errorf("StoryOf reads story #%d from a body whose Refs line says #43:\n%s", n, body)
+	}
 	// Filled in by the agent, it passes.
 	filled := strings.ReplaceAll(body, prbody.Placeholder, "The cart shows the total.")
 	if block, _ := prbody.Check(filled, nil, true); len(block) > 0 {
@@ -89,7 +93,7 @@ func TestRefreshSections(t *testing.T) {
 	old = strings.Replace(old, "| Risk | "+prbody.Placeholder+" |", "| Risk | low |", 1)
 	// The agent rewrites Why, which aayu wrote once and never refreshes, and a
 	// person removes the checks markers and writes the table themselves.
-	old = strings.Replace(old, "Story #42 asks for this change.", "A person's own reason.", 1)
+	old = strings.Replace(old, "This change is for Story #42.", "A person's own reason.", 1)
 	i, j := strings.Index(old, "<!-- aayudha:pr:checks -->"), strings.Index(old, "<!-- /aayudha:pr:checks -->")
 	old = old[:i] + "| Check or test | What it proves | Result |\n|---|---|---|\n| A person's own check | it works | pass |\n" + old[j+len("<!-- /aayudha:pr:checks -->\n"):]
 	// A marker quoted inside a line is not a section.
@@ -105,7 +109,7 @@ func TestRefreshSections(t *testing.T) {
 			t.Errorf("refreshed body lacks %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "aayudha:pr:checks") || strings.Contains(got, "| Checkpoint 2/2 verify") || strings.Contains(got, "asks for this change") {
+	if strings.Contains(got, "aayudha:pr:checks") || strings.Contains(got, "| Checkpoint 2/2 verify") || strings.Contains(got, "This change is for") {
 		t.Errorf("refresh re-added a deleted section or rewrote the agent's Why:\n%s", got)
 	}
 	if !strings.HasSuffix(got, tail) {

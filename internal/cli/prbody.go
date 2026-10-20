@@ -56,7 +56,8 @@ func storyBody(chk ready.Result, issueBody, risk string, deps []prDependency, cp
 	fmt.Fprintf(&b, "\n| At a glance | |\n|---|---|\n| %s | #%d |\n| Type | %s |\n| Who it helps | %s |\n| Risk | %s |\n| Breaking | %s |\n",
 		kind, chk.Issue, typ, ph, prCell(cmp.Or(risk, ph)), ph)
 	b.WriteString("\n## Why\n\n")
-	why := fmt.Sprintf("%s #%d asks for this change.\n", kind, chk.Issue)
+	// Never a line that starts "Story #n": StoryOf reads it as the PR's story.
+	why := fmt.Sprintf("This change is for %s #%d.\n", kind, chk.Issue)
 	if summary != "" {
 		why = summary + "\n\n" + why
 	}
