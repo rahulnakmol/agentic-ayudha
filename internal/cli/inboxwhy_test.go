@@ -110,9 +110,9 @@ func inboxFailures() []struct {
 		{"GitHub's side (502)", InboxReady, ghRefusal("PUT", "/repos/o/r/pulls/661/merge", 502, "Server Error"), "merging", nil,
 			"GitHub had a problem on its side", "Enter tries again in a minute", none, false, true},
 		{"rate limit", InboxReady, rate, "checking the required checks", nil,
-			"GitHub is limiting requests from this account for now", "wait until 12:00, then enter tries again.", none, false, true},
+			"GitHub is limiting requests from this account for now", "wait until 12:00, then Enter tries again.", none, false, true},
 		{"secondary rate limit", InboxFixed, abuse, "posting a comment", nil,
-			"GitHub is limiting requests from this account for now", "then enter tries again.", none, false, false},
+			"GitHub is limiting requests from this account for now", "then Enter tries again.", none, false, false},
 		{"call budget", InboxReady, fmt.Errorf("%w (500 calls)", github.ErrBudget), "reading GitHub", nil,
 			"this session used up its GitHub calls", "you quit (q) and open aayu inbox again", none, false, true},
 		{"network", InboxReady, Wrap(ExitExternal, conn), "merging", nil,
@@ -205,11 +205,14 @@ func TestInboxFailureWords(t *testing.T) {
 		if !strings.HasPrefix(w.Changed, f.changed) {
 			t.Errorf("%s: changed %q, want %q", f.name, w.Changed, f.changed)
 		}
-		if !strings.Contains(strings.ToLower(w.Next), strings.ToLower(f.next)) {
+		if !strings.Contains(w.Next, f.next) {
 			t.Errorf("%s: next %q, want %q", f.name, w.Next, f.next)
 		}
 		if w.Landed != f.landed {
 			t.Errorf("%s: landed %v", f.name, w.Landed)
+		}
+		if w.Retry != strings.Contains(w.Next, "Enter") || strings.Contains(w.Next, "enter ") {
+			t.Errorf("%s: retry %v, but the next line says %q", f.name, w.Retry, w.Next)
 		}
 		if bad := noTech(strings.Join(w.lines(), " ")); len(bad) > 0 {
 			t.Errorf("%s: technical words %q in %q", f.name, bad, w.lines())

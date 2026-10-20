@@ -194,16 +194,16 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 		w.Next = "you quit (q) and open aayu inbox again; it starts a fresh session."
 	case c.rate:
 		w.What = fmt.Sprintf("#%d %s: GitHub is limiting requests from this account for now.", n, not)
-		w.Next = "wait a few minutes, then " + strings.ToLower(retry) + "."
+		w.Next = "wait a few minutes, then " + retry + "."
 		if !c.reset.IsZero() {
-			w.Next = fmt.Sprintf("wait until %s, then %s.", c.reset.Local().Format("15:04"), strings.ToLower(retry))
+			w.Next = fmt.Sprintf("wait until %s, then %s.", c.reset.Local().Format("15:04"), retry)
 		}
 	case c.network && len(maybe) > 0:
 		w.What = fmt.Sprintf("#%d %s: the connection to GitHub dropped in the middle.", n, not)
 		w.Next = "you open it on GitHub (o) to check what landed, then Enter finishes the rest."
 	case c.network:
 		w.What = fmt.Sprintf("#%d %s: aayu couldn't reach GitHub (the network dropped or timed out).", n, not)
-		w.Next = "you check the connection; " + strings.ToLower(retry) + "."
+		w.Next = "you check the connection; " + retry + "."
 	case c.status == 405 && strings.Contains(strings.ToLower(m), "not mergeable"), c.status == 405 && strings.Contains(strings.ToLower(m), "conflict"):
 		w.What = fmt.Sprintf("#%d wasn't merged: it conflicts with %s.", n, dev)
 		w.Next = fmt.Sprintf("its builder rebases it onto %s; nothing for you yet.", dev)
