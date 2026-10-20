@@ -406,6 +406,11 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 			s.pulls[p.GetNumber()] = p
 		}
 		s.self = viewer(ctx, s.c)
+		// viewer drops its error: a first read cut off there (Bug #822) is not
+		// loaded, or the session would never trust inspect's comments by self.
+		if err := context.Cause(ctx); err != nil {
+			return false, err
+		}
 		s.loaded = true
 		return true, nil
 	}

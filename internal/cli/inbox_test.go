@@ -2222,14 +2222,14 @@ func TestInboxLoginScreen(t *testing.T) {
 	}
 }
 
-// holdIssues makes the fake hold every issues list until release is closed
-// (or five seconds pass), with the fake locked, as a GitHub that accepts the
+// holdGET makes the fake hold every GET of path until release is closed (or
+// five seconds pass), with the fake locked, as a GitHub that accepts the
 // request and never answers it does.
-func holdIssues(g *fake.GitHub) (release func()) {
+func holdGET(g *fake.GitHub, path string) (release func()) {
 	ch := make(chan struct{})
 	g.Mu.Lock()
-	g.Hook = func(method, path string) {
-		if method == "GET" && path == "/repos/o/r/issues" {
+	g.Hook = func(method, p string) {
+		if method == "GET" && p == path {
 			select {
 			case <-ch:
 			case <-time.After(5 * time.Second):
@@ -2254,7 +2254,7 @@ func TestInboxReadTimeout(t *testing.T) {
 
 	t.Run("a request GitHub never answers times out", func(t *testing.T) {
 		g := inboxRepo(t)
-		release := holdIssues(g)
+		release := holdGET(g, "/repos/o/r/issues")
 		t.Cleanup(release)
 		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
 		start := time.Now()
@@ -2275,7 +2275,7 @@ func TestInboxReadTimeout(t *testing.T) {
 		was := inboxReadTimeout
 		inboxReadTimeout = 300 * time.Millisecond
 		t.Cleanup(func() { inboxReadTimeout = was })
-		release := holdIssues(g)
+		release := holdGET(g, "/repos/o/r/issues")
 		t.Cleanup(release)
 		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
 		opts.TUI = func(tm tea.Model) error {
@@ -2309,7 +2309,7 @@ func TestInboxReadTimeout(t *testing.T) {
 		was := inboxReadTimeout
 		inboxReadTimeout = 300 * time.Millisecond
 		t.Cleanup(func() { inboxReadTimeout = was })
-		release := holdIssues(g)
+		release := holdGET(g, "/repos/o/r/issues")
 		t.Cleanup(release)
 		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
 		opts.TUI = func(tm tea.Model) error {
@@ -2319,6 +2319,46 @@ func TestInboxReadTimeout(t *testing.T) {
 			if !teaDrive(m, read) {
 				t.Error("q during a first read that timed out left the inbox open")
 			}
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
+	// A first read cut off while it asks who the viewer is stays unloaded, so
+	// R reads it all again and trusts inspect's comments by the viewer (#11
+	// waits at the human rung only in such a comment; inspect's P1 e65fb27d4f
+	// on #828, narrowed).
+	t.Run("first read cut off at the viewer", func(t *testing.T) {
+		g := inboxRepo(t)
+		head := strings.Repeat("e", 40)
+		st, _ := json.Marshal(inspect.State{Human: head, Result: &inspect.Result{Disposition: "merge"}})
+		own := &fake.Comment{ID: 190, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(st) + " -->\n"}
+		own.User.Login, own.User.Type = "o", "User"
+		g.Mu.Lock()
+		g.Issues[11].Comments = append(g.Issues[11].Comments, own)
+		g.Mu.Unlock()
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdGET(g, "/user")
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			if teaDrive(m, m.Init()) {
+				t.Fatal("the inbox quit when its first read timed out")
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Mu.Unlock()
+			teaKeys(m, "R")
+			if !slices.ContainsFunc(m.items, func(it InboxItem) bool { return it.Number == 11 && it.Kind == InboxHumanReview }) {
+				t.Errorf("after R, #11 is not a human-review card: the viewer's inspect comment went unread (status %q)", m.status)
+			}
+			teaKeys(m, "q")
 			return nil
 		}
 		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
@@ -2345,7 +2385,7 @@ func TestInboxReadTimeout(t *testing.T) {
 			if m.status != "Up to date." {
 				t.Errorf("after a finished refresh the status is %q, want Up to date.", m.status)
 			}
-			release := holdIssues(g)
+			release := holdGET(g, "/repos/o/r/issues")
 			defer release()
 			start := time.Now()
 			teaKeys(m, "R")
