@@ -149,7 +149,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - Codex runs through its own provider and passes the GitHub token variables to the MCP server, and the local Codex receiver keeps `CODEX_HOME` (#359, #392, #453).
 - Cursor runs its hooks once, and the plugin's commands come from install (#297).
 - Rolling snapshot builds are named after the newest v* release (#492).
-- The winget package identifier is `Rahulnakmol.AgenticAyudha` (#342).
+- The winget package identifier is `AkmolsInc.AgenticAyudha`, published by Akmols Inc, and `aayu self-update` prints `winget upgrade --id AkmolsInc.AgenticAyudha`; the reverse-DNS identifier `app.akmols.agenticayudha` is reserved for platforms that need one (#342, #831).
 - Every skill has its own page in the guide, generated from the verb registry (#455).
 - New guides cover the delivery loop, working as a solo founder, growing from an MVP, and connecting PostHog and Sentry read-only (#463, #473, #474, #507).
 
