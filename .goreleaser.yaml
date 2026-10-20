@@ -111,14 +111,16 @@ scoops:
     license: BSD-3-Clause
     skip_upload: true # published by release.yml `scoop` job
 
-# Package identifiers (D-8.2j). winget: Rahulnakmol.AgenticAyudha. Reverse-DNS, reserved for any platform that
-# needs one: com.rahulnakmol.agenticayudha (an Apple codesign identifier, a macOS pkg or bundle ID, Linux AppStream,
+# Package identifiers (D-8.2j; renamed by the founder on 2026-10-20, before winget published either). winget:
+# AkmolsInc.AgenticAyudha (publisher Akmols Inc), after the GitHub organisation akmolsinc. Reverse-DNS, from the
+# founder's domain akmols.app, reserved for any platform that
+# needs one: app.akmols.agenticayudha (an Apple codesign identifier, a macOS pkg or bundle ID, Linux AppStream,
 # Flatpak, or deb/rpm metadata). aayu ships a plain CLI with none of those today, so nothing sets it yet. The Homebrew
 # cask and the Scoop manifest keep the install name aayudha: they are published, and renaming them breaks installs.
 winget:
   - name: aayudha # goreleaser writes it as the Moniker: `winget install aayudha` (and `aayu`, a substring of it)
-    publisher: Rahulnakmol
-    package_identifier: Rahulnakmol.AgenticAyudha
+    publisher: Akmols Inc
+    package_identifier: AkmolsInc.AgenticAyudha
     package_name: Agentic Ayudha
     short_description: Agentic software delivery pod in one binary.
     tags: [aayu, aayudha, cli, agents, software-delivery]

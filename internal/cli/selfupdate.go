@@ -191,7 +191,7 @@ func packageManager(exe string) (name, cmd string) {
 	case strings.Contains(p, "/scoop/apps/") || strings.Contains(p, "/scoop/shims/"):
 		return "Scoop", "scoop update aayudha"
 	case strings.Contains(p, "/winget/packages/") || strings.Contains(p, "/windowsapps/"):
-		return "winget", "winget upgrade --id Rahulnakmol.AgenticAyudha"
+		return "winget", "winget upgrade --id AkmolsInc.AgenticAyudha"
 	}
 	return "", ""
 }
