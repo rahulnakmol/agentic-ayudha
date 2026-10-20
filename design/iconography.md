@@ -7,11 +7,12 @@ drawn as clean geometric lines. This note says where the icons live, the rules t
 
 | Mark | Use | Files |
 |---|---|---|
-| ![आयु, the bot mark](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `icons/app/aayu-bot.png` (512 px, for GitHub) |
+| ![आयु, the bot mark](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `icons/app/aayu-bot.png` (512 px, for GitHub), `icons/app/aayu-bot-24.svg` (text size) |
 | ![aayu Sakshi, the witness eye](icons/app/aayu-sakshi.svg) | The logo of **aayu Sakshi**, the GitHub App behind the presence check. Sakshi (साक्षी) means witness: the eye sees that a person is here, and its pupil is the one-time code. | `icons/app/aayu-sakshi.svg`, `icons/app/aayu-sakshi.png` (512 px), `icons/app/aayu-sakshi-24.svg` (small sizes) |
 
-GitHub takes an App's logo only as an upload on the App's settings page, so the PNGs are there for that step. Below
-32 px, use `aayu-sakshi-24.svg`: it drops the four arcs and shows the code as one dot.
+GitHub takes an App's logo only as an upload on the App's settings page, so the PNGs are there for that step. The SVGs
+draw at 64 px. Below 32 px, use `aayu-sakshi-24.svg`: it drops the four arcs and shows the code as one dot.
+`aayu-bot-24.svg` is the same drawing as `aayu-bot.svg` at text size.
 
 ## Seats
 
@@ -86,12 +87,23 @@ is drawn by hand from geometric strokes and checked against Noto Sans Devanagari
 Edit the SVG by hand. Then look at it at 16, 24, and 32 px on a white and on a dark ground (`#0d1117`) before you
 commit it. Keep the comment at the top of each file.
 
+## Where the docs use them
+
+- **Generated tables.** `go generate ./...` (`verbIcon` and `seatIcon` in `internal/verbs/gen`) puts a verb's icon
+  next to its name and a seat's emblem next to its seat. That covers the verbs tables in `docs/README.md` and
+  `docs/RACI.md`, the owner seats in `LAYERS.md`, the verb map in `docs/guide/when-to-use-what.md`, the journey
+  pages' verb tables, the skill index, and each skill page's card. A verb with no icon gets none.
+- **By hand.** The README and the guide's front page (`docs/guide/README.md`), the seats table in
+  `docs/guide/concepts-seats.md`, and the presence check and the agent lane in `docs/guide/how-trust.md`.
+- **Size.** In Markdown the icons draw at their own size, 24 px, and the App marks at 64 px. The docs site
+  (`internal/tell/site.css`) sets icons inline at text size and keeps a cell's icon beside its first word.
+
 ## Where they go next
 
-These surfaces can use the set. None of them is wired up in this change:
+These surfaces can use the set. None of them is wired up yet:
 
 - the GitHub App logo uploads, for the bot App and aayu Sakshi;
 - the `logo` field of `.cursor-plugin/plugin.json` and `interface.logo` of `.codex-plugin/plugin.json`;
 - the MCP server's `Icons` on the server, its tools, and the persona prompt (`internal/mcp/server.go`);
-- the docs site's favicon and header (`internal/tell/site.go`), the seat pages, and the skill pages;
-- the README and the repository's social preview.
+- the docs site's favicon and header (`internal/tell/site.go`);
+- the repository's social preview.

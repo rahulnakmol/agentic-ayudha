@@ -170,13 +170,13 @@ are not verbs; the verbs reference lists them.
 | [Set up](start.md) | [`init`](skills/init.md) | Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request. |
 |  | [`install`](skills/install.md) | Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops. |
 |  | [`doctor`](skills/doctor.md) | Checks your machine and setup, and says exactly what to fix. |
-| [Shape the goal](journey-1-shape.md) | [`grill`](skills/grill.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+| [Shape the goal](journey-1-shape.md) | ![grill](../../design/icons/verbs/grill.svg) [`grill`](skills/grill.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
 |  | [`survey`](skills/survey.md) | Reads a codebase nobody documented, says what it does with a citation for every claim, and drafts the backlog to modernise it. |
-| [Break it down](journey-2-break-down.md) | [`slice`](skills/slice.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
-|  | [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
-|  | [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| [Break it down](journey-2-break-down.md) | ![slice](../../design/icons/verbs/slice.svg) [`slice`](skills/slice.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
+|  | ![plan](../../design/icons/verbs/plan.svg) [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
+|  | ![decide](../../design/icons/verbs/decide.svg) [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
 |  | [`chart`](skills/chart.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
-| [Get a story Ready](journey-3-ready.md) | [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+| [Get a story Ready](journey-3-ready.md) | ![ready](../../design/icons/verbs/ready.svg) [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 | [Design the screens](journey-4-build.md#if-your-story-has-a-screen) | [`research`](skills/research.md) | Collects design references and user research for a Feature. |
 |  | [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |
 |  | [`mockup`](skills/mockup.md) | Turns wireframes into mockups that use your design system. |
@@ -184,22 +184,22 @@ are not verbs; the verbs reference lists them.
 |  | [`review`](skills/review.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
 |  | [`polish`](skills/polish.md) | Applies a design critique to a pull request and reviews it again. |
 |  | [`baseline`](skills/baseline.md) | Captures reference screenshots of a commit to compare later changes against. |
-| [Build it](journey-4-build.md) | [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
-| [Prove it](journey-5-prove.md) | [`verify`](skills/verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
-|  | [`inspect`](skills/inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
-|  | [`proof`](skills/proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
-| [Ship it](journey-6-ship.md) | [`ship`](skills/ship.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
-| [Release it](journey-7-release.md) | [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
+| [Build it](journey-4-build.md) | ![build](../../design/icons/verbs/build.svg) [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| [Prove it](journey-5-prove.md) | ![verify](../../design/icons/verbs/verify.svg) [`verify`](skills/verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
+|  | ![inspect](../../design/icons/verbs/inspect.svg) [`inspect`](skills/inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
+|  | ![proof](../../design/icons/verbs/proof.svg) [`proof`](skills/proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
+| [Ship it](journey-6-ship.md) | ![ship](../../design/icons/verbs/ship.svg) [`ship`](skills/ship.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
+| [Release it](journey-7-release.md) | ![release](../../design/icons/verbs/release.svg) [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 | [Measure and learn](journey-8-learn.md) | [`experiment`](skills/experiment.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
 |  | [`readout`](skills/readout.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
 |  | [`retro`](skills/retro.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
-|  | [`measure`](skills/measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
+|  | ![measure](../../design/icons/verbs/measure.svg) [`measure`](skills/measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
 |  | [`evolve`](skills/evolve.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
-| [Explain it](journey-9-explain.md) | [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
+| [Explain it](journey-9-explain.md) | ![counsel](../../design/icons/verbs/counsel.svg) [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
 |  | [`status`](skills/status.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
 |  | [`audit`](skills/audit.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
 |  | [`brief`](skills/brief.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
-|  | [`tell`](skills/tell.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
+|  | ![tell](../../design/icons/verbs/tell.svg) [`tell`](skills/tell.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 | [Keep it running](when-to-use-what.md#something-broke-in-production) | [`triage`](skills/triage.md) | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
 |  | [`respond`](skills/respond.md) | Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline. |
 |  | [`investigate`](skills/investigate.md) | Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve. |

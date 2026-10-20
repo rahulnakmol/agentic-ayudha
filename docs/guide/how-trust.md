@@ -20,7 +20,7 @@ The trust model in [docs/BUILD-PLAN.md](../BUILD-PLAN.md) (section 0.1) and the
 | Principal | Identity | May |
 |---|---|---|
 | Human (founder, paired human) | Own GitHub account and token | Approve pull requests, accept Decisions, publish, run `init`, change protected paths, promote |
-| Agent lane (any host) | Bot: a GitHub App installation token or a machine user | Open issues and pull requests, push branches, push `ledger`, comment |
+| ![bot identity](../../design/icons/app/aayu-bot-24.svg) Agent lane (any host) | Bot: a GitHub App installation token or a machine user | Open issues and pull requests, push branches, push `ledger`, comment |
 | CI (merge gate, loops, release) | GitHub Actions: the workflow token for proof, the bot App token for loops that write `ledger` | Run `verify` and `inspect`, build the authoritative pack as a run artifact and comment on it (never on the ledger), compute streaks, build and sign releases |
 | Untrusted input | None | Issue and pull request bodies, comments, intake forms, design text, analytics exports, tool output |
 
@@ -145,7 +145,7 @@ Both commands refuse the bypass when:
 
 ### Approving from any device (presence check)
 
-A marked shell is not always an agent. An orb's Terminal tab, or a runner's shell, inherits the agent's marker
+![presence check](../../design/icons/app/aayu-sakshi-24.svg) A marked shell is not always an agent. An orb's Terminal tab, or a runner's shell, inherits the agent's marker
 (`AMP_THREAD_ID`), and the person typing there is you. Neither the marker nor a terminal can tell you apart from an
 agent: an agent can type into the same tmux session. So when a human-only command runs where the guard would refuse
 it, aayu asks the person to prove they are there, through GitHub's OAuth device flow:

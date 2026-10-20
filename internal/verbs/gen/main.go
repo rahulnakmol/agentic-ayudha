@@ -89,6 +89,26 @@ func writeFile(path string, data []byte) error {
 // cell escapes a value for a markdown table cell.
 func cell(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
 
+// verbIcon is the verb's icon (design/icons/verbs, design/iconography.md) as an
+// inline image followed by a space, for a page whose path to the repository
+// root is up, or "" when the verb has none.
+func verbIcon(name, up string) string {
+	return icon("verbs/"+name, name, up)
+}
+
+// seatIcon is the emblem of the seat's twin, named by the twin, like verbIcon.
+func seatIcon(id verbs.SeatID, up string) string {
+	return icon("seats/"+string(id), personas[id].Name, up)
+}
+
+func icon(file, alt, up string) string {
+	p := "design/icons/" + file + ".svg"
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("![%s](%s%s) ", alt, up, p)
+}
+
 func code(s string) string { return "`" + s + "`" }
 
 func surfaces(c verbs.Command) string {
@@ -119,8 +139,8 @@ func genReadme() error {
 	var v strings.Builder
 	v.WriteString("| Verb | Summary | Seat | Lane | Layers | Identity | Surfaces |\n|---|---|---|---|---|---|---|\n")
 	for _, c := range verbs.Verbs {
-		fmt.Fprintf(&v, "| %s | %s | %s | %s | %s | %s | %s |\n", code(c.Name), cell(c.Summary),
-			verbs.SeatName(c.Seat), c.Lane, c.Layers, c.Identity, surfaces(c))
+		fmt.Fprintf(&v, "| %s%s | %s | %s%s | %s | %s | %s | %s |\n", verbIcon(c.Name, "../"), code(c.Name), cell(c.Summary),
+			seatIcon(c.Seat, "../"), verbs.SeatName(c.Seat), c.Lane, c.Layers, c.Identity, surfaces(c))
 	}
 	if s, err = replaceRegion(path, s, "verbs", v.String()); err != nil {
 		return err
@@ -224,9 +244,9 @@ func genVerbMap() error {
 	return nil
 }
 
-// verbLink is a verb's name in code, linked to its page in the guide (docs/guide/skills).
+// verbLink is a verb's icon and name in code, linked to its page in the guide (docs/guide/skills).
 func verbLink(c verbs.Command) string {
-	return fmt.Sprintf("[%s](skills/%s.md)", code(c.Name), c.Name)
+	return fmt.Sprintf("%s[%s](skills/%s.md)", verbIcon(c.Name, "../../"), code(c.Name), c.Name)
 }
 
 // ---- LAYERS.md -------------------------------------------------------------
@@ -249,7 +269,7 @@ Each layer has exactly one owner seat; its charter is ` + code("seats/<seat>/CHA
 		for i, p := range l.Paths {
 			globs[i] = code(p)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", l.ID, cell(l.Name), verbs.SeatName(l.Owner), strings.Join(globs, "<br>"))
+		fmt.Fprintf(&b, "| %s | %s | %s%s | %s |\n", l.ID, cell(l.Name), seatIcon(l.Owner, ""), verbs.SeatName(l.Owner), strings.Join(globs, "<br>"))
 	}
 	return writeFile("LAYERS.md", []byte(b.String()))
 }
@@ -289,7 +309,7 @@ Charters: ` + code("seats/<seat>/CHARTER.md") + `.
 	}
 	for _, c := range verbs.Verbs {
 		r := verbs.RACI[c.Name]
-		fmt.Fprintf(&b, "| %s | %s | %s twin, %s lane | %s | %s | %s | %s | %s | %s | %s |\n", code(c.Name), verbs.SeatName(c.Seat),
+		fmt.Fprintf(&b, "| %s%s | %s%s | %s twin, %s lane | %s | %s | %s | %s | %s | %s | %s |\n", verbIcon(c.Name, "../"), code(c.Name), seatIcon(c.Seat, "../"), verbs.SeatName(c.Seat),
 			verbs.SeatName(c.Seat), c.Lane, verbs.SeatName(verbs.PolicyOwner(c)), cell(names(r.Consulted)), cell(names(r.Informed)),
 			c.Layers, c.Identity, cell(mode(c)), c.Exposure)
 	}
@@ -309,9 +329,9 @@ Model calling: ` + code("none") + ` is deterministic; ` + code("host") + ` means
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", code(c.Name), verbs.SeatName(c.Seat), c.Identity)
 	}
 
-	b.WriteString("\n## Seats\n\n| Seat | Slug |\n|---|---|\n")
+	b.WriteString("\n## Seats\n\n| Seat | Twin | Slug |\n|---|---|---|\n")
 	for _, s := range verbs.Seats {
-		fmt.Fprintf(&b, "| %s | %s |\n", s.Name, code(string(s.ID)))
+		fmt.Fprintf(&b, "| %s | %s%s | %s |\n", s.Name, seatIcon(s.ID, "../"), personas[s.ID].Name, code(string(s.ID)))
 	}
 
 	b.WriteString(`

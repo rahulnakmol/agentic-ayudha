@@ -26,22 +26,25 @@ aayu seat list
 
 ## The fourteen seats
 
-| Seat | In plain words | Some of its verbs |
-|---|---|---|
-| Founder | Final authority; sets up repositories and accepts decisions | `init`, `decide` |
-| Product Strategist | Turns ideas into clear, checked work | `grill`, `slice`, `ready`, `triage` |
-| Code Architect | Plans how each story is built, layer by layer | `plan` |
-| Data & AI Architect | Designs the data and evidence behind numbers and AI answers, and measures them | `chart`, `measure` |
-| Engineering Manager | Reviews, ships, and keeps delivery healthy | `inspect`, `ship`, `status`, `retro` |
-| AI Native Engineer | Builds the software and runs the checks | `build`, `verify`, `evolve` |
-| Production Engineer | Runs the software in production: incidents, SLOs, runbooks, rollbacks | `respond` |
-| Quality Architect | Owns the floors and the proof packs | `proof` |
-| UX Researcher | Designs and reviews the screens | `research`, `wireframe`, `review`, `polish` |
-| DevOps Tinkerer | Releases, installs, and keeps the tooling working | `release`, `install`, `doctor` |
-| Revenue Architect | Sets the targets and runs experiments | `experiment`, `readout` |
-| Mentalist | Explains work to any audience | `brief` |
-| Marketer and Documenter | Writes docs and launch copy from proven work | `tell` |
-| Auditor | Checks the record and reports on it | `audit` |
+Each twin has an emblem: an object, place, animal, or star tied to its name. The
+[branding note](../../design/iconography.md) says what each one shows.
+
+| Emblem | Twin | Seat | In plain words | Some of its verbs |
+|---|---|---|---|---|
+| ![Atri](../../design/icons/seats/founder.svg) | Atri | Founder | Final authority; sets up repositories and accepts decisions | `init`, `decide` |
+| ![Arjun](../../design/icons/seats/product-strategist.svg) | Arjun | Product Strategist | Turns ideas into clear, checked work | `grill`, `slice`, `ready`, `triage` |
+| ![Vishwa](../../design/icons/seats/code-architect.svg) | Vishwa | Code Architect | Plans how each story is built, layer by layer | `plan` |
+| ![Shuka](../../design/icons/seats/data-ai-architect.svg) | Shuka | Data & AI Architect | Designs the data and evidence behind numbers and AI answers, and measures them | `chart`, `measure` |
+| ![Drona](../../design/icons/seats/engineering-manager.svg) | Drona | Engineering Manager | Reviews, ships, and keeps delivery healthy | `inspect`, `ship`, `status`, `retro` |
+| ![Nakul](../../design/icons/seats/ai-native-engineer.svg) | Nakul | AI Native Engineer | Builds the software and runs the checks | `build`, `verify`, `evolve` |
+| ![Shesha](../../design/icons/seats/production-engineer.svg) | Shesha | Production Engineer | Runs the software in production: incidents, SLOs, runbooks, rollbacks | `respond` |
+| ![Yama](../../design/icons/seats/quality-architect.svg) | Yama | Quality Architect | Owns the floors and the proof packs | `proof` |
+| ![Hanu](../../design/icons/seats/ux-researcher-evolutionist.svg) | Hanu | UX Researcher | Designs and reviews the screens | `research`, `wireframe`, `review`, `polish` |
+| ![Nala](../../design/icons/seats/devops-devex-tinkerer.svg) | Nala | DevOps Tinkerer | Releases, installs, and keeps the tooling working | `release`, `install`, `doctor` |
+| ![Kuber](../../design/icons/seats/revenue-architect.svg) | Kuber | Revenue Architect | Sets the targets and runs experiments | `experiment`, `readout` |
+| ![Sanjay](../../design/icons/seats/mentalist.svg) | Sanjay | Mentalist | Explains work to any audience | `brief` |
+| ![Sauti](../../design/icons/seats/marketer-documenter.svg) | Sauti | Marketer and Documenter | Writes docs and launch copy from proven work | `tell` |
+| ![Vidhi](../../design/icons/seats/auditor.svg) | Vidhi | Auditor | Checks the record and reports on it | `audit` |
 
 > **In the story:** in benefits-qa, the Product Strategist's twin interviewed the founder for Goal 125, the AI Native
 > Engineer's twin built the stories, and the Engineering Manager's twin, running in CI, reviewed each pull request.

@@ -16,44 +16,44 @@ Charters: `seats/<seat>/CHARTER.md`.
 
 | Verb | A | R (executes) | Owns thresholds / policy | C | I | Layers | Identity | Model calling | MCP |
 |---|---|---|---|---|---|---|---|---|---|
-| `grill` | Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
-| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer | all | bot | host | read |
-| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect, Production Engineer | AI Native Engineer | all | bot | host | read |
-| `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
-| `counsel` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect, Engineering Manager | Auditor | all | bot | host | read |
-| `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
-| `build` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Code Architect, Production Engineer | Engineering Manager | all | bot | host | write |
-| `verify` | AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
-| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |
-| `ship` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
-| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | write |
-| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
-| `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
-| `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
-| `wireframe` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
-| `mockup` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
-| `prototype` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Code Architect | Engineering Manager | L01, L02 | bot | host | write |
-| `review` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, ui-review lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | hybrid (lane A direct) | write |
-| `polish` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | — | Engineering Manager | L01 | bot | host | write |
-| `baseline` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
-| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist, Data & AI Architect | Founder | L03, L08 | bot | host | write |
-| `readout` | Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
-| `respond` | Production Engineer | Production Engineer twin, build lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
-| `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
-| `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
-| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer | Founder | all | bot | host | write |
-| `measure` | Data & AI Architect | Data & AI Architect twin, spec lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
-| `evolve` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
-| `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
-| `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
-| `init` | Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
-| `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
-| `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
-| `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer, Quality Architect | L05, L07, L08 | bot | host | read |
-| `survey` | Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
-| `investigate` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer | Engineering Manager | all | bot | host | read |
-| `slo` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | Product Strategist, Quality Architect | Engineering Manager, DevOps & DevEx Tinkerer | all | bot | host | read |
-| `runbook` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager | all | bot | host | read |
+| ![grill](../design/icons/verbs/grill.svg) `grill` | ![Arjun](../design/icons/seats/product-strategist.svg) Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
+| ![slice](../design/icons/verbs/slice.svg) `slice` | ![Arjun](../design/icons/seats/product-strategist.svg) Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer | all | bot | host | read |
+| ![plan](../design/icons/verbs/plan.svg) `plan` | ![Vishwa](../design/icons/seats/code-architect.svg) Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect, Production Engineer | AI Native Engineer | all | bot | host | read |
+| ![decide](../design/icons/verbs/decide.svg) `decide` | ![Atri](../design/icons/seats/founder.svg) Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
+| ![counsel](../design/icons/verbs/counsel.svg) `counsel` | ![Atri](../design/icons/seats/founder.svg) Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect, Engineering Manager | Auditor | all | bot | host | read |
+| `triage` | ![Arjun](../design/icons/seats/product-strategist.svg) Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
+| ![build](../design/icons/verbs/build.svg) `build` | ![Nakul](../design/icons/seats/ai-native-engineer.svg) AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Code Architect, Production Engineer | Engineering Manager | all | bot | host | write |
+| ![verify](../design/icons/verbs/verify.svg) `verify` | ![Nakul](../design/icons/seats/ai-native-engineer.svg) AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
+| ![inspect](../design/icons/verbs/inspect.svg) `inspect` | ![Drona](../design/icons/seats/engineering-manager.svg) Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |
+| ![ship](../design/icons/verbs/ship.svg) `ship` | ![Drona](../design/icons/seats/engineering-manager.svg) Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
+| ![release](../design/icons/verbs/release.svg) `release` | ![Nala](../design/icons/seats/devops-devex-tinkerer.svg) DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | write |
+| ![proof](../design/icons/verbs/proof.svg) `proof` | ![Yama](../design/icons/seats/quality-architect.svg) Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
+| ![ready](../design/icons/verbs/ready.svg) `ready` | ![Arjun](../design/icons/seats/product-strategist.svg) Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
+| `research` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
+| `wireframe` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
+| `mockup` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
+| `prototype` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Code Architect | Engineering Manager | L01, L02 | bot | host | write |
+| `review` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, ui-review lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | hybrid (lane A direct) | write |
+| `polish` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | — | Engineering Manager | L01 | bot | host | write |
+| `baseline` | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
+| `experiment` | ![Kuber](../design/icons/seats/revenue-architect.svg) Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist, Data & AI Architect | Founder | L03, L08 | bot | host | write |
+| `readout` | ![Kuber](../design/icons/seats/revenue-architect.svg) Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
+| `respond` | ![Shesha](../design/icons/seats/production-engineer.svg) Production Engineer | Production Engineer twin, build lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
+| `status` | ![Drona](../design/icons/seats/engineering-manager.svg) Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
+| `audit` | ![Vidhi](../design/icons/seats/auditor.svg) Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
+| `retro` | ![Drona](../design/icons/seats/engineering-manager.svg) Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer | Founder | all | bot | host | write |
+| ![measure](../design/icons/verbs/measure.svg) `measure` | ![Shuka](../design/icons/seats/data-ai-architect.svg) Data & AI Architect | Data & AI Architect twin, spec lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
+| `evolve` | ![Nakul](../design/icons/seats/ai-native-engineer.svg) AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
+| `brief` | ![Sanjay](../design/icons/seats/mentalist.svg) Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
+| ![tell](../design/icons/verbs/tell.svg) `tell` | ![Sauti](../design/icons/seats/marketer-documenter.svg) Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
+| `init` | ![Atri](../design/icons/seats/founder.svg) Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
+| `install` | ![Nala](../design/icons/seats/devops-devex-tinkerer.svg) DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
+| `doctor` | ![Nala](../design/icons/seats/devops-devex-tinkerer.svg) DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
+| `chart` | ![Shuka](../design/icons/seats/data-ai-architect.svg) Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer, Quality Architect | L05, L07, L08 | bot | host | read |
+| `survey` | ![Vishwa](../design/icons/seats/code-architect.svg) Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
+| `investigate` | ![Shesha](../design/icons/seats/production-engineer.svg) Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer | Engineering Manager | all | bot | host | read |
+| `slo` | ![Shesha](../design/icons/seats/production-engineer.svg) Production Engineer | Production Engineer twin, spec lane | Production Engineer | Product Strategist, Quality Architect | Engineering Manager, DevOps & DevEx Tinkerer | all | bot | host | read |
+| `runbook` | ![Shesha](../design/icons/seats/production-engineer.svg) Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager | all | bot | host | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass
@@ -86,22 +86,22 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 
 ## Seats
 
-| Seat | Slug |
-|---|---|
-| Product Strategist | `product-strategist` |
-| Code Architect | `code-architect` |
-| Data & AI Architect | `data-ai-architect` |
-| Engineering Manager | `engineering-manager` |
-| AI Native Engineer | `ai-native-engineer` |
-| Production Engineer | `production-engineer` |
-| UX Researcher & Evolutionist | `ux-researcher-evolutionist` |
-| DevOps & DevEx Tinkerer | `devops-devex-tinkerer` |
-| Quality Architect | `quality-architect` |
-| Mentalist | `mentalist` |
-| Auditor | `auditor` |
-| Marketer & Documenter | `marketer-documenter` |
-| Revenue Architect | `revenue-architect` |
-| Founder | `founder` |
+| Seat | Twin | Slug |
+|---|---|---|
+| Product Strategist | ![Arjun](../design/icons/seats/product-strategist.svg) Arjun | `product-strategist` |
+| Code Architect | ![Vishwa](../design/icons/seats/code-architect.svg) Vishwa | `code-architect` |
+| Data & AI Architect | ![Shuka](../design/icons/seats/data-ai-architect.svg) Shuka | `data-ai-architect` |
+| Engineering Manager | ![Drona](../design/icons/seats/engineering-manager.svg) Drona | `engineering-manager` |
+| AI Native Engineer | ![Nakul](../design/icons/seats/ai-native-engineer.svg) Nakul | `ai-native-engineer` |
+| Production Engineer | ![Shesha](../design/icons/seats/production-engineer.svg) Shesha | `production-engineer` |
+| UX Researcher & Evolutionist | ![Hanu](../design/icons/seats/ux-researcher-evolutionist.svg) Hanu | `ux-researcher-evolutionist` |
+| DevOps & DevEx Tinkerer | ![Nala](../design/icons/seats/devops-devex-tinkerer.svg) Nala | `devops-devex-tinkerer` |
+| Quality Architect | ![Yama](../design/icons/seats/quality-architect.svg) Yama | `quality-architect` |
+| Mentalist | ![Sanjay](../design/icons/seats/mentalist.svg) Sanjay | `mentalist` |
+| Auditor | ![Vidhi](../design/icons/seats/auditor.svg) Vidhi | `auditor` |
+| Marketer & Documenter | ![Sauti](../design/icons/seats/marketer-documenter.svg) Sauti | `marketer-documenter` |
+| Revenue Architect | ![Kuber](../design/icons/seats/revenue-architect.svg) Kuber | `revenue-architect` |
+| Founder | ![Atri](../design/icons/seats/founder.svg) Atri | `founder` |
 
 ## Model lanes
 

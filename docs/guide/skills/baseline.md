@@ -10,7 +10,7 @@ on the ledger.
 |---|---|
 | In plain words | Captures reference screenshots of a commit to compare later changes against. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Accountable seat | ![Hanu](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
 | Does the work | Hanu, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

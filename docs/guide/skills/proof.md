@@ -7,9 +7,9 @@ on the ledger: the files that tie each of a story's promises to its evidence, fo
 
 | Field | Value |
 |---|---|
-| In plain words | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
+| In plain words | ![proof](../../../design/icons/verbs/proof.svg) Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
-| Accountable seat | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Accountable seat | ![Yama](../../../design/icons/seats/quality-architect.svg) [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Does the work | Yama, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Informed | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |

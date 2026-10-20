@@ -53,7 +53,7 @@ Measure-later only works if "later" is on the calendar. `release` puts it there 
 
 | Verb | What it does |
 |---|---|
-| [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
+| ![release](../../design/icons/verbs/release.svg) [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 
 <!-- END GENERATED: stage-verbs -->
 

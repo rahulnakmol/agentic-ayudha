@@ -7,9 +7,9 @@ your change, and tells you what the merge gate will find, with no model deciding
 
 | Field | Value |
 |---|---|
-| In plain words | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
+| In plain words | ![verify](../../../design/icons/verbs/verify.svg) Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
-| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Accountable seat | ![Nakul](../../../design/icons/seats/ai-native-engineer.svg) [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Owns the thresholds | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Does the work | Nakul, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |

@@ -8,9 +8,9 @@ that prove it, and how to roll it back, checked and kept on the ledger before an
 
 | Field | Value |
 |---|---|
-| In plain words | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
+| In plain words | ![plan](../../../design/icons/verbs/plan.svg) Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
+| Accountable seat | ![Vishwa](../../../design/icons/seats/code-architect.svg) [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
 | Does the work | Vishwa, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |

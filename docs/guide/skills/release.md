@@ -7,9 +7,9 @@ one rung up, `dev` to `rolling` or `rolling` to `main`, after a full gate on the
 
 | Field | Value |
 |---|---|
-| In plain words | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
+| In plain words | ![release](../../../design/icons/verbs/release.svg) Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 | Journey stage | [Release it](../journey-7-release.md) |
-| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Accountable seat | ![Nala](../../../design/icons/seats/devops-devex-tinkerer.svg) [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
 | Does the work | Nala, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti), [Founder](../../../seats/founder/CHARTER.md) (Atri) |

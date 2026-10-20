@@ -6,9 +6,9 @@ Asks the founder's sage for a steer on anything, with the evidence behind it and
 
 | Field | Value |
 |---|---|
-| In plain words | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
+| In plain words | ![counsel](../../../design/icons/verbs/counsel.svg) Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
+| Accountable seat | ![Atri](../../../design/icons/seats/founder.svg) [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Does the work | Atri, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Informed | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |

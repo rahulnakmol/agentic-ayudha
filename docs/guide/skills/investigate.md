@@ -10,7 +10,7 @@ hypotheses, and proposes a catalog action for a person to approve.
 |---|---|
 | In plain words | Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Accountable seat | ![Shesha](../../../design/icons/seats/production-engineer.svg) [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Does the work | Shesha, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

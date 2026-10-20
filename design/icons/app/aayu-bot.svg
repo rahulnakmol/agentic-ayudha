@@ -1,5 +1,5 @@
 <!-- The bot GitHub App avatar: the word आयु (aayu). Hand-drawn on a 256 px grid; edit by hand (design/iconography.md). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="aayu-bot-title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64" role="img" aria-labelledby="aayu-bot-title">
 <title id="aayu-bot-title">aayu, the bot identity agents write under: आयु, its u-sign closed into the delivery loop</title>
 <rect width="256" height="256" rx="56" fill="#1f5bd1"/>
 <g fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">

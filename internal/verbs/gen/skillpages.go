@@ -198,9 +198,9 @@ func skillCard(c verbs.Command) string {
 	var b strings.Builder
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	row := func(k, v string) { fmt.Fprintf(&b, "| %s | %s |\n", k, cell(v)) }
-	row("In plain words", c.Reader)
+	row("In plain words", verbIcon(c.Name, "../../../")+c.Reader)
 	row("Journey stage", stageLink(c.Stage))
-	row("Accountable seat", seatWithTwin(c.Seat))
+	row("Accountable seat", seatIcon(c.Seat, "../../../")+seatWithTwin(c.Seat))
 	if c.Owns != "" {
 		row("Owns the thresholds", seatWithTwin(c.Owns))
 	}
@@ -333,8 +333,8 @@ func genSkillIndex() error {
 			if first {
 				stage, first = fmt.Sprintf("[%s](../%s)", st.Title, stagePages[st.ID]), false
 			}
-			fmt.Fprintf(&t, "| %s | [`%s`](%s.md) | %s | %s |\n", stage, c.Name, c.Name, cell(c.Reader),
-				fmt.Sprintf("%s (%s)", verbs.SeatName(c.Seat), personas[c.Seat].Name))
+			fmt.Fprintf(&t, "| %s | %s[`%s`](%s.md) | %s | %s |\n", stage, verbIcon(c.Name, "../../../"), c.Name, c.Name, cell(c.Reader),
+				fmt.Sprintf("%s%s (%s)", seatIcon(c.Seat, "../../../"), verbs.SeatName(c.Seat), personas[c.Seat].Name))
 		}
 	}
 	s, err := replaceRegion(path, string(b), "skill-index", t.String())

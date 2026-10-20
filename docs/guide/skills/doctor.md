@@ -9,7 +9,7 @@ check per part of your setup and says what is wrong and how to fix it.
 |---|---|
 | In plain words | Checks your machine and setup, and says exactly what to fix. |
 | Journey stage | [Set up](../start.md) |
-| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Accountable seat | ![Nala](../../../design/icons/seats/devops-devex-tinkerer.svg) [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
 | Does the work | Nala, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

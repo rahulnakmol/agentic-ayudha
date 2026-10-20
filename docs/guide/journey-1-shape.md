@@ -60,7 +60,7 @@ which is what every later check will measure against.
 
 | Verb | What it does |
 |---|---|
-| [`grill`](skills/grill.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+| ![grill](../../design/icons/verbs/grill.svg) [`grill`](skills/grill.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
 | [`survey`](skills/survey.md) | Reads a codebase nobody documented, says what it does with a citation for every claim, and drafts the backlog to modernise it. |
 
 <!-- END GENERATED: stage-verbs -->
