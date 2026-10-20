@@ -206,7 +206,7 @@ func TestInboxFailureWords(t *testing.T) {
 		if f.optionShips {
 			a.Command = "aayu ship 661"
 		}
-		w := explainFailure(it, a, f.err, f.stage, f.wrote)
+		w := explainFailure(it, a, f.err, f.stage, f.wrote, false)
 		if !strings.HasPrefix(w.What, "#661 ") || !strings.Contains(w.What, f.what) {
 			t.Errorf("%s: what %q, want %q", f.name, w.What, f.what)
 		}
@@ -227,6 +227,19 @@ func TestInboxFailureWords(t *testing.T) {
 		}
 		if detail := strings.Join(w.Detail, "\n"); !strings.Contains(detail, f.err.Error()) || !strings.Contains(detail, "Stopped at: ") {
 			t.Errorf("%s: the details lack the error or the step: %q", f.name, detail)
+		}
+		// --plain has moved past the card and has no R or d, and o there
+		// opens the next card: its words name none of them, and Enter only
+		// in a new aayu inbox.
+		p := explainFailure(it, a, f.err, f.stage, f.wrote, true)
+		rest := strings.NewReplacer("Enter in a new aayu inbox", "", "Enter on it in a new aayu inbox", "", "Enter there", "").Replace(p.Next)
+		for _, key := range []string{"R reads", "(d)", "d shows", "(o", "Enter"} {
+			if strings.Contains(rest, key) {
+				t.Errorf("%s: --plain's next %q names %q, a key it cannot use for this card", f.name, p.Next, key)
+			}
+		}
+		if p.What != w.What || p.Changed != w.Changed {
+			t.Errorf("%s: --plain says %q / %q, the full-screen inbox %q / %q", f.name, p.What, p.Changed, w.What, w.Changed)
 		}
 	}
 }

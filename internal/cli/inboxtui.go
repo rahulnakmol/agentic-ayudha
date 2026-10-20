@@ -947,7 +947,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	var why inboxWhy // a failure in a person's words
 	if msg.err != nil && !errors.As(msg.err, &ch) {
 		stage, wrote := job.w.sofar()
-		why = explainFailure(job.it, job.a, msg.err, stage, wrote)
+		why = explainFailure(job.it, job.a, msg.err, stage, wrote, false)
 	}
 	switch {
 	case errors.As(msg.err, &ch):

@@ -323,6 +323,19 @@ func TestInbox(t *testing.T) {
 		t.Errorf("after the picks: #1 %s, #3 %s, #2:\n%s", g.Issues[1].State, g.Issues[3].State, g.Issues[2].Body)
 	}
 	g.Mu.Unlock()
+	// After a failed write the line-by-line inbox has moved past the card,
+	// and it has no R or d: its Next sends the person to a new inbox, not
+	// to a key that would act on the next card (CodeRabbit r4329674541 on #845).
+	g = fake.New(t, "o/r", "User")
+	g.AddIssue("Choose the cache", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which cache?",
+		"options": "1. **Keep it**: the current one.\n2. **Swap it** for a managed one.", "evaluation": "Swap is cheaper.",
+		"recommendation": "Option 2, because it is cheaper.", workitems.FieldReversible: "true"}), "type:decision", "status:planned")
+	g.Fail = "PATCH /repos/o/r/issues/1"
+	opts.GitHubAPI = g.URL()
+	if _, out, errOut := runIn(t, newEnv(), opts, "a q", "inbox", "--repo", "o/r"); !strings.Contains(out, "  ✗ #1 wasn't recorded: GitHub had a problem on its side.\n") ||
+		!strings.Contains(out, "  Next: nothing for you to fix; Enter in a new aayu inbox tries again in a minute.\n    Detail: Stopped at: ") {
+		t.Errorf("a failed write in --plain: %s\n%s", errOut, out)
+	}
 	// With nothing waiting, it says so; under a bot's token it refuses.
 	g = fake.New(t, "o/r", "User")
 	opts.GitHubAPI = g.URL()

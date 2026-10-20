@@ -37,6 +37,22 @@ type inboxWhy struct {
 	Retry bool
 }
 
+// inboxKeyWords are the words a Next line uses for the inbox's keys. The
+// full-screen inbox keeps a failed card on screen, so its keys act on it;
+// --plain has already moved to the next card, and has no R or d, so its words
+// send the person to a new aayu inbox and to the Detail line it prints.
+type inboxKeyWords struct {
+	enter, again, reread, rereadAll, details, dShows, o, open string
+}
+
+var (
+	tuiKeyWords = inboxKeyWords{enter: "Enter", again: "Enter again", reread: "R reads it again; then Enter tries once more", rereadAll: "R reads the inbox again",
+		details: "the details (d)", dShows: "d shows GitHub's own words", o: "(o)", open: "(o opens it)"}
+	plainKeyWords = inboxKeyWords{enter: "Enter in a new aayu inbox", again: "Enter on it in a new aayu inbox", reread: "a new aayu inbox reads it as it is now; Enter there tries once more",
+		rereadAll: "a new aayu inbox reads it again", details: "the Detail line below", dShows: "the Detail line below has GitHub's own words",
+		o: "(its link is on the card above)", open: "(its link is on the card above)"}
+)
+
 // lines are the three lines, in order.
 func (w inboxWhy) lines() []string { return []string{w.What, w.Changed, "Next: " + w.Next} }
 
@@ -158,8 +174,13 @@ func logDetail(err string, detail []string) string {
 
 // explainFailure says, in a person's words, why a write on it stopped:
 // stage is the step it stopped at and wrote what GitHub had already answered
-// as written ("may have …" for a write that got no answer).
-func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote []string) inboxWhy {
+// as written ("may have …" for a write that got no answer); plain says the
+// words are for --plain, whose keys differ (inboxKeyWords).
+func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote []string, plain bool) inboxWhy {
+	k := tuiKeyWords
+	if plain {
+		k = plainKeyWords
+	}
 	n, dev := it.Number, or(it.f.devBr, "dev")
 	c := causeOf(err)
 	_, not := inboxVerb(it, a)
@@ -200,10 +221,10 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 		if it.Story > 0 {
 			story = fmt.Sprintf(" on Story #%d", it.Story)
 		}
-		w.Next = fmt.Sprintf("nothing to undo; an agent finishes the record%s from the details (d). If it stays open it shows under Housekeeping.", story)
+		w.Next = fmt.Sprintf("nothing to undo; an agent finishes the record%s from %s. If it stays open it shows under Housekeeping.", story, k.details)
 		return w
 	}
-	retry := "Enter tries again"
+	retry := k.enter + " tries again"
 	switch m := c.message; {
 	case c.budget:
 		w.What = fmt.Sprintf("#%d %s: this session used up its GitHub calls.", n, not)
@@ -216,7 +237,7 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 		}
 	case c.network && len(maybe) > 0:
 		w.What = fmt.Sprintf("#%d %s: the connection to GitHub dropped in the middle.", n, not)
-		w.Next = "you open it on GitHub (o) to check what landed, then Enter finishes the rest."
+		w.Next = "you open it on GitHub " + k.o + " to check what landed, then " + k.enter + " finishes the rest."
 	case c.network:
 		w.What = fmt.Sprintf("#%d %s: aayu couldn't reach GitHub (the network dropped or timed out).", n, not)
 		w.Next = "you check the connection; " + retry + "."
@@ -228,22 +249,22 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 		w.Next = fmt.Sprintf("its builder updates it from %s; nothing for you yet.", dev)
 	case c.status == 405 && strings.Contains(strings.ToLower(m), "review"):
 		w.What = fmt.Sprintf("#%d wasn't merged: GitHub wants an approving review first.", n)
-		w.Next = "you approve it on GitHub (o opens it), then Enter again."
+		w.Next = "you approve it on GitHub " + k.open + ", then " + k.again + "."
 	case c.status == 405 && strings.Contains(strings.ToLower(m), "status check"):
 		w.What = fmt.Sprintf("#%d wasn't merged: GitHub still waits for a required check.", n)
 		w.Next = "nothing for you; it comes back as Ready to ship when its checks are green."
 	case c.status == 405:
 		w.What = fmt.Sprintf("#%d wasn't merged: GitHub refused the merge.", n)
-		w.Next = "you open it on GitHub (o) to see why; d shows GitHub's own words."
+		w.Next = "you open it on GitHub " + k.o + " to see why; " + k.dShows + "."
 	case c.status == 409 && strings.Contains(strings.ToLower(m), "head branch was modified"):
 		w.What = fmt.Sprintf("#%d wasn't merged: new commits were pushed while it was merging.", n)
 		w.Next = "its builder runs aayu ship on the new commits; it comes back here when it is ready."
 	case c.status == 409:
 		w.What = fmt.Sprintf("#%d %s: it changed on GitHub at the same moment.", n, not)
-		w.Next = "R reads it again; then Enter tries once more."
+		w.Next = k.reread + "."
 	case c.status == 422:
 		w.What = fmt.Sprintf("#%d %s: GitHub turned the change down as not valid.", n, not)
-		w.Next = "Enter tries once more; if it fails again, an agent looks at the details (d)."
+		w.Next = k.enter + " tries once more; if it fails again, an agent looks at " + k.details + "."
 	case c.status == 401:
 		w.What = fmt.Sprintf("#%d %s: GitHub no longer accepts this session's sign-in.", n, not)
 		w.Next = "you quit (q) and open aayu inbox again to sign in."
@@ -252,15 +273,15 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 		w.Next = "a repository admin gives your account access, or someone who has it does this."
 	case c.status == 404:
 		w.What = fmt.Sprintf("#%d %s: GitHub can't find it any more (deleted, moved, or hidden from this account).", n, not)
-		w.Next = "R reads the inbox again; nothing for you on this one."
+		w.Next = k.rereadAll + "; nothing for you on this one."
 	case c.status >= 500:
 		w.What = fmt.Sprintf("#%d %s: GitHub had a problem on its side.", n, not)
-		w.Next = "nothing for you to fix; Enter tries again in a minute."
+		w.Next = "nothing for you to fix; " + k.enter + " tries again in a minute."
 	case c.refusal != "":
-		w.What, w.Next = refusalWords(it, a, c.refusal, dev)
+		w.What, w.Next = refusalWords(it, a, c.refusal, dev, k)
 	default:
 		w.What = fmt.Sprintf("#%d %s: something went wrong inside aayu.", n, not)
-		w.Next = "Enter tries once more; if it fails again, an agent looks at the details (d)."
+		w.Next = k.enter + " tries once more; if it fails again, an agent looks at " + k.details + "."
 	}
 	w.Retry = strings.Contains(w.Next, "Enter")
 	return w
@@ -268,7 +289,7 @@ func explainFailure(it InboxItem, a InboxAction, err error, stage string, wrote 
 
 // refusalWords are the words for a refusal by ship, decide, or inspect
 // --approve, which check before they write.
-func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string) {
+func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (what, next string) {
 	n := it.Number
 	_, not := inboxVerb(it, a)
 	switch {
@@ -276,9 +297,9 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string
 		return fmt.Sprintf("#%d %s: new commits were pushed after you opened it.", n, not),
 			"its builder runs aayu ship on the new commits; it comes back here when it is ready."
 	case reAlreadyMerged.MatchString(m):
-		return fmt.Sprintf("#%d is already merged; there was nothing left to ship.", n), "nothing; R reads the inbox again."
+		return fmt.Sprintf("#%d is already merged; there was nothing left to ship.", n), "nothing; " + k.rereadAll + "."
 	case reClosed.MatchString(m):
-		return fmt.Sprintf("#%d is closed, so there was nothing to do.", n), "nothing; R reads the inbox again."
+		return fmt.Sprintf("#%d is closed, so there was nothing to do.", n), "nothing; " + k.rereadAll + "."
 	case reNoStory.MatchString(m):
 		return fmt.Sprintf("#%d %s: it names no Story, and ship only merges a Story's pull request.", n, not),
 			"its builder adds the Story it delivers (Refs #<story>) to the pull request."
@@ -296,15 +317,15 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string
 	case reConflicts.MatchString(m):
 		return fmt.Sprintf("#%d %s: it conflicts with %s.", n, not, dev), fmt.Sprintf("its builder rebases it onto %s; nothing for you yet.", dev)
 	case reMergeUnknown.MatchString(m):
-		return fmt.Sprintf("#%d %s: GitHub is still working out whether it can merge, so nothing was merged.", n, not), "Enter tries again in a minute."
+		return fmt.Sprintf("#%d %s: GitHub is still working out whether it can merge, so nothing was merged.", n, not), k.enter + " tries again in a minute."
 	case reBypassPost.MatchString(m):
-		return fmt.Sprintf("#%d %s: aayu couldn't post your Solo-mode bypass note, so nothing was merged.", n, not), "Enter tries again; if it fails again, an agent looks at the details (d)."
+		return fmt.Sprintf("#%d %s: aayu couldn't post your Solo-mode bypass note, so nothing was merged.", n, not), k.enter + " tries again; if it fails again, an agent looks at " + k.details + "."
 	case reBypass.MatchString(m):
-		return fmt.Sprintf("#%d %s: it needs your Solo-mode bypass note on the pull request first.", n, not), "Enter posts it and ships again."
+		return fmt.Sprintf("#%d %s: it needs your Solo-mode bypass note on the pull request first.", n, not), k.enter + " posts it and ships again."
 	case reNoPass.MatchString(m):
-		return fmt.Sprintf("#%d %s: it needs an approving review on GitHub first.", n, not), "you approve its latest commit on GitHub (o opens it), then Enter again."
+		return fmt.Sprintf("#%d %s: it needs an approving review on GitHub first.", n, not), "you approve its latest commit on GitHub " + k.open + ", then " + k.again + "."
 	case reChanged.MatchString(m):
-		return fmt.Sprintf("#%d %s: it or %s changed while ship was checking it, so nothing was merged.", n, not, dev), "R reads it again; then Enter tries once more."
+		return fmt.Sprintf("#%d %s: it or %s changed while ship was checking it, so nothing was merged.", n, not, dev), k.reread + "."
 	case reSecondHuman.MatchString(m):
 		who := "another person"
 		if s := reSecondHuman.FindStringSubmatch(m); s[1] != "" {
@@ -314,13 +335,13 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string
 	case reAuthority.MatchString(m):
 		return fmt.Sprintf("#%d %s: this Decision is for %s to accept.", n, not, reAuthority.FindStringSubmatch(m)[1]), "you ask them, or change who the authority is."
 	case reNotReady.MatchString(m):
-		return fmt.Sprintf("#%d %s: the Decision isn't complete enough to accept.", n, not), "you open it on GitHub (o) and complete it."
+		return fmt.Sprintf("#%d %s: the Decision isn't complete enough to accept.", n, not), "you open it on GitHub " + k.o + " and complete it."
 	case reApprover.MatchString(m):
 		return fmt.Sprintf("#%d %s: only %s's review counts here.", n, not, reApprover.FindStringSubmatch(m)[1]), "you ask them to approve it."
 	case reNoApprover.MatchString(m):
 		return fmt.Sprintf("#%d %s: no approver is named for this repository.", n, not), "a person names one under [autonomy] approver in .aayudha/config.toml."
 	case reBatchOpen.MatchString(m):
-		return fmt.Sprintf("#%d %s: another approval request is still open on it.", n, not), "you answer that one on GitHub first (o opens it)."
+		return fmt.Sprintf("#%d %s: another approval request is still open on it.", n, not), "you answer that one on GitHub first " + k.open + "."
 	case reCheck.MatchString(m):
 		s := reCheck.FindStringSubmatch(m)
 		name, state := checkName(s[1]), s[2]
@@ -332,9 +353,9 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string
 		}
 		return fmt.Sprintf("#%d %s: its %s check failed on its latest commit.", n, not, name), "its builder fixes it; nothing for you yet."
 	case reLedger.MatchString(m):
-		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), "Enter tries once more; if it fails again, an agent runs aayu doctor."
+		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), k.enter + " tries once more; if it fails again, an agent runs aayu doctor."
 	}
-	return fmt.Sprintf("#%d %s: aayu stopped before writing anything it wasn't sure of.", n, not), "you read the details (d); an agent can act on them."
+	return fmt.Sprintf("#%d %s: aayu stopped before writing anything it wasn't sure of.", n, not), "you read " + k.details + "; an agent can act on them."
 }
 
 // changedWords says how an item changed on GitHub since the person read it.

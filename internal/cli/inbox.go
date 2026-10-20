@@ -1259,15 +1259,14 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		case errors.As(err, &ch):
 			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", it.Number, changedWords(it, ch.Item)))
 		case err != nil:
-			why := explainFailure(it, a, err, stage, wrote)
+			why := explainFailure(it, a, err, stage, wrote, true)
 			mark := "✗ "
 			if why.Landed {
 				mark, done = "✓ ", done+1
 			}
 			say("  ", mark+why.What)
 			say("  ", why.Changed)
-			// Plain mode has no d key: its details are the line below.
-			say("  ", "Next: "+strings.NewReplacer("the details (d)", "the Detail line below", "d shows GitHub's own words", "the Detail line below has GitHub's own words").Replace(why.Next))
+			say("  ", "Next: "+why.Next)
 			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++
