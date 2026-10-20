@@ -88,8 +88,11 @@ and `k` move, Tab goes to the next item that needs you, `/` (or Ctrl+K) finds an
 `X` select housekeeping (never an item that needs you) and `C` clears all of it after one confirmation, `?` explains
 the card in plain words, and `q` quits; the mouse clicks rows and choices. The inbox opens
 from your last read (kept in your user state directory, never in the repository) and refreshes behind the card every
-45 seconds or on `R`; before any write it reads that item again, and if it changed it shows the new card and writes
-nothing. With `--plain`, `TERM=dumb`, or `[ui] plain = true` the same cards come line by line, fitted to the
+45 seconds or on `R`, reading again the pull request behind each Ready to ship card. A card GitHub would refuse now
+(it conflicts with dev or is behind it, a required check failed or is still running, or new commits came after ship
+checked it) moves to "Not ready yet": it says why and who acts next in plain words, offers nothing to press, and `d`
+shows what GitHub said. Before any write the inbox reads that item again, and if it changed it shows the new card and
+writes nothing. With `--plain`, `TERM=dumb`, or `[ui] plain = true` the same cards come line by line, fitted to the
 terminal's width.
 
 When it has steps, `aayu` with no command shows "Waiting in your inbox" with the count, and `aayu next` names

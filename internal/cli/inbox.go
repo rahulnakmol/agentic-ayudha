@@ -45,6 +45,7 @@ const (
 	InboxDecision    = "decision"     // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxScope       = "scope"        // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
 	InboxReady       = "ready"        // an open Story PR that ship refused only for the human pass, its gate green
+	InboxNotReady    = "not-ready"    // a PR ship left Ready to ship that cannot ship now (a conflict, a check, new commits): nothing for a person yet (Story #796)
 	InboxHumanReview = "human-review" // a PR whose merge gate waits at the human rung for its head (Story #675)
 	InboxCapped      = "capped"       // a PR whose review stopped at the round cap (step-back), waiting for a person
 	InboxUnshipped   = "unshipped"    // a Story whose PR merged into dev without a ship record
@@ -53,7 +54,7 @@ const (
 	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -97,6 +98,12 @@ var inboxKinds = map[string]inboxKind{
 			"Shipping it runs `aayu ship`, which checks everything again, saves the proof, and merges it into dev. " +
 			"If you leave it, nothing merges and the work waits; its checks may need to run again once dev moves on.",
 		Terms: []string{"Merge gate", "Human pass", "Solo-mode bypass"}},
+	InboxNotReady: {Icon: "⏳", Word: "Not ready yet", Seat: verbs.EngineeringManager,
+		Line: "Ship said it was ready, but its pull request has changed since, so GitHub would refuse the merge now. Nothing for you yet.",
+		Explain: "aayu ship found this pull request ready except for your pass, but since then it conflicts with dev or is behind it, " +
+			"a required check failed or is still running, or new commits were pushed. GitHub would refuse the merge now, so the card offers nothing to press. " +
+			"Its builder fixes it (a rebase, a fix, or ship again), and then it comes back here as Ready to ship. d shows what GitHub said.",
+		Terms: []string{"Merge gate", "Human pass"}},
 	InboxHumanReview: {Icon: "🔍", Word: "Needs your review", Seat: verbs.EngineeringManager,
 		Line: "No reviewer app or paid model could review this pull request, so its merge gate waits for your review.",
 		Explain: "Every agent pull request gets a review before it merges. When no installed reviewer app and no paid model can review one, " +
@@ -194,6 +201,8 @@ type InboxItem struct {
 	Evidence    string        `json:"evidence"`              // the one link the counsel rests on
 	Updated     time.Time     `json:"updated,omitzero"`      // when the issue or PR last changed on GitHub
 	Story       int           `json:"story,omitempty"`       // the Story a ship of this PR completes, so two writes on it never run at once
+	Next        string        `json:"next,omitempty"`        // who acts next, in plain words, on a card with nothing for the person yet
+	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
@@ -227,6 +236,8 @@ func (it InboxItem) short() string {
 		return "a choice only you make"
 	case InboxReady:
 		return "green; needs your pass"
+	case InboxNotReady:
+		return it.f.problem
 	case InboxHumanReview:
 		return "needs a human review"
 	case InboxCapped:
@@ -243,8 +254,15 @@ func (it InboxItem) short() string {
 	return ""
 }
 
-// key names the item across refreshes.
-func (it InboxItem) key() string { return it.Kind + "#" + strconv.Itoa(it.Number) }
+// key names the item across refreshes. A Ready to ship card that turns not
+// ready, or back, stays one card.
+func (it InboxItem) key() string {
+	kind := it.Kind
+	if kind == InboxNotReady {
+		kind = InboxReady
+	}
+	return kind + "#" + strconv.Itoa(it.Number)
+}
 
 // ref is the action's number as the inbox shows it: "2", or "2 (B)".
 func (a InboxAction) ref() string { return workitems.Option{N: a.N, Letter: a.Letter}.Ref() }
@@ -345,8 +363,9 @@ type inboxSource struct {
 	issues      map[int]*gh.Issue
 	pulls       map[int]*gh.PullRequest
 	comments    map[int]inboxComments
-	green       map[string]bool // head SHAs whose gate checks were all green
 	perms       map[string]string
+	required    []*gh.RuleStatusCheck // the integration branch's required checks, read once a refresh
+	strict      bool                  // and whether they require a PR up to date with it
 	// pendingAudits, when set, lists the PRs whose audit entry still waits
 	// on the ledger: a card for each, also when its label is gone (#664).
 	pendingAudits func(ctx context.Context) ([]int, error)
@@ -369,7 +388,7 @@ type inboxComments struct {
 func newInboxSource(c *github.Client, repo, dev string, id config.Identity) *inboxSource {
 	owner, name, _ := github.SplitRepo(repo)
 	return &inboxSource{c: c, repo: repo, owner: owner, name: name, dev: dev, id: id, issues: map[int]*gh.Issue{}, pulls: map[int]*gh.PullRequest{},
-		comments: map[int]inboxComments{}, green: map[string]bool{}, perms: map[string]string{}}
+		comments: map[int]inboxComments{}, perms: map[string]string{}}
 }
 
 // gather refreshes the source and lists its items.
@@ -384,6 +403,7 @@ func (s *inboxSource) gather(ctx context.Context) ([]InboxItem, error) {
 func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.required = nil // dev's rules can change while the inbox is open
 	if !s.loaded {
 		s.report("Listing the issues", 0, 0)
 		issues, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
@@ -621,24 +641,36 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			return nil, err
 		}
 		var st inspect.State
-		var marked []string // who left Ready to ship for the current head
+		marks, at := map[string][]string{}, map[string]time.Time{} // who left Ready to ship, and when, by head
 		for _, cm := range comments {
 			if strings.Contains(cm.GetBody(), inspect.Marker) && inspectWriter(cm.GetUser().GetLogin(), s.self, s.id) {
 				st = inspect.ParseState(cm.GetBody())
 			}
-			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil && m[1] == p.GetHead().GetSHA() && !slices.Contains(marked, cm.GetUser().GetLogin()) {
-				marked = append(marked, cm.GetUser().GetLogin())
+			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil && !slices.Contains(marks[m[1]], cm.GetUser().GetLogin()) {
+				marks[m[1]] = append(marks[m[1]], cm.GetUser().GetLogin())
+				for _, t := range []time.Time{cm.GetCreatedAt().Time, cm.GetUpdatedAt().Time} { // an edited marker counts from its edit
+					if t.After(at[m[1]]) {
+						at[m[1]] = t
+					}
+				}
 			}
 		}
 		// A Ready to ship marker on the current head stands over the cycle
-		// cap: ship found everything but the human pass.
-		if len(marked) > 0 && p.GetBase().GetRef() == dev {
-			it, err := s.readyItem(ctx, p, marked)
-			if err != nil {
-				return nil, err
-			}
+		// cap: ship found everything but the human pass. The card says when
+		// the PR cannot ship any more (Story #796).
+		readyFor := func() (bool, error) {
+			it, err := s.readyItem(ctx, p, marks, at)
 			if it != nil {
 				out = append(out, *it)
+			}
+			return it != nil, err
+		}
+		marked := len(marks) > 0 && p.GetBase().GetRef() == dev && !p.GetDraft()
+		if marked && len(marks[p.GetHead().GetSHA()]) > 0 {
+			if ok, err := readyFor(); err != nil || ok {
+				if err != nil {
+					return nil, err
+				}
 				continue
 			}
 		}
@@ -651,6 +683,12 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			continue
 		}
 		if st.Stopped == "" {
+			// Marked for an earlier head only: new commits since ship said Ready.
+			if marked && len(marks[p.GetHead().GetSHA()]) == 0 {
+				if _, err := readyFor(); err != nil {
+					return nil, err
+				}
+			}
 			continue
 		}
 		disp := "none recorded"
@@ -687,49 +725,6 @@ func mapKeys[V any](m map[int]V) func(func(int) bool) {
 			}
 		}
 	}
-}
-
-// readyItem is an open Story PR that ship left Ready to ship on its head, as
-// an inbox step when the merge gate's checks are still green there: ship it,
-// which keeps every gate of ship. It is nil when a check is not green, or
-// when no one in by, who wrote a marker for the head, has the write access
-// ship needs: anyone may comment, so a marker from any other account is text,
-// not ship's word.
-func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, by []string) (*InboxItem, error) {
-	trusted := false
-	for _, login := range by {
-		ok, err := s.canWrite(ctx, login)
-		if err != nil {
-			return nil, err
-		}
-		if trusted = ok; trusted {
-			break
-		}
-	}
-	if !trusted {
-		return nil, nil
-	}
-	head := p.GetHead().GetSHA()
-	if !s.green[head] { // a green gate stays green for its head; one that is not is read again next time
-		runs, _, err := s.c.REST.Checks.ListCheckRunsForRef(ctx, s.owner, s.name, head, &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}})
-		if err != nil {
-			return nil, err
-		}
-		checks := gateCheckRuns(runs.CheckRuns)
-		for _, want := range gateChecks {
-			i := slices.IndexFunc(checks, func(r *gh.CheckRun) bool { return r.GetName() == want }) // the newest run of a name first
-			if i < 0 || checks[i].GetConclusion() != "success" {
-				return nil, nil
-			}
-		}
-		s.green[head] = true
-	}
-	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
-	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time,
-		Evidence: p.GetHTMLURL(), Story: story, f: inboxFacts{story: story, head: head},
-		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
-		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
-			{N: 2, Label: "open it and review it", Command: "open"}}}, nil
 }
 
 // decisionItem is an open Decision as an inbox step: accept one of its
@@ -863,6 +858,10 @@ func inboxCounsel(it InboxItem) string {
 			"green on commit %s of PR #%d, and aayu ship stopped only because no person had said yes. I recommend shipping it now; ship checks "+
 			"every gate again before it merges, so nothing is skipped. Otherwise the PR waits unmerged, and its checks may need to run again.",
 			f.story, short(f.head), n)
+	case InboxNotReady:
+		return fmt.Sprintf("What this is really about: work that was ready, then changed under it. Ship checked PR #%d and only your pass was "+
+			"missing; since then GitHub's view of it moved, so a merge now would fail. The next move is its builder's, not yours. I recommend "+
+			"leaving it alone: once ship checks it again it comes back here as Ready to ship. d shows exactly what GitHub said.", n)
 	case InboxHumanReview:
 		return fmt.Sprintf("What this is really about: a pull request no reviewer could take, so your review is the gate. The evidence: the merge gate "+
 			"waits at the human rung for commit %s of PR #%d. I recommend reading the diff first, then approving with one line on what you checked. "+
@@ -923,24 +922,35 @@ func plural(n int, one, many string) string {
 	return many
 }
 
-// splitInbox parts the items into the cards that need a person and the
-// housekeeping folded into one line.
-func splitInbox(items []InboxItem) (needs, house []InboxItem) {
+// splitInbox parts the items into the cards that need a person, the
+// housekeeping folded into one line, and the cards with nothing for a person
+// yet (not ready: they only say why).
+func splitInbox(items []InboxItem) (needs, house, waiting []InboxItem) {
 	for _, it := range items {
-		if it.kind().Housekeeping {
+		switch {
+		case it.kind().Housekeeping:
 			house = append(house, it)
-		} else {
+		case it.waiting():
+			waiting = append(waiting, it)
+		default:
 			needs = append(needs, it)
 		}
 	}
-	return needs, house
+	return needs, house, waiting
 }
 
+// waiting reports whether the card has nothing for a person yet: it says why
+// and who acts next, and offers only opening it.
+func (it InboxItem) waiting() bool { return it.Kind == InboxNotReady }
+
 // inboxCounts says how many wait, in words.
-func inboxCounts(needs, house int) string {
+func inboxCounts(needs, house, waiting int) string {
 	s := fmt.Sprintf("%d %s you", needs, plural(needs, "needs", "need"))
 	if house > 0 {
 		s += fmt.Sprintf(", %d housekeeping %s", house, plural(house, "item", "items"))
+	}
+	if waiting > 0 {
+		s += fmt.Sprintf(", %d not ready yet", waiting)
 	}
 	return s
 }
@@ -969,9 +979,12 @@ func (s *inboxSource) reread(ctx context.Context, it InboxItem) (InboxItem, erro
 		}
 		was := it
 		f.Updated, was.Updated = time.Time{}, time.Time{} // a comment changes when it was updated, not what it asks
+		details := f.Details
+		f.Details, was.Details = nil, nil // what GitHub said behind the card, not what it asks
 		a, _ := json.Marshal(f)
 		b, _ := json.Marshal(was)
 		f.Updated = items[slices.IndexFunc(items, func(x InboxItem) bool { return x.key() == f.key() })].Updated
+		f.Details = details
 		if string(a) != string(b) {
 			return f, errInboxChanged{f}
 		}
@@ -1090,9 +1103,18 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		fmt.Fprintf(w, "%s: nothing waits for you.\n", repo)
 		return nil
 	}
-	needs, house := splitInbox(items)
-	fmt.Fprintf(w, "%s: %s, @%s.\n", repo, inboxCounts(len(needs), len(house)), login)
+	needs, house, waiting := splitInbox(items)
+	fmt.Fprintf(w, "%s: %s, @%s.\n", repo, inboxCounts(len(needs), len(house), len(waiting)), login)
 	say("", inboxPlainKeys)
+	if len(waiting) > 0 { // nothing to press: what it waits for and who acts, said once
+		fmt.Fprintf(w, "\n%s (nothing for you):\n", inboxKinds[InboxNotReady].Word)
+		for _, it := range waiting {
+			say("  ", fmt.Sprintf("#%d: %s", it.Number, it.Title))
+			say("    ", fmt.Sprintf("#%d %s", it.Number, it.Why))
+			say("    ", "Next: "+it.Next)
+		}
+	}
+	items = append(needs, house...)
 	done, skipped, handled := 0, 0, 0
 	left := func() int { return len(items) - handled }
 	key := func() (byte, error) {
@@ -1362,6 +1384,7 @@ type inboxList struct {
 	Repo         string      `json:"repo"`
 	NeedsYou     int         `json:"needs_you"`
 	Housekeeping int         `json:"housekeeping"`
+	NotReady     int         `json:"not_ready"` // cards with nothing for a person yet: each says why and who acts next
 	Items        []InboxItem `json:"items"`
 	Run          string      `json:"run"`        // what a person runs to act on them
 	Human        bool        `json:"human_only"` // always true: an agent shows the list and never runs Run
@@ -1400,8 +1423,8 @@ func (e *Env) listInbox(ctx context.Context) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	needs, house := splitInbox(items)
-	out := inboxList{Repo: repo, NeedsYou: len(needs), Housekeeping: len(house), Items: items, Run: "aayu inbox", Human: true, How: inboxHow}
+	needs, house, waiting := splitInbox(items)
+	out := inboxList{Repo: repo, NeedsYou: len(needs), Housekeeping: len(house), NotReady: len(waiting), Items: items, Run: "aayu inbox", Human: true, How: inboxHow}
 	if out.Items == nil {
 		out.Items = []InboxItem{}
 	}
@@ -1410,7 +1433,7 @@ func (e *Env) listInbox(ctx context.Context) error {
 			_, err := fmt.Fprintf(w, "**aayu inbox · %s: nothing waits for a person.**\n", repo)
 			return err
 		}
-		fmt.Fprintf(w, "**aayu inbox · %s: %s.**\n", repo, inboxCounts(len(needs), len(house)))
+		fmt.Fprintf(w, "**aayu inbox · %s: %s.**\n", repo, inboxCounts(len(needs), len(house), len(waiting)))
 		// Titles, options, and counsel come from issues anyone may write, and
 		// an agent reads this: they stay inside a provenance block (§0.1;
 		// mdText escapes < so none can close it), the fixed guidance outside.
@@ -1447,6 +1470,17 @@ func (e *Env) listInbox(ctx context.Context) error {
 			}
 			if i < shown+inboxListLines {
 				fmt.Fprintf(w, "- %s %s [#%d](%s) %s · %s\n", k.Icon, k.Word, it.Number, it.URL, mdText(it.Title), e.twinName(it.Seat))
+			}
+		}
+		if len(waiting) > 0 {
+			k := inboxKinds[InboxNotReady]
+			fmt.Fprintf(w, "\n**%s %s** (nothing for you yet; no action offered):\n\n", k.Icon, k.Word)
+			for i, it := range waiting {
+				if i == inboxListLines {
+					fmt.Fprintf(w, "- and %d more, in `aayu inbox`\n", len(waiting)-i)
+					break
+				}
+				fmt.Fprintf(w, "- [#%d](%s) %s · %s Next: %s\n", it.Number, it.URL, mdText(it.Title), mdText(it.Why), mdText(it.Next))
 			}
 		}
 		if len(house) > 0 {
