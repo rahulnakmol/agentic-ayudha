@@ -310,6 +310,8 @@ tags: [type/principle]
 		{"a generated block twice", good, Block("record", "- a") + "\n\n" + Block("record", "- b") + "\n", "block two generated record blocks"},
 		{"a generated block closed by another block's marker", good, "<!-- BEGIN aayudha:brain:record -->\n- a\n<!-- END aayudha:brain:history -->\n", "block the generated record block ends with the END marker of history"},
 		{"a generated block with no END marker", good, "<!-- BEGIN aayudha:brain:record -->\n- a\n", "block the generated record block has no END marker"},
+		{"a generated END marker with no BEGIN marker", good, "- a\n<!-- END aayudha:brain:record -->\n", "block an END marker of a generated record block has no BEGIN marker"},
+		{"a generated block opened inside another", good, "<!-- BEGIN aayudha:brain:record -->\n<!-- BEGIN aayudha:brain:history -->\n- a\n<!-- END aayudha:brain:history -->\n<!-- END aayudha:brain:record -->\n", "block the generated record block has no END marker"},
 		{"issues as a mapping", strings.Replace(good, "owner: founder", "owner: founder\nissues: {1: 2}", 1), "Short.\n", `frontmatter: "issues" holds a mapping`},
 		{"objectives links a note of another type", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Decisions]]\"]", 1), "Short.\n", "objectives: [[Decisions]] has type moc; objectives links a note of type objective"},
 		{"pasted criterion", good, "1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},
