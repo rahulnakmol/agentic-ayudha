@@ -6,7 +6,7 @@ tests = [".:TestReplyJobRunsOnAReopen", "internal/cli:TestInspectConverges"]
 
 [[criterion]]
 id = 2 # the same comment from a bot or a read-only account: nothing is re-run, and the inbox card stays at the cap
-tests = ["internal/cli:TestInspectConverges", "internal/cli:TestInboxNotReady"]
+tests = [".:TestReplyJobRunsOnAReopen", "internal/cli:TestInspectConverges", "internal/cli:TestInboxNotReady"]
 
 [[criterion]]
 id = 3 # once reopened the PR leaves the review-cap card (not ready while the gate reviews it), and the fresh review clears the stop
