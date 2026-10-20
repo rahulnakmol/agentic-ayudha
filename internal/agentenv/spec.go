@@ -61,7 +61,8 @@ type Tool struct {
 	Version  string            `toml:"version,omitempty"` // the pinned version
 	Accept   []string          `toml:"accept,omitempty"`  // "lo hi" version ranges an installed copy may satisfy (hi empty: open)
 	SHA256   map[string]string `toml:"sha256,omitempty"`  // amd64, arm64
-	Via      string            `toml:"via,omitempty"`     // corepack, toolchain, tarball, rustup
+	Via      string            `toml:"via,omitempty"`     // corepack, toolchain, tarball, rustup; aayu: source, release
+	Path     string            `toml:"path,omitempty"`    // aayu: the absolute path the committed Amp plugin calls
 	Evidence string            `toml:"evidence"`
 }
 
@@ -149,7 +150,10 @@ func (s *Spec) HasHost(h string) bool {
 // Requirements is what the code asks for, without resolved pins: a spec is
 // stale when the code's requirements change ("the toolchain changed").
 func (s *Spec) Requirements() string {
-	type tool struct{ Name, Want string }
+	type tool struct {
+		Name, Want string
+		Path       string `json:",omitempty"` // omitted when empty, so older specs keep their fingerprint
+	}
 	r := struct {
 		Tools                     []tool
 		Packages, Browsers, Hosts []string
@@ -162,7 +166,7 @@ func (s *Spec) Requirements() string {
 	}
 	for _, t := range s.Tools {
 		if t.Name != "corepack" { // Resolve adds it; the code does not ask for it
-			r.Tools = append(r.Tools, tool{t.Name, t.Want})
+			r.Tools = append(r.Tools, tool{t.Name, t.Want, t.Path})
 		}
 	}
 	for _, d := range s.Deps {

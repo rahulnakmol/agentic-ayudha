@@ -191,6 +191,10 @@ func Domains(s Spec) []string {
 			add("release-assets.githubusercontent.com", "objects.githubusercontent.com", "pypi.org", "files.pythonhosted.org")
 		case "rust":
 			add("static.rust-lang.org", "index.crates.io", "static.crates.io")
+		case "aayu":
+			if t.Via == "release" {
+				add("release-assets.githubusercontent.com", "objects.githubusercontent.com")
+			}
 		}
 	}
 	if len(s.Browsers) > 0 {
