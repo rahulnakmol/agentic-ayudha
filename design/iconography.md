@@ -66,6 +66,9 @@ is drawn by hand from geometric strokes and checked against Noto Sans Devanagari
 
 - **Grid.** Icons are drawn on a 24 px grid with 2 px round strokes, inside a 2 px margin. The App marks are drawn on
   a 256 px grid as rounded tiles (radius 56).
+- **Exceptions.** A thinner secondary line, or a butt cap such as the stones of Nala's bridge, goes in an inline
+  `style` attribute. The style block's class rules beat presentation attributes such as `stroke-width="1.25"`, so a
+  browser ignores those.
 - **Colour.** One main colour and one gold accent per icon, from `design/brand.yaml`: `accent` and `done-edge` on light
   grounds, `icon-night` and `icon-gold-night` on dark ones. Each pair is in the brand's pairs list, so it passes WCAG
   2.2 AA for graphics (3:1).
