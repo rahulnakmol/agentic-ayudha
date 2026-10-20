@@ -63,12 +63,31 @@ func runLoopGuard(ctx context.Context, e *Env, name string) error {
 		return Wrap(ExitUsage, err)
 	}
 	g := loopGuard{Loop: name}
-	if e.CI && cfg.Config.Budget.CIMinutesMonth > 0 {
+	limit := cfg.Config.Budget.CIMinutesMonth
+	if e.CI && name == BuildLoop {
+		// No person asked for the build-ready loop's run: its monthly cap is
+		// the trusted branch's committed one, which AAYU_* or --set may only tighten.
+		repo, err := e.RepoName(ctx)
+		if err != nil {
+			return err
+		}
+		c, _, err := e.HumanGitHub(ctx)
+		if err != nil {
+			return err
+		}
+		owner, rn, _ := github.SplitRepo(repo)
+		pol, _, err := e.loopPolicy(ctx, c, owner, rn)
+		if err != nil {
+			return err
+		}
+		limit = tighter(limit, pol.Config.Budget.CIMinutesMonth)
+	}
+	if e.CI && limit > 0 {
 		if g.CIMinutes, err = loopMinutes(ctx, e); err != nil {
 			return err
 		}
-		if g.CIMinutes >= cfg.Config.Budget.CIMinutesMonth {
-			return Errorf(ExitBudget, "loop %s: %s used %d Actions minutes this month; [budget] ci_minutes_month is %d", name, loops.Workflow, g.CIMinutes, cfg.Config.Budget.CIMinutesMonth)
+		if g.CIMinutes >= limit {
+			return Errorf(ExitBudget, "loop %s: %s used %d Actions minutes this month; [budget] ci_minutes_month is %d", name, loops.Workflow, g.CIMinutes, limit)
 		}
 	}
 	event, fired := e.Getenv("GITHUB_EVENT_NAME"), ""
