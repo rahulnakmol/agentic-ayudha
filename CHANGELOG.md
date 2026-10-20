@@ -34,6 +34,8 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - `aayu scope <release>` plans a release in its version milestone: the Product Strategist's twin adds, drops, and drafts the plan, and a person accepts it as the baseline from their own terminal or the inbox's Release scope card (#676).
 - After the baseline, each change counts as drift in effort points (XS 1, S 2, M 3, L 5, XL 8), held to `[scope] budget_percent`, 20% by default; a change over budget needs an accepted Decision, and a person accepts it (#676).
 - `aayu scope --handoff` writes the Release's includes links and posts the plan, and `aayu scope --assign <n> --to this|next|backlog` places a Feedback issue by milestone and horizon label; when two open milestones carry the same release's title, scope stops and asks you to close or rename one rather than guess (#676, #820).
+- `aayu brain` keeps the product's lasting knowledge, such as its vision, principles, objectives, objections, decisions, and capabilities, as linked notes on an orphan `brain` branch that Obsidian opens as a vault with a graph; each note is owned by a seat and links issues by number without copying them (#674).
+- `aayu brain init` creates the vault, `aayu brain checkpoint` refreshes only the marked generated blocks from the repository's records and keeps every word a person wrote (`aayu release` runs it after landing), and `aayu brain check` fails a broken link, a missing source, a sentence over 20 words, or a pasted Completion Goal line or issue label; on a public repository the `brain` branch is public (#674).
 - `aayu investigate` investigates an incident from bounded telemetry queries down to the deployed revision and the implicated code, and proposes a mitigation without running it (#343).
 - `aayu investigate --source sentry|posthog` runs its queries against your configured Sentry or PostHog project with a read-only key (#526, #536, #590).
 - investigate reads Sentry Seer's existing analysis of an issue as a labelled opinion it never cites, and never starts a paid analysis (#542).
@@ -122,6 +124,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - `aayu init --identity` prints no Install link and writes no secret when the App's conversion fails, and refuses an App with another owner, an unrequested permission or event, or another webhook (#603).
 - `aayu seat` creates the codeowner-review ruleset when a second person joins a repository that init adopted (#516).
 - `aayu inspect <pr> --approve --reason "<what you checked>"` records the `[autonomy] approver`'s review of the pull request's current head on the ledger, after GitHub's device flow every time, and posts it as the human review the merge gate reads (#647).
+- `aayu init` protects the `brain` branch with the ledger's rulesets, so no one can force-push or delete it; when an adopted ruleset does not cover it, init says what to add and never edits the team's ruleset (#674).
 
 ### Evals
 
