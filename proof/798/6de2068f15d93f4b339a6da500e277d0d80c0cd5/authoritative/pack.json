@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 798,
+  "pr": 851,
+  "pr_head_sha": "6de2068f15d93f4b339a6da500e277d0d80c0cd5",
+  "base_sha": "0b95d23c0244af102d41edc511395169048275b5",
+  "seat": "ai-native-engineer",
+  "host": "cli",
+  "identity": "ci",
+  "authority": {
+    "kind": "authoritative",
+    "workflow": ".github/workflows/aayudha-merge-gate.yml",
+    "run_id": 39501773695,
+    "writer": "rahulnakmol (aayu ship)"
+  },
+  "completion_goal_hash": "33e5d2a1f8f7a7d45ac0a838e639c6caf374ffc81c995afb634811a50274ce8a",
+  "footprint": [
+    "L02"
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "evidence": [
+        "screens/1.png",
+        "recordings/1.webm",
+        "evidence/criterion-1.jsonl"
+      ]
+    },
+    {
+      "id": 2,
+      "evidence": [
+        "screens/2.png",
+        "recordings/2.webm",
+        "evidence/criterion-2.jsonl"
+      ]
+    },
+    {
+      "id": 3,
+      "evidence": [
+        "screens/3.png",
+        "evidence/criterion-3.jsonl"
+      ]
+    },
+    {
+      "id": 4,
+      "evidence": [
+        "evidence/criterion-4.jsonl"
+      ]
+    },
+    {
+      "id": 5,
+      "evidence": [
+        "evidence/criterion-5.jsonl"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "coverage/diff.json",
+      "kind": "metric",
+      "sha256": "054efd60d4f992a4b8cba902c1e56df4b01bb3f2029a3bdfd06faddd0887d850",
+      "size": 283,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-1.jsonl",
+      "kind": "api-trace",
+      "sha256": "68495a523017aeddbd4ae2697f1ca2a4ff7e920e4e7dd8a7749be4f1405c3685",
+      "size": 1002,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-2.jsonl",
+      "kind": "api-trace",
+      "sha256": "456647583c7bfd05c848e9654be42ea32b235ea76b4ed74fda73d36a5488ffbd",
+      "size": 507,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-3.jsonl",
+      "kind": "api-trace",
+      "sha256": "726cd22a625818d72a8865714490efa70868296240025b9f943d0252b44eec7d",
+      "size": 984,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-4.jsonl",
+      "kind": "api-trace",
+      "sha256": "456647583c7bfd05c848e9654be42ea32b235ea76b4ed74fda73d36a5488ffbd",
+      "size": 507,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-5.jsonl",
+      "kind": "api-trace",
+      "sha256": "456647583c7bfd05c848e9654be42ea32b235ea76b4ed74fda73d36a5488ffbd",
+      "size": 507,
+      "store": "git"
+    },
+    {
+      "path": "recordings/1.webm",
+      "kind": "recording",
+      "sha256": "807d5723b86e7dcaf54a7088b740e8d83b1463e6ae01f63312db02480ce226b0",
+      "size": 152585,
+      "store": "none"
+    },
+    {
+      "path": "recordings/2.webm",
+      "kind": "recording",
+      "sha256": "e87f0de9c27f7cb2980de9063964f9c662e8c6c515f0127a8f8e5e8074b62076",
+      "size": 107401,
+      "store": "none"
+    },
+    {
+      "path": "reports/a11y.json",
+      "kind": "report",
+      "sha256": "d0c44b68f672eb2dca2376d52822fc4bd1a0b76273e7318fe21d3ab5bdeb48a8",
+      "size": 1244,
+      "store": "git"
+    },
+    {
+      "path": "reports/feature-map.json",
+      "kind": "report",
+      "sha256": "127c9a70bc6c3e6763b46c0936567912c2ce44c42279a3e93291ea159f48bd2e",
+      "size": 1014,
+      "store": "git"
+    },
+    {
+      "path": "reports/gitleaks.json",
+      "kind": "report",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3,
+      "store": "git"
+    },
+    {
+      "path": "reports/osv-scanner.json",
+      "kind": "report",
+      "sha256": "f5aad51596612fdc0d352296c3c0e561d182b49d0aff1680c1e738bb9ab3baf2",
+      "size": 10541,
+      "store": "git"
+    },
+    {
+      "path": "reports/perf.json",
+      "kind": "metric",
+      "sha256": "1e4fa877baacc8e90604614a519981f6ceeb25a1df0fb83a60a97b53a47b103c",
+      "size": 117,
+      "store": "git"
+    },
+    {
+      "path": "reports/screenshot-review.json",
+      "kind": "report",
+      "sha256": "359d85dd7ca8a97deafe95aea260788c364baf5c3b8303d1adf017282c50bfe7",
+      "size": 123,
+      "store": "git"
+    },
+    {
+      "path": "reports/semgrep.json",
+      "kind": "report",
+      "sha256": "b6c5ccf6beb1ebc8001b5f3e0eccf3a64a2b7942c59e22f657b691fabdb95c5b",
+      "size": 52649,
+      "store": "git"
+    },
+    {
+      "path": "reports/zap.json",
+      "kind": "report",
+      "sha256": "42ce3aefc6a7bc1e057e6d66148e6d8f33ec8620eaaec6151b920ac23eeafaa3",
+      "size": 8824,
+      "store": "git"
+    },
+    {
+      "path": "screens/1.png",
+      "kind": "screenshot",
+      "sha256": "0cdb73e626ba09267884b4198e2535062fcb1c4ad013982bdc8ae440246d1173",
+      "size": 62290,
+      "store": "none"
+    },
+    {
+      "path": "screens/2.png",
+      "kind": "screenshot",
+      "sha256": "0cdb73e626ba09267884b4198e2535062fcb1c4ad013982bdc8ae440246d1173",
+      "size": 62290,
+      "store": "none"
+    },
+    {
+      "path": "screens/3.png",
+      "kind": "screenshot",
+      "sha256": "8b6f077c973ba0f1c6939f6099318dbd192d7fd6da838072cb944df9d161c8ed",
+      "size": 62285,
+      "store": "none"
+    }
+  ],
+  "checks": [
+    {
+      "floor": "coverage",
+      "result": "pass",
+      "value": 96,
+      "threshold": 90,
+      "tool": "aayudha diff coverage (go test -coverprofile)",
+      "version": "go1.25.14",
+      "detail": "98 of 102 changed executable lines covered (go coverprofile)",
+      "network": "isolated"
+    },
+    {
+      "floor": "sast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "semgrep",
+      "version": "1.180.0",
+      "detail": "p/golang p/javascript p/typescript p/python p/kotlin p/ruby p/php p/swift p/github-actions: 0 critical, 0 high, 3 medium, 0 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "secrets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "detail": "0 findings",
+      "network": "isolated"
+    },
+    {
+      "floor": "deps",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "osv-scanner",
+      "version": "2.6.0",
+      "detail": "go.mod pnpm-lock.yaml: 0 critical, 0 high, 0 medium, 0 low (3 more not called, by osv-scanner's call analysis)",
+      "network": "allowed"
+    },
+    {
+      "floor": "a11y",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright + axe-core",
+      "version": "playwright 1.64.0, axe-core 4.14.0",
+      "detail": "WCAG 2.2 AA: 0 critical, 0 serious",
+      "network": "allowed"
+    },
+    {
+      "floor": "keyboard",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "controls not reachable by Tab: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "reduced-motion",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "animations running with prefers-reduced-motion: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "text-scale",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "text clipped at 200 %: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "targets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 44,
+      "tool": "playwright",
+      "version": "1.64.0",
+      "detail": "targets under 44x44 px: none",
+      "network": "allowed"
+    },
+    {
+      "floor": "redaction",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha PII scan",
+      "version": "1",
+      "detail": "DOM scan; OCR unavailable (tesseract not installed)"
+    },
+    {
+      "floor": "perf",
+      "result": "pass",
+      "value": 100,
+      "threshold": 90,
+      "tool": "lighthouse",
+      "version": "13.5.0",
+      "detail": "1 URL(s) within budget",
+      "network": "allowed"
+    },
+    {
+      "floor": "screen-reader",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no-L01"
+    },
+    {
+      "floor": "dast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "zap",
+      "version": "2.17.0",
+      "detail": "active scan (rules 40012, 40014, 40018, 90020) of the app verify started under docker: 0 critical, 0 high, 0 medium, 3 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "api",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no k6 script ([verify.floors.api] script)"
+    },
+    {
+      "floor": "mobile",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no ios or android in [verify] platforms"
+    },
+    {
+      "floor": "feature-map",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha feature map",
+      "version": "1",
+      "detail": "in sync with the source"
+    },
+    {
+      "floor": "behaviour",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no behaviour check for this change (it touches no mapped feature, and no criterion maps a check)"
+    },
+    {
+      "floor": "parity",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no criterion runs `aayu survey --parity` or `--compat`"
+    }
+  ],
+  "cost": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "usd": 0
+  },
+  "links": {
+    "issue": "rahulnakmol/agentic-ayudha#798",
+    "pr": "rahulnakmol/agentic-ayudha#851",
+    "ready_snapshot": "specs/798/ready.md"
+  },
+  "created_at": "2026-10-20T21:47:21Z"
+}

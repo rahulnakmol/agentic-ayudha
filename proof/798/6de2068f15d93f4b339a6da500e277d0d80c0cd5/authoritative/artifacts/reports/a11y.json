@@ -1,0 +1,50 @@
+{
+  "versions": {
+    "playwright": "1.64.0",
+    "axe": "4.14.0"
+  },
+  "states": [
+    {
+      "n": 1,
+      "url": "http://127.0.0.1:8787/",
+      "status": 200,
+      "error": "",
+      "pii": [],
+      "axe": [],
+      "motion": [],
+      "keyboard_unreachable": [],
+      "small_targets": [],
+      "clipped": [],
+      "screenshot": "/tmp/aayudha-verify-997772308/web/state-1.png",
+      "video": "/tmp/aayudha-verify-997772308/web/video-1/page@70b5cf7630593c5d70564dcf9a41edee.webm"
+    },
+    {
+      "n": 2,
+      "url": "http://127.0.0.1:8787/",
+      "status": 200,
+      "error": "",
+      "pii": [],
+      "axe": [],
+      "motion": [],
+      "keyboard_unreachable": [],
+      "small_targets": [],
+      "clipped": [],
+      "screenshot": "/tmp/aayudha-verify-997772308/web/state-2.png",
+      "video": "/tmp/aayudha-verify-997772308/web/video-2/page@ce1709c0353097ef35b6a03edb49da08.webm"
+    },
+    {
+      "n": 3,
+      "url": "http://127.0.0.1:8787/",
+      "status": 200,
+      "error": "",
+      "pii": [],
+      "axe": [],
+      "motion": [],
+      "keyboard_unreachable": [],
+      "small_targets": [],
+      "clipped": [],
+      "screenshot": "/tmp/aayudha-verify-997772308/web/state-3.png",
+      "video": ""
+    }
+  ]
+}
