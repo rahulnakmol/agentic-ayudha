@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -1000,7 +1001,9 @@ func (s *inboxSource) reread(ctx context.Context, it InboxItem, a InboxAction) (
 
 // inboxMaterial is what changed between the card the person read (was) and
 // the item now that changes what choice a does: the kind, the head commit,
-// the choice itself (its command and label), and a Decision's title. A new
+// the choice itself (its command and label), and a Decision's title, its
+// one-way door, and whether the choice is its recommendation (the last two
+// decide whether the inbox asks the person to confirm). A new
 // counsel line, a refreshed comment, or reworded reasons change none of it.
 func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	var out []string
@@ -1021,12 +1024,25 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 			out = append(out, fmt.Sprintf("%q is no longer offered", a.Label))
 		case now.Options[j].Label != a.Label:
 			out = append(out, fmt.Sprintf("the choice now reads %q", now.Options[j].Label))
+		case was.Kind == InboxDecision && now.Options[j].Recommended != a.Recommended: // whether accepting it asks to confirm
+			out = append(out, nowOr(now.Options[j].Recommended, "it is %s the recommendation"))
 		}
+	}
+	if was.Kind == InboxDecision && was.OneWay != now.OneWay { // a one-way Decision asks to confirm, and decide does not ask again
+		out = append(out, nowOr(now.OneWay, "it is %s one-way"))
 	}
 	if was.Kind == InboxDecision && was.Title != now.Title {
 		out = append(out, "its title changed")
 	}
 	return out
+}
+
+// nowOr fills format's %s with "now" when on is true, else "no longer".
+func nowOr(on bool, format string) string {
+	if on {
+		return fmt.Sprintf(format, "now")
+	}
+	return fmt.Sprintf(format, "no longer")
 }
 
 // inboxFieldsDiffer names the fields of the item, as --list --json writes
@@ -1038,19 +1054,14 @@ func inboxFieldsDiffer(was, now InboxItem) []string {
 	jb, _ := json.Marshal(now)
 	_ = json.Unmarshal(ja, &a)
 	_ = json.Unmarshal(jb, &b)
+	keys := append(slices.Collect(maps.Keys(a)), slices.Collect(maps.Keys(b))...)
+	slices.Sort(keys)
 	var out []string
-	for k := range b {
-		a2, ok := a[k]
-		if k != "updated" && k != "details" && (!ok || string(a2) != string(b[k])) {
+	for _, k := range slices.Compact(keys) { // a field one side lacks reads as empty there
+		if k != "updated" && k != "details" && string(a[k]) != string(b[k]) {
 			out = append(out, k)
 		}
 	}
-	for k := range a {
-		if _, ok := b[k]; !ok && k != "updated" && k != "details" {
-			out = append(out, k)
-		}
-	}
-	slices.Sort(out)
 	return out
 }
 
