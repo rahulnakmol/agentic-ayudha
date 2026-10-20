@@ -1254,7 +1254,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; here it is as it is now.", it.Number, changedWords(it, ch.Item)))
 			return fresh, true
 		case errors.As(err, &ch):
-			say("  ", fmt.Sprintf("#%d %s. Nothing was written.", it.Number, changedWords(it, ch.Item)))
+			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", it.Number, changedWords(it, ch.Item)))
 		case err != nil:
 			why := explainFailure(it, a, err, stage, wrote)
 			mark := "✗ "

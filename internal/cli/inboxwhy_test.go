@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	gh "github.com/google/go-github/v90/github"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 )
@@ -361,10 +362,105 @@ func TestInboxSigninWords(t *testing.T) {
 		{"inbox on o/r needs write access; @sam has read", "@sam has read access here, and the inbox needs write. Nothing was done; a repository admin can give @sam write access."},
 		{"inbox: recording the approval in the actions log: disk full; nothing was done", "aayu couldn't record the approval on this machine (its actions log). Nothing was done."},
 		{"Get \"https://api.github.com/user\": dial tcp: i/o timeout", "GitHub gave no approval: "},
+		{"inbox was not approved; nothing was done", "You left the sign-in before it was approved. Nothing was done."},
+		{"no GitHub token: run gh auth login or set AAYU_GITHUB_TOKEN", "aayu has no GitHub sign-in on this machine yet. Nothing was done."},
 	} {
 		got := signinWords(errors.New(c.err))
 		if !strings.HasPrefix(got, c.want) || len(noTech(got)) > 0 {
 			t.Errorf("%q: %q, want %q", c.err, got, c.want)
 		}
+	}
+}
+
+// A choice that failed for good leaves the card (CodeRabbit's r4328514894
+// on #851): when the person had another choice selected and cleared the
+// housekeeping, the selection moves to a choice that is left, so the card
+// always shows which one Enter does.
+func TestInboxFailedChoiceLeaves(t *testing.T) {
+	it := InboxItem{Kind: InboxFixed, Number: 661, Title: "fix: x", Why: "fixed",
+		Options: []InboxAction{{N: 1, Recommended: true, Label: "close it as fixed", Command: "inbox: close as fixed"}, {N: 2, Label: "open it", Command: "open"}}}
+	m := newInboxModel("o/r", "rahulnakmol", "", true)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+	m.Update(inboxGatheredMsg{items: []InboxItem{it}})
+	m.act = func(it InboxItem, _ InboxAction, _ *inboxWork) (InboxItem, string, error) {
+		return it, "", ghRefusal(http.MethodPatch, "/repos/o/r/issues/661", 403, "Resource not accessible by integration")
+	}
+	m.cur = slicesIndex(m, 661)
+	m.sel = 1
+	m.askTidy()
+	teaDrive(m, m.update(tea.KeyPressMsg{Code: tea.KeyEnter}))
+	if cs := m.choices(); len(cs) != 1 || m.sel != 0 || m.state[it.key()] != "not done" {
+		t.Errorf("after the recommendation failed for good: state %q, choices %+v, selected %d", m.state[it.key()], cs, m.sel)
+	}
+}
+
+// The ways aayu inbox ends with no card say so in plain words (inspect's
+// d06e873051 and f998c626f4 on #845): a sign-in that cannot reach GitHub,
+// a sign-in refused before any code, and a first read that cannot reach
+// GitHub. GitHub's own words go to the log line above.
+func TestInboxNoCardExits(t *testing.T) {
+	plain := func(name, errOut, want string) {
+		t.Helper()
+		line, _, _ := strings.Cut(errOut, "\n")
+		if !strings.Contains(line, want) || len(noTech(line)) > 0 || strings.Contains(line, "dial tcp") {
+			t.Errorf("%s: the line says %q, want %q and no technical words", name, line, want)
+		}
+	}
+	dial := func(path string) error {
+		return &url.Error{Op: "Get", URL: "https://api.github.com" + path, Err: errors.New("dial tcp 140.82.112.6:443: connect: connection refused")}
+	}
+	env := func() map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	}
+	g := inboxRepo(t)
+	via := func(fail func(*http.Request) error) *http.Client {
+		return &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+			if err := fail(r); err != nil {
+				return nil, err
+			}
+			return http.DefaultTransport.RoundTrip(r)
+		})}
+	}
+	quit := func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		teaDrive(m, m.Init())
+		teaKeys(m, "q")
+		return nil
+	}
+
+	// A terminal signs in before the inbox opens; GitHub cannot be reached.
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets, TUI: quit,
+		HTTP: via(func(r *http.Request) error { return dial(r.URL.Path) })}
+	code, out, errOut := runIn(t, env(), opts, "", "inbox", "--repo", "o/r")
+	plain("a sign-in that cannot reach GitHub", errOut, "GitHub gave no approval: GitHub couldn't be reached. Nothing was done.")
+	if code != ExitExternal || !strings.Contains(out, "sign-in failed: ") || !strings.Contains(out, "dial tcp") {
+		t.Errorf("a sign-in that cannot reach GitHub: exit %d, log %q", code, out)
+	}
+
+	// Signed in, then the first read of the issues cannot reach GitHub.
+	opts.HTTP = via(func(r *http.Request) error {
+		if strings.HasSuffix(r.URL.Path, "/issues") {
+			return dial(r.URL.Path)
+		}
+		return nil
+	})
+	code, out, errOut = runIn(t, env(), opts, "", "inbox", "--repo", "o/r")
+	plain("a first read that cannot reach GitHub", errOut, "aayu inbox couldn't read GitHub (GitHub couldn't be reached), so nothing was shown or changed")
+	if code != ExitExternal || !strings.Contains(out, "read failed: ") || !strings.Contains(out, "dial tcp") {
+		t.Errorf("a first read that cannot reach GitHub: exit %d, log %q", code, out)
+	}
+
+	// The sign-in screen (an agent marker) is refused before any code.
+	opts.HTTP = &http.Client{}
+	opts.TUI = func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		m.signin = &inboxSignin{run: func() tea.Msg { return nil }}
+		m.Update(inboxSignedMsg{err: Wrap(ExitExternal, dial("/user"))})
+		return nil
+	}
+	code, out, errOut = runIn(t, env(), opts, "", "inbox", "--repo", "o/r")
+	plain("a sign-in refused before any code", errOut, "GitHub gave no approval: GitHub couldn't be reached. Nothing was done.")
+	if code != ExitExternal || !strings.Contains(out, "sign-in failed: ") {
+		t.Errorf("a sign-in refused before any code: exit %d, log %q", code, out)
 	}
 }

@@ -379,6 +379,10 @@ func signinWords(err error) string {
 		if s != nil {
 			return fmt.Sprintf("@%s has %s access here, and the inbox needs %s. Nothing was done; a repository admin can give @%s %s access.", s[2], s[3], s[1], s[2], s[1])
 		}
+	case strings.Contains(m, "no GitHub token"):
+		return "aayu has no GitHub sign-in on this machine yet. Nothing was done."
+	case strings.Contains(m, "was not approved; nothing was done"):
+		return "You left the sign-in before it was approved. Nothing was done."
 	case strings.Contains(m, "recording the approval"):
 		return "aayu couldn't record the approval on this machine (its actions log). Nothing was done."
 	}

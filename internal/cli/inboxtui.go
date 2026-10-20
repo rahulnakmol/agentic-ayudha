@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"slices"
@@ -108,6 +109,18 @@ func (e *Env) inboxTUI(cfg *config.Config) bool {
 // runInboxTUI runs the full-screen inbox. Each step's output (what decide,
 // ship, and the inbox's own steps print) is shown in the status line as it
 // comes, and printed in full once the inbox closes.
+// signinFailed ends aayu inbox when its sign-in failed before any card
+// showed: the cause in a person's words (signinWords), and GitHub's own on
+// the log line above it.
+func signinFailed(out io.Writer, err error) error {
+	fmt.Fprintln(out, "  sign-in failed: "+err.Error())
+	next := "you open aayu inbox again"
+	if strings.Contains(err.Error(), "no GitHub token") {
+		next = "gh auth login"
+	}
+	return WithNext(Errorf(CodeOf(err), "%s", signinWords(err)), next)
+}
+
 func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, signin func(context.Context) (*inboxSource, string, error)) error {
 	out := e.Out
 	var mu sync.Mutex
@@ -187,7 +200,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 	if e.approval != nil || e.agentSignal() == "" && e.isTerminal(e.In) {
 		s, l, err := signin(ctx)
 		if err != nil {
-			return err
+			return signinFailed(out, err)
 		}
 		setup(s, l)
 		m.signin = nil
@@ -247,11 +260,14 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 	if err != nil {
 		return err
 	}
+	// The exits with no card say it in plain words; the log line above them
+	// keeps GitHub's own, as a failed card's details do.
 	if m.signin != nil && m.signin.err != nil {
-		return m.signin.err
+		return signinFailed(out, m.signin.err)
 	}
 	if m.err != nil && len(m.items) == 0 {
-		return WithNext(Errorf(ExitExternal, "aayu inbox could not read GitHub (%s), so nothing was shown or changed: %w", plainCause(m.err), m.err), "aayu inbox")
+		fmt.Fprintln(out, "  read failed: "+m.err.Error())
+		return WithNext(Errorf(ExitExternal, "aayu inbox couldn't read GitHub (%s), so nothing was shown or changed", plainCause(m.err)), "you open aayu inbox again")
 	}
 	if len(m.items) == 0 {
 		fmt.Fprintf(out, "%s: nothing waits for you.\n", repo)
@@ -981,6 +997,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		wrote := job.w.end()
 		m.state[msg.key] = "not done"
 		m.fails[msg.key] = inboxFail{stage: stage, err: msg.err.Error(), wrote: wrote, a: job.a, why: why}
+		if i := m.item(); i >= 0 && m.items[i].key() == msg.key { // the failed choice may have gone: keep the cursor on one that is left
+			m.sel = min(m.sel, max(len(m.choices())-1, 0))
+		}
 		b.failed++
 		if len(wrote) > 0 { // part of it landed: say what, so a retry is a choice made knowing it
 			msg.err = fmt.Errorf("%w (stopped while %s, after it %s)", msg.err, stage, strings.Join(wrote, ", "))

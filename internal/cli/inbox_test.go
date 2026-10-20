@@ -236,6 +236,25 @@ func TestInbox(t *testing.T) {
 		len(g.Writes()) != 0 {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
 	}
+	// Decision #2 is closed on GitHub after the person read it: it no longer
+	// waits, and the line says what changed, like the one above (inspect's
+	// e8fd40150d on #845).
+	g = inboxRepo(t)
+	opts.GitHubAPI = g.URL()
+	lists = 0
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			if lists++; lists == 2 {
+				g.Issues[2].State, g.Issues[2].UpdatedAt = "closed", "2026-10-12T10:00:00Z"
+			}
+		}
+	}
+	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r")
+	g.Hook = nil
+	if code != 0 || !strings.Contains(out, "  > a\n  #2 changed on GitHub since you opened it: it no longer waits for you: someone or something already handled it. Nothing was written.\n") ||
+		len(g.Writes()) != 0 {
+		t.Fatalf("an item that no longer waits: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
+	}
 
 	// A change the choice does not depend on (the PR renamed, at the same
 	// head) does not block a ship from its card; --verbose names it.
