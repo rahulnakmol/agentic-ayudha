@@ -405,12 +405,18 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 		for _, p := range prs {
 			s.pulls[p.GetNumber()] = p
 		}
-		s.self = viewer(ctx, s.c)
-		// viewer drops its error: a first read cut off there (Bug #822) is not
-		// loaded, or the session would never trust inspect's comments by self.
-		if err := context.Cause(ctx); err != nil {
+		// A first read cut off while it asks for the viewer (Bug #822), by its
+		// deadline or by one request's timeout, is not loaded, or the session
+		// would never trust inspect's comments by self. Any other error leaves
+		// self empty, as viewer does.
+		u, _, err := s.c.REST.Users.Get(ctx, "")
+		if cause := context.Cause(ctx); cause != nil {
+			return false, cause
+		}
+		if errors.Is(err, github.ErrTimeout) {
 			return false, err
 		}
+		s.self = u.GetLogin()
 		s.loaded = true
 		return true, nil
 	}

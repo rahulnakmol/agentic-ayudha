@@ -2267,6 +2267,26 @@ func TestInboxReadTimeout(t *testing.T) {
 		}
 	})
 
+	// One request's timeout while the list asks who the viewer is fails the
+	// list, instead of listing without inspect's comments by the viewer
+	// (inspect's P1 eaaf90ffc8 and CodeRabbit's r4325905150 on #828).
+	t.Run("the viewer request times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		// The fake answers /user only after the client gave up, and every other request at once.
+		g.Mu.Lock()
+		g.Hook = func(method, p string) {
+			if method == "GET" && p == "/user" {
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
+		g.Mu.Unlock()
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
+		code, out, errOut := run(t, newEnv(t), opts, "inbox", "--list", "--repo", "o/r")
+		if code == 0 || !strings.Contains(errOut, github.ErrTimeout.Error()) || !strings.Contains(errOut, "/user") {
+			t.Errorf("exit %d, want the viewer request's timeout: %s\n%s", code, errOut, out)
+		}
+	})
+
 	// A cold start with no cache, against a GitHub that never answers: the
 	// inbox stays open, says so where the loading view was, and R reads
 	// again (inspect's P1 c47f82faf1 on #828).
