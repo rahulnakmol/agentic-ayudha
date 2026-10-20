@@ -7,8 +7,8 @@ drawn as clean geometric lines. This note says where the icons live, the rules t
 
 | Mark | Use | Files |
 |---|---|---|
-| ![आयु, the bot mark](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `icons/app/aayu-bot.png` (512 px, for GitHub), `icons/app/aayu-bot-24.svg` (text size) |
-| ![aayu Sakshi, the witness eye](icons/app/aayu-sakshi.svg) | The logo of **aayu Sakshi**, the GitHub App behind the presence check. Sakshi (साक्षी) means witness: the eye sees that a person is here, and its pupil is the one-time code. | `icons/app/aayu-sakshi.svg`, `icons/app/aayu-sakshi.png` (512 px), `icons/app/aayu-sakshi-24.svg` (small sizes) |
+| ![aayu, the bot identity agents write under: आयु, its u-sign closed into the delivery loop](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `icons/app/aayu-bot.png` (512 px, for GitHub), `icons/app/aayu-bot-24.svg` (text size) |
+| ![aayu Sakshi, the presence check: a witness eye whose pupil is the one-time code](icons/app/aayu-sakshi.svg) | The logo of **aayu Sakshi**, the GitHub App behind the presence check. Sakshi (साक्षी) means witness: the eye sees that a person is here, and its pupil is the one-time code. | `icons/app/aayu-sakshi.svg`, `icons/app/aayu-sakshi.png` (512 px), `icons/app/aayu-sakshi-24.svg` (small sizes) |
 
 GitHub takes an App's logo only as an upload on the App's settings page, so the PNGs are there for that step. The SVGs
 draw at 64 px. Below 32 px, use `aayu-sakshi-24.svg`: it drops the four arcs and shows the code as one dot.
@@ -20,40 +20,40 @@ Each twin's emblem is an object, place, animal, or star tied to its name, never 
 
 | Icon | Twin and seat | Emblem |
 |---|---|---|
-| ![Arjun](icons/seats/product-strategist.svg) | Arjun, Product Strategist | An arrow in the centre of the target |
-| ![Vishwa](icons/seats/code-architect.svg) | Vishwa, Code Architect | A set-square and a plumb line |
-| ![Shuka](icons/seats/data-ai-architect.svg) | Shuka, Data and AI Architect | A parrot, which is what Shuka means: it repeats its source faithfully |
-| ![Drona](icons/seats/engineering-manager.svg) | Drona, Engineering Manager | A drawn bow, the teacher's test |
-| ![Nakul](icons/seats/ai-native-engineer.svg) | Nakul, AI Native Engineer | A horse, for the master of horses |
-| ![Shesha](icons/seats/production-engineer.svg) | Shesha, Production Engineer | An endless coil that holds the world up |
-| ![Hanu](icons/seats/ux-researcher-evolutionist.svg) | Hanu, UX Researcher and Evolutionist | The leap across the sea to find what people need |
-| ![Nala](icons/seats/devops-devex-tinkerer.svg) | Nala, DevOps and DevEx Tinkerer | A bridge of floating stones |
-| ![Yama](icons/seats/quality-architect.svg) | Yama, Quality Architect | The gateway every change passes through |
-| ![Sanjay](icons/seats/mentalist.svg) | Sanjay, Mentalist | Far sight carried into words |
-| ![Vidhi](icons/seats/auditor.svg) | Vidhi, Auditor | A palm-leaf record with its seal |
-| ![Sauti](icons/seats/marketer-documenter.svg) | Sauti, Marketer and Documenter | The storyteller's open book |
-| ![Kuber](icons/seats/revenue-architect.svg) | Kuber, Revenue Architect | The treasury, rising |
-| ![Atri](icons/seats/founder.svg) | Atri, Founder's Sage | His star in the Saptarishi (the Big Dipper), where the handle meets the bowl |
+| ![Arjun, Product Strategist: an arrow in the centre of the target](icons/seats/product-strategist.svg) | Arjun, Product Strategist | An arrow in the centre of the target |
+| ![Vishwa, Code Architect: a set-square and a plumb line](icons/seats/code-architect.svg) | Vishwa, Code Architect | A set-square and a plumb line |
+| ![Shuka, Data and AI Architect: a parrot that repeats its source faithfully](icons/seats/data-ai-architect.svg) | Shuka, Data and AI Architect | A parrot, which is what Shuka means: it repeats its source faithfully |
+| ![Drona, Engineering Manager: a drawn bow, the teacher's test](icons/seats/engineering-manager.svg) | Drona, Engineering Manager | A drawn bow, the teacher's test |
+| ![Nakul, AI Native Engineer: a horse, for the master of horses](icons/seats/ai-native-engineer.svg) | Nakul, AI Native Engineer | A horse, for the master of horses |
+| ![Shesha, Production Engineer: an endless coil that holds the world up](icons/seats/production-engineer.svg) | Shesha, Production Engineer | An endless coil that holds the world up |
+| ![Hanu, UX Researcher: the leap across the sea to find what people need](icons/seats/ux-researcher-evolutionist.svg) | Hanu, UX Researcher and Evolutionist | The leap across the sea to find what people need |
+| ![Nala, DevOps and DevEx Tinkerer: a bridge of floating stones](icons/seats/devops-devex-tinkerer.svg) | Nala, DevOps and DevEx Tinkerer | A bridge of floating stones |
+| ![Yama, Quality Architect: the gateway every change passes through](icons/seats/quality-architect.svg) | Yama, Quality Architect | The gateway every change passes through |
+| ![Sanjay, Mentalist: far sight carried into words](icons/seats/mentalist.svg) | Sanjay, Mentalist | Far sight carried into words |
+| ![Vidhi, Auditor: a palm-leaf record with its seal](icons/seats/auditor.svg) | Vidhi, Auditor | A palm-leaf record with its seal |
+| ![Sauti, Marketer and Documenter: the storyteller's open book](icons/seats/marketer-documenter.svg) | Sauti, Marketer and Documenter | The storyteller's open book |
+| ![Kuber, Revenue Architect: the treasury, rising](icons/seats/revenue-architect.svg) | Kuber, Revenue Architect | The treasury, rising |
+| ![Atri, Founder's Sage: his star in the Saptarishi, where the handle meets the bowl](icons/seats/founder.svg) | Atri, Founder's Sage | His star in the Saptarishi (the Big Dipper), where the handle meets the bowl |
 
 ## Verbs
 
 | Icon | Verb | What it shows |
 |---|---|---|
-| ![grill](icons/verbs/grill.svg) | `grill` | A chisel shaping a rough idea into a clear block |
-| ![slice](icons/verbs/slice.svg) | `slice` | A blade cutting a Feature into stories |
-| ![ready](icons/verbs/ready.svg) | `ready` | A raised flag with a check: the story meets the bar to start |
-| ![plan](icons/verbs/plan.svg) | `plan` | A path through a grid, one checkpoint per layer |
-| ![build](icons/verbs/build.svg) | `build` | A stepwell, built one terrace at a time |
-| ![verify](icons/verbs/verify.svg) | `verify` | A balance that weighs the change against the floors |
-| ![inspect](icons/verbs/inspect.svg) | `inspect` | A lens over the lines of a pull request |
-| ![proof](icons/verbs/proof.svg) | `proof` | A seal pressed with a check |
-| ![ship](icons/verbs/ship.svg) | `ship` | A boat under sail |
-| ![release](icons/verbs/release.svg) | `release` | A kite let out on its string |
-| ![measure](icons/verbs/measure.svg) | `measure` | The sundial of Jantar Mantar reading the sun |
-| ![tell](icons/verbs/tell.svg) | `tell` | A tutari horn announcing what is proven |
-| ![decide](icons/verbs/decide.svg) | `decide` | A fork in the path, one branch chosen |
-| ![counsel](icons/verbs/counsel.svg) | `counsel` | Atri's star over the road ahead |
-| ![inbox](icons/verbs/inbox.svg) | `inbox` | A tray of cards that wait for a person |
+| ![grill: shape a rough idea into a clear goal](icons/verbs/grill.svg) | `grill` | A chisel shaping a rough idea into a clear block |
+| ![slice: break a Feature into stories](icons/verbs/slice.svg) | `slice` | A blade cutting a Feature into stories |
+| ![ready: a story meets the bar to start](icons/verbs/ready.svg) | `ready` | A raised flag with a check: the story meets the bar to start |
+| ![plan: one checkpoint per layer](icons/verbs/plan.svg) | `plan` | A path through a grid, one checkpoint per layer |
+| ![build: a stepwell, built one layer at a time](icons/verbs/build.svg) | `build` | A stepwell, built one terrace at a time |
+| ![verify: weigh the change against the floors](icons/verbs/verify.svg) | `verify` | A balance that weighs the change against the floors |
+| ![inspect: review a pull request](icons/verbs/inspect.svg) | `inspect` | A lens over the lines of a pull request |
+| ![proof: the sealed evidence that the work does what it says](icons/verbs/proof.svg) | `proof` | A seal pressed with a check |
+| ![ship: merge proven work](icons/verbs/ship.svg) | `ship` | A boat under sail |
+| ![release: let the work fly, like a kite on its string](icons/verbs/release.svg) | `release` | A kite let out on its string |
+| ![measure: read the outcome, like the sundial at Jantar Mantar](icons/verbs/measure.svg) | `measure` | The sundial of Jantar Mantar reading the sun |
+| ![tell: announce what the pod has proven](icons/verbs/tell.svg) | `tell` | A tutari horn announcing what is proven |
+| ![decide: a person chooses one path](icons/verbs/decide.svg) | `decide` | A fork in the path, one branch chosen |
+| ![counsel: the sage's star over the road ahead](icons/verbs/counsel.svg) | `counsel` | Atri's star over the road ahead |
+| ![inbox: the steps that wait for a person](icons/verbs/inbox.svg) | `inbox` | A tray of cards that wait for a person |
 
 ## Respect
 
