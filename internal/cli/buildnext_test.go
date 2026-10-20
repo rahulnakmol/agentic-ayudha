@@ -267,6 +267,15 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
 		t.Fatalf("a local in_flight raised the committed cap: %d %s", code, out)
 	}
+	// The integration branch is never the run's to name: AAYU_BRANCHES__DEV
+	// pointing at a branch the agent can push does not lend it that branch's cap.
+	g.Mu.Lock()
+	g.Refs["heads/feat/mine"] = "f0000000000000000000000000000000000000fe"
+	g.RefFiles["f0000000000000000000000000000000000000fe"] = map[string]string{"loops/" + BuildLoop + ".toml": g.RefFiles[devTip]["loops/"+BuildLoop+".toml"], ".aayudha/config.toml": "[build]\nin_flight = 2\n"}
+	g.Mu.Unlock()
+	if code, res, pick, out := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "2", "AAYU_BRANCHES__DEV": "feat/mine"}, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
+		t.Fatalf("a run-named branch lent the loop its cap: %d %s", code, out)
+	}
 	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
 	if code, res, _, out := next(two, "--next", "pick"); code != 0 || res.Issue != newer.Number {
 		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)

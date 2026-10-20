@@ -289,20 +289,23 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if pick != nil {
 		st.Loop, st.Claim = BuildLoop, pick.Claim
 	}
-	b, perStory := l.Config.Autonomy.Budget, l.Config.Budget.PerStoryUSD
 	if st.Loop != "" {
 		// No person asked for a loop's build, so its limits are the committed
-		// policy at dev's tip, as for in_flight: AAYU_* or --set may tighten
-		// one, never loosen it or turn it off.
+		// policy of the trusted integration branch, as for in_flight: AAYU_* or
+		// --set may tighten one, never loosen it or turn it off. The run's
+		// config is clamped in place, so the session review spends within it too.
 		owner, name, _ := github.SplitRepo(repo)
-		pol, err := basePolicy(ctx, c, owner, name, dev)
+		pol, _, err := e.loopPolicy(ctx, c, owner, name)
 		if err != nil {
 			return err
 		}
-		cb := pol.Config.Autonomy.Budget
-		b = config.AutonomyBudget{WallHours: tighter(b.WallHours, cb.WallHours), CostUSD: tighter(b.CostUSD, cb.CostUSD), Attempts: tighter(b.Attempts, cb.Attempts)}
-		perStory = tighter(perStory, pol.Config.Budget.PerStoryUSD)
+		lb, cb := &l.Config.Autonomy.Budget, pol.Config.Autonomy.Budget
+		lb.WallHours, lb.CostUSD, lb.Attempts = tighter(lb.WallHours, cb.WallHours), tighter(lb.CostUSD, cb.CostUSD), tighter(lb.Attempts, cb.Attempts)
+		lk, ck := &l.Config.Budget, pol.Config.Budget
+		lk.PerStoryUSD, lk.PerDayUSD = tighter(lk.PerStoryUSD, ck.PerStoryUSD), tighter(lk.PerDayUSD, ck.PerDayUSD)
+		lk.PerPRInspectMax, lk.CIMinutesMonth = tighter(lk.PerPRInspectMax, ck.PerPRInspectMax), tighter(lk.CIMinutesMonth, ck.CIMinutesMonth)
 	}
+	b, perStory := l.Config.Autonomy.Budget, l.Config.Budget.PerStoryUSD
 	// A story's spend is capped by the lower of the build budget and the
 	// breaker's per-story limit, so a config that keeps a lower per_story_usd
 	// is reported, and blocks, at the limit that actually stops it. A cap of 0

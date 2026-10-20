@@ -880,6 +880,21 @@ func TestShipOnProof(t *testing.T) {
 	g.JobLogs[7788] = strings.Replace(strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1), "same-family review (C): codex (openai)", "different-family review (A): claude (anthropic)", 1)
 	g.Mu.Unlock()
 
+	// A build-ready loop PR whose builder stopped it after the loop listed it
+	// is not shipped while its story is status:blocked.
+	var st BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st)
+	st.Loop = BuildLoop
+	b, _ := json.Marshal(st)
+	putLedger(t, bare, BuildLedgerPath(2), string(b))
+	g.Mu.Lock()
+	g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: "status:blocked"})
+	g.Mu.Unlock()
+	refused("story #2 is status:blocked, so the build-ready loop's PR waits for a person")
+	g.Mu.Lock()
+	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	g.Mu.Unlock()
+
 	// The audit's label goes on before the merge: when it cannot, nothing
 	// merges, so no merge on proof escapes the look after merge.
 	g.Mu.Lock()

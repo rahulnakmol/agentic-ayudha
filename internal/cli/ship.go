@@ -391,6 +391,22 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = hp
 	}
 
+	// A build-ready loop PR whose builder stopped it after the loop listed it
+	// is not shipped: the story's status:blocked, read now, beats that list.
+	var st BuildState
+	if _, err := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if contains(github.IssueLabels(is), "status:blocked") {
+			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
+		}
+	}
+
 	// 4. Land the gate's pack (pack.json and data, never media unless the
 	// opt-in bucket is set) under the human's identity, merge, then the
 	// Complete section, status:merged, the ship record, and cleanup.
