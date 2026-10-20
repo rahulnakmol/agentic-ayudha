@@ -386,7 +386,7 @@ func nonNilStrings(s []string) []string {
 
 var (
 	rungRE     = regexp.MustCompile(`^releases/(\d+)/(rolling|main)\.json$`)
-	baselineRE = regexp.MustCompile(`^releases/(v\d+\.\d+\.\d+)/baseline-(\d+)\.json$`)
+	baselineRE = regexp.MustCompile(`^releases/(v\d+\.\d+\.\d+)/baseline-([1-9]\d*)\.json$`) // numbered from 1, as internal/scope writes them
 	driftRE    = regexp.MustCompile(`^releases/(v\d+\.\d+\.\d+)/drift\.json$`)
 	issueURLRE = regexp.MustCompile(`/issues/(\d+)$`)
 )
@@ -539,7 +539,7 @@ func ledgerReleases(ctx context.Context, w *ledger.Writer, r *brain.Records) err
 		case baselineRE.MatchString(p):
 			m := baselineRE.FindStringSubmatch(p)
 			n, _ := strconv.Atoi(m[2])
-			if prev, ok := newest[m[1]]; ok && n <= prev { // baseline-0 is a baseline too
+			if n <= newest[m[1]] { // only the highest baseline counts
 				continue
 			}
 			var b struct {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/brain"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/scope"
 )
 
 // TestBrainInitCheckpointCheck runs the verb end to end against a local
@@ -29,8 +31,14 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	git(t, filepath.Dir(rung), "clone", "--quiet", "--branch", "ledger", bare, rung)
 	_ = os.MkdirAll(filepath.Join(rung, "releases", "9"), 0o755)
 	_ = os.WriteFile(filepath.Join(rung, "releases", "9", "main.json"), []byte(`{"release": 9, "version": "v0.1.0", "target": "main", "tag": "v0.1.0", "stories_released": [2]}`), 0o644)
-	_ = os.MkdirAll(filepath.Join(rung, "releases", "v0.2.0"), 0o755) // the first baseline is number 0
-	_ = os.WriteFile(filepath.Join(rung, "releases", "v0.2.0", "baseline-0.json"), []byte(`{"version": "v0.2.0", "release_issue": 10, "baselined_at": "2026-10-16T09:00:00Z", "budget_pct": 10, "items": [{"number": 2, "type": "story", "title": "Push a pack", "parent": 1}]}`), 0o644)
+	// The baseline comes from internal/scope's own type and path: the brain reads what aayu scope writes.
+	bl, _ := json.Marshal(scope.Baseline{Schema: scope.BaselineSchema, Version: "v0.2.0", ReleaseIssue: 10, Baseline: 1, BaselinedAt: "2026-10-16T09:00:00Z",
+		BudgetPct: 10, Items: []scope.Item{{Number: 2, Type: "story", Title: "Push a pack", Parent: 1}}})
+	_ = os.MkdirAll(filepath.Join(rung, "releases", "v0.2.0"), 0o755)
+	_ = os.WriteFile(filepath.Join(rung, filepath.FromSlash(scope.BaselinePath("v0.2.0", 1))), bl, 0o644)
+	dr, _ := json.Marshal(scope.Drift{Schema: scope.DriftSchema, Version: "v0.2.0", ReleaseIssue: 10, Baseline: 1, BudgetPct: 10, DriftPct: 25, OverBudgetDecision: 7,
+		Resized: []scope.Resize{{Number: 2, Type: "initiative", Title: "Push a pack", From: "S", To: "L", FromType: "story"}}})
+	_ = os.WriteFile(filepath.Join(rung, filepath.FromSlash(scope.DriftPath("v0.2.0"))), dr, 0o644)
 	git(t, rung, "add", ".")
 	git(t, rung, "commit", "--quiet", "-m", "rung")
 	git(t, rung, "push", "--quiet", "origin", "ledger")
@@ -89,8 +97,11 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(vault, "Releases", "v0.1.0.md")); !strings.Contains(string(b), "- #1 Feature: Proof packs [[Proof packs]]\n  - #2 Story: Push a pack") {
 		t.Errorf("the release note does not link what shipped:\n%s", b)
 	}
-	if b, _ := os.ReadFile(filepath.Join(vault, "Releases", "v0.2.0.md")); !strings.Contains(string(b), "Baseline 0 of Release #10") {
-		t.Errorf("the release note lacks the plan from baseline 0:\n%s", b)
+	if b, _ := os.ReadFile(filepath.Join(vault, "Releases", "v0.2.0.md")); !strings.Contains(string(b), "Baseline 1 of Release #10") {
+		t.Errorf("the release note lacks the plan from baseline 1:\n%s", b)
+	} else if !strings.Contains(string(b), "Drift since baseline 1: 25% of a 10% budget") || !strings.Contains(string(b), "Over the budget: Decision #7.") ||
+		!strings.Contains(string(b), ": effort S to L; type Story to Initiative") {
+		t.Errorf("the release note lacks the drift that aayu scope recorded:\n%s", b)
 	}
 
 	_ = os.WriteFile(filepath.Join(vault, "Capabilities", "Proof packs.md"), []byte(strings.Replace(capNote, human, human+"See [[Nowhere]].\n", 1)), 0o644)
