@@ -1,0 +1,39 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 796,
+  "pr": 802,
+  "pr_head_sha": "eb1791825af35f4149849a3534b8524b4e473812",
+  "merge_commit": "164397366cea8a5df813e478b4b040aee85e491f",
+  "pack": "proof/796/eb1791825af35f4149849a3534b8524b4e473812/authoritative/pack.json",
+  "pack_landed": "artifact 12275376870 of run 39440505493 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/39440505493), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 39440505493,
+  "artifact": 12275376870,
+  "pack_sha256": "a48764b6ec7b5dc9c3562b370fb692f294b694bc53d083937da8891d5758dcfe",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/802#issuecomment-6290061690",
+    "commit": "eb1791825af35f4149849a3534b8524b4e473812",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+  },
+  "review_rung": "human",
+  "footprint": [
+    "L02",
+    "L06"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "autonomous": false,
+    "skipped": "the human pass is settled: solo-bypass"
+  },
+  "actions_segment": "actions/2026-10-20/cli-20261020T165004Z.jsonl",
+  "shipped_at": "2026-10-20T17:03:52Z",
+  "shipped_by": "rahulnakmol"
+}
