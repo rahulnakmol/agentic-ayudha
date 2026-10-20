@@ -1,0 +1,22 @@
+# Which tests prove Bug #846's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a capped card whose title, reason, and counsel differ, with the same head and ship choice: no error, and counsel, title, why named
+tests = ["internal/cli:TestInboxReread"]
+
+[[criterion]]
+id = 2 # the card read at head aaaaaaa while the head is ddddddd: nothing written, "the head moved from aaaaaaa to ddddddd"
+tests = ["internal/cli:TestInboxReread"]
+
+[[criterion]]
+id = 3 # a reworded choice, or one no longer offered: nothing written, and the refusal quotes it or says it is no longer offered
+tests = ["internal/cli:TestInboxReread"]
+
+[[criterion]]
+id = 4 # a Decision renamed after the person read it: nothing written, and the refusal says "its title changed"
+tests = ["internal/cli:TestInbox"]
+
+[[criterion]]
+id = 5 # aayu inbox --verbose, a Decision whose ratify-by moved: it is accepted, and the session log names why
+tests = ["internal/cli:TestInbox"]

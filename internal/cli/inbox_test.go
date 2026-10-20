@@ -232,9 +232,27 @@ func TestInbox(t *testing.T) {
 	}
 	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r")
 	g.Hook = nil
-	if code != 0 || !strings.Contains(out, "  > a\n  not done: #2: it changed on GitHub since you read it, so nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
+	if code != 0 || !strings.Contains(out, "  > a\n  not done: #2: it changed on GitHub since you read it (its title changed), so nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
 		len(g.Writes()) != 0 {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
+	}
+
+	// A change the choice does not depend on (a later ratify-by, so only the
+	// card's reason reads differently) does not block it; --verbose names it.
+	g = inboxRepo(t)
+	opts.GitHubAPI = g.URL()
+	lists = 0
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			if lists++; lists == 2 {
+				g.Issues[2].Body, g.Issues[2].UpdatedAt = strings.Replace(g.Issues[2].Body, "2026-10-22T09:00:00Z", "2026-10-23T09:00:00Z", 1), "2026-10-12T10:00:00Z"
+			}
+		}
+	}
+	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r", "--verbose")
+	g.Hook = nil
+	if code != 0 || !strings.Contains(out, "#2 accepted: A, by @o") || !strings.Contains(errOut, `inbox: #2 changed since it was read (why), but not what`) {
+		t.Fatalf("a change that leaves the choice as it was: exit %d: %s\n%s", code, errOut, out)
 	}
 
 	// The keys on cards that lack an answer: an incomplete Decision has only
@@ -2257,6 +2275,70 @@ func TestInboxLoginScreen(t *testing.T) {
 	m.Update(inboxCodeMsg{deviceCodeReply{UserCode: code, VerificationURI: uri}, clock.Add(time.Minute)})
 	if !teaKeys(m, "q") || !errors.Is(m.signin.err, errNotApproved) {
 		t.Errorf("q on the login screen: err %v", m.signin.err)
+	}
+}
+
+// A card blocks its choice only when what the choice does changed, and says
+// what that was: on 2026-10-20 a ship from #817's card was refused twice
+// with no change to what it would do, and #802's once without saying its
+// head had moved. A capped PR with no Story offers no ship, which would
+// always refuse.
+func TestInboxReread(t *testing.T) {
+	g := inboxRepo(t)
+	c, err := github.New(github.Options{Token: "human-token", BaseURL: g.URL() + "/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	src := newInboxSource(c, "o/r", "dev", config.Identity{})
+	items, err := src.gather(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := func(key string) InboxItem {
+		i := slices.IndexFunc(items, func(it InboxItem) bool { return it.key() == key })
+		if i < 0 {
+			t.Fatalf("no %s in %v", key, items)
+		}
+		return items[i]
+	}
+	capped := card("capped#9")
+	ship := capped.Options[1]
+	if ship.Command != "aayu ship 9" || capped.Head != strings.Repeat("d", 40) {
+		t.Fatalf("capped #9: options %v, head %q", capped.Options, capped.Head)
+	}
+
+	// Drawn by an older build or before a new comment: other words, the same head and choice.
+	was := capped
+	was.Title, was.Why, was.Counsel = "fix(cli): capped, as first read", "an older reason", "an older counsel"
+	if now, differ, err := src.reread(ctx, was, ship); err != nil || now.Why != capped.Why || !slices.Equal(differ, []string{"counsel", "title", "why"}) {
+		t.Errorf("a change that leaves the ship as it was: err %v, differ %v", err, differ)
+	}
+
+	// What the ship acts on changed: the head, then the choice itself.
+	was = capped
+	was.Head = strings.Repeat("a", 40)
+	var ch errInboxChanged
+	if _, _, err := src.reread(ctx, was, ship); !errors.As(err, &ch) || ch.Item.Head != capped.Head ||
+		!strings.Contains(err.Error(), "(the head moved from aaaaaaa to ddddddd)") {
+		t.Errorf("a moved head: %v", err)
+	}
+	if _, _, err := src.reread(ctx, capped, InboxAction{N: 2, Label: "merge it as it is", Command: "aayu ship 9"}); err == nil || !strings.Contains(err.Error(), `(the choice now reads "ship PR #9 now (ship's gates still apply)")`) {
+		t.Errorf("a reworded choice: %v", err)
+	}
+
+	// No Story: only open, and the counsel says why.
+	g.Mu.Lock()
+	g.Pulls[9].Body, g.Issues[9].Body, g.Issues[9].UpdatedAt = "a fix", "a fix", "2026-10-13T00:00:00Z"
+	g.Mu.Unlock()
+	if items, err = src.gather(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if capped = card("capped#9"); len(capped.Options) != 1 || capped.Options[0].Command != "open" || !strings.Contains(capped.Counsel, "It names no Story") {
+		t.Errorf("a capped PR with no Story: options %v, counsel %q", capped.Options, capped.Counsel)
+	}
+	if _, _, err := src.reread(ctx, was, ship); err == nil || !strings.Contains(err.Error(), `"ship PR #9 now (ship's gates still apply)" is no longer offered`) {
+		t.Errorf("a ship no longer offered: %v", err)
 	}
 }
 

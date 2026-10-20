@@ -202,6 +202,7 @@ type InboxItem struct {
 	Updated     time.Time     `json:"updated,omitzero"`      // when the issue or PR last changed on GitHub
 	Story       int           `json:"story,omitempty"`       // the Story a ship of this PR completes, so two writes on it never run at once
 	Next        string        `json:"next,omitempty"`        // who acts next, in plain words, on a card with nothing for the person yet
+	Head        string        `json:"head,omitempty"`        // the PR's head commit the card was read at, which a ship or an approval acts on
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	labels      []string
 	mergeSHA    string
@@ -676,7 +677,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		}
 		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev && !p.GetDraft() {
 			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
-				Evidence: p.GetHTMLURL(), f: inboxFacts{head: head},
+				Evidence: p.GetHTMLURL(), Head: head, f: inboxFacts{head: head},
 				Why: fmt.Sprintf("inspect's merge gate waits at the human rung for `%s`: no reviewer app or paid model could review it, so only the [autonomy] approver's recorded review clears it.", short(head)),
 				Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
 					{N: 2, Label: fmt.Sprintf("approve commit %s as your review", short(head)), Command: fmt.Sprintf("aayu inspect %d --approve", p.GetNumber()), Ask: "What did you check?"}}})
@@ -695,12 +696,15 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		if st.Result != nil {
 			disp = st.Result.Disposition
 		}
-		out = append(out, InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
+		it := InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
 			Story:    StoryOf(p.GetBody(), "", p.GetHead().GetRef()), // its "ship now" choice completes the Story
-			Evidence: p.GetHTMLURL(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
-			Why: fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
-			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
-				{N: 2, Label: fmt.Sprintf("ship PR #%d now (ship's gates still apply)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())}}})
+			Evidence: p.GetHTMLURL(), Head: p.GetHead().GetSHA(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
+			Why:     fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
+			Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"}}}
+		if it.Story != 0 { // ship proves a Story, so a PR with none is never offered a ship that always refuses
+			it.Options = append(it.Options, InboxAction{N: 2, Label: fmt.Sprintf("ship PR #%d now (ship's gates still apply)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())})
+		}
+		out = append(out, it)
 	}
 	for i := range out {
 		out[i].f.devBr = dev
@@ -867,10 +871,14 @@ func inboxCounsel(it InboxItem) string {
 			"waits at the human rung for commit %s of PR #%d. I recommend reading the diff first, then approving with one line on what you checked. "+
 			"That records your review of this commit on the ledger, and the gate runs again. A later push needs a new review.", short(f.head), n)
 	case InboxCapped:
+		ship := "Shipping it now is possible and ship's gates still apply, but you would be overriding the reason the loop stopped."
+		if it.Story == 0 {
+			ship = "It names no Story, so aayu ship cannot merge it; after your review, its builder links a Story or you merge it on GitHub."
+		}
 		return fmt.Sprintf("What this is really about: an agent fix loop that stopped by design. The evidence: inspect's review ran %d of %d rounds "+
 			"on PR #%d without converging, and its last disposition was %q. I recommend opening it and reading the review yourself, because more agent rounds "+
-			"did not settle it. Shipping it now is possible and ship's gates still apply, but you would be overriding the reason the loop stopped.",
-			f.cycles, inspect.MaxRounds, n, f.disp)
+			"did not settle it. %s",
+			f.cycles, inspect.MaxRounds, n, f.disp, ship)
 	case InboxUnshipped:
 		return fmt.Sprintf("Criterion: a Story merges through aayu ship, which saves a ship record and a person's pass. Condition: PR #%d merged "+
 			"into %s as commit %s without either, and Story #%d still reads status:%s. Effect: the board shows finished work as unfinished. "+
@@ -956,41 +964,94 @@ func inboxCounts(needs, house, waiting int) string {
 }
 
 // errInboxChanged says an item changed on GitHub since the person read it,
-// so nothing was written; Item is the item as it is now (zero when gone).
-type errInboxChanged struct{ Item InboxItem }
+// so nothing was written; Item is the item as it is now (zero when gone),
+// and What says what changed, in plain words.
+type errInboxChanged struct {
+	Item InboxItem
+	What []string
+}
 
 func (e errInboxChanged) Error() string {
 	if e.Item.Number == 0 {
 		return "it no longer waits for you (it changed on GitHub since you read it); nothing was written"
 	}
-	return "it changed on GitHub since you read it, so nothing was written; here it is as it is now"
+	return "it changed on GitHub since you read it (" + strings.Join(e.What, "; ") + "), so nothing was written; here it is as it is now"
 }
 
-// reread reads it again, just before a write, and returns it as GitHub has
-// it now, or errInboxChanged when it changed or no longer waits.
-func (s *inboxSource) reread(ctx context.Context, it InboxItem) (InboxItem, error) {
+// reread reads it again, just before the person's choice a is done, and
+// returns it as GitHub has it now. It returns errInboxChanged only when what
+// a acts on changed (inboxMaterial), or the item no longer waits; any other
+// difference is returned as the names of the fields that differ.
+func (s *inboxSource) reread(ctx context.Context, it InboxItem, a InboxAction) (InboxItem, []string, error) {
 	items, err := s.gather(ctx)
 	if err != nil {
-		return it, err
+		return it, nil, err
 	}
-	for _, f := range items {
-		if f.key() != it.key() {
-			continue
-		}
-		was := it
-		f.Updated, was.Updated = time.Time{}, time.Time{} // a comment changes when it was updated, not what it asks
-		details := f.Details
-		f.Details, was.Details = nil, nil // what GitHub said behind the card, not what it asks
-		a, _ := json.Marshal(f)
-		b, _ := json.Marshal(was)
-		f.Updated = items[slices.IndexFunc(items, func(x InboxItem) bool { return x.key() == f.key() })].Updated
-		f.Details = details
-		if string(a) != string(b) {
-			return f, errInboxChanged{f}
-		}
-		return f, nil
+	i := slices.IndexFunc(items, func(x InboxItem) bool { return x.key() == it.key() })
+	if i < 0 {
+		return it, nil, errInboxChanged{}
 	}
-	return it, errInboxChanged{}
+	f := items[i]
+	if what := inboxMaterial(it, f, a); len(what) > 0 {
+		return f, nil, errInboxChanged{f, what}
+	}
+	return f, inboxFieldsDiffer(it, f), nil
+}
+
+// inboxMaterial is what changed between the card the person read (was) and
+// the item now that changes what choice a does: the kind, the head commit,
+// the choice itself (its command and label), and a Decision's title. A new
+// counsel line, a refreshed comment, or reworded reasons change none of it.
+func inboxMaterial(was, now InboxItem, a InboxAction) []string {
+	var out []string
+	if was.Kind != now.Kind {
+		out = append(out, fmt.Sprintf("it is now %s, not %s", strings.ToLower(now.kind().Word), strings.ToLower(was.kind().Word)))
+	}
+	if was.Head != now.Head {
+		if was.Head == "" {
+			out = append(out, fmt.Sprintf("the card did not say which commit it was read at; the head is %s", short(now.Head)))
+		} else {
+			out = append(out, fmt.Sprintf("the head moved from %s to %s", short(was.Head), short(now.Head)))
+		}
+	}
+	if a.Command != "open" {
+		j := slices.IndexFunc(now.Options, func(o InboxAction) bool { return o.Command == a.Command })
+		switch {
+		case j < 0:
+			out = append(out, fmt.Sprintf("%q is no longer offered", a.Label))
+		case now.Options[j].Label != a.Label:
+			out = append(out, fmt.Sprintf("the choice now reads %q", now.Options[j].Label))
+		}
+	}
+	if was.Kind == InboxDecision && was.Title != now.Title {
+		out = append(out, "its title changed")
+	}
+	return out
+}
+
+// inboxFieldsDiffer names the fields of the item, as --list --json writes
+// them, that differ between the card read and the item now, past when it
+// was updated and GitHub's facts behind it.
+func inboxFieldsDiffer(was, now InboxItem) []string {
+	var a, b map[string]json.RawMessage
+	ja, _ := json.Marshal(was)
+	jb, _ := json.Marshal(now)
+	_ = json.Unmarshal(ja, &a)
+	_ = json.Unmarshal(jb, &b)
+	var out []string
+	for k := range b {
+		a2, ok := a[k]
+		if k != "updated" && k != "details" && (!ok || string(a2) != string(b[k])) {
+			out = append(out, k)
+		}
+	}
+	for k := range a {
+		if _, ok := b[k]; !ok && k != "updated" && k != "details" {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // runInbox is `aayu inbox`.
@@ -1061,9 +1122,12 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 // inboxApply acts on it only as GitHub has it now: it reads the item again
 // first, and when it changed, writes nothing and returns it as it is now.
 func (e *Env) inboxApply(ctx context.Context, cfg *config.Config, src *inboxSource, login string, it InboxItem, a InboxAction) (InboxItem, error) {
-	fresh, err := src.reread(ctx, it)
+	fresh, differ, err := src.reread(ctx, it, a)
 	if err != nil {
 		return fresh, err
+	}
+	if len(differ) > 0 && e.Verbose { // what changed but changes nothing a does: the session log keeps it findable
+		fmt.Fprintf(e.Err, "inbox: #%d changed since it was read (%s), but not what %q does; doing it\n", it.Number, strings.Join(differ, ", "), a.Label)
 	}
 	return fresh, e.inboxAct(ctx, cfg, src.c, src.repo, login, fresh, a)
 }
