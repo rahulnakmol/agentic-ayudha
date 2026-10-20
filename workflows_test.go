@@ -847,3 +847,157 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 		t.Fatalf("an osv-scanner download that does not match its SHA-256 was accepted: %v", err)
 	}
 }
+
+// TestReplyJobRunsOnAReopen holds Bug #800: a person's `/aayu review again` on a PR whose review stopped at the
+// round cap starts the merge gate's reply job, in this repository's gate and the template, so aayu (which checks who
+// wrote it) re-runs the head's inspect job without a push.
+func TestReplyJobRunsOnAReopen(t *testing.T) {
+	own, err := os.ReadFile(".github/workflows/aayudha-merge-gate.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gates, err := os.ReadFile("internal/cli/testdata/gates/aayudha-merge-gate.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A comment on an open PR, by an account of each association GitHub reports.
+	event := func(assoc, body string) map[string]any {
+		return map[string]any{"github.event_name": "issue_comment", "github.event.issue.pull_request": "https://api.github.com/repos/o/r/pulls/7",
+			"github.event.issue.state": "open", "github.event.comment.user.login": "someone", "github.event.comment.author_association": assoc,
+			"github.event.comment.body": body}
+	}
+	for name, b := range map[string][]byte{"the template": initrepo.GateWorkflows("dev")["aayudha-merge-gate.yml"], "this repository's": own, "the test copy": gates} {
+		var wf struct {
+			Jobs map[string]struct {
+				If string `yaml:"if"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(b, &wf); err != nil {
+			t.Fatal(err)
+		}
+		cond := wf.Jobs["reply"].If
+		for _, c := range []struct {
+			assoc, body string
+			runs        bool
+		}{
+			{"OWNER", "/aayu review again", true},
+			{"COLLABORATOR", "/aayu review again", true},
+			{"MEMBER", " /aayu review again", true},      // aayu trims the comment, so a leading space counts (CodeRabbit r4328461440 on #849)
+			{"CONTRIBUTOR", "/aayu review again", false}, // no write access: no run at all (inspect's c8efb7b295 on #849)
+			{"NONE", "/aayu review again", false},
+			{"OWNER", "looks good to me", false},
+		} {
+			if got := truthy(evalExpr(t, cond, event(c.assoc, c.body))); got != c.runs {
+				t.Errorf("%s merge gate: a %s comment %q starts the reply job: %v, want %v\n%s", name, c.assoc, c.body, got, c.runs, cond)
+			}
+		}
+	}
+}
+
+// evalExpr evaluates a GitHub Actions expression of the forms the merge
+// gate's if lines use: ==, &&, ||, parentheses, string literals, context
+// paths read from vars, and contains, startsWith, endsWith, and fromJSON.
+func evalExpr(t *testing.T, expr string, vars map[string]any) any {
+	t.Helper()
+	toks := regexp.MustCompile(`'(?:[^']|'')*'|&&|\|\||==|!=|[(),!]|[A-Za-z_][\w.\-]*|\S`).FindAllString(expr, -1)
+	pos := 0
+	peek := func() string {
+		if pos < len(toks) {
+			return toks[pos]
+		}
+		return ""
+	}
+	var or, primary func() any
+	primary = func() any {
+		tok := peek()
+		pos++
+		switch {
+		case tok == "(":
+			v := or()
+			pos++ // )
+			return v
+		case tok == "!":
+			return !truthy(primary())
+		case strings.HasPrefix(tok, "'"):
+			return strings.ReplaceAll(tok[1:len(tok)-1], "''", "'")
+		case peek() == "(":
+			pos++
+			var args []any
+			for peek() != ")" {
+				args = append(args, or())
+				if peek() == "," {
+					pos++
+				}
+			}
+			pos++
+			str := func(i int) string { s, _ := args[i].(string); return strings.ToLower(s) }
+			switch tok {
+			case "fromJSON":
+				var v any
+				if err := yaml.Unmarshal([]byte(args[0].(string)), &v); err != nil {
+					t.Fatal(err)
+				}
+				return v
+			case "contains":
+				if list, ok := args[0].([]any); ok {
+					return slices.ContainsFunc(list, func(x any) bool { s, _ := x.(string); return strings.EqualFold(s, fmt.Sprint(args[1])) })
+				}
+				return strings.Contains(str(0), str(1))
+			case "startsWith":
+				return strings.HasPrefix(str(0), str(1))
+			case "endsWith":
+				return strings.HasSuffix(str(0), str(1))
+			}
+			t.Fatalf("evalExpr: no function %s", tok)
+		}
+		return vars[tok]
+	}
+	cmp := func() any {
+		l := primary()
+		for peek() == "==" || peek() == "!=" {
+			op := peek()
+			pos++
+			r := primary()
+			eq := strings.EqualFold(fmt.Sprint(l), fmt.Sprint(r))
+			l = eq == (op == "==")
+		}
+		return l
+	}
+	and := func() any {
+		l := cmp()
+		for peek() == "&&" {
+			pos++
+			r := cmp()
+			if truthy(l) {
+				l = r
+			}
+		}
+		return l
+	}
+	or = func() any {
+		l := and()
+		for peek() == "||" {
+			pos++
+			r := and()
+			if !truthy(l) {
+				l = r
+			}
+		}
+		return l
+	}
+	return or()
+}
+
+// truthy is a GitHub Actions expression value's truth: false, null, 0, and
+// the empty string are false.
+func truthy(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return x
+	case string:
+		return x != ""
+	}
+	return true
+}

@@ -110,6 +110,18 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	// The round cap (Decision #544): past MaxRounds rounds on distinct heads
 	// inspect requests no review and reads no reply until a person reopens it.
 	a.in.Head, a.in.At, a.in.Reopened = head, e.Now(), reopenedAt(posts, mayReopen(ctx, a.c, a.repo, bots), a.prev)
+	// On a comment, a review stopped at this head re-runs only on a person's
+	// reopen, which starts no gate run itself (#800); a reviewer's reply
+	// counts for nothing until then.
+	if replyEvent && a.prev.Stopped == head {
+		if !reopenPending(a.prev, a.in.Reopened) {
+			return e.Emit(map[string]any{"pr": n, "head": head, "result": "stopped at the round cap"}, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "inspect #%d at %s: the review stopped at the round cap; nothing to re-run until a person with write access comments `%s`\n", n, short(head), inspect.ReopenCommand)
+				return err
+			})
+		}
+		return e.rerunInspect(ctx, a.c, owner, name, n, head, "a person's "+inspect.ReopenCommand, nil)
+	}
 	if a.prev.Capped(head, a.in.Reopened) && !replyEvent {
 		res = inspect.StepBackResult(n, head, a.prev)
 		res.Builder = a.builder
@@ -306,7 +318,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		rep, rerr = read(choice)
 	}
 	if replyEvent {
-		return e.rerunInspect(ctx, a.c, owner, name, n, head, choice, rerr)
+		return e.rerunInspect(ctx, a.c, owner, name, n, head, "reply from "+choice.Kind(), rerr)
 	}
 	if errors.Is(rerr, inspect.ErrUnavailable) {
 		if !a.paidTried {
@@ -456,6 +468,14 @@ func reopenedAt(posts []inspect.Post, may func(login, typ string) bool, st inspe
 		}
 	}
 	return st.Reopen(cmds)
+}
+
+// reopenPending reports whether a person's reopen at reopened (reopenedAt)
+// is newer than the one the stopped review last recorded, so no review has
+// run since it.
+func reopenPending(st inspect.State, reopened time.Time) bool {
+	recorded, _ := time.Parse(time.RFC3339, st.Reopened)
+	return st.Stopped != "" && reopened.After(recorded)
 }
 
 // mayReopen allows a stopped review's reopen only from a person (never a
@@ -661,17 +681,18 @@ func prPosts(ctx context.Context, c *github.Client, owner, name string, n int) (
 // has a reply from its reviewer (usable or not), it re-runs the failed jobs
 // of the newest pull_request_target gate run on that head, so the inspect
 // check on the head itself, not a status anyone could set, carries the
-// verdict. A comment with no reply for the head changes nothing.
-func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name string, n int, head string, choice inspect.Choice, rerr error) error {
+// verdict. A comment with no reply for the head changes nothing. why names
+// what the re-run reads: a reviewer's reply, or a person's reopen.
+func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name string, n int, head, why string, rerr error) error {
 	say := func(format string, args ...any) error {
 		msg := fmt.Sprintf(format, args...)
-		return e.Emit(map[string]any{"pr": n, "head": head, "reviewer": choice.Kind(), "result": msg}, func(w io.Writer) error {
+		return e.Emit(map[string]any{"pr": n, "head": head, "reason": why, "result": msg}, func(w io.Writer) error {
 			_, err := fmt.Fprintf(w, "inspect #%d at %s: %s\n", n, short(head), msg)
 			return err
 		})
 	}
 	if errors.Is(rerr, inspect.ErrNoReply) {
-		return say("no reply from %s for this head; nothing to re-run", choice.Kind())
+		return say("no %s for this head; nothing to re-run", why)
 	}
 	path := ".github/workflows/" + MergeGateWorkflow
 	for deadline := e.Now().Add(10 * time.Minute); ; {
@@ -712,14 +733,14 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 			return say("run %d: merge-gate %s, inspect %s; nothing to re-run", run.GetID(), or(state["aayudha/merge-gate"], "missing"), or(state["aayudha/inspect"], "missing"))
 		}
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.actions.rerun", Target: fmt.Sprintf("%s/%s#%d", owner, name, n),
-			Payload: map[string]any{"run": run.GetID(), "head": head, "reason": "reply from " + choice.Kind()}},
+			Payload: map[string]any{"run": run.GetID(), "head": head, "reason": why}},
 			func(ctx context.Context) (any, error) {
 				_, err := c.REST.Actions.RerunFailedJobsByID(ctx, owner, name, run.GetID())
 				return run.GetID(), err
 			}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		return say("re-ran the failed jobs of run %d so its inspect check reads the reply from %s", run.GetID(), choice.Kind())
+		return say("re-ran the failed jobs of run %d so its inspect check reads the %s", run.GetID(), why)
 	}
 }
 

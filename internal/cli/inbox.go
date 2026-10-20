@@ -99,10 +99,11 @@ var inboxKinds = map[string]inboxKind{
 			"If you leave it, nothing merges and the work waits; its checks may need to run again once dev moves on.",
 		Terms: []string{"Merge gate", "Human pass", "Solo-mode bypass"}},
 	InboxNotReady: {Icon: "⏳", Word: "Not ready yet", Seat: verbs.EngineeringManager,
-		Line: "Ship said it was ready, but its pull request has changed since, so GitHub would refuse the merge now. Nothing for you yet.",
-		Explain: "aayu ship found this pull request ready except for your pass, but since then it conflicts with dev or is behind it, " +
-			"a required check failed or is still running, or new commits were pushed. GitHub would refuse the merge now, so the card offers nothing to press. " +
-			"Its builder fixes it (a rebase, a fix, or ship again), and then it comes back here as Ready to ship. d shows what GitHub said.",
+		Line: "Its pull request changed since it was ready, or its review is running again, so there is nothing to press. Nothing for you yet.",
+		Explain: "Either aayu ship found this pull request ready except for your pass and since then it conflicts with dev or is behind it, " +
+			"a check failed or is still running, or new commits were pushed; or a person reopened its stopped review and the merge gate is reviewing it again. " +
+			"Either way anything you pressed now would fail, so the card offers nothing to press. Its builder or the merge gate moves next, " +
+			"and it comes back here when it needs you. d shows what GitHub said.",
 		Terms: []string{"Merge gate", "Human pass"}},
 	InboxHumanReview: {Icon: "🔍", Word: "Needs your review", Seat: verbs.EngineeringManager,
 		Line: "No reviewer app or paid model could review this pull request, so its merge gate waits for your review.",
@@ -689,6 +690,23 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 					return nil, err
 				}
 			}
+			continue
+		}
+		// A person reopened it: the merge gate reviews it again, and the card
+		// waits for that review rather than asking for a reopen again (#800).
+		var posts []inspect.Post
+		for _, cm := range comments {
+			posts = append(posts, inspect.Post{Kind: "comment", Login: cm.GetUser().GetLogin(), Type: cm.GetUser().GetType(), Body: cm.GetBody(), Updated: cm.GetUpdatedAt().Time})
+		}
+		if reopenPending(st, reopenedAt(posts, mayReopen(ctx, s.c, s.repo, s.id.BotLogins), st)) {
+			out = append(out, InboxItem{Kind: InboxNotReady, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
+				Story: StoryOf(p.GetBody(), "", p.GetHead().GetRef()), f: inboxFacts{problem: "review running again"},
+				Why:  "isn't ready yet: its review was reopened, and the merge gate is reviewing it again.",
+				Next: "the merge gate reviews it; nothing for you yet. If the review still does not settle, it comes back here.",
+				Counsel: fmt.Sprintf("What this is really about: a review loop you chose to restart. PR #%d stopped at the round cap and a person reopened it, "+
+					"so the merge gate's review runs again without a push. Nothing is yours to do until that review lands; d shows when it stopped.", p.GetNumber()),
+				CounselFrom: "facts",
+				Details:     []string{fmt.Sprintf("Review stopped at %s after %d rounds; reopened with `%s`", short(st.Stopped), len(st.Rounds), inspect.ReopenCommand), "Pull request: " + p.GetHTMLURL()}})
 			continue
 		}
 		disp := "none recorded"

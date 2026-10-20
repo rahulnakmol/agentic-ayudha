@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 )
 
@@ -412,6 +413,41 @@ func TestInboxNotReady(t *testing.T) {
 	}
 	if it := card(items, a.Number); it.Kind != InboxNotReady || it.short() != "security not run" {
 		t.Errorf("A once dev requires security: %+v", it)
+	}
+
+	// Bug #800: a PR whose review stopped at the round cap is a capped card;
+	// a read-only account's reopen leaves it so, and a person's turns it into
+	// a not-ready card while the merge gate reviews it again.
+	g.AddIssue("Story d", "x", "type:story", "status:in-progress")
+	d := g.AddPR("feat: d", "x", "o", "feat/d", strings.Repeat("d", 40), "dev")
+	stopped, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Stopped: strings.Repeat("d", 40), Rounds: []inspect.Round{{Head: "a"}, {Head: "b"}, {Head: "c"}}, Result: &inspect.Result{Disposition: "fix"}})
+	reopen := func(login, updated string) {
+		at, _ := time.Parse(time.RFC3339, updated)
+		cm := &fake.Comment{ID: int64(990 + len(g.Issues[d.Number].Comments)), Body: inspect.ReopenCommand, CreatedAt: at, UpdatedAt: at}
+		cm.User.Login, cm.User.Type = login, "User"
+		g.Issues[d.Number].Comments = append(g.Issues[d.Number].Comments, cm)
+		g.Issues[d.Number].UpdatedAt = updated // a comment changes it
+	}
+	g.Mu.Lock()
+	g.Issues[d.Number].Comments = append(g.Issues[d.Number].Comments, gateComment(989, inspect.Marker+"\n<!-- aayudha:inspect-state "+string(stopped)+" -->\n"))
+	g.Issues[d.Number].UpdatedAt = "2026-10-12T14:00:00Z"
+	reopen("mallory", "2026-10-12T14:01:00Z")
+	g.Mu.Unlock()
+	if items, err = src.gather(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if it := card(items, d.Number); it.Kind != InboxCapped {
+		t.Errorf("D at the cap after a read-only account's reopen: %+v", it)
+	}
+	g.Mu.Lock()
+	reopen("o", "2026-10-12T14:02:00Z")
+	g.Mu.Unlock()
+	if items, err = src.gather(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if it := card(items, d.Number); it.Kind != InboxNotReady || len(it.choices()) != 1 || it.short() != "review running again" ||
+		it.Why != "isn't ready yet: its review was reopened, and the merge gate is reviewing it again." {
+		t.Errorf("D after a person's reopen: %+v", it)
 	}
 
 	// A read that fails says so and makes no card from half of it.

@@ -20,7 +20,8 @@
 #            coverage manifest; a missing or malformed review, fix, rebuild, or an unreviewed file fails it. A PR that
 #            changes only docs passes without a review.
 #   reply    on a comment or review on the PR (issue_comment and pull_request_review), re-runs the failed jobs of
-#            the head's pull_request_target run once its reviewer has replied, so the inspect check on the head
+#            the head's pull_request_target run once its reviewer has replied, or once a person with write access
+#            reopened a review stopped at the round cap (`/aayu review again`), so the inspect check on the head
 #            carries the verdict. It runs no PR code, holds no secret, and re-runs nothing for other comments.
 #   pack     checks the run's pack against the PR head and the Ready snapshot and keeps one PR comment with each
 #            criterion's verdict, the floors, the pack's SHA-256, and a link to the artifact; it fails when the pack
@@ -266,10 +267,17 @@ jobs:
 
   reply:
     name: aayudha/inspect-reply
-    # Only on an open PR, and only for a comment or review that may be a reviewer's reply.
+    # Only on an open PR, and only for a comment or review that may be a reviewer's reply, or a person's
+    # `/aayu review again`, which re-runs a review stopped at the round cap. The reopen starts the job only
+    # for an owner, member, or collaborator, so an account without write access starts no run (Bug #800).
+    # On a personal repository a collaborator has write access, so this is exact; in an organisation a
+    # member may be read-only, so aayu still checks the author's permission before it re-runs anything.
+    # contains, not startsWith: aayu trims the comment before it reads the command, so a leading space counts.
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.state == 'open' &&
-      (endsWith(github.event.comment.user.login, '[bot]') || contains(github.event.comment.body, 'aayudha-review'))) ||
+      (endsWith(github.event.comment.user.login, '[bot]') || contains(github.event.comment.body, 'aayudha-review') ||
+      (contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      contains(github.event.comment.body, '/aayu review again')))) ||
       (github.event_name == 'pull_request_review' && github.event.pull_request.state == 'open')
     runs-on: ubuntu-latest
     timeout-minutes: 15
