@@ -850,6 +850,9 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 		case slow && first && len(m.items) == 0:
 			// Nothing read yet: the loading view stays, saying so, and R
 			// reads again instead of the inbox quitting (Bug #822).
+			if m.quitting != quitNo { // q during the read: quit, as a finished read would
+				return tea.Quit
+			}
 			m.loading, m.stalled, m.load, m.status = true, true, inboxProgressMsg{}, inboxSlowFirst
 			return m.tick()
 		case first && len(m.items) == 0:

@@ -2247,7 +2247,10 @@ func holdIssues(g *fake.GitHub) (release func()) {
 // reading line; and a refresh cut off before a pull request was read reads
 // it on the next one.
 func TestInboxReadTimeout(t *testing.T) {
-	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	// Each case has its own state directory: a cache one case writes is not the next case's cold start.
+	newEnv := func(t *testing.T) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	}
 
 	t.Run("a request GitHub never answers times out", func(t *testing.T) {
 		g := inboxRepo(t)
@@ -2255,7 +2258,7 @@ func TestInboxReadTimeout(t *testing.T) {
 		t.Cleanup(release)
 		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
 		start := time.Now()
-		code, out, errOut := run(t, env, opts, "inbox", "--list", "--repo", "o/r")
+		code, out, errOut := run(t, newEnv(t), opts, "inbox", "--list", "--repo", "o/r")
 		if code == 0 || !strings.Contains(errOut, github.ErrTimeout.Error()) {
 			t.Errorf("exit %d, want a timeout: %s\n%s", code, errOut, out)
 		}
@@ -2295,7 +2298,30 @@ func TestInboxReadTimeout(t *testing.T) {
 			teaKeys(m, "q")
 			return nil
 		}
-		if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
+	// q during that first read quits once it times out (CodeRabbit's minor on #828).
+	t.Run("q during a first read that times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdIssues(g)
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			read := m.Init()
+			teaKeys(m, "q") // asked while the read runs
+			if !teaDrive(m, read) {
+				t.Error("q during a first read that timed out left the inbox open")
+			}
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
 			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
 		}
 	})
@@ -2346,7 +2372,7 @@ func TestInboxReadTimeout(t *testing.T) {
 			teaKeys(m, "q")
 			return nil
 		}
-		if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
 			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
 		}
 	})
