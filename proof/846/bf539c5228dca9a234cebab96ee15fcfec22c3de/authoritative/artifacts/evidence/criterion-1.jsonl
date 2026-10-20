@@ -1,0 +1,40 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread","Output":"=== RUN   TestInboxReread\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice","Output":"=== RUN   TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice","Output":"--- PASS: TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/another_title,_reason,_and_counsel,_the_same_head_and_choice"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_head_moved"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_head_moved","Output":"=== RUN   TestInboxReread/the_head_moved\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_head_moved","Output":"--- PASS: TestInboxReread/the_head_moved (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_head_moved"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_PR_names_no_Story_any_more"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_PR_names_no_Story_any_more","Output":"=== RUN   TestInboxReread/the_PR_names_no_Story_any_more\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_PR_names_no_Story_any_more","Output":"--- PASS: TestInboxReread/the_PR_names_no_Story_any_more (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_PR_names_no_Story_any_more"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_renamed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_renamed","Output":"=== RUN   TestInboxReread/a_Decision's_option_renamed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_renamed","Output":"--- PASS: TestInboxReread/a_Decision's_option_renamed (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_renamed"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_description_changed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_description_changed","Output":"=== RUN   TestInboxReread/a_Decision's_option_description_changed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_description_changed","Output":"--- PASS: TestInboxReread/a_Decision's_option_description_changed (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/a_Decision's_option_description_changed"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_recommendation_moved"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_recommendation_moved","Output":"=== RUN   TestInboxReread/the_recommendation_moved\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_recommendation_moved","Output":"--- PASS: TestInboxReread/the_recommendation_moved (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_recommendation_moved"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_was_closed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_was_closed","Output":"=== RUN   TestInboxReread/the_Decision_was_closed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_was_closed","Output":"--- PASS: TestInboxReread/the_Decision_was_closed (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_was_closed"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_re-read_fails"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_re-read_fails","Output":"=== RUN   TestInboxReread/the_re-read_fails\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_re-read_fails","Output":"--- PASS: TestInboxReread/the_re-read_fails (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_re-read_fails"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_is_now_one-way"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_is_now_one-way","Output":"=== RUN   TestInboxReread/the_Decision_is_now_one-way\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_is_now_one-way","Output":"--- PASS: TestInboxReread/the_Decision_is_now_one-way (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread/the_Decision_is_now_one-way"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread","Output":"--- PASS: TestInboxReread (0.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxReread"}
