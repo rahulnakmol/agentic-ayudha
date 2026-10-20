@@ -926,6 +926,24 @@ func TestShipOnProof(t *testing.T) {
 		t.Fatalf("ship when the story's build state is unreadable: %d %s", code, out)
 	}
 	putLedger(t, bare, BuildLedgerPath(2), string(b))
+	// A stop given while ship judges the PR, after its first read of the
+	// label, still holds it: ship reads the label again at the merge.
+	g.Mu.Lock()
+	read := false
+	g.Hook = func(method, p string) {
+		switch {
+		case method == "GET" && p == "/repos/o/r/issues/2":
+			read = true
+		case read && method == "GET" && strings.HasSuffix(p, "/git/ref/heads/dev"):
+			g.Issues[2].Labels, read = append(g.Issues[2].Labels, fake.Label{Name: "status:blocked"}), false
+		}
+	}
+	g.Mu.Unlock()
+	refused("story #2 is status:blocked, so the build-ready loop's PR waits for a person")
+	g.Mu.Lock()
+	g.Hook = nil
+	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	g.Mu.Unlock()
 
 	// The audit's label goes on before the merge: when it cannot, nothing
 	// merges, so no merge on proof escapes the look after merge.

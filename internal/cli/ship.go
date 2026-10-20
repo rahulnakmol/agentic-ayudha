@@ -380,18 +380,25 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// with another name is held too.
 	var st BuildState
 	_, rerr := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st)
-	if StoryOf("", "", pr.GetHead().GetRef()) == story || rerr == nil && st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
+	held := func() error {
+		if StoryOf("", "", pr.GetHead().GetRef()) != story && (rerr != nil || st.Loop == "" || st.Branch != pr.GetHead().GetRef()) {
+			return nil
+		}
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		switch {
 		case !contains(github.IssueLabels(is), "status:blocked"):
+			return nil
 		case st.Loop != "":
 			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
 		default:
 			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so its PR waits for a person to make it Ready again", n, story)
 		}
+	}
+	if err := held(); err != nil {
+		return err
 	}
 	if rerr != nil {
 		return Wrap(ExitExternal, rerr)
@@ -472,6 +479,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	if tip != pol.Tip {
 		return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(pol.Tip), short(tip))
+	}
+	// A stop given while ship judged the PR still holds it: the label is read again at the merge.
+	if err := held(); err != nil {
+		return err
 	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
