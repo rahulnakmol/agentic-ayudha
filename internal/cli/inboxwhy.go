@@ -333,7 +333,7 @@ func changedWords(was, now InboxItem) string {
 	switch {
 	case now.Number == 0:
 		return "it no longer waits for you: someone or something already handled it"
-	case was.f.head != "" && now.f.head != "" && was.f.head != now.f.head:
+	case was.Head != "" && now.Head != "" && was.Head != now.Head, was.f.head != "" && now.f.head != "" && was.f.head != now.f.head:
 		return "new commits were pushed since you opened it"
 	case now.waiting() && !was.waiting():
 		return "it " + strings.TrimSuffix(now.Why, ".")
@@ -343,6 +343,10 @@ func changedWords(was, now InboxItem) string {
 		return "its choices were edited"
 	case was.Title != now.Title:
 		return "its title was edited"
+	case was.OneWay != now.OneWay:
+		return nowOr(now.OneWay, "it is %s a one-way door")
+	case was.BodyHash != now.BodyHash:
+		return "its text was edited"
 	}
 	return "its details changed"
 }

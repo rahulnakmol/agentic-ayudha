@@ -1252,6 +1252,9 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		switch {
 		case errors.As(err, &ch) && ch.Item.Number != 0:
 			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; here it is as it is now.", it.Number, changedWords(it, ch.Item)))
+			if len(ch.What) > 0 {
+				say("    ", "Detail: "+strings.Join(ch.What, "; "))
+			}
 			return fresh, true
 		case errors.As(err, &ch):
 			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", it.Number, changedWords(it, ch.Item)))

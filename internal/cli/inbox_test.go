@@ -232,7 +232,7 @@ func TestInbox(t *testing.T) {
 	}
 	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r")
 	g.Hook = nil
-	if code != 0 || !strings.Contains(out, "  > a\n  #2 changed on GitHub since you opened it: its title was edited. Nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
+	if code != 0 || !strings.Contains(out, "  > a\n  #2 changed on GitHub since you opened it: its title was edited. Nothing was written; here it is as it is now.\n    Detail: its title changed\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
 		len(g.Writes()) != 0 {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
 	}
@@ -2371,7 +2371,7 @@ func TestInboxLoginScreen(t *testing.T) {
 // refuse. Each case changes GitHub after the card is drawn, then acts on it
 // in the full-screen inbox.
 func TestInboxReread(t *testing.T) {
-	var log string // the session log of the last act (each write's output), which runs with --verbose
+	var log, note string // the session log of the last act (each write's output), which runs with --verbose, and its card's line
 	act := func(t *testing.T, key string, change func(g *fake.GitHub), keys ...string) (status string, card InboxItem, writes []fake.Request) {
 		t.Helper()
 		g := inboxRepo(t)
@@ -2392,7 +2392,7 @@ func TestInboxReread(t *testing.T) {
 			change(g)
 			g.Mu.Unlock()
 			teaKeys(m, keys...)
-			status, log = m.status, strings.Join(m.log, "\n")
+			status, log, note = m.status, strings.Join(m.log, "\n"), m.notes[key]
 			if i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.key() == key }); i >= 0 {
 				card = m.items[i]
 			}
@@ -2412,6 +2412,16 @@ func TestInboxReread(t *testing.T) {
 		g.Issues[n].Body, g.Issues[n].UpdatedAt = strings.Replace(g.Issues[n].Body, from, to, 1), "2026-10-13T00:00:00Z"
 	}
 	ship := []string{"2", "enter", "enter"} // ship is not the capped card's recommendation, so it asks again
+	// refused: the card says in plain words that it changed (#845's line),
+	// and d and the log carry what exactly changed (#850's words).
+	refused := func(t *testing.T, status string, card InboxItem, writes []fake.Request, words, what string) {
+		t.Helper()
+		if !strings.Contains(status, "changed on GitHub; nothing was written") || !strings.Contains(note, "changed on GitHub since you opened it: "+words+". Nothing was written") ||
+			!strings.Contains(strings.Join(card.Details, "\n"), "What changed: ") || !strings.Contains(strings.Join(card.Details, "\n"), what) ||
+			!strings.Contains(log, "changed since read: #") || !strings.Contains(log, what) || len(writes) != 0 {
+			t.Errorf("refused: status %q, card line %q, details %q, writes %v, log:\n%s", status, note, card.Details, writes, log)
+		}
+	}
 
 	t.Run("another title, reason, and counsel, the same head and choice", func(t *testing.T) {
 		status, _, _ := act(t, "capped#9", func(g *fake.GitHub) {
@@ -2426,20 +2436,18 @@ func TestInboxReread(t *testing.T) {
 		}
 	})
 	t.Run("the head moved", func(t *testing.T) {
-		status, _, writes := act(t, "capped#9", func(g *fake.GitHub) {
+		status, card, writes := act(t, "capped#9", func(g *fake.GitHub) {
 			g.Pulls[9].Head.SHA, g.Issues[9].UpdatedAt = strings.Repeat("e", 40), "2026-10-13T00:00:00Z"
 		}, ship...)
-		if !strings.Contains(status, "(the head moved from ddddddd to eeeeeee)") || len(writes) != 0 {
-			t.Errorf("a moved head: status %q, writes %v", status, writes)
-		}
+		refused(t, status, card, writes, "new commits were pushed since you opened it", "the head moved from ddddddd to eeeeeee")
 	})
 	t.Run("the PR names no Story any more", func(t *testing.T) {
 		status, card, writes := act(t, "capped#9", func(g *fake.GitHub) {
 			g.Pulls[9].Body = "a fix"
 			edit(g, 9, "Refs #170", "a fix")
 		}, ship...)
-		if !strings.Contains(status, `("ship PR #9 now (ship's gates still apply)" is no longer offered)`) || len(writes) != 0 ||
-			len(card.Options) != 1 || card.Options[0].Command != "open" || !strings.Contains(card.Counsel, "It names no Story") {
+		refused(t, status, card, writes, "its choices were edited", `"ship PR #9 now (ship's gates still apply)" is no longer offered`)
+		if len(card.Options) != 1 || card.Options[0].Command != "open" || !strings.Contains(card.Counsel, "It names no Story") {
 			t.Errorf("a capped PR with no Story: status %q, options %v, counsel %q, writes %v", status, card.Options, card.Counsel, writes)
 		}
 	})
@@ -2448,42 +2456,34 @@ func TestInboxReread(t *testing.T) {
 	// any choice when it is one-way, and decide does not ask again: a change
 	// to either, or to the option's words, refuses the stale card's choice.
 	t.Run("a Decision's option renamed", func(t *testing.T) {
-		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "**B.** a vendor engine", "**V.** a vendor engine") }, "2", "enter", "enter")
-		if !strings.Contains(status, `the choice now reads "V"`) || len(writes) != 0 {
-			t.Errorf("a reworded option: status %q, writes %v", status, writes)
-		}
+		status, card, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "**B.** a vendor engine", "**V.** a vendor engine") }, "2", "enter", "enter")
+		refused(t, status, card, writes, "its choices were edited", `the choice now reads "V"`)
 	})
 	t.Run("a Decision's option description changed", func(t *testing.T) {
-		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "a vendor engine", "a hosted vendor engine") }, "2", "enter", "enter")
-		if !strings.Contains(status, "(its text changed)") || len(writes) != 0 {
-			t.Errorf("an option's description changed: status %q, writes %v", status, writes)
-		}
+		status, card, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "a vendor engine", "a hosted vendor engine") }, "2", "enter", "enter")
+		refused(t, status, card, writes, "its text was edited", "its text changed")
 	})
 	t.Run("the recommendation moved", func(t *testing.T) {
-		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Recommendation\n\nA", "### Recommendation\n\nB") }, "1", "enter")
-		if !strings.Contains(status, "it is no longer the recommendation") || len(writes) != 0 {
-			t.Errorf("a choice no longer recommended: status %q, writes %v", status, writes)
-		}
+		status, card, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Recommendation\n\nA", "### Recommendation\n\nB") }, "1", "enter")
+		refused(t, status, card, writes, "its choices were edited", "it is no longer the recommendation")
 	})
 	t.Run("the Decision was closed", func(t *testing.T) {
 		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) {
 			g.Issues[2].State, g.Issues[2].UpdatedAt = "closed", "2026-10-13T00:00:00Z"
 		}, "1", "enter")
-		if !strings.Contains(status, "it no longer waits for you") || len(writes) != 0 {
+		if !strings.Contains(status, "changed on GitHub; nothing was written") || !strings.Contains(note, "it no longer waits for you") || len(writes) != 0 {
 			t.Errorf("a closed Decision: status %q, writes %v", status, writes)
 		}
 	})
 	t.Run("the re-read fails", func(t *testing.T) {
 		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { g.Fail, g.FailAfter = "GET /repos/o/r/issues", 0 }, "1", "enter")
-		if !strings.Contains(status, "not done") || len(writes) != 0 {
+		if !strings.HasPrefix(status, "✗ #2 not ") || len(writes) != 0 {
 			t.Errorf("a failed re-read: status %q, writes %v", status, writes)
 		}
 	})
 	t.Run("the Decision is now one-way", func(t *testing.T) {
-		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Reversible\n\ntrue", "### Reversible\n\nfalse") }, "1", "enter")
-		if !strings.Contains(status, "it is now one-way") || len(writes) != 0 {
-			t.Errorf("a Decision now one-way: status %q, writes %v", status, writes)
-		}
+		status, card, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Reversible\n\ntrue", "### Reversible\n\nfalse") }, "1", "enter")
+		refused(t, status, card, writes, "it is now a one-way door", "it is now one-way")
 	})
 }
 

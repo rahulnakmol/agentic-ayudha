@@ -961,6 +961,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 			for i := range m.items {
 				if m.items[i].key() == msg.key {
 					m.items[i] = ch.Item
+					for _, w := range ch.What { // the exact change goes behind the card (d), its plain words on it
+						m.items[i].Details = append(m.items[i].Details, "What changed: "+w)
+					}
 				}
 			}
 		}
@@ -968,6 +971,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 			m.sel, m.armed = 0, false
 		}
 		m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; the card shows it as it is now.", num, changedWords(job.it, ch.Item))
+		if len(ch.What) > 0 {
+			m.log = append(m.log, "  changed since read: #"+strconv.Itoa(num)+": "+strings.Join(ch.What, "; "))
+		}
 		// The rest of its batch was asked for against what the person read;
 		// an item queued on its own still runs.
 		n := len(m.queue)
