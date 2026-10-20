@@ -110,6 +110,23 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	return s, nil
 }
 
+// accountConfigDir is the account's user config directory
+// (~/.config/aayudha), found from the system's user database: XDG_CONFIG_HOME
+// and HOME are the run's environment, which could name a directory in the
+// checkout. It is "" with why when no user config is trusted.
+func (e *Env) accountConfigDir() (dir, skipped string) {
+	home := e.UserHome
+	if home == nil {
+		home = accountHome
+	}
+	if h, err := home(); err != nil {
+		skipped = fmt.Sprintf(" (no user config is trusted: %v)", err)
+	} else if h != "" {
+		dir = filepath.Join(h, ".config", "aayudha")
+	}
+	return dir, skipped
+}
+
 // trustedProof is the [proof] media bucket, the name of its secret, and the
 // retention its lifecycle rule sets, from sources the person controls
 // (#667): the defaults, the account's user config (~/.config/aayudha, from
@@ -124,19 +141,7 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 // would send the person's local secret to it, so a run whose values differ
 // is refused before any secret is read.
 func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, run *config.Loaded) (config.Proof, error) {
-	// The user config is the account's (~/.config/aayudha), found from the
-	// system's user database: XDG_CONFIG_HOME and HOME are the run's
-	// environment, which could name a directory in the checkout.
-	var userDir, skipped string
-	home := e.UserHome
-	if home == nil {
-		home = accountHome
-	}
-	if h, err := home(); err != nil {
-		skipped = fmt.Sprintf(" (no user config is trusted: %v)", err)
-	} else if h != "" {
-		userDir = filepath.Join(h, ".config", "aayudha")
-	}
+	userDir, skipped := e.accountConfigDir()
 	user, err := config.Load(config.Sources{UserDir: userDir})
 	if err != nil {
 		return config.Proof{}, Wrap(ExitUsage, fmt.Errorf("config: %w", err))

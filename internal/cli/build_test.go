@@ -1132,6 +1132,27 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
 		t.Fatalf("a resume past the PR's review budget: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
 	}
+	// A build-ready loop's build spends within dev's committed cap: a run's
+	// larger per_pr_inspect_max does not lift it.
+	var ls BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &ls)
+	ls.Loop = BuildLoop
+	lb, _ := json.Marshal(ls)
+	putLedger(t, bare, BuildLedgerPath(2), string(lb))
+	g.Mu.Lock()
+	g.Refs["heads/dev"] = "d0000000000000000000000000000000000000de"
+	g.RefFiles = map[string]map[string]string{"d0000000000000000000000000000000000000de": {".aayudha/config.toml": "[budget]\nper_pr_inspect_max = " + strconv.FormatFloat(spent+1, 'f', -1, 64) + "\n"}}
+	g.Mu.Unlock()
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "1000"
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("loop\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
+		t.Fatalf("a loop build's review spent past dev's committed cap: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &ls)
+	ls.Loop = ""
+	lb, _ = json.Marshal(ls)
+	putLedger(t, bare, BuildLedgerPath(2), string(lb))
 	// A cap of 0 is no cap to inspect: the session makes no review call at
 	// all, and a review endpoint it would refuse does not stop the push.
 	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "0"

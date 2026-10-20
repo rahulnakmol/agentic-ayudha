@@ -161,6 +161,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if story == 0 {
 		return Errorf(ExitBlocked, "ship #%d: no story (Refs #n in the PR body); ship proves a story", n)
 	}
+	// The body can be edited; a build's branch names its story. When they
+	// differ, ship would prove, and check for a stop, the wrong story.
+	if b := StoryOf("", "", pr.GetHead().GetRef()); b != 0 && b != story {
+		return Errorf(ExitBlocked, "ship #%d: the PR body refers to story #%d, but its branch %s is story #%d's; fix the body's Refs line", n, story, pr.GetHead().GetRef(), b)
+	}
 	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
 	// Who may pass the PR, and how, is the base branch's committed policy at
 	// its tip now (#645), never this run's config: the checkout, the user
@@ -367,6 +372,31 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
 	}
+	// A build-ready loop PR whose builder stopped it after the loop listed it
+	// is not shipped, nor sent to the inbox: the story's status:blocked, read now, beats that list.
+	// The hold is the story's label, never the ledger alone: a build branch of
+	// the story (story/<n>, bug/<n>) is held whatever its state on the ledger
+	// says, or when that state is missing or torn; a loop's recorded branch
+	// with another name is held too.
+	var st BuildState
+	_, rerr := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st)
+	if StoryOf("", "", pr.GetHead().GetRef()) == story || rerr == nil && st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		switch {
+		case !contains(github.IssueLabels(is), "status:blocked"):
+		case st.Loop != "":
+			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
+		default:
+			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so its PR waits for a person to make it Ready again", n, story)
+		}
+	}
+	if rerr != nil {
+		return Wrap(ExitExternal, rerr)
+	}
+
 	if rec.HumanPass.Kind == "" {
 		if !in.Bool("solo-bypass") {
 			if len(why) == 0 {

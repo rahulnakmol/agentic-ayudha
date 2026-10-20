@@ -93,8 +93,11 @@ agent loop, and the binary decides everything except the code:
    live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and
    `status:in-progress`, and the loop's name on `build/<n>/state.json` on the ledger. It cuts the worktree as
    `aayu build <n>` does. A local lock (`.aayudha/state/build-next.lock`) lets one pick at a time run on a machine.
-   The loop's definition and `[build] in_flight` come from dev's tip on GitHub, as merged; a checkout's file,
-   `AAYU_BUILD__IN_FLIGHT`, or `--set` never adds the loop or raises the cap, and a local value may only lower it.
+   The loop's definition, `[build] in_flight`, and a loop build's `[autonomy.budget]` and `[budget]` limits come
+   from the integration branch's tip on GitHub, as merged. That branch is your user config's `[branches] dev`, else
+   the one the default branch's committed config names, else the default branch. A checkout's file, `AAYU_*`, or
+   `--set` never names that branch, adds the loop, or loosens a limit; a local value may only tighten one.
+   `aayu ship` does not merge a loop PR whose story is `status:blocked`, even when the loop listed it.
    Across machines, each pick appends a line to `build/loop-claims.jsonl` on the ledger before it claims; the ledger's
    one history orders concurrent picks, and a pick that comes after another for the same item or the last slot claims
    nothing.

@@ -384,8 +384,7 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	// ship reads its policy: never from the checkout, AAYU_* or --set, which
 	// the agent running the loop controls. A local in_flight may only lower it.
 	owner, name, _ := github.SplitRepo(repo)
-	dev := e.devBranch()
-	pol, err := basePolicy(ctx, c, owner, name, dev)
+	pol, dev, err := e.loopPolicy(ctx, c, owner, name)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -623,6 +622,34 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	p.Reason = "nothing to build: no item in the queue is Ready and free (" + p.Order + ")"
 	return p, 0, nil
+}
+
+// loopPolicy is the policy a loop build is judged by: the committed config
+// at the integration branch's tip. As for proof (#681), that branch is
+// trusted only by name from the account's user config, else the default
+// branch's committed [branches] dev, else the default branch: never from the
+// checkout, AAYU_* or --set, which could name a branch the agent can push.
+func (e *Env) loopPolicy(ctx context.Context, c *github.Client, owner, name string) (*shipPolicy, string, error) {
+	userDir, _ := e.accountConfigDir()
+	user, err := config.Load(config.Sources{UserDir: userDir})
+	if err != nil {
+		return nil, "", Wrap(ExitUsage, fmt.Errorf("config: %w", err))
+	}
+	branch := user.Config.Branches.Dev
+	if branch == "" {
+		r, _, err := c.REST.Repositories.Get(ctx, owner, name)
+		if err != nil {
+			return nil, "", Wrap(ExitExternal, err)
+		}
+		branch = r.GetDefaultBranch()
+		pol, err := basePolicy(ctx, c, owner, name, branch)
+		if err != nil || pol.Config.Branches.Dev == "" || pol.Config.Branches.Dev == branch {
+			return pol, branch, err
+		}
+		branch = pol.Config.Branches.Dev
+	}
+	pol, err := basePolicy(ctx, c, owner, name, branch)
+	return pol, branch, err
 }
 
 // buildUsage is a story's budget use, for a progress comment written outside

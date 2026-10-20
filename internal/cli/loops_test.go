@@ -113,6 +113,30 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	if code, _ := guard("5 8 * * 1-5", "", "--set", "budget.ci_minutes_month=12"); code != ExitBudget {
 		t.Errorf("12 minutes used of 12: exit %d, want %d", code, ExitBudget)
 	}
+	// The build-ready loop's cap is dev's committed one: a run's larger
+	// ci_minutes_month does not lift it.
+	build, err := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), build, 0o644)
+	g.Mu.Lock()
+	g.Refs["heads/dev"] = devTip
+	g.RefFiles = map[string]map[string]string{devTip: {".aayudha/config.toml": "[budget]\nci_minutes_month = 12\n"}}
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env(""), opts, "hook", "loop:"+BuildLoop, "--ci", "--repo", "o/r", "--set", "budget.ci_minutes_month=13"); code != ExitBudget || !strings.Contains(errOut, "ci_minutes_month is 12") {
+		t.Errorf("a run's cap lifted the build-ready loop's committed one: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r", 0
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env(""), opts, "hook", "loop:"+BuildLoop, "--ci", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, "500") {
+		t.Errorf("the build-ready guard when the committed cap cannot be read: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+	_ = os.Remove(filepath.Join(dir, "loops", BuildLoop+".toml"))
 	// The [budget] breaker's pause file stops every host's run.
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "state"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "paused"), []byte("per_day_usd"), 0o644)
