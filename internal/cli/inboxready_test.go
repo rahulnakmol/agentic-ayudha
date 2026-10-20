@@ -275,19 +275,34 @@ func TestInboxNotReady(t *testing.T) {
 		t.Errorf("--list with nine not-ready cards: exit %d:\n%s", code, out)
 	}
 
-	// GitHub still computing whether C can merge (null, unknown): not ready
-	// until it knows.
+	// GitHub still computing whether C can merge (null, unknown), as it is
+	// on the first read after dev moves: the same refresh asks again, and
+	// uses GitHub's answer once it has one (a conflict here).
+	inboxMergeableWait = 0
+	t.Cleanup(func() { inboxMergeableWait = time.Second })
 	g.Mu.Lock()
-	c.Mergeable, c.MergeableState = nil, "unknown"
+	c.Mergeable, c.MergeableState, c.Computing = &no, "dirty", 2
 	g.Mu.Unlock()
 	if items, err = src.gather(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if it := card(items, c.Number); it.Kind != InboxNotReady || ships(it) || it.short() != "GitHub still checking" {
-		t.Errorf("C while GitHub computes its mergeability: %+v", it)
+	if it := card(items, c.Number); it.Kind != InboxNotReady || ships(it) || it.short() != "conflicts with dev" {
+		t.Errorf("C after GitHub computed a conflict on the third read: %+v", it)
+	}
+	// Still unknown after three reads: an unknown state alone never blocks
+	// (Story #796's assumption); its green checks keep it Ready, and ship's
+	// own checks still apply.
+	g.Mu.Lock()
+	c.Mergeable, c.MergeableState, c.Computing = &yes, "blocked", 3
+	g.Mu.Unlock()
+	if items, err = src.gather(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if it := card(items, c.Number); it.Kind != InboxReady || !ships(it) {
+		t.Errorf("C while GitHub still computes after three reads: %+v", it)
 	}
 	g.Mu.Lock()
-	c.Mergeable = &yes
+	c.Computing = 0
 	g.Mu.Unlock()
 
 	// Behind dev: GitHub merges it while dev's rules do not require a PR up

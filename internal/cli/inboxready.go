@@ -30,12 +30,30 @@ type inboxBlock struct {
 	reason, short, next string
 }
 
+// inboxMergeableWait is how long pull waits before it asks GitHub again
+// whether a pull request can merge, while GitHub still computes it.
+var inboxMergeableWait = time.Second
+
 // pull reads pull request n again: its head, its base, and whether GitHub can
-// merge it (the list endpoint carries no mergeable state).
+// merge it (the list endpoint carries no mergeable state). GitHub answers
+// null and unknown for a moment after the base moves, while it works that
+// out, so pull asks up to twice more. An unknown answer alone never blocks a
+// card (Story #796); ship's own checks still apply.
 func (s *inboxSource) pull(ctx context.Context, n int) (*gh.PullRequest, error) {
-	p, _, err := s.c.REST.PullRequests.Get(ctx, s.owner, s.name, n)
-	if err != nil {
-		return nil, err
+	var p *gh.PullRequest
+	for try := 0; ; try++ {
+		var err error
+		if p, _, err = s.c.REST.PullRequests.Get(ctx, s.owner, s.name, n); err != nil {
+			return nil, err
+		}
+		if p.Mergeable != nil || p.GetMergeableState() != "unknown" || try == 2 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(inboxMergeableWait):
+		}
 	}
 	s.pulls[n] = p
 	return p, nil
@@ -262,9 +280,6 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, marks ma
 	case p.Mergeable != nil && !*p.Mergeable || state == "dirty":
 		b = inboxBlock{fmt.Sprintf("can't merge: it conflicts with %s%s.", dev, tookWords), "conflicts with " + dev,
 			fmt.Sprintf("its builder rebases it onto %s; nothing for you yet.", dev)}
-	case p.Mergeable == nil && state == "unknown": // GitHub computes it in the background after the base moves
-		b = inboxBlock{"isn't ready yet: GitHub is still working out whether it can merge.", "GitHub still checking",
-			"nothing for you; the next refresh (or R) reads it again."}
 	case state == "behind" && s.strict: // GitHub merges a PR behind its base unless the rules require it up to date
 		b = inboxBlock{fmt.Sprintf("can't merge yet: it is behind %s, and %s only takes pull requests that are up to date%s.", dev, dev, strings.Replace(tookWords, ", which took", "; "+dev+" took", 1)),
 			"behind " + dev, fmt.Sprintf("its builder updates it from %s; nothing for you yet.", dev)}

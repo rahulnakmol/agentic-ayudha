@@ -114,6 +114,9 @@ type PR struct {
 	// (GET /pulls/{n} only): nil is still being computed.
 	Mergeable      *bool  `json:"mergeable"`
 	MergeableState string `json:"mergeable_state,omitempty"`
+	// Computing is how many more GETs answer mergeable null and state
+	// unknown before the two above, as GitHub does while it computes them.
+	Computing int `json:"-"`
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
@@ -1192,6 +1195,13 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			pr.ChangedFiles = len(pr.Files) + pr.Unlisted
+			if pr.Computing > 0 {
+				pr.Computing--
+				still := *pr
+				still.Mergeable, still.MergeableState = nil, "unknown"
+				reply(200, &still)
+				return
+			}
 			reply(200, pr)
 		case sm[2] == "" && m == "PATCH":
 			if b, ok := body["body"].(string); ok {
