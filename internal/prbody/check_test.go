@@ -186,7 +186,7 @@ func TestPRTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(repo) != string(Template()) {
-		t.Error(".github/pull_request_template.md differs from internal/workitems/pull_request_template.md; copy it")
+		t.Error(".github/pull_request_template.md differs from internal/prbody/pull_request_template.md; copy it")
 	}
 	// Unfilled, the template is empty where the author writes, and its At a
 	// glance table, whose rows look filled, holds placeholders.
