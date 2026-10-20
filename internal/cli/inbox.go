@@ -1263,7 +1263,8 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 			say("  ", mark+why.What)
 			say("  ", why.Changed)
-			say("  ", "Next: "+why.Next)
+			// Plain mode has no d key: its details are the line below.
+			say("  ", "Next: "+strings.NewReplacer("the details (d)", "the Detail line below", "d shows GitHub's own words", "the Detail line below has GitHub's own words").Replace(why.Next))
 			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++

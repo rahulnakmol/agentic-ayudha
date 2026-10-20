@@ -185,6 +185,9 @@ type inboxDone struct {
 	// Warning is a step after the write's main change that did not finish
 	// (a merge that landed before the Story's record failed), in plain words.
 	Warning []string `json:"warning,omitempty"`
+	// Detail is GitHub's own facts behind Warning (the step, its answer, the
+	// commit), shown under it when the person presses d.
+	Detail []string `json:"detail,omitempty"`
 }
 
 // when is a done write's time in the person's words: the clock time today,

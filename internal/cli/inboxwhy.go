@@ -140,6 +140,19 @@ var (
 	reHex           = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 )
 
+// logDetail is a failed write's quit-log line: the error, then the step,
+// GitHub's answer, and the head commit from detail (its Error line repeats
+// the error, so it is left out).
+func logDetail(err string, detail []string) string {
+	out := []string{err}
+	for _, d := range detail {
+		if !strings.HasPrefix(d, "Error: ") {
+			out = append(out, d)
+		}
+	}
+	return strings.Join(out, "; ")
+}
+
 // explainFailure says, in a person's words, why a write on it stopped:
 // stage is the step it stopped at and wrote what GitHub had already answered
 // as written ("may have …" for a write that got no answer).

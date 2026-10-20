@@ -982,7 +982,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		// The merge landed; a step after it did not: done, with a warning.
 		m.state[msg.key] = "done"
 		delete(m.selected, msg.key)
-		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end(), Warning: []string{why.What, "Next: " + why.Next}}
+		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end(), Warning: []string{why.What, "Next: " + why.Next}, Detail: why.Detail}
 		m.done[msg.key] = d
 		sv := &inboxSave{key: msg.key, d: d}
 		m.saves = append(m.saves, sv)
@@ -990,7 +990,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		save = func() tea.Msg { sv.once.Do(func() { record(sv.key, sv.d) }); return nil }
 		b.done++
 		m.status = fmt.Sprintf("✓ #%d is merged; one step after it didn't finish. The card says which.", num)
-		m.log = append(m.log, "  merged, then stopped: #"+strconv.Itoa(num)+": "+msg.err.Error())
+		m.log = append(m.log, "  merged, then stopped: #"+strconv.Itoa(num)+": "+logDetail(msg.err.Error(), why.Detail))
 		m.relayout()
 	case msg.err != nil:
 		_, stage, _, _ := job.w.snapshot()
@@ -1006,7 +1006,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		}
 		did, _ := inboxVerb(job.it, job.a)
 		m.refuse(fmt.Sprintf("✗ #%d not %s; the card says why.", num, did)) // the whole story is on the card, never cut here
-		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
+		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+logDetail(msg.err.Error(), why.Detail))
 		m.readAfter = true // GitHub's view of it likely moved: the card should show it as it is now
 	case m.dryRun: // planned, not written: the item still waits, and no later session sees it done
 		job.w.end()
@@ -2398,6 +2398,12 @@ func (m *inboxModel) actionView(it InboxItem, w, h int) []string {
 	out = append(out, m.style(ui.Muted, cell(fmt.Sprintf("by @%s at %s", d.By, d.when(m.now())), w)))
 	for _, l := range d.Warning { // a step after the main change did not finish
 		out = append(out, m.wrapStyled(ui.Warn, l, w)...)
+	}
+	if m.details && len(d.Detail) > 0 {
+		out = append(out, m.style(ui.Muted, inboxBold.Render("Details")+" (d hides them)"))
+		for _, l := range d.Detail {
+			out = append(out, m.wrapStyled(ui.Muted, "· "+l, w)...)
+		}
 	}
 	out = append(out, "", inboxBold.Render("What changed on GitHub"))
 	if len(d.Wrote) == 0 {

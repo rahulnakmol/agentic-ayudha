@@ -320,6 +320,19 @@ func TestInboxFailureCards(t *testing.T) {
 		if st := m.state[ready(707).key()]; st != "done" {
 			t.Errorf("%dx%d: a merge that landed is %q, not done", size[0], size[1], st)
 		}
+		// Its Next points at d, so d shows the step and GitHub's answer
+		// (inspect's f20bfe0af5 on #845), and the quit log keeps them for
+		// both the landed merge and the refused one (1310a7af21).
+		teaKeys(m, "d")
+		check("merged, then a step failed, details", []string{"Details (d hides them)", "· Stopped at: ", "· GitHub answered 422 to POST /repos/o/r/issues/664/labels", "· Head commit: e51e073"},
+			func(string) string { return "" })
+		teaKeys(m, "d")
+		log := strings.Join(m.log, "\n")
+		for _, want := range []string{"merged, then stopped: #707: ", "GitHub answered 422 to POST /repos/o/r/issues/664/labels", "not done: #661: ", "GitHub answered 405 to PUT /repos/o/r/pulls/661/merge; Head commit: e51e073"} {
+			if !strings.Contains(log, want) {
+				t.Errorf("%dx%d: the quit log has no %q:\n%s", size[0], size[1], want, log)
+			}
+		}
 
 		at(681)
 		teaDrive(m, m.enter())
