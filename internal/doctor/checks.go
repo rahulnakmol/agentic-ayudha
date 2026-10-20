@@ -144,7 +144,10 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 	if slices.Contains(ap.DeviceFor, "all") { // no reply approves anything, so a reachable credential cannot forge one
 		return Result{Status: Pass, Lines: lines, Detail: "approvals: replies are off (`[approvals] device_for = [\"all\"]`), so " + device}
 	}
-	if ex := identity.Exposed(reach, ap.Approvers); len(ex) > 0 {
+	// With no approvers recorded, no reply approves anything either, so an
+	// unconfirmed credential (a git credential helper with nothing stored on a
+	// clean macOS or Windows machine) cannot forge one: the row only warns.
+	if ex := identity.Exposed(reach, ap.Approvers); len(ap.Approvers) > 0 && len(ex) > 0 {
 		var who []string
 		for _, r := range ex {
 			if r.Login == "" {
