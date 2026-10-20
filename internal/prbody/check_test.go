@@ -132,6 +132,8 @@ func TestCheckPRBodyIgnoresLongSentencesOutsideProse(t *testing.T) {
 		"reviewers":    strings.Replace(goodPRBody, "The check reads the level 2 headings.", thirty, 1),
 		"html":         strings.Replace(goodPRBody, "## Why\n", "## Why\n\n<!-- "+thirty+" -->\n", 1),
 		"deviation ok": strings.Replace(goodPRBody, "## For reviewers", "## Deviation from the plan:\n\nThe plan assumed one check. We built two.\n\n## For reviewers", 1),
+		// A details example in code is not the section's details block.
+		"details example in a fence": strings.Replace(goodPRBody, "## For reviewers\n", "## For reviewers\n\n```html\n<details><summary>Example</summary></details>\n```\n", 1),
 		// A comment opener in code is text: it hides nothing after it.
 		"opener in a code span": strings.Replace(goodPRBody, "## Why\n", "Write `<!--` to start a note.\n\n## Why\n", 1),
 		"opener in a fence":     strings.Replace(goodPRBody, "## Why\n", "```html\n<!--\n```\n\n## Why\n", 1),

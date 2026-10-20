@@ -165,11 +165,15 @@ func prName(s string) string { return strings.ToLower(strings.TrimSuffix(strings
 func prFilled(name, text string) bool {
 	text = htmlComment.ReplaceAllString(text, "")
 	if prName(name) == prName(Reviewers) {
-		if i := strings.Index(strings.ToLower(text), "<details"); i >= 0 {
-			text = text[i:]
-			if j := strings.Index(strings.ToLower(text), "</details>"); j >= 0 {
-				text = text[:j]
+		// The <details> block, found outside code: an example in a fence
+		// or a code span is text.
+		masked := strings.ToLower(codeMask(text))
+		if i := strings.Index(masked, "<details"); i >= 0 {
+			end := len(text)
+			if j := strings.Index(masked[i:], "</details>"); j >= 0 {
+				end = i + j
 			}
+			text = text[i:end]
 		} else {
 			text = trailerLine.ReplaceAllString(text, "")
 		}
