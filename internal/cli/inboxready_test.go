@@ -251,11 +251,13 @@ func TestInboxNotReady(t *testing.T) {
 		t.Errorf("--list --json card for A: %+v", it)
 	}
 	// A Not ready yet card waits on its builder: the home screen (and so
-	// aayu next) counts in the inbox only what needs a person (C), not A or B.
+	// aayu next) counts in the inbox, and as waiting for a person, only what
+	// needs one (C), never A or B, so it never suggests shipping them.
 	dir := gitInit(t, "dev", map[string]string{".aayudha/config.toml": "version = 1\n"})
 	var home journey.State
 	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1}, "--json", "--repo", "o/r"); code != 0 ||
-		json.Unmarshal([]byte(out), &home) != nil || len(home.Inbox) != 1 || home.Inbox[0].Number != c.Number {
+		json.Unmarshal([]byte(out), &home) != nil || len(home.Inbox) != 1 || home.Inbox[0].Number != c.Number ||
+		len(home.AwaitingHuman) != 1 || home.AwaitingHuman[0].Number != c.Number {
 		t.Errorf("home with two not-ready cards: exit %d: %s", code, out)
 	}
 	// --list stays about a screen: past six not-ready cards it counts the rest.

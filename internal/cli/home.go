@@ -141,9 +141,11 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	if l, err := e.Config(); err == nil {
 		id = l.Config.Identity
 	}
+	notReady := map[int]bool{} // PRs a Not ready yet card says only their builder can fix
 	if items, err := gatherInbox(ctx, c, repo, e.devBranch(), id); err == nil {
 		for _, it := range items {
 			if it.waiting() { // a Not ready yet card waits on its builder, not a person
+				notReady[it.Number] = true
 				continue
 			}
 			s.Inbox = append(s.Inbox, journey.Item{Number: it.Number, Title: it.Title, Detail: it.Kind})
@@ -157,7 +159,7 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	checked := 0
 	for _, pr := range prs {
 		story := prStory(pr)
-		if pr.GetDraft() || story == 0 || checked == 10 {
+		if pr.GetDraft() || story == 0 || checked == 10 || notReady[pr.GetNumber()] {
 			continue
 		}
 		checked++
