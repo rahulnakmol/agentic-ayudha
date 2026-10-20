@@ -575,6 +575,48 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	if !refused || !strings.Contains(out, "it conflicts with dev, so GitHub cannot merge it; nothing was merged") {
 		t.Fatalf("ship of a PR that came to conflict with dev:\n%s", out)
 	}
+	// Bug #799: GitHub has not worked out whether A can merge, and still
+	// has not when asked again. Ship posts no bypass and merges nothing.
+	mergeableWait = 0
+	t.Cleanup(func() { mergeableWait = time.Second })
+	g.Mu.Lock()
+	g.Pulls[prA].Computing = 1000
+	g.Mu.Unlock()
+	_, out, _ = runIn(t, agent, opts, "s a q", "inbox", "--repo", "o/r")
+	g.Mu.Lock()
+	unknown := !g.Pulls[prA].Merged && !slices.ContainsFunc(g.Issues[prA].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, SoloBypassPrefix) })
+	g.Pulls[prA].Computing = 0
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if !unknown || !strings.Contains(out, "GitHub has not worked out yet whether it can merge; your Solo-mode bypass was not posted, and nothing was merged") {
+		t.Fatalf("ship while GitHub computes whether the PR can merge:\n%s", out)
+	}
+	// Bug #799: A can merge when ship reads it, then dev takes another PR
+	// before the merge, and GitHub refuses it. The bypass ship posted for
+	// the merge is deleted again.
+	yes, no := true, false
+	g.Mu.Lock()
+	g.Pulls[prA].Mergeable, g.Pulls[prA].MergeableState = &yes, "clean"
+	g.Pulls[prB].Mergeable, g.Pulls[prB].MergeableState = &yes, "clean"
+	posted := 0
+	g.Hook = func(method, path string) {
+		switch {
+		case method == "POST" && path == "/repos/o/r/issues/"+strconv.Itoa(prA)+"/comments":
+			posted++
+		case method == "PUT" && path == "/repos/o/r/pulls/"+strconv.Itoa(prA)+"/merge":
+			g.Pulls[prA].Mergeable, g.Pulls[prA].MergeableState = &no, "dirty"
+		}
+	}
+	g.Mu.Unlock()
+	_, out, _ = runIn(t, agent, opts, "s a q", "inbox", "--repo", "o/r")
+	g.Mu.Lock()
+	cleaned := posted == 1 && !g.Pulls[prA].Merged && !slices.ContainsFunc(g.Issues[prA].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, SoloBypassPrefix) })
+	g.Pulls[prA].Mergeable, g.Pulls[prA].MergeableState, g.Hook = &yes, "clean", nil
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if !cleaned || !strings.Contains(out, "not mergeable") {
+		t.Fatalf("a merge GitHub refused after the bypass was posted (posted %d):\n%s", posted, out)
+	}
 	// The full-screen inbox: each Ready to ship card with Drona's counsel,
 	// shipped with Enter.
 	var cards []string

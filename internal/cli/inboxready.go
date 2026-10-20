@@ -30,30 +30,34 @@ type inboxBlock struct {
 	reason, short, next string
 }
 
-// inboxMergeableWait is how long pull waits before it asks GitHub again
+// mergeableWait is how long pullMergeable waits before it asks GitHub again
 // whether a pull request can merge, while GitHub still computes it.
-var inboxMergeableWait = time.Second
+var mergeableWait = time.Second
 
-// pull reads pull request n again: its head, its base, and whether GitHub can
-// merge it (the list endpoint carries no mergeable state). GitHub answers
+// pullMergeable reads pull request n: its head, its base, and whether GitHub
+// can merge it (the list endpoint carries no mergeable state). GitHub answers
 // null and unknown for a moment after the base moves, while it works that
-// out, so pull asks up to twice more. An unknown answer alone never blocks a
-// card (Story #796); ship's own checks still apply.
-func (s *inboxSource) pull(ctx context.Context, n int) (*gh.PullRequest, error) {
-	var p *gh.PullRequest
+// out, so pullMergeable asks up to twice more; its Mergeable may still be nil.
+func pullMergeable(ctx context.Context, c *github.Client, owner, name string, n int) (*gh.PullRequest, error) {
 	for try := 0; ; try++ {
-		var err error
-		if p, _, err = s.c.REST.PullRequests.Get(ctx, s.owner, s.name, n); err != nil {
-			return nil, err
-		}
-		if p.Mergeable != nil || p.GetMergeableState() != "unknown" || try == 2 {
-			break
+		p, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+		if err != nil || p.Mergeable != nil || p.GetMergeableState() != "unknown" || try == 2 {
+			return p, err
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(inboxMergeableWait):
+		case <-time.After(mergeableWait):
 		}
+	}
+}
+
+// pull reads pull request n again (pullMergeable). An unknown answer alone
+// never blocks a card (Story #796); ship's own checks still apply.
+func (s *inboxSource) pull(ctx context.Context, n int) (*gh.PullRequest, error) {
+	p, err := pullMergeable(ctx, s.c, s.owner, s.name, n)
+	if err != nil {
+		return nil, err
 	}
 	s.pulls[n] = p
 	return p, nil

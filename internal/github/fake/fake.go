@@ -1250,6 +1250,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
 				return
 			}
+			if pr.Mergeable != nil && !*pr.Mergeable {
+				reply(405, map[string]any{"message": "Pull Request is not mergeable"})
+				return
+			}
 			pr.Merged, pr.State, pr.MergedAt = true, "closed", time.Now().UTC()
 			pr.MergeCommitSHA = g.nextSHA(body)
 			if is := g.Issues[pr.Number]; is != nil {
@@ -1373,6 +1377,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			perm = "write" // GitHub reports maintain as write, with role_name maintain
 		}
 		reply(200, map[string]any{"permission": perm, "role_name": role, "user": map[string]any{"login": login}})
+	case reComment.MatchString(p) && m == "DELETE":
+		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
+		for _, is := range g.Issues {
+			if i := slices.IndexFunc(is.Comments, func(c *Comment) bool { return c.ID == id }); i >= 0 {
+				is.Comments = slices.Delete(is.Comments, i, i+1)
+				w.WriteHeader(204)
+				return
+			}
+		}
+		notFound()
 	case reComment.MatchString(p) && (m == "PATCH" || m == "GET"):
 		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
 		for _, is := range g.Issues {
