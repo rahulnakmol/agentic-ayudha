@@ -151,7 +151,7 @@ func Snapshot(res Result) string {
 	b.WriteString(SnapshotMarker + "\n### Ready snapshot\n\n| | |\n|---|---|\n")
 	fmt.Fprintf(&b, "| Schema | work items v%d, %s |\n", workitems.SchemaVersion, res.Type)
 	fmt.Fprintf(&b, "| Body hash | `%s` |\n", res.BodyHash)
-	cg := "n/a (no Completion Goal on this type)"
+	cg := "n/a (this type has no Completion Goal)"
 	if res.CompletionGoalHash != "" {
 		cg = "`" + res.CompletionGoalHash + "`"
 	}
@@ -169,7 +169,7 @@ func Snapshot(res Result) string {
 			fmt.Fprintf(&b, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
 		}
 	}
-	b.WriteString("\nEditing the body after Ready removes `status:ready` (Ready guard); run `aayu ready` again to re-snapshot.\n")
+	b.WriteString("\nAn edit to the body after Ready removes `status:ready` (the Ready guard). Run `aayu ready` again to make a new snapshot.\n")
 	return b.String()
 }
 

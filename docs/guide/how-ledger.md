@@ -119,7 +119,7 @@ A Ready snapshot, from `git show origin/ledger:specs/131/ready.md`, trimmed:
 | Written by | rahulnakmol (`identity:human-fallback`) |
 | Ledger | `specs/131/ready.md` |
 …
-Editing the body after Ready removes `status:ready` (Ready guard); run `aayu ready` again to re-snapshot.
+An edit to the body after Ready removes `status:ready` (the Ready guard). Run `aayu ready` again to make a new snapshot.
 ```
 
 A release record, from `git show origin/ledger:releases/144/rolling.json`, trimmed:

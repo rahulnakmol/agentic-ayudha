@@ -38,9 +38,24 @@ var (
 	hostTrailer  = regexp.MustCompile(`(?m)^Aayudha-Host:\s*(\S+)\s*$`)
 	// effortTrailer is the builder's reasoning effort, one token, written on
 	// the line after Aayudha-Model (AAYU_EFFORT).
-	effortTrailer = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
-	storyBranch   = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
+	effortTrailer   = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
+	delegateTrailer = regexp.MustCompile(`(?m)^Aayudha-Delegate:\s*(\S+)\s*$`)
+	storyBranch     = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
 )
+
+// declared is the builder declaration in a PR body or commit message, as
+// counsel reads it: every Aayudha-Model value, and the first Aayudha-Host
+// value (named is false without one). Aayudha-Effort is no model, so it is
+// not read here.
+func declared(text string) (models []string, host string, named bool) {
+	for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
+		models = append(models, m[1])
+	}
+	if h := hostTrailer.FindStringSubmatch(text); h != nil {
+		return models, h[1], true
+	}
+	return models, "", false
+}
 
 // VerifyResult is what verify reports.
 type VerifyResult struct {

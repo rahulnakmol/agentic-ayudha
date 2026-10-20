@@ -285,7 +285,7 @@ func InspectVoice(assets fs.FS) string {
 	}
 	return fmt.Sprintf("Write the summary as %s. Voice: %s Pushing back: %s\n\n%s\n\n"+
 		"The persona shapes the summary only. Findings stay in the reply's schema, one per problem with its quote, and the deterministic floors stay facts no voice can soften.",
-		p.Heading(), p.Voice, p.PushBack, seats.EvidenceRule)
+		p.Heading(), p.Voice, p.PushBack, seats.EvidenceRule+"\n\n"+seats.WritingRule)
 }
 
 func runInspect(ctx context.Context, e *Env, in Values) error {
@@ -450,9 +450,18 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, dc.claims, dc.hosts, lane)
 	// A docs-only PR merges without a review, whichever backend reviews.
+	// Its description is still checked (prBodyFloor).
 	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
-		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
-			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
+		res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
+			Disposition: inspect.Skipped, Summary: "This PR changes only documentation. A documentation PR merges without a review."}
+		e.prBodyFloor(&res, pr, nil)
+		if err := e.emitInspect(res, []string{builder.Note()}); err != nil {
+			return err
+		}
+		if res.Disposition == inspect.Fix {
+			return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
+		}
+		return nil
 	}
 	if reviewErr != nil {
 		return Wrap(ExitUsage, reviewErr)
@@ -615,12 +624,14 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// As in the app path, a cached review's rung follows the builder as
-	// declared now, and a changed label rewrites the record ship reads.
-	relabel := false
+	// declared now, and a changed label rewrites the record ship reads, as
+	// does a change in what the PR description check blocks.
+	relabel := e.prBodyFloor(&res, pr, prev.Result)
 	if st.Result != nil {
-		relabel = st.Result.Review != res.Review
+		relabel = relabel || st.Result.Review != res.Review
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
+		keepFloor(&st, res)
 	}
 	switch {
 	case errors.Is(err, inspect.ErrNoPack):

@@ -398,7 +398,21 @@ func TestDelegateLocalFallback(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(errOut, "Codex's cloud agent is not connected") || !strings.Contains(errOut, "add `--local`") {
 		t.Fatalf("no silent fallback to the CLI: %d %s", code, errOut)
 	}
+	// From an Amp thread, a delegated checkpoint names its receiver, never the
+	// thread's own model: aayu does not ask Amp which model the thread ran.
+	env["AMP_THREAD_ID"] = "T-1"
+	probe := opts.Exec
+	var asked []string
+	opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+		if name == "amp" {
+			asked = append(asked, strings.Join(args, " "))
+		}
+		return probe(ctx, dir, name, args...)
+	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if len(asked) > 0 {
+		t.Errorf("a delegated build asked Amp for the thread's model: %q", asked)
+	}
 	wt := delegate.Worktree(dir, 2, "codex", 2)
 	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" {
 		t.Fatalf("local: %d %+v %s", code, res, errOut)
@@ -419,8 +433,8 @@ func TestDelegateLocalFallback(t *testing.T) {
 	g.Mu.Lock()
 	p := g.Pulls[res.PR]
 	g.Mu.Unlock()
-	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "Built by codex (local") ||
-		!strings.Contains(p.Body, "## What I proved") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
+	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "codex (local, `aayu build --delegate`) built this") ||
+		!strings.Contains(p.Body, "codex's own check, quoted") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
 		t.Fatalf("commit:\n%s\nPR body:\n%s\nproved: %q", msg, p.Body, res.Delegation.Proved)
 	}
 	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list-2"); pushed != git(t, wt, "rev-parse", "HEAD") {

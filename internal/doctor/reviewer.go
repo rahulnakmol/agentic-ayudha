@@ -176,7 +176,7 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	switch {
 	case c.Rung == inspect.RungA:
 	case b.Unknown():
-		lines = append(lines, "move up: no reviewer can be shown to differ from an unknown builder; run doctor in the agent host (or pass --host), and declare Aayudha-Host and Aayudha-Model lines on PRs built outside aayu build")
+		lines = append(lines, "move up: no reviewer can be shown to differ from an unknown builder; run doctor in the agent host (or pass --host), and declare Aayudha-Host and Aayudha-Model lines on PRs built outside aayu build (and an Aayudha-Effort line only when the host says its effort)")
 	case len(up) > 0:
 		lines = append(lines, "move up (free): "+strings.Join(up, "; "))
 	}

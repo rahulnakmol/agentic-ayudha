@@ -480,12 +480,47 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[6].Labels = slices.DeleteFunc(g.Issues[6].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
 	g.Mu.Unlock()
+	// ship reads the approver from the base branch's config, never --set.
+	g.Mu.Lock()
+	if g.Files == nil {
+		g.Files = map[string]string{}
+	}
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"rahulnakmol\"\n"
+	g.Mu.Unlock()
 	for _, pr := range []int{prA, prB} {
 		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
 		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {
 			t.Fatalf("agent ship #%d: %d %s", pr, code, errOut)
 		}
+		// The comment and the refusal name the configured approver, never a role.
+		g.Mu.Lock()
+		named := slices.ContainsFunc(g.Issues[pr].Comments, func(c *fake.Comment) bool {
+			return strings.HasPrefix(c.Body, ReadyToShipMarker) && strings.Contains(c.Body, "@rahulnakmol ships it from `aayu inbox`")
+		})
+		g.Mu.Unlock()
+		if !named || !strings.Contains(errOut, "the `aayu inbox` of @rahulnakmol") {
+			t.Fatalf("agent ship #%d does not name the approver: %s", pr, errOut)
+		}
 	}
+	// The author's own review never counts: when the author is the only
+	// approver, the comment offers only the inbox, never a review.
+	g.Mu.Lock()
+	author := g.Pulls[prA].User.Login
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"" + author + "\"\n"
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(prA), "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("agent ship #%d with the author as approver: %d %s", prA, code, errOut)
+	}
+	g.Mu.Lock()
+	for _, c := range g.Issues[prA].Comments {
+		if c.User.Login != "mallory" && strings.HasPrefix(c.Body, ReadyToShipMarker) && (!strings.Contains(c.Body, "@"+author+" ships it from `aayu inbox`.") || strings.Contains(c.Body, "approves the head")) {
+			t.Errorf("the author as the only approver is asked to review: %s", c.Body)
+		}
+	}
+	g.Mu.Unlock()
+	g.Mu.Lock()
+	delete(g.Files, ".aayudha/config.toml")
+	g.Mu.Unlock()
 	g.Mu.Lock()
 	// PR B had hit inspect's cycle cap before its gate went green: ship's
 	// Ready to ship on the current head stands over the cap.

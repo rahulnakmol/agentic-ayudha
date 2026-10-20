@@ -123,3 +123,49 @@ func CopilotSelector(id string) bool {
 	}
 	return false
 }
+
+// modelNames are the display names of the model IDs aayu knows, keyed by the
+// IDs in lower case. Gateway and Copilot spell Claude IDs differently (a dash
+// against a dot), so both spellings are listed.
+var modelNames = map[string]string{
+	ModelClaudeOpus:     "Claude Opus 5.5",
+	CopilotClaudeOpus:   "Claude Opus 5.5",
+	ModelClaudeSonnet:   "Claude Sonnet 5.5",
+	CopilotClaudeSonnet: "Claude Sonnet 5.5",
+	ModelClaudeHaiku:    "Claude Haiku 5.5",
+	ModelClaudeFable:    "Claude Fable 5.1",
+	ModelGPTSol:         "GPT-6.1 Sol", // CopilotGPTSol is the same ID
+	ModelGPTAstra:       "GPT-6 Astra",
+	ModelGrok:           "Grok 4.7",
+	ModelGrokPrior:      "Grok 4.6",
+	ModelGemini:         "Gemini 3.8 Flash",
+	CopilotGeminiArgon:  "Gemini 4 Argon",
+	ModelComposer:       "Composer 2.5",
+}
+
+// ModelName is a model ID's display name, or the ID unchanged when aayu does
+// not know it: a name is never guessed from the ID's shape.
+func ModelName(id string) string {
+	if n, ok := modelNames[strings.ToLower(id)]; ok {
+		return n
+	}
+	return id
+}
+
+// BuilderName renders a builder's declaration for a reader: the models'
+// display names joined with " and ", then the effort, as in "Claude Opus 5.5,
+// medium effort". With no models it says the model was not reported.
+func BuilderName(models []string, effort string) string {
+	names := make([]string, len(models))
+	for i, m := range models {
+		names[i] = ModelName(m)
+	}
+	s := strings.Join(names, " and ")
+	if s == "" {
+		s = "model not reported"
+	}
+	if effort != "" {
+		s += ", " + effort + " effort"
+	}
+	return s
+}
