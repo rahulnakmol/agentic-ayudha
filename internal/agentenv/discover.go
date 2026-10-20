@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -46,6 +47,16 @@ var (
 	lfsAttr       = regexp.MustCompile(`filter=lfs`)
 	lfsCheckout   = regexp.MustCompile(`(?m)^\s*lfs:\s*true`)
 	rustChannel   = regexp.MustCompile(`(?m)^\s*channel\s*=\s*"([^"]+)"`)
+	moduleLine    = regexp.MustCompile(`(?m)^module\s+(\S+)`)
+	pluginAAYU    = regexp.MustCompile(`(?m)^const AAYU = ("[^"\n]*")\r?$`)
+	pluginVersion = regexp.MustCompile(`(?m)^const VERSION = ("[^"\n]*")\r?$`)
+	releaseNumber = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+)
+
+// aayu's own module, and the Amp plugin `aayu install` commits (hosts.AmpPlugin).
+const (
+	aayuModule = "github.com/rahulnakmol/agentic-ayudha"
+	ampPlugin  = ".amp/plugins/aayudha.ts"
 )
 
 // baseline packages the script always ensures; CI lines naming them add nothing.
@@ -82,6 +93,7 @@ func Discover(root string) (Discovery, error) {
 	d.node()
 	d.python()
 	d.rust()
+	d.aayu()
 	d.services()
 	d.envFile()
 	d.systemPackages()
@@ -181,6 +193,30 @@ func (d *discoverer) goModule() {
 			d.service(dep.svc, "go.mod requires "+dep.mod)
 		}
 	}
+}
+
+// aayu puts aayu itself in the environment, so loops and hooks find it (Bug
+// #819): built from the checkout in aayu's own repository, else the release
+// the committed Amp plugin was installed by, also at the path it calls.
+func (d *discoverer) aayu() {
+	if m := moduleLine.FindSubmatch(d.read("go.mod")); m != nil && string(m[1]) == aayuModule && d.exists("cmd/aayudha") {
+		d.spec.Tools = append(d.spec.Tools, Tool{Name: "aayu", Want: "source", Via: "source", Evidence: "go.mod module " + aayuModule + " (cmd/aayudha)"})
+		return
+	}
+	b := d.read(ampPlugin)
+	var v, p string
+	if m := pluginVersion.FindSubmatch(b); m == nil || json.Unmarshal(m[1], &v) != nil {
+		return
+	}
+	if !releaseNumber.MatchString(v) {
+		d.spec.Notes = append(d.spec.Notes, fmt.Sprintf("%s was installed by aayu %s, which is not a release: setup does not install aayu", ampPlugin, v))
+		return
+	}
+	t := Tool{Name: "aayu", Want: v, Version: v, Via: "release", Evidence: fmt.Sprintf("%s:%d (VERSION %q)", ampPlugin, lineOf(b, pluginVersion), v)}
+	if m := pluginAAYU.FindSubmatch(b); m != nil && json.Unmarshal(m[1], &p) == nil && path.IsAbs(p) && (path.Base(p) == "aayudha" || path.Base(p) == "aayu") {
+		t.Path = p
+	}
+	d.spec.Tools = append(d.spec.Tools, t)
 }
 
 func (d *discoverer) node() {

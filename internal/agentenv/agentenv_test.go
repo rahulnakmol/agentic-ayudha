@@ -330,6 +330,59 @@ func TestGenerateKeepsTheOwnersKeys(t *testing.T) {
 	}
 }
 
+// Setup puts aayu on PATH (Bug #819): aayu's own repository builds it from the
+// checkout; a product repository gets the release its committed Amp plugin
+// expects, pinned to checksums.txt, also at the path the plugin calls.
+func TestSetupInstallsAayu(t *testing.T) {
+	own := pinned(t, repo(t, map[string]string{"go.mod": "module " + aayuModule + "\n\ngo 1.25.0\n", "cmd/aayudha/main.go": "package main\n"}), nil)
+	if a := own.Tool("aayu"); a == nil || a.Via != "source" {
+		t.Fatalf("aayu's own repository: aayu = %+v, want a build from the checkout", a)
+	}
+	other := pinned(t, repo(t, map[string]string{"go.mod": "module example.com/m\n\ngo 1.25.0\n", "cmd/aayudha/main.go": "package main\n"}), nil)
+	if a := other.Tool("aayu"); a != nil {
+		t.Errorf("another module with a cmd/aayudha: aayu = %+v, want none", a)
+	}
+	setup, check := setupScript(own, own.Fingerprint()), checkScript(own, own.Fingerprint())
+	build := `CGO_ENABLED=0 go build -trimpath -o "$AAYU_DIR/aayudha" ./cmd/aayudha`
+	for _, want := range []string{build, `"vcs.revision=$(git rev-parse HEAD) vcs.modified=false"`, `ln -sf aayudha "$AAYU_DIR/aayu"`, `path_first "$AAYU_DIR"`} {
+		if !strings.Contains(setup, want) {
+			t.Errorf("setup lacks %q", want)
+		}
+	}
+	if strings.Index(setup, build) < strings.Index(setup, "go mod download") || !strings.Contains(check, "\naayu version\n") {
+		t.Error("setup must build aayu after the Go dependencies, and check must run it")
+	}
+
+	plugin := "// Written by `aayu install`\nconst AAYU = \"/home/alice/.local/bin/aayudha\"\nconst VERSION = \"0.2.0\"\n"
+	checksums := sum('7') + "  aayudha_0.2.0_darwin_arm64.tar.gz\n" + sum('8') + "  aayudha_0.2.0_linux_amd64.tar.gz\n" + sum('9') + "  aayudha_0.2.0_linux_arm64.tar.gz\n"
+	d, err := Discover(repo(t, map[string]string{ampPlugin: plugin}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := d.Spec
+	if err := Resolve(context.Background(), &s, fakeFetch(map[string]string{aayuReleases + "0.2.0/checksums.txt": checksums})); err != nil {
+		t.Fatal(err)
+	}
+	a := s.Tool("aayu")
+	if a == nil || a.Version != "0.2.0" || a.Path != "/home/alice/.local/bin/aayudha" || a.SHA256["amd64"] != sum('8') || a.SHA256["arm64"] != sum('9') || !strings.Contains(a.Evidence, ampPlugin+":3") {
+		t.Fatalf("product repository: aayu = %+v, want 0.2.0 from the plugin at its path, pinned to the linux lines of checksums.txt", a)
+	}
+	setup, check = setupScript(s, s.Fingerprint()), checkScript(s, s.Fingerprint())
+	for _, want := range []string{"AAYU_VERSION=0.2.0", "amd64) sum=" + sum('8'), "arm64) sum=" + sum('9'),
+		`fetch "https://github.com/rahulnakmol/agentic-ayudha/releases/download/v$AAYU_VERSION/aayudha_${AAYU_VERSION}_linux_$ARCH.tar.gz" "$sum"`,
+		"plugin_aayu='/home/alice/.local/bin/aayudha'", `ln -sf aayudha "$AAYU_DIR/aayu"`, `path_first "$AAYU_DIR"`} {
+		if !strings.Contains(setup, want) {
+			t.Errorf("setup lacks %q", want)
+		}
+	}
+	if !strings.Contains(check, `expect aayu "$(aayu version)" "aayu 0.2.0"`) {
+		t.Errorf("check does not expect aayu 0.2.0:\n%s", check)
+	}
+	if dev, _ := Discover(repo(t, map[string]string{ampPlugin: strings.Replace(plugin, "0.2.0", "0.0.0-dev", 1)})); dev.Spec.Tool("aayu") != nil {
+		t.Error("a plugin installed by a dev build has no release to install, want no aayu step")
+	}
+}
+
 func TestStatus(t *testing.T) {
 	root := repo(t, goNode)
 	s := pinned(t, root, map[string]Answer{"hosts": {Value: "amp,cursor,claude", Source: "stated"}})
