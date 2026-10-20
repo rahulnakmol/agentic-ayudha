@@ -147,6 +147,23 @@ func TestInbox(t *testing.T) {
 			t.Errorf("inbox output lacks %q:\n%s", want, out)
 		}
 	}
+	// Bug #7 is closed on GitHub while the set is tidied: nothing is written
+	// for it, so the set was not cleared and nothing cheers (CodeRabbit
+	// r4328514878 on #851).
+	g2 := inboxRepo(t)
+	seen := 0
+	g2.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			if seen++; seen == 3 { // the read before #7's write: #5's was the second
+				g2.Issues[7].State, g2.Issues[7].UpdatedAt = "closed", "2026-10-12T10:00:00Z"
+			}
+		}
+	}
+	_, changed, _ := runIn(t, newEnv(), Options{GitHubAPI: g2.URL(), GitHubGap: -1, IsTerminal: tty, Assets: aayudha.Assets}, "s s s C y", "inbox", "--repo", "o/r")
+	g2.Hook = nil
+	if !strings.Contains(changed, "#7 changed on GitHub since you opened it") || strings.Contains(changed, "Job well done") {
+		t.Errorf("a set with an item that changed on GitHub cheers:\n%s", changed)
+	}
 	for _, not := range []string{"#10:", "#4:", "#11:", "Accept B now"} {
 		if strings.Contains(out, not) {
 			t.Errorf("inbox shows %s, which is not a human-only step or not counsel:\n%s", not, out)

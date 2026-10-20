@@ -1278,6 +1278,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		return it, false
 	}
 	tidied := false
+	tidyN := 0 // how many tidyAll wrote for
 	tidyAll := func() (bool, error) {
 		var todo []InboxItem
 		var lines []string
@@ -1299,7 +1300,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 			return false, err
 		}
-		tidied = true
+		tidied, tidyN = true, len(todo)
 		for _, it := range todo {
 			apply(it, *it.recommended())
 		}
@@ -1440,8 +1441,10 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 				break tidy
 			case 'a', 'A', 'C', '\r', '\n', '1':
 				ok, err := tidyAll()
-				if ok && failed == failedBefore && done > before && (left() > 0 || skipped > 0 || failed > 0) { // a set cleared; inbox zero says its own
-					e.cheer(w, cheerFor(len(house), false))
+				// A set cleared: every item it tidied was done, none failed or
+				// changed on GitHub first. Inbox zero says its own.
+				if ok && failed == failedBefore && done-before == tidyN && (left() > 0 || skipped > 0 || failed > 0) {
+					e.cheer(w, cheerFor(tidyN, false))
 				}
 				if err != nil || ok {
 					break tidy
