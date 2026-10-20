@@ -1,0 +1,1 @@
+{"id":"04aa17da91","pr":681,"file":"internal/cli/proof.go","category":"security","title":"macOS release build trusts $HOME as the proof user config","reason":"false premise: cgo-off darwin os/user uses libSystem getpwuid_r (cgo_lookup_syscall.go), no HOME fallback; lookup_stubs.go excludes darwin and windows","by":"rahulnakmol","at":"2026-10-20T11:09:03Z"}
