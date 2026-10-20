@@ -280,6 +280,16 @@ func TestScope(t *testing.T) {
 		}
 		return 0
 	}
+	// Two open milestones with the next release's title: scope does not guess which release it is.
+	g.Mu.Lock()
+	g.Milestones = append(g.Milestones, &fake.Milestone{Number: 13, Title: "v0.4.0", State: "open"})
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != ExitBlocked || !strings.Contains(out, "two open milestones") || milestone(6) != "" {
+		t.Fatalf("--to next with two open v0.4.0 milestones: exit %d, #6 in %q: %s", code, milestone(6), out)
+	}
+	g.Mu.Lock()
+	g.Milestones = g.Milestones[:len(g.Milestones)-1]
+	g.Mu.Unlock()
 	if code, _, out := scopeRun(agent, "--assign", "6", "--to", "next"); code != 0 || msNumber(6) != 3 || !slices.Contains(g.LabelNames(6), "horizon:next") || slices.Contains(g.LabelNames(6), "horizon:now") {
 		t.Fatalf("--to next: exit %d, %q %v: %s", code, milestone(6), g.LabelNames(6), out)
 	}
