@@ -31,6 +31,14 @@ type Label struct {
 	Description string `json:"description"`
 }
 
+// Milestone is a repository milestone.
+type Milestone struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+}
+
 // IssueType is an organization issue type.
 type IssueType struct {
 	ID          int64  `json:"id"`
@@ -63,6 +71,7 @@ type Issue struct {
 	StateReason string     `json:"state_reason,omitempty"`
 	ClosedBy    *Account   `json:"closed_by,omitempty"`
 	Labels      []Label    `json:"labels"`
+	Milestone   *Milestone `json:"milestone"`
 	Type        *IssueType `json:"type,omitempty"`
 	CreatedAt   string     `json:"created_at"`
 	// UpdatedAt is advanced by every write to the issue, or to the pull
@@ -234,7 +243,8 @@ type GitHub struct {
 	ViewerType  string // GET /user type; default User
 	// Permissions is each login's repository permission (GET
 	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
-	// maintain, read, or none. The Viewer defaults to admin, others to read.
+	// maintain, read, or none, or "not-found" for an account that is not a
+	// collaborator (GitHub answers 404). The Viewer defaults to admin, others to read.
 	Permissions map[string]string
 	Labels      []*Label
 	IssueTypes  []*IssueType
@@ -243,15 +253,18 @@ type GitHub struct {
 	Trees       map[string][]map[string]any // sha -> entries
 	Commits     map[string]map[string]any   // sha -> commit
 	Issues      map[int]*Issue
-	Pulls       map[int]*PR
-	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
-	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
-	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
-	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
-	Runs        []WorkflowRun           // Actions workflow runs
-	Artifacts   map[int64][]ArtifactZip // run ID -> artifacts
-	Releases    map[string]*Release     // tag -> GitHub Release
-	Workflows   []string                // workflow file names GET actions/workflows lists
+	Milestones  []*Milestone
+	// AuthorOnlyEdits makes a comment edit by anyone but its author a 403, as on GitHub.
+	AuthorOnlyEdits bool
+	Pulls           map[int]*PR
+	CheckRuns       map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
+	Statuses        map[string][]Status     // commit SHA -> legacy commit statuses, newest first
+	JobLogs         map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
+	RunJobs         map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
+	Runs            []WorkflowRun           // Actions workflow runs
+	Artifacts       map[int64][]ArtifactZip // run ID -> artifacts
+	Releases        map[string]*Release     // tag -> GitHub Release
+	Workflows       []string                // workflow file names GET actions/workflows lists
 	// OnDispatch, when set, describes the run a workflow_dispatch starts (the
 	// fake assigns its ID, path, and event). OnRerun re-runs a run's failed
 	// jobs. Both run with Mu held and must not lock it.
@@ -792,6 +805,35 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"workflow_run_id": id, "run_url": fmt.Sprintf("%s%s/actions/runs/%d", g.Server.URL, repo, id),
 			"html_url": fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)})
 
+	// Milestones.
+	case m == "GET" && p == repo+"/milestones":
+		out := []*Milestone{}
+		for _, ms := range g.Milestones {
+			if q := r.URL.Query().Get("state"); q == "all" || ms.State == q || q == "" && ms.State == "open" {
+				out = append(out, ms)
+			}
+		}
+		reply(200, out)
+	case m == "POST" && p == repo+"/milestones":
+		if slices.ContainsFunc(g.Milestones, func(ms *Milestone) bool { return ms.Title == str("title") }) {
+			reply(422, map[string]any{"message": "Validation Failed", "errors": []any{map[string]any{"code": "already_exists"}}})
+			return
+		}
+		ms := &Milestone{Number: len(g.Milestones) + 1, Title: str("title"), Description: str("description"), State: "open"}
+		g.Milestones = append(g.Milestones, ms)
+		reply(201, ms)
+	case m == "PATCH" && strings.HasPrefix(p, repo+"/milestones/"):
+		n, _ := strconv.Atoi(strings.TrimPrefix(p, repo+"/milestones/"))
+		i := slices.IndexFunc(g.Milestones, func(ms *Milestone) bool { return ms.Number == n })
+		if i < 0 {
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		}
+		if v, ok := body["description"].(string); ok {
+			g.Milestones[i].Description = v
+		}
+		reply(200, g.Milestones[i])
+
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
 		out := []Label{}
@@ -928,9 +970,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		out := []*Issue{}
 		since := r.URL.Query().Get("since")
 		for n := 1; n <= len(g.Issues); n++ {
-			want := r.URL.Query().Get("labels")
+			want, ms := r.URL.Query().Get("labels"), r.URL.Query().Get("milestone")
 			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
-				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) {
+				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) &&
+				(ms == "" || is.Milestone != nil && strconv.Itoa(is.Milestone.Number) == ms) {
 				out = append(out, is)
 			}
 		}
@@ -1179,6 +1222,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			if v, ok := body["title"].(string); ok {
 				is.Title = v
 			}
+			if v, ok := body["milestone"]; ok {
+				is.Milestone = nil
+				for _, ms := range g.Milestones {
+					if f, _ := v.(float64); int(f) == ms.Number {
+						is.Milestone = ms
+					}
+				}
+			}
 			if v, ok := body["state"].(string); ok {
 				is.State = v
 				is.StateReason, _ = body["state_reason"].(string)
@@ -1259,6 +1310,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		login := rePerm.FindStringSubmatch(p)[1]
 		perm := g.Permissions[login]
 		switch {
+		case perm == "not-found":
+			reply(404, map[string]any{"message": "Not Found"})
+			return
 		case perm == "" && login == g.Viewer:
 			perm = "admin"
 		case perm == "":
@@ -1274,6 +1328,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		for _, is := range g.Issues {
 			for _, c := range is.Comments {
 				if c.ID == id {
+					caller := g.Viewer
+					if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+						caller = a.Login // a bot's token edits as the bot
+					}
+					if m == "PATCH" && g.AuthorOnlyEdits && !strings.EqualFold(c.User.Login, caller) {
+						reply(403, map[string]any{"message": "Resource not accessible: only the author edits a comment"})
+						return
+					}
 					if m == "PATCH" {
 						c.Body, c.UpdatedAt = str("body"), time.Now().UTC().Add(time.Second)
 					}

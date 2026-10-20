@@ -23,6 +23,7 @@ type Roles struct {
 var RACI = map[string]Roles{
 	"grill":      {Consulted: []SeatID{CodeArchitect, UXResearcher}, Informed: []SeatID{EngineeringManager}},
 	"slice":      {Consulted: []SeatID{CodeArchitect, EngineeringManager}, Informed: []SeatID{AINativeEngineer}},
+	"scope":      {Consulted: []SeatID{EngineeringManager, Founder}, Informed: []SeatID{DevOps, Marketer}},
 	"plan":       {Consulted: []SeatID{EngineeringManager, QualityArchitect, DataAIArchitect, ProductionEngineer}, Informed: []SeatID{AINativeEngineer}},
 	"decide":     {Consulted: []SeatID{ProductStrategist, CodeArchitect}, Informed: []SeatID{EngineeringManager, Auditor}},
 	"counsel":    {Consulted: []SeatID{ProductStrategist, CodeArchitect, EngineeringManager}, Informed: []SeatID{Auditor}},

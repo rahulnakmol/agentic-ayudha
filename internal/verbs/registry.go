@@ -564,6 +564,7 @@ const (
 	GateCodeowner     GateID = "codeowner-review"
 	GateTTY           GateID = "tty-confirm"
 	GateStableRequest GateID = "stable-request"
+	GateScopeBudget   GateID = "scope-budget"
 )
 
 // Gates lists every gate a command may declare.
@@ -588,6 +589,7 @@ var Gates = []Gate{
 	{GateCodeowner, "A human CODEOWNER review on protected paths."},
 	{GateTTY, "Interactive confirmation on a TTY; refused for agents."},
 	{GateStableRequest, "Promoting to main needs a person's stable-release request: their comment \"Stable release: <version>\" on the Release issue after its rolling snapshot, or their yes at a terminal."},
+	{GateScopeBudget, "After a person accepts a release's baseline, drift stays within [scope] budget_percent, or a person accepts the change through GitHub's device flow against an accepted Decision."},
 }
 
 var (
@@ -1228,6 +1230,26 @@ var Verbs = []Command{
 		Outputs:  []string{"runbook", "runbook-findings"},
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "scope", WP: "v0.3.0", Stage: StageBreakDown,
+		Summary: "Plan a release's scope in its version milestone, draft it, have a person baseline it, hand it off, assign Feedback, and hold drift to the change budget.",
+		Reader:  "Plans what a release contains, freezes it once a person accepts it, and stops later changes beyond the budget unless a person decides.",
+		Seat:    ProductStrategist, Lane: LanePlan, Layers: AllLayers(),
+		Inputs: []Input{
+			pos("release", TypeIssue, "Release issue (Version vX.Y.Z) whose scope to plan; without another flag, scope reports the plan, its points, and its drift."),
+			flag("add", TypeIssue, "Initiative, Feature, Story, or Bug to add to the release's milestone; after a baseline it counts as drift."),
+			flag("drop", TypeIssue, "Item to remove from the release's milestone, so it rides a later release; after a baseline it counts as drift."),
+			flag("assign", TypeIssue, "Feedback issue to assign with --to; sets its milestone and horizon label, never its body, and is not drift."),
+			enumIn("to", false, false, "With --assign: this release, the next release milestone, or the backlog.", "this", "next", "backlog"),
+			flag("draft", TypeBool, "Snapshot the plan on the ledger (releases/<version>/draft.json) and ask a person to accept it; refuses an unsized, XL, or unsliced plan."),
+			flag("decision", TypeIssue, "Accepted Decision that names the Release: with --add, --drop, or --draft over budget, it asks a person to accept the change; never applies it."),
+			humanOnly(flag("accept", TypeBool, "Accept the Release's waiting request, a drafted baseline or a change over budget, through GitHub's device flow every time; aayu inbox shows the same card.")),
+			flag("handoff", TypeBool, "Hand the baselined plan off: write the Release's includes links and post the plan on it."),
+		},
+		Outputs:  []string{"release-plan", "scope-draft", "scope-baseline", "scope-drift"},
+		Gates:    []GateID{GateScopeBudget, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 }
 

@@ -278,6 +278,7 @@ var humanGates = map[verbs.GateID]string{
 	verbs.GateEnvironment:   "A person approves the GitHub Environment before anything runs in production.",
 	verbs.GateCodeowner:     "A person who owns the changed paths (a CODEOWNER) reviews the change.",
 	verbs.GateAuthority:     "Only a person who holds `[decisions] authority` for its type or layer accepts it.",
+	verbs.GateScopeBudget:   "Once a person accepts a release's baseline, a change beyond the budget waits for a person: they approve it through GitHub's device code, against an accepted Decision.",
 	verbs.GateStableRequest: "A stable release to main waits for a person's request: their comment on the Release issue, or their yes at a terminal.",
 }
 

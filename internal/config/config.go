@@ -42,6 +42,7 @@ type Config struct {
 	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
 	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
+	Scope         Scope                  `koanf:"scope" jsonschema_description:"A release's change budget after its baseline, and the effort weights drift is measured in (aayu scope)."`
 	Team          Team                   `koanf:"team" jsonschema_description:"The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."`
 	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
 	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
@@ -158,6 +159,12 @@ type Design struct {
 type Review struct {
 	FigmaDiffMax float64  `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
 	Baseline     []string `koanf:"baseline" jsonschema_description:"URL paths on the [verify.environments] target that baseline captures for each commit (WP6.6)."`
+}
+
+// Scope is [scope] (aayu scope).
+type Scope struct {
+	BudgetPercent float64 `koanf:"budget_percent" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Drift from a release's accepted baseline, in percent of its effort points, that changes may reach without a person's accepted Decision."`
+	EffortPoints  []int   `koanf:"effort_points" jsonschema:"minItems=5,maxItems=5" jsonschema_description:"Effort points, each at least 1, of XS, S, M, L, and XL, in that order: the weights of Stories and Bugs in a plan and its drift."`
 }
 
 // Measure is [measure]: which exported events mark each AARRR stage. Event

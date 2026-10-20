@@ -92,6 +92,7 @@ Layers owned: none.
 | `measure` | Informed |
 | `tell` | Informed |
 | `init` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
+| `scope` | Consulted |
 
 Plumbing commands accountable for: `halt`, `resume`, `seat`, `tour`, `inbox`.
 

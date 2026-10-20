@@ -26,6 +26,7 @@ agent runs the verb as a skill, and the same rules apply either way.
 |  | [`plan`](plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. | Code Architect (Vishwa) |
 |  | [`decide`](decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. | Founder (Atri) |
 |  | [`chart`](chart.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. | Data & AI Architect (Shuka) |
+|  | [`scope`](scope.md) | Plans what a release contains, freezes it once a person accepts it, and stops later changes beyond the budget unless a person decides. | Product Strategist (Arjun) |
 | [Get a story Ready](../journey-3-ready.md) | [`ready`](ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. | Product Strategist (Arjun) |
 | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) | [`research`](research.md) | Collects design references and user research for a Feature. | UX Researcher & Evolutionist (Hanu) |
 |  | [`wireframe`](wireframe.md) | Sketches the screens a Feature needs, from its research and promises. | UX Researcher & Evolutionist (Hanu) |

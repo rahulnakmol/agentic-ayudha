@@ -67,7 +67,7 @@ proof = false
 proof_rungs = ["A", "B", "C"]
 always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"]
 always_person_config = [".aayudha/config.toml"]
-always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget"]
+always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope"]
 
 # A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
 # direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
@@ -88,6 +88,12 @@ ci_minutes_month = 2000
 [proof]
 media = ""
 retention_days = 90
+
+# Release scope (aayu scope): the change budget after a person accepts a release's baseline, and the effort weights
+# drift is measured in. Over budget, a change needs a person and an accepted Decision.
+[scope]
+budget_percent = 20.0
+effort_points = [1, 2, 3, 5, 8] # XS, S, M, L, XL
 
 # Design review tolerances and baseline paths (WP6.5, WP6.6).
 [review]

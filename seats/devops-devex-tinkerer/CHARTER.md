@@ -88,6 +88,7 @@ Sources:
 | `doctor` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `slo` | Informed |
 | `runbook` | Consulted |
+| `scope` | Informed |
 
 Plumbing commands accountable for: `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent`, `completion`.
 
