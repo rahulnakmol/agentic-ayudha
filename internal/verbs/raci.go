@@ -28,6 +28,7 @@ var RACI = map[string]Roles{
 	"decide":     {Consulted: []SeatID{ProductStrategist, CodeArchitect}, Informed: []SeatID{EngineeringManager, Auditor}},
 	"counsel":    {Consulted: []SeatID{ProductStrategist, CodeArchitect, EngineeringManager}, Informed: []SeatID{Auditor}},
 	"triage":     {Informed: []SeatID{EngineeringManager}},
+	"brain":      {Consulted: []SeatID{Founder, RevenueArchitect}, Informed: []SeatID{Marketer}},
 	"build":      {Consulted: []SeatID{CodeArchitect, ProductionEngineer}, Informed: []SeatID{EngineeringManager}},
 	"verify":     {Informed: []SeatID{EngineeringManager}},
 	"inspect":    {Consulted: []SeatID{QualityArchitect, CodeArchitect}, Informed: []SeatID{AINativeEngineer}},

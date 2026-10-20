@@ -125,6 +125,8 @@ After landing, the rung:
 - publishes release notes that cite only proven Features (`tell release`);
 - records the artifact identity and shipping evidence on the ledger and in the Release;
 - makes the Goals and Initiatives above those stories due for `measure`.
+- refreshes the product brain (`aayu brain checkpoint`) when the repository has a `brain` branch; when that step
+  fails, the release stands and you run the checkpoint again.
 
 CI and bot accounts are refused. Promote only on the release schedule or an explicit release request; a green
 gate alone is not a reason. Never run it to work around a red gate; fix the cause through dev.

@@ -197,6 +197,7 @@ are not verbs; the verbs reference lists them.
 |  | [`measure`](skills/measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
 |  | [`evolve`](skills/evolve.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
 | [Explain it](journey-9-explain.md) | [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
+|  | [`brain`](skills/brain.md) | Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person. |
 |  | [`status`](skills/status.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
 |  | [`audit`](skills/audit.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
 |  | [`brief`](skills/brief.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |

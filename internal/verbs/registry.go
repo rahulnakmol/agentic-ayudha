@@ -623,7 +623,7 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 
 // Verbs lists the 32 verbs in plan order (V7, WP0.3), then chart, the Data & AI
 // Architect's verb (Decision #283, Appendix B S-5.1g), then survey (WP5.9,
-// Decision #287), then the Production Engineer's verbs (WP5.10, Decision #324).
+// Decision #287), then the Production Engineer's verbs (WP5.10, Decision #324); brain (v0.3.0) follows triage.
 var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
@@ -719,6 +719,20 @@ var Verbs = []Command{
 		Outputs:  []string{"labels"},
 		Gates:    []GateID{GateLabelsOnly, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "the host's model passes --as; never in product CI", Exposure: ExposeWrite,
+	},
+	{
+		Name: "brain", WP: "v0.3.0", Stage: StageExplain,
+		Summary: "Keep the product brain: an Obsidian vault on the orphan brain branch; init, checkpoint its generated links, check, or open it.",
+		Reader:  "Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person.",
+		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
+		Inputs: []Input{
+			readOnlyWith(enumIn("action", true, true, "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no pasted Completion Goal line or issue label; open: print how to open the vault in Obsidian.", "init", "checkpoint", "check", "open"), "check", "open"),
+			flag("workstream", TypeString, "With init: add a workstream folder with its own index and map of content, linked up into the root vault."),
+			flag("dir", TypeString, "With check: check a local folder (a worktree of the brain branch) instead of the branch's tip on the remote."),
+		},
+		Outputs:  []string{"vault", "check-report"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
 		Name: "build", WP: "WP5.5", Stage: StageBuild,

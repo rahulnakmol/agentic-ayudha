@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -82,6 +83,7 @@ type Issue struct {
 	Comments  []*Comment `json:"-"`
 	Subs      []int      `json:"-"`
 	Parent    int        `json:"-"`
+	ParentURL string     `json:"parent_issue_url,omitempty"` // set from Parent when the issue list replies
 	Assignees []Account  `json:"assignees"`
 	// PullRequest is set on the issue that a pull request shares its number with, as GitHub's Issues API does.
 	PullRequest *struct {
@@ -218,6 +220,8 @@ type Release struct {
 	Body    string           `json:"body"`
 	HTMLURL string           `json:"html_url"`
 	Assets  []map[string]any `json:"assets,omitempty"`
+	// PublishedAt is the publication time, as GitHub's release list reports it.
+	PublishedAt string `json:"published_at,omitempty"`
 }
 
 // ArtifactZip is a run artifact with its zip bytes.
@@ -994,8 +998,17 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
 				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) &&
 				(ms == "" || is.Milestone != nil && strconv.Itoa(is.Milestone.Number) == ms) {
+				if is.Parent != 0 {
+					is.ParentURL = fmt.Sprintf("https://api.github.com%s/issues/%d", repo, is.Parent)
+				}
 				out = append(out, is)
 			}
+		}
+		reply(200, out)
+	case m == "GET" && p == repo+"/releases":
+		out := []*Release{}
+		for _, tag := range slices.Sorted(maps.Keys(g.Releases)) {
+			out = append(out, g.Releases[tag])
 		}
 		reply(200, out)
 	case m == "POST" && p == repo+"/issues":

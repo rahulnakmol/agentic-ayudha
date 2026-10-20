@@ -22,6 +22,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
 | `counsel` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect, Engineering Manager | Auditor | all | bot | host | read |
 | `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
+| `brain` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Founder, Revenue Architect | Marketer & Documenter | none | bot | none | read |
 | `build` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Code Architect, Production Engineer | Engineering Manager | all | bot | host | write |
 | `verify` | AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
 | `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |

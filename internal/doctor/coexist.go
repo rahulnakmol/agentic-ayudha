@@ -17,7 +17,7 @@ import (
 // instead of renaming anything.
 var (
 	initWorkflows = []string{"aayudha-token.yml", "aayudha-ready-guard.yml"}
-	initBranches  = []string{"dev", "rolling", "main", "ledger"}
+	initBranches  = []string{"dev", "rolling", "main", "ledger", "brain"}
 )
 
 // Workflow is an existing workflow file and the check names its jobs report.

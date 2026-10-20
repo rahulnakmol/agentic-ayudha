@@ -93,5 +93,5 @@ func (e *Env) Ledger(ctx context.Context, tok identity.Token, ident, tag string)
 	if err != nil {
 		return nil, err
 	}
-	return &ledger.Writer{Dir: root, Repo: repo, Token: tok.Value, Log: log, Identity: ident, Tag: tag}, nil
+	return &ledger.Writer{Dir: root, Repo: repo, Token: tok.Value, Log: log, Identity: ident, Tag: tag, OnAttempt: e.LedgerAttempt}, nil
 }

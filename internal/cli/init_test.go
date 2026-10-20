@@ -140,8 +140,9 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if !slices.ContainsFunc(g.Labels, func(l *fake.Label) bool { return l.Name == SecurityLabel }) {
 		t.Fatalf("init did not create %s", SecurityLabel)
 	}
-	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it.
-	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole]" {
+	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it. The brain
+	// branch (`aayu brain`'s vault) is protected alike, by the same two rulesets.
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole] on [refs/heads/ledger refs/heads/brain]" {
 		t.Fatalf("ledger rulesets: %s", got)
 	}
 	first := snapshot(t, dir)
@@ -187,6 +188,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	g.Rulesets = slices.DeleteFunc(g.Rulesets, func(rs map[string]any) bool { return rs["name"] == initrepo.LedgerHistoryRuleset })
 	g.Rulesets[0]["rules"] = []any{map[string]any{"type": "deletion"}, map[string]any{"type": "non_fast_forward"}, map[string]any{"type": "update"}}
 	g.Rulesets[0]["bypass_actors"] = []any{map[string]any{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}}
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger"}, "exclude": []any{}}}
 	g.Mu.Unlock()
 	g.Reset()
 	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 1 || rep.Counts["updated"] != 1 {
@@ -195,23 +197,52 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if w := g.Writes(); len(w) != 2 || w[0].Method != "POST" || w[1].Method != "PUT" {
 		t.Fatalf("migration writes %v, want the history ruleset created before the old one is narrowed", w)
 	}
-	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole]" {
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole] on [refs/heads/ledger refs/heads/brain]" {
 		t.Fatalf("ledger rulesets after the migration: %s", got)
 	}
+
+	// Rulesets an init before the brain branch created (rules and actors right, include only the ledger):
+	// a rerun adds refs/heads/brain to both, keeping any other ref they include, and drops an exclusion of
+	// refs/heads/brain itself, which would beat the inclusion; a wider exclusion stays.
+	g.Mu.Lock()
+	for _, rs := range g.Rulesets {
+		rs["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/archive"}, "exclude": []any{"refs/heads/brain", "refs/heads/tmp-*"}}}
+	}
+	g.Mu.Unlock()
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 0 || rep.Counts["updated"] != 2 {
+		t.Fatalf("rerun on rulesets without brain: exit %d, counts %v: %s", code, rep.Counts, errOut)
+	}
+	if w := g.Writes(); len(w) != 2 || w[0].Method != "PUT" || w[1].Method != "PUT" {
+		t.Fatalf("brain upgrade writes %v, want two ruleset updates", w)
+	}
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/archive refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole] on [refs/heads/ledger refs/heads/archive refs/heads/brain]" {
+		t.Fatalf("ledger rulesets after the brain upgrade: %s", got)
+	}
+	g.Mu.Lock()
+	for _, rs := range g.Rulesets {
+		if x := fmt.Sprint(rs["conditions"].(map[string]any)["ref_name"].(map[string]any)["exclude"]); x != "[refs/heads/tmp-*]" {
+			t.Errorf("exclusions after the brain upgrade: %s, want only refs/heads/tmp-*", x)
+		}
+	}
+	g.Mu.Unlock()
 
 	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "aayudha-pack run artifact") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
 }
 
-// ledgerRulesets renders the fake's ledger rulesets: name, rule types, and
-// bypass actors.
+// ledgerRulesets renders the fake's ledger rulesets: name, rule types,
+// bypass actors, and the refs they include.
 func ledgerRulesets(g *fake.GitHub) string {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	b, _ := json.Marshal(g.Rulesets)
 	var rs []struct {
-		Name   string
+		Name       string
+		Conditions struct {
+			RefName struct{ Include []string } `json:"ref_name"`
+		}
 		Rules  []struct{ Type string }
 		Bypass []struct {
 			ActorID   int64  `json:"actor_id"`
@@ -229,7 +260,7 @@ func ledgerRulesets(g *fake.GitHub) string {
 		for _, a := range r.Bypass {
 			by = append(by, fmt.Sprint(a.ActorID, " ", a.ActorType))
 		}
-		out = append(out, fmt.Sprintf("%s: %v bypass %v", r.Name, rules, by))
+		out = append(out, fmt.Sprintf("%s: %v bypass %v on %v", r.Name, rules, by, r.Conditions.RefName.Include))
 	}
 	slices.Sort(out)
 	return strings.Join(out, "; ")
@@ -360,7 +391,48 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 	if len(g.IssueTypes) != 10 || !strings.Contains(snapshot(t, dir)[initrepo.FormPath(workitems.Types[3])], "\ntype: \"Story\"\n") {
 		t.Errorf("organization: %d issue types; forms must set the type", len(g.IssueTypes))
 	}
-	_ = rep
+	// The team's ruleset protects the ledger but not the brain branch: init never edits it, and says exactly
+	// what to change, once, on every run until it is changed.
+	advice := `it does not protect refs/heads/brain: add "refs/heads/brain" to ruleset "ledger-writers" (id 99) conditions.ref_name.include`
+	rulesetNotes := func(rep initReport) []string {
+		var notes []string
+		for _, c := range rep.Changes {
+			if c.Step == "ruleset" {
+				notes = append(notes, c.Name+" "+c.Result+": "+c.Detail)
+			}
+		}
+		return notes
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.HasPrefix(notes[0], "ledger-writers adopted: ") || !strings.Contains(notes[0], advice) {
+		t.Errorf("adoption notes %q, want one adopted note saying %q", notes, advice)
+	}
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || len(g.Writes()) != 0 {
+		t.Fatalf("rerun: exit %d, writes %v: %s", code, g.Writes(), errOut)
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.HasPrefix(notes[0], "ledger-writers unchanged: ") || !strings.Contains(notes[0], advice) {
+		t.Errorf("rerun notes %q, want one unchanged note saying %q", notes, advice)
+	}
+	// An exclusion beats an inclusion: a matching pattern still leaves brain unprotected.
+	g.Mu.Lock()
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/brain"}, "exclude": []any{"**/brain"}}}
+	g.Mu.Unlock()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun with a matching exclusion: exit %d: %s", code, errOut)
+	}
+	exclusion := `it does not protect refs/heads/brain: remove the exclusion "**/brain" from ruleset "ledger-writers" (id 99) conditions.ref_name.exclude`
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.Contains(notes[0], exclusion) || strings.Contains(notes[0], "include") {
+		t.Errorf("notes with an exclusion that matches brain: %q, want %q", notes, exclusion)
+	}
+	g.Mu.Lock()
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/b*"}}} // a pattern covers brain
+	g.Mu.Unlock()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun after the team added brain: exit %d: %s", code, errOut)
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || strings.Contains(notes[0], "refs/heads/brain") {
+		t.Errorf("notes once the team's ruleset includes brain: %q", notes)
+	}
 	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "x"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), Dir: dir}, "uninit", "--external"); code != 0 || !strings.Contains(out, "no external resources") {
 		t.Errorf("uninit --external: %d %s", code, out)
 	}

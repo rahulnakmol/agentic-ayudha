@@ -80,6 +80,7 @@ Layers owned: none.
 
 | Verb | Role |
 |---|---|
+| `brain` | Consulted |
 | `experiment` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 | `readout` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
 | `measure` | owns thresholds and policy |

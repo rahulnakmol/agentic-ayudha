@@ -86,6 +86,7 @@ Layers owned: none.
 | `decide` | Consulted |
 | `counsel` | Consulted |
 | `triage` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
+| `brain` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `ship` | Informed |
 | `ready` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `research` | Consulted |

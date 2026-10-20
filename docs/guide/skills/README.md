@@ -47,6 +47,7 @@ agent runs the verb as a skill, and the same rules apply either way.
 |  | [`measure`](measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. | Data & AI Architect (Shuka) |
 |  | [`evolve`](evolve.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. | AI Native Engineer (Nakul) |
 | [Explain it](../journey-9-explain.md) | [`counsel`](counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. | Founder (Atri) |
+|  | [`brain`](brain.md) | Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person. | Product Strategist (Arjun) |
 |  | [`status`](status.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. | Engineering Manager (Drona) |
 |  | [`audit`](audit.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. | Auditor (Vidhi) |
 |  | [`brief`](brief.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. | Mentalist (Sanjay) |
