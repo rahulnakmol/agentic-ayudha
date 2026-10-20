@@ -716,7 +716,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		if st.Result != nil {
 			disp = st.Result.Disposition
 		}
-		it := InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
+		it := InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time,
 			Story:    StoryOf(p.GetBody(), "", p.GetHead().GetRef()), // its "ship now" choice completes the Story
 			Evidence: p.GetHTMLURL(), Head: p.GetHead().GetSHA(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
 			Why:     fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),

@@ -2455,11 +2455,17 @@ func TestInboxReread(t *testing.T) {
 	}
 
 	t.Run("another title, reason, and counsel, the same head and choice", func(t *testing.T) {
-		status, _, _ := act(t, "capped#9", func(g *fake.GitHub) {
+		status, card, _ := act(t, "capped#9", func(g *fake.GitHub) {
 			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
 			gate := g.Issues[9].Comments[slices.IndexFunc(g.Issues[9].Comments, func(c *fake.Comment) bool { return c.ID == 77 })]
 			gate.Body = strings.Replace(gate.Body, `"disposition":"fix"`, `"disposition":"hold"`, 1) // inspect's last disposition: the card's reason and counsel
 		}, ship...)
+		// A capped card names its own pull request, as a Ready card does, so
+		// a ship from it that merges and then stops shows as merged
+		// (CodeRabbit r4330405278 on #845).
+		if card.PR != 9 {
+			t.Errorf("the capped card names PR %d, not its own #9", card.PR)
+		}
 		// The re-read passes and ship runs; ship then stops at its own gate (the fake has no merge gate pack).
 		if strings.Contains(status, "changed on GitHub") || !strings.Contains(log, "ship #9: no merge gate pack") ||
 			!strings.Contains(log, `inbox: #9 changed since it was read (counsel, title, why), but not what "ship PR #9 now (ship's gates still apply)" does; doing it`) {
