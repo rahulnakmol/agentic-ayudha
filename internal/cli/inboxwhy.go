@@ -137,6 +137,9 @@ var (
 	reBatchOpen     = regexp.MustCompile(`batch \S+ is still open`)
 	reLedger        = regexp.MustCompile(`(?i)ledger`)
 	reBypass        = regexp.MustCompile(`post .* starting "Solo-mode bypass:"`)
+	reConflicts     = regexp.MustCompile(`it conflicts with \S+, so GitHub cannot merge it`)
+	reMergeUnknown  = regexp.MustCompile(`GitHub has not worked out yet whether it can merge`)
+	reBypassPost    = regexp.MustCompile(`Solo-mode bypass comment was not posted`)
 	reHex           = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 )
 
@@ -290,6 +293,12 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string) (what, next string
 	case rePlan.MatchString(m):
 		return fmt.Sprintf("#%d %s: it changes a part of the code that needs an approved plan first.", n, not),
 			"its builder drafts the plan; then you approve it (aayu plan <story> --approve)."
+	case reConflicts.MatchString(m):
+		return fmt.Sprintf("#%d %s: it conflicts with %s.", n, not, dev), fmt.Sprintf("its builder rebases it onto %s; nothing for you yet.", dev)
+	case reMergeUnknown.MatchString(m):
+		return fmt.Sprintf("#%d %s: GitHub is still working out whether it can merge, so nothing was merged.", n, not), "Enter tries again in a minute."
+	case reBypassPost.MatchString(m):
+		return fmt.Sprintf("#%d %s: aayu couldn't post your Solo-mode bypass note, so nothing was merged.", n, not), "Enter tries again; if it fails again, an agent looks at the details (d)."
 	case reBypass.MatchString(m):
 		return fmt.Sprintf("#%d %s: it needs your Solo-mode bypass note on the pull request first.", n, not), "Enter posts it and ships again."
 	case reNoPass.MatchString(m):

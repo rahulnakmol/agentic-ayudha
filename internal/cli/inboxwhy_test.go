@@ -156,6 +156,13 @@ func inboxFailures() []struct {
 			"solo mode doesn't apply here", "you ask @sam for an approving review", none, false, true},
 		{"ship: no bypass note", InboxReady, Errorf(ExitBlocked, "ship --solo-bypass: post a PR comment starting %q that says why, from your own account, first", SoloBypassPrefix), "reading comments", nil,
 			"it needs your Solo-mode bypass note on the pull request first", "Enter posts it and ships again", none, false, true},
+		// ship's own mergeability check (#848) refuses before it writes.
+		{"ship: conflicts before the merge", InboxReady, WithNext(Errorf(ExitBlocked, "ship #661: it conflicts with dev, so GitHub cannot merge it; nothing was merged"), "rebase it onto dev, then aayu ship 661"), "reading it again from GitHub", nil,
+			"#661 wasn't shipped: it conflicts with dev.", "its builder rebases it onto dev; nothing for you yet.", none, false, true},
+		{"ship: mergeability not known yet", InboxReady, WithNext(Errorf(ExitBlocked, "ship #661: GitHub has not worked out yet whether it can merge; your Solo-mode bypass was not posted, and nothing was merged"), "aayu ship 661 again in a minute"), "reading it again from GitHub", nil,
+			"GitHub is still working out whether it can merge", "Enter tries again in a minute.", none, false, true},
+		{"ship: the bypass note did not post", InboxReady, Errorf(ExitExternal, "ship #661: not merged: your Solo-mode bypass comment was not posted: %v", ghRefusal("POST", "/repos/o/r/issues/661/comments", 403, "Resource not accessible")), "writing to GitHub", nil,
+			"aayu couldn't post your Solo-mode bypass note, so nothing was merged", "Enter tries again", none, false, true},
 		{"ship: the ledger", InboxReady, Errorf(ExitExternal, "ledger: fetch origin ledger: exit status 128"), "reading GitHub", nil,
 			"aayu couldn't read or write its records (the ledger branch)", "an agent runs aayu doctor", none, false, true},
 		// Merged, then a later step stopped: done, with a warning.
