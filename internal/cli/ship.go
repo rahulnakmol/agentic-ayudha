@@ -161,6 +161,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if story == 0 {
 		return Errorf(ExitBlocked, "ship #%d: no story (Refs #n in the PR body); ship proves a story", n)
 	}
+	// The body can be edited; a build's branch names its story. When they
+	// differ, ship would prove, and check for a stop, the wrong story.
+	if b := StoryOf("", "", pr.GetHead().GetRef()); b != 0 && b != story {
+		return Errorf(ExitBlocked, "ship #%d: the PR body refers to story #%d, but its branch %s is story #%d's; fix the body's Refs line", n, story, pr.GetHead().GetRef(), b)
+	}
 	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
 	// Who may pass the PR, and how, is the base branch's committed policy at
 	// its tip now (#645), never this run's config: the checkout, the user

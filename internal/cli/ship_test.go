@@ -891,6 +891,16 @@ func TestShipOnProof(t *testing.T) {
 	g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: "status:blocked"})
 	g.Mu.Unlock()
 	refused("story #2 is status:blocked, so the build-ready loop's PR waits for a person")
+	// An edit of the body to name another story does not step around the
+	// stop: the branch still names story #2.
+	g.Mu.Lock()
+	body := g.Pulls[prN].Body
+	g.Pulls[prN].Body = strings.Replace(body, "Refs #2", "Refs #3", 1)
+	g.Mu.Unlock()
+	refused("the PR body refers to story #3, but its branch story/2-")
+	g.Mu.Lock()
+	g.Pulls[prN].Body = body
+	g.Mu.Unlock()
 	// The story cannot be read: ship does not guess that it is not blocked.
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2", 0
