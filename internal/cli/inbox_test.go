@@ -2264,6 +2264,42 @@ func TestInboxReadTimeout(t *testing.T) {
 		}
 	})
 
+	// A cold start with no cache, against a GitHub that never answers: the
+	// inbox stays open, says so where the loading view was, and R reads
+	// again (inspect's P1 c47f82faf1 on #828).
+	t.Run("first read", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdIssues(g)
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			if teaDrive(m, m.Init()) {
+				t.Fatal("the inbox quit when its first read timed out")
+			}
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+			if v := ansi.Strip(m.View().Content); !strings.Contains(v, inboxSlowFirst) || strings.Contains(v, "Nothing waits for you") || strings.Contains(v, "Reading the issues") {
+				t.Errorf("after a first read past its deadline:\n%s", v)
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Mu.Unlock()
+			teaKeys(m, "R")
+			if len(m.items) == 0 || m.loading || m.status != "Enter does the preselected choice." {
+				t.Errorf("R after a timed-out first read: %d items, loading %v, status %q", len(m.items), m.loading, m.status)
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
 	t.Run("refresh", func(t *testing.T) {
 		g := inboxRepo(t)
 		was := inboxReadTimeout

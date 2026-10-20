@@ -58,6 +58,9 @@ var errInboxSlow = errors.New("GitHub did not answer the inbox's read in time; r
 // inboxReading is the status line while R reads GitHub; a finished read replaces it.
 const inboxReading = "Reading what changed on GitHub…"
 
+// inboxSlowFirst is the status line when the first read timed out with nothing read.
+const inboxSlowFirst = "GitHub did not answer in time, so nothing was read yet. R tries again; q quits."
+
 // Motion timings: one frame at 120 fps, and how long each movement lasts.
 const (
 	inboxFrame = time.Second / 120
@@ -438,6 +441,7 @@ type inboxModel struct {
 
 	opened              time.Time // when the session began
 	loading, refreshing bool
+	stalled             bool      // the first read timed out with nothing read: R reads again
 	fresh               time.Time // when the items were last read from GitHub
 	every               time.Duration
 	timer               bool // refresh every so often (a real program)
@@ -837,15 +841,21 @@ func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 // backs off when GitHub limits the rate.
 func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	first := m.loading
-	m.loading, m.refreshing = false, false
+	m.loading, m.refreshing, m.stalled = false, false, false
 	if msg.err != nil {
 		var rl *gh.RateLimitError
 		var ab *gh.AbuseRateLimitError
+		slow := errors.Is(msg.err, errInboxSlow) || errors.Is(msg.err, github.ErrTimeout)
 		switch {
+		case slow && first && len(m.items) == 0:
+			// Nothing read yet: the loading view stays, saying so, and R
+			// reads again instead of the inbox quitting (Bug #822).
+			m.loading, m.stalled, m.load, m.status = true, true, inboxProgressMsg{}, inboxSlowFirst
+			return m.tick()
 		case first && len(m.items) == 0:
 			m.err = msg.err
 			return tea.Quit
-		case errors.Is(msg.err, errInboxSlow) || errors.Is(msg.err, github.ErrTimeout):
+		case slow:
 			m.status = "GitHub did not answer in time, so nothing was refreshed; the cards are from the last read. R tries again."
 		case errors.Is(msg.err, github.ErrBudget):
 			m.status = "Stopped refreshing: this session used its GitHub call budget. The cards stay; reopen the inbox for fresh ones."
@@ -1148,7 +1158,7 @@ func wroteSuffix(w []string) string {
 
 func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
-	busy := m.loading && len(m.items) == 0
+	busy := m.loading && len(m.items) == 0 && (m.refreshing || !m.stalled) // a first read that timed out takes R and q
 	writing := len(m.queue) > 0
 	switch {
 	case m.ask != nil && m.ask.quit:
@@ -1230,8 +1240,12 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		return m.findKey(msg)
 	}
 	if len(m.rows) == 0 {
-		if k == "q" || k == "esc" {
+		switch {
+		case k == "q" || k == "esc":
 			return tea.Quit
+		case k == "R" && m.stalled && !m.refreshing: // the first read timed out: read again
+			m.refreshing, m.status = true, inboxReading
+			return tea.Batch(m.spinTick(), m.gatherCmd())
 		}
 		return nil
 	}
@@ -1881,6 +1895,9 @@ func (m *inboxModel) listLines() []inboxLine {
 func (m *inboxModel) skeleton(w, h int) []string {
 	block := func(n int) string { return m.style(ui.Muted, strings.Repeat("░", max(n, 1))) }
 	c := m.cols(min(w, max(w*inboxShare/100, 40)))
+	if m.stalled && !m.refreshing { // the first read timed out, and no read runs now
+		return []string{"", inboxSlowFirst}
+	}
 	out := []string{"", m.spinner() + "Reading the issues and pull requests of " + m.repo + "…"}
 	switch l := m.load; {
 	case l.total > 0:
