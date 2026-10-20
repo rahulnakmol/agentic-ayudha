@@ -231,7 +231,7 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, marks ma
 	head := p.GetHead().GetSHA()
 	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
 	it := InboxItem{Kind: InboxReady, Number: n, Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: n, Updated: p.GetUpdatedAt().Time,
-		Evidence: p.GetHTMLURL(), Story: story, f: inboxFacts{story: story, head: head}}
+		Evidence: p.GetHTMLURL(), Story: story, Head: head, f: inboxFacts{story: story, head: head}}
 	// When ship last said Ready: its marker on this head, else its newest.
 	var since time.Time
 	var marked string

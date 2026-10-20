@@ -232,9 +232,27 @@ func TestInbox(t *testing.T) {
 	}
 	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r")
 	g.Hook = nil
-	if code != 0 || !strings.Contains(out, "  > a\n  not done: #2: it changed on GitHub since you read it, so nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
+	if code != 0 || !strings.Contains(out, "  > a\n  not done: #2: it changed on GitHub since you read it (its title changed), so nothing was written; here it is as it is now.\n\n[2/4] Decision #2: Choose the rules engine, now for billing\n") ||
 		len(g.Writes()) != 0 {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
+	}
+
+	// A change the choice does not depend on (the PR renamed, at the same
+	// head) does not block a ship from its card; --verbose names it.
+	g = inboxRepo(t)
+	opts.GitHubAPI = g.URL()
+	lists = 0
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			if lists++; lists == 2 {
+				g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
+			}
+		}
+	}
+	_, out, errOut = runIn(t, newEnv(), opts, "s s 2 y q", "inbox", "--repo", "o/r", "--verbose")
+	g.Hook = nil
+	if strings.Contains(out, "it changed on GitHub") || !strings.Contains(errOut, `inbox: #9 changed since it was read (title), but not what "ship PR #9 now`) {
+		t.Fatalf("a change that leaves the ship as it was: %s\n%s", errOut, out)
 	}
 
 	// The keys on cards that lack an answer: an incomplete Decision has only
@@ -2323,6 +2341,129 @@ func TestInboxLoginScreen(t *testing.T) {
 	if !teaKeys(m, "q") || !errors.Is(m.signin.err, errNotApproved) {
 		t.Errorf("q on the login screen: err %v", m.signin.err)
 	}
+}
+
+// A card refuses a choice only when what the choice does changed, and
+// says what: on 2026-10-20 a ship from #817's card was refused twice with
+// no change to what it would do, and #802's once without saying its head had
+// moved. A capped PR with no Story offers no ship, which would always
+// refuse. Each case changes GitHub after the card is drawn, then acts on it
+// in the full-screen inbox.
+func TestInboxReread(t *testing.T) {
+	var log string // the session log of the last act (each write's output), which runs with --verbose
+	act := func(t *testing.T, key string, change func(g *fake.GitHub), keys ...string) (status string, card InboxItem, writes []fake.Request) {
+		t.Helper()
+		g := inboxRepo(t)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			teaDrive(m, m.Init())
+			for range 30 {
+				if i := m.item(); i >= 0 && m.items[i].key() == key {
+					break
+				}
+				teaKeys(m, "j")
+			}
+			if i := m.item(); i < 0 || m.items[i].key() != key {
+				t.Fatalf("no %s card to act on", key)
+			}
+			g.Mu.Lock()
+			change(g)
+			g.Mu.Unlock()
+			teaKeys(m, keys...)
+			status, log = m.status, strings.Join(m.log, "\n")
+			if i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.key() == key }); i >= 0 {
+				card = m.items[i]
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}, opts, "", "inbox", "--repo", "o/r", "--verbose")
+		if code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+		return status, card, g.Writes()
+	}
+	edit := func(g *fake.GitHub, n int, from, to string) {
+		if !strings.Contains(g.Issues[n].Body, from) {
+			t.Fatalf("#%d's body has no %q", n, from)
+		}
+		g.Issues[n].Body, g.Issues[n].UpdatedAt = strings.Replace(g.Issues[n].Body, from, to, 1), "2026-10-13T00:00:00Z"
+	}
+	ship := []string{"2", "enter", "enter"} // ship is not the capped card's recommendation, so it asks again
+
+	t.Run("another title, reason, and counsel, the same head and choice", func(t *testing.T) {
+		status, _, _ := act(t, "capped#9", func(g *fake.GitHub) {
+			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
+			gate := g.Issues[9].Comments[slices.IndexFunc(g.Issues[9].Comments, func(c *fake.Comment) bool { return c.ID == 77 })]
+			gate.Body = strings.Replace(gate.Body, `"disposition":"fix"`, `"disposition":"hold"`, 1) // inspect's last disposition: the card's reason and counsel
+		}, ship...)
+		// The re-read passes and ship runs; ship then stops at its own gate (the fake has no merge gate pack).
+		if strings.Contains(status, "changed on GitHub") || !strings.Contains(log, "ship #9: no merge gate pack") ||
+			!strings.Contains(log, `inbox: #9 changed since it was read (counsel, title, why), but not what "ship PR #9 now (ship's gates still apply)" does; doing it`) {
+			t.Errorf("a change that leaves the ship as it was: status %q, log:\n%s", status, log)
+		}
+	})
+	t.Run("the head moved", func(t *testing.T) {
+		status, _, writes := act(t, "capped#9", func(g *fake.GitHub) {
+			g.Pulls[9].Head.SHA, g.Issues[9].UpdatedAt = strings.Repeat("e", 40), "2026-10-13T00:00:00Z"
+		}, ship...)
+		if !strings.Contains(status, "(the head moved from ddddddd to eeeeeee)") || len(writes) != 0 {
+			t.Errorf("a moved head: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("the PR names no Story any more", func(t *testing.T) {
+		status, card, writes := act(t, "capped#9", func(g *fake.GitHub) {
+			g.Pulls[9].Body = "a fix"
+			edit(g, 9, "Refs #170", "a fix")
+		}, ship...)
+		if !strings.Contains(status, `("ship PR #9 now (ship's gates still apply)" is no longer offered)`) || len(writes) != 0 ||
+			len(card.Options) != 1 || card.Options[0].Command != "open" || !strings.Contains(card.Counsel, "It names no Story") {
+			t.Errorf("a capped PR with no Story: status %q, options %v, counsel %q, writes %v", status, card.Options, card.Counsel, writes)
+		}
+	})
+
+	// A Decision asks to confirm a choice that is not its recommendation, or
+	// any choice when it is one-way, and decide does not ask again: a change
+	// to either, or to the option's words, refuses the stale card's choice.
+	t.Run("a Decision's option renamed", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "**B.** a vendor engine", "**V.** a vendor engine") }, "2", "enter", "enter")
+		if !strings.Contains(status, `the choice now reads "V"`) || len(writes) != 0 {
+			t.Errorf("a reworded option: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("a Decision's option description changed", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "a vendor engine", "a hosted vendor engine") }, "2", "enter", "enter")
+		if !strings.Contains(status, "(its text changed)") || len(writes) != 0 {
+			t.Errorf("an option's description changed: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("the recommendation moved", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Recommendation\n\nA", "### Recommendation\n\nB") }, "1", "enter")
+		if !strings.Contains(status, "it is no longer the recommendation") || len(writes) != 0 {
+			t.Errorf("a choice no longer recommended: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("the Decision was closed", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) {
+			g.Issues[2].State, g.Issues[2].UpdatedAt = "closed", "2026-10-13T00:00:00Z"
+		}, "1", "enter")
+		if !strings.Contains(status, "it no longer waits for you") || len(writes) != 0 {
+			t.Errorf("a closed Decision: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("the re-read fails", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { g.Fail, g.FailAfter = "GET /repos/o/r/issues", 0 }, "1", "enter")
+		if !strings.Contains(status, "not done") || len(writes) != 0 {
+			t.Errorf("a failed re-read: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("the Decision is now one-way", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Reversible\n\ntrue", "### Reversible\n\nfalse") }, "1", "enter")
+		if !strings.Contains(status, "it is now one-way") || len(writes) != 0 {
+			t.Errorf("a Decision now one-way: status %q, writes %v", status, writes)
+		}
+	})
 }
 
 // holdGET makes the fake hold every GET of path until release is closed (or
