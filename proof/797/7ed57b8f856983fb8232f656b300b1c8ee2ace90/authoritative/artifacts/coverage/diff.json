@@ -1,0 +1,42 @@
+{
+  "covered": 402,
+  "executable": 428,
+  "percent": 93.92523364485982,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inbox.go": [
+      1265
+    ],
+    "internal/cli/inboxtui.go": [
+      119,
+      120,
+      729
+    ],
+    "internal/cli/inboxwhy.go": [
+      89,
+      90,
+      102,
+      103,
+      104,
+      105,
+      106,
+      208,
+      209,
+      370,
+      371,
+      389,
+      390,
+      391,
+      392,
+      395,
+      396,
+      397,
+      398,
+      401,
+      402,
+      423
+    ]
+  },
+  "format": "go coverprofile"
+}
