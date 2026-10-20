@@ -25,6 +25,10 @@ import (
 // DefaultBudget is the call budget of one verb run when Options.Budget is 0.
 const DefaultBudget = 2000
 
+// DefaultTimeout is the longest one request may take, its reply's body
+// included, when Options.Timeout is 0 (Bug #822).
+const DefaultTimeout = 5 * time.Minute
+
 // Errors.
 var (
 	// ErrBudget means the run used its call budget; nothing further is sent.
@@ -35,6 +39,9 @@ var (
 	// ErrRateLimited means GitHub's rate limit would take longer than
 	// Options.MaxWait to clear.
 	ErrRateLimited = errors.New("GitHub rate limit")
+	// ErrTimeout means GitHub did not answer one request within
+	// Options.Timeout.
+	ErrTimeout = errors.New("GitHub did not answer in time")
 )
 
 // Options configure a client. Zero values are production defaults.
@@ -49,7 +56,11 @@ type Options struct {
 	WriteGap   time.Duration     // minimum gap between mutating calls; default 1s (GitHub's guidance), negative disables
 	Writes     *WriteGate        // shared with other clients so their writes never overlap; nil: this client's own
 	MaxWait    time.Duration     // longest rate-limit wait before failing; default 2 minutes
-	Retries    int               // rate-limit retries per request; default 3
+	// Timeout bounds each attempt of a request, its reply's body included;
+	// the rate-limit and 5xx waits between attempts are MaxWait's. Default
+	// DefaultTimeout.
+	Timeout time.Duration
+	Retries int // rate-limit retries per request; default 3
 	// ServerRetries are the retries of a 5xx on a request that cannot write
 	// twice (WP5.5); default 3, negative disables.
 	ServerRetries int
@@ -90,6 +101,9 @@ func New(opts Options) (*Client, error) {
 	}
 	if opts.MaxWait == 0 {
 		opts.MaxWait = 2 * time.Minute
+	}
+	if opts.Timeout == 0 {
+		opts.Timeout = DefaultTimeout
 	}
 	if opts.Retries == 0 {
 		opts.Retries = 3

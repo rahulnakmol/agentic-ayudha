@@ -420,8 +420,9 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 		if old := s.issues[is.GetNumber()]; old != nil && old.GetUpdatedAt().Equal(is.GetUpdatedAt()) {
 			continue // the newest one already seen: since includes its own second
 		}
-		any = true
-		s.issue(is)
+		// The pull request is read before the issue counts as seen: a read
+		// cut off here (a timeout, Bug #822) leaves `since` before it, so the
+		// next refresh reads it again instead of keeping the old one for ever.
 		if is.IsPullRequest() {
 			p, _, err := s.c.REST.PullRequests.Get(ctx, s.owner, s.name, is.GetNumber())
 			if err != nil {
@@ -429,6 +430,8 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 			}
 			s.pulls[p.GetNumber()] = p
 		}
+		any = true
+		s.issue(is)
 	}
 	return any, nil
 }

@@ -46,6 +46,18 @@ import (
 // inboxRefreshEvery is how often the open inbox asks GitHub what changed.
 const inboxRefreshEvery = 45 * time.Second
 
+// inboxReadTimeout bounds one read of GitHub, the first or a refresh, above
+// the client's longest rate-limit wait (github.Options.MaxWait, 2 minutes):
+// a read GitHub never finishes ends in errInboxSlow, and R tries again
+// (Bug #822). A variable so tests can shorten it.
+var inboxReadTimeout = 3 * time.Minute
+
+// errInboxSlow is a read of GitHub that ran past inboxReadTimeout.
+var errInboxSlow = errors.New("GitHub did not answer the inbox's read in time; run aayu inbox again")
+
+// inboxReading is the status line while R reads GitHub; a finished read replaces it.
+const inboxReading = "Reading what changed on GitHub…"
+
 // Motion timings: one frame at 120 fps, and how long each movement lasts.
 const (
 	inboxFrame = time.Second / 120
@@ -180,10 +192,15 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 	m.gather = func() inboxGatheredMsg {
 		at := e.Now()
 		before := src.c.Stats()
-		changed, err := src.refresh(ctx)
+		rctx, cancel := context.WithTimeoutCause(ctx, inboxReadTimeout, errInboxSlow)
+		defer cancel()
+		changed, err := src.refresh(rctx)
 		var items []InboxItem
 		if err == nil {
-			items, err = src.items(ctx)
+			items, err = src.items(rctx)
+		}
+		if err != nil && errors.Is(context.Cause(rctx), errInboxSlow) {
+			err = errInboxSlow
 		}
 		after := src.c.Stats()
 		if err == nil {
@@ -828,6 +845,8 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 		case first && len(m.items) == 0:
 			m.err = msg.err
 			return tea.Quit
+		case errors.Is(msg.err, errInboxSlow) || errors.Is(msg.err, github.ErrTimeout):
+			m.status = "GitHub did not answer in time, so nothing was refreshed; the cards are from the last read. R tries again."
 		case errors.Is(msg.err, github.ErrBudget):
 			m.status = "Stopped refreshing: this session used its GitHub call budget. The cards stay; reopen the inbox for fresh ones."
 			return nil
@@ -854,7 +873,7 @@ func (m *inboxModel) gathered(msg inboxGatheredMsg) tea.Cmd {
 	switch {
 	case first && len(m.items) > 0:
 		m.status = "Enter does the preselected choice."
-	case strings.HasPrefix(m.status, "From the last read"):
+	case strings.HasPrefix(m.status, "From the last read"), m.status == inboxReading:
 		m.status = "Up to date."
 	}
 	if read := m.deferredRead(); read != nil { // R asked during the writes, and this read began before they ended
@@ -1267,7 +1286,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		if writing {
 			m.readAfter, m.status = true, "A refresh waits for the writes under way; it reads GitHub again after them."
 		} else if !m.refreshing {
-			m.refreshing, m.status = true, "Reading what changed on GitHub…"
+			m.refreshing, m.status = true, inboxReading
 			return tea.Batch(m.spinTick(), m.gatherCmd())
 		}
 	default:

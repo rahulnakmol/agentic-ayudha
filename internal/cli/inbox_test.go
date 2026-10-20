@@ -2221,3 +2221,97 @@ func TestInboxLoginScreen(t *testing.T) {
 		t.Errorf("q on the login screen: err %v", m.signin.err)
 	}
 }
+
+// holdIssues makes the fake hold every issues list until release is closed
+// (or five seconds pass), with the fake locked, as a GitHub that accepts the
+// request and never answers it does.
+func holdIssues(g *fake.GitHub) (release func()) {
+	ch := make(chan struct{})
+	g.Mu.Lock()
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			select {
+			case <-ch:
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	g.Mu.Unlock()
+	var once sync.Once
+	return func() { once.Do(func() { close(ch) }) }
+}
+
+// Bug #822: a read GitHub never answers ends, in every verb (the run's HTTP
+// timeout bounds each GitHub request) and in the inbox (a read past its
+// deadline says so, and R reads again); a finished refresh clears its
+// reading line; and a refresh cut off before a pull request was read reads
+// it on the next one.
+func TestInboxReadTimeout(t *testing.T) {
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+
+	t.Run("a request GitHub never answers times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		release := holdIssues(g)
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
+		start := time.Now()
+		code, out, errOut := run(t, env, opts, "inbox", "--list", "--repo", "o/r")
+		if code == 0 || !strings.Contains(errOut, github.ErrTimeout.Error()) {
+			t.Errorf("exit %d, want a timeout: %s\n%s", code, errOut, out)
+		}
+		if d := time.Since(start); d > 4*time.Second {
+			t.Errorf("the list waited %s for a reply GitHub never sent", d)
+		}
+	})
+
+	t.Run("refresh", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		title := func(m *inboxModel, n int) string {
+			if i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n }); i >= 0 {
+				return m.items[i].Title
+			}
+			return ""
+		}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			teaDrive(m, m.Init())
+			teaKeys(m, "R")
+			if m.status != "Up to date." {
+				t.Errorf("after a finished refresh the status is %q, want Up to date.", m.status)
+			}
+			release := holdIssues(g)
+			defer release()
+			start := time.Now()
+			teaKeys(m, "R")
+			if d := time.Since(start); d > 4*time.Second {
+				t.Errorf("the refresh waited %s for a reply GitHub never sent", d)
+			}
+			if want := "GitHub did not answer in time, so nothing was refreshed; the cards are from the last read. R tries again."; m.status != want || m.refreshing {
+				t.Errorf("after a refresh past its deadline: refreshing %v, status %q, want %q", m.refreshing, m.status, want)
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
+			g.Fail, g.FailAfter = "GET /repos/o/r/pulls/9", 0
+			g.Mu.Unlock()
+			teaKeys(m, "R") // cut off before #9's pull request is read
+			if !strings.HasPrefix(m.status, "Could not refresh") {
+				t.Errorf("the injected failure did not stop the refresh: %q", m.status)
+			}
+			teaKeys(m, "R")
+			if got := title(m, 9); got != "fix(cli): capped, renamed" || m.status != "Up to date." {
+				t.Errorf("after a cut-off refresh, R reads #9 as %q (status %q), want its new title", got, m.status)
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		if code, out, errOut := runIn(t, env, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+}
