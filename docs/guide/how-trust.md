@@ -337,6 +337,13 @@ shows the card as it is now. A refresh asks GitHub only what changed since the l
 `since`, then each changed pull request) through the client's ETag cache, so a refresh with nothing changed is one
 call. The last read is kept per user outside the repository, and nothing is ever done from it.
 
+A write that fails says so on its card in three plain lines: what happened (for example, that the pull request wasn't
+merged because it conflicts with dev), whether anything changed on GitHub, and who acts next. They name no link, HTTP
+method, status code, commit, or error text; `d` shows those (the step it stopped at, GitHub's own answer,
+the request, and the commit), and the log printed when the inbox quits keeps them. A failure that pressing Enter again
+cannot fix takes that action off the card.
+A merge that landed before a later step failed shows as merged, with the step that did not finish.
+
 The counsel on a card is advice, never an approval: a Decision's is the newest `aayu counsel --post` comment from an
 account with write access, cut to 75 words; every other kind's is written from the facts the inbox read
 (`inboxCounsel`), with no model call.

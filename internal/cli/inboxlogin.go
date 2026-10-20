@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -110,16 +109,9 @@ func (m *inboxModel) signinUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 				s.err = msg.err
 				return tea.Quit, true
 			}
-			s.failed = msg.err.Error()
-			var e *Error
-			if errors.As(msg.err, &e) && e.Next != "" {
-				// Enter asks for a new code here, so the advice to run the
-				// command again is left out.
-				next, _, _ := strings.Cut(e.Next, "ask for the command again")
-				if next = strings.TrimRight(next, "; ,"); next != "" {
-					s.failed += "; " + next
-				}
-			}
+			// In a person's words; Enter asks for a new code here, so no
+			// advice to run the command again.
+			s.failed = signinWords(msg.err)
 			m.status = ""
 			return nil, true
 		}

@@ -1113,16 +1113,17 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	// The full-screen inbox watches its own GitHub requests, to name the
-	// stage of a write while it runs; the watch only reports, never alters.
+	// The inbox watches its own GitHub requests, to name the stage of a
+	// write while it runs and what it wrote if it stops; the watch only
+	// reports, never alters.
 	tui := e.inboxTUI(&l.Config)
+	hc := http.Client{}
+	if e.HTTP != nil {
+		hc = *e.HTTP
+	}
+	hc.Transport = &inboxWatch{next: hc.Transport}
+	e.HTTP = &hc
 	if tui {
-		hc := http.Client{}
-		if e.HTTP != nil {
-			hc = *e.HTTP
-		}
-		hc.Transport = &inboxWatch{next: hc.Transport}
-		e.HTTP = &hc
 		// Every client of this session, the writes' own included, keeps one
 		// gap between GitHub writes: two writes in the background never overlap.
 		e.writes = &github.WriteGate{}
@@ -1240,18 +1241,33 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			e.openURL(it.URL)
 			return it, false
 		}
-		fresh, err := e.inboxApply(ctx, cfg, src, login, it, a)
+		// The write's own requests are watched, so a failure says what
+		// GitHub had already written (inboxWatch).
+		work := &inboxWork{}
+		work.begin(it.key(), e.Now())
+		fresh, err := e.inboxApply(context.WithValue(ctx, inboxWorkKey{}, work), cfg, src, login, it, a)
+		stage, wrote := work.sofar()
+		work.end()
 		var ch errInboxChanged
 		switch {
 		case errors.As(err, &ch) && ch.Item.Number != 0:
-			say("  ", fmt.Sprintf("not done: #%d: %v.", it.Number, err))
-			return fresh, true
-		case err != nil:
-			say("  ", fmt.Sprintf("not done: #%d: %v", it.Number, err))
-			var ae *Error
-			if errors.As(err, &ae) && ae.Next != "" {
-				say("  ", "next: "+ae.Next)
+			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; here it is as it is now.", it.Number, changedWords(it, ch.Item)))
+			if len(ch.What) > 0 {
+				say("    ", "Detail: "+strings.Join(ch.What, "; "))
 			}
+			return fresh, true
+		case errors.As(err, &ch):
+			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", it.Number, changedWords(it, ch.Item)))
+		case err != nil:
+			why := explainFailure(it, a, err, stage, wrote, true)
+			mark := "✗ "
+			if why.Landed {
+				mark, done = "✓ ", done+1
+			}
+			say("  ", mark+why.What)
+			say("  ", why.Changed)
+			say("  ", "Next: "+why.Next)
+			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++
 		}

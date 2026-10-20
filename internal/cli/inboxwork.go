@@ -43,6 +43,13 @@ func (w *inboxWork) end() []string {
 	return wrote
 }
 
+// sofar is the stage and what was written so far, leaving the work as it is.
+func (w *inboxWork) sofar() (stage string, wrote []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.stage, slices.Clone(w.wrote)
+}
+
 // steps are the stages seen so far and the index of the current one.
 func (w *inboxWork) steps() ([]string, int) {
 	w.mu.Lock()
@@ -175,6 +182,12 @@ type inboxDone struct {
 	At     time.Time `json:"at"`
 	Choice string    `json:"choice"`
 	Wrote  []string  `json:"wrote,omitempty"`
+	// Warning is a step after the write's main change that did not finish
+	// (a merge that landed before the Story's record failed), in plain words.
+	Warning []string `json:"warning,omitempty"`
+	// Detail is GitHub's own facts behind Warning (the step, its answer, the
+	// commit), shown under it when the person presses d.
+	Detail []string `json:"detail,omitempty"`
 }
 
 // when is a done write's time in the person's words: the clock time today,
@@ -271,4 +284,5 @@ type inboxFail struct {
 	stage, err string
 	wrote      []string
 	a          InboxAction
+	why        inboxWhy // the same, in a person's words
 }
