@@ -1186,6 +1186,17 @@ func TestShipEMSeatApprover(t *testing.T) {
 			t.Fatalf("ship with %s: %d merged %t %s", c.why, code, merged, out)
 		}
 	}
+	// #667: nor can the checkout name the bucket that ship sends the
+	// person's media secret to.
+	var code int
+	var out string
+	local := filepath.Join(dir, ".aayudha", "config.local.toml")
+	_ = os.WriteFile(local, []byte("version = 1\n[proof]\nmedia = \"s3://evil/x?endpoint=http://127.0.0.1:9\"\nmedia_secret = \"github-token\"\n"), 0o644)
+	code, out = shipCmd(t, env, opts, prN, seat...)
+	_ = os.Remove(local)
+	if code != ExitBlocked || contains(g.LabelNames(2), "status:merged") || !strings.Contains(out, "the proof media bucket, its secret, and its retention are read only from the user config and dev's committed .aayudha/config.toml") {
+		t.Fatalf("ship with the checkout's media bucket: %d %s", code, out)
+	}
 	g.Mu.Lock()
 	g.Pulls[prN].Reviews = g.Pulls[prN].Reviews[:1]
 	g.Mu.Unlock()
@@ -1245,7 +1256,7 @@ func TestShipEMSeatApprover(t *testing.T) {
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 	g.Pulls[prN].Unlisted = 0
 	g.Mu.Unlock()
-	code, out := shipCmd(t, env, opts, prN, seat...)
+	code, out = shipCmd(t, env, opts, prN, seat...)
 	g.Mu.Lock()
 	merged := g.Pulls[prN].Merged
 	g.Mu.Unlock()

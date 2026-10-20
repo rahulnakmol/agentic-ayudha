@@ -1,0 +1,5 @@
+# Which tests prove Bug #667's Completion Goal (the proof media bucket and its secret come only from trusted config).
+
+[[criterion]]
+id = 1 # a checkout [proof] media and media_secret that differ from the base branch: ship and proof push refuse, and no secret reaches the checkout's bucket
+tests = ["internal/cli:TestProofPushVerifyCLI", "internal/cli:TestShipEMSeatApprover", "internal/cli:TestAccountHomeIgnoresHOME"]

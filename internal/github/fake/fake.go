@@ -240,7 +240,12 @@ type GitHub struct {
 	// Viewer's (a bot's installation token): GET /user and the comments it
 	// posts answer as that account.
 	TokenLogins map[string]Account
-	ViewerType  string // GET /user type; default User
+	// InstallationTokens are GitHub App installation tokens, each with the
+	// repositories ("owner/name") its installation was granted: GET /user
+	// refuses them, as GitHub does, and GET /installation/repositories
+	// lists those repositories.
+	InstallationTokens map[string][]string
+	ViewerType         string // GET /user type; default User
 	// Permissions is each login's repository permission (GET
 	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
 	// maintain, read, or none, or "not-found" for an account that is not a
@@ -494,7 +499,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, v)
 		return
 	}
+	installation, isInstallation := g.InstallationTokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
 	switch m, p := r.Method, path; {
+	case m == "GET" && p == "/user" && isInstallation:
+		reply(403, map[string]any{"message": "Resource not accessible by integration"})
+	case m == "GET" && p == "/installation/repositories" && isInstallation:
+		repos := []map[string]any{}
+		for _, full := range installation {
+			repos = append(repos, map[string]any{"full_name": full})
+		}
+		reply(200, map[string]any{"total_count": len(repos), "repositories": repos})
 	case m == "GET" && p == "/user" && g.Device != nil && r.Header.Get("Authorization") == "Bearer "+DeviceToken:
 		typ := g.Device.ApproverType
 		if typ == "" {

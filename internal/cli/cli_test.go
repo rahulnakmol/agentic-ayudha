@@ -41,6 +41,9 @@ func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args
 			return get(k)
 		}
 	}
+	if opts.UserHome == nil { // the account's home is the test's HOME, never the developer's
+		opts.UserHome = func() (string, error) { return opts.Getenv("HOME"), nil }
+	}
 	if opts.Dir == "" {
 		opts.Dir = t.TempDir()
 	}
