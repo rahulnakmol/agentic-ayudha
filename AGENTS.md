@@ -94,6 +94,39 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   protected paths and why, then `gh pr merge --squash --admin`. Never bypass a failing build, test, lint,
   security, docs, or drift check.
 
+## Code review
+
+How an agent handles review of its own PR. The merge gate's inspect decides; Codex, CodeRabbit, and other bots'
+comments are input to it, never a verdict. The mechanics (rungs, cache, round cap) are in
+[docs/guide/how-merge-gate.md](docs/guide/how-merge-gate.md).
+
+- **Check every finding against the code before acting.** A finding is a claim, not a fact: read the cited lines,
+  reproduce it, or show from the code that it cannot happen. Record which, with the file and line.
+- **Fix a valid finding with a test that fails without the fix.** Revert the fix once to see the test fail. A finding
+  that names a class covers every instance of that class, so look for the siblings and fix them in the same push.
+- **Never decline a P0 or P1 on your own.** Put the evidence in front of a person and wait. A P2 or P3 you decline,
+  and every declined finding, gets its reason in the RAID log. A false finding a person agrees to drop is dismissed
+  by that person (`aayu inspect <pr> --dismiss <id> --reason …`, human-only). A cached verdict ignores a dismissal
+  until the next judged review (Bug #816).
+- **Reply in the PR body's RAID log, not in review threads.** Each finding gets a row: fixed (with the test),
+  declined (with the reason), or filed (with the issue). Never reply or review with `gh` under the person's token:
+  each reply shows as an empty review by that person, and inspect can read it as their verdict (Bug #808).
+- **Edit the PR body only together with a push, or after the merge.** An `edited` event starts the merge gate and a
+  paid review, the same as a push, and an edit made right after a push can gate the old head (Bug #812). Push first,
+  then edit, and check that the gate run is on the new head.
+- **Batch.** Push early only for a P0 or P1. Fold P2 and P3 fixes into the next push you make anyway. A finding raised
+  after inspect said `merge` goes into a follow-up PR that links the original, unless it is a P0 or P1 that the
+  merged code would ship.
+- **Respect the round cap.** Three judged rounds since the last reopen; then inspect says `step-back`. Only a person
+  reopens with `/aayu review again`, so ask, with the findings and your proposed fix, before pushing a fourth head.
+  When a PR keeps raising new findings of the same kind, say so and offer to hold it for a later release.
+- **Do not rerun inspect to get a different answer.** Same head, same cached verdict, and once rung B fails on a head
+  it is not retried until a push (Bug #810). A rerun is for a transient failure outside the review (a link checker's
+  503, a cancelled run), once, and the PR body says why. Never cancel or rerun a run just to unstick a queue.
+- **When no reviewer can answer** (rung B failed and the reviewer app has seen the head already), the review falls to a
+  person: tell them which head, what changed since the last judged head (`git range-diff`), and what to look at
+  first. They approve it with `aayu inspect <pr> --approve --reason …`.
+
 ## Promotion and release (no human approval)
 
 Founder policy for this repository: promotions `dev` → `rolling` and `rolling` → `main` need **no human
