@@ -2285,6 +2285,7 @@ func TestInboxLoginScreen(t *testing.T) {
 // refuse. Each case changes GitHub after the card is drawn, then acts on it
 // in the full-screen inbox.
 func TestInboxReread(t *testing.T) {
+	var log string // the session log of the last act (each write's output), which runs with --verbose
 	act := func(t *testing.T, key string, change func(g *fake.GitHub), keys ...string) (status string, card InboxItem, writes []fake.Request) {
 		t.Helper()
 		g := inboxRepo(t)
@@ -2305,14 +2306,15 @@ func TestInboxReread(t *testing.T) {
 			change(g)
 			g.Mu.Unlock()
 			teaKeys(m, keys...)
-			status = m.status
+			status, log = m.status, strings.Join(m.log, "\n")
 			if i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.key() == key }); i >= 0 {
 				card = m.items[i]
 			}
 			teaKeys(m, "q")
 			return nil
 		}
-		if code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}, opts, "", "inbox", "--repo", "o/r", "--verbose")
+		if code != 0 {
 			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
 		}
 		return status, card, g.Writes()
@@ -2325,12 +2327,16 @@ func TestInboxReread(t *testing.T) {
 	}
 	ship := []string{"2", "enter", "enter"} // ship is not the capped card's recommendation, so it asks again
 
-	t.Run("another title, the same head and choice", func(t *testing.T) {
+	t.Run("another title, reason, and counsel, the same head and choice", func(t *testing.T) {
 		status, _, _ := act(t, "capped#9", func(g *fake.GitHub) {
 			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
+			gate := g.Issues[9].Comments[slices.IndexFunc(g.Issues[9].Comments, func(c *fake.Comment) bool { return c.ID == 77 })]
+			gate.Body = strings.Replace(gate.Body, `"disposition":"fix"`, `"disposition":"hold"`, 1) // inspect's last disposition: the card's reason and counsel
 		}, ship...)
-		if strings.Contains(status, "changed on GitHub") {
-			t.Errorf("a renamed PR refused its ship: %q", status)
+		// The re-read passes and ship runs; ship then stops at its own gate (the fake has no merge gate pack).
+		if strings.Contains(status, "changed on GitHub") || !strings.Contains(log, "ship #9: no merge gate pack") ||
+			!strings.Contains(log, `inbox: #9 changed since it was read (counsel, title, why), but not what "ship PR #9 now (ship's gates still apply)" does; doing it`) {
+			t.Errorf("a change that leaves the ship as it was: status %q, log:\n%s", status, log)
 		}
 	})
 	t.Run("the head moved", func(t *testing.T) {

@@ -18,5 +18,5 @@ id = 4 # a Decision renamed after the person read it: nothing written, and the r
 tests = ["internal/cli:TestInbox"]
 
 [[criterion]]
-id = 5 # aayu inbox --verbose, a Decision whose ratify-by moved: it is accepted, and the session log names why
-tests = ["internal/cli:TestInbox"]
+id = 5 # aayu inbox --verbose, capped #9 renamed or its reason and counsel changed: ship runs, and the session log names the fields
+tests = ["internal/cli:TestInbox", "internal/cli:TestInboxReread"]
