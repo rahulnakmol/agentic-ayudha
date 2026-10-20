@@ -2,9 +2,11 @@ package github
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -110,10 +112,15 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if cached != nil {
 			r.Header.Set("If-None-Match", cached.etag)
 		}
-		resp, err := t.next.RoundTrip(r)
+		// Each attempt is bounded, its body included: a reply GitHub never
+		// sends must not hold a verb (or the inbox) for ever (Bug #822).
+		actx, cancel := context.WithTimeoutCause(r.Context(), o.Timeout, errAttemptTimeout)
+		resp, err := t.next.RoundTrip(r.WithContext(actx))
 		if err != nil {
-			return nil, err
+			cancel()
+			return nil, timedOut(actx, o.Timeout, err)
 		}
+		resp.Body = &attemptBody{ReadCloser: resp.Body, ctx: actx, cancel: cancel, timeout: o.Timeout}
 		if resp.StatusCode == http.StatusNotModified && cached != nil {
 			_ = resp.Body.Close()
 			t.c.mu.Lock()
@@ -186,6 +193,41 @@ func isQuery(req *http.Request) bool {
 		return false
 	}
 	return !strings.HasPrefix(strings.TrimSpace(body.Query), "mutation")
+}
+
+// errAttemptTimeout is the cause of an attempt's own timeout, so a deadline
+// or cancellation of the caller's context is never mistaken for it.
+var errAttemptTimeout = errors.New("attempt timeout")
+
+// timedOut names an attempt that ran past its timeout as ErrTimeout; any
+// other error, the caller's own cancellation included, is returned as it is.
+func timedOut(ctx context.Context, timeout time.Duration, err error) error {
+	if err != nil && errors.Is(context.Cause(ctx), errAttemptTimeout) {
+		return fmt.Errorf("%w (%s): %w", ErrTimeout, timeout, err)
+	}
+	return err
+}
+
+// attemptBody is a reply's body under its attempt's timeout: closing it
+// releases the timer, and a read cut off by the timeout is ErrTimeout.
+type attemptBody struct {
+	io.ReadCloser
+	ctx     context.Context
+	cancel  context.CancelFunc
+	timeout time.Duration
+}
+
+func (b *attemptBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		err = timedOut(b.ctx, b.timeout, err)
+	}
+	return n, err
+}
+
+func (b *attemptBody) Close() error {
+	defer b.cancel()
+	return b.ReadCloser.Close()
 }
 
 func clone(req *http.Request) (*http.Request, error) {

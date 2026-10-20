@@ -2221,3 +2221,219 @@ func TestInboxLoginScreen(t *testing.T) {
 		t.Errorf("q on the login screen: err %v", m.signin.err)
 	}
 }
+
+// holdGET makes the fake hold every GET of path until release is closed (or
+// five seconds pass), with the fake locked, as a GitHub that accepts the
+// request and never answers it does.
+func holdGET(g *fake.GitHub, path string) (release func()) {
+	ch := make(chan struct{})
+	g.Mu.Lock()
+	g.Hook = func(method, p string) {
+		if method == "GET" && p == path {
+			select {
+			case <-ch:
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}
+	g.Mu.Unlock()
+	var once sync.Once
+	return func() { once.Do(func() { close(ch) }) }
+}
+
+// Bug #822: a read GitHub never answers ends, in every verb (the run's HTTP
+// timeout bounds each GitHub request) and in the inbox (a read past its
+// deadline says so, and R reads again); a finished refresh clears its
+// reading line; and a refresh cut off before a pull request was read reads
+// it on the next one.
+func TestInboxReadTimeout(t *testing.T) {
+	// Each case has its own state directory: a cache one case writes is not the next case's cold start.
+	newEnv := func(t *testing.T) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	}
+
+	t.Run("a request GitHub never answers times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		release := holdGET(g, "/repos/o/r/issues")
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
+		start := time.Now()
+		code, out, errOut := run(t, newEnv(t), opts, "inbox", "--list", "--repo", "o/r")
+		if code == 0 || !strings.Contains(errOut, github.ErrTimeout.Error()) {
+			t.Errorf("exit %d, want a timeout: %s\n%s", code, errOut, out)
+		}
+		if d := time.Since(start); d > 4*time.Second {
+			t.Errorf("the list waited %s for a reply GitHub never sent", d)
+		}
+	})
+
+	// One request's timeout while the list asks who the viewer is fails the
+	// list, instead of listing without inspect's comments by the viewer
+	// (inspect's P1 eaaf90ffc8 and CodeRabbit's r4325905150 on #828).
+	t.Run("the viewer request times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		// The fake answers /user only after the client gave up, and every other request at once.
+		g.Mu.Lock()
+		g.Hook = func(method, p string) {
+			if method == "GET" && p == "/user" {
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
+		g.Mu.Unlock()
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{Timeout: 300 * time.Millisecond}, Assets: aayudha.Assets}
+		code, out, errOut := run(t, newEnv(t), opts, "inbox", "--list", "--repo", "o/r")
+		if code == 0 || !strings.Contains(errOut, github.ErrTimeout.Error()) || !strings.Contains(errOut, "/user") {
+			t.Errorf("exit %d, want the viewer request's timeout: %s\n%s", code, errOut, out)
+		}
+	})
+
+	// A cold start with no cache, against a GitHub that never answers: the
+	// inbox stays open, says so where the loading view was, and R reads
+	// again (inspect's P1 c47f82faf1 on #828).
+	t.Run("first read", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdGET(g, "/repos/o/r/issues")
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			if teaDrive(m, m.Init()) {
+				t.Fatal("the inbox quit when its first read timed out")
+			}
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
+			if v := ansi.Strip(m.View().Content); !strings.Contains(v, inboxSlowFirst) || strings.Contains(v, "Nothing waits for you") || strings.Contains(v, "Reading the issues") {
+				t.Errorf("after a first read past its deadline:\n%s", v)
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Mu.Unlock()
+			teaKeys(m, "R")
+			if len(m.items) == 0 || m.loading || m.status != "Enter does the preselected choice." {
+				t.Errorf("R after a timed-out first read: %d items, loading %v, status %q", len(m.items), m.loading, m.status)
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
+	// q during that first read quits once it times out (CodeRabbit's minor on #828).
+	t.Run("q during a first read that times out", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdGET(g, "/repos/o/r/issues")
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			read := m.Init()
+			teaKeys(m, "q") // asked while the read runs
+			if !teaDrive(m, read) {
+				t.Error("q during a first read that timed out left the inbox open")
+			}
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
+	// A first read cut off while it asks who the viewer is stays unloaded, so
+	// R reads it all again and trusts inspect's comments by the viewer (#11
+	// waits at the human rung only in such a comment; inspect's P1 e65fb27d4f
+	// on #828, narrowed).
+	t.Run("first read cut off at the viewer", func(t *testing.T) {
+		g := inboxRepo(t)
+		head := strings.Repeat("e", 40)
+		st, _ := json.Marshal(inspect.State{Human: head, Result: &inspect.Result{Disposition: "merge"}})
+		own := &fake.Comment{ID: 190, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(st) + " -->\n"}
+		own.User.Login, own.User.Type = "o", "User"
+		g.Mu.Lock()
+		g.Issues[11].Comments = append(g.Issues[11].Comments, own)
+		g.Mu.Unlock()
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		release := holdGET(g, "/user")
+		t.Cleanup(release)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			if teaDrive(m, m.Init()) {
+				t.Fatal("the inbox quit when its first read timed out")
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Mu.Unlock()
+			teaKeys(m, "R")
+			if !slices.ContainsFunc(m.items, func(it InboxItem) bool { return it.Number == 11 && it.Kind == InboxHumanReview }) {
+				t.Errorf("after R, #11 is not a human-review card: the viewer's inspect comment went unread (status %q)", m.status)
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+
+	t.Run("refresh", func(t *testing.T) {
+		g := inboxRepo(t)
+		was := inboxReadTimeout
+		inboxReadTimeout = 300 * time.Millisecond
+		t.Cleanup(func() { inboxReadTimeout = was })
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HTTP: &http.Client{}, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets}
+		title := func(m *inboxModel, n int) string {
+			if i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == n }); i >= 0 {
+				return m.items[i].Title
+			}
+			return ""
+		}
+		opts.TUI = func(tm tea.Model) error {
+			m := tm.(*inboxModel)
+			teaDrive(m, m.Init())
+			teaKeys(m, "R")
+			if m.status != "Up to date." {
+				t.Errorf("after a finished refresh the status is %q, want Up to date.", m.status)
+			}
+			release := holdGET(g, "/repos/o/r/issues")
+			defer release()
+			start := time.Now()
+			teaKeys(m, "R")
+			if d := time.Since(start); d > 4*time.Second {
+				t.Errorf("the refresh waited %s for a reply GitHub never sent", d)
+			}
+			if want := "GitHub did not answer in time, so nothing was refreshed; the cards are from the last read. R tries again."; m.status != want || m.refreshing {
+				t.Errorf("after a refresh past its deadline: refreshing %v, status %q, want %q", m.refreshing, m.status, want)
+			}
+			release()
+			g.Mu.Lock()
+			g.Hook = nil
+			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
+			g.Fail, g.FailAfter = "GET /repos/o/r/pulls/9", 0
+			g.Mu.Unlock()
+			teaKeys(m, "R") // cut off before #9's pull request is read
+			if !strings.HasPrefix(m.status, "Could not refresh") {
+				t.Errorf("the injected failure did not stop the refresh: %q", m.status)
+			}
+			teaKeys(m, "R")
+			if got := title(m, 9); got != "fix(cli): capped, renamed" || m.status != "Up to date." {
+				t.Errorf("after a cut-off refresh, R reads #9 as %q (status %q), want its new title", got, m.status)
+			}
+			teaKeys(m, "q")
+			return nil
+		}
+		if code, out, errOut := runIn(t, newEnv(t), opts, "", "inbox", "--repo", "o/r"); code != 0 {
+			t.Fatalf("exit %d: %s\n%s", code, errOut, out)
+		}
+	})
+}
