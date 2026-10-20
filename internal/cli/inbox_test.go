@@ -164,6 +164,12 @@ func TestInbox(t *testing.T) {
 	if !strings.Contains(changed, "#7 changed on GitHub since you opened it") || strings.Contains(changed, "Job well done") {
 		t.Errorf("a set with an item that changed on GitHub cheers:\n%s", changed)
 	}
+	// C on a card that needs the person tidies the set there, and the set
+	// cheers there too (CodeRabbit r4330641125 on #851).
+	_, fromCard, _ := runIn(t, newEnv(), Options{GitHubAPI: inboxRepo(t).URL(), GitHubGap: -1, IsTerminal: tty, Assets: aayudha.Assets}, "ay a C y s", "inbox", "--repo", "o/r")
+	if _, after, ok := strings.Cut(fromCard, "[3/4] At the review cap #9"); !ok || !strings.Contains(after, "  > C\n") || !strings.Contains(after, "🎉 Housekeeping cleared: 3 tidied. Job well done.") {
+		t.Errorf("C on a card that needs you: no cheer for the set:\n%s", fromCard)
+	}
 	for _, not := range []string{"#10:", "#4:", "#11:", "Accept B now"} {
 		if strings.Contains(out, not) {
 			t.Errorf("inbox shows %s, which is not a human-only step or not counsel:\n%s", not, out)
@@ -1475,10 +1481,10 @@ func TestInboxWriteFailures(t *testing.T) {
 	reads := 0 // R during the writes reads GitHub once, after them
 	m.gather = func() inboxGatheredMsg { reads++; return inboxGatheredMsg{items: slices.Clone(m.items)} }
 	job := func(n int) inboxJob { it := byNum(n); return inboxJob{it: it, a: *it.recommended()} }
-	first := m.start([]inboxJob{job(640), job(642), job(650)}) // one confirmed batch: #640 and #642 run, #650 waits
-	m.start([]inboxJob{job(644)})                              // queued on its own
-	m.start([]inboxJob{job(646)})
-	m.start([]inboxJob{job(654)})
+	first := m.start([]inboxJob{job(640), job(642), job(650)}, true) // one confirmed batch: #640 and #642 run, #650 waits
+	m.start([]inboxJob{job(644)}, false)                             // queued on its own
+	m.start([]inboxJob{job(646)}, false)
+	m.start([]inboxJob{job(654)}, false)
 
 	// While #640 is written: Enter on it again is refused, and the status
 	// line says so instead of the writes' count; Ctrl-C with the help open
@@ -1575,8 +1581,8 @@ func TestInboxWriteFailures(t *testing.T) {
 		i := slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Kind == InboxCapped })
 		m.items[i].Story = 644
 		capped, story := m.items[i], m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 644 })]
-		m.start([]inboxJob{{it: capped, a: capped.Options[1]}})
-		m.start([]inboxJob{{it: story, a: *story.recommended()}})
+		m.start([]inboxJob{{it: capped, a: capped.Options[1]}}, false)
+		m.start([]inboxJob{{it: story, a: *story.recommended()}}, false)
 		if running, waiting := m.queued(story.key()); running || !waiting {
 			t.Errorf("a write on Story #644 while capped #%d ships it: running %v, waiting %v", capped.Number, running, waiting)
 		}
@@ -1592,7 +1598,7 @@ func TestInboxWriteFailures(t *testing.T) {
 		kept := 0
 		m.recordDone = func(string, inboxDone) { kept++ }
 		it := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 697 })]
-		m.start([]inboxJob{{it: it, a: *it.recommended()}})
+		m.start([]inboxJob{{it: it, a: *it.recommended()}}, false)
 		cmd := m.finished(inboxDoneMsg{key: it.key(), fresh: it})
 		if kept != 0 {
 			t.Errorf("dry run %v: the cache was written inside the update", dry)
@@ -1613,7 +1619,7 @@ func TestInboxWriteFailures(t *testing.T) {
 				bulk = append(bulk, inboxJob{it: it, a: *it.recommended()})
 			}
 		}
-		m.start(bulk)
+		m.start(bulk, true)
 		for i, j := range bulk {
 			var err error
 			if i == 1 {
@@ -1638,7 +1644,7 @@ func TestInboxWriteFailures(t *testing.T) {
 			jobs = append(jobs, inboxJob{it: it, a: *it.recommended()})
 		}
 		for _, j := range jobs {
-			m.start([]inboxJob{j})
+			m.start([]inboxJob{j}, false)
 		}
 		teaKeys(m, "q")
 		m.finished(inboxDoneMsg{key: jobs[0].it.key(), fresh: jobs[0].it})
@@ -1658,7 +1664,7 @@ func TestInboxWriteFailures(t *testing.T) {
 		m.queue = nil
 		m.act = func(it InboxItem, _ InboxAction, _ *inboxWork) (InboxItem, string, error) { return it, "", nil }
 		it := m.items[slices.IndexFunc(m.items, func(it InboxItem) bool { return it.Number == 697 })]
-		write := m.start([]inboxJob{{it: it, a: *it.recommended()}})
+		write := m.start([]inboxJob{{it: it, a: *it.recommended()}}, false)
 		teaKeys(m, "q")
 		teaDrive(m, write)
 		_, cmd := m.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
@@ -2455,11 +2461,17 @@ func TestInboxReread(t *testing.T) {
 	}
 
 	t.Run("another title, reason, and counsel, the same head and choice", func(t *testing.T) {
-		status, _, _ := act(t, "capped#9", func(g *fake.GitHub) {
+		status, card, _ := act(t, "capped#9", func(g *fake.GitHub) {
 			g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
 			gate := g.Issues[9].Comments[slices.IndexFunc(g.Issues[9].Comments, func(c *fake.Comment) bool { return c.ID == 77 })]
 			gate.Body = strings.Replace(gate.Body, `"disposition":"fix"`, `"disposition":"hold"`, 1) // inspect's last disposition: the card's reason and counsel
 		}, ship...)
+		// A capped card names its own pull request, as a Ready card does, so
+		// a ship from it that merges and then stops shows as merged
+		// (CodeRabbit r4330405278 on #845).
+		if card.PR != 9 {
+			t.Errorf("the capped card names PR %d, not its own #9", card.PR)
+		}
 		// The re-read passes and ship runs; ship then stops at its own gate (the fake has no merge gate pack).
 		if strings.Contains(status, "changed on GitHub") || !strings.Contains(log, "ship #9: no merge gate pack") ||
 			!strings.Contains(log, `inbox: #9 changed since it was read (counsel, title, why), but not what "ship PR #9 now (ship's gates still apply)" does; doing it`) {

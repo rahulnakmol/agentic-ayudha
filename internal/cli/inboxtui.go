@@ -398,6 +398,7 @@ type inboxAsk struct {
 	// first: text is what they typed, and Enter with none writes nothing.
 	prompt, text string
 	quit         bool // the question q asks while writes run
+	bulk         bool // a set of housekeeping (C, A, or the selected ones), however many
 }
 
 // inboxHit is one line of the finder: an item (or the housekeeping line), or
@@ -942,8 +943,8 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	job := m.queue[at]
 	m.queue = slices.Delete(m.queue, at, at+1)
 	var save tea.Cmd // the done write's record in the cache
-	b := m.batches[job.batch]
-	if b == nil {
+	b, bulk := m.batches[job.batch]
+	if !bulk {
 		b = &inboxBatch{total: 1}
 	}
 	num := job.it.Number
@@ -1043,8 +1044,8 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		m.status = "✓ " + inboxDoingFor(job.it, job.a).did + "."
 		m.relayout()
 	}
-	cleared := b.total > 1 && b.done+b.failed >= b.total && b.failed == 0 && !m.dryRun // a set of housekeeping, every one done
-	if b.total > 1 && b.done+b.failed >= b.total {
+	cleared := bulk && b.done+b.failed >= b.total && b.failed == 0 && !m.dryRun // a set of housekeeping, every one done
+	if bulk && b.done+b.failed >= b.total {
 		delete(m.batches, job.batch)
 		m.status = fmt.Sprintf("Applied %d: %d done, %d not done. Written changes are not undone here.", b.total, b.done, b.failed)
 		if m.dryRun {
@@ -1160,10 +1161,11 @@ func (m *inboxModel) pump() tea.Cmd {
 
 // start queues jobs and starts what can run now: the writes run in the
 // background, so the person goes on acting meanwhile. After one Enter the
-// cursor moves on to the next item that waits for them.
-func (m *inboxModel) start(jobs []inboxJob) tea.Cmd {
+// cursor moves on to the next item that waits for them. bulk says the jobs
+// are a set of housekeeping, even a set of one.
+func (m *inboxModel) start(jobs []inboxJob, bulk bool) tea.Cmd {
 	m.batch++
-	if len(jobs) > 1 {
+	if bulk {
 		m.batches[m.batch] = &inboxBatch{total: len(jobs)}
 	}
 	for k := range jobs {
@@ -1296,7 +1298,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 			jobs := m.ask.jobs
 			jobs[0].a.Answer = strings.TrimSpace(m.ask.text)
 			m.ask = nil
-			return m.start(jobs)
+			return m.start(jobs, false)
 		case "esc":
 			m.ask, m.status = nil, "Not applied; nothing was written."
 		case "backspace":
@@ -1310,9 +1312,9 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case m.ask != nil:
 		switch k {
 		case "enter", "y", "Y":
-			jobs := m.ask.jobs
+			jobs, bulk := m.ask.jobs, m.ask.bulk
 			m.ask = nil
-			return m.start(jobs)
+			return m.start(jobs, bulk)
 		case "esc", "n", "N", "q":
 			m.ask, m.status = nil, "Not applied; nothing was written."
 		}
@@ -1475,7 +1477,7 @@ func (m *inboxModel) enter() tea.Cmd {
 		m.status = "Nothing is written until you press Enter again."
 	default:
 		m.armed = false
-		return m.start([]inboxJob{{it: it, a: c}})
+		return m.start([]inboxJob{{it: it, a: c}}, false)
 	}
 	return nil
 }
@@ -1511,7 +1513,7 @@ func (m *inboxModel) askJobs(items []InboxItem, title string) {
 		return
 	}
 	m.ask = &inboxAsk{title: fmt.Sprintf(title, len(jobs), plural(len(jobs), "item", "items")),
-		lines: append(lines, "", fmt.Sprintf("Each is written to GitHub as @%s and is not undone here. Nothing in the code changes.", m.login)), jobs: jobs}
+		lines: append(lines, "", fmt.Sprintf("Each is written to GitHub as @%s and is not undone here. Nothing in the code changes.", m.login)), jobs: jobs, bulk: true}
 	m.status = "Nothing is written until you press Enter."
 }
 

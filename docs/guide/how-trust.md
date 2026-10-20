@@ -342,7 +342,8 @@ merged because it conflicts with dev), whether anything changed on GitHub, and w
 method, status code, commit, or error text; `d` shows those (the step it stopped at, GitHub's own answer,
 the request, and the commit), and the log printed when the inbox quits keeps them. A failure that pressing Enter again
 cannot fix takes that action off the card.
-A merge that landed before a later step failed shows as merged, with the step that did not finish.
+A merge that landed before a later step failed shows as merged, with the step that did not finish
+(`TestInboxFailureWords`, `TestInboxFailureCards`, `TestInboxFailedChoiceLeaves`).
 
 Clearing a set of housekeeping, or the last item that needs you, gets a short "Job well done" in the Auditor's or the
 Founder's Sage's voice, with a burst of confetti over the card pane for at most a second and a half. It never blocks (any key

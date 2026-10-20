@@ -110,6 +110,15 @@ func TestInboxCheer(t *testing.T) {
 		t.Errorf("a set with a failure: cheer %v, status %q", m.cheer, m.status)
 	}
 
+	// A set of one is still a set: C clears the last housekeeping item while
+	// a Decision still waits (CodeRabbit r4330641134 on #851).
+	m, _ = scene(false, true, 0)
+	m.state[InboxItem{Kind: InboxFixed, Number: 640}.key()], m.state[InboxItem{Kind: InboxFixed, Number: 642}.key()] = "done", "done"
+	teaKeys(m, "C", "y")
+	if m.status != "Housekeeping cleared: 1 tidied. Job well done." {
+		t.Errorf("a set of one: status %q", m.status)
+	}
+
 	// Criterion 5: an inbox that opens empty has nothing to celebrate.
 	m = newInboxModel("o/r", "rahulnakmol", "", false)
 	m.motion, m.now = true, func() time.Time { return clock }

@@ -716,7 +716,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		if st.Result != nil {
 			disp = st.Result.Disposition
 		}
-		it := InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
+		it := InboxItem{Kind: InboxCapped, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time,
 			Story:    StoryOf(p.GetBody(), "", p.GetHead().GetRef()), // its "ship now" choice completes the Story
 			Evidence: p.GetHTMLURL(), Head: p.GetHead().GetSHA(), f: inboxFacts{cycles: len(st.Rounds), disp: termText(disp)},
 			Why:     fmt.Sprintf("inspect's review ran %d rounds without converging and stopped at %s (last disposition: %s); the builder steps back, and a person reviews it or comments `%s` to reopen review.", len(st.Rounds), short(st.Stopped), termText(disp), inspect.ReopenCommand),
@@ -1278,7 +1278,9 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		return it, false
 	}
 	tidied := false
-	tidyN := 0 // how many tidyAll wrote for
+	// tidyAll tidies every housekeeping item, from its own card or with A or
+	// C on any card. A set cleared (every item it tidied done, none failed or
+	// changed on GitHub first) gets its cheer here; inbox zero says its own.
 	tidyAll := func() (bool, error) {
 		var todo []InboxItem
 		var lines []string
@@ -1300,9 +1302,13 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 			return false, err
 		}
-		tidied, tidyN = true, len(todo)
+		tidied = true
+		before, failedBefore := done, failed
 		for _, it := range todo {
 			apply(it, *it.recommended())
+		}
+		if failed == failedBefore && done-before == len(todo) && (left() > 0 || skipped > 0 || failed > 0) {
+			e.cheer(w, cheerFor(len(todo), false))
 		}
 		return true, nil
 	}
@@ -1422,7 +1428,6 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		say("  ", fmt.Sprintf("1. Tidy all %d (recommended)", len(house)))
 		say("  ", "2. Go through them one by one")
 		say("  ", "Enter = 1 · 2 = one by one · s = leave them · ? = explain · q = quit")
-		before, failedBefore := done, failed
 	tidy:
 		for {
 			ch, err := key()
@@ -1441,11 +1446,6 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 				break tidy
 			case 'a', 'A', 'C', '\r', '\n', '1':
 				ok, err := tidyAll()
-				// A set cleared: every item it tidied was done, none failed or
-				// changed on GitHub first. Inbox zero says its own.
-				if ok && failed == failedBefore && done-before == tidyN && (left() > 0 || skipped > 0 || failed > 0) {
-					e.cheer(w, cheerFor(tidyN, false))
-				}
 				if err != nil || ok {
 					break tidy
 				}
