@@ -33,7 +33,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - `aayu build <n> --stop "<why>"` blocks a build that cannot reach a pull request, and a loop claim with no pull request is blocked 4 hours after its lease runs out, with its owner paged (#685).
 - `aayu scope <release>` plans a release in its version milestone: the Product Strategist's twin adds, drops, and drafts the plan, and a person accepts it as the baseline from their own terminal or the inbox's Release scope card (#676).
 - After the baseline, each change counts as drift in effort points (XS 1, S 2, M 3, L 5, XL 8), held to `[scope] budget_percent`, 20% by default; a change over budget needs an accepted Decision, and a person accepts it (#676).
-- `aayu scope --handoff` writes the Release's includes links and posts the plan, and `aayu scope --assign <n> --to this|next|backlog` places a Feedback issue by milestone and horizon label (#676).
+- `aayu scope --handoff` writes the Release's includes links and posts the plan, and `aayu scope --assign <n> --to this|next|backlog` places a Feedback issue by milestone and horizon label; when two open milestones carry the same release's title, scope stops and asks you to close or rename one rather than guess (#676, #820).
 - `aayu investigate` investigates an incident from bounded telemetry queries down to the deployed revision and the implicated code, and proposes a mitigation without running it (#343).
 - `aayu investigate --source sentry|posthog` runs its queries against your configured Sentry or PostHog project with a read-only key (#526, #536, #590).
 - investigate reads Sentry Seer's existing analysis of an issue as a labelled opinion it never cites, and never starts a paid analysis (#542).
