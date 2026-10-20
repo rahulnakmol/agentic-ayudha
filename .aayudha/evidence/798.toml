@@ -1,0 +1,21 @@
+# Which tests prove Story #798's Completion Goal.
+
+[[criterion]]
+id = 1 # C on three housekeeping items, all done: a burst under 1.5 s over the card pane, the status, Vidhi's line, keys act, key bar never covered
+tests = ["internal/cli:TestInboxCheer", "internal/cli:TestInboxTUI"]
+
+[[criterion]]
+id = 2 # the last needs-you item done: inbox zero, with Atri's line
+tests = ["internal/cli:TestInboxCheer"]
+
+[[criterion]]
+id = 3 # motion off, NO_COLOR, or --plain: the words only
+tests = ["internal/cli:TestInboxCheer", "internal/cli:TestInbox"]
+
+[[criterion]]
+id = 4 # a set with one failure: no celebration, the usual Applied line
+tests = ["internal/cli:TestInboxCheer"]
+
+[[criterion]]
+id = 5 # an inbox that opens empty: no burst
+tests = ["internal/cli:TestInboxCheer"]

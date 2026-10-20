@@ -344,6 +344,11 @@ the request, and the commit), and the log printed when the inbox quits keeps the
 cannot fix takes that action off the card.
 A merge that landed before a later step failed shows as merged, with the step that did not finish.
 
+Clearing a set of housekeeping, or the last item that needs you, gets a short "Job well done" in the Auditor's or the
+Founder's Sage's voice, with a burst of confetti over the card pane for at most a second and a half. It never blocks (any key
+carries on), never covers the key bar, and never follows a failure; with `[ui] motion = false`, `NO_COLOR`, or
+`--plain` only the words show.
+
 The counsel on a card is advice, never an approval: a Decision's is the newest `aayu counsel --post` comment from an
 account with write access, cut to 75 words; every other kind's is written from the facts the inbox read
 (`inboxCounsel`), with no model call.

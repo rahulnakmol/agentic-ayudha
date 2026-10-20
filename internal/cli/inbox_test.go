@@ -140,11 +140,29 @@ func TestInbox(t *testing.T) {
 		"    Merged without ship #5: Merged story: mark #5 merged without proof (it stays uncovered)\n    Bug fixed, still open #7: A bug: close #7 as completed, fixed in #8\n    Replaced, still open #3: Old story: close #3 as not planned, replaced by #4\n" +
 			"  1. Tidy all 3 (recommended)\n  2. Go through them one by one\n",
 		"  > C\n  This tidies 3 housekeeping items, each written to GitHub as @o and not undone later: #5 mark #5 merged without proof (it stays uncovered); #7 close #7 as completed, fixed in #8; #3 close #3 as not planned, replaced by #4. Apply it to all 3? y = yes · n = no, go back\n  > y\n",
+		"\n🎉 Housekeeping cleared: 3 tidied. Job well done.\n  Vidhi (Auditor): Three loose ends closed, each with its trail.", // Story #798: words only
 		"inbox: 5 done, 1 skipped, 0 left",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("inbox output lacks %q:\n%s", want, out)
 		}
+	}
+	// Bug #7 is closed on GitHub while the set is tidied: nothing is written
+	// for it, so the set was not cleared and nothing cheers (CodeRabbit
+	// r4328514878 on #851).
+	g2 := inboxRepo(t)
+	seen := 0
+	g2.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/issues" {
+			if seen++; seen == 3 { // the read before #7's write: #5's was the second
+				g2.Issues[7].State, g2.Issues[7].UpdatedAt = "closed", "2026-10-12T10:00:00Z"
+			}
+		}
+	}
+	_, changed, _ := runIn(t, newEnv(), Options{GitHubAPI: g2.URL(), GitHubGap: -1, IsTerminal: tty, Assets: aayudha.Assets}, "s s s C y", "inbox", "--repo", "o/r")
+	g2.Hook = nil
+	if !strings.Contains(changed, "#7 changed on GitHub since you opened it") || strings.Contains(changed, "Job well done") {
+		t.Errorf("a set with an item that changed on GitHub cheers:\n%s", changed)
 	}
 	for _, not := range []string{"#10:", "#4:", "#11:", "Accept B now"} {
 		if strings.Contains(out, not) {
@@ -863,7 +881,7 @@ func TestInboxTUI(t *testing.T) {
 		{"Find: bug", "🐞 #7 A bug · Bug fixed, still open · Drona"},
 		{"› [ ] 🐞 #7 A bug", "🐞 Bug fixed, still open · #7", "› 1 Close #7 as completed, fixed in #8"},
 		{"Clear all 5 housekeeping items?", "📦 #5: mark #5 merged without proof", fmt.Sprintf("📦 #%d: mark #%d", more[1], more[1]), "🔁 #3: close #3 as not planned", "Enter applies all · Esc cancels"},
-		{"Applied 5: 5 done, 0 not done.", "› 🧭 #1 Waive the eval"},
+		{"Housekeeping cleared: 5 tidied. Job well done.", "📜 Vidhi, Auditor", "Five loose ends closed", "› 🧭 #1 Waive the eval"}, // Story #798
 	} {
 		v := strings.Join(strings.Fields(views[i]), " ")
 		for _, w := range want {
