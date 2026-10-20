@@ -2,3 +2,4 @@
 {"pr":674,"head":"37f8ae86c19161eb913692022ebbdedf8bb5a385","by":"rahulnakmol","at":"2026-10-19T17:08:58Z","reason":"all of it"}
 {"pr":802,"head":"2b4e9471fdaf1ea69cce3e8819b6686f25657bb7","by":"rahulnakmol","at":"2026-10-20T11:16:08Z","reason":"All good here"}
 {"pr":676,"head":"f40bb1e4c73672466b41970b4e6349855e4c5650","by":"rahulnakmol","at":"2026-10-20T11:16:52Z","reason":"All good here"}
+{"pr":802,"head":"beffea76b0dbb820f8d06ad4004070f55478e4b4","by":"rahulnakmol","at":"2026-10-20T12:16:44Z","reason":"rebase of 2b4e947 onto dev 51b6600; range-diff: only inboxOrder adds InboxScope from #676"}
