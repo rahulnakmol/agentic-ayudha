@@ -1,0 +1,7 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-product-strategist-title">
+<title id="aayu-seats-product-strategist-title">Arjun, Product Strategist: an arrow in the centre of the target</title>
+<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<circle class="s" cx="11" cy="13" r="8"/><circle class="s" cx="11" cy="13" r="3.5"/>
+<path class="s" d="M11 13 20 4"/><path class="s" d="M17 3.5V7h3.5"/><circle class="fa" cx="11" cy="13" r="1.6"/>
+</svg>

@@ -1,0 +1,15 @@
+<!-- The bot GitHub App avatar: the word आयु (aayu). Hand-drawn on a 256 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="aayu-bot-title">
+<title id="aayu-bot-title">aayu, the bot identity agents write under: आयु, its u-sign closed into the delivery loop</title>
+<rect width="256" height="256" rx="56" fill="#1f5bd1"/>
+<g fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+<path d="M26 62H230"/>
+<path d="M36 90C44 78 56 74 68 76C84 79 88 96 80 106C75 112 68 114 60 114C84 114 96 130 94 152C92 174 76 186 58 184C46 183 36 175 32 164"/>
+<path d="M62 114H108"/>
+<path d="M108 62V198"/>
+<path d="M136 62V198"/>
+<path d="M168 64C184 72 186 90 174 98C162 106 158 124 172 131C186 138 204 132 216 120"/>
+<path d="M216 62V148"/>
+</g>
+<path d="M216 148C216 162 204 168 196 174C186 182 190 202 206 202C222 202 230 188 225 177C221 169 212 169 208 176" fill="none" stroke="#f2b632" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

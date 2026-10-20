@@ -1,0 +1,14 @@
+<!-- The aayu Sakshi GitHub App logo. Hand-drawn on a 256 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="aayu-sakshi-title">
+<title id="aayu-sakshi-title">aayu Sakshi, the presence check: a witness eye whose pupil is the one-time code</title>
+<rect width="256" height="256" rx="56" fill="#ffffff"/>
+<g fill="none" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+<path d="M28 128C60 82 94 70 128 70C162 70 196 82 228 128C196 174 162 186 128 186C94 186 60 174 28 128Z" stroke="#1f5bd1"/>
+<circle cx="128" cy="128" r="38" stroke="#1f5bd1"/>
+<path d="M60 64A96 96 0 0 1 112 38" stroke="#1f5bd1"/>
+<path d="M144 38A96 96 0 0 1 196 64" stroke="#9a6700"/>
+<path d="M196 192A96 96 0 0 1 144 218" stroke="#9a6700"/>
+<path d="M112 218A96 96 0 0 1 60 192" stroke="#1f5bd1"/>
+</g>
+<g fill="#9a6700"><circle cx="116" cy="116" r="9"/><circle cx="140" cy="116" r="9"/><circle cx="116" cy="140" r="9"/><circle cx="140" cy="140" r="9"/></g>
+</svg>

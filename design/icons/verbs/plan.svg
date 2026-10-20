@@ -1,0 +1,8 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-verbs-plan-title">
+<title id="aayu-verbs-plan-title">plan: one checkpoint per layer</title>
+<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<rect class="s" x="3" y="3" width="18" height="18" rx="2"/><path class="s" d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
+<path class="a" d="M6 18 18 6" stroke-dasharray="0 4.24"/>
+<circle class="fa" cx="6" cy="18" r="1.6"/><circle class="fa" cx="12" cy="12" r="1.6"/><circle class="fa" cx="18" cy="6" r="1.6"/>
+</svg>

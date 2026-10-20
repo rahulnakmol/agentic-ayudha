@@ -1,0 +1,7 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-verbs-counsel-title">
+<title id="aayu-verbs-counsel-title">counsel: the sage&#39;s star over the road ahead</title>
+<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="fa" d="m12 1.5 1.3 2.7 3 .4-2.2 2 .6 3-2.7-1.5-2.7 1.5.6-3-2.2-2 3-.4Z"/>
+<path class="s" d="M8 22c3-1 6-2 5-4.5s-4-2.5-2.5-5.5"/>
+</svg>
