@@ -10,7 +10,7 @@ ships only Bugs while a budget is spent.
 |---|---|
 | In plain words | Sets how reliable the product must be for its users, measures how much room for failure is left, and holds back risky releases when it runs out. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | ![Shesha](../../../design/icons/seats/production-engineer.svg) [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Accountable seat | ![Shesha, Production Engineer: an endless coil that holds the world up](../../../design/icons/seats/production-engineer.svg) [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Does the work | Shesha, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |

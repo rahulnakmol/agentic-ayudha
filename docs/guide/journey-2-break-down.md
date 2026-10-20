@@ -66,9 +66,9 @@ honest move is to record that it was skipped, not to pretend.
 
 | Verb | What it does |
 |---|---|
-| ![slice](../../design/icons/verbs/slice.svg) [`slice`](skills/slice.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
-| ![plan](../../design/icons/verbs/plan.svg) [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
-| ![decide](../../design/icons/verbs/decide.svg) [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| ![slice: break a Feature into stories](../../design/icons/verbs/slice.svg) [`slice`](skills/slice.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
+| ![plan: one checkpoint per layer](../../design/icons/verbs/plan.svg) [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
+| ![decide: a person chooses one path](../../design/icons/verbs/decide.svg) [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
 | [`chart`](skills/chart.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
 
 <!-- END GENERATED: stage-verbs -->

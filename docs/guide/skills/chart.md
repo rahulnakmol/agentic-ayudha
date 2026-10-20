@@ -10,7 +10,7 @@ data or evidence that answers it, and how to prove it right.
 |---|---|
 | In plain words | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | ![Shuka](../../../design/icons/seats/data-ai-architect.svg) [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
+| Accountable seat | ![Shuka, Data and AI Architect: a parrot that repeats its source faithfully](../../../design/icons/seats/data-ai-architect.svg) [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
 | Does the work | Shuka, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Kuber) |
 | Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |

@@ -9,7 +9,7 @@ records. `init` adds them, shows what it will change, and asks before it uses yo
 |---|---|
 | In plain words | Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request. |
 | Journey stage | [Set up](../start.md) |
-| Accountable seat | ![Atri](../../../design/icons/seats/founder.svg) [Founder](../../../seats/founder/CHARTER.md) (Atri) |
+| Accountable seat | ![Atri, Founder's Sage: his star in the Saptarishi, where the handle meets the bowl](../../../design/icons/seats/founder.svg) [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Does the work | Atri, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

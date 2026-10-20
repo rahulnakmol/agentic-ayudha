@@ -7,9 +7,9 @@ time, until every vague word is something a person can check, then files the res
 
 | Field | Value |
 |---|---|
-| In plain words | ![grill](../../../design/icons/verbs/grill.svg) Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+| In plain words | ![grill: shape a rough idea into a clear goal](../../../design/icons/verbs/grill.svg) Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
 | Journey stage | [Shape the goal](../journey-1-shape.md) |
-| Accountable seat | ![Arjun](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Accountable seat | ![Arjun, Product Strategist: an arrow in the centre of the target](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Does the work | Arjun, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

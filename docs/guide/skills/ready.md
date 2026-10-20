@@ -7,9 +7,9 @@ work item is complete, then freezes exactly what was agreed, so any later edit i
 
 | Field | Value |
 |---|---|
-| In plain words | ![ready](../../../design/icons/verbs/ready.svg) Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+| In plain words | ![ready: a story meets the bar to start](../../../design/icons/verbs/ready.svg) Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 | Journey stage | [Get a story Ready](../journey-3-ready.md) |
-| Accountable seat | ![Arjun](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Accountable seat | ![Arjun, Product Strategist: an arrow in the centre of the target](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Does the work | Arjun, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

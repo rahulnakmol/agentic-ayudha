@@ -1,15 +1,15 @@
 # aayudha
 
-![aayu, the aayudha mark: the word आयु with its delivery loop](design/icons/app/aayu-bot.svg)
+![aayu, the bot identity agents write under: आयु, its u-sign closed into the delivery loop](design/icons/app/aayu-bot.svg)
 
 Your coding agent can write a feature in an afternoon. aayudha is the delivery team around it: it turns a vague
 idea into clear promises, checks every change against them before it merges, and measures whether the result helped.
 It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), on your GitHub repository.
 
-- ![grill](design/icons/verbs/grill.svg) **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
-- ![proof](design/icons/verbs/proof.svg) **Proof before merge.** A merge gate runs fixed checks in your CI and asks a reviewer agent from another vendor.
+- ![grill: shape a rough idea into a clear goal](design/icons/verbs/grill.svg) **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
+- ![proof: the sealed evidence that the work does what it says](design/icons/verbs/proof.svg) **Proof before merge.** A merge gate runs fixed checks in your CI and asks a reviewer agent from another vendor.
   It needs no AI keys in your CI.
-- ![decide](design/icons/verbs/decide.svg) **A person decides.** Nothing merges or releases without a person's yes, and every bypass is recorded.
+- ![decide: a person chooses one path](design/icons/verbs/decide.svg) **A person decides.** Nothing merges or releases without a person's yes, and every bypass is recorded.
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
 does.

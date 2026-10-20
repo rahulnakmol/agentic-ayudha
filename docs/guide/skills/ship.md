@@ -7,9 +7,9 @@ the evidence again on the exact commit, needs a person's yes, then merges and wr
 
 | Field | Value |
 |---|---|
-| In plain words | ![ship](../../../design/icons/verbs/ship.svg) Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
+| In plain words | ![ship: merge proven work](../../../design/icons/verbs/ship.svg) Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 | Journey stage | [Ship it](../journey-6-ship.md) |
-| Accountable seat | ![Drona](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Accountable seat | ![Drona, Engineering Manager: a drawn bow, the teacher's test](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Informed | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |

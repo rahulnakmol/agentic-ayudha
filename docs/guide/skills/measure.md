@@ -7,9 +7,9 @@ Goal's metric exactly as its baseline was computed, over a new window, and write
 
 | Field | Value |
 |---|---|
-| In plain words | ![measure](../../../design/icons/verbs/measure.svg) Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
+| In plain words | ![measure: read the outcome, like the sundial at Jantar Mantar](../../../design/icons/verbs/measure.svg) Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | ![Shuka](../../../design/icons/seats/data-ai-architect.svg) [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
+| Accountable seat | ![Shuka, Data and AI Architect: a parrot that repeats its source faithfully](../../../design/icons/seats/data-ai-architect.svg) [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
 | Owns the thresholds | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Kuber) |
 | Does the work | Shuka, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |

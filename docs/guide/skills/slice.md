@@ -8,9 +8,9 @@ the order to build them in.
 
 | Field | Value |
 |---|---|
-| In plain words | ![slice](../../../design/icons/verbs/slice.svg) Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
+| In plain words | ![slice: break a Feature into stories](../../../design/icons/verbs/slice.svg) Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | ![Arjun](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Accountable seat | ![Arjun, Product Strategist: an arrow in the centre of the target](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Does the work | Arjun, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |

@@ -9,7 +9,7 @@ happened and files each lesson as a Feedback issue a person accepts or rejects.
 |---|---|
 | In plain words | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | ![Drona](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Accountable seat | ![Drona, Engineering Manager: a drawn bow, the teacher's test](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi), [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |

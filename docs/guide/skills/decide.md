@@ -8,9 +8,9 @@ lets only a person with the authority accept it.
 
 | Field | Value |
 |---|---|
-| In plain words | ![decide](../../../design/icons/verbs/decide.svg) Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| In plain words | ![decide: a person chooses one path](../../../design/icons/verbs/decide.svg) Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | ![Atri](../../../design/icons/seats/founder.svg) [Founder](../../../seats/founder/CHARTER.md) (Atri) |
+| Accountable seat | ![Atri, Founder's Sage: his star in the Saptarishi, where the handle meets the bowl](../../../design/icons/seats/founder.svg) [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Does the work | Atri, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |

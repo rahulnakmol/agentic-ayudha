@@ -7,9 +7,9 @@ brand's voice, and links a piece of work only when it is a Feature whose shipped
 
 | Field | Value |
 |---|---|
-| In plain words | ![tell](../../../design/icons/verbs/tell.svg) Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
+| In plain words | ![tell: announce what the pod has proven](../../../design/icons/verbs/tell.svg) Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | ![Sauti](../../../design/icons/seats/marketer-documenter.svg) [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
+| Accountable seat | ![Sauti, Marketer and Documenter: the storyteller's open book](../../../design/icons/seats/marketer-documenter.svg) [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
 | Does the work | Sauti, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Mentalist](../../../seats/mentalist/CHARTER.md) (Sanjay), [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |

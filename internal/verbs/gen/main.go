@@ -26,9 +26,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -93,20 +95,30 @@ func cell(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
 // inline image followed by a space, for a page whose path to the repository
 // root is up, or "" when the verb has none.
 func verbIcon(name, up string) string {
-	return icon("verbs/"+name, name, up)
+	return icon("verbs/"+name, up)
 }
 
-// seatIcon is the emblem of the seat's twin, named by the twin, like verbIcon.
+// seatIcon is the emblem of the seat's twin, like verbIcon.
 func seatIcon(id verbs.SeatID, up string) string {
-	return icon("seats/"+string(id), personas[id].Name, up)
+	return icon("seats/"+string(id), up)
 }
 
-func icon(file, alt, up string) string {
+// svgTitle is an icon's <title>: what it names and what it shows.
+var svgTitle = regexp.MustCompile(`<title[^>]*>([^<]+)</title>`)
+
+// icon's alt text is the SVG's own title, so it names the thing and states the
+// takeaway (docs/guide/AGENTS.md, Images) from one source.
+func icon(file, up string) string {
 	p := "design/icons/" + file + ".svg"
-	if _, err := os.Stat(p); err != nil {
+	b, err := os.ReadFile(p)
+	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("![%s](%s%s) ", alt, up, p)
+	m := svgTitle.FindSubmatch(b)
+	if m == nil {
+		panic(p + ": no <title> for the alt text")
+	}
+	return fmt.Sprintf("![%s](%s%s) ", cell(html.UnescapeString(string(m[1]))), up, p)
 }
 
 func code(s string) string { return "`" + s + "`" }

@@ -9,7 +9,7 @@ sorts each intake issue into Feedback, Bug, or Incident by label, and never edit
 |---|---|
 | In plain words | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | ![Arjun](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Accountable seat | ![Arjun, Product Strategist: an arrow in the centre of the target](../../../design/icons/seats/product-strategist.svg) [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Does the work | Arjun, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

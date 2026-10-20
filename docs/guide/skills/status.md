@@ -9,7 +9,7 @@ risk, proof, open decisions, and cost for each Goal, Initiative, and Feature, wi
 |---|---|
 | In plain words | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | ![Drona](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Accountable seat | ![Drona, Engineering Manager: a drawn bow, the teacher's test](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
 | Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |

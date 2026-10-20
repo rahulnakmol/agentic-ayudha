@@ -75,7 +75,7 @@ Checking every small step is cheaper than reviewing one big change. And a clear 
 
 | Verb | What it does |
 |---|---|
-| ![build](../../design/icons/verbs/build.svg) [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| ![build: a stepwell, built one layer at a time](../../design/icons/verbs/build.svg) [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
 | [`research`](skills/research.md) | Collects design references and user research for a Feature. |
 | [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |
 | [`mockup`](skills/mockup.md) | Turns wireframes into mockups that use your design system. |

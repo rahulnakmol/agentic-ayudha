@@ -10,7 +10,7 @@ gives one verdict: recapture, rebuild, fix, or ship.
 |---|---|
 | In plain words | Critiques a pull request's screens with a model and with fixed accessibility checks. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | ![Hanu](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Accountable seat | ![Hanu, UX Researcher: the leap across the sea to find what people need](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
 | Does the work | Hanu, the Accountable seat's twin, in the [`ui-review`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

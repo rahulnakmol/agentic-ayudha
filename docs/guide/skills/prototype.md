@@ -10,7 +10,7 @@ each state's render with its Figma frame before it records anything.
 |---|---|
 | In plain words | Builds a working prototype behind a flag and compares it with the design. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | ![Hanu](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Accountable seat | ![Hanu, UX Researcher: the leap across the sea to find what people need](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
 | Does the work | Hanu, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

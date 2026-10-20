@@ -62,11 +62,11 @@ Claims that point at evidence travel further than claims that ask for trust.
 
 | Verb | What it does |
 |---|---|
-| ![counsel](../../design/icons/verbs/counsel.svg) [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
+| ![counsel: the sage's star over the road ahead](../../design/icons/verbs/counsel.svg) [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
 | [`status`](skills/status.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
 | [`audit`](skills/audit.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
 | [`brief`](skills/brief.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
-| ![tell](../../design/icons/verbs/tell.svg) [`tell`](skills/tell.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
+| ![tell: announce what the pod has proven](../../design/icons/verbs/tell.svg) [`tell`](skills/tell.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 
 <!-- END GENERATED: stage-verbs -->
 

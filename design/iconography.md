@@ -95,6 +95,9 @@ commit it. Keep the comment at the top of each file.
   pages' verb tables, the skill index, and each skill page's card. A verb with no icon gets none.
 - **By hand.** The README and the guide's front page (`docs/guide/README.md`), the seats table in
   `docs/guide/concepts-seats.md`, and the presence check and the agent lane in `docs/guide/how-trust.md`.
+- **Alt text.** An icon's alt text is its SVG `<title>`: the thing it names and what it shows, such as "build: a
+  stepwell, built one layer at a time". The generator reads the title, so a new title reaches every table on the next
+  `go generate ./...`; copy it by hand on the hand-edited pages.
 - **Size.** In Markdown the icons draw at their own size, 24 px, and the App marks at 64 px. The docs site
   (`internal/tell/site.css`) sets icons inline at text size and keeps a cell's icon beside its first word.
 

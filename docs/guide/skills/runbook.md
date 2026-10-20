@@ -10,7 +10,7 @@ recovery, and how to roll back.
 |---|---|
 | In plain words | Writes down how to spot and fix each known production problem with the approved actions, so whoever is on call can follow it. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | ![Shesha](../../../design/icons/seats/production-engineer.svg) [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Accountable seat | ![Shesha, Production Engineer: an endless coil that holds the world up](../../../design/icons/seats/production-engineer.svg) [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Does the work | Shesha, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |

@@ -10,7 +10,7 @@ people said and did, and records them on the ledger for the design stages that f
 |---|---|
 | In plain words | Collects design references and user research for a Feature. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | ![Hanu](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Accountable seat | ![Hanu, UX Researcher: the leap across the sea to find what people need](../../../design/icons/seats/ux-researcher-evolutionist.svg) [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
 | Does the work | Hanu, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
 | Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |

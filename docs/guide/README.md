@@ -1,6 +1,6 @@
 # Ship what you promised, and prove it
 
-![aayu, the aayudha mark: the word आयु with its delivery loop](../../design/icons/app/aayu-bot.svg)
+![aayu, the bot identity agents write under: आयु, its u-sign closed into the delivery loop](../../design/icons/app/aayu-bot.svg)
 
 Your coding agent can write a feature in an afternoon. Whether that feature does what you promised, is safe to
 merge, and helps anyone at all is a different question. aayudha is the delivery team around the agent you already
@@ -44,10 +44,10 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 
 | You | Your agents |
 |---|---|
-| ![decide](../../design/icons/verbs/decide.svg) Decide what matters and how to measure it | ![grill](../../design/icons/verbs/grill.svg) Interview you and file clear issues |
-| ![ready](../../design/icons/verbs/ready.svg) Agree the promises each piece of work must keep | ![build](../../design/icons/verbs/build.svg) Split the work, plan it layer by layer, build it |
-| ![ship](../../design/icons/verbs/ship.svg) Give the final yes on each merge and release | ![proof](../../design/icons/verbs/proof.svg) Run the checks, collect evidence, review the change |
-| ![measure](../../design/icons/verbs/measure.svg) Read the results | ![tell](../../design/icons/verbs/tell.svg) Measure, explain, and suggest what to improve |
+| ![decide: a person chooses one path](../../design/icons/verbs/decide.svg) Decide what matters and how to measure it | ![grill: shape a rough idea into a clear goal](../../design/icons/verbs/grill.svg) Interview you and file clear issues |
+| ![ready: a story meets the bar to start](../../design/icons/verbs/ready.svg) Agree the promises each piece of work must keep | ![build: a stepwell, built one layer at a time](../../design/icons/verbs/build.svg) Split the work, plan it layer by layer, build it |
+| ![ship: merge proven work](../../design/icons/verbs/ship.svg) Give the final yes on each merge and release | ![proof: the sealed evidence that the work does what it says](../../design/icons/verbs/proof.svg) Run the checks, collect evidence, review the change |
+| ![measure: read the outcome, like the sundial at Jantar Mantar](../../design/icons/verbs/measure.svg) Read the results | ![tell: announce what the pod has proven](../../design/icons/verbs/tell.svg) Measure, explain, and suggest what to improve |
 
 ## Will it fit, and what does it cost?
 

@@ -8,9 +8,9 @@ reads the review as `merge`, `fix`, or `rebuild`.
 
 | Field | Value |
 |---|---|
-| In plain words | ![inspect](../../../design/icons/verbs/inspect.svg) A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
+| In plain words | ![inspect: review a pull request](../../../design/icons/verbs/inspect.svg) A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
-| Accountable seat | ![Drona](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Accountable seat | ![Drona, Engineering Manager: a drawn bow, the teacher's test](../../../design/icons/seats/engineering-manager.svg) [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`review`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
 | Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |

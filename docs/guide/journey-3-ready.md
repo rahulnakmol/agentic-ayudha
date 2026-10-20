@@ -51,7 +51,7 @@ story.
 
 | Verb | What it does |
 |---|---|
-| ![ready](../../design/icons/verbs/ready.svg) [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+| ![ready: a story meets the bar to start](../../design/icons/verbs/ready.svg) [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 
 <!-- END GENERATED: stage-verbs -->
 

@@ -7,9 +7,9 @@ own worktree, one layer at a time, checks each step, and opens a pull request.
 
 | Field | Value |
 |---|---|
-| In plain words | ![build](../../../design/icons/verbs/build.svg) Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| In plain words | ![build: a stepwell, built one layer at a time](../../../design/icons/verbs/build.svg) Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
 | Journey stage | [Build it](../journey-4-build.md) |
-| Accountable seat | ![Nakul](../../../design/icons/seats/ai-native-engineer.svg) [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Accountable seat | ![Nakul, AI Native Engineer: a horse, for the master of horses](../../../design/icons/seats/ai-native-engineer.svg) [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Does the work | Nakul, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
 | Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
