@@ -47,6 +47,7 @@ type Config struct {
 	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
 	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
 	Delegate      Delegate               `koanf:"delegate" jsonschema_description:"How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."`
+	Build         Build                  `koanf:"build" jsonschema_description:"The build-ready loop (aayu build --next): how many items it has in progress at once."`
 	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
 	Approvals     Approvals              `koanf:"approvals" jsonschema_description:"Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."`
 }
@@ -65,6 +66,11 @@ type CursorHost struct {
 type Approvals struct {
 	Approvers []string `koanf:"approvers" jsonschema_description:"GitHub logins of the people whose /aayu approve reply on a batch counts as their approval. Their GitHub credentials must be in no agent's reach (aayu doctor checks); with none, every batch needs the device code."`
 	DeviceFor []string `koanf:"device_for" jsonschema:"enum=one-way,enum=all" jsonschema_description:"Batches that always need the device code, even when comment approvals are on: one-way (any irreversible item: an irreversible Decision, a floor waiver) or all."`
+}
+
+// Build is [build]: the build-ready loop's limit.
+type Build struct {
+	InFlight int `koanf:"in_flight" jsonschema:"minimum=0" jsonschema_description:"Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__IN_FLIGHT or --set may only lower it."`
 }
 
 // Delegate is [delegate] (WP5.5b).

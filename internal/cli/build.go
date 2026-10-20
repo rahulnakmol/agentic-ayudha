@@ -26,6 +26,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -60,6 +61,8 @@ type BuildResult struct {
 	Delegation *Delegation `json:"delegation,omitempty"`
 	// Review is the session review of the head before its push (Decision #656).
 	Review *SessionReview `json:"session_review,omitempty"`
+	// Pick is set when the build-ready loop picked the story (--next pick).
+	Pick *BuildPick `json:"pick,omitempty"`
 }
 
 // Usage is a story's build budget use against [autonomy.budget].
@@ -108,6 +111,12 @@ type BuildState struct {
 	ReviewUSD float64 `json:"session_review_usd,omitempty"`
 	// ReviewPR is the PR that spend belongs to; 0 before the PR is opened.
 	ReviewPR int `json:"session_review_pr,omitempty"`
+	// Loop names the loop that claimed the story (BuildLoop, `build --next
+	// pick`): its claim and its pull request count toward [build] in_flight.
+	Loop string `json:"loop,omitempty"`
+	// Claim is the loop pick's line in LoopClaimsPath: once a state carries
+	// it, the line no longer holds a slot of its own.
+	Claim string `json:"claim,omitempty"`
 }
 
 // CheckpointRecord is one checkpoint commit and what verify said of it.
@@ -201,9 +210,39 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	n := issueNumber(in.String("issue"))
+	mode := in.String("next")
+	switch {
+	case mode != "" && (n != 0 || in.String("stop") != "" || in.String("delegate") != "" || in.Bool("resume")):
+		return Errorf(ExitUsage, "build --next picks the story itself: give no issue, --stop, --delegate, or --resume with it")
+	case mode == "" && n == 0:
+		return Errorf(ExitUsage, "build: name the Ready story or bug to build, or run `aayu build --next pick` (the build-ready loop)")
+	}
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
 		return err
+	}
+	var pick *BuildPick
+	if mode == "pick" {
+		unlock, err := e.lockPick()
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
+	if mode != "" {
+		pw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+		if err != nil {
+			return err
+		}
+		if pick, n, err = e.pickNext(ctx, c, pw, l, repo, mode); err != nil {
+			return err
+		}
+		if n == 0 || c.DryRun() {
+			return e.emitPick(pick) // a dry run previews the pick and builds nothing
+		}
+		// The loop a person set up is the ask (D-5.5c.20): its words go to
+		// the actions log like a person's.
+		in["asked"] = fmt.Sprintf("the %s loop picked #%d (aayu build --next pick, loops/%s.toml): %s", BuildLoop, n, BuildLoop, pick.Order)
 	}
 	rd := &ready.Ready{GH: c, Repo: repo, TechnicalOwner: e.technicalOwner()}
 	chk, is, err := rd.Check(ctx, n)
@@ -211,6 +250,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return Wrap(ExitExternal, err)
 	}
 	labels := github.IssueLabels(is)
+	if why := in.String("stop"); why != "" {
+		return e.stopBuild(ctx, c, bot, l, repo, n, labels, why)
+	}
 	why, err := e.notReady(ctx, c, repo, n, chk, labels)
 	if err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("build #%d: reading the Ready snapshot: %w", n, err))
@@ -224,7 +266,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if err := e.askedGate(ctx, c, repo, n, chk.Title, labels, in); err != nil {
 		return err
 	}
-	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
+	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title)), Pick: pick}
 	dev := e.devBranch()
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 	if err != nil {
@@ -237,14 +279,59 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR}
+		// A loop's build stays the loop's: its PR still counts toward [build] in_flight.
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR, Loop: st.Loop, Claim: st.Claim}
 	}
 	if st.StartedAt == "" {
 		st.StartedAt = now.Format(time.RFC3339)
 	}
 	st.Story, st.Branch = n, res.Branch
+	if pick != nil {
+		st.Loop, st.Claim = BuildLoop, pick.Claim
+	}
+	b, perStory := l.Config.Autonomy.Budget, l.Config.Budget.PerStoryUSD
+	if st.Loop != "" {
+		// No person asked for a loop's build, so its limits are the committed
+		// policy at dev's tip, as for in_flight: AAYU_* or --set may tighten
+		// one, never loosen it or turn it off.
+		owner, name, _ := github.SplitRepo(repo)
+		pol, err := basePolicy(ctx, c, owner, name, dev)
+		if err != nil {
+			return err
+		}
+		cb := pol.Config.Autonomy.Budget
+		b = config.AutonomyBudget{WallHours: tighter(b.WallHours, cb.WallHours), CostUSD: tighter(b.CostUSD, cb.CostUSD), Attempts: tighter(b.Attempts, cb.Attempts)}
+		perStory = tighter(perStory, pol.Config.Budget.PerStoryUSD)
+	}
+	// A story's spend is capped by the lower of the build budget and the
+	// breaker's per-story limit, so a config that keeps a lower per_story_usd
+	// is reported, and blocks, at the limit that actually stops it. A cap of 0
+	// is off on purpose and stays off.
+	if p := perStory; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
+		b.CostUSD = p
+	}
+	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
+	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
+		res.Budget.WallHours = now.Sub(started).Hours()
+	}
 	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
 		return err
+	}
+	if pick != nil {
+		// Two runs that picked the same story both wrote a lock comment; the
+		// lease is the first one, so the run that does not hold it stops.
+		owner, name, _ := github.SplitRepo(repo)
+		if cur, err := readLease(ctx, c, owner, name, n); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if cur != nil && cur.CommentID != res.Lease.CommentID {
+			return Errorf(ExitBlocked, "build --next: another run claimed #%d first (%s)", n, cur.Holder)
+		}
+		// The loop's claim reaches the ledger before its status changes or its
+		// worktree is cut: a later failure leaves a claim in_flight counts and,
+		// once its lease runs out, a Ready item the queue picks again.
+		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+			return err
+		}
 	}
 	// A story being built is in progress (D-5.5c.17): build is the verb that
 	// moves it there from status:ready, and later runs accept either label.
@@ -253,18 +340,6 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
-	}
-	b := l.Config.Autonomy.Budget
-	// A story's spend is capped by the lower of the build budget and the
-	// breaker's per-story limit, so a config that keeps a lower per_story_usd
-	// is reported, and blocks, at the limit that actually stops it. A cap of 0
-	// is off on purpose and stays off.
-	if p := l.Config.Budget.PerStoryUSD; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
-		b.CostUSD = p
-	}
-	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
-	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
-		res.Budget.WallHours = now.Sub(started).Hours()
 	}
 	block := func(why string) error { return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, why) }
 	switch {
@@ -355,6 +430,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				return err
 			}
 			return e.Emit(res, func(w io.Writer) error {
+				if res.Pick != nil {
+					writePick(w, res.Pick)
+				}
 				_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
 				return err
 			})
@@ -926,14 +1004,8 @@ func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detai
 
 // blockBuild moves the story to status:blocked, pages, and records why.
 func (e *Env) blockBuild(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, st *BuildState, res *BuildResult, why string) error {
-	st.Blocked = why
-	if err := setStatus(ctx, c, repo, n, labels, "blocked"); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("build:%s#%d", repo, n), Subject: fmt.Sprintf("aayu build blocked #%d", n),
-		Body: fmt.Sprintf("%s#%d is status:blocked: %s. A human looks at it and runs `aayu ready %d` to let the build continue.", repo, n, why, n)})
-	res.Notes = append(res.Notes, "page: "+sent)
-	if err := e.saveBuild(ctx, c, w, repo, n, st, res); err != nil {
+	sent, err := e.markBlocked(ctx, c, w, repo, n, labels, st, res, why)
+	if err != nil {
 		return err
 	}
 	res.Next = fmt.Sprintf("a human looks at #%d; `aayu ready %d` lets the build continue with a fresh budget", n, n)
@@ -942,6 +1014,63 @@ func (e *Env) blockBuild(ctx context.Context, c *github.Client, w *ledger.Writer
 		return err
 	})
 	return Errorf(ExitBlocked, "build #%d blocked: %s", n, why)
+}
+
+// markBlocked moves the story to status:blocked with why, pages its owner,
+// and records it on the ledger and in the progress comment.
+func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, st *BuildState, res *BuildResult, why string) (string, error) {
+	st.Blocked = why
+	if err := setStatus(ctx, c, repo, n, labels, "blocked"); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("build:%s#%d", repo, n), Subject: fmt.Sprintf("aayu build blocked #%d", n),
+		Body: fmt.Sprintf("%s#%d is status:blocked: %s. A human looks at it and runs `aayu ready %d` to let the build continue.", repo, n, why, n)})
+	res.Notes = append(res.Notes, "page: "+sent)
+	return sent, e.saveBuild(ctx, c, w, repo, n, st, res)
+}
+
+// stopBuild is `aayu build <n> --stop <why>`: the builder gives up on a story
+// it is building, so it is blocked with that reason and its owner paged, and
+// no loop picks it again until a person makes it Ready. The lease stays until
+// it expires.
+func (e *Env) stopBuild(ctx context.Context, c *github.Client, bot identity.Bot, l *config.Loaded, repo string, n int, labels []string, why string) error {
+	if !contains(labels, labelInProgress) {
+		return Errorf(ExitBlocked, "build #%d --stop: it is not being built (no status:in-progress)", n)
+	}
+	// Only the builder stops its own build: another holder's live lease is
+	// another build still at work.
+	owner, name, _ := github.SplitRepo(repo)
+	cur, err := readLease(ctx, c, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if me := leaseHolder(bot.Login); cur != nil && cur.Holder != me && cur.Expires.After(e.Now()) {
+		return Errorf(ExitBlocked, "build #%d --stop: %s holds a live lease on it until %s, not %s; only its builder stops it", n, cur.Holder, cur.Expires.UTC().Format(time.RFC3339), me)
+	}
+	if c.DryRun() {
+		// blockBuild pages, and a page records itself in notify.json.
+		return Errorf(ExitBlocked, "build #%d --stop --dry-run: would block it (stopped by its builder: %s) and page its owner", n, why)
+	}
+	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+	if err != nil {
+		return err
+	}
+	var st BuildState
+	if _, err := readLedgerJSON(ctx, w, BuildLedgerPath(n), &st); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	st.Story = n
+	res := BuildResult{Issue: n, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, e.Now())}
+	return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, "stopped by its builder: "+why)
+}
+
+// tighter is the stricter of a local and a committed limit, where 0 is off:
+// a local value may lower a committed limit, never raise it or turn it off.
+func tighter[T int | float64](local, committed T) T {
+	if committed > 0 && (local <= 0 || local > committed) {
+		return committed
+	}
+	return local
 }
 
 const progressMarker = "<!-- aayudha:progress -->"

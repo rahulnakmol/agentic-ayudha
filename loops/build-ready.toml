@@ -1,0 +1,11 @@
+# Build what is Ready (v0.3.0). Every two hours of each working day, the AI Native Engineer twin first hands the loop's
+# own open pull requests to `aayu ship`, oldest first, then builds one more Ready Story or Bug if [build] in_flight
+# allows. The binary picks and claims with no model (`aayu build --next`): the current release's accepted baseline in
+# its order, else priority, then age. ship decides each merge: on proof, or a "Ready to ship" card in a person's inbox.
+# No bot key: build and ship write under the bot when one is set up, else under the person's own token, tagged. The
+# cron is in [time] tz: every two hours of the working day, 09:00 to 17:00. Hourly would run twice an hour in Cursor
+# while the zone is on summer time: its UTC triggers for the two offsets overlap, and Cursor does not say which fired.
+description = "Build what is Ready: ship the loop's open pull requests on proof, then claim the next Ready Story or Bug and build it to a pull request."
+command = ["build", "--next", "ship"]
+cron = "0 9,11,13,15,17 * * 1-5"
+prompt = "For each pull request it lists, oldest first, run `AAYU_AGENT=1 aayu ship <pr>` once and report in one line what ship did: it merges on proof, or it refuses and says why (a pull request that needs a person waits in `aayu inbox`). Never pass --solo-bypass or --admin, never merge in any other way, and never run a human-only step. Then run `AAYU_AGENT=1 aayu build --next pick`. If it claimed nothing, report only the stale claims it blocked and the items it skipped, and stop; with neither, stop without reporting. Otherwise it claimed one Ready Story or Bug and cut its worktree: follow the aayudha build skill for that issue from step 2 until `aayu build <n>` opens or updates the pull request, then report its link and stop. If the build cannot reach a pull request, run `AAYU_AGENT=1 aayu build <n> --stop \"<why>\"` and report it. Build only the item it claimed, and never pick a second one in the same run."

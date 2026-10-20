@@ -726,7 +726,9 @@ var Verbs = []Command{
 		Reader:  "Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: AllLayers(),
 		Inputs: []Input{
-			pos("issue", TypeIssue, "Ready story or bug to build."),
+			optPos("issue", TypeIssue, "Ready story or bug to build; required unless --next."),
+			enumIn("next", false, false, "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.", "ship", "pick"),
+			flag("stop", TypeString, "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires."),
 			flag("resume", TypeBool, "Resume from the last Aayudha-Checkpoint trailer."),
 			enumIn("delegate", false, false, "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).", "codex", "cursor", "claude", "amp", "auto"),
 			flag("local", TypeBool, "With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR."),

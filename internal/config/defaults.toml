@@ -65,9 +65,9 @@ correction_days = 14
 # this should be default").
 proof = false
 proof_rungs = ["A", "B", "C"]
-always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"]
+always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"]
 always_person_config = [".aayudha/config.toml"]
-always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope"]
+always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build"]
 
 # A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
 # direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
@@ -76,6 +76,11 @@ always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify"
 wall_hours = 8
 cost_usd = 60.0
 attempts = 3
+
+# The build-ready loop (loops/build-ready.toml, `aayu build --next`): how many items it has in progress at once, from
+# claim to merge. Its open pull requests count as well as its claims that have no pull request yet; 0 stops its picks.
+[build]
+in_flight = 1
 
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]

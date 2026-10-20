@@ -134,8 +134,14 @@ type Account struct {
 
 // Branch is a PR head or base.
 type Branch struct {
-	Ref string `json:"ref"`
-	SHA string `json:"sha"`
+	Ref  string    `json:"ref"`
+	SHA  string    `json:"sha"`
+	Repo *HeadRepo `json:"repo,omitempty"`
+}
+
+// HeadRepo is the repository a PR's head branch lives in.
+type HeadRepo struct {
+	FullName string `json:"full_name"`
 }
 
 // Review is a PR review.
@@ -406,7 +412,7 @@ func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
 	}{URL: fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", g.Repo, is.Number)}
 	is.URL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, is.Number)
 	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", URL: is.URL, User: Account{Login: author, Type: "User"},
-		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
+		Head: Branch{Ref: head, SHA: headSHA, Repo: &HeadRepo{FullName: g.Owner + "/" + g.Repo}}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
 	g.Pulls[is.Number] = pr
 	return pr
 }
@@ -1133,7 +1139,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "POST" && p == repo+"/pulls":
 		is := g.addIssue(str("title"), str("body"), nil)
 		pr := &PR{Number: is.Number, Title: str("title"), Body: str("body"), State: "open", User: Account{Login: g.Viewer, Type: "User"},
-			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
+			Head: Branch{Ref: str("head"), Repo: &HeadRepo{FullName: g.Owner + "/" + g.Repo}}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
 		g.Pulls[is.Number] = pr
 		reply(201, pr)
 	case m == "GET" && p == repo+"/pulls":

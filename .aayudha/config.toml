@@ -87,5 +87,7 @@ always_person = [
   ".aayudha/config.json",
   ".aayudha/config.local.toml",
   ".aayudha/config.local.json",
+  # The build-ready loop's definition is a person's standing ask to build Ready work (aayu build --next).
+  "loops/build-ready.toml",
 ]
 always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]

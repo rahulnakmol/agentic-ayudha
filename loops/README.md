@@ -77,6 +77,40 @@ In `loops/active.json` an event loop is recorded like any loop: Amp's ID is `sub
 it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event and has the
 scheduled loop with the same command set up, and names that loop. With no such loop set up there, it is `missing`.
 
+`build-ready` (every two hours each weekday, 09:00 to 17:00) builds what is Ready, with no person to start each build. It is an
+agent loop, and the binary decides everything except the code:
+
+1. `aayu build --next ship` lists the loop's own open pull requests, oldest first, and changes nothing. The agent runs
+   `aayu ship <pr>` on each. ship merges on proof, or refuses and says why; a pull request that needs a person waits
+   as **Ready to ship** in `aayu inbox`. The loop never passes `--solo-bypass` or `--admin` and never merges another way.
+2. `aayu build --next pick` first blocks each of the loop's claims whose lease ran out more than 4 hours ago with no
+   pull request (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Within those
+   4 hours the claim keeps its slot, so a builder that resumes keeps its story. Then it counts what the
+   loop has in flight: its open pull requests, its live claims with no pull request yet, and any Ready item with a
+   live lease (a claim another pick is still setting up). Under `[build] in_flight`
+   (default 1, so one item from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
+   open Story or Bug, `status:ready`, passes Ready with an undrifted snapshot, and has no open pull request and no
+   live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and
+   `status:in-progress`, and the loop's name on `build/<n>/state.json` on the ledger. It cuts the worktree as
+   `aayu build <n>` does. A local lock (`.aayudha/state/build-next.lock`) lets one pick at a time run on a machine.
+   The loop's definition and `[build] in_flight` come from dev's tip on GitHub, as merged; a checkout's file,
+   `AAYU_BUILD__IN_FLIGHT`, or `--set` never adds the loop or raises the cap, and a local value may only lower it.
+   Across machines, each pick appends a line to `build/loop-claims.jsonl` on the ledger before it claims; the ledger's
+   one history orders concurrent picks, and a pick that comes after another for the same item or the last slot claims
+   nothing.
+3. The queue: when an open Release has an accepted baseline from `aayu scope` (`releases/<vX.Y.Z>/baseline-<n>.json`
+   on the ledger), the loop builds only the Stories and Bugs of the newest baseline of the lowest such version, in the
+   baseline's order, and nothing outside it. Without one, every `status:ready` Story and Bug by priority (P0 first,
+   none last), then age.
+4. The agent builds the one item it claimed with the build skill, to a pull request. When it cannot get there,
+   `aayu build <n> --stop "<why>"` blocks the item with that reason and pages its owner; the loop never retries it.
+
+The loop's definition in the repository is the person's standing ask: `--next` runs only where
+`loops/build-ready.toml` exists; the file is in the narrow set (`[autonomy] always_person`), so only a person adds or
+changes it, and each pick goes to the actions log as build's ask (`build.asked`). It sets no
+`bot = true`: build and ship write under the bot when one is set up, and otherwise under the person's own token,
+tagged as a human fallback, so the loop runs today without the bot App.
+
 The Production Engineer's loops (WP5.10, Decision #324) are agent loops, so telemetry and its credentials stay in your
 own session: `alert-triage` (twice each weekday) reports fast-burning SLOs and open incidents with no investigation
 note, `error-budget-review` (weekly) measures every SLO from a fresh sanitised export and records the budget that
