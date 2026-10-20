@@ -1,7 +1,7 @@
 <!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-ux-researcher-evolutionist-title">
 <title id="aayu-seats-ux-researcher-evolutionist-title">Hanu, UX Researcher: the leap across the sea to find what people need</title>
-<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
-<path class="s" d="M2 21v-6h4"/><path class="s" d="M6 15C8 6 15 4 19 10.5" stroke-dasharray="2 3"/>
-<path class="s" d="M10 19c1-.8 2-.8 3 0s2 .8 3 0 2-.8 3 0"/><circle class="fa" cx="19.5" cy="13.5" r="1.8"/>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="aayu-s" d="M2 21v-6h4"/><path class="aayu-s" d="M6 15C8 6 15 4 19 10.5" stroke-dasharray="2 3"/>
+<path class="aayu-s" d="M10 19c1-.8 2-.8 3 0s2 .8 3 0 2-.8 3 0"/><circle class="aayu-fa" cx="19.5" cy="13.5" r="1.8"/>
 </svg>

@@ -73,7 +73,9 @@ is drawn by hand from geometric strokes and checked against Noto Sans Devanagari
   grounds, `icon-night` and `icon-gold-night` on dark ones. Each pair is in the brand's pairs list, so it passes WCAG
   2.2 AA for graphics (3:1).
 - **Light and dark.** Each icon carries a small style block. It switches colours with `prefers-color-scheme`, and a
-  page that inlines an icon can set `--aayu-icon` and `--aayu-icon-accent` to recolour it. The App tiles carry their
+  page that inlines an icon can set `--aayu-icon` and `--aayu-icon-accent` to recolour it. Its classes start with
+  `aayu-` (`aayu-s` main stroke, `aayu-a` accent stroke, `aayu-f` and `aayu-fa` fills): an inlined style block applies
+  to the whole page, so the prefix keeps the icon and the page from restyling each other. The App tiles carry their
   own background and look the same on either ground.
 - **Accessible.** Every file is `role="img"` with a `<title>` that says what the icon shows and does.
 - **In the terminal.** A terminal cannot draw these files, so `aayu inbox` keeps its emoji (`inboxKinds` and

@@ -1,7 +1,7 @@
 <!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-ai-native-engineer-title">
 <title id="aayu-seats-ai-native-engineer-title">Nakul, AI Native Engineer: a horse, for the master of horses</title>
-<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
-<path class="s" d="M7.5 21c0-3.2 1.2-5.3 3.5-6.8L6.6 12.8a1.6 1.6 0 0 1-.9-2.3L9.5 4l.8-2 1.6 2.2c4.3.4 7.6 4.3 7.6 9.6V21"/><path class="s" d="M5.5 21h15"/>
-<circle class="fa" cx="12" cy="8" r="1.4"/>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="aayu-s" d="M7.5 21c0-3.2 1.2-5.3 3.5-6.8L6.6 12.8a1.6 1.6 0 0 1-.9-2.3L9.5 4l.8-2 1.6 2.2c4.3.4 7.6 4.3 7.6 9.6V21"/><path class="aayu-s" d="M5.5 21h15"/>
+<circle class="aayu-fa" cx="12" cy="8" r="1.4"/>
 </svg>

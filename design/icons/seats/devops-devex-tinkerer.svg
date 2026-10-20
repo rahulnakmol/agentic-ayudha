@@ -1,8 +1,8 @@
 <!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-devops-devex-tinkerer-title">
 <title id="aayu-seats-devops-devex-tinkerer-title">Nala, DevOps and DevEx Tinkerer: a bridge of floating stones</title>
-<style>.s,.a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.s{stroke:var(--aayu-icon,#1f5bd1)}.a{stroke:var(--aayu-icon-accent,#9a6700)}.f{fill:var(--aayu-icon,#1f5bd1)}.fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.s{stroke:var(--aayu-icon,#7aa2f7)}.a{stroke:var(--aayu-icon-accent,#e0a526)}.f{fill:var(--aayu-icon,#7aa2f7)}.fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
-<path class="s" d="M3 16a9 9 0 0 1 18 0" stroke-dasharray="4.6 1.3" style="stroke-width:3;stroke-linecap:butt"/>
-<path class="a" d="M3 16a9 9 0 0 1 18 0" stroke-dasharray="0 11.8 4.6 30" style="stroke-width:3;stroke-linecap:butt"/>
-<path class="s" d="M3 21c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0"/>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="aayu-s" d="M3 16a9 9 0 0 1 18 0" stroke-dasharray="4.6 1.3" style="stroke-width:3;stroke-linecap:butt"/>
+<path class="aayu-a" d="M3 16a9 9 0 0 1 18 0" stroke-dasharray="0 11.8 4.6 30" style="stroke-width:3;stroke-linecap:butt"/>
+<path class="aayu-s" d="M3 21c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0"/>
 </svg>
