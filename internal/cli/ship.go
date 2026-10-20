@@ -374,18 +374,27 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	// A build-ready loop PR whose builder stopped it after the loop listed it
 	// is not shipped, nor sent to the inbox: the story's status:blocked, read now, beats that list.
+	// The hold is the story's label, never the ledger alone: a build branch of
+	// the story (story/<n>, bug/<n>) is held whatever its state on the ledger
+	// says, or when that state is missing or torn; a loop's recorded branch
+	// with another name is held too.
 	var st BuildState
-	if _, err := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	if st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
+	_, rerr := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st)
+	if StoryOf("", "", pr.GetHead().GetRef()) == story || rerr == nil && st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if contains(github.IssueLabels(is), "status:blocked") {
+		switch {
+		case !contains(github.IssueLabels(is), "status:blocked"):
+		case st.Loop != "":
 			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
+		default:
+			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so its PR waits for a person to make it Ready again", n, story)
 		}
+	}
+	if rerr != nil {
+		return Wrap(ExitExternal, rerr)
 	}
 
 	if rec.HumanPass.Kind == "" {

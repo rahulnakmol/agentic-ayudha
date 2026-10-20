@@ -911,15 +911,21 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Fail = ""
 	g.Mu.Unlock()
-	// Nor when the story's build state cannot be read.
+	// A torn build state does not lift the stop: the story's own branch is
+	// still held by its label, and without the label ship still stops.
 	putLedger(t, bare, BuildLedgerPath(2), "{")
+	refused("story #2 is status:blocked, so its PR waits for a person")
+	// Nor does a state that names no loop, or another branch.
+	putLedger(t, bare, BuildLedgerPath(2), `{"story":2,"branch":"story/2-elsewhere"}`)
+	refused("story #2 is status:blocked, so its PR waits for a person")
+	putLedger(t, bare, BuildLedgerPath(2), "{")
+	g.Mu.Lock()
+	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal {
 		t.Fatalf("ship when the story's build state is unreadable: %d %s", code, out)
 	}
 	putLedger(t, bare, BuildLedgerPath(2), string(b))
-	g.Mu.Lock()
-	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
-	g.Mu.Unlock()
 
 	// The audit's label goes on before the merge: when it cannot, nothing
 	// merges, so no merge on proof escapes the look after merge.
