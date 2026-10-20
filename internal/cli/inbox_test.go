@@ -237,22 +237,22 @@ func TestInbox(t *testing.T) {
 		t.Fatalf("a changed item: exit %d, writes %v: %s\n%s", code, g.Writes(), errOut, out)
 	}
 
-	// A change the choice does not depend on (a later ratify-by, so only the
-	// card's reason reads differently) does not block it; --verbose names it.
+	// A change the choice does not depend on (the PR renamed, at the same
+	// head) does not block a ship from its card; --verbose names it.
 	g = inboxRepo(t)
 	opts.GitHubAPI = g.URL()
 	lists = 0
 	g.Hook = func(method, path string) {
 		if method == "GET" && path == "/repos/o/r/issues" {
 			if lists++; lists == 2 {
-				g.Issues[2].Body, g.Issues[2].UpdatedAt = strings.Replace(g.Issues[2].Body, "2026-10-22T09:00:00Z", "2026-10-23T09:00:00Z", 1), "2026-10-12T10:00:00Z"
+				g.Pulls[9].Title, g.Issues[9].Title, g.Issues[9].UpdatedAt = "fix(cli): capped, renamed", "fix(cli): capped, renamed", "2026-10-13T00:00:00Z"
 			}
 		}
 	}
-	code, out, errOut = runIn(t, newEnv(), opts, "s a q", "inbox", "--repo", "o/r", "--verbose")
+	_, out, errOut = runIn(t, newEnv(), opts, "s s 2 y q", "inbox", "--repo", "o/r", "--verbose")
 	g.Hook = nil
-	if code != 0 || !strings.Contains(out, "#2 accepted: A, by @o") || !strings.Contains(errOut, `inbox: #2 changed since it was read (why), but not what`) {
-		t.Fatalf("a change that leaves the choice as it was: exit %d: %s\n%s", code, errOut, out)
+	if strings.Contains(out, "it changed on GitHub") || !strings.Contains(errOut, `inbox: #9 changed since it was read (title), but not what "ship PR #9 now`) {
+		t.Fatalf("a change that leaves the ship as it was: %s\n%s", errOut, out)
 	}
 
 	// The keys on cards that lack an answer: an incomplete Decision has only
@@ -2357,13 +2357,19 @@ func TestInboxReread(t *testing.T) {
 	// to either, or to the option's words, refuses the stale card's choice.
 	t.Run("a Decision's option renamed", func(t *testing.T) {
 		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "**B.** a vendor engine", "**V.** a vendor engine") }, "2", "enter", "enter")
-		if !strings.Contains(status, `(the choice now reads "V")`) || len(writes) != 0 {
+		if !strings.Contains(status, `the choice now reads "V"`) || len(writes) != 0 {
 			t.Errorf("a reworded option: status %q, writes %v", status, writes)
+		}
+	})
+	t.Run("a Decision's option description changed", func(t *testing.T) {
+		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "a vendor engine", "a hosted vendor engine") }, "2", "enter", "enter")
+		if !strings.Contains(status, "(its text changed)") || len(writes) != 0 {
+			t.Errorf("an option's description changed: status %q, writes %v", status, writes)
 		}
 	})
 	t.Run("the recommendation moved", func(t *testing.T) {
 		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Recommendation\n\nA", "### Recommendation\n\nB") }, "1", "enter")
-		if !strings.Contains(status, "(it is no longer the recommendation") || len(writes) != 0 {
+		if !strings.Contains(status, "it is no longer the recommendation") || len(writes) != 0 {
 			t.Errorf("a choice no longer recommended: status %q, writes %v", status, writes)
 		}
 	})
@@ -2383,7 +2389,7 @@ func TestInboxReread(t *testing.T) {
 	})
 	t.Run("the Decision is now one-way", func(t *testing.T) {
 		status, _, writes := act(t, "decision#2", func(g *fake.GitHub) { edit(g, 2, "### Reversible\n\ntrue", "### Reversible\n\nfalse") }, "1", "enter")
-		if !strings.Contains(status, "(it is now one-way)") || len(writes) != 0 {
+		if !strings.Contains(status, "it is now one-way") || len(writes) != 0 {
 			t.Errorf("a Decision now one-way: status %q, writes %v", status, writes)
 		}
 	})

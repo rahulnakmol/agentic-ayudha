@@ -204,6 +204,7 @@ type InboxItem struct {
 	Story       int           `json:"story,omitempty"`       // the Story a ship of this PR completes, so two writes on it never run at once
 	Next        string        `json:"next,omitempty"`        // who acts next, in plain words, on a card with nothing for the person yet
 	Head        string        `json:"head,omitempty"`        // the PR's head commit the card was read at, which a ship or an approval acts on
+	BodyHash    string        `json:"body_hash,omitempty"`   // a Decision's body as read (workitems.BodyHash): accepting it accepts that text
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	labels      []string
 	mergeSHA    string
@@ -736,7 +737,7 @@ func mapKeys[V any](m map[int]V) func(func(int) bool) {
 // options, by the Decision's own number, through `decide --accept`.
 func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 	w, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), labels)
-	it.Kind, it.Seat, it.Evidence = InboxDecision, verbs.Founder, it.URL
+	it.Kind, it.Seat, it.Evidence, it.BodyHash = InboxDecision, verbs.Founder, it.URL, workitems.BodyHash(is.GetBody())
 	it.Provisional = slices.Contains(labels, workitems.LabelProvisional)
 	if ps := workitems.Validate(w, workitems.StageReady); len(ps) > 0 {
 		it.f.problem = termText(ps[0].String())
@@ -1001,10 +1002,12 @@ func (s *inboxSource) reread(ctx context.Context, it InboxItem, a InboxAction) (
 
 // inboxMaterial is what changed between the card the person read (was) and
 // the item now that changes what choice a does: the kind, the head commit,
-// the choice itself (its command and label), and a Decision's title, its
-// one-way door, and whether the choice is its recommendation (the last two
-// decide whether the inbox asks the person to confirm). A new
-// counsel line, a refreshed comment, or reworded reasons change none of it.
+// the choice itself (its command and label), and for a Decision, any change
+// to what its card shows: its title, its body (options, evaluation, and
+// recommendation), its one-way door, and whether the choice is its
+// recommendation (the last two decide whether the inbox asks the person to
+// confirm). On a PR's card, a new counsel line, a refreshed comment, or
+// reworded reasons change none of it.
 func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	var out []string
 	if was.Kind != now.Kind {
@@ -1033,6 +1036,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	}
 	if was.Kind == InboxDecision && was.Title != now.Title {
 		out = append(out, "its title changed")
+	}
+	if was.Kind == InboxDecision && was.BodyHash != now.BodyHash { // its options, evaluation, or recommendation: the text the person accepts
+		out = append(out, "its text changed")
 	}
 	return out
 }
