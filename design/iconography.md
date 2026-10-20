@@ -7,8 +7,8 @@ drawn as clean geometric lines. This note says where the icons live, the rules t
 
 | Mark | Use | Files |
 |---|---|---|
-| ![आयु, the bot mark](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `aayu-bot.png` (512 px, for GitHub) |
-| ![aayu Sakshi, the witness eye](icons/app/aayu-sakshi.svg) | The logo of **aayu Sakshi**, the GitHub App behind the presence check. Sakshi (साक्षी) means witness: the eye sees that a person is here, and its pupil is the one-time code. | `icons/app/aayu-sakshi.svg`, `aayu-sakshi.png` (512 px), `aayu-sakshi-24.svg` (small sizes) |
+| ![आयु, the bot mark](icons/app/aayu-bot.svg) | The avatar of the bot GitHub App that agents write under. The word आयु (aayu), drawn by hand; the u-sign under य closes into a gold loop, the delivery loop. | `icons/app/aayu-bot.svg`, `icons/app/aayu-bot.png` (512 px, for GitHub) |
+| ![aayu Sakshi, the witness eye](icons/app/aayu-sakshi.svg) | The logo of **aayu Sakshi**, the GitHub App behind the presence check. Sakshi (साक्षी) means witness: the eye sees that a person is here, and its pupil is the one-time code. | `icons/app/aayu-sakshi.svg`, `icons/app/aayu-sakshi.png` (512 px), `icons/app/aayu-sakshi-24.svg` (small sizes) |
 
 GitHub takes an App's logo only as an upload on the App's settings page, so the PNGs are there for that step. Below
 32 px, use `aayu-sakshi-24.svg`: it drops the four arcs and shows the code as one dot.
