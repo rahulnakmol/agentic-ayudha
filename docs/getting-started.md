@@ -39,12 +39,12 @@ scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
 scoop install aayudha
 ```
 
-Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install --id Rahulnakmol.AgenticAyudha`, or `winget install aayudha`)
+Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install --id AkmolsInc.AgenticAyudha`, or `winget install aayudha`)
 come the same way. Scoop and winget check the archive's SHA-256 from their manifest; only
 `install.sh` checks the cosign signature.
 
 > **Honest status:** Homebrew and Scoop have v0.2.0. winget does not have it yet: the package
-> (`Rahulnakmol.AgenticAyudha`, v0.2.0) has passed validation and is waiting for a moderator in
+> (`AkmolsInc.AgenticAyudha`, v0.2.0) is waiting for validation and a moderator in
 > [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680). Until it merges,
 > use Scoop or `install.sh` on Windows.
 

@@ -131,7 +131,7 @@ func TestSelfUpdateDefersToPackageManagers(t *testing.T) {
 	for dir, want := range map[string]string{
 		"/opt/homebrew/Cellar/aayudha/0.1.0/bin": "brew upgrade aayudha",
 		`C:\Users\a\scoop\apps\aayudha\current`:  "scoop update aayudha",
-		`C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\Rahulnakmol.AgenticAyudha_Microsoft.Winget.Source_8wekyb3d8bbwe`: "winget upgrade --id Rahulnakmol.AgenticAyudha",
+		`C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\AkmolsInc.AgenticAyudha_Microsoft.Winget.Source_8wekyb3d8bbwe`: "winget upgrade --id AkmolsInc.AgenticAyudha",
 	} {
 		if _, cmd := packageManager(dir + "/aayudha"); cmd != want {
 			t.Errorf("packageManager(%s) = %q, want %q", dir, cmd, want)
