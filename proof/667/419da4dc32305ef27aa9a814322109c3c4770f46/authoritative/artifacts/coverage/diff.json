@@ -1,0 +1,18 @@
+{
+  "covered": 136,
+  "executable": 142,
+  "percent": 95.77464788732394,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/proof.go": [
+      133,
+      134,
+      261,
+      262,
+      264,
+      265
+    ]
+  },
+  "format": "go coverprofile"
+}
