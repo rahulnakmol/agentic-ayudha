@@ -1,0 +1,7 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-production-engineer-title">
+<title id="aayu-seats-production-engineer-title">Shesha, Production Engineer: an endless coil that holds the world up</title>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="aayu-s" d="M12 12c-1.8-2.6-3.6-4-6-4a4 4 0 0 0 0 8c2.4 0 4.2-1.4 6-4s3.6-4 6-4a4 4 0 0 1 0 8c-2.4 0-4.2-1.4-6-4Z"/>
+<circle class="aayu-fa" cx="18" cy="12" r="1.9"/>
+</svg>

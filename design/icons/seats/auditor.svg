@@ -1,0 +1,7 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-auditor-title">
+<title id="aayu-seats-auditor-title">Vidhi, Auditor: a palm-leaf record with its seal</title>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<rect class="aayu-s" x="2" y="7" width="20" height="10" rx="2"/><path class="aayu-s" d="M5.5 10.5h6M5.5 13.5h4"/>
+<circle class="aayu-a" cx="17" cy="12" r="2.6"/>
+</svg>

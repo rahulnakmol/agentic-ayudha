@@ -31,8 +31,12 @@ palette:
   here: '#eef3fd'
   hood: '#eef1f6'
   hood-edge: '#535b6b'
+  icon-gold-bright: '#f2b632'
+  icon-gold-night: '#e0a526'
+  icon-night: '#7aa2f7'
   ink: '#1d2330'
   muted: '#535b6b'
+  night: '#0d1117'
   panel: '#f5f6f8'
   paper: '#ffffff'
   setup: '#fdf0ec'
@@ -122,4 +126,25 @@ pairs:
     use: text
   - fg: story-edge
     bg: paper
+    use: ui
+  - fg: done-edge
+    bg: paper
+    use: ui
+  - fg: icon-night
+    bg: ink
+    use: ui
+  - fg: icon-night
+    bg: night
+    use: ui
+  - fg: icon-gold-night
+    bg: ink
+    use: ui
+  - fg: icon-gold-night
+    bg: night
+    use: ui
+  - fg: paper
+    bg: accent
+    use: ui
+  - fg: icon-gold-bright
+    bg: accent
     use: ui

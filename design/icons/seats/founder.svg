@@ -1,0 +1,9 @@
+<!-- aayudha icon, hand-drawn on a 24 px grid; edit by hand (design/iconography.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-labelledby="aayu-seats-founder-title">
+<title id="aayu-seats-founder-title">Atri, Founder&#39;s Sage: his star in the Saptarishi, where the handle meets the bowl</title>
+<style>.aayu-s,.aayu-a{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.aayu-s{stroke:var(--aayu-icon,#1f5bd1)}.aayu-a{stroke:var(--aayu-icon-accent,#9a6700)}.aayu-f{fill:var(--aayu-icon,#1f5bd1)}.aayu-fa{fill:var(--aayu-icon-accent,#9a6700)}@media (prefers-color-scheme:dark){.aayu-s{stroke:var(--aayu-icon,#7aa2f7)}.aayu-a{stroke:var(--aayu-icon-accent,#e0a526)}.aayu-f{fill:var(--aayu-icon,#7aa2f7)}.aayu-fa{fill:var(--aayu-icon-accent,#e0a526)}}</style>
+<path class="aayu-s" d="M2.5 5 6.5 7.5 10 9.5 13.5 11.5 14 17.5 20 18.5 21 12.5 13.5 11.5" style="stroke-width:1.25"/>
+<circle class="aayu-f" cx="2.5" cy="5" r="1.4"/><circle class="aayu-f" cx="6.5" cy="7.5" r="1.4"/><circle class="aayu-f" cx="10" cy="9.5" r="1.4"/>
+<circle class="aayu-f" cx="14" cy="17.5" r="1.4"/><circle class="aayu-f" cx="20" cy="18.5" r="1.4"/><circle class="aayu-f" cx="21" cy="12.5" r="1.4"/>
+<circle class="aayu-fa" cx="13.5" cy="11.5" r="2.4"/>
+</svg>
