@@ -1,0 +1,19 @@
+{
+  "covered": 78,
+  "executable": 83,
+  "percent": 93.97590361445783,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/ship.go": [
+      516,
+      517,
+      536,
+      537
+    ],
+    "internal/github/fake/fake.go": [
+      1389
+    ]
+  },
+  "format": "go coverprofile"
+}

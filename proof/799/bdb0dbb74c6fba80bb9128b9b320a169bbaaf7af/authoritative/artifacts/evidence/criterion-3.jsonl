@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMobileWaiverAndSoloBypass"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMobileWaiverAndSoloBypass","Output":"=== RUN   TestShipMobileWaiverAndSoloBypass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMobileWaiverAndSoloBypass","Output":"--- PASS: TestShipMobileWaiverAndSoloBypass (0.84s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMobileWaiverAndSoloBypass"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxShipsReadyPRs"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxShipsReadyPRs","Output":"=== RUN   TestInboxShipsReadyPRs\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxShipsReadyPRs","Output":"--- PASS: TestInboxShipsReadyPRs (2.07s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInboxShipsReadyPRs"}
