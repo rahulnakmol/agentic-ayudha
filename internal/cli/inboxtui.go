@@ -729,6 +729,9 @@ func (m *inboxModel) choices() []InboxAction {
 		return nil
 	}
 	it := m.items[i]
+	if m.state[it.key()] == "gone" { // GitHub no longer lists it: no choice the card read still applies
+		return nil
+	}
 	f, failed := m.fails[it.key()]
 	if !failed || m.state[it.key()] != "not done" || f.why.Retry {
 		return it.choices()
@@ -971,6 +974,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 			m.sel, m.armed = 0, false
 		}
 		m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; the card shows it as it is now.", num, changedWords(job.it, ch.Item))
+		if ch.Item.Number == 0 { // nothing is left to show: the card keeps what was read, and offers none of it
+			m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", num, changedWords(job.it, ch.Item))
+		}
 		if len(ch.What) > 0 {
 			m.log = append(m.log, "  changed since read: #"+strconv.Itoa(num)+": "+strings.Join(ch.What, "; "))
 		}
@@ -1425,6 +1431,9 @@ func (m *inboxModel) pick(n int) {
 func (m *inboxModel) enter() tea.Cmd {
 	cs := m.choices()
 	if len(cs) == 0 {
+		if i := m.item(); i >= 0 && m.state[m.items[i].key()] == "gone" {
+			m.refuse(fmt.Sprintf("#%d is no longer on GitHub's list of what waits; nothing to do.", m.items[i].Number))
+		}
 		return nil
 	}
 	c := cs[min(m.sel, len(cs)-1)]
@@ -2257,7 +2266,7 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		}
 		choiceEnd[ci] = len(choiceLines) - 1
 	}
-	if m.armed && i >= 0 {
+	if m.armed && i >= 0 && len(m.choices()) > 0 {
 		c := m.choices()[min(m.sel, len(m.choices())-1)]
 		choiceLines = append(choiceLines, "")
 		for _, l := range wrapTo(inboxEffect(it, c), w) {

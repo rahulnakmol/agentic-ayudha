@@ -258,7 +258,7 @@ func TestInboxFailureCards(t *testing.T) {
 	}
 	moved := ready(681)
 	moved.Kind, moved.Options, moved.Why, moved.Next = InboxNotReady, nil, "can't merge: it conflicts with dev, which took #725 since ship checked it.", "its builder rebases it onto dev; nothing for you yet."
-	items := []InboxItem{ready(661), ready(681), ready(707)}
+	items := []InboxItem{ready(661), ready(681), ready(707), ready(690)}
 	for _, size := range [][2]int{{120, 34}, {72, 34}} {
 		m := newInboxModel("o/r", "rahulnakmol", "", true)
 		m.now = func() time.Time { return clock }
@@ -279,6 +279,8 @@ func TestInboxFailureCards(t *testing.T) {
 				return it, "", ghRefusal(http.MethodPut, "/repos/o/r/pulls/661/merge", 405, "Pull Request is not mergeable")
 			case 681:
 				return it, "", errInboxChanged{Item: moved}
+			case 690: // GitHub no longer lists it
+				return it, "", errInboxChanged{}
 			default: // merged, then the Story's labels fail
 				call(w, http.MethodPut, "/repos/o/r/pulls/707/merge", 200)
 				call(w, http.MethodPost, "/repos/o/r/issues/664/labels", 422)
@@ -362,10 +364,24 @@ func TestInboxFailureCards(t *testing.T) {
 		if strings.Contains(flatView(m), "Ship PR #681") || !strings.HasPrefix(m.status, "#681 changed on GitHub; nothing was written.") {
 			t.Errorf("%dx%d: the changed card still ships, or status %q", size[0], size[1], m.status)
 		}
+		// An item GitHub no longer lists: the card says so, claims nothing
+		// about being current, and offers none of what was read (inspect's
+		// bb03031fb2 on #845); Enter still says why nothing happens.
+		at(690)
+		teaDrive(m, m.enter())
+		at(690)
+		check("gone since read", []string{"#690 changed on GitHub since you opened it: it no longer waits for you: someone or something already handled it. Nothing was written."}, card)
+		if v := flatView(m); strings.Contains(v, "card shows it as it is now") || strings.Contains(v, "Ship PR #690") || len(m.choices()) != 0 {
+			t.Errorf("%dx%d: the gone card claims to be current or still offers %+v:\n%s", size[0], size[1], m.choices(), v)
+		}
+		teaDrive(m, m.enter())
+		if !strings.Contains(m.status, "#690 is no longer on GitHub's list of what waits") {
+			t.Errorf("%dx%d: Enter on the gone card: status %q", size[0], size[1], m.status)
+		}
 		// A refresh GitHub fails keeps the cards and says so plainly.
 		m.refreshing = true
 		m.Update(inboxGatheredMsg{err: ghRefusal(http.MethodGet, "/repos/o/r/issues", 502, "Server Error")})
-		if m.status != "Not refreshed: GitHub had a problem. R tries again." || len(m.items) != 3 {
+		if m.status != "Not refreshed: GitHub had a problem. R tries again." || len(m.items) != 4 {
 			t.Errorf("%dx%d: a failed refresh: status %q, %d cards", size[0], size[1], m.status, len(m.items))
 		}
 	}
