@@ -295,10 +295,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		// --set may tighten one, never loosen it or turn it off. The run's
 		// config is clamped in place, so the session review spends within it too.
 		owner, name, _ := github.SplitRepo(repo)
-		pol, _, err := e.loopPolicy(ctx, c, owner, name)
+		pol, trusted, err := e.loopPolicy(ctx, c, owner, name)
 		if err != nil {
 			return err
 		}
+		// Its worktree is cut from, and its PR opened against, that branch too.
+		dev = trusted
 		lb, cb := &l.Config.Autonomy.Budget, pol.Config.Autonomy.Budget
 		lb.WallHours, lb.CostUSD, lb.Attempts = tighter(lb.WallHours, cb.WallHours), tighter(lb.CostUSD, cb.CostUSD), tighter(lb.Attempts, cb.Attempts)
 		lk, ck := &l.Config.Budget, pol.Config.Budget

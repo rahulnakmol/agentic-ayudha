@@ -891,6 +891,22 @@ func TestShipOnProof(t *testing.T) {
 	g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: "status:blocked"})
 	g.Mu.Unlock()
 	refused("story #2 is status:blocked, so the build-ready loop's PR waits for a person")
+	// The story cannot be read: ship does not guess that it is not blocked.
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2", 0
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "500") {
+		t.Fatalf("ship when the loop's story cannot be read: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+	// Nor when the story's build state cannot be read.
+	putLedger(t, bare, BuildLedgerPath(2), "{")
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal {
+		t.Fatalf("ship when the story's build state is unreadable: %d %s", code, out)
+	}
+	putLedger(t, bare, BuildLedgerPath(2), string(b))
 	g.Mu.Lock()
 	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
 	g.Mu.Unlock()

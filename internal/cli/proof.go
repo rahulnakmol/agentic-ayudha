@@ -119,14 +119,12 @@ func (e *Env) accountConfigDir() (dir, skipped string) {
 	if home == nil {
 		home = accountHome
 	}
-	h, err := home()
-	switch {
-	case err != nil:
-		return "", fmt.Sprintf(" (no user config is trusted: %v)", err)
-	case h == "":
-		return "", ""
+	if h, err := home(); err != nil {
+		skipped = fmt.Sprintf(" (no user config is trusted: %v)", err)
+	} else if h != "" {
+		dir = filepath.Join(h, ".config", "aayudha")
 	}
-	return filepath.Join(h, ".config", "aayudha"), ""
+	return dir, skipped
 }
 
 // trustedProof is the [proof] media bucket, the name of its secret, and the

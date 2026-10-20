@@ -367,6 +367,22 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
 	}
+	// A build-ready loop PR whose builder stopped it after the loop listed it
+	// is not shipped, nor sent to the inbox: the story's status:blocked, read now, beats that list.
+	var st BuildState
+	if _, err := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if contains(github.IssueLabels(is), "status:blocked") {
+			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
+		}
+	}
+
 	if rec.HumanPass.Kind == "" {
 		if !in.Bool("solo-bypass") {
 			if len(why) == 0 {
@@ -389,22 +405,6 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 		rec.HumanPass = hp
-	}
-
-	// A build-ready loop PR whose builder stopped it after the loop listed it
-	// is not shipped: the story's status:blocked, read now, beats that list.
-	var st BuildState
-	if _, err := readLedgerJSON(ctx, s.Ledger, BuildLedgerPath(story), &st); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	if st.Loop != "" && st.Branch == pr.GetHead().GetRef() {
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, story)
-		if err != nil {
-			return Wrap(ExitExternal, err)
-		}
-		if contains(github.IssueLabels(is), "status:blocked") {
-			return Errorf(ExitBlocked, "ship #%d: story #%d is status:blocked, so the %s loop's PR waits for a person to make it Ready again", n, story, st.Loop)
-		}
 	}
 
 	// 4. Land the gate's pack (pack.json and data, never media unless the

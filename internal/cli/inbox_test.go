@@ -461,6 +461,25 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	// hold. The author is the founder, so no review can pass it: Ready to ship.
 	agent := maps.Clone(env)
 	maps.Copy(agent, hostShells["amp"])
+	// A build-ready loop PR whose story is status:blocked waits for a person
+	// to make it Ready again: no Ready to ship card goes up for it.
+	orig := git(t, bare, "show", "ledger:"+BuildLedgerPath(6))
+	var st BuildState
+	_ = json.Unmarshal([]byte(orig), &st)
+	st.Loop = BuildLoop
+	b, _ := json.Marshal(st)
+	putLedger(t, bare, BuildLedgerPath(6), string(b))
+	g.Mu.Lock()
+	g.Issues[6].Labels = append(g.Issues[6].Labels, fake.Label{Name: "status:blocked"})
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(prB), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "story #6 is status:blocked") ||
+		slices.ContainsFunc(g.Issues[prB].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, ReadyToShipMarker) }) {
+		t.Fatalf("ship of a blocked loop PR: %d %s", code, errOut)
+	}
+	putLedger(t, bare, BuildLedgerPath(6), orig)
+	g.Mu.Lock()
+	g.Issues[6].Labels = slices.DeleteFunc(g.Issues[6].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	g.Mu.Unlock()
 	for _, pr := range []int{prA, prB} {
 		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
 		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {

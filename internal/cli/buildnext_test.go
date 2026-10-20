@@ -170,8 +170,10 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	}
 	putLedger(t, bare, LoopClaimsPath, claimLine(99, time.Now().Add(-time.Hour))) // a pick that died long ago holds nothing
 	// A loop build takes its budget from dev's committed config: a local
-	// override may tighten a limit, never loosen or turn it off.
-	loosen := map[string]string{"AAYU_AUTONOMY__BUDGET__WALL_HOURS": "0", "AAYU_AUTONOMY__BUDGET__ATTEMPTS": "9", "AAYU_AUTONOMY__BUDGET__COST_USD": "1"}
+	// override may tighten a limit, never loosen or turn it off. Nor does an
+	// override move its worktree's base or its PR's base off the trusted
+	// branch: feat/mine does not exist yet, so a build cut from it fails.
+	loosen := map[string]string{"AAYU_AUTONOMY__BUDGET__WALL_HOURS": "0", "AAYU_AUTONOMY__BUDGET__ATTEMPTS": "9", "AAYU_AUTONOMY__BUDGET__COST_USD": "1", "AAYU_BRANCHES__DEV": "feat/mine"}
 	code, res, pick, out := next(loosen, "--next", "pick")
 	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
 		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
@@ -276,6 +278,39 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, res, pick, out := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "2", "AAYU_BRANCHES__DEV": "feat/mine"}, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
 		t.Fatalf("a run-named branch lent the loop its cap: %d %s", code, out)
 	}
+	// The person names it: in the account's user config, or in the default
+	// branch's committed [branches] dev. Either way its cap counts.
+	home := t.TempDir()
+	userCfg := filepath.Join(home, ".config", "aayudha", "config.toml")
+	_ = os.MkdirAll(filepath.Dir(userCfg), 0o755)
+	_ = os.WriteFile(userCfg, []byte("[branches]\ndev = \"feat/mine\"\n"), 0o644)
+	if code, _, pick, out := next(map[string]string{"HOME": home, "AAYU_BUILD__IN_FLIGHT": "2"}, "--next", "ship"); code != 0 || pick.Limit != 2 {
+		t.Fatalf("the user config's integration branch is not trusted: %d %s", code, out)
+	}
+	// The account's user config is read even when the run's HOME is elsewhere.
+	_ = os.WriteFile(userCfg, []byte("[branches\n"), 0o644)
+	acct := opts
+	acct.UserHome = func() (string, error) { return home, nil }
+	if code, _, errOut := run(t, env, acct, "build", "--repo", "o/r", "--next", "ship"); code != ExitUsage || !strings.Contains(errOut, "config:") {
+		t.Fatalf("a broken account user config: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Default, g.Refs["heads/main"] = "main", "a000000000000000000000000000000000000a00"
+	g.RefFiles["a000000000000000000000000000000000000a00"] = map[string]string{".aayudha/config.toml": "[branches]\ndev = \"feat/mine\"\n"}
+	g.Mu.Unlock()
+	if code, _, pick, out := next(two, "--next", "ship"); code != 0 || pick.Limit != 2 {
+		t.Fatalf("the default branch's mapped integration branch is not trusted: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r", 0
+	g.Mu.Unlock()
+	if code, _, _, out := next(nil, "--next", "ship"); code == 0 || !strings.Contains(out, "500") {
+		t.Fatalf("a loop run when the default branch cannot be read: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Fail, g.Default = "", "dev"
+	delete(g.Refs, "heads/main")
+	g.Mu.Unlock()
 	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
 	if code, res, _, out := next(two, "--next", "pick"); code != 0 || res.Issue != newer.Number {
 		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)
