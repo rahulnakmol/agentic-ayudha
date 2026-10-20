@@ -280,7 +280,8 @@ credential helper, and the token aayu itself would use, including one in its sec
 never by value, and fails when one belongs to an approver or when GitHub cannot say whose it is just then (a
 timeout or a rate limit counts as exposed). A legacy 40-character token counts too, in a variable named for GitHub,
 and so does a source that cannot be read just then: a locked keychain on macOS or Windows, or a git credential helper
-that is configured but does not answer. With no approvers recorded, no reply approves anything, so the row only warns.
+that is configured but does not answer. With no approvers recorded, no reply approves anything, so the row warns
+instead (with `device_for = ["all"]` it passes, as replies are off).
 An agent with only the bot's token (`AAYU_BOT_TOKEN`) reads and posts the batch as the bot;
 it cannot ask for a device code, which proves the person's own account, so a one-way door waits for the person.
 
