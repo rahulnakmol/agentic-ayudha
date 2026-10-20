@@ -264,6 +264,7 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("ship with skipped: mobile: %d %s", code, out)
 	}
 	// The gate re-ran on a new head after a waiver Decision was filed under the story.
+	first := head
 	git(t, BuildWorktree(dir, 2), "commit", "--quiet", "--allow-empty", "-m", "chore: re-run the gate")
 	head = git(t, BuildWorktree(dir, 2), "rev-parse", "HEAD")
 	g.Mu.Lock()
@@ -277,15 +278,24 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): pb}}); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, `post a PR comment starting "Solo-mode bypass:"`) {
+	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+` first: a PR comment starting "Solo-mode bypass:"`) {
 		t.Fatalf("solo bypass without the comment: %d %s", code, out)
 	}
 	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("solo bypass by an agent: %d %s", code, errOut)
 	}
 	g.Mu.Lock()
-	bypass := &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story."}
-	bypass.User.Login, bypass.User.Type = "founder", "User"
+	// Bug #799: a bypass written for an earlier head is not one for this head.
+	stale := &fake.Comment{ID: 76, Body: "Solo-mode bypass: one human, no bot App; the merge gate is green on the head `" + short(first) + "`."}
+	stale.User.Login, stale.User.Type = "founder", "User"
+	g.Issues[prN].Comments = append(g.Issues[prN].Comments, stale)
+	g.Mu.Unlock()
+	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+" first") {
+		t.Fatalf("solo bypass with a comment for an earlier head: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	bypass := &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story at " + head[:12] + "."}
+	bypass.User.Login, bypass.User.Type, bypass.HTMLURL = "founder", "User", "https://github.com/o/r/pull/"+strconv.Itoa(prN)+"#issuecomment-77"
 	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
 	g.Mu.Unlock()
 	// Bug #170: with every solo-mode condition met, an agent running ship --solo-bypass through its host's shell
@@ -333,7 +343,7 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("Complete section:\n%s", body)
 	}
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
-	if !strings.Contains(rec, `"skipped": "the human pass is settled: solo-bypass"`) || !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
+	if !strings.Contains(rec, `"skipped": "the human pass is settled: solo-bypass"`) || !strings.Contains(rec, `issuecomment-77"`) || !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
 		t.Fatalf("ship record: %s", rec)
 	}
 }

@@ -141,7 +141,8 @@ Both commands refuse the bypass when:
   `self-update`);
 - a bot identity is configured, because then the agent can author and the human can approve;
 - a second human holds a paired seat, because then they can review;
-- no comment from the caller starts with `Solo-mode bypass:` (checked by `soloModeComment` in `internal/cli/ship.go`).
+- no comment from the caller starts with `Solo-mode bypass:` and names the PR's head commit (checked by
+  `soloModeComment` in `internal/cli/ship.go`); a bypass for an earlier head does not count after a push.
 
 ### Approving from any device (presence check)
 
@@ -349,7 +350,7 @@ Every card offers its choices and `s` to skip, so no card is a forced choice. Th
 | Step | What the record shows | The recommendation | What accepting does |
 |---|---|---|---|
 | Decision | an open Decision, a floor waiver, or a provisional one (V8) | the Decision's own Recommendation (ratify, for a provisional one) | `aayu decide <n> --accept <number>` |
-| Story PR ready to ship | `aayu ship` stopped on an open Story PR only for the human pass and commented "Ready to ship", and the merge gate is still green on that head | ship it (another: open it and review it) | `aayu ship <pr>`; in solo mode it first posts your `Solo-mode bypass:` comment and ships with `--solo-bypass` |
+| Story PR ready to ship | `aayu ship` stopped on an open Story PR only for the human pass and commented "Ready to ship", and the merge gate is still green on that head | ship it (another: open it and review it) | `aayu ship <pr>`; in solo mode it ships with `--solo-bypass`, and ship posts your `Solo-mode bypass:` comment for the head only once its checks pass, just before the merge |
 | PR that needs your review | the merge gate's inspect waits at the human rung for the PR's head: no reviewer app or paid model could review it | open it and review it (another: approve its head, after one line on what you checked) | the record `aayu inspect <pr> --approve` writes: your review of that head on the ledger, and the human-review reply the gate reads |
 | PR whose review stopped | inspect's review ran 3 rounds on distinct heads without converging and asked the builder to step back | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
 | Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |

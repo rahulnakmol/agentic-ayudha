@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -429,7 +430,12 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s", refusal, who), "aayu inbox ("+who+")")
 		}
 		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config)
-		if err != nil {
+		switch {
+		case errors.Is(err, errNoSoloBypass) && in.String(shipBypassNote) != "":
+			// The inbox's pick is the bypass: its comment is posted once
+			// every check below has passed, just before the merge.
+			hp = HumanPass{Kind: "solo-bypass", Login: me.Login, Commit: head, Note: soloBypassNote}
+		case err != nil:
 			return err
 		}
 		rec.HumanPass = hp
@@ -472,12 +478,24 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// (a tightened narrow set, say) stops it.
 	// Nor may the PR itself have moved: a base retargeted, a head pushed, or
 	// a PR closed since ship read it is not the PR it judged.
-	now, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+	now, err := pullMergeable(ctx, c, owner, name, n)
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	if now.GetState() != "open" || now.GetHead().GetSHA() != head || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
 		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	}
+	// GitHub would refuse the merge of a PR that conflicts with its base:
+	// refuse it here, before the bypass below is posted.
+	if now.Mergeable != nil && !now.GetMergeable() || now.GetMergeableState() == "dirty" {
+		base := pr.GetBase().GetRef()
+		return WithNext(Errorf(ExitBlocked, "ship #%d: it conflicts with %s, so GitHub cannot merge it; nothing was merged", n, base), fmt.Sprintf("rebase it onto %s, then aayu ship %d", base, n))
+	}
+	// Nor is a bypass posted while GitHub has not said whether it can merge:
+	// a refused merge would leave it on a PR that never merged.
+	bypassing := rec.HumanPass.Kind == "solo-bypass" && rec.HumanPass.Comment == "" && !c.DryRun()
+	if bypassing && now.Mergeable == nil {
+		return WithNext(Errorf(ExitBlocked, "ship #%d: GitHub has not worked out yet whether it can merge; your Solo-mode bypass was not posted, and nothing was merged", n), fmt.Sprintf("aayu ship %d again in a minute", n))
 	}
 	// Any pass, a person's included, was judged by the policy at that tip.
 	tip, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
@@ -491,6 +509,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err := held(); err != nil {
 		return err
 	}
+	var posted int64 // the bypass comment ship posts below, deleted again if the merge fails
+	if bypassing {
+		id, url, err := createCommentURL(ctx, c, repo, n, "github.comment.solo-bypass", in.String(shipBypassNote))
+		if err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: your Solo-mode bypass comment was not posted: %v", n, err)
+		}
+		posted, rec.HumanPass.Comment = id, url
+	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
 		Request: &actions.Request{Method: http.MethodPut, Path: fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, n)},
@@ -500,6 +526,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			merged, _, err = c.REST.PullRequests.Merge(ctx, owner, name, n, "", &gh.PullRequestOptions{CommitTitle: fmt.Sprintf("%s (#%d)", pr.GetTitle(), n), SHA: head, MergeMethod: "squash"})
 			return map[string]any{"sha": merged.GetSHA()}, err
 		}); err != nil {
+		if posted != 0 {
+			if _, derr := c.Write(ctx, actions.Action{Kind: "github.comment.delete", Target: fmt.Sprintf("%s#%d", repo, n),
+				Request: &actions.Request{Method: http.MethodDelete, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", repo, posted)}},
+				func(ctx context.Context) (any, error) {
+					_, err := c.REST.Issues.DeleteComment(ctx, owner, name, posted)
+					return nil, err
+				}); derr != nil {
+				return Wrap(ExitExternal, fmt.Errorf("%w; the Solo-mode bypass comment ship posted for the merge was not deleted: %w", err, derr))
+			}
+		}
 		return Wrap(ExitExternal, err)
 	}
 	if c.DryRun() {
@@ -732,19 +768,54 @@ var soloComment = regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(SoloBypassPrefix
 // the comment in the ship record, the Complete section, and the actions log,
 // where `audit` (WP7.6) reconciles it.
 func (e *Env) soloBypass(ctx context.Context, c *github.Client, owner, name string, n int, head, login string, cfg *config.Config) (HumanPass, error) {
-	url, err := soloModeComment(ctx, c, owner, name, n, login, cfg, "ship --solo-bypass", "a PR comment")
+	url, err := soloModeComment(ctx, c, owner, name, n, login, cfg, "ship --solo-bypass", "a PR comment", head)
 	if err != nil {
 		return HumanPass{}, err
 	}
-	return HumanPass{Kind: "solo-bypass", Login: login, Comment: url, Commit: head,
-		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"}, nil
+	return HumanPass{Kind: "solo-bypass", Login: login, Comment: url, Commit: head, Note: soloBypassNote}, nil
 }
+
+const soloBypassNote = "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+
+// createCommentURL posts body on PR n and returns the comment's URL, which
+// the ship record cites.
+func createCommentURL(ctx context.Context, c *github.Client, repo string, n int, kind, body string) (int64, string, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	var id int64
+	var url string
+	_, err := c.Write(ctx, actions.Action{Kind: kind, Target: fmt.Sprintf("%s#%d", repo, n),
+		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)}},
+		func(ctx context.Context) (any, error) {
+			cm, _, err := c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: gh.Ptr(body)})
+			id, url = cm.GetID(), cm.GetHTMLURL()
+			return id, err
+		})
+	return id, url, err
+}
+
+// errNoSoloBypass is a ship refused for want of a bypass that names the head.
+var errNoSoloBypass = errors.New("post a Solo-mode bypass")
+
+// namesHead reports whether body names head: a hex word of at least seven
+// characters that head starts with.
+func namesHead(body, head string) bool {
+	for _, w := range hexWord.FindAllString(body, -1) {
+		if strings.HasPrefix(head, strings.ToLower(w)) {
+			return true
+		}
+	}
+	return false
+}
+
+var hexWord = regexp.MustCompile(`\b[0-9a-fA-F]{7,40}\b`)
 
 // soloModeComment checks that solo mode holds (no bot identity, no second
 // paired human) and finds login's comment on issue or PR n starting
 // "Solo-mode bypass:"; it returns the comment's URL. what names the command
-// in refusals and where the comment belongs.
-func soloModeComment(ctx context.Context, c *github.Client, owner, name string, n int, login string, cfg *config.Config, cmd, where string) (string, error) {
+// in refusals and where the comment belongs. With a head, only a comment
+// that names that head counts: a bypass is for the commit it was written
+// for, never a later push (#799).
+func soloModeComment(ctx context.Context, c *github.Client, owner, name string, n int, login string, cfg *config.Config, cmd, where, head string) (string, error) {
 	if err := soloMode(cfg, login, cmd); err != nil {
 		return "", err
 	}
@@ -755,8 +826,11 @@ func soloModeComment(ctx context.Context, c *github.Client, owner, name string, 
 		return "", Wrap(ExitExternal, err)
 	}
 	i := slices.IndexFunc(comments, func(cm *gh.IssueComment) bool {
-		return strings.EqualFold(cm.GetUser().GetLogin(), login) && soloComment.MatchString(cm.GetBody())
+		return strings.EqualFold(cm.GetUser().GetLogin(), login) && soloComment.MatchString(cm.GetBody()) && (head == "" || namesHead(cm.GetBody(), head))
 	})
+	if i < 0 && head != "" {
+		return "", Errorf(ExitBlocked, "%s: %w for the head %s first: %s starting %q from your own account that names %s and says why", cmd, errNoSoloBypass, short(head), where, SoloBypassPrefix, short(head))
+	}
 	if i < 0 {
 		return "", Errorf(ExitBlocked, "%s: post %s starting %q that says why, from your own account, first", cmd, where, SoloBypassPrefix)
 	}
@@ -766,6 +840,10 @@ func soloModeComment(ctx context.Context, c *github.Client, owner, name string, 
 // shipExpectHead pins ship to the head a person chose in the inbox; it is not
 // a flag, so only the inbox sets it.
 const shipExpectHead = "expect-head"
+
+// shipBypassNote is the Solo-mode bypass comment the inbox asks ship to post
+// for the person, once ship's checks pass on the head; it is not a flag.
+const shipBypassNote = "bypass-note"
 
 // headMoved refuses a ship whose PR was pushed after the person chose it.
 func headMoved(n int, chose, now string) error {

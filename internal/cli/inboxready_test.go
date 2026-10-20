@@ -279,8 +279,8 @@ func TestInboxNotReady(t *testing.T) {
 	// GitHub still computing whether C can merge (null, unknown), as it is
 	// on the first read after dev moves: the same refresh asks again, and
 	// uses GitHub's answer once it has one (a conflict here).
-	inboxMergeableWait = 0
-	t.Cleanup(func() { inboxMergeableWait = time.Second })
+	mergeableWait = 0
+	t.Cleanup(func() { mergeableWait = time.Second })
 	g.Mu.Lock()
 	c.Mergeable, c.MergeableState, c.Computing = &no, "dirty", 2
 	g.Mu.Unlock()

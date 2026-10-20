@@ -336,7 +336,7 @@ func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *con
 		return Errorf(ExitUsage, "plan --solo-bypass: #%d's plan was already reviewed by %s; no bypass is needed", n, p.Review.ApprovedBy)
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	url, err := soloModeComment(ctx, c, owner, name, n, me.Login, cfg, "plan --solo-bypass", "a comment on the story")
+	url, err := soloModeComment(ctx, c, owner, name, n, me.Login, cfg, "plan --solo-bypass", "a comment on the story", "")
 	if err != nil {
 		return err
 	}

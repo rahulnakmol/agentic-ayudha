@@ -95,7 +95,8 @@ over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and
    `status:merged`, records the approval, the pass rule, and the streak in `ship.json` beside the pack, releases the
    build lease, and removes the branch and the worktree.
 4. Solo mode only (one human, no bot App): GitHub refuses self-approval, so the human may post a PR comment starting
-   `Solo-mode bypass:` that says why, then run `aayu ship <pr> --solo-bypass`; it is recorded for `audit`.
+   `Solo-mode bypass:` that names the head commit and says why, then run `aayu ship <pr> --solo-bypass`; it is
+   recorded for `audit`. A bypass counts only for the head it names: after a push, post one for the new head.
 5. When ship stops only for the human pass (or the narrow set), it comments **Ready to ship** on the PR. Stop
    there: never merge a Story PR with `gh`. The PR waits in a person's `aayu inbox`, which ships it (in solo mode, under their
    solo-mode bypass) with every gate above.
