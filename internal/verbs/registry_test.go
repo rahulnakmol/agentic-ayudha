@@ -37,7 +37,7 @@ func TestRegistry(t *testing.T) {
 		check func() error
 	}{
 		{"32 verbs in plan order with counsel after decide, then chart, survey, and the Production Engineer's", func() error {
-			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 39 {
+			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 40 {
 				return fmt.Errorf("verbs = %v, want %v", got, wantVerbs)
 			}
 			return nil
