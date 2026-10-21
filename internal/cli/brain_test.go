@@ -133,7 +133,10 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 		t.Helper()
 		for _, l := range strings.Split(out, "\n") {
 			if _, cmd, ok := strings.Cut(l, ". "); ok && (strings.HasPrefix(cmd, "git ") || strings.HasPrefix(cmd, "if ")) {
-				if b, err := exec.Command("sh", "-c", "cd "+single+" && "+cmd).CombinedOutput(); err != nil {
+				// Dir, not "cd <path>": sh strips the backslashes of a Windows path.
+				c := exec.Command("sh", "-c", cmd)
+				c.Dir = single
+				if b, err := c.CombinedOutput(); err != nil {
 					t.Fatalf("step %q: %v\n%s", cmd, err, b)
 				}
 			}
