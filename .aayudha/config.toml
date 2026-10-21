@@ -36,6 +36,15 @@ acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
 
+# Read-only GitHub counts for Initiative metrics (@rahulnakmol, 2026-10-21): the baseline of "aayu core: the
+# human-dependency engine", PRs merged into dev over 28 days. The key is a fine-grained token with public-repository
+# read access and no permissions (aayu-read-agentic-ayudha); aayu cannot verify a fine-grained token's scope, so it
+# trusts scope = "read" (docs/guide/guide-integrations.md).
+[integrations.github]
+secret = "github" # set the value with: aayu auth set-secret github
+scope = "read"
+project = "rahulnakmol/agentic-ayudha"
+
 # CodeRabbit (rung A whatever the builder's family) stays installed as the fallback app (founder, 2026-10-18, after Codex
 # reached its usage limits on #617). The CI review below supersedes "no AI key in the merge gate" (2026-10-15): the
 # inspect job holds the code-review environment's key, which only the base branches reach.
