@@ -119,7 +119,9 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 3. Before you write, list your claims, each with its source: a met criterion, a Feature field, or a Result. Only the
    claims on that list go into the copy. Decide the reader, what they want to do or decide, and the shape of the kind
    (below).
-4. Write the draft as Markdown by the rules below.
+4. Write the draft as Markdown by the rules below. Then read each sentence against the source on your list. The
+   binary does not check meaning, so you do: an "only", "can", "every", or "your own" that the source does not say
+   comes out.
 5. Check it. The binary refuses (exit 4) a link to a work item that is not a proven Feature, a sentence that names an
    unproven Feature, a proven Feature named but never linked, an announcement that links no proven Feature, an
    avoided word, an exclamation mark when the brand avoids them, and a superlative. It tags every outbound link with
@@ -160,8 +162,15 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 - Restate; never extrapolate. Keep each criterion's own scope:
   - A control does only what its criterion shows. If the export keeps the columns in the order shown, the column
     picker is not proven to reorder them.
-  - No interaction count ("one click away"), no exclusive or inverse rule ("a viewer cannot edit it" is not "only
-    you can"), no "always", "every", or "any" the criterion does not say, and no time it does not name ("today's").
+  - A negative criterion proves only what cannot happen, and only for the person it names. Restate it as that
+    negative: for "expected: a viewer cannot edit the document", write "a viewer cannot edit it". Never turn it into
+    an exclusive or a positive rule ("only the owner can edit it", "you decide who edits it"): "only X can" also
+    says that X can, and the criterion does not show that. The inverse holds too: "the owner can edit it" does not
+    prove that a viewer cannot.
+  - Keep the criterion's actor and object when you reword: "stores the basket under the name the customer types" is
+    "save a basket under a name you choose", not "under your own name".
+  - No interaction count ("one click away"), no "always", "every", or "any" the criterion does not say, and no time
+    it does not name ("today's").
   - An optional behaviour stays optional: "you can add a note" is not "every order now carries its reason".
 - Who it helps is the reader and the problem from the Feature's problem or summary, as a need: "for customers who
   rebuild the same basket every week". Never as an outcome: "no longer", "never again", "stays with", or "the problem
