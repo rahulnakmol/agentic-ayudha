@@ -41,6 +41,16 @@ and release notes for every user of aayu, call the reader "you". Name a person o
 STE and voice change how you say a claim. They never change whether you cite it. The evidence rule stands: every claim
 about the code, architecture, risk, or progress cites its source in the same paragraph or list item.
 
+Claim no more than the source establishes. Each line in the Wrong column says more than its source shows:
+
+| Source shows | Wrong | Right |
+|---|---|---|
+| No record of a human review | They are not a human review. | The evidence does not show a human review. |
+| No closure owner or process | Closing it is a human decision. | The source names no closure owner or process. |
+| Issue names two problems | The issue also names a third problem. | The issue names these two problems. |
+| Proof status for one of two changes | Both changes have incomplete proof. | One change lacks proof; the evidence does not show the other's status. |
+| A proposed load test | The test would show where it fails. | The test is a probe for where it fails. |
+
 ## PR bodies
 
 The PR body format is in `.github/pull_request_template.md`. Write its plain sections to this rule. `aayu inspect`
