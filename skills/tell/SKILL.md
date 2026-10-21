@@ -192,14 +192,15 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 - A release's copy covers what that release shipped. A Feature from an earlier release is not new in this one.
 - Never claim an absence the sources do not state: "nothing breaks", "no action needed", or "fully compatible" is a
   claim about every change, and no pack proves it. When no source names a break or a step, leave that part out.
+- A Feature's out-of-scope item is outside this Feature's scope, never a missing capability: write "pinning across
+  lists is outside this Feature's scope", never "you cannot pin across lists".
 - `aayu tell` does not check code blocks or diagram labels, so you check them: a code block shows only a command,
   setting, or value a criterion names, and a diagram's labels trace like prose.
 - Name a person only when a source names them, by GitHub login (`@login`) next to their work, never as "the founder"
   or by a display name. A bot or a review app is not a person to thank.
 - A Feature without authoritative packs is not in the copy at all: not named, linked, described, or hinted at
   ("coming soon", "next for teams"). Release notes and changelogs count what they cannot describe, bugs without a
-  Feature included: "Two more changes shipped in this release. They are not described here, because their proof is
-  not complete yet."
+  Feature included: "Two more changes shipped in this release. They are not described here." Give no reason.
 
 ## Voice: design/brand.yaml
 

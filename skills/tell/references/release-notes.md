@@ -126,7 +126,7 @@ The reader the request or the brief names comes first. Without one, the stage de
   | Who it helps | the Feature's problem, as a need | "For people who look for the same note every day." |
   | On your own, in a team | a criterion with a second person, or a setting someone must approve | "On your own, a pin keeps your note in view. In a team, another person who opens the list sees the pin." |
   | How to start | the control or command the criterion names | "Choose **Pin**." (the control the criterion names) |
-  | A limit | the scope's exclusions | "Pins apply to one list; a pinned note does not move to other lists." |
+  | A limit | the scope's exclusions | "Pinning across lists is outside this Feature's scope." |
 
 - Write the solo and team lines only when a source shows the difference. When the change means the same for
   everyone, one line serves both: do not invent a team benefit.
@@ -139,8 +139,8 @@ The reader the request or the brief names comes first. Without one, the stage de
 ### The closing count
 
 - The last line of the changes counts what shipped and is not described: unproven Features' stories and bugs without
-  a Feature. "Two more changes shipped in this release. They are not described here, because their proof is not
-  complete yet."
+  a Feature. "Two more changes shipped in this release. They are not described here." Give no reason: "their proof
+  is not complete yet" is false for a bug without a Feature.
 - Never name, link, or describe those changes, and never say what is next.
 - Proven Features that a startup page leaves out to keep its 400-word cap get their own line after it, with a true
   reason: "Two more proven Features shipped in this release. They do not fit on this one-page summary." Never give
