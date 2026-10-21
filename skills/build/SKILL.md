@@ -121,9 +121,11 @@ with no questions. Either way, create it, make it Ready (`aayu ready <n>`), then
 You (the host's model) write the code; the binary owns the worktree, the lease, the commits, verify, and the PR.
 
 1. Start: `aayu build <story>`. It refuses a story that is not Ready, whose body changed after its Ready snapshot, or
-   that another builder holds a live lease on. Build only a story the person asked for. When you pick up a Ready
-   story that did not come out of their grill in this session, build stops with a warning. Ask them, and on yes pass
-   their words: `aayu build <story> --asked "<their words>"`. Never invent the words. When they ask you to pick up
+   that another builder holds a live lease on. Build only a story the person asked for. Before their yes, and after a
+   no, say the wait or the refusal without words of a build in progress: "I have not started a build; it waits for
+   your yes". Never write "I am building …", not even negated ("I am building neither story"). When you pick up a
+   Ready story that did not come out of their grill in this session, build stops with a warning. Ask them, and on yes
+   pass their words: `aayu build <story> --asked "<their words>"`. Never invent the words. When they ask you to pick up
    work without naming a story ("whatever is Ready"), `aayu status` shows what is Ready: name each story by number
    and title with what it adds, say which you would take and why, and ask: `Shall I build #<n>, <title>?` Their yes
    is the words. On a no, stop: take no lease, start nothing else, and say that every story stays as it was, and how to start
@@ -143,8 +145,14 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
    is a floor miss without it. When the change adds or renames a command, flag, route, or exported function, update
    the feature map in the same checkpoint: the surface on the feature it belongs to, and a behaviour check per
    criterion that drives the real product (the aayudha verify skill, "When a branch changes the product"); map the
-   criteria to those checks too, and run `aayu verify --map` (it must be clean) before the commit. The evidence map
-   and the feature map are the checkpoint's own records, not product code: write them in the same checkpoint,
+   criteria to those checks too, and run `aayu verify --map` before the commit. It must exit 0. Exit 3 is drift (a
+   surface no feature claims, a feature missing from the index, a handle the source no longer has): fix it in this
+   checkpoint. Never leave drift for the maintain pass, for after the merge, or until `[verify] drift_blocking_from`.
+   A feature that `--map` reports stale (a source changed after its `verified_at`, or a new feature with no
+   `verified_at`) is in step: the merge gate's feature-map floor reports it in sync, and its behaviour floor re-checks
+   it. Do not write a `verified_at` by hand, and do not report stale as open work: in the handover, say the map is in
+   step, with no drift, and name the stale features the merge gate re-checks. The evidence map and the feature map
+   are the checkpoint's own records, not product code: write them in the same checkpoint,
    without asking, outside the plan's paths and in a path `LAYERS.md` leaves unassigned; only an `[autonomy] never`
    layer stops you. `aayu build <story>` runs the tests when it commits the checkpoint, so when you cannot run tests
    yourself, write the failing test and the code together and let that commit run them; do not stop to ask for
