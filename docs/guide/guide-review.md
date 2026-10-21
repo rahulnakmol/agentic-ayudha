@@ -1,8 +1,8 @@
 # A pull request is ready
 
 Your agent says the work is done. Before it merges, aayudha finds out whether that is true: fixed checks run in your
-CI, a reviewer agent from another vendor reads the change against every promise, and a person gives the last yes.
-Your CI never needs an AI key for any of it.
+CI, a reviewer model from another vendor reads the change against every promise, and a person gives the last yes.
+The one AI key your CI holds is the review model's, and only your base branches reach it.
 
 > **You are here:** Level 2. You need the merge gate (`aayu init --gates`) and a Ready story the pull request serves.
 > At Level 1? Start with [your first hour](start.md).
@@ -11,23 +11,20 @@ Your CI never needs an AI key for any of it.
 > Until 0.2 is released, `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev` installs the build this
 > page describes.
 
-## Before your first pull request: pick a reviewer
+## Before your first pull request: set up the reviewer
 
-The reviewer is an agent app installed on your GitHub account or organisation: Claude (`@claude`), Codex
-(`@codex`), or Cursor (`@cursor`). It must come from a different vendor than the agent that wrote the code, so the
-builder never grades its own work.
+By default the merge gate reviews each pull request itself, with a review model from a different vendor than the agent
+that wrote the code, so the builder never grades its own work. `aayu init --gates` creates the repository's
+`code-review` environment and fills in the model's endpoint and ID; you add its key.
 
-1. Install the app from its vendor, on the account that owns the repository.
-2. Run `aayu doctor`. Its `reviewer-apps` row shows each app it detected.
-3. Name the apps in `.aayudha/config.toml`:
+1. Open the repository's **Settings → Environments → code-review**.
+2. Add the secret `AAYU_REVIEW_MODEL_KEY`: your key for the endpoint in `AAYU_REVIEW_MODEL_URL` (filled in with
+   `https://api.x.ai/v1`, for `grok-4.7`).
 
-   ```toml
-   [inspect]
-   apps = ["codex"]
-   ```
-
-**You should see** `reviewer-apps` turn `PASS`. With no app of another vendor, the review falls back to a person, and
-the row says so. Amp cannot review, because it replies as the person who connected it.
+**You should see** the inspect check on your next pull request carry the review, with a first line such as
+`different-family review (B, paid): grok-4.7 (xai)`. Until the key is set, the check fails and names it.
+[Code review in the gate](how-review.md) covers other models, and review apps (Codex, CodeRabbit, Greptile, Claude,
+Cursor) if you prefer one.
 
 ## What happens on the pull request
 
@@ -37,10 +34,11 @@ the row says so. Amp cannot review, because it replies as the person who connect
    [feature map](guide-prove-behaviour.md), its behaviour checks.
 2. **It keeps a proof pack**, a file tying each promise to its evidence, and posts a proof comment. The comment opens
    with a risk line and the files to look at first, and flags any check the pull request weakens.
-3. **The reviewer is asked.** `aayu build` and a hand-off sync post the request for you. If you opened the
-   pull request some other way, run `aayu inspect <pr>` yourself, outside CI: the apps answer the people who
+3. **The review model reads the change** in the gate's inspect job, against the story's promises and the floors'
+   results. With a review app instead, `aayu build` and a hand-off sync post the request for you; if you opened the
+   pull request some other way, run `aayu inspect <pr>` yourself, outside CI, since the apps answer the people who
    connected them, never a workflow.
-4. **aayu reads the reply** as `merge`, `fix`, or `rebuild`, with a verdict per promise. A failing floor, a serious
+4. **aayu reads the review** as `merge`, `fix`, or `rebuild`, with a verdict per promise. A failing floor, a serious
    finding, or an unmet promise turns `merge` into `fix`. The reviewer cannot overrule a floor.
 
 **You should see** three checks on the pull request: `aayudha/merge-gate`, `aayudha/inspect`, and `aayudha/pack`.

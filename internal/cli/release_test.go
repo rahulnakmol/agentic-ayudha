@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,17 +26,18 @@ type ladderFixture struct {
 	opts       Options
 	dir, bare  string
 	goal       int
-	other      int  // the story under the unproven Feature, status:ready like a WP story merged by hand
-	pending    int  // a story that never merged
-	release    int  // includes #2 and #other
-	wide       int  // includes Feature #1, whose other stories never merged
-	unready    int  // no Version: fails Ready
-	snapshot   int  // Version is a snapshot, not vX.Y.Z
-	again      int  // a second Release of v0.1.0
-	gateFails  int  // ci.yml attempts that fail
-	tagRed     bool // release.yml stays red after its re-run
-	wrongSHA   bool // the dispatched gate runs on another commit
-	evalsRed   bool // evals.yml fails
+	other      int      // the story under the unproven Feature, status:ready like a WP story merged by hand
+	pending    int      // a story that never merged
+	release    int      // includes #2 and #other
+	wide       int      // includes Feature #1, whose other stories never merged
+	unready    int      // no Version: fails Ready
+	snapshot   int      // Version is a snapshot, not vX.Y.Z
+	again      int      // a second Release of v0.1.0
+	gateFails  int      // ci.yml attempts that fail
+	tagRed     bool     // release.yml stays red after its re-run
+	wrongSHA   bool     // the dispatched gate runs on another commit
+	noEvals    bool     // a new dev commit gets no evals.yml run
+	groups     []string // the eval-results artifacts each evals.yml run uploads
 	dispatched []string
 }
 
@@ -79,9 +81,6 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 			sha = strings.Repeat("d", 40)
 		}
 		run := fake.WorkflowRun{HeadSHA: sha, HeadBranch: ref, Status: "completed", Conclusion: "success", Attempt: 1}
-		if wf == "evals.yml" && f.evalsRed {
-			run.Conclusion = "failure"
-		}
 		if wf == "ci.yml" && f.gateFails > 0 {
 			f.gateFails--
 			run.Conclusion = "failure"
@@ -108,6 +107,8 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 	f.env = env
 	f.opts = opts
 	f.opts.RunPoll = time.Millisecond
+	// f.env is a person at a terminal (stdin is one; stdout is not, so output stays plain); an agent has none.
+	f.opts.IsTerminal = func(stream any) bool { _, ok := stream.(*strings.Reader); return ok }
 	return f
 }
 
@@ -130,6 +131,14 @@ func (f *ladderFixture) commit(t *testing.T, msg string, pr int, body, head stri
 		f.g.Static = map[string]any{}
 	}
 	f.g.Static["/repos/o/r/commits/"+sha+"/pulls"] = pulls
+	if !f.noEvals { // its push run of evals.yml, with a results artifact per group
+		id := int64(8000 + len(f.g.Runs))
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/evals.yml", HeadSHA: sha, HeadBranch: "dev", Event: "push",
+			Status: "completed", Conclusion: "success", Attempt: 1, HTMLURL: fmt.Sprintf("https://github.com/o/r/actions/runs/%d", id)})
+		for i, g := range f.groups {
+			f.g.Artifacts[id] = append(f.g.Artifacts[id], fake.ArtifactZip{ID: id*10 + int64(i), Name: "eval-results-" + sha + "-" + g})
+		}
+	}
 	f.g.Mu.Unlock()
 	return sha
 }
@@ -165,8 +174,8 @@ func TestReleaseLadder(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"agent lane", agent, []string{rel, "--to", "rolling"}, "refused for agents"},
-		{"no confirmation off a terminal", f.env, []string{rel, "--to", "rolling"}, "release not confirmed"},
+		{"in CI", f.env, []string{rel, "--to", "rolling", "--ci"}, "refused in CI"},
+		{"agent says --yes", agent, []string{rel, "--to", "rolling", "--yes"}, "--yes is for humans only"},
 		{"main before rolling", f.env, []string{rel, "--to", "main", "--yes"}, "has not been promoted to rolling yet"},
 		{"includes unmerged work", f.env, []string{strconv.Itoa(f.wide), "--to", "rolling", "--yes"}, fmt.Sprintf("#%d (status in-progress) is not in rolling..dev", f.pending)},
 		{"not a Release", f.env, []string{"2", "--to", "rolling", "--yes"}, `is a "story", not a Release`},
@@ -228,9 +237,15 @@ func TestReleaseLadder(t *testing.T) {
 		t.Fatal("the dry run moved rolling")
 	}
 
-	// A gate that still fails after one re-run of its failed jobs stops the promotion: nothing lands.
+	// A person at a terminal is still asked; a no promotes nothing.
+	if code, _, errOut := runIn(t, f.env, opts, "n\n", "release", rel, "--to", "rolling", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "release not confirmed") || len(f.dispatched) != 0 {
+		t.Fatalf("a person's no at a terminal: %d %s", code, errOut)
+	}
+
+	// An agent (Story #430) runs it with no terminal and no --yes. A gate that still fails after one re-run of its
+	// failed jobs stops the promotion: nothing lands.
 	f.gateFails = 2
-	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "the rolling gate failed") {
+	if code, _, errOut := f.run(t, day, agent, rel, "--to", "rolling"); code != ExitBlocked || !strings.Contains(errOut, "the rolling gate failed") {
 		t.Fatalf("failing gate: %d %s", code, errOut)
 	}
 	if git(t, f.bare, "rev-parse", "refs/heads/rolling") != rolling0 || git(t, f.bare, "tag", "--list") != "" || git(t, f.bare, "branch", "--list", "promote/*") != "" {
@@ -242,8 +257,9 @@ func TestReleaseLadder(t *testing.T) {
 	f.dispatched = nil
 
 	f.gateFails = 1 // the first gate attempt fails (a transient signing timeout); release re-runs its failed jobs once
-	code, out, errOut = run(t, f.env, opts, "release", rel, "--to", "rolling", "--yes", "--repo", "o/r")
-	if code != 0 || !strings.Contains(out, fmt.Sprintf("  measure due: #%d (goal) after 2026-11-09\n", f.goal)) || !strings.Contains(out, "  ci.yml: success https://github.com/o/r/actions/runs/") {
+	code, out, errOut = run(t, agent, opts, "release", rel, "--to", "rolling", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("  measure due: #%d (goal) after 2026-11-09\n", f.goal)) || !strings.Contains(out, "  ci.yml: success https://github.com/o/r/actions/runs/") ||
+		!strings.Contains(out, "  run by an agent (AAYU_AGENT=1) under @founder\n") {
 		t.Fatalf("release to rolling: %d\n%s%s", code, out, errOut)
 	}
 	var p Promotion
@@ -261,7 +277,7 @@ func TestReleaseLadder(t *testing.T) {
 	if out := git(t, f.bare, "branch", "--list", "promote/*"); out != "" {
 		t.Fatalf("candidate branch left on the remote: %s", out)
 	}
-	if fmt.Sprint(f.dispatched) != "[evals.yml@dev map[] ci.yml@promote/rolling map[gate:rolling]]" || p.Gate.Attempts != 2 || p.Gate.Conclusion != "success" ||
+	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" || p.Gate.Attempts != 2 || p.Gate.Conclusion != "success" ||
 		fmt.Sprint(p.Artifacts) != "[{binaries  0}]" {
 		t.Fatalf("dispatches %v, gate %+v, artifacts %+v", f.dispatched, p.Gate, p.Artifacts)
 	}
@@ -278,7 +294,7 @@ func TestReleaseLadder(t *testing.T) {
 		!strings.Contains(notes, "- Show empty list") || !strings.Contains(notes, "1 more change(s) shipped under Features without authoritative packs") || strings.Contains(notes, "Upload a CSV") {
 		t.Fatalf("release notes:\n%s", notes)
 	}
-	if p.Tree == "" || p.Notes != "tell/release/rolling-2026-10-12.md" || p.PromotedBy != "founder" || p.SourceSHA != git(t, f.bare, "rev-parse", "refs/heads/dev") {
+	if p.Tree == "" || p.Notes != "tell/release/rolling-2026-10-12.md" || p.PromotedBy != "founder" || p.Agent != "AAYU_AGENT=1" || p.Request != nil || p.SourceSHA != git(t, f.bare, "rev-parse", "refs/heads/dev") {
 		t.Fatalf("promotion record: %+v", p)
 	}
 	var due MeasureDue
@@ -291,7 +307,7 @@ func TestReleaseLadder(t *testing.T) {
 	body := f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
 	for _, want := range []string{"### Shipping evidence", "**dev → rolling** on 2026-10-12T09:41:00Z by @founder", "commit `" + tip + "`",
-		"ci.yml run", "success (attempts 2)", fmt.Sprintf("Stories released: #2, #%d", f.other), fmt.Sprintf("Measure due: #%d (goal) after 2026-11-09", f.goal)} {
+		"ci.yml run", "success (attempts 2)", "- Run by an agent (`AAYU_AGENT=1`) under @founder's account", fmt.Sprintf("Stories released: #2, #%d", f.other), fmt.Sprintf("Measure due: #%d (goal) after 2026-11-09", f.goal)} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Shipping evidence lacks %q:\n%s", want, body)
 		}
@@ -344,9 +360,97 @@ func TestReleaseLadder(t *testing.T) {
 	}
 	git(t, f.bare, "update-ref", "refs/heads/rolling", rollingTip)
 
+	// Main needs the explicit stable-release request (Story #430): a comment "Stable release: v0.1.0" on the Release,
+	// after its rolling snapshot (10:41), by a non-bot account with write access and no aayudha marker. Each near
+	// miss alone is refused, with nothing pushed.
+	rollingAt := day.Add(time.Hour)
+	comment := func(login, typ, body string, at time.Time) {
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		c := &fake.Comment{ID: at.Unix(), Body: body, CreatedAt: at, HTMLURL: fmt.Sprintf("https://github.com/o/r/issues/%d#issuecomment-%d", f.release, at.Unix())}
+		c.User.Login, c.User.Type = login, typ
+		f.g.Issues[f.release].Comments = append(f.g.Issues[f.release].Comments, c)
+	}
+	f.g.Mu.Lock()
+	f.g.Permissions = map[string]string{"maintainer": "maintain"} // visitor: read, the default
+	f.g.Mu.Unlock()
+	mainTip0 := git(t, f.bare, "rev-parse", "refs/heads/main")
+	for i, miss := range []struct{ login, typ, body string }{
+		{"", "", ""}, // no request at all
+		{"aayudha-bot[bot]", "Bot", "Stable release: v0.1.0"},
+		{"visitor", "User", "Stable release: v0.1.0"},
+		{"maintainer", "User", "Stable release: v0.2.0"},
+		{"maintainer", "User", "<!-- aayudha:release -->\nStable release: v0.1.0"},
+		{"maintainer", "User", "Stable release: v0.1.0 (before the snapshot)"},
+	} {
+		at := rollingAt.Add(time.Duration(i+1) * time.Minute)
+		switch {
+		case i == 5:
+			comment(miss.login, miss.typ, "Stable release: v0.1.0", rollingAt.Add(-time.Minute))
+		case miss.login != "":
+			comment(miss.login, miss.typ, miss.body, at)
+		}
+		code, _, errOut := f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main")
+		if code != ExitBlocked || !strings.Contains(errOut, `needs the explicit stable-release request: a person with write access comments "Stable release: v0.1.0" on Release #`) ||
+			git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 || git(t, f.bare, "tag", "--list", "v0.1.0") != "" {
+			t.Fatalf("main with request miss %d (%+v): %d %s", i, miss, code, errOut)
+		}
+	}
+	// In a person's shell that carries an agent marker (an orb's Terminal tab), the yes comes through a device-flow
+	// approval instead (presence.go); a denied one promotes nothing.
+	f.g.Mu.Lock()
+	f.g.Variables = map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": "c"}
+	f.g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "deny"}
+	f.g.Mu.Unlock()
+	marked := maps.Clone(f.env)
+	marked["AMP_THREAD_ID"] = "T-0000"
+	f.opts.DevicePoll = time.Millisecond
+	if code, _, errOut := f.run(t, day.Add(2*time.Hour), marked, rel, "--to", "main"); code != ExitBlocked || f.g.Device.Started != 1 ||
+		!strings.Contains(errOut, fmt.Sprintf("release #%s --to main (v0.1.0) on o/r was not approved: the request was denied", rel)) ||
+		!strings.Contains(errOut, "  Approving: Promotes rolling to main as v0.1.0 and tags it: the stable release of Release #"+rel+". One-way door") ||
+		git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 {
+		t.Fatalf("main with a denied device-flow approval: %d %s", code, errOut)
+	}
+	if strings.Contains(fmt.Sprint(f.dispatched), "promote/main") {
+		t.Fatalf("a refused main rung dispatched its gate: %v", f.dispatched)
+	}
+	// A dry run without the request says what is missing instead of refusing.
+	if code, p, errOut := f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main", "--dry-run"); code != 0 || !strings.Contains(strings.Join(p.Notices, "\n"), "needs the explicit stable-release request") {
+		t.Fatalf("main dry run with no request: %d %+v %s", code, p.Notices, errOut)
+	}
+	comment("maintainer", "User", "Stable release: v0.1.0\n\nShip it.", rollingAt.Add(30*time.Minute))
+	later := f.opts
+	later.Now = func() time.Time { return day.Add(2 * time.Hour) }
+	// Decision #480: with the security workflow installed, main takes only a rolling tip it scanned green.
+	rollingNow := git(t, f.bare, "rev-parse", "refs/heads/rolling")
+	f.g.Mu.Lock()
+	f.g.Workflows = append(f.g.Workflows, SecurityWorkflow)
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 8001, git(t, f.bare, "rev-parse", "refs/heads/dev"), "success")) // another commit's run
+	f.g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "so it was never scanned") {
+		t.Fatalf("main with an unscanned rolling tip: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 8002, rollingNow, "failure"))
+	f.g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "ended failure on the rolling tip") {
+		t.Fatalf("main with a red rolling scan: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	// A newer run of the same tip still in progress (a re-run) does not hide the completed green scan.
+	rerun := WorkflowRunFor(SecurityWorkflow, 8004, rollingNow, "")
+	rerun.Status = "in_progress"
+	f.g.Runs = append(f.g.Runs[:len(f.g.Runs)-1], rerun, WorkflowRunFor(SecurityWorkflow, 8003, rollingNow, "success"))
+	f.g.Mu.Unlock()
+	if code, out, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "  stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {
+		t.Fatalf("main dry run with the request: %d %s %s", code, out, errOut)
+	}
+
 	// Main: Release: v0.1.0, an annotated tag, and the Release closed.
-	code, p, errOut = f.run(t, day.Add(2*time.Hour), f.env, rel, "--to", "main", "--yes")
-	if code != 0 || p.Message != "Release: v0.1.0" || p.Gate == nil || !strings.Contains(fmt.Sprint(f.dispatched), "ci.yml@promote/main map[gate:stable]") {
+	code, p, errOut = f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main")
+	if code != 0 || p.Message != "Release: v0.1.0" || p.Gate == nil || !strings.Contains(fmt.Sprint(f.dispatched), "ci.yml@promote/main map[gate:stable]") ||
+		p.Request == nil || p.Request.Author != "maintainer" || p.Request.Via != "comment" || !strings.HasSuffix(p.Request.URL, "#issuecomment-"+strconv.FormatInt(rollingAt.Add(30*time.Minute).Unix(), 10)) {
 		t.Fatalf("release to main: %d %+v %s", code, p, errOut)
 	}
 	if p.ReleaseRun == nil || p.ReleaseRun.Conclusion != "success" || p.ReleaseRun.Attempts != 2 ||
@@ -365,7 +469,7 @@ func TestReleaseLadder(t *testing.T) {
 	f.g.Mu.Lock()
 	state, body := f.g.Issues[f.release].State, f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
-	if state != "closed" || !strings.Contains(body, "**dev → rolling**") || !strings.Contains(body, "**rolling → main**") {
+	if state != "closed" || !strings.Contains(body, "**dev → rolling**") || !strings.Contains(body, "**rolling → main**") || !strings.Contains(body, "- Stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {
 		t.Fatalf("Release after main: %s\n%s", state, body)
 	}
 	if code, _, errOut := f.run(t, day.Add(3*time.Hour), f.env, rel, "--to", "main", "--yes"); code == 0 || !strings.Contains(errOut, "closed") {
@@ -386,15 +490,14 @@ func TestReleaseFailsClosed(t *testing.T) {
 		landed bool
 		after  int // successes before the failure (the same request made before landing)
 	}{
-		{"GET /repos/o/r/issues/{release}", false, 0},       // the Release
-		{"GET /repos/o/r/issues/2", false, 0},               // a listed story
-		{"GET /repos/o/r/commits/{commit}/pulls", false, 0}, // what the range ships
-		{"GET /repos/o/r/actions/workflows", false, 0},      // which workflows exist
-		{"POST /repos/o/r/actions/workflows/evals.yml/dispatches", false, 0},
-		{"GET /repos/o/r/actions/runs/901", false, 0}, // waiting for the evals
+		{"GET /repos/o/r/issues/{release}", false, 0},                 // the Release
+		{"GET /repos/o/r/issues/2", false, 0},                         // a listed story
+		{"GET /repos/o/r/commits/{commit}/pulls", false, 0},           // what the range ships
+		{"GET /repos/o/r/actions/workflows", false, 0},                // which workflows exist
+		{"GET /repos/o/r/actions/workflows/evals.yml/runs", false, 0}, // the source commit's evals
 		{"POST /repos/o/r/actions/workflows/ci.yml/dispatches", false, 0},
-		{"GET /repos/o/r/actions/runs/902", false, 0},
-		{"POST /repos/o/r/actions/runs/902/rerun-failed-jobs", false, 0}, // re-running a failed gate        // waiting for the gate
+		{"GET /repos/o/r/actions/runs/901", false, 0},                    // waiting for the gate
+		{"POST /repos/o/r/actions/runs/901/rerun-failed-jobs", false, 0}, // re-running a failed gate
 		{"POST /repos/o/r/issues/2/labels", true, 0},                     // stamping
 		{"GET /repos/o/r/issues", false, 0},                              // the Features, for the notes
 		{"GET /repos/o/r/issues/2/parent", false, 0},                     // a story's Feature, for the notes
@@ -408,7 +511,7 @@ func TestReleaseFailsClosed(t *testing.T) {
 		{"GET /repos/o/r/issues/2/parent", true, 1},                      // the measure schedule walks up
 		{"GET /repos/o/r/issues/1/parent", true, 1},                      // to the Goal
 		{"GET /repos/o/r/issues/1/sub_issues", false, 0},                 // the proven Features, for the notes
-		{"GET /repos/o/r/actions/runs/902/artifacts", false, 0},
+		{"GET /repos/o/r/actions/runs/901/artifacts", false, 0},
 	} {
 		f := newLadderFixture(t)
 		rolling0 := git(t, f.bare, "rev-parse", "refs/heads/rolling")
@@ -501,17 +604,9 @@ func TestReleaseRefusesBeforeLanding(t *testing.T) {
 	}
 	_ = os.Remove(filepath.Join(f.dir, "design", "brand.yaml"))
 
-	// Red evals stop the promotion before the gate.
-	f.evalsRed = true
-	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "evals.yml ended failure") ||
-		strings.Contains(fmt.Sprint(f.dispatched), "ci.yml") {
-		t.Fatalf("red evals: %d %s %v", code, errOut, f.dispatched)
-	}
-	f.evalsRed = false
-
 	// The gate must have run on the candidate itself.
 	f.wrongSHA = true
-	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "evals.yml run 90") || !strings.Contains(errOut, "is on ddddddd") {
+	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "ci.yml run 901") || !strings.Contains(errOut, "is on ddddddd") {
 		t.Fatalf("a run on another commit: %d %s", code, errOut)
 	}
 	if git(t, f.bare, "rev-parse", "refs/heads/rolling") != rolling0 || git(t, f.bare, "tag", "--list") != "" {
@@ -587,5 +682,330 @@ func TestStoriesOfEveryRefsLine(t *testing.T) {
 		if got := storiesOf(c.body, c.branch); !slices.Equal(got, c.want) {
 			t.Errorf("storiesOf(%q, %q) = %v, want %v", c.body, c.branch, got, c.want)
 		}
+	}
+}
+
+// Decision #324: once dev defines SLOs, release refuses a missing or stale
+// error-budget status, lets only Bugs through while a budget is spent, and
+// refuses a catalog rollback that has never run once through aayudha-ops.
+func TestReleaseProductionGate(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	_ = os.MkdirAll(filepath.Join(f.dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "slos.toml"), []byte(`version = 1
+[[slo]]
+name = "ask-availability"
+service = "app"
+journey = "Ask a question"
+sli = "availability"
+objective = 99.5
+window = "28d"
+[[slo]]
+name = "app-crash-free"
+service = "app"
+journey = "Open the app"
+sli = "crash-free"
+objective = 99.9
+window = "28d"
+`), 0o644)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "actions.toml"), []byte(`version = 1
+[[action]]
+name = "deploy-app"
+summary = "Deploy a revision."
+argv_template = ["deploy.sh", "{revision}"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 2
+rollback = "rollback-app"
+blast_radius = "service"
+[action.params.revision]
+type = "string"
+pattern = "^[0-9a-f]{7,40}$"
+[[action]]
+name = "rollback-app"
+summary = "Roll back to the previous revision."
+argv_template = ["deploy.sh", "--rollback"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 2
+rollback = "none"
+blast_radius = "service"
+`), 0o644)
+	git(t, f.dir, "add", "ops")
+	f.commit(t, "feat(ops): SLOs and the catalog", 0, "", "")
+	// The crash-free SLO is measured from Sentry: its measure carries the
+	// source and a digest, and gates like the export's.
+	status := func(at time.Time, remaining float64, crashFree ...float64) {
+		t.Helper()
+		scratch := filepath.Join(t.TempDir(), "l")
+		git(t, filepath.Dir(scratch), "clone", "--quiet", "--branch", "ledger", f.bare, scratch)
+		_ = os.MkdirAll(filepath.Join(scratch, "slo"), 0o755)
+		cf := append(crashFree, remaining)[0]
+		b, _ := json.Marshal(map[string]any{"computed_at": at, "slos": []map[string]any{{"name": "ask-availability", "budget_remaining": remaining, "spent": remaining <= 0},
+			{"name": "app-crash-free", "sli": "crash-free", "budget_remaining": cf, "spent": cf <= 0, "source": "sentry project 4507 sessions", "source_sha256": strings.Repeat("ab", 32)}}})
+		_ = os.WriteFile(filepath.Join(scratch, "slo", "status.json"), b, 0o644)
+		git(t, scratch, "add", ".")
+		git(t, scratch, "commit", "--quiet", "-m", "slo: status")
+		git(t, scratch, "push", "--quiet", "origin", "HEAD:ledger")
+	}
+	dry := func() (int, string) {
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--dry-run")
+		return code, errOut
+	}
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "no error budget is recorded") {
+		t.Fatalf("no status: %d %s", code, errOut)
+	}
+	status(day.Add(-9*24*time.Hour), 0.8)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "the error-budget status is 9.0d old") {
+		t.Fatalf("stale status: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), -0.4)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of ask-availability, app-crash-free is spent") ||
+		!strings.Contains(errOut, fmt.Sprintf("#2 (story), #%d (story) would ship", f.other)) {
+		t.Fatalf("spent budget: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), 0.3, -0.1)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of app-crash-free is spent") {
+		t.Fatalf("spent crash-free budget: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), 0.3)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "rollback action(s) rollback-app") {
+		t.Fatalf("untried rollback: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Static["/repos/o/r/actions/workflows/aayudha-ops.yml/runs"] = map[string]any{"total_count": 1, "workflow_runs": []any{
+		map[string]any{"id": 11, "name": "aayudha-ops rollback-app for #9 (r-000000000001)", "status": "completed", "conclusion": "success"}}}
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("fresh budget and a tried rollback: %d %s", code, errOut)
+	}
+}
+
+// A rolling promotion merges a dev commit with tier-2 results for every gating group (an eval-results artifact per
+// group on a completed evals.yml run of that commit, as the rolling gate's evals-gate needs) and never dispatches
+// evals.yml. When dev's newest commit has none, release names the newest one that has them and both ways on, and
+// --at promotes that one.
+func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	_ = os.MkdirAll(filepath.Join(f.dir, "evals"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"brief-plain\"\ngate = \"advisory\"\n"), 0o644)
+	git(t, f.dir, "add", "evals")
+	f.groups = []string{"skills"} // survey's results are missing: not every gating group
+	partial := f.commit(t, "chore: eval groups", 0, "", "")
+	f.groups = []string{"skills", "survey"} // the advisory group's are not needed
+	f.g.Mu.Lock()
+	for i := 0; i < 120; i++ { // a busy week of runs ahead of it: the commit's own run is not on dev's first page
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9000 + i), Path: ".github/workflows/evals.yml", HeadSHA: fmt.Sprintf("%040x", i), HeadBranch: "dev", Event: "push", Status: "completed", Conclusion: "success"})
+	}
+	f.g.Mu.Unlock()
+	older := f.commit(t, "feat: evaluated (#34)", 34, "Refs #2", "story/2-evaluated")
+	buried := f.commit(t, "chore: re-dispatched", 0, "", "")
+	f.g.Mu.Lock()
+	for i := 0; i < 20; i++ { // its results are on a run older than its newest 20, which is all the gate looks at
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9500 + i), Path: ".github/workflows/evals.yml", HeadSHA: buried, HeadBranch: "dev", Event: "workflow_dispatch", Status: "completed", Conclusion: "cancelled"})
+	}
+	f.g.Mu.Unlock()
+	f.noEvals = true
+	// The newest commit adds a gating group; the older commit is judged by its own groups, as the gate would judge it.
+	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"ux\"\n"), 0o644)
+	git(t, f.dir, "add", "evals")
+	newest := f.commit(t, "feat: not evaluated yet (#35)", 35, "Refs #2", "story/2-newest")
+
+	for _, mode := range []string{"--dry-run", "--yes"} { // a dry run refuses as the promotion would
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", mode)
+		for _, want := range []string{
+			"dev's newest commit " + newest[:7] + " has no completed evals.yml run with results for every gating group (missing: no completed run)",
+			"Either promote " + older[:7] + ", the newest dev commit that has them",
+			"`aayu release " + rel + " --to rolling --at " + older[:7] + "`",
+			"or dispatch once on dev's newest commit: `gh workflow run evals.yml --ref dev`",
+		} {
+			if code != ExitBlocked || !strings.Contains(errOut, want) {
+				t.Errorf("%s, newest commit unevaluated: exit %d, want %q in:\n%s", mode, code, want, errOut)
+			}
+		}
+	}
+	if len(f.dispatched) != 0 || git(t, f.bare, "branch", "--list", "promote/*") != "" {
+		t.Fatalf("release dispatched %v or pushed a candidate", f.dispatched)
+	}
+	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", partial); code != ExitBlocked || !strings.Contains(errOut, "(missing: survey)") {
+		t.Fatalf("--at a commit without every gating group's results: %d %s", code, errOut)
+	}
+
+	// dev gains SLOs after the chosen commit; with no error budget recorded they would block, but the release gates
+	// read the commit being promoted, which has none.
+	_ = os.MkdirAll(filepath.Join(f.dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "slos.toml"), []byte("version = 1\n[[slo]]\nname = \"ask-availability\"\nservice = \"app\"\njourney = \"Ask a question\"\nsli = \"availability\"\nobjective = 99.5\nwindow = \"28d\"\n"), 0o644)
+	git(t, f.dir, "add", "ops")
+	f.commit(t, "feat(ops): SLOs", 0, "", "")
+
+	code, p, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", older[:7])
+	tip := git(t, f.bare, "rev-parse", "refs/heads/rolling")
+	if code != 0 || p.SourceSHA != older || p.Evals == nil || !strings.HasPrefix(p.Evals.URL, "https://github.com/o/r/actions/runs/8") || git(t, f.bare, "rev-parse", tip+"^2") != older {
+		t.Fatalf("--at %s: %d %+v %s", older[:7], code, p, errOut)
+	}
+	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" {
+		t.Fatalf("dispatches %v: only the gate", f.dispatched)
+	}
+}
+
+// Story #481: an agent runs the stable release with no "Stable release:"
+// comment, and the person approves it through the device code: the promotion
+// record and the Release's shipping evidence name the approving person and the
+// device flow next to the agent marker the command ran under.
+func TestReleaseMainApprovedThroughDeviceCode(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes"); code != 0 {
+		t.Fatalf("rolling: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: f.g.Viewer, Outcome: "approve"}
+	who := f.g.Viewer
+	f.g.Mu.Unlock()
+	marked := maps.Clone(f.env)
+	marked["AMP_THREAD_ID"] = "T-0000"
+	f.opts.DevicePoll = time.Millisecond
+	code, p, errOut := f.run(t, day.Add(2*time.Hour), marked, rel, "--to", "main")
+	if code != 0 || p.Approval == nil || p.Approval.Login != who || p.Approval.Via != "device-flow" || p.Agent == "" || p.Request == nil || p.Request.Via != "device-flow" {
+		t.Fatalf("main approved through the device code: %d %+v %s", code, p, errOut)
+	}
+	f.g.Mu.Lock()
+	body := f.g.Issues[f.release].Body
+	f.g.Mu.Unlock()
+	if want := fmt.Sprintf("with @%s's account, approved by @%s through the device code (device-flow)", who, who); !strings.Contains(body, want) {
+		t.Fatalf("shipping evidence does not name the approver (%q):\n%s", want, body)
+	}
+}
+
+// WorkflowRunFor is a completed push run of a workflow on a commit.
+func WorkflowRunFor(file string, id int64, sha, conclusion string) fake.WorkflowRun {
+	return fake.WorkflowRun{ID: id, Path: ".github/workflows/" + file, HeadSHA: sha, Event: "push", Status: "completed", Conclusion: conclusion, Attempt: 1}
+}
+
+// Story #487 criterion 4: an open aayudha:security Bug last seen on rolling or
+// main holds the promotion until it is gone there or a person accepts a floor
+// waiver on it that names its floor; one seen only on dev, or gone from
+// rolling, holds nothing.
+func TestReleaseSecurityBugsHold(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	sha := strings.Repeat("ab", 20)
+	bug := func(fp, branch string) *fake.Issue {
+		is := f.g.AddIssue("Security: "+fp, "### Summary\n\nfound\n\n"+securityMarker(fp, "seen", branch, sha)+"\n", "type:bug", "status:backlog", SecurityLabel)
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		is.User = fake.Account{Login: SecurityFiler, Type: "Bot"}
+		return is
+	}
+	onDev := bug("deps GO-1 x go.mod", "dev")
+	dry := func() (int, string) {
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--dry-run")
+		return code, errOut
+	}
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a Bug seen only on dev held the promotion: %d %s", code, errOut)
+	}
+	// Codex review of #500: a triage user's issue with a forged marker and the label is not a security Bug.
+	f.g.AddIssue("Security: forged", "### Summary\n\nfound\n\n"+securityMarker("sast forged x.go", "seen", "rolling", sha)+"\n", "type:bug", SecurityLabel)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a forged Bug held the promotion: %d %s", code, errOut)
+	}
+	// A path with a quote and a > in it, which a raw marker attribute would end early.
+	onRolling := bug(`sast rule-1 cmd/"odd">.go`, "rolling")
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, fmt.Sprintf(`#%d (sast rule-1 cmd/"odd">.go, last seen on rolling at ababab`, onRolling.Number)) ||
+		strings.Contains(errOut, fmt.Sprintf("#%d ", onDev.Number)) {
+		t.Fatalf("a Bug seen on rolling did not hold, or the dev one did: %d %s", code, errOut)
+	}
+	// A waiver that names another floor, or one nobody accepted, waives nothing.
+	waiver := func(title string, accepted bool, closer ...string) {
+		by := append(closer, "founder")[0]
+		body := decisionBody("false", fmt.Sprintf("waives #%d", onRolling.Number))
+		if accepted {
+			body += "\n### Decision\n\nwaive, accepted by @" + by + " on 2026-10-12.\n"
+		}
+		d := f.g.AddIssue(title, body, "type:decision")
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		d.Parent = onRolling.Number
+		onRolling.Subs = append(onRolling.Subs, d.Number)
+		if accepted {
+			d.State, d.StateReason, d.ClosedBy = "closed", "completed", &fake.Account{Login: by, Type: "User"}
+		}
+	}
+	waiver("Waive the deps floor on #"+strconv.Itoa(onRolling.Number), true)
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), false)
+	if code, errOut := dry(); code != ExitBlocked {
+		t.Fatalf("a waiver of another floor, or an unaccepted one, released the hold: %d %s", code, errOut)
+	}
+	// Bug #599: once the founder is the floor-waiver authority, a sast waiver
+	// another person with write access accepted and closed holds nothing back.
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), true, "mallory")
+	f.env["AAYU_AUTONOMY__APPROVER"] = "founder"
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, fmt.Sprintf("#%d (sast", onRolling.Number)) {
+		t.Fatalf("a waiver the authority did not accept released the hold: %d %s", code, errOut)
+	}
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), true)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("an accepted sast waiver did not release the hold: %d %s", code, errOut)
+	}
+	// Gone from main after being seen there: no hold.
+	onMain := bug("secrets github-pat config.txt", "main")
+	if code, _ := dry(); code != ExitBlocked {
+		t.Fatalf("a Bug seen on main did not hold")
+	}
+	// A gone marker from anyone but the Bug's author (the workflow) is ignored.
+	gone := func(id int64, login string) {
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		c := &fake.Comment{ID: id, Body: securityMarker("", "gone", "main", sha) + "\nNot found."}
+		c.User.Login, c.User.Type = login, "User"
+		onMain.Comments = append(onMain.Comments, c)
+	}
+	gone(98, "mallory")
+	if code, _ := dry(); code != ExitBlocked {
+		t.Fatalf("another user's gone marker released the hold")
+	}
+	gone(99, onMain.User.Login)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a Bug gone from main still held: %d %s", code, errOut)
+	}
+	// A fix on dev reaches rolling by the normal path: once the dev tip being promoted was scanned clean, the Bug
+	// last seen on rolling no longer holds; a clean scan of an older dev commit does not count.
+	fixed := bug("deps GO-2 y go.mod", "rolling")
+	tip := git(t, f.bare, "rev-parse", "refs/heads/dev")
+	onDevScan := func(id int64, at string) {
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		c := &fake.Comment{ID: id, Body: securityMarker("", "gone", "dev", at) + "\nNot found."}
+		c.User.Login, c.User.Type = fixed.User.Login, "User"
+		fixed.Comments = append(fixed.Comments, c)
+	}
+	onDevScan(201, strings.Repeat("cd", 20))
+	if code, _ := dry(); code != ExitBlocked {
+		t.Fatalf("a clean scan of another dev commit released the hold")
+	}
+	onDevScan(202, tip)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a fix scanned clean at the dev tip still held the promotion: %d %s", code, errOut)
+	}
+	// Codex review of #500: any workflow's token comments as github-actions[bot], so an event alone never lets a
+	// promotion through. With the security workflow installed, rolling too takes only a dev tip it scanned green.
+	f.g.Mu.Lock()
+	f.g.Workflows = append(f.g.Workflows, SecurityWorkflow)
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 301, strings.Repeat("cd", 20), "success")) // another commit's run
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "push run on the dev tip "+short(tip)) {
+		t.Fatalf("rolling took a dev tip the workflow never scanned: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 302, tip, "success"))
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a dev tip scanned green still held the promotion: %d %s", code, errOut)
 	}
 }

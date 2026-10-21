@@ -40,7 +40,7 @@ Run `/reload-plugins`, or start a new session.
 | `/aayudha:next` | The single best next step; Claude takes it when it may |
 | `/aayudha:grill`, `/aayudha:ready`, `/aayudha:build`, … | One skill per verb, from the same `skills/` the binary carries |
 | The `aayudha` MCP server | The verbs as tools; write verbs only with `[mcp] expose_writes = true` |
-| Hooks | `session-start` reports skill drift; `pre-tool` pauses agents when the budget breaker trips or the repository is halted |
+| Hooks | `session-start` reports skill drift; `pre-tool` pauses agents when the budget breaker trips or the repository is halted, and refuses PostHog or Sentry writes through another MCP server or CLI; `post-tool` logs the PostHog and Sentry reads it lets through |
 
 Shipping, releasing, accepting a Decision, and responding to an incident are for a person. Their skills only run when
 you type them, the MCP server never offers them, and the `pre-tool` hook blocks Claude if it tries to run them in a
@@ -73,12 +73,20 @@ If you would rather commit the setup with the repository, use `aayu install` ins
 aayu install --host claude --apply
 ```
 
-It writes skill copies to `.claude/skills/`, the MCP server to `.mcp.json`, and the hooks and the status line to
-`.claude/settings.json`, each calling aayu by its full, version-checked path. Each teammate runs it once on their
-machine. Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no
-hooks or MCP server of its own (and removes the ones it wrote before), so Claude Code lists one `aayudha` server and runs
-each hook once. If you add the plugin later, its hooks stand aside and tell you to run
-`aayu install --host claude --apply` again. The skills still appear twice while both are present.
+It writes skill copies to `.claude/skills/`, the plugin's commands to `.claude/commands/aayudha/` (the same
+`/aayudha:home`, `/aayudha:next`, and hand-offs), the MCP server to `.mcp.json`, and the hooks and the status line to
+`.claude/settings.json`, each calling aayu by its full, version-checked path. Your product's verify skill stays in
+`.agents/skills/verify-<product>/`; Claude Code reaches it as `/aayudha:verify-<product>`, a short command that points
+there, so Cursor, which reads `.claude/skills/` too, lists it once. Each teammate runs it once on their
+machine. What `install` writes is the same whether or not you have the plugin, so a teammate who clones the repository
+without the plugin still gets every skill.
+
+If you also have the plugin, `install` turns it off for this repository: `.claude/settings.json` gets
+`"enabledPlugins": {"aayudha@aayudha": false}`, which Claude Code applies over your user setting. Claude Code then lists
+each skill, command, and the `aayudha` server once, runs each hook once, and keeps the plugin on in your other
+repositories. The commands keep their names, because `install` writes them itself. An `enabledPlugins`
+entry in `.claude/settings.local.json` turns the plugin back on: its hooks stand aside, and `aayu doctor` reports the
+doubled skills.
 
 ## Check it worked
 

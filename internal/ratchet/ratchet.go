@@ -1,5 +1,5 @@
 // Package ratchet keeps this repository's coverage floor from loosening
-// (docs/research/video-learnings-2026-10.md P7; Appendix B S-4.3r and D-4.3r).
+// (private research note video-learnings-2026-10.md P7; Appendix B S-4.3r and D-4.3r).
 // The floor lives in ratchets.toml at the repository root. CI measures the
 // statement coverage of `go test ./...` on every PR and push: coverage below
 // the floor (less its noise margin) fails; coverage that holds well above it
@@ -22,6 +22,8 @@ import (
 	gh "github.com/google/go-github/v90/github"
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
@@ -143,23 +145,29 @@ func Total(r io.Reader) (float64, error) {
 // a floor-waiver Decision for floor that a human accepted: labelled
 // decision:waiver, titled "Waive the <floor> floor on #…", closed as
 // completed by someone who is not a bot, with "waive, accepted by @" in its
-// Decision section (the rule `verify` applies, WP5.6).
-func AcceptedWaiver(is *gh.Issue, floor string, bots []string) error {
+// Decision section, and accepted by the floor-waiver authority c resolves for
+// a waiver of a parentType item (decide.WaiverAcceptedBy): the rule `verify`
+// applies (WP5.6, Bug #599).
+func AcceptedWaiver(is *gh.Issue, floor string, c *config.Config, parentType string) error {
 	n := is.GetNumber()
 	_, v := workitems.Sections(is.GetBody())
 	labels := map[string]bool{}
 	for _, l := range is.Labels {
 		labels[l.GetName()] = true
 	}
-	switch by := is.GetClosedBy(); {
+	by := is.GetClosedBy()
+	switch {
 	case !labels[workitems.LabelWaiver]:
 		return fmt.Errorf("#%d is not a floor-waiver Decision (no %s label)", n, workitems.LabelWaiver)
 	case !strings.HasPrefix(is.GetTitle(), "Waive the "+floor+" floor on #"):
 		return fmt.Errorf("#%d waives another floor: %q", n, is.GetTitle())
 	case is.GetState() != "closed" || is.GetStateReason() != "completed" || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(v["Decision"])), "waive, accepted by @"):
 		return fmt.Errorf("#%d is not accepted: a human accepts it with `aayu decide %d --accept waive`", n, n)
-	case by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, bots):
+	case by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, c.Identity.BotLogins):
 		return fmt.Errorf("#%d was not closed by a person", n)
+	}
+	if err := decide.WaiverAcceptedBy(c, parentType, by.GetLogin(), v["Decision"]); err != nil {
+		return fmt.Errorf("#%d is not accepted: %w", n, err)
 	}
 	return nil
 }

@@ -10,5 +10,27 @@
 /CONSTRAINTS.md          @rahulnakmol
 /internal/config/defaults.toml  @rahulnakmol
 /.aayudha/config.toml    @rahulnakmol
+/.aayudha/config.json    @rahulnakmol
+/.aayudha/config.local.toml  @rahulnakmol
+/.aayudha/config.local.json  @rahulnakmol
 /.agents/                @rahulnakmol
 /.claude/                @rahulnakmol
+# The plugin bundle this repository's marketplaces ship: its manifests, hooks, and the Amp plugin run on the
+# machines that install it. The host config a checkout runs is the aayudha:host-config block below.
+/.claude-plugin/         @rahulnakmol
+/.codex-plugin/          @rahulnakmol
+/.cursor-plugin/         @rahulnakmol
+/hosts/claude/hooks.json @rahulnakmol
+/hosts/codex/hooks.json  @rahulnakmol
+/hosts/cursor/hooks.json @rahulnakmol
+/hosts/amp/aayudha.ts    @rahulnakmol
+
+# BEGIN aayudha:host-config (written by `aayu init --gates`: the hooks, MCP servers, and plugins a host runs from this repository)
+/.mcp.json  @rahulnakmol
+/.claude/  @rahulnakmol
+/.cursor/  @rahulnakmol
+/.codex/  @rahulnakmol
+/.amp/plugins/  @rahulnakmol
+/.github/hooks/  @rahulnakmol
+/.agents/  @rahulnakmol
+# END aayudha:host-config

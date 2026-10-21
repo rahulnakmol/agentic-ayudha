@@ -137,20 +137,20 @@ max_drop = 0.3
 [[groups]]
 name = "brief-plain"
 prefixes = ["brief/eli5-", "brief/ste-"]
-max_usd = 6.0
+max_usd = 4.0 # run 39012708292 (70559ea): 1.70 USD for 9 of 10 runs, …
 pass_k = "advisory"
 gate = "advisory"
 
 [[groups]]
 name = "brief"
 prefixes = ["brief/"]
-max_usd = 6.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h)
+max_usd = 3.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h); …
 …
 pass_k = "advisory"
 
 [[groups]]
 name = "skills" # every other case
-max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; …
+max_usd = 4.0 # run 39017055049 (dae0662): 1.97 USD
 ```
 
 The pass^k computation, from `Tier2` in `internal/evals/tier2.go`:
@@ -268,6 +268,36 @@ Retro checks that a fix held. Each report lists the evolve pull requests merged 
 cursor (`RecurrenceDays`). If a retro Feedback issue opened after the merge, or a finding of this window, names the
 same skill, the problem came back. Retro then files "evolve did not hold: skill `<s>` (…) came back" with the
 `aayu install --pin` rollback. That title names the skill, so it counts as evidence for the next evolve.
+
+### Fix layer first: only prose goes to evolve
+
+A skill rewrite is the third layer of the fix, not the first (ETHOS 10). Before evolve sees it, each Feedback issue is
+classified by the highest layer that can fix its correction for good, with the reason:
+
+| Layer | The fix | What aayu files |
+|---|---|---|
+| `codebase` | a type, an invariant, or a boundary makes the mistake impossible | a Story whose Completion Goal names that proof in backticks |
+| `check` | a lint rule, a test, a CI check, or a `verify` floor catches it | a Story whose Completion Goal names the rule or test |
+| `prose` | guidance in a skill or `AGENTS.md`, for what needs judgement | nothing: evolve's eval-first rewrite |
+| `review` | a change to what the environment surfaces for a person | a Story about the proof comment, the review plan, or the risk line |
+
+`aayu retro --classify <feedback> --layer <layer> --reason "…"` records it: a `fix:<layer>` label on the Feedback issue
+and one replace-in-place comment holding the reason. For `prose` and `review` it also needs `--not-catchable`, why no
+type, invariant, lint rule, or test can catch it. For the other three layers it needs `--criterion`, the Story's
+Completion Goal criterion, and files the Story once. The Story carries the same `fix:<layer>` label, so fix work is
+filterable by layer. The layer is a model judgement; aayu checks only that the record is complete. Running the
+command again reclassifies, and the Story's label follows (a Story loses it when the correction moves to `prose`).
+
+Unclassified Feedback does not wait for evolve to refuse it. `aayu doctor`'s `feedback-layers` row, the home screen,
+the status line, and the session-start hook list every open Feedback issue without a `fix:<layer>` label, with the
+command that classifies it. The hook reads the last home screen and makes no network call, so it is as fresh as the
+last `aayu` or `aayu next`.
+
+evolve then refuses (exit 4) a Feedback issue that is unclassified, a `review` correction, or a `codebase` or `check`
+correction whose classification gives no `--not-catchable` reason, and only the Feedback it accepts counts toward
+the two-issue rule. Every retro report ends with a "Fix layer of Feedback" table that counts every Feedback issue by
+its label, unclassified included, with the fix Stories that carry each layer's label and those shipped by the
+cursor.
 
 The `evolve` loop in `loops/evolve.toml` runs monthly, on the 2nd at 10:00 in `[time] tz`. It only lists the skills
 that have the evidence; it changes no skill itself.

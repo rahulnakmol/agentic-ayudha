@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/percent.go
@@ -24,7 +29,8 @@ const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/perce
 +	if total < 0 {
 +		return 0
 +	}
- 	return float64(covered) / float64(total) * 100
+-	return float64(covered) / float64(total) * 100
++	return float64(covered) / float64(total) * 100
  }
 diff --git a/LAYERS.md b/LAYERS.md
 --- a/LAYERS.md
@@ -114,6 +120,120 @@ func TestGeneralModeFilters(t *testing.T) {
 	}
 	if len(InlineComments(res, []string{res.Findings[0].ID})) != 0 {
 		t.Fatal("a finding already posted is posted again")
+	}
+	// A reviewer's line where its quote is stands, even when the same text
+	// is also on an added line: the P1 on the unchanged closing brace (line
+	// 5) is pre-existing, not moved to the added one (line 4).
+	diff := ParseDiff("diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1,4 +1,6 @@\n func f() {\n \tif x {\n+\t\ty()\n+\t}\n }\n")
+	brace := Finding{Severity: "P1", Category: "bug", File: "a.go", Line: 5, Quote: "}", Title: "f never returns", Confidence: 0.9}
+	if keep, drop := (Filter{}).Clean([]Finding{brace}, diff, nil, ""); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropPreExisting || drop[0].Line != 5 {
+		t.Fatalf("an anchored context-line quote: kept %+v, dropped %+v", keep, drop)
+	}
+}
+
+// A summary over its 1200 characters is cut, and the paid review's verdict and
+// findings are kept (Bug #807); every other limit still rejects the reply.
+func TestInspectCutsLongSummary(t *testing.T) {
+	long := reply("fix", finding("P1", "bug", "internal/report/percent.go", "return float64(covered) / float64(total) * 100", "divides by zero", 0.9))
+	long["summary"] = strings.Repeat("wordy ", 216) + "end" // 1299 characters
+	a, calls := scripted("grok-4.7", long, long)
+	res, _, err := Runner{Reviewers: []Reviewer{a}}.Run(context.Background(), testInput(""), State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len([]rune(res.Summary)); n > 1200 || !strings.HasSuffix(res.Summary, "wordy…") || *calls != 1 {
+		t.Fatalf("summary of %d characters ending %q, %d calls", n, res.Summary[len(res.Summary)-12:], *calls)
+	}
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Title != "divides by zero" {
+		t.Fatalf("%s, findings %+v", res.Disposition, res.Findings)
+	}
+
+	bad := reply("merge", finding("P2", "bug", "internal/report/percent.go", "return 0", strings.Repeat("t", 201), 0.9))
+	b, _ := scripted("grok-4.7", bad, bad)
+	_, _, err = Runner{Reviewers: []Reviewer{b}}.Run(context.Background(), testInput(""), State{})
+	if err == nil || !strings.Contains(err.Error(), "$.findings[0].title: longer than 200 characters") {
+		t.Fatalf("an over-long title: %v", err)
+	}
+}
+
+// The model reads the PR's title and body, so an edit of either reaches it
+// again; a changed Aayudha-Model declaration does not (the rung is relabelled).
+func TestRunCacheKeyCoversPRText(t *testing.T) {
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in := testInput("")
+	in.Title, in.Body = "Add Percent", "Adds Percent.\n\nAayudha-Host: amp"
+	_, st, err := r.Run(context.Background(), in, State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Body += "\nAayudha-Model: gpt-6.1-sol\n"
+	if res, _, _ := r.Run(context.Background(), in, st); !res.Cached || *calls != 1 {
+		t.Fatalf("a changed declaration: cached %v, %d calls", res.Cached, *calls)
+	}
+	// CodeRabbit's release-notes block in the body is not the author's input (#689: its edit re-ran the gate).
+	bot := in
+	bot.Body += "\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n## Summary by CodeRabbit\n\n* **Bug Fixes**\n  * Percent no longer divides by zero.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n"
+	if res, _, _ := r.Run(context.Background(), bot, st); !res.Cached || *calls != 1 {
+		t.Fatalf("CodeRabbit's summary in the body: cached %v, %d calls", res.Cached, *calls)
+	}
+	in.Body += "Aayudha-Model: rounds half up now\n" // not a declaration aayu reads: it is description
+	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 2 {
+		t.Fatalf("an edited description: cached %v, %d calls", res.Cached, *calls)
+	}
+	in.Title = "Add Percent; it now also rounds"
+	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 3 {
+		t.Fatalf("an edited title: cached %v, %d calls", res.Cached, *calls)
+	}
+}
+
+// Story #568: a new head past the round cap steps back even when its inputs
+// match the last review's, so an empty commit cannot reuse a cached merge.
+func TestRunCapBeforeCache(t *testing.T) {
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in, st := testInput(""), State{}
+	for _, h := range []string{"a", "b", "c"} {
+		in.Body += h // a new input each round
+		in.Head = strings.Repeat(h, 40)
+		var err error
+		if _, st, err = r.Run(context.Background(), in, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in.Head = strings.Repeat("d", 40) // the same inputs as round 3, a new head
+	res, capped, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != StepBack || res.Cached || *calls != 3 {
+		t.Fatalf("a fourth head with round 3's inputs: %s cached %v, %d calls", res.Disposition, res.Cached, *calls)
+	}
+	// The state records the step-back, not round 3's merge: delegate and
+	// brief read it as this head's result.
+	if capped.Result == nil || capped.Result.Disposition != StepBack || capped.Result.Head != in.Head {
+		t.Fatalf("the capped state's result: %+v", capped.Result)
+	}
+	// A repeated finding is hidden, not resolved: a reviewer's fix with a
+	// repeated P2 behind it stays fix, even beside a liftable drop.
+	rep := Result{Disposition: Fix, Dropped: []Dropped{{Finding{Severity: "P2", Category: "bug", Title: "old typo"}, DropPreExisting},
+		{Finding{Severity: "P2", Category: "security", Title: "token logged"}, DropRepeat}}}
+	if liftFix(&rep); rep.Disposition != Fix {
+		t.Fatalf("a repeat lifted the fix: %s", rep.Disposition)
+	}
+	// After a reopen and three more rounds, a head judged only before the
+	// reopen is a fourth round in the new window, not a re-review.
+	reopen := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	var w State
+	for i, h := range []string{"1", "2", "3", "4", "5", "6"} {
+		w.Rounds = append(w.Rounds, Round{Head: h, At: reopen.Add(time.Duration(i-3)*time.Hour + time.Minute).Format(time.RFC3339)})
+	}
+	if !w.Capped("1", reopen) || w.Capped("6", reopen) {
+		t.Fatalf("the reopened window: head 1 capped %v, head 6 capped %v", w.Capped("1", reopen), w.Capped("6", reopen))
+	}
+	// Back on head 1 after the reopen, a finding its old-window round kept is
+	// a repeat: only head 1's rounds in this window are its own.
+	w.Rounds[0].Findings = []Earlier{{ID: "x", Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}}
+	again := Finding{Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}
+	if keep, drop := Repeats([]Finding{again}, w.Rounds, "1", reopen); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropRepeat {
+		t.Fatalf("a repeat of head 1's old-window finding: kept %+v, dropped %+v", keep, drop)
 	}
 }
 
@@ -268,30 +388,49 @@ func TestBuilderOf(t *testing.T) {
 		name    string
 		rec     Records
 		commits []string
-		claim   string
+		claims  []string
+		hosts   []string
 		lane    verbs.Family
 		family  verbs.Family
 		cands   []verbs.Family
 		source  string
 	}{
-		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, nil, nil, verbs.FamilyOpenAI,
 			verbs.FamilyAnthropic, []verbs.Family{verbs.FamilyAnthropic}, "attributed, not verified"},
-		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, nil, nil, verbs.FamilyOpenAI,
 			"", []verbs.Family{verbs.FamilyAnthropic}, "names a model family for 1 of 2 commits"},
-		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, "", "",
+		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, nil, nil, "",
 			"", []verbs.Family{verbs.FamilyAnthropic}, "for 1 of 2 commits"},
-		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, "", "",
+		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, nil, nil, "",
 			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "name 2 families"},
-		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, "", verbs.FamilyHostManaged,
+		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, nil, nil, verbs.FamilyHostManaged,
 			"", nil, "no build or delegation record"},
-		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, "grok-4.7", verbs.FamilyAnthropic,
-			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "trailer claims grok-4.7 (self-reported, unverified)"},
-		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, "", verbs.FamilyAnthropic,
+		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, []string{"grok-4.7"}, nil, verbs.FamilyAnthropic,
+			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "declarations claim [xai] (self-reported, unverified)"},
+		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, nil, nil, verbs.FamilyAnthropic,
 			verbs.FamilyOpenAI, []verbs.Family{verbs.FamilyOpenAI}, "handed the story to codex"},
-		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, "claude-opus-5-5", "",
+		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, []string{"claude-opus-5-5"}, nil, "",
 			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "the records say openai"},
+		{"amp declared, no model: its modes' families", Records{}, []string{"a"}, nil, []string{"amp"}, "",
+			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "may be any of [anthropic openai]"},
+		{"amp declares host-managed", Records{}, []string{"a"}, []string{"host-managed"}, []string{"amp"}, "",
+			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "host-managed"},
+		{"copilot declared, no model: unknown", Records{}, []string{"a"}, nil, []string{"copilot"}, "",
+			"", nil, "copilot declares no model"},
+		{"a model aayu cannot place: unknown", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "composer-2.5"}, nil, "",
+			"", nil, "cannot place in a model family"},
+		{"a session that changed model: every family", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "gpt-5.4"}, nil, "",
+			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "claim [anthropic openai]"},
+		{"amp and cursor, neither naming a model: cursor's modes are unknown", Records{}, []string{"a", "b"}, nil, []string{"amp", "cursor"}, "",
+			"", nil, "cursor declares no model"},
+		{"amp naming no model beside a gpt commit: amp's families stay candidates", Records{}, []string{"a", "b"}, []string{"gpt-5.4"}, []string{"amp"}, "",
+			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "amp picks the model"},
+		{"a record covering every commit beside a host naming no model", cp(map[string]string{"a": "gpt-6.1-sol"}), []string{"a"}, nil, []string{"amp"}, "",
+			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "amp picks the model"},
+		{"nothing declared at all: unknown", Records{}, []string{"a"}, nil, nil, "",
+			"", nil, "every review is a labelled same-family review"},
 	} {
-		got := BuilderOf(tt.rec, tt.commits, tt.claim, tt.lane)
+		got := BuilderOf(tt.rec, tt.commits, tt.claims, tt.hosts, tt.lane)
 		if got.Family != tt.family || !slices.Equal(got.Candidates, tt.cands) || !strings.Contains(got.Note(), tt.source) {
 			t.Errorf("%s: %+v; want family %q, candidates %v, a note with %q", tt.name, got, tt.family, tt.cands, tt.source)
 		}
@@ -367,7 +506,7 @@ func TestCoverageManifest(t *testing.T) {
 		{Path: "internal/report/percent.go", Status: Reviewed},
 		{Path: "LAYERS.md", Status: SkippedCov, Why: "generated: the drift check owns it"},
 		{Path: "internal/report/percent_test.go", Status: Reviewed},
-		{Path: "old.go", Status: SkippedCov, Why: "deleted"},
+		{Path: "old.go", Status: Reviewed}, // no criteria here: the deletion was in the reviewer's prompt
 	}
 	if m == nil || !slices.Equal(m.Files, want) || m.State != "complete" || res.Disposition != Merge {
 		t.Fatalf("manifest %+v, disposition %s", m, res.Disposition)
@@ -379,6 +518,167 @@ func TestCoverageManifest(t *testing.T) {
 	if res2.Coverage.State != "partial" || !slices.Equal(res2.Coverage.Unreviewed(), []string{"internal/big/big.go"}) ||
 		res2.Disposition != Fix || !strings.Contains(res2.Overridden, "left unreviewed: internal/big/big.go") || res2.Coverage.SHA256 == m.SHA256 {
 		t.Fatalf("over the cap: %+v %s %q", res2.Coverage, res2.Disposition, res2.Overridden)
+	}
+	if c := res2.Coverage.Files[len(res2.Coverage.Files)-1]; !strings.Contains(c.Why, "its diff alone is over the 120000-byte prompt cap") {
+		t.Errorf("an oversized file's reason: %q", c.Why)
+	}
+
+	// A diff over the cap whose files each fit is reviewed in two parts, in
+	// parallel, with the same plan and criteria: coverage is complete and the
+	// findings of both parts are kept. Part 1 shows criterion 1 met; part 2
+	// shows none of it, so its unclear does not undo the met; each part's evidence
+	// and cost are kept.
+	file := func(p string) string {
+		return "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,701 @@\n+package parts\n" +
+			strings.Repeat("+// "+strings.Repeat("y", 96)+"\n", 700)
+	}
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+	var mu sync.Mutex
+	var prompts []string
+	parts := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		p := req.Messages[0].Content
+		mu.Lock()
+		prompts = append(prompts, p)
+		mu.Unlock()
+		f, v, ev := "internal/a/a.go", "met", "e"
+		if strings.Contains(p, "b/internal/b/b.go") {
+			f, v, ev = "internal/b/b.go", "unclear", "Not in this part."
+		}
+		r := reply("merge", finding("P2", "maintainability", f, "package parts", "Package name in "+f, 0.9))
+		r["criteria"] = []map[string]any{{"id": 1, "verdict": v, "evidence": ev}}
+		b, _ := json.Marshal(r)
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res3, st3, err := Runner{Reviewers: []Reviewer{parts}}.Run(context.Background(), in, State{})
+	var files []string
+	for _, f := range res3.Findings {
+		files = append(files, f.File)
+	}
+	if err != nil || len(prompts) != 2 || res3.Coverage.State != "complete" || len(res3.Coverage.Unreviewed()) != 0 ||
+		!slices.Equal(files, []string{"internal/a/a.go", "internal/b/b.go"}) || res3.Disposition != Merge || res3.CostUSD != 1 || st3.SpentUSD != 1 ||
+		len(res3.Criteria) != 1 || res3.Criteria[0].Verdict != "met" || res3.Criteria[0].Evidence != "part 1 (met): e; part 2 (unclear): Not in this part." ||
+		!strings.Contains(strings.Join(res3.Notes, "\n"), "reviewed in 2 parts of whole files, in parallel, each with the same plan and criteria (0.50 + 0.50 USD)") {
+		t.Fatalf("a 2-part diff: err %v, %d calls, %+v, findings %v, %s, %.2f USD, criteria %+v, notes %v", err, len(prompts), res3.Coverage, files, res3.Disposition, res3.CostUSD, res3.Criteria, res3.Notes)
+	}
+	// A part that does not hold criterion 1 says unclear and fix; with no
+	// finding of its own, its fix does not stand once part 1 shows the
+	// criterion met (Codex's P1 on #714). A fix with a finding stands. A
+	// finding on another part's file is dropped, and one raised by both
+	// parts is kept once (CodeRabbit's minor on #714).
+	// A finding the noise rules dropped as low-confidence keeps its part's fix,
+	// as liftFix keeps one (Codex's P1 on #714).
+	// So does a P3 the noise rules counted as a nit, as in an unsplit review.
+	// An unclear for a reason of its own, not "not in this part", keeps the
+	// criterion unclear and the fix (Codex's P1 on #714).
+	for _, c := range []struct {
+		finding bool
+		low     bool
+		nit     bool
+		why     string
+		want    string
+	}{{false, false, false, "not in this part", Merge}, {true, false, false, "not in this part", Fix}, {false, true, false, "not in this part", Fix},
+		{false, false, true, "not in this part", Fix}, {false, false, false, "no test shows Percent(0, 0)", Fix}} {
+		split := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+			r := reply("merge", finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9))
+			if strings.Contains(req.Messages[0].Content, "b/internal/b/b.go") {
+				fs := []map[string]any{finding("P2", "maintainability", "internal/a/a.go", "package parts", "Shared title", 0.9)}
+				if c.finding {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A bug in b", 0.9))
+				}
+				if c.low {
+					fs = append(fs, finding("P2", "bug", "internal/b/b.go", "package parts", "A guess about b", 0.1))
+				}
+				if c.nit {
+					fs = append(fs, finding("P3", "maintainability", "internal/b/b.go", "package parts", "A nit in b", 0.9))
+				}
+				r = map[string]any{"disposition": "fix", "summary": "s", "findings": fs,
+					"criteria": []map[string]any{{"id": 1, "verdict": "unclear", "evidence": c.why}}}
+			}
+			b, _ := json.Marshal(r)
+			return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+		}}
+		in.Diff = file("internal/a/a.go") + file("internal/b/b.go")
+		res, _, err := Runner{Reviewers: []Reviewer{split}, Filter: Filter{MinConfidence: 0.5}}.Run(context.Background(), in, State{})
+		var fs []string
+		for _, f := range res.Findings {
+			fs = append(fs, f.File+" "+f.Title)
+		}
+		want := []string{"internal/a/a.go Shared title"}
+		if c.finding {
+			want = append(want, "internal/b/b.go A bug in b")
+		}
+		if err != nil || res.Disposition != c.want || !slices.Equal(fs, want) {
+			t.Errorf("part 2 says fix (its own finding %t, a low-confidence one %t, a nit %t, unclear: %s): %s, findings %v, err %v", c.finding, c.low, c.nit, c.why, res.Disposition, fs, err)
+		}
+	}
+
+	// An oversized file first and one part after it: the reviewer is sent
+	// only the part, never the oversized file truncated (Codex's P1 on #714).
+	in.Diff = big + pkgDiff
+	var sent string
+	one := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		sent = req.Messages[0].Content
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res4, _, _ := Runner{Reviewers: []Reviewer{one}}.Run(context.Background(), in, State{})
+	if strings.Contains(sent, "b/internal/big/big.go") || !strings.Contains(sent, "b/internal/report/percent.go") ||
+		!slices.Equal(res4.Coverage.Unreviewed(), []string{"internal/big/big.go"}) || res4.Coverage.Files[1].Status != Reviewed {
+		t.Errorf("an oversized file before one part: sent the oversized file %t, coverage %+v", strings.Contains(sent, "b/internal/big/big.go"), res4.Coverage)
+	}
+
+	// At most maxParts parts start: a fourth file waits for a person or an
+	// app, so one round's parallel calls cannot run past the budget unbounded.
+	in.Diff = file("internal/a/a.go") + file("internal/b/b.go") + file("internal/c/c.go") + file("internal/d/d.go") + file("internal/e/e.go")
+	var calls atomic.Int32
+	count := Reviewer{Model: "grok-4.7", Complete: func(_ context.Context, req models.Request) (models.Response, float64, error) {
+		calls.Add(1)
+		b, _ := json.Marshal(reply("merge"))
+		return models.Response{Text: string(b), Model: "grok-4.7"}, 0.5, nil
+	}}
+	res5, _, _ := Runner{Reviewers: []Reviewer{count}}.Run(context.Background(), in, State{})
+	if u := res5.Coverage.Unreviewed(); calls.Load() != maxParts || len(u) != 2 || u[0] != "internal/d/d.go" ||
+		!strings.Contains(res5.Coverage.Files[4].Why, "comes after the review's 3 parts") {
+		t.Errorf("past %d parts: %d calls, %+v", maxParts, calls.Load(), res5.Coverage)
+	}
+	for _, p := range prompts {
+		// The PR author's paths are data: each part's file lists sit in untrusted blocks (inspect's P1 on #714).
+		if !strings.Contains(p, "<untrusted source=\"this part's files\">\ninternal/") || !strings.Contains(p, "<untrusted source=\"the other parts' files\">\ninternal/") {
+			t.Errorf("a part's file lists are not marked untrusted")
+		}
+		if !strings.Contains(p, "## Part of the diff") || strings.Contains(p, "b/internal/a/a.go") == strings.Contains(p, "b/internal/b/b.go") || len(p) > maxDiffBytes+20000 {
+			t.Errorf("each part's prompt names its part and holds one file's diff (%d bytes)", len(p))
+		}
+	}
+}
+
+// splitDiff fills a part before it drops a file: a part closes early for
+// balance only while the files left still fit in the parts left (Codex's P2
+// on #714). 10 kB, 120 kB, 90 kB, and 30 kB fit in three parts.
+func TestSplitDiffFillsBeforeDropping(t *testing.T) {
+	section := func(p string, n int) string {
+		h := "diff --git a/" + p + " b/" + p + "\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1,1 @@\n+"
+		return h + strings.Repeat("z", n-len(h)-1) + "\n"
+	}
+	// It counts whole files, not bytes: 84, 6, 120, and 40 kB fit as 90 / 120 / 40.
+	for _, c := range []struct{ in, want []int }{
+		{[]int{10000, 120000, 90000, 30000}, []int{10000, 120000, 120000}},
+		{[]int{84000, 6000, 120000, 40000}, []int{90000, 120000, 40000}},
+		// #707's diff: two parts hold it, so balancing never adds a third (job 117991827277).
+		{[]int{72000, 87000, 5600}, []int{72000, 92600}},
+	} {
+		var diff string
+		for i, n := range c.in {
+			diff += section("f"+strconv.Itoa(i)+".go", n)
+		}
+		parts, out := splitDiff(diff, maxDiffBytes, maxParts)
+		var sizes []int
+		for _, p := range parts {
+			sizes = append(sizes, len(p))
+		}
+		if len(out) != 0 || !slices.Equal(sizes, c.want) {
+			t.Errorf("%v: parts %v, left out %v", c.in, sizes, out)
+		}
 	}
 }
 
@@ -503,5 +803,331 @@ func TestRiskOf(t *testing.T) {
 		if got.Tier != tt.tier || (tt.reasons != nil || got.Tier == RiskLow) && !slices.Equal(got.Reasons, append([]string{}, tt.reasons...)) || tt.look != nil && !slices.Equal(got.Look, tt.look) {
 			t.Errorf("%s: %+v", tt.name, got)
 		}
+	}
+}
+
+// Peer mode pairs each of B's findings with at most one of A's (D-4.8d.8),
+// from findings the review eval recorded: one leak anchored on its cause and
+// its symptom four lines apart, and one parse defect on the same line under
+// two categories, merge; distinct problems on the same or nearby lines stay
+// apart, and a finding pairs with its own problem, not with the first one
+// nearby.
+func TestPeerPairsOneDefectOnce(t *testing.T) {
+	f := func(src string, line int, cat, title, detail string) Finding {
+		return Finding{Severity: "P1", Category: cat, File: "x.go", Line: line, Title: title, Detail: detail, Sources: []string{src},
+			ID: FindingID("x.go", cat, title)}
+	}
+	cases := []struct {
+		name  string
+		a, b  []Finding
+		posts []string // titles posted, each with its sources
+	}{
+		{"leak, cause and symptom",
+			[]Finding{f("A", 23, "bug", "Response body is never closed", "Any Fetch that gets a response, including a 404, returns without closing resp.Body. net/http then keeps the connection out of the idle pool, and repeated conversions leak sockets.")},
+			[]Finding{f("B", 27, "bug", "Close the response body on every successful HTTP request", "After c.HTTP.Do returns a response without an error, Fetch reaches the status check without arranging to close resp.Body; repeated calls leave response resources unreleased.")},
+			[]string{"Response body is never closed A+B"}},
+		{"parse defect, two categories",
+			[]Finding{f("A", 15, "bug", "Include the first invoice line in the total", "The loop starts at index 1, so the subtotal skips the first line and returns 45 rather than 225."),
+				f("A", 23, "contract", "Reject invalid and nonpositive form quantities", "ParseQty(\"abc\") discards the conversion error and returns (0, nil); ParseQty(\"0\") also returns (0, nil). Both violate criterion 2.")},
+			[]Finding{f("B", 23, "bug", "ParseQty never returns an error", "ParseQty(\"abc\") makes strconv.Atoi fail, but the error is discarded and n is 0, so it returns (0, nil). ParseQty(\"0\") also returns (0, nil). Criterion 2 requires an error for both.")},
+			[]string{"Include the first invoice line in the total A", "Reject invalid and nonpositive form quantities A+B"}},
+		{"distinct problems on one line and nearby",
+			[]Finding{f("A", 13, "security", "Customer search input is executable SQL", "SearchHandler forwards q unchanged; interpolating it into a quoted SQL expression lets ' OR 1=1 -- replace the filter.")},
+			[]Finding{f("B", 13, "bug", "Name match is case-sensitive, so q=ann misses Ann Lee", "Search uses LIKE with the raw text and no LOWER, so under a case-sensitive collation '%ann%' does not match Ann Lee."),
+				f("B", 19, "contract", "No-match search encodes as JSON null", "out stays nil when rows.Next never runs, and encoding/json encodes a nil slice as null.")},
+			[]string{"Customer search input is executable SQL A", "Name match is case-sensitive, so q=ann misses Ann Lee B", "No-match search encodes as JSON null B"}},
+		{"each pairs with its own problem",
+			[]Finding{f("A", 20, "bug", "Cap the initial wait as well as subsequent waits", "Retry(ctx, 3, time.Minute, f) waits a full minute after the first failure."),
+				f("A", 22, "bug", "Check cancellation before invoking each attempt", "Retry invokes f without checking ctx.Err().")},
+			[]Finding{f("B", 22, "bug", "Check cancellation before each attempt", "An already-cancelled request still calls f."),
+				f("B", 21, "bug", "Cap the first wait too", "A one-minute base waits a minute, against the 30 s cap.")},
+			[]string{"Cap the initial wait as well as subsequent waits A+B", "Check cancellation before invoking each attempt A+B"}},
+	}
+	for _, c := range cases {
+		pair := pairPeer(c.a, c.b)
+		keep, _ := mergePeer(c.a, c.b, pair, nil, nil)
+		var got []string
+		for _, k := range keep {
+			got = append(got, k.Title+" "+strings.Join(k.Sources, "+"))
+		}
+		if !slices.Equal(got, c.posts) {
+			t.Errorf("%s: posted %q, want %q", c.name, got, c.posts)
+		}
+	}
+}
+
+// A PR that touches only documentation merges without a review; any file
+// that steers the product or its agents, even Markdown, needs one.
+func TestDocsOnly(t *testing.T) {
+	files := func(ps ...string) []DiffFile {
+		var out []DiffFile
+		for _, p := range ps {
+			out = append(out, DiffFile{Path: p})
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		paths []string
+		want  bool
+	}{
+		{[]string{"docs/guide/how-trust.md", "README.md", "examples/benefits-qa/README.md"}, true},
+		{[]string{"docs/img/flow.png"}, true},
+		{nil, false},
+		{[]string{"docs/guide/how-trust.md", "internal/inspect/diff.go"}, false},
+		{[]string{"skills/build/SKILL.md"}, false},
+		{[]string{"AGENTS.md"}, false},
+		{[]string{"internal/cli/AGENTS.md"}, false},
+		{[]string{"docs/guide/AGENTS.md"}, false},
+		{[]string{"docs/BUILD-PLAN.md"}, false},
+		{[]string{"GLOSSARY.md"}, false},
+		{[]string{"docs/threat-model.md"}, false},
+		{[]string{"evals/cases/grill/bakery-ux/rubric.md"}, false},
+		{[]string{".github/PULL_REQUEST_TEMPLATE.md"}, false},
+		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
+		{[]string{"internal/production/testdata/runbook.md"}, false},
+		{[]string{"internal/report/notes.md"}, false},
+		{[]string{"docs/guide/skills/build.md", "docs/guide/hosts/codex.md"}, true},
+		{[]string{"CHANGELOG.txt"}, false},
+	} {
+		if got := DocsOnly(files(tc.paths...)); got != tc.want {
+			t.Errorf("DocsOnly(%v) = %v, want %v", tc.paths, got, tc.want)
+		}
+	}
+	// A rename is judged by both paths: code or a steering document moved
+	// into docs/ needs a review, with or without edits.
+	for _, tc := range []struct {
+		diff string
+		want bool
+	}{
+		{"diff --git a/internal/auth.go b/docs/auth.go\nsimilarity index 100%\nrename from internal/auth.go\nrename to docs/auth.go\n", false},
+		{"diff --git a/docs/BUILD-PLAN.md b/docs/archive/plan.md\nsimilarity index 90%\nrename from docs/BUILD-PLAN.md\nrename to docs/archive/plan.md\n--- a/docs/BUILD-PLAN.md\n+++ b/docs/archive/plan.md\n@@ -1 +1 @@\n-# Plan\n+# Old plan\n", false},
+		{"diff --git a/docs/a.md b/docs/guide/a.md\nsimilarity index 100%\nrename from docs/a.md\nrename to docs/guide/a.md\n", true},
+		{"diff --git \"a/docs/\\303\\251.md\" \"b/docs/\\303\\251.md\"\n--- \"a/docs/\\303\\251.md\"\n+++ \"b/docs/\\303\\251.md\"\n@@ -1 +1 @@\n-a\n+b\n", true},
+	} {
+		if got := DocsOnly(ParseDiff(tc.diff)); got != tc.want {
+			t.Errorf("DocsOnly(%q) = %v, want %v", tc.diff, got, tc.want)
+		}
+	}
+}
+
+// The review ladder (Decision #469): an installed app of a family the builder
+// cannot be gives a different-family review (A); with none, the first app
+// that can review gives a labelled same-family review (C), the default for a
+// single-family user; an unknown builder is C with any app, never blocked;
+// with no app, a person reviews.
+func TestReviewLadder(t *testing.T) {
+	anthropic := Builder{Family: verbs.FamilyAnthropic, Candidates: []verbs.Family{verbs.FamilyAnthropic}}
+	amp := BuilderOf(Records{}, []string{"a"}, nil, []string{"amp"}, "")
+	unknown := BuilderOf(Records{}, []string{"a"}, nil, []string{"copilot"}, "")
+	xaiCursor := map[string]string{"cursor": "xai"}
+	all := []string{"claude", "cursor", "greptile", "coderabbit", "codex"} // config order does not matter
+	for _, tt := range []struct {
+		name      string
+		b         Builder
+		reviewer  string
+		installed []string
+		families  map[string]string
+		skip      []string
+		app, rung string
+	}{
+		{"codex chosen, another family: A", anthropic, "codex", all, nil, nil, "codex", RungA},
+		{"claude chosen, the builder's family: a labelled C, not replaced", anthropic, "claude", all, nil, nil, "claude", RungC},
+		{"coderabbit is A for an anthropic builder", anthropic, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"greptile is A even for an unknown builder", unknown, "greptile", all, nil, nil, "greptile", RungA},
+		{"coderabbit is A for amp (anthropic or openai)", amp, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"unknown builder: codex is C", unknown, "codex", all, nil, nil, "codex", RungC},
+		{"amp builder, Cursor on Grok: A", amp, "cursor", all, xaiCursor, nil, "cursor", RungA},
+		{"Cursor of unknown family is only C", anthropic, "cursor", all, nil, nil, "cursor", RungC},
+		{"a chosen app that is not installed is still asked", anthropic, "codex", nil, nil, nil, "codex", RungA},
+		{"codex cannot review: the next installed app in the fixed order", anthropic, "codex", all, nil, []string{"codex"}, "coderabbit", RungA},
+		{"codex and coderabbit cannot: greptile", anthropic, "codex", all, nil, []string{"codex", "coderabbit"}, "greptile", RungA},
+		{"claude cannot: codex comes first in the order", anthropic, "claude", all, nil, []string{"claude"}, "codex", RungA},
+		{"no installed app left: a person (the CI review is the caller's step)", anthropic, "codex", []string{"codex"}, nil, []string{"codex"}, "", RungHuman},
+		{"the CI review's own fallback: the first installed app in the order", anthropic, "ci", []string{"claude", "greptile"}, nil, nil, "greptile", RungA},
+		{"human", anthropic, "human", all, nil, nil, "", RungHuman},
+		{"unset: a person", anthropic, "", all, nil, nil, "", RungHuman},
+		{"a leftover auto: a person", anthropic, "auto", all, nil, nil, "", RungHuman},
+	} {
+		c := ChooseReviewer(tt.reviewer, tt.installed, tt.families, tt.b, "founder", tt.skip...)
+		if c.App != tt.app || c.Rung != tt.rung {
+			t.Errorf("%s: chose %q at rung %q; want %q at %q (%v)", tt.name, c.App, c.Rung, tt.app, tt.rung, c.Notes)
+		}
+		if (tt.reviewer == "" || tt.reviewer == "auto") && !strings.Contains(strings.Join(c.Notes, " "), `set [inspect] reviewer = "<tool>"`) {
+			t.Errorf("%s: the notes do not say how to choose: %v", tt.name, c.Notes)
+		}
+	}
+	// The reported model settles the rung: a reply by an openai model on an
+	// anthropic build counts; the same app reporting an anthropic model does not.
+	if anthropic.Rung(verbs.FamilyOf("gpt-6.1-sol")) != RungA || anthropic.Rung(verbs.FamilyOf("claude-sonnet-5-5")) != RungC || anthropic.Rung(verbs.FamilyOf("composer-2.5")) != RungC {
+		t.Error("the reported model's family does not settle the rung")
+	}
+	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward the streak, and counts for merge on proof only where [autonomy] proof_rungs lists C") {
+		t.Errorf("C label: %q", l)
+	}
+	if l := unknown.RungLabel(RungC, "codex", verbs.FamilyOpenAI); !strings.Contains(l, "builder family unknown") {
+		t.Errorf("unknown builder's label: %q", l)
+	}
+}
+
+// Story #568: a P0 or P1 stays open while its file's patch is unchanged,
+// on a file the manifest skips (a deletion) too, and a later reply that
+// repeats it at a lower severity, P1 or P2, neither clears nor downgrades it.
+func TestRunCarriesOpenBlockers(t *testing.T) {
+	const gone = `diff --git a/internal/auth/check.go b/internal/auth/check.go
+deleted file mode 100644
+--- a/internal/auth/check.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package auth
+-
+-func Check(token string) bool { return token != "" }
+`
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7",
+		reply("fix", finding("P0", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9),
+			finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge", finding("P2", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9),
+			finding("P1", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9)))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in := testInput("")
+	in.Diff, in.Head = pkgDiff+gone, strings.Repeat("a", 40)
+	in.Pack.Criteria = []proof.Criterion{{ID: 1}} // with criteria, the manifest skips the deletion
+	res, st, err := r.Run(context.Background(), in, State{})
+	if err != nil || len(res.Findings) != 2 {
+		t.Fatalf("round 1: %v %+v", err, res.Findings)
+	}
+	in.Head, in.Body = strings.Repeat("b", 40), "round 2"
+	res, _, _ = r.Run(context.Background(), in, st)
+	var open []string
+	for _, f := range res.Findings {
+		if f.Repeat == 1 {
+			open = append(open, f.Severity+" "+f.File)
+		}
+	}
+	slices.Sort(open)
+	if res.Disposition != Fix || !slices.Contains(open, "P0 internal/auth/check.go") || !slices.Contains(open, "P1 internal/report/percent.go") {
+		t.Fatalf("round 2: %s, open %v, findings %+v", res.Disposition, open, res.Findings)
+	}
+}
+
+// Story #568: a blocker found on a head before a reopen still carries when
+// the branch returns to that head and patch after the reopen; only this
+// head's round in the current window is replaced by the new reply.
+func TestRunCarriesAcrossReopen(t *testing.T) {
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7", reply("fix", finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	in := testInput("")
+	x := in.Diff
+	in.Head, in.At = strings.Repeat("a", 40), at
+	_, st, _ := r.Run(context.Background(), in, State{})
+	in.Head, in.At, in.Diff = strings.Repeat("b", 40), at.Add(time.Hour), strings.Replace(x, "return 0", "return -1", 1)
+	_, st, _ = r.Run(context.Background(), in, st)
+	in.Head, in.At, in.Diff, in.Reopened = strings.Repeat("a", 40), at.Add(3*time.Hour), x, at.Add(2*time.Hour)
+	res, _, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("back to H1's patch after a reopen: %s %+v", res.Disposition, res.Findings)
+	}
+}
+
+// Story #568: a class finding stays open while any instance's file is
+// unchanged since it was raised, even when the head changes the file it was
+// reported on, and closes once every one has changed.
+func TestJudgeCarriesClassInstances(t *testing.T) {
+	cls := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Line: 8, Quote: "return float64(covered) / float64(total) * 100",
+		Title: "Percent divides by zero when total is zero", Detail: "d", Fix: "f", Confidence: 0.9, Class: "unguarded division",
+		Instances: []Instance{{File: "internal/report/percent.go", Line: 8}, {File: "LAYERS.md", Line: 1}}}
+	both := []string{"internal/report/percent.go", "LAYERS.md"}
+	in := testInput("")
+	in.Head = strings.Repeat("a", 40)
+	_, st, err := Runner{}.Judge(context.Background(), in, State{}, AppReply{Reply: Reply{Disposition: Fix, Summary: "s", Findings: []Finding{cls}}, Head: in.Head, Reviewed: both})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Head, in.Diff = strings.Repeat("b", 40), strings.Replace(in.Diff, "return 0", "return -1", 1) // percent.go changes, LAYERS.md does not
+	res, st, _ := Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("one instance's file fixed, the other unchanged: %s %+v", res.Disposition, res.Findings)
+	}
+	// Round 3 changes LAYERS.md too, percent.go staying as in round 2: every
+	// instance's file has now changed since the finding, so it closes.
+	in.Head, in.Diff = strings.Repeat("c", 40), strings.Replace(in.Diff, "+new", "+newer", 1)
+	res, _, _ = Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
+	if res.Disposition != Merge || len(res.Findings) != 0 {
+		t.Fatalf("every instance's file changed: %s %+v", res.Disposition, res.Findings)
+	}
+}
+
+// CodeRabbit's and Greptile's own reviews of the head are read
+// deterministically (Story #635): the receipt, then each inline comment on the
+// head with a severity badge is a finding; a thread reply, a comment on another
+// commit, or no receipt for the head is not a reply.
+func TestReadServiceReply(t *testing.T) {
+	head, old := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	at := time.Date(2026, 10, 18, 14, 0, 0, 0, time.UTC)
+	criteria := []workitems.Criterion{{N: 1}, {N: 2}}
+	choice := func(app string) Choice { return ChooseReviewer(app, []string{app}, nil, Builder{}, "") }
+	const rabbit, greptile = "coderabbitai[bot]", "greptile-apps[bot]"
+	major := "**🔒 Security** | **🟠 Major** | **⚡ Quick win**\n\n**Guard an empty total.**\n\n`Percent(0, 0)` divides by zero, so criterion 1 is not met.\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+	trivial := "**🧹 Nitpick** | **🔵 Trivial**\n\n**Name the constant.**\n\nA magic number."
+	rabbitPosts := []Post{
+		{Kind: "comment", ID: 1, Login: rabbit, Body: "<!-- walkthrough -->\n## Walkthrough\nAdds Percent.", Updated: at},
+		{Kind: "review", ID: 2, Login: rabbit, Commit: head, Body: "**Actionable comments posted: 1**", Updated: at},
+		{Kind: "inline", ID: 3, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 9, Body: major, Updated: at},
+		{Kind: "inline", ID: 4, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 2, Body: trivial, Updated: at},
+		{Kind: "inline", ID: 5, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 3, Body: "Thanks, noted.", Updated: at},
+		{Kind: "inline", ID: 6, Login: rabbit, Commit: old, Path: "internal/report/percent.go", Line: 4, Body: major, Updated: at},
+	}
+	r, err := ReadReply(choice(AppCodeRabbit), rabbitPosts, head, time.Time{}, nil, criteria, []string{"internal/report/percent.go"})
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 2 || r.Findings[0].Severity != "P1" || r.Findings[0].Title != "Guard an empty total." ||
+		r.Findings[0].Line != 9 || r.Findings[0].Category != "security" || r.Findings[1].Severity != "P3" || r.Findings[1].Category != "bug" || r.Criteria[0].Verdict != "unmet" || r.Criteria[1].Verdict != "unclear" {
+		t.Fatalf("coderabbit: %v %+v", err, r)
+	}
+	// Without its review of the head, CodeRabbit has not replied; a rate-limit
+	// comment after the request makes it unavailable.
+	if _, err := ReadReply(choice(AppCodeRabbit), rabbitPosts[2:], head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("coderabbit without a review of the head: %v", err)
+	}
+	limited := append(slices.Clone(rabbitPosts[:1]), Post{Kind: "comment", ID: 7, Login: rabbit, Body: "Rate limit exceeded: wait 12 minutes.", Updated: at})
+	if _, err := ReadReply(choice(AppCodeRabbit), limited, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("coderabbit at its rate limit: %v", err)
+	}
+	// A walkthrough about quota code is not a limit notice: still no reply. A
+	// review of the head that says it hit a limit is never a clean review.
+	walk := []Post{{Kind: "comment", ID: 10, Login: rabbit, Body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\nFalls back when Codex reaches its usage limits or quota.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), walk, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("a walkthrough about quotas: %v", err)
+	}
+	skipped := []Post{{Kind: "review", ID: 11, Login: rabbit, Commit: head, Body: "> [!WARNING]\n> ## Rate limit exceeded\n> Review skipped.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), skipped, head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("a rate-limited review of the head: %v", err)
+	}
+	// CodeRabbit's findings outside the diff are in its review's body; a review
+	// that discusses quotas is still a review, and a Codex comment that does is
+	// malformed, never a limit notice.
+	outside := "**Actionable comments posted: 0**\n\nThis PR changes quota handling.\n\n> [!CAUTION]\n> **⚠️ Outside diff range comments (1)**\n> \n> <details>\n> <summary><strong>🟠 Major</strong> · Preserve the response service tier when calculating cost. · <code>gateway.go:50</code></summary><blockquote>\n> \n> `internal/models/gateway.go:50`\n> **🗄️ Data Integrity** | **🟠 Major**\n> \n> **Preserve the response service tier when calculating cost.**\n> </blockquote></details>\n"
+	r, err = ReadReply(choice(AppCodeRabbit), []Post{{Kind: "review", ID: 12, Login: rabbit, Commit: head, Body: outside, Updated: at}}, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/models/gateway.go" || r.Findings[0].Line != 50 ||
+		r.Findings[0].Title != "Preserve the response service tier when calculating cost." {
+		t.Fatalf("coderabbit's outside-diff finding: %v %+v", err, r)
+	}
+	prose := []Post{{Kind: "comment", ID: 13, Login: "chatgpt-codex-connector[bot]", Body: "This review checks quota handling and usage limits in the fallback.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodex), prose, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("a codex comment about quotas: %v", err)
+	}
+	// Greptile: its summary names the head; a P2 does not block.
+	greptilePosts := []Post{
+		{Kind: "comment", ID: 8, Login: greptile, Body: "<!-- greptile_summary -->\n\n<sub>Last reviewed commit: [\"feat\"](https://github.com/o/r/commit/" + head + ")</sub>", Updated: at},
+		{Kind: "inline", ID: 9, Login: greptile, Commit: head, Path: "internal/report/percent.go", Line: 4,
+			Body: `<a href="#"><img alt="P2" src="https://greptile-static-assets.s3.amazonaws.com/badges/p2.svg" align="top"></a> **Comment restates the code**` + "\n\nThe doc comment repeats the function."},
+	}
+	r, err = ReadReply(choice(AppGreptile), greptilePosts, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Merge || len(r.Findings) != 1 || r.Findings[0].Severity != "P2" || r.Findings[0].Title != "Comment restates the code" {
+		t.Fatalf("greptile: %v %+v", err, r)
+	}
+	if _, err := ReadReply(choice(AppGreptile), greptilePosts, old, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("greptile's summary of another head: %v", err)
 	}
 }

@@ -17,17 +17,52 @@ calls = [
   ["ready", "41", "--check"],
 ]
 
-# The scripted human parked speed, accessibility beyond the floors, and the loyalty idea, and deferred the wording and
-# offline: none of them may become a criterion. Checked in tier 1 and before the judge in tier 2.
-scope = [
-  { pattern = '(?i)\bloyalt|\bstamp', why = "the loyalty stamp card the human parked" },
-  { pattern = '(?i)\[sr-transcript\]|screen[- ]?reader|\bkeyboard\b|\bwcag\b|\bcontrast\b|\baxe\b', why = "accessibility beyond the floors, which the human parked" },
-  { pattern = '(?i)\blighthouse\b|\b(lcp|cls|tbt)\b|\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?)\b', why = "a performance budget the human parked" },
-  { pattern = '(?i)\boffline\b', why = "an offline state the human deferred" },
-  { pattern = '(?i)expected:[^\n]*(?:message|text|heading|title|label)\s+\"', why = "exact wording the human deferred" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/ux.md"]
+
+# The scripted human parked speed, accessibility beyond the floors, and the loyalty idea, and deferred the wording and
+# offline: none of them may become a criterion. Checked in tier 1 and before the judge in tier 2.
+[[scope]]
+pattern = '(?i)\bloyalt|\bstamp'
+why = "the loyalty stamp card the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['a loyalty stamp card on the receipt', 'collect a stamp per order']
+negated = ['no loyalty stamp card']
+near_miss = ['the order shows a timestamp']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\[sr-transcript\]|screen[- ]?reader|\bkeyboard\b|\bwcag\b|\bcontrast\b|\baxe\b'
+why = "accessibility beyond the floors, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['1. [sr-transcript] state: the menu', 'reachable by keyboard']
+negated = ['no screen-reader criterion']
+near_miss = ['the screen reads "Order placed"']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\blighthouse\b|\b(lcp|cls|tbt)\b|\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?)\b'
+why = "a performance budget the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['the menu loads in 200 ms', 'a Lighthouse score of 90']
+negated = ['the menu need not load in 200 ms']
+near_miss = ['pickup in 15 minutes']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\boffline\b'
+why = "an offline state the human deferred"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['an offline banner when the network drops']
+negated = ['no offline state']
+near_miss = ['the online menu']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)expected:[^\n]*(?:message|text|heading|title|label)\s+\"'
+why = "exact wording the human deferred"
+match = ['expected: a heading "Your order is in"']
+negated = ['expected: a confirmation message, with no exact wording']
+near_miss = ['expected: a "Place order" button']

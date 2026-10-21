@@ -15,73 +15,225 @@ min_pass_k = 0.8
 min_mean = 3.5
 max_drop = 0.3
 
+# The bars only rise (Story #400, Feedback #327). CI's build job (internal/ratchet/cmd/ratchet with the PR's base) fails a
+# change that lowers pass_score, min_pass_k, or min_mean, raises max_drop, moves a case into a group whose gate or
+# pass_k is "advisory", removes a case, removes or changes a case's deterministic rule (its pattern or allow), or drops
+# or rewords a rubric item so that it loses a word (evals.CheckBars). Fix the work instead. When a bar really is wrong,
+# a human decides: `aayu decide --waiver eval-bar <story>`, accepted with `aayu decide <n> --accept waive`, named here as
+# bar_waiver = <n>; a waiver already named on the base does not count again. Raising a bar, adding a case, a group,
+# a rule, or rubric words needs nothing.
+bar_waiver = 413 # Story #401: negation allows on the brief rule (4 cases) and two slice/proof-retention-6-layer rules (D-4.3t)
+
 # Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
 # group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
 # group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. gate = "advisory" reports a group's
 # results without gating promotion (D-7.3h); "enforced" is the default. A case belongs to the first
-# group with a prefix of its ID, else to the group without prefixes. Unpriced models are charged at the gateway's
-# conservative fallback rate, so real spend is lower. The four brief register cases were charged 6.21 (run 38200697472)
-# and about 7 USD (run 38207049608); the stub, grill, slice, and plan cases together about 4.5 in that run.
+# group with a prefix of its ID, else to the group without prefixes. Every call is charged at its model's published
+# list price (models.ListPrices, with source and date; D-3.4p), since the AI gateway reports no cost; until 2026-10-17
+# every model was unpriced and charged at the 15/75 USD fallback rate, about 4x the list price. A model without a price
+# is still charged at the fallback rate and named in the results' warnings. Each max_usd is about twice the group's
+# latest full run at list price, rounded up to a whole dollar, so a cap stops a runaway run and never cuts a normal one
+# short (founder, 2026-10-17; D-3.4q). The basis on each line is that run's recorded tokens at list price, with every
+# input token at the cache-write rate where the model has one (recordings before D-3.4p do not split cache tokens), so
+# it is an upper bound. Older run figures below quoted at the fallback rate say so.
 # The plain registers (eli5, ste) do not gate (D-7.3h): their rubric asks for everyday restatement and STE phrasing
 # that the fact-fidelity bar marks down (Feedback in D-7.3h). Results are computed and printed; evals-gate skips them.
 # A case belongs to the first group with a matching prefix, so this group comes before brief.
 [[groups]]
 name = "brief-plain"
 prefixes = ["brief/eli5-", "brief/ste-"]
-max_usd = 6.0
+max_usd = 4.0 # run 39012708292 (70559ea): 1.70 USD for 9 of 10 runs, the 10th cut by the old cap, so about 1.90 a full run
 pass_k = "advisory"
 gate = "advisory"
 
 [[groups]]
 name = "brief"
 prefixes = ["brief/"]
-max_usd = 6.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h)
+max_usd = 3.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h); run 39012708292 (70559ea): 1.01 USD
 # The brief register bar is not met at pass^5 after five rounds (D-7.3g): the group passes on the mean bar (per case and
 # suite) and the drop rule; pass^5 is computed and printed, but advisory. Every other group keeps the full WP3.4 bar.
 pass_k = "advisory"
 
-# Persona cases (WP5.1b): the Engineering Manager twin's retro explanation at the startup and enterprise stages, and the
-# on-demand decision packs of an EM-owned and a Code Architect-owned question, in their own group with their own cap
-# (four cases, five runs each, plus at most one revision a run). Run 38682959916 reached a 6 USD cap after 6 of 20 runs
-# (about 1 USD a run at the fallback rate, every run revised once), so the cap is 20 USD.
-# The personas group does not gate yet (D-5.1d): runs 38682959916 and 38685472745 missed the bar. Its results are
-# computed and printed; evals-gate skips it until a run passes, then this line goes. It never runs nightly or on
-# promotion: on dispatch, and on pushes to dev that change persona files (evals.yml, D-5.3b.h).
+# Persona cases (WP5.1b): the on-demand decision packs of an EM-owned, a Code Architect-owned, a Quality
+# Architect-owned, and a Founder question, answered in the Accountable seat's voice, in their own group with their own
+# cap (five runs each, plus at most one revision a run).
+# The personas group does not gate (D-5.1d, D-5.1t option (a)): its results are computed and printed, and evals-gate
+# skips it. It never runs nightly or on promotion: on dispatch, and on pushes to dev that change persona files
+# (evals.yml, D-5.3b.h).
 [[groups]]
 name = "personas"
-prefixes = ["retro/", "decide/"]
-max_usd = 20.0
+prefixes = ["decide/"]
+max_usd = 8.0 # four cases: run 39006699646 (b861636) cost about 0.96 a case, so about 3.84; the founder case alone cost
+# 1.00 USD in run 39044452662
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 
+# The Engineering Manager twin's retro explanation at the startup, scaleup, and enterprise stages (WP5.1b). It gates
+# since two consecutive filtered runs on the same skill text held every run at 4 or more with no floor failure
+# (39065433359 at 4.80, 39066499915 at 4.87; D-5.1y). Like tell, it runs on dispatch (aayu release dispatches
+# evals.yml on dev before a rolling gate) and on pushes to rolling and main, so every promoted commit has results for
+# the next gate; never nightly, and never on pushes to dev (evals.yml).
+[[groups]]
+name = "retro"
+prefixes = ["retro/"]
+max_usd = 4.0 # run 39065433359 (4ae87fa): 1.86 USD
+events = ["workflow_dispatch", "push"]
+
+# Atri, the Founder's Sage, counselling on demand (Story #478): a PR at the scaleup stage and a free question at the
+# startup stage, persona cases answered in the twin's voice and revised once on the checks' findings (counsel's parts,
+# no claim of a review, the evidence rule). Advisory until two consecutive full runs hold every case's mean at 4.0 or
+# more; it runs on dispatch only. The cap is a first estimate: the retro group's three persona cases cost 1.83 USD in
+# run 39072304197, so two cases should cost about 1.2.
+[[groups]]
+name = "counsel"
+prefixes = ["counsel/"]
+max_usd = 3.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+
+# Data & AI Architect cases (Decision #283, Appendix B S-5.1g): the chart notes (data at a startup, AI at a scaleup) and
+# two readings of a measure Result (startup and scaleup), persona cases answered in the twin's voice and revised once
+# on the checks' findings. Advisory until a run meets the bar of a mean of at least 4.0 per skill; the founder capped
+# this work's tier-2 spend at 60 USD in all (at the fallback rate), and the group runs on dispatch only.
+[[groups]]
+name = "data-ai"
+prefixes = ["chart/", "measure/"]
+max_usd = 8.0 # run 39012883212 (32cca9a): 3.53 USD for 19 of 20 runs (one 524 from the endpoint), so about 3.72 a full run
+gate = "advisory"
+events = ["workflow_dispatch"]
+# A scaleup chart note thinks through many checks before it writes: run 39034116306 stopped two of five
+# chart/ai-scaleup runs at the 12000-token cap (mostly thinking), so the group's cap is 32000, a ceiling and not a
+# charge (D-5.1g.n).
+max_tokens = 32000
+
+# Production Engineer cases (Decision #324, D-5.10d): investigate, slo, runbook, and respond (the postmortem), two
+# cases each at the startup and scaleup stages, on groundings from the instrumented benefits-qa (a bad deploy) and a
+# synthetic claims service (a slow dependency no catalog action fixes). Persona cases answered in the twin's voice and
+# revised once on the checks' findings; the floors are internal/production's (production.CheckDoc): every part in
+# order, catalog actions only, no executed change or production command, bounded queries, two cited queries in an
+# investigation, a blameless postmortem. Advisory until a run holds a mean of at least 4.0 per skill; dispatch only.
+[[groups]]
+name = "production"
+prefixes = ["investigate/", "slo/", "runbook/", "respond/"]
+max_usd = 15.0 # an estimate, no run yet: data-ai's latest full run cost about 0.93 USD a case (39012883212), so eight cases about 7.44
+gate = "advisory"
+events = ["workflow_dispatch"]
+# A scaleup incident assessment is long: run 39092388903 stopped one investigate/upstream-scaleup draft at the
+# 12000-token cap, and its first drafts reached 10.4k before, so the group's cap is 32000, a ceiling and not a charge.
+max_tokens = 32000
+
 # Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
 # scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
-# dispatch only (about 70 review calls per k).
+# dispatch only (about 80 review calls per k; D-4.8d).
 [[groups]]
 name = "review"
 prefixes = ["inspect/"]
-max_usd = 20.0
+max_usd = 5.0 # no run has all thirteen cases: run 39008726458 (deee2b4) cost 1.66 USD for nine, so thirteen about 2.40 (38980397572: 2.07 for twelve)
 k = 2
 pass_k = "advisory"
 gate = "advisory"
 events = ["workflow_dispatch"]
 
-# Grill conversation cases (WP5.3b): three or four skill calls a run with the assessment in context, about 1.3 USD a
-# run at the fallback rate (13.42 USD for both cases in run 38687921977), in their own group with their own cap so they
+# Grill conversation cases (WP5.3b): three or four skill calls a run with the assessment in context, about 0.45 USD a
+# run at list price, in their own group with their own cap so they
 # never fail or starve the skills group. Advisory until a run meets the bar (D-5.3b.g): results are computed and
 # printed, evals-gate skips them; then the gate line goes. It never runs nightly or on promotion: on dispatch, and on
 # pushes to dev that change grill files (evals.yml, D-5.3b.h). WP5.8 adds four cases (motion, terms, a CLI's
-# "simple", and a concrete request the gate passes, which is one call a run), so the cap is 40 USD (D-5.8c).
+# "simple", and a concrete request the gate passes, which is one call a run; D-5.8c).
 [[groups]]
 name = "conversations"
 prefixes = ["grill/bakery-ux", "grill/search-fast", "grill/bakery-motion", "grill/bakery-terms", "grill/tally-simple", "grill/bakery-concrete", "grill/quotes-fast", "grill/slugkit-simple"]
-max_usd = 60.0 # 8 cases x 5 runs at about 1.3 USD (run 38841610907: 30 runs, 38.97 USD); the founder allows about 180 USD over at most 4 runs (D-5.8f)
+max_usd = 37.0 # run 38980397572 (7542b85): 17.97 USD for 39 of 40 runs, the 40th cut by the 60 USD fallback-rate breaker, so about 18.43 a full run
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 
+# tell cases (D-7.5b): release notes, a how-to guide, and launch copy on one grounding (evals/cases/tell), each with its
+# own design/brand.yaml; one skill call a run plus at most one revision and the judge. It
+# gates since two consecutive full runs held a mean of 5.00 (39008894754, 39009455409; D-7.5e). Founder (2026-10-17):
+# it runs on dispatch (aayu release dispatches evals.yml on dev before a rolling gate) and on pushes to rolling and main,
+# so every promoted commit has results for the next gate; never nightly, and never on pushes to dev (evals.yml).
+[[groups]]
+name = "tell"
+prefixes = ["tell/"]
+max_usd = 3.0 # run 39009455409 (6dcfccf): 1.43 USD
+events = ["workflow_dispatch", "push"]
+
+# Host-skill session cases (D-3.4f): build, verify, and ready as they run in a person's terminal, over several turns.
+# The skill runs commands against the case's world (session.toml): real `aayu` verbs that only read, recorded answers
+# for the ones that lease, commit, or run code, and a scripted person. The hard rules each skill's verb enforces are
+# tier-1 floors on the recorded session and on every run (session.go). Build runs on its own lane (claude-opus-5-5),
+# verify and ready on the chore lane. It gates since two consecutive full runs held a mean of at least 4.0 on every
+# case (39055371933 at 4.72, 39057649097 at 4.70; D-3.4x). Like tell, it runs on dispatch (aayu release dispatches
+# evals.yml on dev before a rolling gate) and on pushes to rolling and main, so every promoted commit has results for
+# the next gate; never nightly, and never on pushes to dev (evals.yml), so its spend is still chosen run by run.
+[[groups]]
+name = "host-skills"
+prefixes = ["build/", "verify/", "ready/readback-", "ready/refuse-"]
+max_usd = 13.0 # run 39057649097 (d282d17): 6.24 USD
+events = ["workflow_dispatch", "push"]
+# A session turn writes whole files (a command, its tests, a feature file): run 39027788820 stopped a map-drift turn
+# at the 12000-token cap, and earlier turns reached 10.1k, so the group's cap is 32000, a ceiling and not a charge
+# (D-3.4m).
+max_tokens = 32000
+
+# The UX Researcher's skills (research, wireframe, mockup, prototype, review, polish, baseline): two cases each, with
+# deterministic floors per skill (internal/evals/ux.go) before the judge. Advisory until two consecutive full runs hold
+# a mean of 4.0 for every skill (founder, 2026-10-17); then a PR proposes making it gate. Dispatch only, so every run's
+# spend is chosen: 14 cases x 5 runs. The mockup and polish floors render pages in Chromium, so its evals.yml job
+# installs packages/floors and Playwright first.
+[[groups]]
+name = "ux"
+prefixes = ["research/", "wireframe/", "mockup/", "prototype/", "review/", "polish/", "baseline/"]
+# max_usd is an estimate, since no run has all fourteen cases: the latest run of each skill's case cost polish 1.18 and
+# baseline 0.06 USD (39018074896), mockup 2.00, wireframe 0.82, and research 1.39 (39012826814, 4 of 5 runs scaled to
+# 5); prototype's five runs in 39018074896 stopped at 24000 tokens, so at the 32000 cap with a judge call each they are
+# about 4.14; review, which has no completed run, is taken at their mean, 1.60: 11.19 for seven cases, so about 22.38
+# for fourteen.
+max_usd = 45.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+# A prototype writes several code files: in run 39009788787 all five prototype runs spent the 12000-token cap on
+# thinking and returned no text, and mockups reached 10k (run 39008592764), so the group's skill cap was 24000 (D-6.5c).
+# Streamed, all five prototype runs still stopped at 24000 while writing files (run 39018074896), so it was 32000 (D-6.5e).
+# Run 39022787117 stopped four of five at 32000: a first reply plans the whole feature before writing it (one revision
+# rewrote every file in 12k), so the cap is 64000, a ceiling and not a charge (D-6.5g).
+max_tokens = 64000
+
+# The survey skill (WP5.9): two survey drafts on real legacy codebases (C++ and PHP fixtures under
+# evals/cases/survey/repos) and one backlog from a survey with a recorded interview. Each run indexes the fixture
+# through `aayu survey`, gives the skill every module pack and the files the case lists (about 20k tokens of input),
+# allows one revision on `aayu survey --draft` or `--backlog` findings, then the judge reads the same grounding. A
+# draft that passes is judged for the record only, then self-checked (D-5.9l): the skill verifies every item against
+# its evidence and replies with corrections only, applied to the draft all or nothing (D-5.9n); only the corrected
+# draft, which must pass the floors again, is scored.
+# Advisory until two consecutive full runs hold a mean of 4.0 per case (the founder's standing rule, D-5.9l); then
+# gating. Dispatch only, so every run's spend is chosen.
+# One case of five runs was recorded at 16.87 USD at the fallback rate (run 39017129248), 4.74 at list price; per the
+# founder's rule of 2026-10-17 (quality is the constraint, never burn money) the breaker sits where a full run fits
+# twice, and each dispatch is filtered to the cases the last run failed first.
+[[groups]]
+name = "survey"
+prefixes = ["survey/"]
+# max_usd is the founder's budget stage, a checkpoint and not an estimate (D-5.9n). Run 39046436016 (tiny-js, five
+# runs with the full-redraft self-check) cost 14.11 USD; with corrections only, a case is about 11.5 to 12.6. Stage 1
+# runs survey/tinyjs-rust alone for about 15 USD or less: the breaker is checked before each call, and one call costs up
+# to about 1.1 USD, so it is 14. A later stage raises it in its own PR. A case with [survey] rubrics runs section by
+# section (survey-sections-2026-10.md), projected at about 6.8 USD a case of five runs. Measured on run 39101367105
+# (946065d), one completed run of tinyjs-rust cost 7.86 USD (each section drafted, judged, self-checked, judged again;
+# output and thinking are most of it), so five runs are about 40 USD and 14 stops a case after its first runs.
+# Stage 2 (the founder's call of 2026-10-18: no fixed survey budget, spend cautiously) reruns one case per dispatch,
+# tinyjs-rust and then minpack-manual, so the breaker is 40: one case of five runs, stopped before a second.
+max_usd = 40.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+# A survey draft of tiny-js is about 6000 tokens of JSON before any thinking; at the first cap of 24000, three of five
+# runs stopped mid-draft (run 39017129248), so the skill cap is 48000. A case written in sections uses each section's
+# own cap and effort instead (internal/evals/survey_sections.go), rerunning a section that stops at its cap at twice it.
+max_tokens = 48000
+
 [[groups]]
 name = "skills" # every other case
-max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 38747551788 hit a 6 USD cap at 6.03 and cut its last run to 0, so the cap is 8 (founder, 2026-10-15)
+max_usd = 4.0 # run 39017055049 (dae0662): 1.97 USD
 
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output

@@ -1,0 +1,18 @@
+# Which tests prove story #432's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # solo mode applies at 24 business hours; a second human keeps 48
+tests = ["internal/decide:TestSoloProvisional", "internal/cli:TestSoloProvisional", "internal/cli:TestDecideSLA"]
+
+[[criterion]]
+id = 2 # waivers of any kind, seat changes, human-only steps, and one-way doors never apply, in either mode
+tests = ["internal/decide:TestProvisionalNever", "internal/cli:TestSoloProvisional"]
+
+[[criterion]]
+id = 3 # the 12-hour minimum and the repository-only key
+tests = ["internal/config:TestSoloProvisionalKey"]
+
+[[criterion]]
+id = 4 # status lists the provisional Decision with its deadline and how to reverse it
+tests = ["internal/cli:TestSoloProvisional"]

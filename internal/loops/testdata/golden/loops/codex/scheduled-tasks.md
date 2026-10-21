@@ -10,6 +10,10 @@ the app is open, and the aayu binary must be on its PATH.
 Test each prompt before it runs on its own, as the Codex documentation advises: run
 `aayu install --loops --host codex --run-now <loop>`, which runs it once with `codex exec`.
 
+## aayudha arrival
+
+When an issue opens with the label intake: no issues.opened trigger here (Codex event tasks take only pull request activity, and only on the web), so nothing to set up. The scheduled loop triage runs the same command (Daily at 09:00 Europe/London).
+
 ## aayudha sweep
 
 Mon–Fri at 09:15, 13:15, 17:15 Europe/London.

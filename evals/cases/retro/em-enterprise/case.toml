@@ -1,8 +1,8 @@
 # Persona case (WP5.1b): the Engineering Manager twin explains why story #212 overran at the enterprise stage. The same
-# scenario and task run as em-startup and em-enterprise, so the depth must differ while both stay grounded.
+# scenario and task run as em-startup, em-scaleup, and em-enterprise, so the depth must differ while each stays grounded.
 # output/retro.md is a recorded answer (tier 1); tier 2 has the retro skill answer again and the judge score it.
 skill = "retro"
-description = "Athena explains the #212 overrun at the enterprise stage."
+description = "Drona explains the #212 overrun at the enterprise stage."
 input = "../grounding.md"
 artifacts = ["output/retro.md"]
 

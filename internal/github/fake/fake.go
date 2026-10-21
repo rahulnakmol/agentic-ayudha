@@ -5,11 +5,13 @@
 package fake
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -30,6 +32,14 @@ type Label struct {
 	Description string `json:"description"`
 }
 
+// Milestone is a repository milestone.
+type Milestone struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+}
+
 // IssueType is an organization issue type.
 type IssueType struct {
 	ID          int64  `json:"id"`
@@ -40,9 +50,12 @@ type IssueType struct {
 
 // Comment is an issue comment.
 type Comment struct {
-	ID   int64  `json:"id"`
-	Body string `json:"body"`
-	User struct {
+	ID        int64     `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at,omitzero"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"` // set when the comment is edited (PATCH); zero means never edited
+	HTMLURL   string    `json:"html_url,omitempty"`
+	User      struct {
 		Login string `json:"login"`
 		Type  string `json:"type"`
 	} `json:"user"`
@@ -59,31 +72,67 @@ type Issue struct {
 	StateReason string     `json:"state_reason,omitempty"`
 	ClosedBy    *Account   `json:"closed_by,omitempty"`
 	Labels      []Label    `json:"labels"`
+	Milestone   *Milestone `json:"milestone"`
 	Type        *IssueType `json:"type,omitempty"`
 	CreatedAt   string     `json:"created_at"`
-	Comments    []*Comment `json:"-"`
-	Subs        []int      `json:"-"`
-	Parent      int        `json:"-"`
-	Assignees   []Account  `json:"assignees"`
+	// UpdatedAt is advanced by every write to the issue, or to the pull
+	// request that shares its number, through the fake; the issue list
+	// filters on it with since, as GitHub does.
+	UpdatedAt string     `json:"updated_at"`
+	URL       string     `json:"html_url"`
+	Comments  []*Comment `json:"-"`
+	Subs      []int      `json:"-"`
+	Parent    int        `json:"-"`
+	ParentURL string     `json:"parent_issue_url,omitempty"` // set from Parent when the issue list replies
+	Assignees []Account  `json:"assignees"`
+	// PullRequest is set on the issue that a pull request shares its number with, as GitHub's Issues API does.
+	PullRequest *struct {
+		URL string `json:"url"`
+	} `json:"pull_request,omitempty"`
+	User Account `json:"user"` // the author: the viewer
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
 type PR struct {
-	Number int     `json:"number"`
-	Title  string  `json:"title"`
-	Body   string  `json:"body"`
-	State  string  `json:"state"`
-	Draft  bool    `json:"draft"`
-	Merged bool    `json:"merged"`
-	User   Account `json:"user"`
-	Head   Branch  `json:"head"`
-	Base   Branch  `json:"base"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	// MergedAt is set when the PR merges through the fake; the list
+	// endpoint carries it, not Merged.
+	MergedAt time.Time `json:"merged_at,omitzero"`
+	URL      string    `json:"html_url"`
+	User     Account   `json:"user"`
+	Head     Branch    `json:"head"`
+	Base     Branch    `json:"base"`
+	// Labels and NodeID are served from the PR's issue and number.
+	Labels []Label `json:"labels"`
+	NodeID string  `json:"node_id"`
+	// Mergeable and MergeableState are what GitHub says of merging it
+	// (GET /pulls/{n} only): nil is still being computed.
+	Mergeable      *bool  `json:"mergeable"`
+	MergeableState string `json:"mergeable_state,omitempty"`
+	// Computing is how many more GETs answer mergeable null and state
+	// unknown before the two above, as GitHub does while it computes them.
+	Computing int `json:"-"`
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
 	Reviews        []Review  `json:"-"`
 	Files          []string  `json:"-"`
-	Diff           string    `json:"-"`
+	// Compared, when set, is what the comparison of its base and head SHAs
+	// lists instead of Files (GET /compare/{base}...{head}): the live PR's
+	// files can differ from the revisions a caller captured.
+	Compared []string `json:"-"`
+	// Timeline is its timeline's event names (GET /issues/{n}/timeline), oldest first.
+	Timeline []string `json:"-"`
+	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
+	// file listing leaves out (it lists at most 3,000).
+	ChangedFiles int    `json:"changed_files"`
+	Unlisted     int    `json:"-"`
+	Diff         string `json:"-"`
 }
 
 // Account is a user or bot.
@@ -94,8 +143,14 @@ type Account struct {
 
 // Branch is a PR head or base.
 type Branch struct {
-	Ref string `json:"ref"`
-	SHA string `json:"sha"`
+	Ref  string    `json:"ref"`
+	SHA  string    `json:"sha"`
+	Repo *HeadRepo `json:"repo,omitempty"`
+}
+
+// HeadRepo is the repository a PR's head branch lives in.
+type HeadRepo struct {
+	FullName string `json:"full_name"`
 }
 
 // Review is a PR review.
@@ -122,6 +177,25 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	StartedAt  string `json:"started_at,omitempty"` // RFC 3339
+	App        *App   `json:"app,omitempty"`        // the GitHub App that made it
+	Suite      *Suite `json:"check_suite,omitempty"`
+}
+
+// Suite is a check suite: one workflow run's checks, reruns included.
+type Suite struct {
+	ID int64 `json:"id"`
+}
+
+// Status is a legacy commit status.
+type Status struct {
+	Context string `json:"context"`
+	State   string `json:"state"`
+}
+
+// App is the GitHub App of a check run.
+type App struct {
+	ID int64 `json:"id"`
 }
 
 // WorkflowRun is an Actions run.
@@ -135,6 +209,15 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 	Attempt    int    `json:"run_attempt,omitempty"`
 	HTMLURL    string `json:"html_url,omitempty"`
+	// PullRequests are the pull requests the run is for, with their bases,
+	// as GitHub lists them for a same-repository pull request.
+	PullRequests []RunPR `json:"pull_requests,omitempty"`
+}
+
+// RunPR is a pull request a workflow run is for.
+type RunPR struct {
+	Number int    `json:"number"`
+	Base   Branch `json:"base"`
 }
 
 // Release is a GitHub Release, keyed by its tag.
@@ -144,6 +227,8 @@ type Release struct {
 	Body    string           `json:"body"`
 	HTMLURL string           `json:"html_url"`
 	Assets  []map[string]any `json:"assets,omitempty"`
+	// PublishedAt is the publication time, as GitHub's release list reports it.
+	PublishedAt string `json:"published_at,omitempty"`
 }
 
 // ArtifactZip is a run artifact with its zip bytes.
@@ -161,28 +246,47 @@ type Request struct {
 
 // GitHub is the fake. Lock Mu to read or change state from a test.
 type GitHub struct {
-	Mu         sync.Mutex
-	Owner      string // login of the repository owner
-	OwnerType  string // User or Organization
-	Repo       string // name
-	Private    bool
-	Default    string
-	Viewer     string
-	ViewerType string // GET /user type; default User
-	Labels     []*Label
-	IssueTypes []*IssueType
-	Rulesets   []map[string]any
-	Refs       map[string]string           // "heads/ledger" -> sha
-	Trees      map[string][]map[string]any // sha -> entries
-	Commits    map[string]map[string]any   // sha -> commit
-	Issues     map[int]*Issue
-	Pulls      map[int]*PR
-	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
-	JobLogs    map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
-	Runs       []WorkflowRun           // Actions workflow runs
-	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
-	Releases   map[string]*Release     // tag -> GitHub Release
-	Workflows  []string                // workflow file names GET actions/workflows lists
+	Mu        sync.Mutex
+	Owner     string // login of the repository owner
+	OwnerType string // User or Organization
+	Repo      string // name
+	Private   bool
+	Default   string
+	Viewer    string
+	// TokenLogins names the account behind a bearer token other than the
+	// Viewer's (a bot's installation token): GET /user and the comments it
+	// posts answer as that account.
+	TokenLogins map[string]Account
+	// InstallationTokens are GitHub App installation tokens, each with the
+	// repositories ("owner/name") its installation was granted: GET /user
+	// refuses them, as GitHub does, and GET /installation/repositories
+	// lists those repositories.
+	InstallationTokens map[string][]string
+	ViewerType         string // GET /user type; default User
+	// Permissions is each login's repository permission (GET
+	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
+	// maintain, read, or none, or "not-found" for an account that is not a
+	// collaborator (GitHub answers 404). The Viewer defaults to admin, others to read.
+	Permissions map[string]string
+	Labels      []*Label
+	IssueTypes  []*IssueType
+	Rulesets    []map[string]any
+	Refs        map[string]string           // "heads/ledger" -> sha
+	Trees       map[string][]map[string]any // sha -> entries
+	Commits     map[string]map[string]any   // sha -> commit
+	Issues      map[int]*Issue
+	Milestones  []*Milestone
+	// AuthorOnlyEdits makes a comment edit by anyone but its author a 403, as on GitHub.
+	AuthorOnlyEdits bool
+	Pulls           map[int]*PR
+	CheckRuns       map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
+	Statuses        map[string][]Status     // commit SHA -> legacy commit statuses, newest first
+	JobLogs         map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
+	RunJobs         map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
+	Runs            []WorkflowRun           // Actions workflow runs
+	Artifacts       map[int64][]ArtifactZip // run ID -> artifacts
+	Releases        map[string]*Release     // tag -> GitHub Release
+	Workflows       []string                // workflow file names GET actions/workflows lists
 	// OnDispatch, when set, describes the run a workflow_dispatch starts (the
 	// fake assigns its ID, path, and event). OnRerun re-runs a run's failed
 	// jobs. Both run with Mu held and must not lock it.
@@ -192,8 +296,13 @@ type GitHub struct {
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
 	Variables  map[string]string
-	PublicKey  string         // base64 Curve25519 key for Actions secrets
-	App        map[string]any // what /app-manifests/{code}/conversions returns
+	// Environments are the repository's deployment environments by name.
+	Environments map[string]*Environment
+	PublicKey    string         // base64 Curve25519 key for Actions secrets
+	App          map[string]any // what /app-manifests/{code}/conversions returns
+	// Device is GitHub's OAuth device flow (/login/device/code and
+	// /login/oauth/access_token, both form-encoded): nil serves no device flow.
+	Device *DeviceFlow
 
 	Files map[string]string // repository file path -> content, served by the contents API for any ref
 	// RefFiles serves the contents API for one ref (a commit SHA or branch)
@@ -208,11 +317,27 @@ type GitHub struct {
 	// RulesetsUnavailable answers every rulesets request as GitHub does for a
 	// private repository on GitHub Free.
 	RulesetsUnavailable bool
+	// RequiredChecks are the required status checks the rules for every
+	// branch name (GET /rules/branches/{branch}), one rule each, served a page
+	// of RulesPerPage at a time (0: all). "name@id" pins a check to the app
+	// (integration_id) it must come from.
+	RequiredChecks []string
+	ClassicChecks  []string // classic branch protection's required checks (GET /branches/{b}), "name@id" pinned
+	// Strict is the rules' strict_required_status_checks_policy: a PR must
+	// be up to date with its base to merge.
+	Strict           bool
+	RulesPerPage     int
+	CheckRunsPerPage int
+	RunsPerPage      int // workflow runs a page, whatever per_page asks (0: per_page)
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
-	Fail      string
+	Fail string
+	// Hook, when set, runs first on every request with the fake locked: a
+	// test changes state between two of aayu's writes.
+	Hook      func(method, path string)
 	FailAfter int
 	seq       int64
+	updates   int // writes so far: each advances an issue's UpdatedAt by a second
 	failSeen  int
 	Server    *httptest.Server
 }
@@ -257,12 +382,28 @@ func (g *GitHub) AddIssue(title, body string, labels ...string) *Issue {
 func (g *GitHub) addIssue(title, body string, labels []string) *Issue {
 	g.seq++
 	n := len(g.Issues) + 1
-	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z"}
+	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z", UpdatedAt: "2026-10-12T09:00:00Z",
+		URL: fmt.Sprintf("https://github.com/%s/%s/issues/%d", g.Owner, g.Repo, n), User: Account{Login: g.Viewer, Type: "User"}}
 	for _, l := range labels {
 		is.Labels = append(is.Labels, g.label(l))
 	}
 	g.Issues[n] = is
 	return is
+}
+
+var touched = regexp.MustCompile(`^/repos/[^/]+/[^/]+/(?:issues|pulls)/([0-9]+)(?:/|$)`)
+
+// touch advances the UpdatedAt of the issue a write to path changed.
+func (g *GitHub) touch(path string) {
+	m := touched.FindStringSubmatch(path)
+	if m == nil {
+		return
+	}
+	n, _ := strconv.Atoi(m[1])
+	if is := g.Issues[n]; is != nil {
+		g.updates++
+		is.UpdatedAt = time.Date(2026, 10, 12, 9, 0, g.updates, 0, time.UTC).Format(time.RFC3339)
+	}
 }
 
 func (g *GitHub) label(name string) Label {
@@ -280,8 +421,12 @@ func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	is := g.addIssue(title, body, nil)
-	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
-		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
+	is.PullRequest = &struct {
+		URL string `json:"url"`
+	}{URL: fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", g.Repo, is.Number)}
+	is.URL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, is.Number)
+	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", URL: is.URL, User: Account{Login: author, Type: "User"},
+		Head: Branch{Ref: head, SHA: headSHA, Repo: &HeadRepo{FullName: g.Owner + "/" + g.Repo}}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
 	g.Pulls[is.Number] = pr
 	return pr
 }
@@ -306,19 +451,22 @@ func (g *GitHub) nextSHA(v any) string {
 
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
+	reStatuses  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/statuses$`)
 	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
 	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
+	reRunJobs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/jobs$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
-	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments|/commits)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
 	reComments  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/comments$`)
 	reComment   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/comments/([0-9]+)$`)
+	rePerm      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/collaborators/([^/]+)/permission$`)
 	reSubs      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues$`)
 	reParent    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/parent$`)
 	reAssignees = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/assignees$`)
@@ -327,6 +475,13 @@ var (
 func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+	if g.Hook != nil {
+		g.Hook(r.Method, r.URL.Path)
+	}
+	if strings.HasPrefix(r.URL.Path, "/login/") {
+		g.serveDevice(w, r)
+		return
+	}
 	var body map[string]any
 	var list []any
 	if r.Body != nil {
@@ -340,6 +495,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	path, _ := url.PathUnescape(r.URL.EscapedPath())
 	g.Requests = append(g.Requests, Request{r.Method, path, body})
+	if r.Method != "GET" {
+		defer g.touch(path)
+	}
 	if g.Fail == r.Method+" "+path {
 		if g.failSeen >= g.FailAfter {
 			g.Fail = ""
@@ -361,7 +519,25 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, v)
 		return
 	}
+	installation, isInstallation := g.InstallationTokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
 	switch m, p := r.Method, path; {
+	case m == "GET" && p == "/user" && isInstallation:
+		reply(403, map[string]any{"message": "Resource not accessible by integration"})
+	case m == "GET" && p == "/installation/repositories" && isInstallation:
+		repos := []map[string]any{}
+		for _, full := range installation {
+			repos = append(repos, map[string]any{"full_name": full})
+		}
+		reply(200, map[string]any{"total_count": len(repos), "repositories": repos})
+	case m == "GET" && p == "/user" && g.Device != nil && r.Header.Get("Authorization") == "Bearer "+DeviceToken:
+		typ := g.Device.ApproverType
+		if typ == "" {
+			typ = "User"
+		}
+		reply(200, map[string]any{"login": g.Device.Approver, "type": typ})
+	case m == "GET" && p == "/user" && g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")].Login != "":
+		a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
+		reply(200, map[string]any{"login": a.Login, "type": a.Type})
 	case m == "GET" && p == "/user":
 		typ := g.ViewerType
 		if typ == "" {
@@ -382,6 +558,55 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"name": g.Repo, "full_name": g.Owner + "/" + g.Repo, "private": g.Private, "visibility": vis,
 			"default_branch": g.Default, "owner": map[string]any{"login": g.Owner, "type": g.OwnerType}})
 
+	case m == "GET" && strings.HasPrefix(p, repo+"/issues/") && strings.HasSuffix(p, "/timeline"):
+		out := []map[string]any{}
+		if pr := g.Pulls[atoi(strings.TrimSuffix(strings.TrimPrefix(p, repo+"/issues/"), "/timeline"))]; pr != nil {
+			for _, ev := range pr.Timeline {
+				out = append(out, map[string]any{"event": ev})
+			}
+		}
+		reply(200, out)
+	case m == "GET" && strings.HasPrefix(p, repo+"/compare/"):
+		basehead := strings.TrimPrefix(p, repo+"/compare/")
+		for _, pr := range g.Pulls {
+			if pr.Base.SHA+"..."+pr.Head.SHA != basehead {
+				continue
+			}
+			list := pr.Files
+			if pr.Compared != nil {
+				list = pr.Compared
+			}
+			files := []map[string]any{}
+			for _, f := range list {
+				files = append(files, map[string]any{"filename": f, "status": "modified"})
+			}
+			reply(200, map[string]any{"status": "ahead", "files": files})
+			return
+		}
+		reply(404, map[string]any{"message": "Not Found"})
+	case m == "GET" && strings.HasPrefix(p, repo+"/branches/") && !strings.Contains(strings.TrimPrefix(p, repo+"/branches/"), "/"):
+		b := strings.TrimPrefix(p, repo+"/branches/")
+		sha, ok := g.Refs["heads/"+b]
+		for _, pr := range g.Pulls {
+			if !ok && pr.Base.Ref == b && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
+		if !ok && b != g.Default {
+			notFound()
+			return
+		}
+		checks := []map[string]any{}
+		for _, c := range g.ClassicChecks {
+			name, app, pinned := strings.Cut(c, "@")
+			ck := map[string]any{"context": name}
+			if pinned {
+				ck["app_id"] = atoi(app)
+			}
+			checks = append(checks, ck)
+		}
+		reply(200, map[string]any{"name": b, "commit": map[string]any{"sha": sha}, "protected": len(checks) > 0,
+			"protection": map[string]any{"enabled": len(checks) > 0, "required_status_checks": map[string]any{"checks": checks}}})
 	case m == "GET" && p == repo+"/branches":
 		names := []string{g.Default}
 		for ref := range g.Refs {
@@ -399,6 +624,25 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	// GraphQL: just Projects v2.
 	case m == "POST" && p == "/graphql":
 		q, _ := body["query"].(string)
+		if strings.Contains(q, "revertPullRequest") {
+			in, _ := body["variables"].(map[string]any)["input"].(map[string]any)
+			id, _ := in["pullRequestId"].(string)
+			orig := g.Pulls[atoi(strings.TrimPrefix(id, "PR_"))]
+			if orig == nil || !orig.Merged {
+				reply(200, map[string]any{"errors": []any{map[string]any{"message": "pull request not found or not merged"}}})
+				return
+			}
+			title, _ := in["title"].(string)
+			text, _ := in["body"].(string)
+			is := g.addIssue(title, text, nil)
+			pr := &PR{Number: is.Number, Title: title, Body: text, State: "open", User: Account{Login: g.Viewer, Type: "User"},
+				Head: Branch{Ref: fmt.Sprintf("revert-%d-%s", orig.Number, orig.Head.Ref)}, Base: orig.Base, CreatedAt: time.Now().UTC()}
+			url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, pr.Number)
+			pr.URL = url
+			g.Pulls[is.Number] = pr
+			reply(200, map[string]any{"data": map[string]any{"revertPullRequest": map[string]any{"revertPullRequest": map[string]any{"url": url}}}})
+			return
+		}
 		if strings.Contains(q, "createProjectV2") {
 			in, _ := body["variables"].(map[string]any)["input"].(map[string]any)
 			g.seq++
@@ -457,6 +701,83 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
 		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
 		w.WriteHeader(204)
+	case m == "GET" && strings.HasPrefix(p, repo+"/rules/branches/"):
+		out := []any{}
+		for i, c := range g.RequiredChecks {
+			name, app, pinned := strings.Cut(c, "@")
+			sc := map[string]any{"context": name}
+			if pinned {
+				sc["integration_id"] = atoi(app)
+			}
+			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": i + 1,
+				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": g.Strict}})
+		}
+		if per := g.RulesPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			out = out[lo:hi]
+		}
+		reply(200, out)
+	case g.RulesetsUnavailable && strings.HasPrefix(p, repo+"/environments/"): // GitHub Free has neither for a private repository
+		reply(403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.", "status": "403"})
+	case strings.HasPrefix(p, repo+"/environments/"):
+		name, rest, _ := strings.Cut(strings.TrimPrefix(p, repo+"/environments/"), "/")
+		if g.Environments == nil {
+			g.Environments = map[string]*Environment{}
+		}
+		env := g.Environments[name]
+		switch {
+		case m == "PUT" && rest == "":
+			if env == nil {
+				env = &Environment{Variables: map[string]string{}}
+				g.Environments[name] = env
+			}
+			env.Policy, _ = body["deployment_branch_policy"].(map[string]any)
+			reply(200, map[string]any{"name": name})
+		case env == nil:
+			notFound()
+		case m == "GET" && rest == "":
+			reply(200, map[string]any{"name": name, "deployment_branch_policy": env.Policy})
+		case m == "GET" && rest == "deployment-branch-policies":
+			ps := []any{}
+			for i, b := range env.Branches {
+				if b != "" {
+					ps = append(ps, map[string]any{"id": i + 1, "name": b, "type": "branch"})
+				}
+			}
+			// GitHub pages this list: per_page (default 30) from page (default 1).
+			per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			per, pg = cmp.Or(per, 30), cmp.Or(pg, 1)
+			ps = ps[min((pg-1)*per, len(ps)):min(pg*per, len(ps))]
+			reply(200, map[string]any{"total_count": len(ps), "branch_policies": ps})
+		case m == "DELETE" && strings.HasPrefix(rest, "deployment-branch-policies/"):
+			i, err := strconv.Atoi(strings.TrimPrefix(rest, "deployment-branch-policies/"))
+			if err != nil || i < 1 || i > len(env.Branches) || env.Branches[i-1] == "" {
+				notFound()
+				return
+			}
+			env.Branches[i-1] = "" // keeps the other IDs stable
+			w.WriteHeader(204)
+		case m == "POST" && rest == "deployment-branch-policies":
+			env.Branches = append(env.Branches, str("name"))
+			reply(200, map[string]any{"name": str("name")})
+		case m == "POST" && rest == "variables":
+			env.Variables[str("name")] = str("value")
+			w.WriteHeader(201)
+		case m == "GET" && strings.HasPrefix(rest, "variables/"):
+			v, ok := env.Variables[strings.TrimPrefix(rest, "variables/")]
+			if !ok {
+				notFound()
+				return
+			}
+			reply(200, map[string]any{"name": strings.TrimPrefix(rest, "variables/"), "value": v})
+		default:
+			notFound()
+		}
 	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
 		for _, rs := range g.Rulesets {
 			if fmt.Sprint(rs["id"]) == strings.TrimPrefix(p, repo+"/rulesets/") {
@@ -517,6 +838,35 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(200, map[string]any{"workflow_run_id": id, "run_url": fmt.Sprintf("%s%s/actions/runs/%d", g.Server.URL, repo, id),
 			"html_url": fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)})
+
+	// Milestones.
+	case m == "GET" && p == repo+"/milestones":
+		out := []*Milestone{}
+		for _, ms := range g.Milestones {
+			if q := r.URL.Query().Get("state"); q == "all" || ms.State == q || q == "" && ms.State == "open" {
+				out = append(out, ms)
+			}
+		}
+		reply(200, out)
+	case m == "POST" && p == repo+"/milestones":
+		if slices.ContainsFunc(g.Milestones, func(ms *Milestone) bool { return ms.Title == str("title") }) {
+			reply(422, map[string]any{"message": "Validation Failed", "errors": []any{map[string]any{"code": "already_exists"}}})
+			return
+		}
+		ms := &Milestone{Number: len(g.Milestones) + 1, Title: str("title"), Description: str("description"), State: "open"}
+		g.Milestones = append(g.Milestones, ms)
+		reply(201, ms)
+	case m == "PATCH" && strings.HasPrefix(p, repo+"/milestones/"):
+		n, _ := strconv.Atoi(strings.TrimPrefix(p, repo+"/milestones/"))
+		i := slices.IndexFunc(g.Milestones, func(ms *Milestone) bool { return ms.Number == n })
+		if i < 0 {
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		}
+		if v, ok := body["description"].(string); ok {
+			g.Milestones[i].Description = v
+		}
+		reply(200, g.Milestones[i])
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
@@ -584,6 +934,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/git/ref/"):
 		ref := strings.TrimPrefix(p, repo+"/git/ref/")
 		sha, ok := g.Refs[ref]
+		for _, pr := range g.Pulls { // a branch no test set is a PR's base, at its base SHA
+			if !ok && "heads/"+pr.Base.Ref == ref && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
 		if !ok {
 			notFound()
 			return
@@ -605,6 +960,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			sha, _ = c["tree"].(string)
 		}
 		tree, ok := g.Trees[sha]
+		for _, pr := range g.Pulls { // a PR's head or base commit no test gave a tree has an empty one
+			if !ok && sha != "" && (pr.Head.SHA == sha || pr.Base.SHA == sha) {
+				tree, ok = []map[string]any{}, true
+			}
+		}
 		if !ok {
 			notFound()
 			return
@@ -642,12 +1002,23 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	// Issues.
 	case m == "GET" && p == repo+"/issues":
 		out := []*Issue{}
+		since := r.URL.Query().Get("since")
 		for n := 1; n <= len(g.Issues); n++ {
-			want := r.URL.Query().Get("labels")
-			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") &&
-				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) {
+			want, ms := r.URL.Query().Get("labels"), r.URL.Query().Get("milestone")
+			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
+				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) &&
+				(ms == "" || is.Milestone != nil && strconv.Itoa(is.Milestone.Number) == ms) {
+				if is.Parent != 0 {
+					is.ParentURL = fmt.Sprintf("https://api.github.com%s/issues/%d", repo, is.Parent)
+				}
 				out = append(out, is)
 			}
+		}
+		reply(200, out)
+	case m == "GET" && p == repo+"/releases":
+		out := []*Release{}
+		for _, tag := range slices.Sorted(maps.Keys(g.Releases)) {
+			out = append(out, g.Releases[tag])
 		}
 		reply(200, out)
 	case m == "POST" && p == repo+"/issues":
@@ -656,13 +1027,39 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		for _, l := range ls {
 			labels = append(labels, l.(string))
 		}
-		reply(201, g.addIssue(str("title"), str("body"), labels))
-	case m == "GET" && reCheckRuns.MatchString(p):
-		runs := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]]
-		if runs == nil {
-			runs = []CheckRun{}
+		is := g.addIssue(str("title"), str("body"), labels)
+		if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+			is.User = Account{Login: a.Login, Type: a.Type}
 		}
-		reply(200, map[string]any{"total_count": len(runs), "check_runs": runs})
+		reply(201, is)
+	case m == "GET" && reCheckRuns.MatchString(p):
+		// GitHub lists only the newest run of each name unless filter=all.
+		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[string]int64{}
+		for _, c := range all {
+			newest[c.Name] = max(newest[c.Name], c.ID)
+		}
+		runs := []CheckRun{}
+		for _, c := range all {
+			if r.URL.Query().Get("filter") == "all" || c.ID == newest[c.Name] {
+				runs = append(runs, c)
+			}
+		}
+		total := len(runs)
+		if per := g.CheckRunsPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, total), min(page*per, total)
+			if hi < total {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			runs = runs[lo:hi]
+		}
+		reply(200, map[string]any{"total_count": total, "check_runs": runs})
+	case m == "GET" && reStatuses.MatchString(p):
+		out := g.Statuses[reStatuses.FindStringSubmatch(p)[1]]
+		if out == nil {
+			out = []Status{}
+		}
+		reply(200, out)
 	case m == "GET" && reWfRuns.MatchString(p):
 		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
 		out := []WorkflowRun{}
@@ -671,7 +1068,28 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				out = append(out, run)
 			}
 		}
-		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+		slices.SortStableFunc(out, func(a, b WorkflowRun) int { return cmp.Compare(b.ID, a.ID) }) // newest first, as GitHub lists them
+		total, per := len(out), atoi(q.Get("per_page"))
+		if g.RunsPerPage > 0 {
+			per = g.RunsPerPage
+		}
+		if per > 0 { // a page at a time, as GitHub serves them
+			page := max(atoi(q.Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				q.Set("page", strconv.Itoa(page+1))
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?%s>; rel="next"`, g.Server.URL, p, q.Encode()))
+			}
+			out = out[lo:hi]
+		}
+		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
+	case m == "GET" && strings.HasPrefix(p, repo+"/actions/workflows/") && !strings.Contains(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/"):
+		f := strings.TrimPrefix(p, repo+"/actions/workflows/")
+		if !slices.Contains(g.Workflows, f) {
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		}
+		reply(200, map[string]any{"id": slices.Index(g.Workflows, f) + 1, "path": ".github/workflows/" + f, "state": "active"})
 	case m == "GET" && p == repo+"/actions/workflows":
 		out := []map[string]any{}
 		for _, f := range g.Workflows {
@@ -708,6 +1126,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		notFound()
+	case m == "GET" && reRunJobs.MatchString(p):
+		jobs := g.RunJobs[int64(atoi(reRunJobs.FindStringSubmatch(p)[1]))]
+		reply(200, map[string]any{"total_count": len(jobs), "jobs": jobs})
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
@@ -741,13 +1162,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "POST" && p == repo+"/pulls":
 		is := g.addIssue(str("title"), str("body"), nil)
 		pr := &PR{Number: is.Number, Title: str("title"), Body: str("body"), State: "open", User: Account{Login: g.Viewer, Type: "User"},
-			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
+			Head: Branch{Ref: str("head"), Repo: &HeadRepo{FullName: g.Owner + "/" + g.Repo}}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
 		g.Pulls[is.Number] = pr
 		reply(201, pr)
 	case m == "GET" && p == repo+"/pulls":
 		out := []*PR{}
 		q := r.URL.Query()
 		for _, pr := range g.Pulls {
+			g.servePR(pr)
 			if st := q.Get("state"); (st == "all" || pr.State == st || (st == "" && pr.State == "open")) && (q.Get("head") == "" || q.Get("head") == g.Owner+":"+pr.Head.Ref) {
 				out = append(out, pr)
 			}
@@ -764,12 +1186,29 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			notFound()
 			return
 		}
+		g.servePR(pr)
 		switch {
 		case sm[2] == "" && m == "GET":
 			if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
 				w.WriteHeader(200)
 				_, _ = w.Write([]byte(pr.Diff))
 				return
+			}
+			pr.ChangedFiles = len(pr.Files) + pr.Unlisted
+			if pr.Computing > 0 {
+				pr.Computing--
+				still := *pr
+				still.Mergeable, still.MergeableState = nil, "unknown"
+				reply(200, &still)
+				return
+			}
+			reply(200, pr)
+		case sm[2] == "" && m == "PATCH":
+			if b, ok := body["body"].(string); ok {
+				pr.Body = b // a pull request is an issue: both reads return the new body
+				if is := g.Issues[pr.Number]; is != nil {
+					is.Body = b
+				}
 			}
 			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
@@ -798,6 +1237,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			reply(200, out)
+		case sm[2] == "/commits" && m == "GET": // the head commit alone; Static gives a PR more
+			reply(200, []map[string]any{{"sha": pr.Head.SHA, "commit": map[string]any{"message": ""}}})
 		case sm[2] == "/files" && m == "GET":
 			out := []map[string]any{}
 			for _, f := range pr.Files {
@@ -809,7 +1250,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
 				return
 			}
-			pr.Merged, pr.State = true, "closed"
+			if pr.Mergeable != nil && !*pr.Mergeable {
+				reply(405, map[string]any{"message": "Pull Request is not mergeable"})
+				return
+			}
+			pr.Merged, pr.State, pr.MergedAt = true, "closed", time.Now().UTC()
 			pr.MergeCommitSHA = g.nextSHA(body)
 			if is := g.Issues[pr.Number]; is != nil {
 				is.State = "closed"
@@ -830,6 +1275,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			if v, ok := body["title"].(string); ok {
 				is.Title = v
+			}
+			if v, ok := body["milestone"]; ok {
+				is.Milestone = nil
+				for _, ms := range g.Milestones {
+					if f, _ := v.(float64); int(f) == ms.Number {
+						is.Milestone = ms
+					}
+				}
 			}
 			if v, ok := body["state"].(string); ok {
 				is.State = v
@@ -894,8 +1347,12 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if m == "POST" {
 			g.seq++
-			c := &Comment{ID: g.seq, Body: str("body")}
+			c := &Comment{ID: g.seq, Body: str("body"), CreatedAt: time.Now().UTC()}
+			c.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d", g.Owner, g.Repo, is.Number, c.ID)
 			c.User.Login, c.User.Type = g.Viewer, "User"
+			if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+				c.User.Login, c.User.Type = a.Login, a.Type
+			}
 			is.Comments = append(is.Comments, c)
 			reply(201, c)
 			return
@@ -903,12 +1360,49 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		out := []*Comment{}
 		out = append(out, is.Comments...)
 		reply(200, out)
-	case reComment.MatchString(p) && m == "PATCH":
+	case rePerm.MatchString(p) && m == "GET":
+		login := rePerm.FindStringSubmatch(p)[1]
+		perm := g.Permissions[login]
+		switch {
+		case perm == "not-found":
+			reply(404, map[string]any{"message": "Not Found"})
+			return
+		case perm == "" && login == g.Viewer:
+			perm = "admin"
+		case perm == "":
+			perm = "read"
+		}
+		role := perm
+		if perm == "maintain" {
+			perm = "write" // GitHub reports maintain as write, with role_name maintain
+		}
+		reply(200, map[string]any{"permission": perm, "role_name": role, "user": map[string]any{"login": login}})
+	case reComment.MatchString(p) && m == "DELETE":
+		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
+		for _, is := range g.Issues {
+			if i := slices.IndexFunc(is.Comments, func(c *Comment) bool { return c.ID == id }); i >= 0 {
+				is.Comments = slices.Delete(is.Comments, i, i+1)
+				w.WriteHeader(204)
+				return
+			}
+		}
+		notFound()
+	case reComment.MatchString(p) && (m == "PATCH" || m == "GET"):
 		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
 		for _, is := range g.Issues {
 			for _, c := range is.Comments {
 				if c.ID == id {
-					c.Body = str("body")
+					caller := g.Viewer
+					if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+						caller = a.Login // a bot's token edits as the bot
+					}
+					if m == "PATCH" && g.AuthorOnlyEdits && !strings.EqualFold(c.User.Login, caller) {
+						reply(403, map[string]any{"message": "Resource not accessible: only the author edits a comment"})
+						return
+					}
+					if m == "PATCH" {
+						c.Body, c.UpdatedAt = str("body"), time.Now().UTC().Add(time.Second)
+					}
 					reply(200, c)
 					return
 				}
@@ -971,3 +1465,77 @@ func commitJSON(c map[string]any) map[string]any {
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
+
+// DeviceToken is the access token the fake device flow issues on approval.
+const DeviceToken = "device-flow-token"
+
+// Environment is a deployment environment: its branch policy (as PUT sent
+// it), the branches it admits, and its variables.
+type Environment struct {
+	Policy    map[string]any
+	Branches  []string
+	Variables map[string]string
+}
+
+// DeviceFlow scripts GitHub's OAuth device flow.
+type DeviceFlow struct {
+	ClientID     string // the client ID it accepts
+	Approver     string // GET /user login for DeviceToken
+	ApproverType string // GET /user type for DeviceToken; default User
+	Pending      int    // polls answered authorization_pending before Outcome
+	Outcome      string // approve, deny, or "" (pending until the code expires)
+	ExpiresIn    int    // seconds; default 900
+	Started      int    // device codes issued
+	Polls        int    // token polls answered
+	// OnPoll, when set, runs at each token poll with the fake locked: a test
+	// changes state while a person is entering the code.
+	OnPoll func(poll int)
+}
+
+func (g *GitHub) serveDevice(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	g.Requests = append(g.Requests, Request{r.Method, r.URL.Path, nil})
+	reply := func(v any) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(v)
+	}
+	d := g.Device
+	switch {
+	case d == nil || r.Method != "POST":
+		http.NotFound(w, r)
+	case r.Form.Get("client_id") != d.ClientID:
+		reply(map[string]any{"error": "incorrect_client_credentials"})
+	case r.URL.Path == "/login/device/code":
+		d.Started++
+		exp := d.ExpiresIn
+		if exp == 0 {
+			exp = 900
+		}
+		reply(map[string]any{"device_code": "dc-1", "user_code": "WDJB-MJHT", "verification_uri": "https://github.com/login/device", "expires_in": exp, "interval": 5})
+	case r.URL.Path == "/login/oauth/access_token" && r.Form.Get("device_code") == "dc-1" && r.Form.Get("grant_type") == "urn:ietf:params:oauth:grant-type:device_code":
+		d.Polls++
+		if d.OnPoll != nil {
+			d.OnPoll(d.Polls)
+		}
+		switch {
+		case d.Polls <= d.Pending || d.Outcome == "":
+			reply(map[string]any{"error": "authorization_pending"})
+		case d.Outcome == "approve":
+			reply(map[string]any{"access_token": DeviceToken, "token_type": "bearer", "scope": ""})
+		default:
+			reply(map[string]any{"error": "access_denied"})
+		}
+	default:
+		reply(map[string]any{"error": "bad_verification_code"})
+	}
+}
+
+// servePR fills a PR's labels from its issue and its node ID, as GitHub
+// serves them.
+func (g *GitHub) servePR(pr *PR) {
+	pr.NodeID = fmt.Sprintf("PR_%d", pr.Number)
+	pr.Labels = nil
+	if is := g.Issues[pr.Number]; is != nil {
+		pr.Labels = is.Labels
+	}
+}

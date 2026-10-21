@@ -5,6 +5,10 @@ check back to the agent that built it, measure after a release. A **loop** is on
 command on a schedule. A loop that needs an agent runs in your agent's own scheduler, as you, so your CI never calls
 a model. A loop that needs no agent (`agent = false`) runs free in GitHub Actions.
 
+![Four loops sit inside each other: the goal loop over weeks, the story loop for a story you can build in a day, the review loop on each push with at most two fix rounds, and the checkpoint loop for each layer. Below, scheduled loops run each weekday, night, week, and month, each named with the twin that runs it, or Actions when no model is needed.](media/loop-cadence.svg)
+
+*Fast loops inside, slow loops outside. The scheduled loops keep them moving.*
+
 > **You are here:** Level 3. Loops work at any level, but they pay off once work flows steadily.
 >
 > **Needs aayudha 0.2.** If `aayu version` prints 0.1.x, this page is ahead of your binary: run `aayu self-update`.
@@ -15,7 +19,9 @@ a model. A loop that needs no agent (`agent = false`) runs free in GitHub Action
 
 The first time you run `aayu install --loops` (below) in a repository with no `loops/` folder, it adds the default
 loop files from aayudha's [loops](../../loops) folder and renders them for every tool, so there is nothing to copy.
-Commit them. They do nothing until you set them up. To change a loop later, edit its file and run
+The nightly `verify-sweep` installs your dependencies and the Playwright browser with the package manager your
+lockfile names (pnpm, Bun, or npm); edit its `setup_run` if your checks need more. Commit them. They do nothing until
+you set them up. To change a loop later, edit its file and run
 `aayu init --gates`, which renders them again.
 
 | Loop | Runs | Does |

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -52,12 +53,12 @@ type Loop struct {
 	Description string   `toml:"description" json:"description"`
 	Command     []string `toml:"command" json:"command"`               // aayu argv: a verb or plumbing command and its flags
 	Cron        string   `toml:"cron,omitempty" json:"cron,omitempty"` // five fields, in [time] tz
-	// On and Filter are the event-loop keys of WP7.1b, deferred to a later
-	// version (Appendix B S-7.1e): Parse refuses them, so 0.2 loops are
-	// scheduled only.
-	On     string         `toml:"on,omitempty" json:"-"`
-	Filter map[string]any `toml:"filter,omitempty" json:"-"`
-	Prompt string         `toml:"prompt,omitempty" json:"prompt,omitempty"`
+	// On and Filter make an event loop (WP7.1b): it starts when the GitHub
+	// event happens, in the tools whose own trigger can start a run on it
+	// (Events), and has no cron. A scheduled loop covers the other tools.
+	On     string  `toml:"on,omitempty" json:"on,omitempty"`
+	Filter *Filter `toml:"filter,omitempty" json:"filter,omitempty"`
+	Prompt string  `toml:"prompt,omitempty" json:"prompt,omitempty"`
 	// Agent false marks a loop that needs no model: its command is
 	// deterministic and runs with the workflow token, so it runs in the free
 	// GitHub Actions fallback, not in an agent tool (Appendix B D-7.1f).
@@ -76,6 +77,31 @@ type Loop struct {
 
 	sched schedule
 }
+
+// Filter narrows an event loop's event: Label is the label the issue carries
+// when it opens (the intake forms set it).
+type Filter struct {
+	Label string `toml:"label" json:"label"`
+}
+
+// Event is a GitHub event an event loop may start on: how a label names it,
+// the agent hosts whose own trigger can start a run on it, and Amp's
+// filter_kind for it. Claude Code routines and Codex event tasks take only
+// pull request and release events, so a scheduled loop covers them there.
+type Event struct {
+	Words   string
+	Hosts   []string
+	AmpKind string
+}
+
+// Events are the events an event loop may name; triage on arrival is the
+// first (other events can follow).
+var Events = map[string]Event{
+	"issues.opened": {Words: "When an issue opens", Hosts: []string{HostAmp, HostCursor}, AmpKind: "issue-opened"},
+}
+
+// IsEvent reports whether the loop starts on a GitHub event, not a cron.
+func (l Loop) IsEvent() bool { return l.On != "" }
 
 // NeedsAgent reports whether the loop runs in an agent tool (agent unset or
 // true) rather than in the Actions fallback.
@@ -117,11 +143,12 @@ func Load(root string) ([]Loop, error) {
 }
 
 // Defaults are the default loops a repository gets from `aayu install --loops`
-// when it has none: aayudha's own loops/*.toml in assets, by path. setup and
-// setup_run, with the comment just above them, are left out, because they
-// are the product's own commands (aayudha's install its example's browser
-// tooling); a product adds its own.
-func Defaults(assets fs.FS) (map[string][]byte, error) {
+// when it has none: aayudha's own loops/*.toml in assets, by path. A loop's
+// setup and setup_run, with the comment just above them, are aayudha's own
+// (its example's browser tooling), so they are replaced by the product's,
+// from the lockfiles at root (ProductSetup, Appendix B D-7.1h), or left out
+// when it has none.
+func Defaults(assets fs.FS, root string) (map[string][]byte, error) {
 	files, err := fs.Glob(assets, Dir+"/*.toml")
 	if err != nil {
 		return nil, err
@@ -136,7 +163,7 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 			return nil, err
 		}
 		var keep, comment []string
-		inArray := false
+		inArray, replaced := false, false
 		for _, line := range strings.SplitAfter(string(b), "\n") {
 			switch {
 			case inArray:
@@ -144,6 +171,9 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 			case strings.HasPrefix(line, "setup =") || strings.HasPrefix(line, "setup_run ="):
 				comment = nil // the comment above describes this repository's setup
 				inArray = strings.HasSuffix(strings.TrimSpace(line), "[")
+				if !replaced {
+					keep, replaced = append(keep, productSetupTOML(root)), true
+				}
 			case strings.HasPrefix(line, "#"):
 				comment = append(comment, line)
 			default:
@@ -158,6 +188,59 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 		out[f] = body
 	}
 	return out, nil
+}
+
+// ProductSetup is what the Actions job of a product's loop installs before
+// its command, read from the lockfiles at root (D-7.1h): the pinned tool
+// setups (setupActions), the commands that install the dependencies and the
+// Playwright browser the behaviour checks drive, through the same package
+// manager, and the lockfiles it read. pnpm wins over Bun, and Bun over npm;
+// with both pnpm and Bun locks, pnpm installs and Bun is set up too. No
+// lockfile, no setup.
+func ProductSetup(root string) (tools, run, from []string) {
+	has := func(names ...string) bool {
+		for _, n := range names {
+			if _, err := os.Stat(filepath.Join(root, n)); err == nil {
+				from = append(from, n)
+				return true
+			}
+		}
+		return false
+	}
+	pnpm, bun := has("pnpm-lock.yaml"), has("bun.lock", "bun.lockb")
+	const browser = "playwright install --with-deps chromium"
+	switch {
+	case pnpm && bun:
+		return []string{"node", "pnpm", "bun"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}, from
+	case pnpm:
+		return []string{"node", "pnpm"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}, from
+	case bun:
+		return []string{"bun"}, []string{"bun install --frozen-lockfile", "bunx " + browser}, from
+	case has("package-lock.json"):
+		return []string{"node"}, []string{"npm ci", "npx " + browser}, from
+	}
+	return nil, nil, nil
+}
+
+// productSetupTOML is ProductSetup as loop keys, or "" with no lockfile.
+func productSetupTOML(root string) string {
+	tools, run, from := ProductSetup(root)
+	if len(tools) == 0 {
+		return ""
+	}
+	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	var b strings.Builder
+	fmt.Fprintf(&b, "# From this repository's %s (aayu install --loops); edit it as the product needs.\n", strings.Join(from, " and "))
+	ts := make([]string, len(tools))
+	for i, t := range tools {
+		ts[i] = q(t)
+	}
+	fmt.Fprintf(&b, "setup = [%s]\nsetup_run = [\n", strings.Join(ts, ", "))
+	for _, r := range run {
+		fmt.Fprintf(&b, "  %s,\n", q(r))
+	}
+	b.WriteString("]\n")
+	return b.String()
 }
 
 // Find returns the loop named name.
@@ -183,8 +266,11 @@ func Parse(name string, data []byte) (Loop, error) {
 		return l, fmt.Errorf("loops/%s.toml: %w", name, err)
 	}
 	l.Name = name
+	ev, isEvent := Events[l.On]
 	switch {
 	case len(l.Hosts) > 0:
+	case isEvent && l.NeedsAgent():
+		l.Hosts = slices.Clone(ev.Hosts)
 	case l.NeedsAgent():
 		l.Hosts = slices.Clone(AgentHosts)
 	default:
@@ -207,7 +293,7 @@ func Parse(name string, data []byte) (Loop, error) {
 	}
 	for _, x := range l.Setup {
 		if _, ok := setupActions[x]; !ok {
-			bad("setup: %q: want node or pnpm", x)
+			bad("setup: %q: want node, pnpm, or bun", x)
 		}
 	}
 	if l.NeedsAgent() {
@@ -222,7 +308,7 @@ func Parse(name string, data []byte) (Loop, error) {
 			bad("hosts: an agent = false loop runs only in the Actions fallback (actions)")
 		}
 		if l.Bot {
-			bad("bot: the workflow token is never the bot identity (D1); a loop that writes as the bot is an agent loop")
+			bad("bot: the workflow token is never the bot identity; a loop that writes as the bot is an agent loop")
 		}
 		if l.Prompt != "" {
 			bad("prompt: no agent reads it in an agent = false loop")
@@ -233,9 +319,27 @@ func Parse(name string, data []byte) (Loop, error) {
 	}
 	switch {
 	case l.On != "" || l.Filter != nil:
-		bad("on and filter: event loops are deferred to a later version (Appendix B S-7.1e); set cron, a schedule")
+		if strings.ContainsAny(strings.Join(l.Command, " "), "{}") {
+			bad("command: aayu fills in no event subject; name a command that lists what it acts on")
+		}
+		switch {
+		case !isEvent:
+			bad("on %q: want %s (other events can follow), with a filter", l.On, strings.Join(slices.Sorted(maps.Keys(Events)), ", "))
+		case l.Cron != "":
+			bad("set cron or on, not both: a scheduled loop of its own covers the tools with no %s trigger", l.On)
+		case !l.NeedsAgent():
+			bad("on: an event loop starts an agent in your tool; the Actions fallback runs no event loop")
+		case l.Filter == nil || strings.TrimSpace(l.Filter.Label) == "":
+			bad("filter: name the label the issue carries when it opens, e.g. filter = { label = \"intake\" }")
+		default:
+			for _, h := range l.Hosts {
+				if !slices.Contains(ev.Hosts, h) {
+					bad("hosts: %s has no %s trigger (only %s do); a scheduled loop covers it there", h, l.On, strings.Join(ev.Hosts, ", "))
+				}
+			}
+		}
 	case l.Cron == "":
-		bad("cron is required: five fields in [time] tz")
+		bad("cron is required: five fields in [time] tz, or on and filter for an event")
 	default:
 		var err error
 		if l.sched, err = parseCron(l.Cron); err != nil {
@@ -363,17 +467,19 @@ func Offsets(loc *time.Location) []int {
 	return slices.Compact(out)
 }
 
-// UTCCron renders the loop's cron in UTC for a zone at offset off (seconds).
-func (l Loop) UTCCron(off int) (string, error) {
+// UTCCron renders the loop's cron in UTC for a zone at offset off (seconds):
+// one cron for each UTC day its local hours fall on, so 21:00 in New York
+// (01:00 UTC the next day) gets its own cron with the days moved on by one.
+func (l Loop) UTCCron(off int) ([]string, error) {
 	sc := l.sched
 	offMin := off / 60
 	if sc.hours == nil {
 		m := ((sc.minute-offMin)%60 + 60) % 60
-		return fmt.Sprintf("%d * * * *", m), nil
+		return []string{fmt.Sprintf("%d * * * *", m)}, nil
 	}
-	var hours []int
-	minute, shift := -1, 0
-	for i, h := range sc.hours {
+	minute := 0
+	byShift := map[int][]int{}
+	for _, h := range sc.hours {
 		t, sh := h*60+sc.minute-offMin, 0
 		for t < 0 {
 			t += 1440
@@ -383,38 +489,43 @@ func (l Loop) UTCCron(off int) (string, error) {
 			t -= 1440
 			sh++
 		}
-		if i > 0 && sh != shift {
-			return "", fmt.Errorf("loops/%s.toml: its hours fall on two different days in UTC; split it into two loops", l.Name)
+		minute = t % 60
+		byShift[sh] = append(byShift[sh], t/60)
+	}
+	shifts := slices.Sorted(maps.Keys(byShift))
+	var out []string
+	for _, shift := range shifts {
+		dow := "*"
+		if sc.dow != nil {
+			var ds []int
+			for _, d := range sc.dow {
+				ds = append(ds, ((d+shift)%7+7)%7)
+			}
+			slices.Sort(ds)
+			dow = ranges(ds)
 		}
-		minute, shift = t%60, sh
-		hours = append(hours, t/60)
-	}
-	dow := "*"
-	if sc.dow != nil {
-		var ds []int
-		for _, d := range sc.dow {
-			ds = append(ds, ((d+shift)%7+7)%7)
+		if shift != 0 && sc.dom != nil {
+			return nil, fmt.Errorf("loops/%s.toml: its local time is on another day in UTC, which a day-of-month cron cannot follow; pick a time that is the same day in UTC", l.Name)
 		}
-		slices.Sort(ds)
-		dow = ranges(ds)
+		hours := byShift[shift]
+		slices.Sort(hours)
+		out = append(out, fmt.Sprintf("%d %s %s %s %s", minute, ranges(hours), sc.domRaw, sc.monthRaw, dow))
 	}
-	if shift != 0 && sc.dom != nil {
-		return "", fmt.Errorf("loops/%s.toml: its local time is on another day in UTC, which a day-of-month cron cannot follow; pick a time that is the same day in UTC", l.Name)
-	}
-	slices.Sort(hours)
-	return fmt.Sprintf("%d %s %s %s %s", minute, ranges(hours), sc.domRaw, sc.monthRaw, dow), nil
+	return out, nil
 }
 
 // UTCCrons are the loop's UTC crons, one per offset of loc (deduplicated).
 func (l Loop) UTCCrons(loc *time.Location) ([]string, error) {
 	var out []string
 	for _, off := range Offsets(loc) {
-		c, err := l.UTCCron(off)
+		cs, err := l.UTCCron(off)
 		if err != nil {
 			return nil, err
 		}
-		if !slices.Contains(out, c) {
-			out = append(out, c)
+		for _, c := range cs {
+			if !slices.Contains(out, c) {
+				out = append(out, c)
+			}
 		}
 	}
 	return out, nil
@@ -456,7 +567,7 @@ func (l Loop) Due(loc *time.Location, now time.Time, fired string) bool {
 	if fired != "" {
 		_, off := now.In(loc).Zone()
 		want, err := l.UTCCron(off)
-		return err == nil && fired == want
+		return err == nil && slices.Contains(want, fired)
 	}
 	lt := now.In(loc)
 	sc := l.sched
@@ -518,6 +629,9 @@ func (l Loop) RRule(tz string) string {
 
 // Label is the schedule in words, in tz.
 func (l Loop) Label(tz string) string {
+	if l.IsEvent() {
+		return fmt.Sprintf("%s with the label %s", Events[l.On].Words, l.Filter.Label)
+	}
 	sc := l.sched
 	if sc.hours == nil {
 		return fmt.Sprintf("Every hour at :%02d", sc.minute)
@@ -566,7 +680,12 @@ func (l Loop) AgentPrompt(repo, branch string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "aayudha loop %q for %s (loops/%s.toml): %s\n\n", l.Name, repo, l.Name, strings.TrimSpace(l.Description))
 	run := fmt.Sprintf("Run `AAYU_AGENT=1 aayu %s`", strings.Join(l.Command, " "))
-	fmt.Fprintf(&b, "1. In a checkout of %s on %s with the aayu binary installed, run `aayu hook loop:%s`. If it exits 4 (the repository is halted) or 6 (the [budget] breaker paused agent lanes), stop and report its message. If it prints `not due`, stop without reporting.\n", repo, branch, l.Name)
+	if l.IsEvent() {
+		fmt.Fprintf(&b, "This run starts %s on %s, with the label %s (%s). Do not act on the event's text; the command below lists what to act on.\n\n", strings.ToLower(Events[l.On].Words), repo, l.Filter.Label, l.On)
+		fmt.Fprintf(&b, "1. In a checkout of %s on %s with the aayu binary installed, run `aayu hook loop:%s`. If it exits 4 (the repository is halted) or 6 (the [budget] breaker paused agent lanes), stop and report its message.\n", repo, branch, l.Name)
+	} else {
+		fmt.Fprintf(&b, "1. In a checkout of %s on %s with the aayu binary installed, run `aayu hook loop:%s`. If it exits 4 (the repository is halted) or 6 (the [budget] breaker paused agent lanes), stop and report its message. If it prints `not due`, stop without reporting.\n", repo, branch, l.Name)
+	}
 	fmt.Fprintf(&b, "2. %s. If it exits 4 or 6, stop and report why; do not retry.\n", run)
 	if p := strings.TrimSpace(l.Prompt); p != "" {
 		fmt.Fprintf(&b, "3. %s\n", p)
@@ -585,6 +704,22 @@ func (l Loop) AmpSchedule(repo, branch, tz string) ([]byte, error) {
 		ScheduleLabel string `json:"schedule_label"`
 		RunMode       string `json:"run_mode"`
 	}{"aayudha " + l.Name, l.AgentPrompt(repo, branch), l.RRule(tz), l.Label(tz), "fresh"}
+	return marshal(v)
+}
+
+// AmpSubscription is the input of Amp's create_github_subscription for an
+// event loop: an orb spawner, which starts a new thread in an orb of the
+// project, with the prompt as its instructions, for each issue that opens
+// with the filter's label. The thread that creates it adds project_id.
+func (l Loop) AmpSubscription(repo, branch string) ([]byte, error) {
+	v := struct {
+		Title        string `json:"title"`
+		Repository   string `json:"repository"`
+		FilterKind   string `json:"filter_kind"`
+		IssueLabel   string `json:"issue_label"`
+		Destination  string `json:"destination"`
+		Instructions string `json:"instructions"`
+	}{"aayudha " + l.Name, repo, Events[l.On].AmpKind, l.Filter.Label, "new-orb", l.AgentPrompt(repo, branch)}
 	return marshal(v)
 }
 
@@ -617,13 +752,9 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 		if !l.Runs(HostCursor) {
 			continue
 		}
-		var triggers []string
-		crons, err := l.UTCCrons(loc)
+		triggers, err := cursorTriggers(l, repo, loc)
 		if err != nil {
 			return nil, err
-		}
-		for _, c := range crons {
-			triggers = append(triggers, "cron = { schedule = "+hclString(c)+" }")
 		}
 		fmt.Fprintf(&b, "\n# %s: %s\n", l.Name, l.Label(tz))
 		fmt.Fprintf(&b, "resource \"cursor_platform_workflow\" \"aayudha_%s\" {\n", strings.ReplaceAll(l.Name, "-", "_"))
@@ -642,6 +773,25 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 	return []byte(b.String()), nil
 }
 
+// cursorTriggers are a loop's Cursor triggers: one cron per UTC offset of
+// loc, or, for issues.opened, the git_label trigger on issues when the
+// filter's label is added. Cursor has no issue-opened trigger; the intake
+// forms set the label as the issue opens.
+func cursorTriggers(l Loop, repo string, loc *time.Location) ([]string, error) {
+	if l.IsEvent() {
+		return []string{fmt.Sprintf("git_label = { repos = [%s], issues = true, label_name = %s, on_added = true }", hclString(repo), hclString(l.Filter.Label))}, nil
+	}
+	crons, err := l.UTCCrons(loc)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, c := range crons {
+		out = append(out, "cron = { schedule = "+hclString(c)+" }")
+	}
+	return out, nil
+}
+
 const generated = "# Code generated from loops/*.toml by aayudha (WP7.1); DO NOT EDIT.\n"
 
 // Action pins used by the Actions fallback, with the version in a comment.
@@ -652,8 +802,10 @@ const (
 )
 
 // setupActions are the tool setups a loop's setup may name, pinned like every
-// other action; pnpm reads its version from the root package.json.
+// other action; pnpm reads its version from the root package.json, and Bun
+// from its packageManager field or .bun-version, else the latest.
 var setupActions = map[string]string{
+	"bun":  "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0",
 	"node": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        with:\n          node-version: \"24\"\n          package-manager-cache: false",
 	"pnpm": "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0",
 }
@@ -688,13 +840,15 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 		}
 		j := job{l: l}
 		for _, off := range Offsets(loc) {
-			c, err := l.UTCCron(off)
+			cs, err := l.UTCCron(off)
 			if err != nil {
 				return nil, err
 			}
-			if !slices.Contains(j.crons, c) {
-				j.crons = append(j.crons, c)
-				j.notes = append(j.notes, utcOffset(off))
+			for _, c := range cs {
+				if !slices.Contains(j.crons, c) {
+					j.crons = append(j.crons, c)
+					j.notes = append(j.notes, utcOffset(off))
+				}
 			}
 		}
 		jobs = append(jobs, j)
@@ -830,7 +984,12 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 		if !l.Runs(HostAmp) || !implemented(l.Verb()) {
 			continue
 		}
-		b, err := l.AmpSchedule(repo, branch, tz)
+		var b []byte
+		if l.IsEvent() {
+			b, err = l.AmpSubscription(repo, branch)
+		} else {
+			b, err = l.AmpSchedule(repo, branch, tz)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -855,3 +1014,15 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 
 // Workflow is the Actions fallback's file name.
 const Workflow = "aayudha-loops.yml"
+
+// Covers is the scheduled loop that covers event loop l in host, which has
+// no trigger for l's event: the first scheduled loop with the same command
+// that runs there.
+func Covers(ls []Loop, l Loop, host string) (Loop, bool) {
+	for _, c := range ls {
+		if !c.IsEvent() && c.Runs(host) && slices.Equal(c.Command, l.Command) {
+			return c, true
+		}
+	}
+	return Loop{}, false
+}

@@ -48,7 +48,7 @@ func TestLaneAConsensus(t *testing.T) {
 		reply(false, finding{"contrast", 3}, finding{"target-size", 3}, finding{"copy", 2}),
 		reply(false), reply(false, finding{"layout", 2}), reply(false),
 	}}
-	l, err := LaneA(context.Background(), fake.Complete, []Capture{capture(t, "planted"), capture(t, "clean")}, K, 44, "medium", "gemini-3.1-pro-low")
+	l, err := LaneA(context.Background(), fake.Complete, []Capture{capture(t, "planted"), capture(t, "clean")}, K, 44, "medium", "gemini-3.8-flash")
 	if err != nil {
 		t.Fatal(err)
 	}

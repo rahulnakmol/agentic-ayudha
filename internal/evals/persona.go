@@ -9,9 +9,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/chart"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/counsel"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -32,6 +36,9 @@ type PersonaSpec struct {
 	// Planted is a recorded output with a planted uncited claim; tier 1 fails
 	// unless the evidence rule catches it.
 	Planted string `toml:"planted"`
+	// Kind is the chart note's kind (data or ai) for a chart case: its output
+	// must also be a complete chart note of that kind (chart.CheckStructure).
+	Kind string `toml:"kind"`
 }
 
 // personaOf loads the case's persona and practice from the embedded seats/.
@@ -48,6 +55,9 @@ func personaOf(c Case, assets fs.FS) (seats.Persona, seats.Practice, error) {
 	if !slices.Contains(config.TeamStages, p.Stage) {
 		return seats.Persona{}, seats.Practice{}, fmt.Errorf("stage %q: want one of %s", p.Stage, strings.Join(config.TeamStages, ", "))
 	}
+	if c.Skill == "chart" && (!slices.Contains(chart.Kinds, p.Kind) || p.Practice != chart.Practice(p.Kind)) {
+		return seats.Persona{}, seats.Practice{}, fmt.Errorf("a chart case needs kind data or ai and that kind's practice (%s for %q)", chart.Practice(p.Kind), p.Kind)
+	}
 	persona := ps[verbs.SeatID(p.Seat)]
 	pr, ok := persona.Practice(p.Practice)
 	if !ok {
@@ -56,9 +66,21 @@ func personaOf(c Case, assets fs.FS) (seats.Persona, seats.Practice, error) {
 	return persona, pr, nil
 }
 
-// checkPersona runs the deterministic checks on one output.
+// checkPersona runs the deterministic checks on one output; a chart case's
+// output must also have every part of its kind of note, and a counsel case's
+// every part of a counsel with no claim of a review (counsel.CheckStructure).
 func checkPersona(c Case, pr seats.Practice, grounding, out string) []string {
-	return append(seats.CheckGrounding(out, grounding), seats.CheckStage(out, pr, c.Persona.Stage)...)
+	found := append(seats.CheckGrounding(out, grounding), seats.CheckStage(out, pr, c.Persona.Stage)...)
+	if c.Skill == "chart" {
+		found = append(found, chart.CheckStructure(out, c.Persona.Kind)...)
+	}
+	if c.Skill == "counsel" {
+		found = append(found, counsel.CheckStructure(out)...)
+	}
+	if slices.Contains(production.Skills, c.Skill) {
+		found = append(found, production.CheckDoc(c.Skill, out, grounding)...)
+	}
+	return found
 }
 
 // tier1Persona checks the recorded output and that the planted one fails.
@@ -85,8 +107,8 @@ func tier1Persona(c Case, assets fs.FS) []string {
 		if err != nil {
 			return append(out, err.Error())
 		}
-		if len(seats.CheckGrounding(planted, grounding)) == 0 {
-			out = append(out, c.Persona.Planted+": the planted uncited claim was not caught by the evidence rule")
+		if len(checkPersona(c, pr, grounding, planted)) == 0 {
+			out = append(out, c.Persona.Planted+": the planted defect was not caught by the deterministic checks")
 		}
 	}
 	return out
@@ -110,14 +132,17 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 			"Reply with your Markdown answer only, nothing before or after it.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\n" + c.Persona.Task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// A long note (the data-ai chart cases write 9k-13k tokens) runs for minutes; unstreamed, the gateway closes
+		// the idle connection with a 524 on every attempt (run 39066544341, chart/ai-scaleup), as for sessions.
+		Stream: true,
 	}
-	answer, problems, revised, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
+	answer, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(answer)}, err
 	}
-	run.Revised = revised
+	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: "persona checks: " + clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: run.RevisedFor, Floor: "persona checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(answer)}, nil
 	}
 	d := pr.At(c.Persona.Stage)
 	checks := fmt.Sprintf("Deterministic checks passed: every claim about code, architecture, risk, or progress cites a source "+
@@ -125,38 +150,68 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 	if c.Persona.Stage == config.StageStartup {
 		checks += fmt.Sprintf("; it is at most %d words", seats.StartupMaxWords)
 	}
+	if c.Skill == "chart" {
+		checks += fmt.Sprintf("; it has every part of a %s chart note in order, each naming what the part must name", c.Persona.Kind)
+	}
+	if c.Skill == "counsel" {
+		checks += "; it has every part of a counsel in order, names a door, the three readings, and the dominant one, makes one " +
+			"recommendation in one paragraph, gives an `aayu` command as the next step, ends with a one-line question, claims no " +
+			"review, approval, or LGTM, and is at most 500 words"
+	}
+	if slices.Contains(production.Skills, c.Skill) {
+		checks += "; it has every part of its document in order, each naming what the part must name; every proposed action is a catalog action " +
+			"the grounding lists; it claims no executed change and gives no production command outside the catalog; every query and query template " +
+			"is bounded by a window and a limit"
+		switch c.Skill {
+		case "investigate":
+			checks += "; it cites at least two bounded queries"
+		case "respond":
+			checks += "; it uses no blaming language"
+		}
+	}
 	judged, err := h.judge(ctx, "## Task\n\n"+c.Persona.Task+"\n\n## Team stage\n\n"+c.Persona.Stage+
 		"\n\n## Persona the skill speaks in\n\n"+persona.Prompt(c.Persona.Stage, "set by the case")+
 		"\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks+".", rubric, answer, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, Answer: answerOf(answer)}, err
 	}
-	judged.Revised = run.Revised
+	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
+	judged.Answer = answerOf(answer)
 	return judged, nil
 }
 
 // reviseOnce asks the skill for its Markdown answer and, when check finds
 // problems, gives it the findings once to revise, as a host would. It returns
-// the last answer, its remaining problems, and whether it was revised.
+// the last answer, its remaining problems, and the first draft's findings
+// (none when the first draft passed). When the revision errors, it returns
+// the first draft and its findings with the error, so the run keeps them.
 func reviseOnce(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
-	check func(string) []string) (answer string, problems []string, revised bool, err error) {
+	check func(string) []string) (answer string, problems, first []string, err error) {
+	return reviseOnceAsking(ctx, complete, req, check, "Fix every finding and reply with the whole revised answer only.")
+}
+
+// reviseOnceAsking is reviseOnce with its own request for the revision.
+func reviseOnceAsking(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
+	check func(string) []string, ask string) (answer string, problems, first []string, err error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := complete(ctx, req)
 		if err != nil {
-			return "", nil, false, err
+			return answer, problems, first, err
 		}
 		if resp.Truncated {
-			return "", nil, false, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
+			return answer, problems, first, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
 		}
 		answer = draftOnly(resp.Text)
 		if problems = check(answer); len(problems) == 0 {
-			return answer, nil, attempt > 0, nil
+			return answer, nil, first, nil
+		}
+		if attempt == 0 {
+			first = problems
 		}
 		req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: answer},
-			models.Message{Role: "user", Content: "The deterministic checks reported:\n- " + strings.Join(problems, "\n- ") +
-				"\n\nFix every finding and reply with the whole revised answer only."})
+			models.Message{Role: "user", Content: "The deterministic checks reported:\n- " + strings.Join(problems, "\n- ") + "\n\n" + ask})
 	}
-	return answer, problems, true, nil
+	return answer, problems, first, nil
 }
 
 // PackSpec makes a case a decision-pack case (WP5.1b, D-5.6b): the human asks
@@ -237,22 +292,32 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 			fmt.Sprintf("Reply with the decision pack in Markdown only, at most %d words, nothing before or after it.", decide.PackMaxWords),
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\nThe human is stuck and asks: " + c.Pack.Question}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true, // as the persona call
 	}
-	pack, problems, revised, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
+	pack, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(pack)}, err
 	}
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: "pack checks: " + clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: revisedFor(first), Floor: "pack checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(pack)}, nil
 	}
 	checks := "Deterministic checks passed: every part is present in order, the question is one sentence, there are two or three " +
 		"options, the recommendation names its door, the pack ends with the one decision, and every claim cites a source the grounding contains."
-	judged, err := h.judge(ctx, "## The human's question\n\n"+c.Pack.Question+"\n\n## Owning twin and team stage\n\n"+persona.Name+", the "+
-		verbs.SeatName(persona.Seat)+" twin, at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
+	judged, err := h.judge(ctx, "## The human's question\n\n"+c.Pack.Question+"\n\n## Owning twin and team stage\n\n"+persona.Heading()+
+		", at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
 		rubric, pack, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(pack)}, err
 	}
-	judged.Revised = revised
+	judged.Revised, judged.RevisedFor = len(first) > 0, revisedFor(first)
+	judged.Answer = answerOf(pack)
 	return judged, nil
+}
+
+// answerOf is the answer as a run records it: redacted and clipped.
+func answerOf(s string) string { return clip(actions.RedactString(s), 8000) }
+
+// revisedFor is the first draft's findings as a run records them.
+func revisedFor(first []string) string {
+	return clip(actions.RedactString(strings.Join(first, "; ")), 600)
 }

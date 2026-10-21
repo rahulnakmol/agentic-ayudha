@@ -17,10 +17,12 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
+	"github.com/rahulnakmol/agentic-ayudha/internal/tell"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -32,8 +34,11 @@ type Config struct {
 	MinPassK  float64 `toml:"min_pass_k"` // suite pass^k bar
 	MinMean   float64 `toml:"min_mean"`   // suite mean rubric score bar
 	MaxDrop   float64 `toml:"max_drop"`   // largest allowed fall of the mean below the baseline
-	MaxUSD    float64 `toml:"-"`          // spend cap of the run: the selected group's max_usd (ForGroup)
-	Groups    []Group `toml:"groups"`     // tier-2 case groups, each run as its own job with its own spend cap
+	// BarWaiver is the accepted eval-bar floor waiver that let this change
+	// lower a bar (CheckBars); one named on the base does not count again.
+	BarWaiver int     `toml:"bar_waiver"`
+	MaxUSD    float64 `toml:"-"`      // spend cap of the run: the selected group's max_usd (ForGroup)
+	Groups    []Group `toml:"groups"` // tier-2 case groups, each run as its own job with its own spend cap
 	MaxTokens struct {
 		Skill int `toml:"skill"`
 		Judge int `toml:"judge"`
@@ -56,6 +61,9 @@ type Group struct {
 	Gate string `toml:"gate"`
 	// K overrides the runs per case for this group; 0 keeps eval.toml's k.
 	K int `toml:"k"`
+	// MaxTokens overrides the skill call's output cap for this group; 0 keeps
+	// eval.toml's [max_tokens] skill (D-6.5c).
+	MaxTokens int `toml:"max_tokens"`
 	// Events are the GitHub event names (EVENT in evals.yml) the group runs
 	// on; empty runs on every event. A costly group runs on dispatch only.
 	Events []string `toml:"events"`
@@ -122,6 +130,9 @@ func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
 		if g.K > 0 {
 			c.K = g.K
 		}
+		if g.MaxTokens > 0 {
+			c.MaxTokens.Skill = g.MaxTokens
+		}
 		var out []Case
 		for _, k := range cases {
 			if c.GroupOf(k.ID) == name {
@@ -152,6 +163,7 @@ type Case struct {
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
+	Tell        *TellSpec  `toml:"tell"`  // a tell case: the input is the grounding, the output Markdown copy (D-7.5b)
 	// Repo is a repository fixture (a directory relative to the case) the
 	// recorded calls run in and grill's --assess reads (WP5.3b).
 	Repo string `toml:"repo"`
@@ -178,6 +190,11 @@ type Case struct {
 	// PR's diff; tier 2 runs it in every review variant and scores precision
 	// and recall against the planted defects, without a judge.
 	Review *ReviewSpec `toml:"review"`
+	// UX makes a case for one of the UX Researcher's skills (ux.go).
+	UX *UXSpec `toml:"ux"`
+	// Survey makes a survey case (WP5.9, survey.go): the repo fixture is a
+	// codebase with no product docs and the reply a survey draft or backlog.
+	Survey *SurveySpec `toml:"survey"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,
@@ -190,16 +207,68 @@ type Scope struct {
 	// Allow, when set, matches phrases that honour the rule rather than break
 	// it ("no price" where the human ruled prices out); they are removed before
 	// Pattern is matched (WP5.8).
-	Allow   string `toml:"allow"`
-	re      *regexp.Regexp
-	allowRE *regexp.Regexp
+	Allow string `toml:"allow"`
+	// Fixtures (Story #401, Feedback #329): every rule ships with text it
+	// must fire on (Match, each way the thing can be said), a negated form
+	// that rules the thing out or does not do it (Negated), and a near miss:
+	// an ordinary use of a word in the pattern, a valid idiom, or a
+	// neighbouring claim it must not fire on (NearMiss). A rule must not fire
+	// on its negated fixtures unless NegatedFires says that even ruling the
+	// thing out is out of scope (a topic the human parked, not ruled out).
+	// TestCaseRulesHaveFixtures enforces all of it.
+	Match        []string `toml:"match"`
+	Negated      []string `toml:"negated"`
+	NearMiss     []string `toml:"near_miss"`
+	NegatedFires bool     `toml:"negated_fires"`
+	re           *regexp.Regexp
+	allowRE      *regexp.Regexp
+}
+
+// fixtureProblems returns what is wrong with the rule's fixtures: a missing
+// kind, a match fixture it does not fire on, or a negated or near-miss
+// fixture it fires on (or, with NegatedFires, a negated one it does not).
+func (r Scope) fixtureProblems() []string {
+	var out []string
+	for _, k := range []struct {
+		kind  string
+		texts []string
+		fires bool
+	}{{"match", r.Match, true}, {"negated", r.Negated, r.NegatedFires}, {"near_miss", r.NearMiss, false}} {
+		if len(k.texts) == 0 {
+			out = append(out, "no "+k.kind+" fixture")
+		}
+		for _, t := range k.texts {
+			if m, _ := r.find(t); (m != "") != k.fires {
+				verb := "fires"
+				if k.fires {
+					verb = "does not fire"
+				}
+				out = append(out, fmt.Sprintf("%s on its %s fixture %q", verb, k.kind, t))
+			}
+		}
+	}
+	return out
 }
 
 // find returns the rule's first match in text, outside the allowed phrases,
 // and the clause around it, so a floor shows what the skill wrote.
 func (r Scope) find(text string) (match, clause string) {
 	if r.allowRE != nil {
-		text = r.allowRE.ReplaceAllStringFunc(text, func(m string) string { return strings.Repeat(" ", len(m)) })
+		// Allowed phrases may overlap ("no pack …, so I can't say …"): search again from the
+		// next word after each match's start, not its end, and blank every match (D-3.4w).
+		b := []byte(text)
+		for i := 0; i < len(text); {
+			loc := r.allowRE.FindStringIndex(text[i:])
+			if loc == nil {
+				break
+			}
+			s := i + loc[0]
+			for j := s; j < i+loc[1]; j++ {
+				b[j] = ' '
+			}
+			i = nextWord(text, s)
+		}
+		text = string(b)
 	}
 	loc := r.re.FindStringIndex(text)
 	if loc == nil {
@@ -213,6 +282,24 @@ func (r Scope) find(text string) (match, clause string) {
 		end = loc[1] + i
 	}
 	return text[loc[0]:loc[1]], strings.Join(strings.Fields(text[start:end]), " ")
+}
+
+// nextWord is the index of the first word after the one at s (always past s).
+func nextWord(text string, s int) int {
+	if s >= len(text) {
+		return len(text)
+	}
+	word := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' }
+	i := s + 1
+	if j := strings.IndexFunc(text[i:], func(r rune) bool { return !word(r) }); j >= 0 {
+		i += j
+	} else {
+		return len(text)
+	}
+	if j := strings.IndexFunc(text[i:], word); j >= 0 {
+		return i + j
+	}
+	return len(text)
 }
 
 // OutOfScope returns one line per scope rule the item breaks. A grilled
@@ -272,6 +359,10 @@ type Tier2Spec struct {
 	// Human is the scripted human (conversation.go) of a grill conversation
 	// case: the skill asks in rounds and the script answers by dimension.
 	Human string `toml:"human"`
+	// Session is the session.toml (session.go) of a host-skill session case
+	// (D-3.4f): the skill works in turns, running commands against the case's
+	// world, and the finished session is checked against its floors.
+	Session string `toml:"session"`
 }
 
 var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -373,8 +464,24 @@ func LoadCase(dir string) (Case, error) {
 	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
 		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
 	}
+	if t := c.Tell; t != nil && (!slices.Contains(tell.Kinds, t.Kind) || t.Request == "" || t.Draft == "") {
+		return c, fmt.Errorf("%s: [tell] needs a kind (%s), request, and draft", c.ID, strings.Join(tell.Kinds, ", "))
+	}
 	if p := c.Persona; p != nil && (p.Seat == "" || p.Stage == "" || p.Practice == "" || p.Task == "" || p.Draft == "") {
 		return c, fmt.Errorf("%s: [persona] needs seat, stage, practice, task, and draft", c.ID)
+	}
+	if c.Survey != nil {
+		if err := c.Survey.check(); err != nil {
+			return c, fmt.Errorf("%s: %w", c.ID, err)
+		}
+		if c.Repo == "" {
+			return c, fmt.Errorf("%s: a survey case needs repo, the codebase fixture", c.ID)
+		}
+	}
+	if c.UX != nil {
+		if err := c.UX.check(c.Skill); err != nil {
+			return c, fmt.Errorf("%s: %w", c.ID, err)
+		}
 	}
 	if p := c.Pack; p != nil && (p.Seat == "" || p.Stage == "" || p.Question == "" || p.Draft == "") {
 		return c, fmt.Errorf("%s: [pack] needs seat, stage, question, and draft", c.ID)

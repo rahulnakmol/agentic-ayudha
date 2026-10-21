@@ -1,5 +1,7 @@
 // Command ratchet checks or tightens this repository's coverage floor
-// (internal/ratchet; Appendix B S-4.3r). CI's build job runs
+// (internal/ratchet; Appendix B S-4.3r) and, given a base, checks that the
+// change lowers no skill-eval bar (evals.CheckBars, Story #400). CI's build
+// job runs
 //
 //	go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out [-base <sha>]
 //
@@ -8,14 +10,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ratchet"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func main() {
@@ -24,7 +30,7 @@ func main() {
 	update := flag.Bool("update", false, "tighten the floor in "+ratchet.File+" to what the coverage supports; never loosens it")
 	flag.Parse()
 	if err := run(*profile, *base, *update); err != nil {
-		fmt.Fprintf(os.Stderr, "::error::coverage ratchet: %v\n", err)
+		fmt.Fprintf(os.Stderr, "::error::%v\n", err)
 		os.Exit(1)
 	}
 }
@@ -65,13 +71,23 @@ func run(profile, base string, update bool) error {
 	}
 	problems, waiver := ratchet.Check(cur.Coverage, prev, measured)
 	if waiver != 0 {
-		if err := checkWaiver(waiver); err != nil {
+		if err := checkWaiver(waiver, "coverage"); err != nil {
 			problems = append(problems, fmt.Sprintf("waiver #%d: %v", waiver, err))
 		}
 	}
 	fmt.Printf("coverage %.1f %%; floor %.1f %% (margin %.1f)\n", measured, cur.Coverage.Floor, cur.Coverage.Margin)
+	for i, p := range problems {
+		problems[i] = "coverage ratchet: " + p
+	}
+	if base != "" {
+		bars, err := ratchet.EvalBarReport(os.Stdout, ".", base, func(n int) error { return checkWaiver(n, evals.BarFloor) })
+		if err != nil {
+			return err
+		}
+		problems = append(problems, bars...)
+	}
 	if len(problems) > 0 {
-		return fmt.Errorf("%s", strings.Join(problems, "\n::error::coverage ratchet: "))
+		return errors.New(strings.Join(problems, "\n::error::"))
 	}
 	return nil
 }
@@ -99,20 +115,38 @@ func baseRatchet(sha string) (*ratchet.Ratchet, error) {
 	return &r.Coverage, nil
 }
 
-// checkWaiver reads the waiver Decision from GitHub with the job's token.
-func checkWaiver(n int) error {
+// checkWaiver reads a floor-waiver Decision for floor from GitHub (the job's
+// API URL, so GitHub Enterprise works too) with the job's token, and the
+// waived item's type, so the checkout's config resolves the floor-waiver
+// authority.
+func checkWaiver(n int, floor string) error {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	owner, name, err := github.SplitRepo(repo)
 	if err != nil {
 		return fmt.Errorf("GITHUB_REPOSITORY %q: %w", repo, err)
 	}
-	c, err := github.New(github.Options{Token: os.Getenv("GH_TOKEN")})
+	c, err := github.New(github.Options{Token: os.Getenv("GH_TOKEN"), BaseURL: os.Getenv("GITHUB_API_URL")})
 	if err != nil {
 		return err
 	}
-	is, _, err := c.REST.Issues.Get(context.Background(), owner, name, n)
+	ctx := context.Background()
+	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
 	if err != nil {
 		return err
 	}
-	return ratchet.AcceptedWaiver(is, "coverage", nil)
+	var parentType string
+	switch parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n)); {
+	case err == nil:
+		parentType, _ = workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
+	case !github.NotFound(err):
+		return err
+	}
+	l, err := config.Load(config.DefaultSources(os.Getenv, ".", os.Environ(), nil))
+	if err != nil {
+		return err
+	}
+	for _, n := range l.Notices {
+		fmt.Fprintln(os.Stderr, "ratchet:", n)
+	}
+	return ratchet.AcceptedWaiver(is, floor, &l.Config, parentType)
 }

@@ -330,6 +330,59 @@ func TestGenerateKeepsTheOwnersKeys(t *testing.T) {
 	}
 }
 
+// Setup puts aayu on PATH (Bug #819): aayu's own repository builds it from the
+// checkout; a product repository gets the release its committed Amp plugin
+// expects, pinned to checksums.txt, also at the path the plugin calls.
+func TestSetupInstallsAayu(t *testing.T) {
+	own := pinned(t, repo(t, map[string]string{"go.mod": "module " + aayuModule + "\n\ngo 1.25.0\n", "cmd/aayudha/main.go": "package main\n"}), nil)
+	if a := own.Tool("aayu"); a == nil || a.Via != "source" {
+		t.Fatalf("aayu's own repository: aayu = %+v, want a build from the checkout", a)
+	}
+	other := pinned(t, repo(t, map[string]string{"go.mod": "module example.com/m\n\ngo 1.25.0\n", "cmd/aayudha/main.go": "package main\n"}), nil)
+	if a := other.Tool("aayu"); a != nil {
+		t.Errorf("another module with a cmd/aayudha: aayu = %+v, want none", a)
+	}
+	setup, check := setupScript(own, own.Fingerprint()), checkScript(own, own.Fingerprint())
+	build := `CGO_ENABLED=0 go build -trimpath -o "$AAYU_DIR/aayudha" ./cmd/aayudha`
+	for _, want := range []string{build, `"vcs.revision=$(git rev-parse HEAD) vcs.modified=false"`, `ln -sf aayudha "$AAYU_DIR/aayu"`, `path_first "$AAYU_DIR"`} {
+		if !strings.Contains(setup, want) {
+			t.Errorf("setup lacks %q", want)
+		}
+	}
+	if strings.Index(setup, build) < strings.Index(setup, "go mod download") || !strings.Contains(check, "\naayu version\n") {
+		t.Error("setup must build aayu after the Go dependencies, and check must run it")
+	}
+
+	plugin := "// Written by `aayu install`\nconst AAYU = \"/home/alice/.local/bin/aayudha\"\nconst VERSION = \"0.2.0\"\n"
+	checksums := sum('7') + "  aayudha_0.2.0_darwin_arm64.tar.gz\n" + sum('8') + "  aayudha_0.2.0_linux_amd64.tar.gz\n" + sum('9') + "  aayudha_0.2.0_linux_arm64.tar.gz\n"
+	d, err := Discover(repo(t, map[string]string{ampPlugin: plugin}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := d.Spec
+	if err := Resolve(context.Background(), &s, fakeFetch(map[string]string{aayuReleases + "0.2.0/checksums.txt": checksums})); err != nil {
+		t.Fatal(err)
+	}
+	a := s.Tool("aayu")
+	if a == nil || a.Version != "0.2.0" || a.Path != "/home/alice/.local/bin/aayudha" || a.SHA256["amd64"] != sum('8') || a.SHA256["arm64"] != sum('9') || !strings.Contains(a.Evidence, ampPlugin+":3") {
+		t.Fatalf("product repository: aayu = %+v, want 0.2.0 from the plugin at its path, pinned to the linux lines of checksums.txt", a)
+	}
+	setup, check = setupScript(s, s.Fingerprint()), checkScript(s, s.Fingerprint())
+	for _, want := range []string{"AAYU_VERSION=0.2.0", "amd64) sum=" + sum('8'), "arm64) sum=" + sum('9'),
+		`fetch "https://github.com/rahulnakmol/agentic-ayudha/releases/download/v$AAYU_VERSION/aayudha_${AAYU_VERSION}_linux_$ARCH.tar.gz" "$sum"`,
+		"plugin_aayu='/home/alice/.local/bin/aayudha'", `ln -sf aayudha "$AAYU_DIR/aayu"`, `path_first "$AAYU_DIR"`} {
+		if !strings.Contains(setup, want) {
+			t.Errorf("setup lacks %q", want)
+		}
+	}
+	if !strings.Contains(check, `expect aayu "$(aayu version)" "aayu 0.2.0"`) {
+		t.Errorf("check does not expect aayu 0.2.0:\n%s", check)
+	}
+	if dev, _ := Discover(repo(t, map[string]string{ampPlugin: strings.Replace(plugin, "0.2.0", "0.0.0-dev", 1)})); dev.Spec.Tool("aayu") != nil {
+		t.Error("a plugin installed by a dev build has no release to install, want no aayu step")
+	}
+}
+
 func TestStatus(t *testing.T) {
 	root := repo(t, goNode)
 	s := pinned(t, root, map[string]Answer{"hosts": {Value: "amp,cursor,claude", Source: "stated"}})
@@ -391,13 +444,15 @@ func TestFix(t *testing.T) {
 	}
 }
 
+const codexWarning = `WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/h/codex"))`
+
 func TestDetect(t *testing.T) {
 	type ans struct {
 		out string
 		ok  bool
 	}
 	table := map[string]ans{
-		"/bin/codex --version":           {"codex-cli 0.163.0", true},
+		"/bin/codex --version":           {codexWarning + "\ncodex-cli 0.163.0", true},
 		"/bin/codex login status":        {"Logged in using an API key - sk-***", true},
 		"/bin/claude --version":          {"2.1.301 (Claude Code)", true},
 		"/bin/claude auth status --json": {`{"loggedIn": true, "authMethod": "api_key"}`, true},
@@ -427,6 +482,10 @@ func TestDetect(t *testing.T) {
 	for _, a := range Detect(context.Background(), p) {
 		got[a.Name] = a
 	}
+	// Codex's stderr warning is not its version (seen on megaman, codex-cli 0.163.0).
+	if c := got["codex"]; c.Version != "codex-cli 0.163.0" || !slices.Equal(c.Warnings, []string{codexWarning}) {
+		t.Errorf("codex version %q, warnings %q", c.Version, c.Warnings)
+	}
 	if c := got["codex"]; !c.SignedIn || c.Cloud || !strings.Contains(c.CloudDetail, "API key") {
 		t.Errorf("codex with an API key login: %+v; want signed in but not cloud-capable", c)
 	}
@@ -438,6 +497,30 @@ func TestDetect(t *testing.T) {
 	}
 	if a := got["amp"]; a.SignedIn || a.Cloud || len(a.Install) != 1 || a.SignIn[0] != "amp login" {
 		t.Errorf("amp: %+v", a)
+	}
+	// D-5.5c.24: a Codex that is not signed in but answers through its own
+	// model provider (megaman's gateway wrapper) runs locally; one whose
+	// provider key is in an environment variable does not, since the local
+	// receiver never gets a model provider's key.
+	report := func(env string) string {
+		d := `"model provider requires OpenAI auth":"false"`
+		if env != "" {
+			d += `,"provider auth env var":"` + env + ` (present)"`
+		}
+		// The shape of codex 0.163.0's report: checks keyed by ID, details
+		// holding strings and lists, a warning before it.
+		return "WARNING: proceeding (codex_home: AbsolutePathBuf(\"/x\"))\n{\n\"schemaVersion\": 1,\n\"checks\": {" +
+			"\"config.load\": {\"id\": \"config.load\", \"status\": \"ok\", \"details\": {\"model provider\": \"private_gateway\", \"PATH entries\": [\"/bin\"]}, \"durationMs\": 4}," +
+			"\"auth.credentials\": {\"id\": \"auth.credentials\", \"status\": \"ok\", \"details\": {" + d + "}, \"remediation\": null}}}\n"
+	}
+	table["/bin/codex login status"] = ans{"Not logged in", false}
+	for env, want := range map[string]bool{"": true, "GATEWAY_KEY": false, "CODEX_API_KEY": true} {
+		table["/bin/codex doctor --json"] = ans{report(env), true}
+		for _, a := range Detect(context.Background(), p) {
+			if a.Name == "codex" && (a.SignedIn != want || want && a.Via != "the model provider private_gateway" || a.Cloud) {
+				t.Errorf("codex through a model provider (key in %q): %+v; want runs locally %v, not cloud", env, a, want)
+			}
+		}
 	}
 	table["/bin/codex login status"] = ans{"Logged in using ChatGPT", true}
 	table["/bin/claude auth status --json"] = ans{`{"loggedIn": true, "authMethod": "claude.ai"}`, true}
@@ -490,3 +573,200 @@ func TestProbeReplies(t *testing.T) {
 }
 
 func timeNow() time.Time { return time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC) }
+
+func gateJobs(s Spec) []string {
+	var out []string
+	for _, g := range s.Gate {
+		out = append(out, g.Job)
+	}
+	return out
+}
+
+// TestLocalGateMirrorsRequiredJobs: the local gate (.agents/check --full) has
+// a step, or a reason it runs only in CI, for every job a pull request must
+// pass (Story #399). Adding a CI job without the gate fails here.
+func TestLocalGateMirrorsRequiredJobs(t *testing.T) {
+	// This repository: the committed gate lists exactly the jobs the workflows
+	// have now, with no gap, and covers the required checks (AGENTS.md).
+	d, err := Discover("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed, ok, err := LoadSpec("../..")
+	if err != nil || !ok {
+		t.Fatalf("LoadSpec: %v %v", ok, err)
+	}
+	if got, want := gateJobs(committed), gateJobs(d.Spec); !slices.Equal(got, want) {
+		t.Errorf("%s gate jobs = %v, the workflows have %v: add the job under [[gate]] and run aayu install --env --apply", SpecPath, got, want)
+	}
+	if gaps := GateGaps(committed); len(gaps) > 0 {
+		t.Errorf("CI jobs without a local step or a reason: %v", gaps)
+	}
+	for _, req := range []string{"build", "generate-drift", "lint", "commits", "security", "docs", "release-snapshot", "protected-paths"} {
+		if !slices.Contains(gateJobs(committed), req) {
+			t.Errorf("required check %s is not in the local gate", req)
+		}
+	}
+
+	// Discovery: pull-request jobs only, by check name, in order; a job run
+	// only by workflow_dispatch inputs and a push-only workflow are not mirrored.
+	root := repo(t, map[string]string{
+		".github/workflows/ci.yml": `on:
+  pull_request:
+  workflow_dispatch:
+    inputs: {gate: {type: string}}
+jobs:
+  vet: {runs-on: x, steps: [{run: "true"}]}
+  lint-go: {name: lint, runs-on: x, steps: [{run: "true"}]}
+  smoke: {name: "smoke (${{ matrix.os }})", if: "inputs.gate == 'stable'", runs-on: x, steps: [{run: "true"}]}
+  integration: {if: "inputs.gate == 'rolling' || inputs.gate == 'stable'", runs-on: x, steps: [{run: "true"}]}
+  docs: {if: "github.event_name == 'pull_request' || inputs.gate == 'x'", runs-on: x, steps: [{run: "true"}]}
+`,
+		".github/workflows/ci.yaml":             "on: pull_request\njobs: [unclosed\n",
+		".github/workflows/protected-paths.yml": "on: [push, pull_request_target]\njobs:\n  protected-paths: {runs-on: x, steps: [{run: \"true\"}]}\n",
+	})
+	d, err = Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gateJobs(d.Spec); strings.Join(got, " ") != "vet lint docs protected-paths" {
+		t.Errorf("gate jobs = %v, want vet lint docs protected-paths", got)
+	}
+	if !slices.ContainsFunc(d.Spec.Notes, func(n string) bool { return strings.HasPrefix(n, ".github/workflows/ci.yaml: ") }) {
+		t.Errorf("notes = %v: an unreadable workflow must be named, not skipped silently", d.Spec.Notes)
+	}
+	for src, want := range map[string]string{
+		"":                                      "",
+		"- a list\n":                            "",
+		"on: push\njobs: {a: {}}\n":             "",
+		"on: pull_request\njobs: {a: {}}\n":     "a",
+		"on: {pull_request: {}}\njobs: {a: {}}": "a",
+	} {
+		if got, err := PullRequestJobs([]byte(src)); err != nil || strings.Join(got, " ") != want {
+			t.Errorf("PullRequestJobs(%q) = %v, %v; want %q", src, got, err, want)
+		}
+	}
+	// A spec written before the docs job existed keeps its commands and
+	// reasons, and reports the new job as a gap.
+	s := d.Spec
+	KeepPins(&s, Spec{Gate: []GateJob{{Job: "vet", Run: []string{"go vet ./..."}}, {Job: "lint", Remote: "only in CI"}}})
+	if gaps := GateGaps(s); strings.Join(gaps, " ") != "docs (.github/workflows/ci.yml) protected-paths (.github/workflows/protected-paths.yml)" {
+		t.Errorf("gaps = %v, want the new docs job", gaps)
+	}
+	if s.Gate[0].Run[0] != "go vet ./..." || s.Gate[1].Remote != "only in CI" {
+		t.Errorf("gate = %+v: the committed commands and reasons were not kept", s.Gate)
+	}
+}
+
+// The generated gate runs every job, stops a job at its first failing
+// command, names each failed CI job, says what runs only in CI, fails on a job
+// with no local step, and runs only with --full.
+func TestLocalGateScript(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash")
+	}
+	dir := t.TempDir()
+	s := Spec{Gate: []GateJob{
+		// A pre-push hook's GIT_DIR must not reach the gate's commands, or tests that run git in a temporary
+		// directory change the pushing clone.
+		{Job: "ok", Workflow: "ci.yml", Run: []string{`[ -z "${GIT_DIR:-}${GIT_INDEX_FILE:-}${GIT_WORK_TREE:-}" ]`, "echo ok-ran > ok"}},
+		{Job: "bad", Workflow: "ci.yml", Run: []string{"true", "false | true", "touch after-fail"}},
+		{Job: "later", Workflow: "ci.yml", Run: []string{"echo later-ran > later"}, Remote: "the other platforms"},
+		{Job: "remote", Workflow: "pp.yml", Remote: "it reads reviews"},
+		{Job: "gap", Workflow: "ci.yml"},
+	}}
+	script := filepath.Join(dir, ".agents", "check") // it runs from the directory above .agents
+	if err := os.MkdirAll(filepath.Dir(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(script, []byte(checkScript(s, "fp")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", script, "--full")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_DIR="+filepath.Join(dir, "elsewhere.git"), "GIT_INDEX_FILE=index", "GIT_WORK_TREE="+dir)
+	out, err := cmd.CombinedOutput()
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) || ee.ExitCode() != 1 {
+		t.Fatalf("gate exit = %v, want 1:\n%s", err, out)
+	}
+	for _, want := range []string{
+		`aayu-gate: FAIL: CI job "bad" fails here: false | true`, // pipefail
+		`aayu-gate: NOT RUN LOCALLY: part of CI job "later": the other platforms`,
+		`aayu-gate: NOT RUN LOCALLY: CI job "remote" runs only in CI: it reads reviews`,
+		`aayu-gate: FAIL: CI job "gap" (ci.yml) has no local step`,
+		"aayu-gate: failed CI jobs: bad gap",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("gate output lacks %q:\n%s", want, out)
+		}
+	}
+	for f, want := range map[string]bool{"ok": true, "later": true, "after-fail": false} {
+		if _, err := os.Stat(filepath.Join(dir, f)); (err == nil) != want {
+			t.Errorf("%s written = %v, want %v:\n%s", f, err == nil, want, out)
+		}
+	}
+	if strings.Contains(string(out), Marker) {
+		t.Errorf("the gate went on to the environment checks:\n%s", out)
+	}
+	plain := exec.Command("bash", script)
+	if out, err := plain.CombinedOutput(); err != nil || strings.Contains(string(out), "aayu-gate") {
+		t.Errorf("without --full: %v, want the environment check only:\n%s", err, out)
+	}
+}
+
+// The pre-push hook replaces git-lfs's stock hook, whose work it does, but
+// never a hand-written one.
+func TestInstallPrePush(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "pre-push")
+	stock := "#!/bin/sh\ncommand -v git-lfs >/dev/null 2>&1 || { echo >&2 \"\\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path.\\n\"; exit 2; }\ngit lfs pre-push \"$@\"\n"
+	for _, c := range []struct {
+		old     string
+		replace bool
+	}{{"", true}, {stock, true}, {PrePushHook, true}, {stock + "./scripts/my-check\n", false}} {
+		if c.old != "" {
+			if err := os.WriteFile(p, []byte(c.old), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			_ = os.Remove(p)
+		}
+		_, err := InstallPrePush(dir)
+		got, _ := os.ReadFile(p)
+		if replaced := err == nil && string(got) == PrePushHook; replaced != c.replace {
+			t.Errorf("old hook %q: replaced = %v (err %v), want %v", c.old, replaced, err, c.replace)
+		}
+	}
+	// .agents/setup does the same in a cloud host's clone.
+	if _, err := exec.LookPath("bash"); err == nil {
+		for _, c := range []struct {
+			old     string
+			replace bool
+		}{{"", true}, {stock, true}, {stock + "./scripts/my-check\n", false}} {
+			clone := t.TempDir()
+			if out, err := exec.Command("git", "init", "-q", clone).CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+			hook := filepath.Join(clone, ".git", "hooks", "pre-push")
+			if c.old != "" {
+				if err := os.WriteFile(hook, []byte(c.old), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command("bash", "-ec", "step() { :; }\n"+setupHook(Spec{Gate: []GateJob{{Job: "build"}}}))
+			cmd.Dir = clone
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(clone, "none")) // no machine-wide core.hooksPath
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("setup hook step: %v %s", err, out)
+			}
+			got, _ := os.ReadFile(hook)
+			if (string(got) == PrePushHook) != c.replace {
+				t.Errorf("setup with old hook %q: hook = %q, want replaced %v", c.old, got, c.replace)
+			}
+		}
+	}
+	if !strings.Contains(PrePushHook, `exec git lfs pre-push "$@"`) || !strings.Contains(PrePushHook, "--full </dev/null") {
+		t.Errorf("hook does not chain git-lfs or lets the gate read the refs on stdin:\n%s", PrePushHook)
+	}
+}

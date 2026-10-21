@@ -31,6 +31,11 @@ the budget runs out, or a risky layer fails twice, the agent stops, marks the st
 through Slack, email, or a GitHub mention. The code your agent writes is billed by your agent's own
 plan as usual.
 
+> **Since then:** the spend limit is 60 USD, and it applies only when aayudha's own model calls are pay-as-you-go,
+> through a gateway endpoint or a provider key. Subscription use is not counted, and the build output says so. When
+> an agent building on your machine hits its subscription usage limit, the build waits for the reset and carries on,
+> or tells you when to run it again: [hand work to an agent](guide-build.md).
+
 On your Monday the brake was pulled once, and the alert landed on you. Story 134's local checks failed twice on its
 platform layer, a risky one, so the agent stopped and marked the story blocked. You looked. The cause was not the
 code: it was a stale local copy of `aayu`, built before a fix to the accessibility check, and CI, on the current
@@ -70,14 +75,14 @@ Checking every small step is cheaper than reviewing one big change. And a clear 
 
 | Verb | What it does |
 |---|---|
-| [`build`](../../skills/build/SKILL.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
-| [`research`](../../skills/research/SKILL.md) | Collects design references and user research for a Feature. |
-| [`wireframe`](../../skills/wireframe/SKILL.md) | Sketches the screens a Feature needs, from its research and promises. |
-| [`mockup`](../../skills/mockup/SKILL.md) | Turns wireframes into mockups that use your design system. |
-| [`prototype`](../../skills/prototype/SKILL.md) | Builds a working prototype behind a flag and compares it with the design. |
-| [`review`](../../skills/review/SKILL.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
-| [`polish`](../../skills/polish/SKILL.md) | Applies a design critique to a pull request and reviews it again. |
-| [`baseline`](../../skills/baseline/SKILL.md) | Captures reference screenshots of a commit to compare later changes against. |
+| [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| [`research`](skills/research.md) | Collects design references and user research for a Feature. |
+| [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |
+| [`mockup`](skills/mockup.md) | Turns wireframes into mockups that use your design system. |
+| [`prototype`](skills/prototype.md) | Builds a working prototype behind a flag and compares it with the design. |
+| [`review`](skills/review.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
+| [`polish`](skills/polish.md) | Applies a design critique to a pull request and reviews it again. |
+| [`baseline`](skills/baseline.md) | Captures reference screenshots of a commit to compare later changes against. |
 
 <!-- END GENERATED: stage-verbs -->
 

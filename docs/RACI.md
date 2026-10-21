@@ -17,16 +17,18 @@ Charters: `seats/<seat>/CHARTER.md`.
 | Verb | A | R (executes) | Owns thresholds / policy | C | I | Layers | Identity | Model calling | MCP |
 |---|---|---|---|---|---|---|---|---|---|
 | `grill` | Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
-| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer (+SRE hat) | all | bot | host | read |
-| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
+| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer | all | bot | host | read |
+| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect, Production Engineer | AI Native Engineer | all | bot | host | read |
 | `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
+| `counsel` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect, Engineering Manager | Auditor | all | bot | host | read |
 | `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
-| `build` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Code Architect | Engineering Manager | all | bot | host | write |
-| `verify` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
-| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer (+SRE hat) | all | bot | direct | write |
+| `brain` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Founder, Revenue Architect | Marketer & Documenter | none | bot | none | read |
+| `build` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Code Architect, Production Engineer | Engineering Manager | all | bot | host | write |
+| `verify` | AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
+| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |
 | `ship` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
-| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager | Marketer & Documenter, Founder | L09 | human | none | never |
-| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer (+SRE hat) | Auditor | all | bot | none | read |
+| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | write |
+| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
 | `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
 | `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
 | `wireframe` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
@@ -35,19 +37,25 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `review` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, ui-review lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | hybrid (lane A direct) | write |
 | `polish` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | — | Engineering Manager | L01 | bot | host | write |
 | `baseline` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
-| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist | Founder | L03, L08 | bot | host | write |
+| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist, Data & AI Architect | Founder | L03, L08 | bot | host | write |
 | `readout` | Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
-| `respond` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
+| `respond` | Production Engineer | Production Engineer twin, build lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
 | `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
 | `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
-| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer (+SRE hat) | Founder | all | bot | host | write |
-| `measure` | Revenue Architect | Revenue Architect twin, chore lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
-| `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect | Engineering Manager | L05 | bot | host | write |
+| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer | Founder | all | bot | host | write |
+| `measure` | Data & AI Architect | Data & AI Architect twin, spec lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
+| `evolve` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
 | `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
 | `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
 | `init` | Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
 | `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
 | `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
+| `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer, Quality Architect | L05, L07, L08 | bot | host | read |
+| `survey` | Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
+| `investigate` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer | Engineering Manager | all | bot | host | read |
+| `slo` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | Product Strategist, Quality Architect | Engineering Manager, DevOps & DevEx Tinkerer | all | bot | host | read |
+| `runbook` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager | all | bot | host | read |
+| `scope` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Engineering Manager, Founder | DevOps & DevEx Tinkerer, Marketer & Documenter | all | bot | host | write |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass
@@ -75,6 +83,7 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 | `lfs-agent` | DevOps & DevEx Tinkerer | human |
 | `next` | Engineering Manager | human |
 | `tour` | Founder | human |
+| `inbox` | Founder | human |
 | `completion` | DevOps & DevEx Tinkerer | human |
 
 ## Seats
@@ -83,8 +92,10 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 |---|---|
 | Product Strategist | `product-strategist` |
 | Code Architect | `code-architect` |
+| Data & AI Architect | `data-ai-architect` |
 | Engineering Manager | `engineering-manager` |
-| AI Native Engineer (+SRE hat) | `ai-native-engineer` |
+| AI Native Engineer | `ai-native-engineer` |
+| Production Engineer | `production-engineer` |
 | UX Researcher & Evolutionist | `ux-researcher-evolutionist` |
 | DevOps & DevEx Tinkerer | `devops-devex-tinkerer` |
 | Quality Architect | `quality-architect` |
@@ -99,6 +110,8 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 Settled defaults per host. Configuration (`[models.<lane>.<host>]`, WP1.2) overrides them; the model gateway
 resolves them (WP1.6). Model IDs are as the AI gateway lists them; the family belongs to the model, not the endpoint.
 Cursor cannot run the openai family, so a GPT model configured for Cursor falls back to the lane's Cursor default.
+Cursor's defaults follow `[hosts.cursor] plan` (the review-ladder decision of 2026-10-17): `x`, the default, for a plan that includes only
+Cursor's own models, or `legacy` for one that still includes Claude and Gemini.
 When the binary calls a model itself and the host's default is a host-managed mode, it uses the Claude Code default.
 
 The reviewer model family must differ from the builder model family on every story (reviewer.family != builder.family).
@@ -106,26 +119,38 @@ The reviewer model family must differ from the builder model family on every sto
 | Lane | Host | Default | Model ID | Family | Escalation / alternative |
 |---|---|---|---|---|---|
 | `build` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
-| `build` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `build` | Cursor (x plan) | Grok 4.7 | `grok-4.7` | xai | — |
+| `build` | Cursor (legacy plan) | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `build` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `build` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `build` | GitHub Copilot | Claude Sonnet 5.5 | `claude-sonnet-5.5` | anthropic | escalation: Claude Opus 5.5 (`claude-opus-5.5`) |
 | `spec` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
-| `spec` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `spec` | Cursor (x plan) | Grok 4.7 | `grok-4.7` | xai | — |
+| `spec` | Cursor (legacy plan) | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `spec` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `spec` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `spec` | GitHub Copilot | Claude Sonnet 5.5 | `claude-sonnet-5.5` | anthropic | escalation: Claude Opus 5.5 (`claude-opus-5.5`) |
 | `plan` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
-| `plan` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `plan` | Cursor (x plan) | Grok 4.7 | `grok-4.7` | xai | — |
+| `plan` | Cursor (legacy plan) | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `plan` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `plan` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `plan` | GitHub Copilot | Claude Sonnet 5.5 | `claude-sonnet-5.5` | anthropic | escalation: Claude Opus 5.5 (`claude-opus-5.5`) |
 | `review` (adversarial) | Amp | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
-| `review` (adversarial) | Cursor | Grok 4.7 | `grok-4.7` | xai | — |
+| `review` (adversarial) | Cursor (x plan) | Grok 4.6 | `grok-4.6` | xai | — |
+| `review` (adversarial) | Cursor (legacy plan) | Grok 4.7 | `grok-4.7` | xai | — |
 | `review` (adversarial) | Claude Code | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | OpenAI Codex | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Grok 4.7 (grok-4.7) |
+| `review` (adversarial) | GitHub Copilot | GPT-6.1 Sol | `gpt-6.1-sol` | openai | or Claude Opus 5.5 (claude-opus-5.5) when the build has no anthropic response, Gemini 4 Argon (gemini-4-argon) when it used both anthropic and openai |
 | `ui-review` (adversarial) | Amp | Amp high | host-managed | host-managed | — |
-| `ui-review` (adversarial) | Cursor | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
-| `ui-review` (adversarial) | Claude Code | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
-| `ui-review` (adversarial) | OpenAI Codex | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
+| `ui-review` (adversarial) | Cursor (x plan) | Grok 4.6 | `grok-4.6` | xai | — |
+| `ui-review` (adversarial) | Cursor (legacy plan) | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | Claude Code | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | OpenAI Codex | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | GitHub Copilot | Gemini 4 Argon (high) | `gemini-4-argon` | google | or Gemini 3.8 Flash (high) (gemini-3.8-flash) through the AI gateway when copilot is not installed or signed in, a call fails, or [models.ui-review.copilot] model = ""; Argon costs about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed) |
 | `chore` | Amp | Amp low | host-managed | host-managed | — |
-| `chore` | Cursor | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
+| `chore` | Cursor (x plan) | Composer 2.5 | `composer-2.5` | unknown | note: family unknown: Cursor does not publish Composer's base model |
+| `chore` | Cursor (legacy plan) | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
 | `chore` | Claude Code | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
 | `chore` | OpenAI Codex | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
+| `chore` | GitHub Copilot | Copilot Auto (Efficiency) | `auto:efficiency` | host-managed | — |

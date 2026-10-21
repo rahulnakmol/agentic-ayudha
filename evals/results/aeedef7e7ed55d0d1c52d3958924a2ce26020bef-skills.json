@@ -1,0 +1,682 @@
+{
+  "version": 1,
+  "sha": "aeedef7e7ed55d0d1c52d3958924a2ce26020bef",
+  "ref": "main",
+  "time": "2026-10-17T00:57:24.014946079Z",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "grill/goal-first-claim",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, preserves the activation definition, retains the 0.31 baseline with its cohort window and snapshot source, and specifies \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented requirements. Open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11853,
+              "tokens_out": 1152,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1594,
+              "tokens_out": 82,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal states the outcome and claimant beneficiaries, preserves activation as first claim submitted within 7 days of sign-up, and retains the 0.31 baseline with its weekly cohorts and aayu measure snapshot source. The target is \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented content. The deferred open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11853,
+              "tokens_out": 1151,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1592,
+              "tokens_out": 97,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, preserves activation as first claim submitted within 7 days of signup, retains the 0.31 baseline with its weekly cohorts and named snapshot source, and specifies a target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented requirements.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11853,
+              "tokens_out": 924,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1536,
+              "tokens_out": 86,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal states the requested outcome and claimant beneficiaries, preserves the activation definition, and retains the 0.31 baseline with its weekly cohorts and snapshot source. The target is \u003e= 0.40 by 2027-03-31, and no parent or invented substantive requirements are added. Open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11853,
+              "tokens_out": 1513,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1671,
+              "tokens_out": 83,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, defines activation as first claim submission within 7 days of signing up, preserves the 0.31 baseline with its weekly cohorts and aayu measure snapshot source, and retains the target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented requirements. The open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11853,
+              "tokens_out": 1071,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1549,
+              "tokens_out": 98,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    },
+    {
+      "case": "grill/story-empty-claims",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria for a signed-in, seeded claimant with zero claims. The summary and scenario are concrete, the environment explicitly uses synthetic data and excludes production, the parent is Feature #30, and effort S is plausible. No additional product requirements are imposed; deferred wording and presentation choices are open questions, not gaps.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12941,
+              "tokens_out": 1884,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1957,
+              "tokens_out": 83,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria for a signed-in, seeded claimant with zero claims. The summary and scenario are concrete, the environment explicitly uses synthetic data and never production, the parent is Feature #30, and effort S is plausible. No invented implementation requirements are imposed; unresolved copy, presentation, and flow details are appropriately left as open questions.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12941,
+              "tokens_out": 2270,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1919,
+              "tokens_out": 86,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requested outcomes have observable screenshot criteria for a signed-in, seeded new claimant with no claims. The summary and scenario are concrete, the environment explicitly uses synthetic data and never production, the parent is Feature #30, and effort S is plausible. No additional implementation specifics are required; the deferred open questions do not lower the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12941,
+              "tokens_out": 2538,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1988,
+              "tokens_out": 83,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria: the empty claims page tells a seeded new claimant they have no claims yet and names how to start a claim. The summary and scenario are concrete, the environment explicitly uses synthetic seeded data and excludes production, the parent is Feature #30, and effort S is plausible. No unsupported implementation specifics are required; the deferred open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12941,
+              "tokens_out": 2096,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1835,
+              "tokens_out": 125,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable criteria supported by fitting screenshot evidence: a no-claims message and visible guidance on starting a claim. The state explicitly names a seeded claimant with no claims, and the summary, scenario, and synthetic non-production environment are concrete. The parent is Feature #30 and effort S is plausible. No additional requirements are imposed; deferred wording and presentation choices are open questions, not scoring gaps.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12941,
+              "tokens_out": 2146,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1822,
+              "tokens_out": 97,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    },
+    {
+      "case": "plan/config-migration",
+      "skill": "plan",
+      "lane": "plan",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint identifies the legacy retention_days field, the new kind-to-days map, and propagation of the legacy value to every known kind. Tests explicitly cover migrated values, config-show behavior, and byte-for-byte rollback, including comments and ordering. Rollback concretely restores a verbatim pre-upgrade backup, and instrumentation specifies migration and restoration details. The plan stays within the story's scope; open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4324,
+              "tokens_out": 988,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1783,
+              "tokens_out": 106,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The plan covers migration of the old value to every artifact kind, tests migrated reporting and byte-for-byte rollback, specifies backup restoration with checksum verification, and records useful migration details without expanding scope. The minor gap is that the new config shape is referenced as Feature #40's per-kind schema rather than explicitly naming its structure or keys.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4324,
+              "tokens_out": 817,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1621,
+              "tokens_out": 162,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint identifies the old scalar and new per-kind retention shape, explicitly maps the old value to every kind, and includes tests for migrated values, config-show reporting, and byte-for-byte rollback. Rollback concretely restores a verbatim pre-write backup without reserialization, with hash verification. Instrumentation records the source value, populated kinds, config and backup paths, and restore hash. The plan stays within the story's scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4324,
+              "tokens_out": 1012,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1714,
+              "tokens_out": 154,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint identifies the legacy scalar and proposed per-kind map, explicitly maps the legacy value to every artifact kind, and includes tests for per-kind config-show results and byte-for-byte rollback, including comments and ordering. Rollback concretely restores a verbatim pre-migration backup. Instrumentation specifies the migration name, legacy value, populated kinds, restored backup path, and byte-equality verification. The planned work stays within the story’s scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4324,
+              "tokens_out": 1246,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1912,
+              "tokens_out": 108,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The checkpoint identifies the legacy [proof] retention_days setting, the new kind-to-days map, and the mapping of the legacy value to every artifact kind. Named tests directly cover per-kind migration, config-show reporting, and byte-for-byte upgrade rollback. Rollback concretely saves and restores the original file bytes, and instrumentation specifies the source value, affected kinds, backup path, and restored byte count. The plan remains within the story's scope; its open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4324,
+              "tokens_out": 1047,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1825,
+              "tokens_out": 154,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 4.8
+    },
+    {
+      "case": "slice/proof-retention-6-layer",
+      "skill": "slice",
+      "lane": "plan",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five capabilities are covered: migrated per-kind configuration, kind-aware purge, the CLI flag and documentation, API ledger-pack listing, and scheduled purge. Dependencies sensibly put configuration before purge and purge plus API listing before the workflow. Stories are independently shippable increments with plausible efforts and observable criteria supported by recordings, API traces, or screenshots. Numeric retention values and pack counts are explicitly seeded test fixtures, not invented production requirements. No pack-format changes or other out-of-scope work are added.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4250,
+              "tokens_out": 3572,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3164,
+              "tokens_out": 231,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five requirements are covered by independently shippable stories, including legacy config migration, kind-aware purge, the CLI flag and documentation, API ledger listing, and scheduled execution. Criteria use observable config results, deletion outcomes, API responses, and workflow logs with synthetic fixtures and suitable evidence. Dependencies correctly place migration before purge and purge before the CLI and workflow; efforts are plausible. Numeric retention values are fixture examples, no production schedule is invented, and the pack format remains unchanged.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4250,
+              "tokens_out": 2856,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3027,
+              "tokens_out": 201,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five required capabilities are covered by independently shippable stories. Dependencies sensibly place config migration before kind-aware purge, and purge before the CLI flag and scheduled workflow; the workflow also depends on API listing. Acceptance criteria provide observable results with fitting config, purge, CLI, API, and sandbox-workflow evidence. Efforts are plausible, numeric retention examples are synthetic test fixtures rather than imposed policy, and no out-of-scope pack-format changes are introduced.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4250,
+              "tokens_out": 3255,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3155,
+              "tokens_out": 177,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five requested capabilities are covered by independently shippable stories. Dependencies sensibly place config migration before kind-aware purge, purge before the CLI flag, and the CLI and API listing before the scheduled workflow. Criteria use observable fixture-based config, purge, CLI, API-pagination, and sandbox-workflow checks with fitting evidence. Retention values and artifact ages are test fixtures rather than invented product requirements, efforts are plausible, and the slice preserves the pack format without adding unrelated scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4250,
+              "tokens_out": 3089,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2972,
+              "tokens_out": 263,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five scope items are covered by independently shippable stories with observable acceptance criteria and appropriate test or trace evidence. Dependencies sensibly place config migration before kind-aware purge and purge before the CLI flag and scheduled workflow; the workflow also depends on API listing. Effort estimates are plausible, numeric retention examples are confined to synthetic fixtures, and no pack-format changes or other out-of-scope requirements are added.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 4250,
+              "tokens_out": 2643,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2750,
+              "tokens_out": 151,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    },
+    {
+      "case": "stub/csv-export",
+      "skill": "stub",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: an API trace verifies all matching claims across pages and exactly the visible columns, and a recording verifies responsiveness during preparation for more than 10,000 claims. The CSV header check is a format convention, not an invented requirement. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1378,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1702,
+              "tokens_out": 96,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify every matching claim across pages and exactly the visible columns, while a recording demonstrates scrolling and click responsiveness during preparation for more than 10,000 matching claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No invented requirements are imposed; the header check is a CSV convention, and the open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1757,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1764,
+              "tokens_out": 109,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify the downloaded CSV includes matching claims across pages and exactly the visible columns, while a recording verifies responsiveness during preparation for more than 10,000 matching claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No invented requirements are imposed; the header-row check is a CSV convention, and the open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1213,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1664,
+              "tokens_out": 110,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify every matching claim across pages and exactly the visible columns, while a recording demonstrates scrolling and click responsiveness during preparation for more than 10,000 claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No invented requirements are imposed; checking the CSV header is a valid format convention.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1308,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1637,
+              "tokens_out": 100,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify every filtered claim across pages and exactly the visible columns, including CSV headers; a recording verifies scrolling and click responsiveness while preparing an export exceeding 10,000 claims. The summary, scenario, and environment are concrete, the parent is Feature #7, and effort M is plausible. No extra requirements are imposed; the open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1346,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1708,
+              "tokens_out": 101,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    }
+  ],
+  "pass_k": 1,
+  "mean": 4.96,
+  "errors": 0,
+  "cost_usd": 6.947565000000001,
+  "group": "skills",
+  "verdict": "pass"
+}

@@ -12,11 +12,9 @@ version: 2
 
 project_name: aayudha
 
-# rolling-<date> traceability tags are not versions. Without this, a promotion candidate built on top of a
-# rolling snapshot picks rolling-* as its current tag and the snapshot version template fails to parse it.
-git:
-  ignore_tags:
-    - "rolling-*"
+# A snapshot's version comes from GORELEASER_CURRENT_TAG, which ci.yml and installers.yml set to the newest
+# v* tag. Without it, goreleaser takes the rolling-<date> tag on a rolling commit, which is not a version, and
+# git.ignore_tags cannot exclude it: goreleaser OSS matches ignore_tags by exact name, not by glob.
 
 before:
   hooks:
@@ -113,11 +111,19 @@ scoops:
     license: BSD-3-Clause
     skip_upload: true # published by release.yml `scoop` job
 
+# Package identifiers (D-8.2j; renamed by the founder on 2026-10-20, before winget published either). winget:
+# AkmolsInc.AgenticAyudha (publisher Akmols Inc), after the GitHub organisation akmolsinc. Reverse-DNS, from the
+# founder's domain akmols.app, reserved for any platform that
+# needs one: app.akmols.agenticayudha (an Apple codesign identifier, a macOS pkg or bundle ID, Linux AppStream,
+# Flatpak, or deb/rpm metadata). aayu ships a plain CLI with none of those today, so nothing sets it yet. The Homebrew
+# cask and the Scoop manifest keep the install name aayudha: they are published, and renaming them breaks installs.
 winget:
-  - name: aayudha
-    publisher: rahulnakmol
-    package_identifier: rahulnakmol.aayudha
+  - name: aayudha # goreleaser writes it as the Moniker: `winget install aayudha` (and `aayu`, a substring of it)
+    publisher: Akmols Inc
+    package_identifier: AkmolsInc.AgenticAyudha
+    package_name: Agentic Ayudha
     short_description: Agentic software delivery pod in one binary.
+    tags: [aayu, aayudha, cli, agents, software-delivery]
     license: BSD-3-Clause
     homepage: https://github.com/rahulnakmol/agentic-ayudha
     publisher_url: https://github.com/rahulnakmol

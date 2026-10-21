@@ -66,9 +66,11 @@ honest move is to record that it was skipped, not to pretend.
 
 | Verb | What it does |
 |---|---|
-| [`slice`](../../skills/slice/SKILL.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
-| [`plan`](../../skills/plan/SKILL.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
-| [`decide`](../../skills/decide/SKILL.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| [`slice`](skills/slice.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
+| [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
+| [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| [`chart`](skills/chart.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
+| [`scope`](skills/scope.md) | Plans what a release contains, freezes it once a person accepts it, and stops later changes beyond the budget unless a person decides. |
 
 <!-- END GENERATED: stage-verbs -->
 

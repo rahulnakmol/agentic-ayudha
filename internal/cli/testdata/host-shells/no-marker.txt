@@ -1,0 +1,13 @@
+# No host marker and no terminal (a script, as cron or a host that sets nothing would run it), 2026-10-15T07:08:45Z
+$ aayu ship 189 --solo-bypass --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: ship --solo-bypass is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token
+exit=4
+$ aayu resume --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: resume is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token
+exit=4
+
+# No host marker, stdin a terminal (script(1) gives the command a pty): the human check passes, and ship goes on
+# to its own checks, which refuse this PR because its merge gate is not green
+$ aayu ship 189 --solo-bypass --dry-run --plain --repo rahulnakmol/agentic-ayudha
+aayu: ship #189: aayudha/inspect is failure on e2eb1e9; the merge gate must be green
+exit=4

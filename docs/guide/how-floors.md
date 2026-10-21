@@ -36,7 +36,7 @@ Thresholds are the keys under `[verify.floors]` (and `[verify]`) with their defa
 | Floor | Tool and pinned version | Threshold key: default | Runs when |
 |---|---|---|---|
 | coverage | aayudha diff coverage over `go test -coverprofile` (or your command's lcov or Cobertura report); Go 1.25.x in CI | `coverage.min_diff_percent`: 90.0 | Always |
-| sast | semgrep 1.180.0, language rule packs such as `p/golang` | `sast.max_critical`: 0, `sast.max_high`: 0 | Always |
+| sast | semgrep 1.180.0, language rule packs such as `p/golang`; a scan that leaves a file unanalysed (a syntax error, timeout, or out of memory) is blocked | `sast.max_critical`: 0, `sast.max_high`: 0 | Always |
 | secrets | gitleaks 8.30.1 (SHA-256 checked), commits from base to head, `--redact` | `secrets.max_findings`: 0 | Always |
 | deps | osv-scanner 2.6.0 (SHA-256 checked), every lockfile git tracks | `deps.max_critical`: 0, `deps.max_high`: 0 | Always |
 | a11y | Playwright 1.64.0 and axe-core 4.14.0, tags WCAG 2.0 to 2.2 A and AA | `a11y.standard`: "WCAG 2.2 AA", `a11y.max_critical`: 0, `a11y.max_serious`: 0 | A web target URL and screenshot or recording criteria |
@@ -47,7 +47,7 @@ Thresholds are the keys under `[verify.floors]` (and `[verify]`) with their defa
 | redaction | aayudha PII scan of the DOM, plus tesseract OCR when installed | None: any personal data blocks | With a11y |
 | perf | Lighthouse 13.5.0 on each state URL | `perf.min_score`, `max_lcp_ms`, `max_cls`, `max_tbt_ms`: no default | Budgets set, plus the a11y conditions |
 | screen-reader | Guidepup 0.35.0 with VoiceOver or NVDA | `screen_reader.layers`: ["L01"], `screen_reader.max_missing_phrases`: 0 | L01 in the footprint, sr-transcript criteria, a macOS or Windows runner; in CI only with the `aayudha:screen-reader` label or nightly |
-| dast | OWASP ZAP stable 2.17.0, image pinned by digest | `[verify] dast`: false, `dast.max_high`: 0 | `dast = true` and a target URL |
+| dast | OWASP ZAP stable 2.17.0, image pinned by digest, under Docker or else Podman | `[verify] dast`: true, `dast.max_high`: 0, `dast.skipped_blocks_ship`: true | web or api in `[verify] platforms` (otherwise `n/a`) |
 | api | k6, running your script's thresholds | `api.script`: empty | A script is set |
 | mobile | None yet | `mobile.skipped_blocks_ship`: true | ios or android in `[verify] platforms` |
 
@@ -63,6 +63,19 @@ A few details matter in practice:
 - **Web target.** The a11y and perf floors capture the URL of `[verify.environments.<env>]`, where `<env>` is
   `AAYU_ENV` (default `local`). `verify` refuses a production target before it seeds or captures anything.
 - **Redaction** runs first. If a capture holds personal data, the pack is blocked and no capture is kept.
+- **DAST** runs a spider and the passive rules, plus the active cross-site scripting and injection
+  rules only against an app `[verify] seed` started in this run on a loopback host; an app that already answered
+  before the seed ran is not one verify started. Any other URL gets a passive
+  scan, which cannot see a reflected XSS, unless its `[verify.environments.<env>]` sets `active_scan = true`; only
+  `.aayudha/config.toml` can set that, for the url it names, and a change that adds it gets the passive scan until it
+  merges. The url is an absolute http or https URL with no userinfo, query, or fragment, and a ZAP report that
+  reached no site is `blocked`. A CLI or library is `n/a`. A web or api story with no target records a
+  `skipped: dast: no runnable target` that blocks `ship` like the mobile skip, and names the fix: a `[verify] seed`
+  and a `[verify.environments.local] url`, or a waiver. A run with no story or Bug, such as the security workflow's,
+  records the skip without blocking, since no waiver could release it. ZAP runs under Docker, or Podman (rootless too) when there is
+  no Docker. With neither, a local run skips and leaves the scan to CI; in CI it is `blocked`. A high-risk alert and the
+  no-target skip are advisory until `[verify] new_floors_blocking_from` (2026-11-14), then they fail and block. `aayu doctor` shows the target,
+  the scan mode, and the runtime.
 
 ### What a miss does
 
@@ -86,6 +99,10 @@ Sometimes a team must ship with a miss. The only way is a recorded human decisio
 3. On the next run, `verify` looks for accepted waivers under the story: closed as completed, by a non-bot, with
    `waive, accepted by @<login>` in the Decision section, linking `waives` the story and naming the floor. It turns
    the matching check into `waived` and stores the Decision number in the check's `waiver` field.
+   When the floor-waiver authority resolves to a login (`[decisions.authority]`, a seat's paired human, or
+   `[autonomy] approver`), that login must have closed the Decision and be the one it names; `verify` lists any other
+   closed waiver as `waiver ignored`, with the authority it lacked. With no login configured, any person's acceptance
+   counts. The coverage ratchet and its eval-bar check apply the same rule to their waivers.
 
 A filed but unaccepted waiver waives nothing. `ship` copies every waiver into its ship record, and `aayu audit` counts
 waivers and lists them per pack in its "Floors and waivers" table.
@@ -98,8 +115,8 @@ blocks `ship` like a miss until a waiver is accepted. Setting it to `false` reco
 
 > **Honest status:** the merge gate runs on Linux, so the screen-reader floor is always skipped in gate packs. This
 > repository runs it in a separate `screen-reader` workflow on macOS and Windows runners, which is not a required
-> check. The gate template installs only semgrep, gitleaks, and osv-scanner; a product that sets an api script or
-> turns on DAST must provide k6 or Docker, or those floors are `blocked`. tesseract is not installed in this
+> check. The gate template installs only semgrep, gitleaks, and osv-scanner; a product that sets an api script
+> must provide k6, or that floor is `blocked`. GitHub's Linux runners have Docker, which the dast floor uses. tesseract is not installed in this
 > repository's gate, so redaction scans the DOM only.
 
 ## Key data and file formats
@@ -109,7 +126,8 @@ The floor defaults, from [internal/config/defaults.toml](../../internal/config/d
 ```toml
 # Floors run by `verify` (rule 7: no model disposition can override a floor miss).
 [verify]
-dast = false # ZAP baseline runs only when a product opts in (WP4.6)
+# DAST on by default for web and api platforms (Decision #485): active rules only against an app verify starts itself.
+dast = true
 
 [verify.floors.coverage]
 min_diff_percent = 90.0
@@ -140,6 +158,7 @@ max_missing_phrases = 0
 
 [verify.floors.dast]
 max_high = 0
+skipped_blocks_ship = true
 
 [verify.floors.mobile]
 skipped_blocks_ship = true

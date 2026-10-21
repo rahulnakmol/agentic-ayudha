@@ -24,8 +24,13 @@ func ReadLayers(root string) LayerGlobs {
 	if err != nil {
 		return nil
 	}
+	return ParseLayers(string(b))
+}
+
+// ParseLayers reads the layer globs from LAYERS.md's text.
+func ParseLayers(text string) LayerGlobs {
 	out := LayerGlobs{}
-	for _, line := range strings.Split(string(b), "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		m := layerRow.FindStringSubmatch(line)
 		if m == nil {
 			continue

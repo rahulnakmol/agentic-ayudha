@@ -1,0 +1,10 @@
+{
+  "number": 20,
+  "title": "Notes basics",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

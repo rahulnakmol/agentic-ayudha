@@ -13,6 +13,9 @@ name: evals
 # and personas groups run only on dispatch and after merges to dev that change their own files (D-5.3b.h). Each group's results file
 # evals/results/<sha>-<group>.json is uploaded as the artifact eval-results-<sha>-<group>; its baseline is main's
 # artifact for the same group. The promotion gate (ci.yml, job evals-gate) needs every group to pass.
+# Each run's steps (a survey's sections, for example) are saved as they return and uploaded, even when the job
+# fails, as eval-steps-<sha>-<group>; a dispatch with resume_run set to an earlier run's ID reloads that run's
+# finished steps and redoes only the rest.
 # Skips cleanly (green) while the environment's secret is not set.
 on:
   schedule:
@@ -27,6 +30,10 @@ on:
         default: ""
       cases:
         description: "Run only the tier-2 cases whose ID (<skill>/<name>) matches this regular expression; empty runs every case"
+        required: false
+        default: ""
+      resume_run:
+        description: "Resume from this earlier evals run's saved steps (its run ID): finished steps are reused, the rest rerun"
         required: false
         default: ""
 
@@ -73,7 +80,11 @@ jobs:
         group: ${{ fromJSON(needs.groups.outputs.groups) }}
     runs-on: ubuntu-latest
     environment: ai-gateway
-    timeout-minutes: 90 # nine tier-2 cases of five runs each took about 30 minutes (WP5.4); grill conversations add about 30 (WP5.3b)
+    # nine tier-2 cases of five runs each took about 30 minutes (WP5.4); grill conversations add about 30 (WP5.3b). The ux
+    # group's prototype runs take about 5 minutes each, and its first full run was cancelled at 90 with no results (D-6.5h).
+    # A survey run written in sections takes about 35 minutes (run 39106751006 finished two runs and three sections of
+    # tinyjs-rust in 90, then timed out), so a case of five runs needs about three hours; its steps save as they finish.
+    timeout-minutes: ${{ matrix.group == 'ux' && 180 || matrix.group == 'survey' && 240 || 90 }}
     env:
       AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
       AAYU_MODELS__GATEWAY__SECRET: ai-gateway
@@ -109,19 +120,20 @@ jobs:
             echo "::notice::Dispatched for group $ONLY; $GROUP does not run."
             run=false
           fi
-          # The brief register cases cost about 6-7 USD a run: nightly, dispatch, and promotion run them, pushes to dev
-          # do not (D-7.3c).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ]; }; then
+          # The brief register cases cost about 3 USD a run at list price: nightly, dispatch, and promotion run them, pushes
+          # to dev do not (D-7.3c). The tell cases (about 1.50 USD) and the host-skills cases (about 6 USD) run on dispatch
+          # and promotion only (events in eval.toml, D-7.5e and D-3.4x), and so do the retro cases (about 1.90 USD, D-5.1y).
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ] || [ "$GROUP" = host-skills ] || [ "$GROUP" = retro ]; }; then
             echo "::notice::Push to dev: the $GROUP group runs nightly, on dispatch, and on promotion."
             run=false
           fi
-          # The advisory conversations and personas groups (about 13 and 20 USD a run) never run nightly (events in
+          # The advisory conversations and personas groups (about 18 and 4 USD a run) never run nightly (events in
           # evals/eval.toml) or on promotion: only on dispatch and on pushes to dev that change their own files
           # (D-5.3b.h).
           paths=
           case "$GROUP" in
             conversations) paths='^(skills/grill/|evals/cases/grill/|internal/grill/|internal/evals/conversation\.go$)' ;;
-            personas) paths='^(seats/[^/]+/persona\.toml$|internal/seats/persona\.go$|evals/cases/(retro|decide)/|internal/evals/persona\.go$)' ;;
+            personas) paths='^(seats/[^/]+/persona\.toml$|internal/seats/persona\.go$|evals/cases/decide/|internal/evals/persona\.go$)' ;;
           esac
           if [ "$run" = true ] && [ -n "$paths" ] && [ "$EVENT" = push ]; then
             if [ "$REF" != dev ] || ! git diff --name-only "$BEFORE" "$SHA" | grep -qE "$paths"; then
@@ -136,6 +148,43 @@ jobs:
             fi
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
+      # A survey case may survey a manual fetched at run time and never committed ([survey.docs] in its case.toml,
+      # internal/evals/survey_docs.go; survey/minpack-manual's MINPACK-1 User Guide). pdftotext converts it, and the file
+      # is cached under its pinned SHA-256, so a cache miss is its only download. Without pdftotext, or when the fetch or a
+      # hash fails, the case reports not run (no score, no spend, no failure).
+      - name: Fetched manuals (pdftotext, and the cache key from their pinned SHA-256s)
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'survey'
+        id: docs
+        run: |
+          set -euo pipefail
+          if ! { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils; }; then
+            echo "::warning::poppler-utils did not install; survey cases with a fetched manual will not run."
+          fi
+          shas="$(sed -n 's/^sha256 = "\([0-9a-f]\{64\}\)"$/\1/p' evals/cases/survey/*/case.toml | sort -u | paste -sd- -)"
+          echo "key=eval-docs-${shas:-none}" >> "$GITHUB_OUTPUT"
+          echo "AAYU_EVAL_DOCS=$GITHUB_WORKSPACE/evals/.docs-cache" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'survey'
+        id: docs-cache
+        with:
+          path: evals/.docs-cache
+          key: ${{ steps.docs.outputs.key }}
+      # The ux group's mockup and polish floors render pages in Chromium and run lane B (impeccable, axe, the focus and
+      # 44 px probes), pinned in packages/floors and pnpm-lock.yaml. The group runs on dispatch only (evals/eval.toml).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'ux' && github.event_name == 'workflow_dispatch'
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'ux' && github.event_name == 'workflow_dispatch'
+      - name: Browser floors for the ux group (frozen lockfile, Playwright's Chromium)
+        if: steps.scope.outputs.run == 'true' && matrix.group == 'ux' && github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --filter @aayudha/floors
+          pnpm --filter @aayudha/floors exec playwright install --with-deps chromium
+          echo "AAYU_FLOOR_WEB=1" >> "$GITHUB_ENV"
       - name: Baseline (this group's results for main's commit)
         if: steps.scope.outputs.run == 'true'
         id: baseline
@@ -155,6 +204,24 @@ jobs:
             fi
           done
           echo "::notice::No tier-2 results for main ($main_sha, group $GROUP) yet; only the absolute bar applies."
+      - name: Saved steps to resume (dispatch input resume_run)
+        if: steps.scope.outputs.run == 'true' && inputs.resume_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESUME: ${{ inputs.resume_run }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RESUME" =~ ^[0-9]+$ ]]; then
+            echo "::error::resume_run is a run ID (digits only), not '$RESUME'."
+            exit 1
+          fi
+          sha="$(gh run view "$RESUME" --json headSha --jq .headSha)"
+          if gh run download "$RESUME" --name "eval-steps-$sha-$GROUP" --dir "evals/results/steps/$GROUP"; then
+            echo "Resuming $GROUP from the steps run $RESUME saved."
+          else
+            echo "::notice::Run $RESUME saved no steps for $GROUP; every step runs."
+          fi
       - name: Tier 2 (skips while the secret is absent)
         if: steps.scope.outputs.run == 'true'
         env:
@@ -170,7 +237,13 @@ jobs:
             echo "::notice::The ai-gateway environment has no secret or URL; skipping tier 2."
             exit 0
           fi
-          go run ./internal/evals/cmd/eval -tier 2 -group "$GROUP" -sha "$SHA" -ref "$REF" -out "evals/results/$SHA-$GROUP.json" -baseline "$BASELINE" -cases "$CASES"
+          go run ./internal/evals/cmd/eval -tier 2 -group "$GROUP" -sha "$SHA" -ref "$REF" -out "evals/results/$SHA-$GROUP.json" -baseline "$BASELINE" -cases "$CASES" -steps "evals/results/steps/$GROUP"
+      # Saved even when the group fails, so the next run does not download the manual again.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.docs-cache.outcome == 'success' && steps.docs-cache.outputs.cache-hit != 'true' && hashFiles('evals/.docs-cache/*') != ''
+        with:
+          path: evals/.docs-cache
+          key: ${{ steps.docs.outputs.key }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -178,3 +251,11 @@ jobs:
           path: evals/results/${{ github.sha }}-${{ matrix.group }}.json
           if-no-files-found: ignore
           retention-days: 90
+      # Every step saved so far, even when a call or the job failed, so a dispatch with resume_run can pick up from it.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eval-steps-${{ github.sha }}-${{ matrix.group }}
+          path: evals/results/steps/${{ matrix.group }}
+          if-no-files-found: ignore
+          retention-days: 30

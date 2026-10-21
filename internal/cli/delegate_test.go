@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -232,7 +233,13 @@ func TestDelegateCycleCapPages(t *testing.T) {
 	st := inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Head: strings.Repeat("0", 40), Disposition: inspect.Fix}}
 	j, _ := json.Marshal(st)
 	g.Mu.Lock()
-	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"})
+	gate := &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
+	// Bug #601: a later marker from anyone else (a merge, no cycles) is not the state; the cap holds.
+	fj, _ := json.Marshal(inspect.State{Result: &inspect.Result{Head: strings.Repeat("e", 40), Disposition: inspect.Merge}})
+	forged := &fake.Comment{ID: 100, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(fj) + " -->"}
+	forged.User.Login, forged.User.Type = "mallory", "User"
+	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate, forged)
 	g.Mu.Unlock()
 	n := len(cur.reqs)
 	code, res, errOut := delegateRun(t, env, opts, set...)
@@ -240,6 +247,36 @@ func TestDelegateCycleCapPages(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(errOut, "2-cycle cap") || len(sink.Pages) != 1 || res.Delegation.Status != dlgCapped ||
 		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
 		t.Fatalf("cap: %d %+v %s, pages %d", code, res, errOut, len(sink.Pages))
+	}
+
+	// The review stopped at its round cap on the head (Story #568): the
+	// stored result is this head's step-back, and sync stops the same way,
+	// without sending the receiver a fix prompt.
+	g, env, opts, _, _ = delegateFixture(t)
+	cur = &fakeCursor{}
+	srv2 := httptest.NewServer(cur)
+	defer srv2.Close()
+	env["AAYU_SECRET_CURSOR_API_KEY"] = "k"
+	set = []string{"--delegate", "cursor", "--set", "delegate.cursor_api=" + srv2.URL}
+	if code, _, errOut := delegateRun(t, env, opts, set...); code != 0 {
+		t.Fatal(errOut)
+	}
+	head := strings.Repeat("e", 40)
+	pr = g.AddPR("feat: show empty list", "Refs #2", "founder", "cursor/x", head, "dev")
+	cur.finished = pr.Number
+	sb := inspect.StepBackResult(pr.Number, head, inspect.State{})
+	j, _ = json.Marshal(inspect.State{Stopped: head, Result: &sb})
+	g.Mu.Lock()
+	gate = &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
+	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate)
+	g.Mu.Unlock()
+	n = len(cur.reqs)
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	sink = opts.NotifySink.(*notify.Fake)
+	if code != ExitBlocked || !strings.Contains(errOut, "review stopped after 3 rounds") || len(sink.Pages) != 1 || res.Delegation.Status != dlgCapped ||
+		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
+		t.Fatalf("step-back: %d %+v %s, pages %d", code, res, errOut, len(sink.Pages))
 	}
 }
 
@@ -361,7 +398,21 @@ func TestDelegateLocalFallback(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(errOut, "Codex's cloud agent is not connected") || !strings.Contains(errOut, "add `--local`") {
 		t.Fatalf("no silent fallback to the CLI: %d %s", code, errOut)
 	}
+	// From an Amp thread, a delegated checkpoint names its receiver, never the
+	// thread's own model: aayu does not ask Amp which model the thread ran.
+	env["AMP_THREAD_ID"] = "T-1"
+	probe := opts.Exec
+	var asked []string
+	opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+		if name == "amp" {
+			asked = append(asked, strings.Join(args, " "))
+		}
+		return probe(ctx, dir, name, args...)
+	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if len(asked) > 0 {
+		t.Errorf("a delegated build asked Amp for the thread's model: %q", asked)
+	}
 	wt := delegate.Worktree(dir, 2, "codex", 2)
 	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" {
 		t.Fatalf("local: %d %+v %s", code, res, errOut)
@@ -382,8 +433,8 @@ func TestDelegateLocalFallback(t *testing.T) {
 	g.Mu.Lock()
 	p := g.Pulls[res.PR]
 	g.Mu.Unlock()
-	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "Built by codex (local") ||
-		!strings.Contains(p.Body, "## What I proved") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
+	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "codex (local, `aayu build --delegate`) built this") ||
+		!strings.Contains(p.Body, "codex's own check, quoted") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
 		t.Fatalf("commit:\n%s\nPR body:\n%s\nproved: %q", msg, p.Body, res.Delegation.Proved)
 	}
 	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list-2"); pushed != git(t, wt, "rev-parse", "HEAD") {
@@ -530,5 +581,149 @@ func TestDelegateCodexDiffReturn(t *testing.T) {
 	// The commit, not the working copy: with core.autocrlf (Git for Windows) git apply writes CRLF to the worktree.
 	if b := git(t, wt, "show", "HEAD:empty.txt"); b != "Your cart is empty" {
 		t.Fatalf("diff not applied: %q", b)
+	}
+}
+
+// A local receiver that hits its subscription usage limit pauses the build
+// until the window resets, then runs again and the build goes on (founder
+// decision, 2026-10-17). The pause is no failed attempt. A reset after the
+// wall-time budget ends cannot be waited out: the build stops as paused, not
+// failed, again with no attempt counted.
+func TestDelegateLocalUsageLimitPause(t *testing.T) {
+	g, env, opts, _, bare := delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) {
+		if name == "codex" {
+			return "/usr/local/bin/codex", nil
+		}
+		return "", os.ErrNotExist
+	}
+	start := opts.Now()
+	now := start
+	opts.Now = func() time.Time { return now }
+	var slept []time.Duration
+	opts.Sleep = func(_ context.Context, d time.Duration) error {
+		slept = append(slept, d)
+		now = now.Add(d)
+		return nil
+	}
+	// Codex prints the reset in the machine's local time, with the date when it is not today.
+	limit := func(at time.Time) string {
+		at = at.In(time.Local)
+		return "ERROR: You’ve hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at " +
+			at.Format("Jan 2") + "th" + at.Format(", 2006 3:04 PM") + "."
+	}
+	// Five hours outlasts the four-hour story lease, so the wait renews it.
+	resets := now.Add(5 * time.Hour).Truncate(time.Minute)
+	runs := 0
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
+		runs++
+		if runs == 1 {
+			return limit(resets), errors.New("codex: exit status 1")
+		}
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	g.Reset()
+	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if code != 0 || res.PR == 0 || runs != 2 || total != resets.Sub(start)+time.Minute || res.Budget.Attempts != 0 || res.Budget.WallHours < total.Hours() {
+		t.Fatalf("pause and resume: %d %+v runs %d slept %v %s", code, res.Budget, runs, slept, errOut)
+	}
+	var leasedUntil time.Time
+	for _, r := range g.Writes() {
+		body, _ := r.Body["body"].(string)
+		if m := regexp.MustCompile(`aayudha:lease holder=\S+ expires=(\S+) -->`).FindStringSubmatch(body); m != nil {
+			if t, err := time.Parse(time.RFC3339, m[1]); err == nil && t.After(leasedUntil) {
+				leasedUntil = t
+			}
+		}
+	}
+	if leasedUntil.Before(resets) || res.Lease.Expires.Before(resets) {
+		t.Fatalf("the lease ran out at %s, before the limit reset at %s", leasedUntil, resets)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 {
+		t.Fatalf("build state after the pause: %v %+v", err, st)
+	}
+	var ds delegate.State
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &ds)
+	paused := false
+	for _, ev := range ds.Events {
+		paused = paused || (ev.Status == dlgPaused && strings.Contains(ev.Detail, "Codex's subscription usage limit; resumes at "+resets.UTC().Format(time.RFC3339)))
+	}
+	if !paused {
+		t.Fatalf("no pause event: %+v", ds.Events)
+	}
+
+	// A reset already a few minutes past still waits a minute before the rerun.
+	_, env, opts, _, _ = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	now = opts.Now()
+	opts.Now = func() time.Time { return now }
+	slept = nil
+	opts.Sleep = func(_ context.Context, d time.Duration) error { slept = append(slept, d); now = now.Add(d); return nil }
+	runs = 0
+	past := now.Add(-2 * time.Minute)
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
+		runs++
+		if runs == 1 {
+			return limit(past), errors.New("codex: exit status 1")
+		}
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	if code, _, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local"); code != 0 || runs != 2 || len(slept) != 1 || slept[0] != time.Minute {
+		t.Fatalf("reset already past: %d runs %d slept %v %s", code, runs, slept, errOut)
+	}
+
+	// A receiver still running when the wall-time budget ends is stopped, and
+	// the story is blocked for the budget, not left in progress.
+	g, env, opts, _, _ = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	now = opts.Now()
+	opts.Now = func() time.Time { return now }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		now = now.Add(8 * time.Hour)
+		return "", context.DeadlineExceeded
+	}
+	code, _, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if code != ExitBlocked || !strings.Contains(errOut, "wall-time budget breached: Codex was still running when the 8 h budget ended") || !slices.Contains(g.LabelNames(2), "status:blocked") {
+		t.Fatalf("receiver at the wall deadline: %d %s %v", code, errOut, g.LabelNames(2))
+	}
+
+	// A reset two days out is after the 8-hour wall budget, and one less than a
+	// minute before it leaves no time to run again: the budget ends during the
+	// wait, so the story is blocked for wall time with no attempt counted, and
+	// ready gives it a fresh budget.
+	for _, after := range []time.Duration{48 * time.Hour, 8*time.Hour - 30*time.Second} {
+		g, env, opts, _, bare = delegateFixture(t)
+		opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+		opts.Sleep = func(context.Context, time.Duration) error { t.Fatal("waited past the wall budget"); return nil }
+		opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+			return limit(opts.Now().Add(after)), errors.New("codex: exit status 1")
+		}
+		code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+		if code != ExitBlocked || !strings.Contains(errOut, "wall-time budget: Codex's subscription usage limit resets at") || res.Budget.Attempts != 0 || !slices.Contains(g.LabelNames(2), "status:blocked") {
+			t.Fatalf("reset %s out: %d %+v %s", after, code, res, errOut)
+		}
+		st = BuildState{}
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || !strings.HasPrefix(st.Blocked, "wall-time budget: ") {
+			t.Fatalf("build state after a reset past the wall budget: %v %+v", err, st)
+		}
+	}
+
+	// With no reset time printed, the build pauses without blocking the story.
+	g, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		return "ERROR: You’ve hit your usage limit. Try again later.", errors.New("codex: exit status 1")
+	}
+	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	st = BuildState{}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st)
+	if code != ExitBlocked || !strings.Contains(errOut, "paused") || res.Delegation.Status != dlgPaused || st.Attempts != 0 || st.Blocked != "" ||
+		slices.Contains(g.LabelNames(2), "status:blocked") || !strings.Contains(res.Next, "again once the limit resets") {
+		t.Fatalf("no reset time: %d %+v %+v %s", code, res, st, errOut)
 	}
 }

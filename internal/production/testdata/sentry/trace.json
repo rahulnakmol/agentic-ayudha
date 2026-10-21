@@ -1,0 +1,95 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation getOrganizationTrace: the body is the spec's example with its timestamps moved into the test's window, one error title, and one child database span added. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/trace/da6caabcd90e45fdb81f6655824a5f88/?end=2026-10-17T09%3A00%3A00Z&start=2026-10-17T08%3A00%3A00Z",
+      "status": 200,
+      "response": [
+        {
+          "event_id": "0123456789abcdef0123456789abcdef",
+          "event_type": "span",
+          "transaction_id": "280027d94f30428c83a2de46f932612a",
+          "project_id": 4507,
+          "project_slug": "web",
+          "transaction": "POST /api/0/projects/{org}/{proj}/events/{event_id}/attachments/",
+          "description": "POST /api/0/projects/{org}/{proj}/events/{event_id}/attachments/",
+          "op": "http.server",
+          "name": "http.server",
+          "parent_span_id": null,
+          "profile_id": "",
+          "profiler_id": "",
+          "sdk_name": "sentry.python",
+          "is_transaction": true,
+          "start_timestamp": 1792224300,
+          "end_timestamp": 1792224300.25,
+          "duration": 250,
+          "measurements": {
+            "measurements.frames_slow_rate": 0.02,
+            "measurements.frames_frozen_rate": 0.01
+          },
+          "browser_web_vital": {
+            "browser.web_vital.lcp.value": 2807.335,
+            "browser.web_vital.cls.value": 0.0382,
+            "browser.web_vital.inp.value": 120,
+            "browser.web_vital.ttfb.value": 450,
+            "browser.web_vital.fcp.value": 2258.06
+          },
+          "mobile_app_vital": {
+            "app.vitals.start.cold.value": 1600,
+            "app.vitals.start.warm.value": 400,
+            "app.vitals.ttid.value": 1200,
+            "app.vitals.ttfd.value": 2400
+          },
+          "children": [
+            {
+              "event_id": "0123456789abcdef0123456789abcdef",
+              "event_type": "span",
+              "transaction_id": "280027d94f30428c83a2de46f932612a",
+              "project_id": 4507,
+              "project_slug": "web",
+              "transaction": "POST /api/0/projects/{org}/{proj}/events/{event_id}/attachments/",
+              "description": "SELECT * FROM carts WHERE id = %s",
+              "op": "db",
+              "name": "http.server",
+              "parent_span_id": null,
+              "profile_id": "",
+              "profiler_id": "",
+              "sdk_name": "sentry.python",
+              "is_transaction": false,
+              "start_timestamp": 1792224300.05,
+              "end_timestamp": 1792224300.25,
+              "duration": 180,
+              "measurements": {
+                "measurements.frames_slow_rate": 0.02,
+                "measurements.frames_frozen_rate": 0.01
+              },
+              "browser_web_vital": {
+                "browser.web_vital.lcp.value": 2807.335,
+                "browser.web_vital.cls.value": 0.0382,
+                "browser.web_vital.inp.value": 120,
+                "browser.web_vital.ttfb.value": 450,
+                "browser.web_vital.fcp.value": 2258.06
+              },
+              "mobile_app_vital": {
+                "app.vitals.start.cold.value": 1600,
+                "app.vitals.start.warm.value": 400,
+                "app.vitals.ttid.value": 1200,
+                "app.vitals.ttfd.value": 2400
+              },
+              "children": [],
+              "errors": [],
+              "occurrences": []
+            }
+          ],
+          "errors": [
+            {
+              "title": "ZeroDivisionError: division by zero"
+            }
+          ],
+          "occurrences": []
+        }
+      ]
+    }
+  ]
+}

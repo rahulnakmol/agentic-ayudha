@@ -21,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("next", runNext) }
@@ -57,7 +58,7 @@ func runNext(ctx context.Context, e *Env, _ Values) error {
 // fail the home screen: it says so and shows the local facts.
 func (e *Env) gatherHome(ctx context.Context) Home {
 	s := journey.State{Ready: []journey.Item{}, InProgress: []journey.Item{}, Blocked: []journey.Item{}, AwaitingHuman: []journey.Item{},
-		FailingFloors: []journey.Floor{}, MeasureDue: []journey.Due{}, Hosts: []string{}}
+		FailingFloors: []journey.Floor{}, MeasureDue: []journey.Due{}, Hosts: []string{}, Unclassified: []journey.Item{}, Inbox: []journey.Item{}}
 	s.Host, _ = doctor.DetectHost(e.Host, e.Getenv)
 	root := config.RepoRoot(e.Dir)
 	s.InRepo = root != ""
@@ -126,6 +127,30 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 			return "unreachable (" + shortErr(err) + ")"
 		}
 	}
+	fbs, _, err := c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{"type:feedback"}, ListOptions: gh.ListOptions{PerPage: 100}})
+	if err != nil {
+		return "unreachable (" + shortErr(err) + ")"
+	}
+	for _, i := range fbs {
+		if !i.IsPullRequest() && workitems.FixLayerOf(github.IssueLabels(i)) == "" {
+			s.Unclassified = append(s.Unclassified, journey.Item{Number: i.GetNumber(), Title: i.GetTitle()})
+		}
+	}
+	// The inbox (Story #431) is best effort: the home screen stands without it.
+	var id config.Identity
+	if l, err := e.Config(); err == nil {
+		id = l.Config.Identity
+	}
+	notReady := map[int]bool{} // PRs a Not ready yet card says only their builder can fix
+	if items, err := gatherInbox(ctx, c, repo, e.devBranch(), id); err == nil {
+		for _, it := range items {
+			if it.waiting() { // a Not ready yet card waits on its builder, not a person
+				notReady[it.Number] = true
+				continue
+			}
+			s.Inbox = append(s.Inbox, journey.Item{Number: it.Number, Title: it.Title, Detail: it.Kind})
+		}
+	}
 	prs, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: gh.ListOptions{PerPage: 30}})
 	if err != nil {
 		return "unreachable (" + shortErr(err) + ")"
@@ -134,7 +159,7 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	checked := 0
 	for _, pr := range prs {
 		story := prStory(pr)
-		if pr.GetDraft() || story == 0 || checked == 10 {
+		if pr.GetDraft() || story == 0 || checked == 10 || notReady[pr.GetNumber()] {
 			continue
 		}
 		checked++
@@ -157,11 +182,33 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	return journey.GitHubOK
 }
 
+// gateCheckRuns drops, from a head's check runs (newest first), those of the
+// merge gate's reply runs (#690, #643). A comment or review on the PR runs the
+// workflow with only aayudha/inspect-reply, and its skipped merge-gate,
+// inspect, and pack checks must not hide the gate's own: a check suite is a
+// reply run when its aayudha/inspect-reply check was not skipped, which the
+// gate's pull_request_target run always skips.
+func gateCheckRuns(runs []*gh.CheckRun) []*gh.CheckRun {
+	reply := map[int64]bool{}
+	for _, r := range runs {
+		if r.GetName() == "aayudha/inspect-reply" && r.GetConclusion() != "skipped" {
+			reply[r.GetCheckSuite().GetID()] = true
+		}
+	}
+	var kept []*gh.CheckRun
+	for _, r := range runs {
+		if !reply[r.GetCheckSuite().GetID()] {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
 // gateState is the merge gate as ship reads it (gateChecks, the newest run of
-// each name first): passed when every gate check succeeded, failed when one
-// finished otherwise, else pending.
+// each name first, reply runs dropped): passed when every gate check succeeded,
+// failed when one finished otherwise, else pending.
 func gateState(runs []*gh.CheckRun) string {
-	state := "passed"
+	state, runs := "passed", gateCheckRuns(runs)
 	for _, want := range gateChecks {
 		concl := "pending"
 		for _, r := range runs {

@@ -13,7 +13,7 @@ diagram, real excerpts from this repository, a list of invariants, and links int
 | Page | What you will learn |
 |---|---|
 | [Architecture](how-architecture.md) | One static binary, four hosts, four surfaces per verb, which steps your agent's model reasons in versus the binary's own model calls, and the vagueness gate |
-| [The verb registry and code generation](how-registry.md) | How 32 verbs are declared once, what `go generate` builds from them, and how CI catches drift |
+| [The verb registry and code generation](how-registry.md) | How 34 verbs are declared once, what `go generate` builds from them, and how CI catches drift |
 
 ## Who may do what
 
@@ -29,6 +29,7 @@ diagram, real excerpts from this repository, a list of invariants, and links int
 |---|---|
 | [Proof packs](how-proof-packs.md) | The `pack.json` format, how promises map to evidence, and advisory versus authoritative packs |
 | [The merge gate](how-merge-gate.md) | Why the gate runs from the base branch, the sandbox `verify` runs in, and inspect's structured verdict and fix cycle |
+| [Code review in the gate](how-review.md) | The default review: the code-review environment's model, how to set it up, and review apps as an option |
 | [Floors in detail](how-floors.md) | Every floor, its tool and pinned version, its threshold, when it is skipped, and how waivers work |
 | [Verify skills, feature maps, and behaviour checks](how-verify-maps.md) | The feature map format, the drift check, how behaviour checks run with no model, the maintain hand-off, and red-on-base proof for Bugs |
 

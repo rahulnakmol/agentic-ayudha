@@ -31,6 +31,12 @@
         "mcp",
         "--skills",
         "0.0.0"
+      ],
+      "env_vars": [
+        "AAYU_GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GH_CONFIG_DIR",
+        "XDG_CONFIG_HOME"
       ]
     }
   }

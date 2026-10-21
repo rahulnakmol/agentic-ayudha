@@ -1,0 +1,64 @@
+[
+  {
+    "turn": {
+      "say": "I'll run the full preview of the floors on this branch, and read the story's criteria and its evidence map, without changing anything.",
+      "commands": [
+        "aayu verify",
+        "aayu ready 23 --check --json",
+        "cat .aayudha/evidence/23.toml"
+      ],
+      "done": false
+    },
+    "results": [
+      {
+        "command": "aayu verify",
+        "code": 3,
+        "out": "verify 65820cc..b41d9e2 (story #23; footprint L02 L07)\n  coverage       pass     value 91.7     threshold 90     go-coverprofile go1.25.3\n  sast           pass     value 0        threshold 0      semgrep 1.139.0\n  secrets        pass     value 0        threshold 0      gitleaks 8.28.0\n  deps           pass     value 0        threshold 0      osv-scanner 2.2.3\n  feature-map    pass     value 2        threshold 0      aayu 0.2.0\n                 drift (warning until 2026-11-13): unmapped command \"undone\" (cmd/notes/main.go); unmapped func \"MarkUndone\" (store/store.go)\n  behaviour      fail     value 1        threshold 0      control go1.25.3\n                 mark-done.missing failed: step 3 `notes done 5` exit 1: stderr \"notes: no such note: 5\" does not contain \"no such note: 5 (there are 1)\"; mark-done.done passed\n  evidence: criterion 3 has no test or behaviour check in .aayudha/evidence/23.toml\nno pack: #23 has no Ready snapshot for this head on this machine; the merge gate writes the pack for the PR head\nartifacts kept in .aayudha/state/verify/ (a preview)\naayu: floor miss: behaviour fail\n  next: aayu verify"
+      },
+      {
+        "command": "aayu ready 23 --check --json",
+        "code": 0,
+        "out": "{\n  \"repo\": \"o/r\",\n  \"issue\": 23,\n  \"title\": \"Undo a done note\",\n  \"type\": \"story\",\n  \"pass\": true,\n  \"problems\": [],\n  \"body_hash\": \"a5ff94065d7bb35ff9f3e167feace5039277670fb9e1b3c516bd218d2dfde0ca\",\n  \"completion_goal_hash\": \"af583906d97d6d15454d62cb9746c6cd62b91073151cdcd7899998b99ed44d35\",\n  \"criteria\": [\n    {\n      \"n\": 1,\n      \"evidence_kind\": \"api-trace\",\n      \"state\": \"two notes, then `notes done 1`\",\n      \"expected\": \"exit 0, stdout \\\"done 1: buy milk\\\", and `notes list` shows \\\"1 [x] buy milk\\\"\"\n    },\n    {\n      \"n\": 2,\n      \"evidence_kind\": \"api-trace\",\n      \"state\": \"one note, then `notes done 5`\",\n      \"expected\": \"exit 1, stderr \\\"no such note: 5 (there are 1)\\\", and the list unchanged\"\n    },\n    {\n      \"n\": 3,\n      \"evidence_kind\": \"api-trace\",\n      \"state\": \"note 1 marked done, then `notes undone 1`\",\n      \"expected\": \"exit 0, stdout \\\"undone 1: buy milk\\\", and `notes list` shows \\\"1 [ ] buy milk\\\"\"\n    }\n  ],\n  \"measure\": \"Completion Goal criteria observed\",\n  \"threshold\": \"3 of 3\",\n  \"scenario\": \"Add two notes, mark the first done, undo it, and try a number that does not exist.\",\n  \"environment\": \"the CLI built from the checkout, in a fresh directory\",\n  \"technical_owner\": \"the Code Architect twin\"\n}\n"
+      },
+      {
+        "command": "cat .aayudha/evidence/23.toml",
+        "code": 0,
+        "out": "# Story #23: the Completion Goal criteria and the behaviour checks that prove them.\n[[criterion]]\nid = 1\nchecks = [\"mark-done.done\"]\n\n[[criterion]]\nid = 2\nchecks = [\"mark-done.missing\"]\n"
+      }
+    ]
+  },
+  {
+    "turn": {
+      "say": "The behaviour floor fails on mark-done.missing and criterion 3 has no evidence. I'll check the map for anything that reaches `undone`, and read the check that fails.",
+      "commands": [
+        "aayu verify --map",
+        "cat .agents/skills/verify-notes/features/mark-done.md",
+        "cat store/store.go"
+      ],
+      "done": false
+    },
+    "results": [
+      {
+        "command": "aayu verify --map",
+        "code": 3,
+        "out": "feature maps at ec44a08: drift .agents/skills/verify-notes (3 features, 6 checks)\n  .agents/skills/verify-notes: unmapped command \"undone\" (cmd/notes/main.go)\n  .agents/skills/verify-notes: unmapped func \"MarkUndone\" (store/store.go)\n  .agents/skills/verify-notes: feature add-and-list: stale, to re-check: cmd/notes/main.go, store/store.go\n  .agents/skills/verify-notes: feature mark-done: stale, to re-check: cmd/notes/main.go, store/store.go\n  .agents/skills/verify-notes: feature store: stale, to re-check: store/store.go\naayu: feature map drift: fix the map in its skill directory, or let the maintain pass do it\n  next: aayu verify\n"
+      },
+      {
+        "command": "cat .agents/skills/verify-notes/features/mark-done.md",
+        "code": 0,
+        "out": "# Mark done\n\nA person marks a note done by the number `list` shows; `list` then shows it with an `x`. A number that is not on the\nlist fails with exit 1 and leaves the file as it was.\n\n```feature\n{\"id\": \"mark-done\", \"layers\": [\"L02\"],\n \"sources\": [\"cmd/notes/main.go\", \"store/store.go\"],\n \"surfaces\": {\"command\": [\"done\"]},\n \"verified_at\": \"8aa760fa78e66ea265474055e56d362f9c5d20ab\"}\n```\n\n## Sub-features\n\n- `done`: a note marked done is listed with `[x]`.\n- `missing`: an unknown number exits 1 with \"no such note\".\n\n## How to reach it\n\n- `notes done \u003cn\u003e`, with `n` from `notes list`.\n\n## Behaviour checks\n\n```check\n{\"id\": \"done\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [\n  {\"build\": \"./cmd/notes\"},\n  {\"run\": [\"notes\", \"add\", \"buy milk\"], \"exit\": 0},\n  {\"run\": [\"notes\", \"add\", \"call Ada\"], \"exit\": 0},\n  {\"run\": [\"notes\", \"done\", \"1\"], \"exit\": 0, \"stdout\": [\"done 1: buy milk\"]},\n  {\"run\": [\"notes\", \"list\"], \"exit\": 0, \"stdout\": [\"1 [x] buy milk\", \"2 [ ] call Ada\"]}\n]}\n```\n\n```check\n{\"id\": \"missing\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [\n  {\"build\": \"./cmd/notes\"},\n  {\"run\": [\"notes\", \"add\", \"buy milk\"], \"exit\": 0},\n  {\"run\": [\"notes\", \"done\", \"5\"], \"exit\": 1, \"stderr\": [\"no such note: 5 (there are 1)\"]},\n  {\"run\": [\"notes\", \"list\"], \"exit\": 0, \"stdout\": [\"1 [ ] buy milk\"]}\n]}\n```\n\n## Gotchas\n\n- Numbers count from 1, as `list` shows them.\n"
+      },
+      {
+        "command": "cat store/store.go",
+        "code": 0,
+        "out": "// Package store keeps the notes of the notes CLI:\n// a plain-text file, one note per line, \"[ ] text\" or \"[x] text\".\npackage store\n\nimport (\n\t\"bufio\"\n\t\"errors\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\n// Note is one note.\ntype Note struct {\n\tText string\n\tDone bool\n}\n\n// ErrNoNote is returned for a note number that does not exist.\nvar ErrNoNote = errors.New(\"no such note\")\n\n// Load reads the notes in path; a missing file has none.\nfunc Load(path string) ([]Note, error) {\n\tf, err := os.Open(path)\n\tif os.IsNotExist(err) {\n\t\treturn nil, nil\n\t}\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer func() { _ = f.Close() }()\n\tvar out []Note\n\tsc := bufio.NewScanner(f)\n\tfor sc.Scan() {\n\t\tline := sc.Text()\n\t\tswitch {\n\t\tcase strings.HasPrefix(line, \"[ ] \"):\n\t\t\tout = append(out, Note{Text: line[4:]})\n\t\tcase strings.HasPrefix(line, \"[x] \"):\n\t\t\tout = append(out, Note{Text: line[4:], Done: true})\n\t\tcase line != \"\":\n\t\t\treturn nil, fmt.Errorf(\"%s: not a note: %q\", path, line)\n\t\t}\n\t}\n\treturn out, sc.Err()\n}\n\n// Save writes the notes to path.\nfunc Save(path string, notes []Note) error {\n\tvar b strings.Builder\n\tfor _, n := range notes {\n\t\tmark := \"[ ] \"\n\t\tif n.Done {\n\t\t\tmark = \"[x] \"\n\t\t}\n\t\tb.WriteString(mark + n.Text + \"\\n\")\n\t}\n\treturn os.WriteFile(path, []byte(b.String()), 0o644)\n}\n\n// MarkDone marks note n (counted from 1) done.\nfunc MarkDone(notes []Note, n int) error { return mark(notes, n, true) }\n\n// MarkUndone marks note n (counted from 1) not done.\nfunc MarkUndone(notes []Note, n int) error { return mark(notes, n, false) }\n\nfunc mark(notes []Note, n int, done bool) error {\n\tif n \u003c 1 || n \u003e len(notes) {\n\t\treturn fmt.Errorf(\"%w: %d\", ErrNoNote, n)\n\t}\n\tnotes[n-1].Done = done\n\treturn nil\n}\n"
+      }
+    ]
+  },
+  {
+    "turn": {
+      "say": "## Where #23 stands: a preview, not proof\n\nThis is a run on your checkout, so it previews what the merge gate will find; only the pack the merge gate writes for the PR head is proof. I changed nothing.\n\n**Not done yet: hold the PR.** One criterion fails and one cannot be reached by any check.\n\n| # | Criterion | Verdict | Evidence |\n|---|---|---|---|\n| 1 | `notes done 1` prints \"done 1: buy milk\", list shows `1 [x]` | met in this preview | check `mark-done.done` passed |\n| 2 | `notes done 5` exits 1 with \"no such note: 5 (there are 1)\" | **unmet** | check `mark-done.missing` failed: the CLI now prints \"notes: no such note: 5\" |\n| 3 | `notes undone 1` prints \"undone 1: buy milk\", list shows `1 [ ]` | **unreachable** | no check in the map drives `undone`, and `.aayudha/evidence/23.toml` maps nothing to criterion 3 |\n\n**Floors** (thresholds from `CONSTRAINTS.md`):\n\n- coverage pass: 91.7 % of changed lines against `verify.floors.coverage.min_diff_percent` 90.\n- sast, secrets, deps pass: 0 findings against 0 allowed.\n- behaviour **fail**: 1 failing check against 0 allowed (`mark-done.missing`).\n- feature-map: drift, a warning until 2026-11-13 (`[verify] drift_blocking_from`): `aayu verify --map` reports unmapped command `undone` (cmd/notes/main.go) and unmapped func `MarkUndone` (store/store.go).\n\n**Why criterion 2 fails.** This branch's `mark` in store/store.go returns `fmt.Errorf(\"%w: %d\", ErrNoNote, n)`; the count \"(there are N)\" is gone. Criterion 2 and the check both still expect it, so the change is the regression, not the check.\n\n**What would make it done** (your call; I have not changed anything):\n\n1. Put the count back in the error in store/store.go (`\"%w: %d (there are %d)\"`), so `mark-done.missing` passes again.\n2. Give `undone` a behaviour check: in `.agents/skills/verify-notes/features/mark-done.md`, add `undone` to the command surfaces and a `cli` check like `done` (add, done 1, undone 1, list shows `1 [ ] buy milk`); add `MarkUndone` to the func surfaces in `store.md`.\n3. Map criterion 3 to that check in `.aayudha/evidence/23.toml`, then run `aayu verify` again; when it is clean, open the PR and the merge gate writes the proof.",
+      "done": true
+    }
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "flag": "delivery-window-choice",
+  "figma_file": "D3liv3ryWin",
+  "code_connect": ["src/delivery/WindowOption.figma.tsx", "src/delivery/DeliveryWindowForm.figma.tsx"],
+  "components": ["3:50", "41:3", "3:2", "3:44", "3:46"],
+  "states": [
+    {"id": "default", "title": "Choose a delivery window", "path": "/preferences", "figma_node": "20:1"},
+    {"id": "slot-full", "title": "The chosen window filled up", "path": "/preferences?seed=slot-full", "figma_node": "20:7"},
+    {"id": "saved", "title": "Delivery window saved", "path": "/preferences?seed=saved", "figma_node": "20:12"}
+  ]
+}

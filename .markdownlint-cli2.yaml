@@ -9,3 +9,5 @@ globs:
   - "**/*.md"
 ignores:
   - "**/node_modules/**"
+  - "evals/cases/survey/repos/**" # third-party codebases kept as they are for the survey evals (WP5.9)
+  - "evals/cases/{investigate,slo,runbook,respond}/*/grounding.md" # the verbs' printed groundings, kept as they print (D-5.10d)

@@ -33,7 +33,7 @@ The real layout today, from `git ls-tree -r --name-only origin/ledger`, grouped:
 | `specs/<n>/plan.json` | The story's plan: footprint, checkpoints, plan-time review or bypass | `aayu plan` |
 | `proof/<story>/<sha>/<authority>/pack.json` | A proof pack for one head commit; `<authority>` is `authoritative` (the merge gate's, landed by `aayu ship`) or `advisory` | `aayu ship`, or `aayu proof push` |
 | `proof/<story>/<sha>/<authority>/artifacts/…` | Evidence, coverage, and floor reports the pack hashes (text; never media) | same as the pack |
-| `proof/<story>/<sha>/authoritative/ship.json` | The ship record: merge commit, human pass, streak | `aayu ship` |
+| `proof/<story>/<sha>/authoritative/ship.json` | The ship record: merge commit, human pass, streak, and the [review rung](how-merge-gate.md) (A, B, C, or a person's review) | `aayu ship` |
 | `build/<n>/state.json` | Where `aayu build` is in a story | `aayu build` |
 | `actions/<date>/<host>-<run>.jsonl` | Actions segments: the hash-chained write log | every verb that writes |
 | `audit/<date>/` | Audit reports and their GitHub input snapshots | `aayu audit` |
@@ -119,7 +119,7 @@ A Ready snapshot, from `git show origin/ledger:specs/131/ready.md`, trimmed:
 | Written by | rahulnakmol (`identity:human-fallback`) |
 | Ledger | `specs/131/ready.md` |
 …
-Editing the body after Ready removes `status:ready` (Ready guard); run `aayu ready` again to re-snapshot.
+An edit to the body after Ready removes `status:ready` (the Ready guard). Run `aayu ready` again to make a new snapshot.
 ```
 
 A release record, from `git show origin/ledger:releases/144/rolling.json`, trimmed:

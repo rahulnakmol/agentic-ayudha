@@ -62,10 +62,12 @@ Claims that point at evidence travel further than claims that ask for trust.
 
 | Verb | What it does |
 |---|---|
-| [`status`](../../skills/status/SKILL.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
-| [`audit`](../../skills/audit/SKILL.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
-| [`brief`](../../skills/brief/SKILL.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
-| [`tell`](../../skills/tell/SKILL.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
+| [`counsel`](skills/counsel.md) | Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides. |
+| [`brain`](skills/brain.md) | Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person. |
+| [`status`](skills/status.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
+| [`audit`](skills/audit.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
+| [`brief`](skills/brief.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
+| [`tell`](skills/tell.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 
 <!-- END GENERATED: stage-verbs -->
 

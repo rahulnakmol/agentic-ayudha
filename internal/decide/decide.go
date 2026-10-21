@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,8 +35,10 @@ const FloorsLayer = "L04"
 
 // Waivable lists the floors a waiver Decision may name (WP4.3–WP4.9). The
 // PII redaction floor is not waivable: a capture holding personal data never
-// lands (V3), whoever accepts.
-var Waivable = []string{"coverage", "sast", "secrets", "deps", "a11y", "keyboard", "reduced-motion", "text-scale", "targets", "perf", "dast", "api", "screen-reader", "mobile"}
+// lands (V3), whoever accepts. eval-bar is this repository's skill-eval bars
+// (evals.CheckBars, Story #400): a change that lowers one names an accepted
+// eval-bar waiver.
+var Waivable = []string{"coverage", "sast", "secrets", "deps", "a11y", "keyboard", "reduced-motion", "text-scale", "targets", "perf", "dast", "api", "screen-reader", "mobile", "error-budget", "eval-bar"}
 
 // Decision is an open or closed Decision issue as decide sees it.
 type Decision struct {
@@ -59,23 +62,82 @@ func (d Decision) Reversible() bool {
 	return !d.Waiver() && strings.EqualFold(strings.TrimSpace(d.Item.Fields[workitems.FieldReversible]), "true")
 }
 
+var (
+	waiverRE    = regexp.MustCompile(`(?i)\bwaiv`)
+	seatRE      = regexp.MustCompile(`(?i)\bseats?\b` + seatNames())
+	humanOnlyRE = regexp.MustCompile(`(?i)\bapprov\w*\b.{0,40}\b(pr|prs|pull requests?)\b|\bpublish|\baayu init\b|\bratchet|\bfloors?\b|` +
+		`\.github/|\bskills/|\bops/|constraints\.md|codeowners|\.aayudha/config\.toml|\[(autonomy|models|decisions)[].]`)
+)
+
+func seatNames() string {
+	var b strings.Builder
+	for _, s := range verbs.Seats {
+		fmt.Fprintf(&b, `|\b%s\b|\b%s\b`, regexp.QuoteMeta(string(s.ID)), regexp.QuoteMeta(s.Name))
+	}
+	return b.String()
+}
+
+// Excluded says why d's recommendation is never applied provisionally,
+// whatever its body says and in every mode (V8, Story #432): a waiver of any
+// kind, so no agent waits out a floor or ratchet; a seat change; or a step the
+// trust model keeps human-only. "" when none applies. Its title, question,
+// and links are read, so a waiver without the label still counts.
+func (d Decision) Excluded() string {
+	text := d.Title + "\n" + d.Item.Fields[workitems.FieldSummary]
+	switch {
+	case d.Waiver() || waiverRE.MatchString(text+"\n"+d.Item.Fields[workitems.FieldLinks]):
+		return "a waiver is never applied provisionally"
+	case seatRE.MatchString(text):
+		return "a seat change is never applied provisionally"
+	case humanOnlyRE.MatchString(text):
+		return "a human-only step of the trust model (a PR approval, publishing, init, a protected path, a floor, or a ratchet) is never applied provisionally"
+	}
+	return ""
+}
+
 // Policy is [decisions] with the [time] clock.
 type Policy struct {
 	Clock       config.Clock
 	SLA         time.Duration // business hours before the page and escalation
 	Provisional time.Duration // business hours before a reversible recommendation applies
+	Solo        bool          // the solo window applies: at most one human is configured
 	EscalateTo  string        // login mentioned on escalation (founder B); empty when unset
 }
 
-// NewPolicy reads [decisions] and [time].
+// NewPolicy reads [decisions] and [time]. In solo mode the provisional window
+// is the shorter of provisional_after_hours and solo_provisional_after_hours,
+// never under config.MinSoloProvisionalHours; provisional_after_hours = 0
+// still turns provisional application off.
 func NewPolicy(c *config.Config) (Policy, error) {
 	clock, err := c.Clock()
 	if err != nil {
 		return Policy{}, err
 	}
-	return Policy{Clock: clock, SLA: time.Duration(c.Decisions.SLAHours) * time.Hour,
+	p := Policy{Clock: clock, SLA: time.Duration(c.Decisions.SLAHours) * time.Hour,
 		Provisional: time.Duration(c.Decisions.ProvisionalAfter) * time.Hour,
-		EscalateTo:  strings.TrimPrefix(strings.TrimSpace(c.Decisions.EscalateTo), "@")}, nil
+		EscalateTo:  strings.TrimPrefix(strings.TrimSpace(c.Decisions.EscalateTo), "@")}
+	if solo := time.Duration(max(c.Decisions.SoloProvisional, config.MinSoloProvisionalHours)) * time.Hour; Humans(c) <= 1 && p.Provisional > 0 && solo < p.Provisional {
+		p.Provisional, p.Solo = solo, true
+	}
+	return p, nil
+}
+
+// Humans counts the distinct human logins the configuration names: paired
+// seats' humans and [autonomy] approver. At most one is solo mode.
+func Humans(c *config.Config) int {
+	seen := map[string]bool{}
+	add := func(login string) {
+		if l := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "@")); l != "" {
+			seen[l] = true
+		}
+	}
+	for _, s := range c.Seats {
+		if s.Mode == "paired" {
+			add(s.Human)
+		}
+	}
+	add(c.Autonomy.Approver)
+	return len(seen)
 }
 
 // Deadlines returns when d's SLA lapses and when its recommendation may apply
@@ -115,8 +177,8 @@ func (p Policy) Evaluate(d Decision, now time.Time) Step {
 	switch {
 	case slices.Contains(d.Labels, workitems.LabelProvisional):
 		s.Reason = "already applied provisionally"
-	case d.Waiver():
-		s.Reason = "a floor waiver is never applied provisionally"
+	case d.Excluded() != "":
+		s.Reason = d.Excluded()
 	case !d.Reversible():
 		s.Reason = "reversible: false; the lapse only re-pages"
 	case len(workitems.Validate(d.Item, workitems.StageReady)) > 0:
@@ -161,6 +223,30 @@ func Login(c *config.Config, value string) string {
 	return strings.TrimPrefix(strings.TrimSpace(c.Autonomy.Approver), "@")
 }
 
+// WaiverAcceptedBy checks a closed floor-waiver Decision's acceptance against
+// the floor-waiver authority, as `decide --accept` enforces it: when the
+// authority resolves to a login, closer must be that login and decision (the
+// Decision section) must name it. With no login (the day-one path) any person
+// may accept, so it returns nil. parentType is the waived item's work-item
+// type (Bug #599).
+func WaiverAcceptedBy(c *config.Config, parentType, closer, decision string) error {
+	key, value := Authority(c, Decision{Labels: []string{LabelWaiver}, ParentType: parentType})
+	want := Login(c, value)
+	if want == "" {
+		return nil
+	}
+	if !strings.EqualFold(closer, want) {
+		return fmt.Errorf("closed by @%s, not the floor-waiver authority @%s (%s = %s)", closer, want, key, value)
+	}
+	if m := waiveAcceptedBy.FindStringSubmatch(decision); m == nil || !strings.EqualFold(m[1], want) {
+		return fmt.Errorf("its Decision section does not name the floor-waiver authority @%s (%s = %s)", want, key, value)
+	}
+	return nil
+}
+
+// waiveAcceptedBy is the login in "waive, accepted by @<login>" (Accepted).
+var waiveAcceptedBy = regexp.MustCompile(`(?i)^\s*waive, accepted by @([a-z0-9-]+)`)
+
 // EscalationComment is the comment posted when the SLA lapses. It is stable
 // for a given Decision, so a rerun of the sweep changes nothing.
 func EscalationComment(d Decision, p Policy, authority, login string) string {
@@ -180,6 +266,8 @@ func EscalationComment(d Decision, p Policy, authority, login string) string {
 	switch {
 	case d.Waiver():
 		b.WriteString("- This is a floor waiver: it is never applied provisionally (rule 7); the floor miss stays blocking until a human accepts it.\n")
+	case d.Excluded() != "":
+		fmt.Fprintf(&b, "- Not applied provisionally: %s; it waits for a human to accept it.\n", d.Excluded())
 	case d.Reversible():
 		fmt.Fprintf(&b, "- Reversible: at %s (%s business hours) the recommendation applies provisionally and must then be ratified or reverted.\n", local(prov, p.Clock), hours(p.Provisional))
 	default:
@@ -193,9 +281,13 @@ func EscalationComment(d Decision, p Policy, authority, login string) string {
 func ProvisionalText(d Decision, p Policy, at time.Time) string {
 	by := p.RatifyBy(at)
 	rec := strings.TrimSpace(d.Item.Fields["recommendation"])
-	return fmt.Sprintf("Provisional: the recommendation (%s) applies from %s because the Decision was not accepted within %s business hours (V8). "+
-		"Ratify or revert by %s (%s) with `aayu decide %d --accept <option>`.",
-		oneLine(rec), local(at, p.Clock), hours(p.Provisional), by.UTC().Format(time.RFC3339), local(by, p.Clock), d.Number)
+	rule := "V8"
+	if p.Solo {
+		rule = "V8, solo mode"
+	}
+	return fmt.Sprintf("Provisional: the recommendation (%s) applies from %s because the Decision was not accepted within %s business hours (%s). "+
+		"Ratify or revert by %s (%s) with `aayu inbox` or `aayu decide %d --accept <option>`.",
+		oneLine(rec), local(at, p.Clock), hours(p.Provisional), rule, by.UTC().Format(time.RFC3339), local(by, p.Clock), d.Number)
 }
 
 var ratifyRE = regexp.MustCompile(`Ratify or revert by ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)`)
@@ -222,12 +314,45 @@ func Accepted(option, login string, at time.Time, provisional bool) string {
 // MatchOption reports whether option names one of the Decision's options: a
 // case-insensitive whole-word match in the Options field.
 func MatchOption(options, option string) bool {
-	o := strings.TrimSpace(option)
-	if o == "" {
-		return false
+	return workitems.MentionsOption(options, option)
+}
+
+// Options are a Decision's numbered options, each under the Decision's own
+// number, and the index of the recommended one (-1 when none is): the option
+// marked "(recommended)", else the one its Recommendation names by number
+// ("Option 2", "2."), else by name (the longest name it names, so "Don't
+// waive" wins over "Waive"). The inbox, the approval batch, and decide's
+// output all show options this way, and decide --accept takes the number.
+func Options(it workitems.Item) ([]workitems.Option, int) {
+	os, _ := workitems.ParseOptions(it.Fields["options"])
+	rec := slices.IndexFunc(os, func(o workitems.Option) bool { return o.Recommended })
+	if n := workitems.RecommendedOption(os, it.Fields["recommendation"]); rec < 0 && n >= 1 && n <= len(os) {
+		rec = n - 1
 	}
-	re, err := regexp.Compile(`(?i)(^|[^\pL\pN])` + regexp.QuoteMeta(o) + `($|[^\pL\pN])`)
-	return err == nil && re.MatchString(options)
+	for i := range os { // one recommendation, even where a draft marks two
+		os[i].Recommended = i == rec
+	}
+	return os, rec
+}
+
+// Pick resolves what a person typed to accept, an option's number, a lettered
+// option's letter, or its name, to that option of it, in that order, as
+// workitems.RecommendedOption reads them (so "B" is option 2 (B) even when
+// option 1 is named B); ok is false when it names none.
+func Pick(it workitems.Item, typed string) (workitems.Option, bool) {
+	os, _ := Options(it)
+	typed = strings.TrimSpace(typed)
+	for _, o := range os {
+		if typed == strconv.Itoa(o.N) || o.Letter != "" && strings.EqualFold(typed, o.Letter) {
+			return o, true
+		}
+	}
+	for _, o := range os {
+		if strings.EqualFold(typed, o.Name) {
+			return o, true
+		}
+	}
+	return workitems.Option{}, false
 }
 
 // WaiverItem is the body of a floor-waiver Decision for floor on story n.
@@ -239,10 +364,11 @@ func WaiverItem(floor string, n int, why string) (title string, fields map[strin
 	}
 	return title, map[string]string{
 		workitems.FieldSummary: q,
-		"options": fmt.Sprintf("waive: #%d ships with the `%s` floor recorded as waived by this Decision.\n"+
-			"fix: no waiver; #%d fixes the miss before it ships.", n, floor, n),
-		"evaluation":              "A waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.",
-		"recommendation":          "fix",
+		"options": fmt.Sprintf("1. **Waive.** #%d ships with the `%s` floor recorded as waived by this Decision.\n"+
+			"2. **Don't waive.** No waiver: the work is fixed until the floor holds, and #%d stays blocked until then.", n, floor, n),
+		"evaluation": "A waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.",
+		// Never the waiver by default: recommending it is the floor's owner seat's call, with evidence.
+		"recommendation":          "Option 2, don't waive, until the seat that owns the floor recommends the waiver with evidence.",
 		workitems.FieldReversible: "false",
 		workitems.FieldLinks:      fmt.Sprintf("waives #%d", n),
 	}

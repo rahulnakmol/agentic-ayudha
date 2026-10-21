@@ -1,0 +1,28 @@
+# The example product's ops catalog (benefits-qa, Decision #324): deploys and rollbacks run only through
+# `aayu respond`, in the production GitHub Environment, after a person approves.
+version = 1
+
+[[action]]
+name = "deploy-benefits-qa"
+summary = "Deploy one revision of benefits-qa."
+argv_template = ["examples/benefits-qa/deploy/deploy.sh", "{revision}"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 4
+rollback = "rollback-benefits-qa"
+blast_radius = "service"
+
+[action.params.revision]
+type = "string"
+pattern = "^[0-9a-f]{7,40}$"
+summary = "The commit to deploy."
+
+[[action]]
+name = "rollback-benefits-qa"
+summary = "Redeploy the revision the current deploy replaced (the deploy marker's previous)."
+argv_template = ["examples/benefits-qa/deploy/deploy.sh", "--rollback"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 2
+rollback = "deploy-benefits-qa"
+blast_radius = "service"

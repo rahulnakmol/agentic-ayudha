@@ -13,7 +13,7 @@ runs. aayudha's `verify` skill holds the procedures for filling in and maintaini
 ## What a run proves, and what it does not
 
 A run on your machine or in your session is a **preview**. The merge gate runs the same checks on the PR head, and
-only its pack counts (S-4.2b).
+only its pack counts.
 
 ## Launch
 

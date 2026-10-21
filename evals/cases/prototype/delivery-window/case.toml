@@ -1,0 +1,20 @@
+# prototype (WP6.5) from the recorded research, wireframe, and mockup stages of the same Feature. output/ is a
+# recorded run (tier 1); tier 2 reruns it. The floors: `aayu prototype`'s static checks against the pinned mockup
+# manifest (states, a flagd boolean flag off by default, a Code Connect mapping for every Figma component), every
+# Completion Goal state, and token-only colours in the code. The figma-diff gate needs a Figma file and a running app,
+# so it is not run here (TestPrototypeCaptureWithBrowser covers it).
+skill = "prototype"
+description = "A flagged prototype with Code Connect for Feature #570."
+input = "input.md"
+artifacts = ["output/stage.json", "output/flags.flagd.json"]
+
+[ux]
+output = "output"
+feature = 570
+team = "scaleup"
+upstream = ["../../research/delivery-window/output", "../../wireframe/delivery-window/output", "../../mockup/delivery-window/output"]
+states = ["default", "slot-full", "saved"]
+context = ["evals/cases/mockup/design-system.md", "packages/design-system/src/styles/tokens.css", "./figma.md"]
+
+[tier2]
+rubric = "rubric.md"

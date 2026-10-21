@@ -17,15 +17,20 @@ import (
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ops"
+	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/tell"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -78,34 +83,52 @@ type MeasureDue struct {
 // Promotion is releases/<issue>/<target>.json on the ledger: one rung of a
 // Release's ladder, with the artifact's identity and the shipping evidence.
 type Promotion struct {
-	Repo            string       `json:"repo"`
-	Release         int          `json:"release"`
-	Version         string       `json:"version"`
-	Source          string       `json:"source"`
-	Target          string       `json:"target"`
-	SourceSHA       string       `json:"source_sha"`
-	Commit          string       `json:"commit"`
-	Tree            string       `json:"tree,omitempty"`
-	Message         string       `json:"message"`
-	Tag             string       `json:"tag"`
-	Candidate       string       `json:"candidate"`
-	Evals           *RunRef      `json:"evals,omitempty"`
-	Gate            *RunRef      `json:"gate,omitempty"`
-	ReleaseRun      *RunRef      `json:"release_run,omitempty"`
-	Artifacts       []Artifact   `json:"artifacts"`
-	Stories         []int        `json:"stories_released"`
-	AlreadyReleased []int        `json:"already_released"`
-	NotListed       []int        `json:"shipped_not_listed"`    // shipped in this range but not linked by the Release
-	NotMerged       []int        `json:"referenced_not_merged"` // referenced by a PR in this range but not status:merged; not stamped
-	Notes           string       `json:"release_notes,omitempty"`
-	MeasureDue      []MeasureDue `json:"measure_due"`
-	PromotedBy      string       `json:"promoted_by"`
-	PromotedAt      string       `json:"promoted_at"`
-	DryRun          bool         `json:"dry_run,omitempty"`
-	Notices         []string     `json:"notices,omitempty"`
+	Repo            string         `json:"repo"`
+	Release         int            `json:"release"`
+	Version         string         `json:"version"`
+	Source          string         `json:"source"`
+	Target          string         `json:"target"`
+	SourceSHA       string         `json:"source_sha"`
+	Commit          string         `json:"commit"`
+	Tree            string         `json:"tree,omitempty"`
+	Message         string         `json:"message"`
+	Tag             string         `json:"tag"`
+	Candidate       string         `json:"candidate"`
+	Evals           *RunRef        `json:"evals,omitempty"`
+	Gate            *RunRef        `json:"gate,omitempty"`
+	ReleaseRun      *RunRef        `json:"release_run,omitempty"`
+	Artifacts       []Artifact     `json:"artifacts"`
+	Stories         []int          `json:"stories_released"`
+	AlreadyReleased []int          `json:"already_released"`
+	NotListed       []int          `json:"shipped_not_listed"`    // shipped in this range but not linked by the Release
+	NotMerged       []int          `json:"referenced_not_merged"` // referenced by a PR in this range but not status:merged; not stamped
+	Notes           string         `json:"release_notes,omitempty"`
+	MeasureDue      []MeasureDue   `json:"measure_due"`
+	PromotedBy      string         `json:"promoted_by"`
+	PromotedAt      string         `json:"promoted_at"`
+	Agent           string         `json:"agent,omitempty"`          // the agent marker when an agent ran it (Story #430); empty for a person
+	Approval        *Approval      `json:"approval,omitempty"`       // the person who approved it through the device code (Story #481)
+	Request         *StableRequest `json:"stable_request,omitempty"` // main: who asked for the stable release
+	DryRun          bool           `json:"dry_run,omitempty"`
+	Notices         []string       `json:"notices,omitempty"`
 }
 
 var versionRE = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// StableRequest is the explicit stable-release request that promoting to main needs
+// (AGENTS.md, Promotion and release): a person's comment on the Release issue,
+// or a person's yes at a terminal.
+type StableRequest struct {
+	Via    string `json:"via"` // comment, terminal, or device-flow
+	Author string `json:"author"`
+	URL    string `json:"url,omitempty"`
+	At     string `json:"at,omitempty"`
+}
+
+// StableRequestPrefix starts the first line of a stable-release request
+// comment: "Stable release: v1.2.0". The pre-tool hook refuses an agent's shell
+// command that would write one (hosts.StableRequestCommand).
+const StableRequestPrefix = "Stable release:"
 
 // shippedStatus is where a story already is when an earlier promotion released it.
 var shippedStatus = []string{"released", "measured", "done", "cancelled"}
@@ -118,11 +141,20 @@ var shippedStatus = []string{"released", "measured", "done", "cancelled"}
 // records the artifact identity and shipping evidence, and makes the Goals and
 // Initiatives above the stories due for measure.
 func runRelease(ctx context.Context, e *Env, in Values) (err error) {
-	if err := e.refuseNonHuman("release"); err != nil {
-		return err
+	// An agent may promote (founder policy, Story #430): the gate below decides, and
+	// main needs a person's stable-release request. CI may not: its token is a
+	// workflow or bot token.
+	if e.CI {
+		return Errorf(ExitBlocked, "release runs under a person's own account; it is refused in CI, where the token is a workflow or bot token")
 	}
+	agent := e.agentSignal()
+	person := agent == "" && e.isTerminal(e.In) // a person at a terminal confirms below; nobody else is asked
 	n := issueNumber(in.String("release"))
 	to := in.String("to")
+	at := strings.TrimSpace(in.String("at"))
+	if at != "" && to != "rolling" {
+		return Errorf(ExitUsage, "release: --at picks the dev commit for --to rolling; --to main promotes rolling as it is")
+	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err
@@ -189,11 +221,21 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		return Errorf(ExitBlocked, "release: origin needs both %s and %s: %v", src, dst, err)
 	}
 	srcSHA, _, _ = strings.Cut(srcSHA, "\n")
-	revs, _ := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+"..origin/"+src) // both refs exist; an empty range refuses below
+	srcRef := "origin/" + src // what the candidate merges: dev's newest commit, or --at
+	if at != "" {
+		if srcSHA, err = gitOut(root, "rev-parse", "--verify", at+"^{commit}"); err != nil {
+			return Errorf(ExitUsage, "release: --at %s is not a commit: %v", at, err)
+		}
+		if _, err := gitOut(root, "merge-base", "--is-ancestor", srcSHA, "origin/"+src); err != nil {
+			return Errorf(ExitUsage, "release: --at %s is not on %s", short(srcSHA), src)
+		}
+		srcRef = srcSHA
+	}
+	revs, _ := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+".."+srcRef) // both refs exist; an empty range refuses below
 	now := e.Now().UTC()
 	ts := now.Format("20060102T1504Z")
 	p := Promotion{Repo: repo, Release: n, Version: version, Source: src, Target: dst, SourceSHA: srcSHA, PromotedBy: me.Login,
-		PromotedAt: now.Format(time.RFC3339), Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, NotMerged: []int{}, MeasureDue: []MeasureDue{}}
+		PromotedAt: now.Format(time.RFC3339), Agent: agent, Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, NotMerged: []int{}, MeasureDue: []MeasureDue{}}
 	if to == "main" {
 		p.Candidate, p.Message, p.Tag = "promote/main-"+version, "Release: "+version, version
 		if out, _ := gitOut(root, "ls-remote", "--tags", "origin", "refs/tags/"+version); out != "" {
@@ -209,6 +251,29 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		}
 		if _, err := gitOut(root, "merge-base", "--is-ancestor", prior.Commit, "origin/"+src); err != nil {
 			return Errorf(ExitBlocked, "release #%d: its %s snapshot %s is no longer on %s", n, src, short(prior.Commit), src)
+		}
+		if person {
+			p.Request = &StableRequest{Via: "terminal", Author: me.Login, At: now.Format(time.RFC3339)}
+		} else if p.Request, err = e.stableRequest(ctx, c, repo, n, version, prior.PromotedAt, l.Config.Identity.BotLogins); err != nil {
+			return err
+		} else if p.Request == nil {
+			why := fmt.Sprintf("release #%d --to %s needs the explicit stable-release request: a person with write access comments %q on Release #%d, as the first line, after its %s snapshot (%s). An agent cannot write it; ask the person",
+				n, dst, StableRequestPrefix+" "+version, n, src, prior.PromotedAt)
+			if c.DryRun() {
+				p.Notices = append(p.Notices, why)
+			} else {
+				// Or the person approves it from any device (presence.go): their yes,
+				// as at a terminal.
+				refusal := WithNext(Errorf(ExitBlocked, "%s", why), fmt.Sprintf("a person comments `%s %s` on #%d", StableRequestPrefix, version, n))
+				a, err := e.presenceCheck(ctx, Pending{What: fmt.Sprintf("release #%d --to main (%s)", n, version),
+					Effect: []string{fmt.Sprintf("Promotes %s to %s as %s and tags it: the stable release of Release #%d. One-way door: a published release is not taken back.", src, dst, version, n)}},
+					AccessWrite, refusal)
+				if err != nil {
+					return err
+				}
+				p.Request = &StableRequest{Via: a.Via, Author: a.Login, At: e.Now().UTC().Format(time.RFC3339)}
+				p.Approval = a
+			}
 		}
 	} else {
 		p.Candidate, p.Message = "promote/rolling-"+ts, "Rolling snapshot: "+ts
@@ -231,7 +296,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if err != nil {
 		return err
 	}
-	status := map[int]string{}
+	status, kind := map[int]string{}, map[int]string{}
 	for _, s := range append(slices.Clone(listed), shipped...) {
 		if _, ok := status[s]; !ok {
 			x, _, err := c.REST.Issues.Get(ctx, owner, name, s)
@@ -239,6 +304,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 				return err
 			}
 			status[s] = workitems.Item{Labels: github.IssueLabels(x)}.Label("status")
+			kind[s], _ = workitems.TypeOf(x.GetType().GetName(), github.IssueLabels(x))
 		}
 	}
 	var problems []string
@@ -269,13 +335,18 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 			p.NotListed = append(p.NotListed, s)
 		}
 	}
+	if err := e.productionGate(ctx, c, tok, gitOut, root, repo, srcRef, p.Stories, kind); err != nil {
+		return err
+	}
+	// Decision #480: an open security Bug seen on rolling or main holds the promotion, and each promotion takes
+	// only a source tip the security workflow scanned green.
+	guarded := []string{pick(l.Config.Branches.Rolling, "rolling"), pick(l.Config.Branches.Main, "main")}
+	if err := e.securityGate(ctx, c, repo, guarded, src, srcSHA); err != nil {
+		return err
+	}
 	notes, utm, err := e.releaseNotes(ctx, c, repo, &p, shipped)
 	if err != nil {
 		return err
-	}
-	if c.DryRun() {
-		p.DryRun = true
-		return e.Emit(p, func(out io.Writer) error { return promotionText(out, p) })
 	}
 	wfs, _, err := c.REST.Actions.ListWorkflows(ctx, owner, name, &gh.ListOptions{PerPage: 100})
 	if err != nil {
@@ -285,11 +356,27 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	for _, w := range wfs.Workflows {
 		has[path.Base(w.GetPath())] = true
 	}
+	// The rolling gate's evals-gate needs tier-2 results for the commit it promotes; release never dispatches them,
+	// and a dry run refuses what the promotion would.
+	if to == "rolling" && has[evalsWorkflow] {
+		if p.Evals, err = e.evaluated(ctx, c, gitOut, root, repo, n, src, dst, srcSHA, at != ""); err != nil {
+			return err
+		}
+	} else if to == "rolling" {
+		p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
+	}
+	if c.DryRun() {
+		p.DryRun = true
+		return e.Emit(p, func(out io.Writer) error { return promotionText(out, p) })
+	}
 	if !has[gateWorkflow] {
 		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
 	}
-	if err := e.confirmOrBlock("release", fmt.Sprintf("Promote %s (%s) to %s as %q for Release #%d?", src, short(srcSHA), dst, p.Message, n)); err != nil {
-		return err
+	// The TTY gate is gone for release (Story #430): a person at a terminal is still
+	// asked (or says --yes), and an agent, or a run without a terminal, goes on
+	// with no prompt: the gate decides, and main already holds a person's request.
+	if person && !e.confirm(fmt.Sprintf("Promote %s (%s) to %s as %q for Release #%d? [y/N] ", src, short(srcSHA), dst, p.Message, n)) {
+		return Errorf(ExitBlocked, "release not confirmed: nothing was promoted")
 	}
 
 	// 1. The candidate: the exact merge commit that will land.
@@ -302,7 +389,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if _, err := gitOut(root, "worktree", "add", "--quiet", "-b", p.Candidate, wt, "origin/"+dst); err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if _, err := gitOut(wt, "merge", "--quiet", "--no-ff", "--signoff", "-m", p.Message, "origin/"+src); err != nil {
+	if _, err := gitOut(wt, "merge", "--quiet", "--no-ff", "--signoff", "-m", p.Message, srcRef); err != nil {
 		return Errorf(ExitBlocked, "release: %s does not merge cleanly into %s: %v", src, dst, err)
 	}
 	if p.Commit, err = gitOut(wt, "rev-parse", "HEAD"); err != nil {
@@ -316,19 +403,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		_ = e.gitPush(ctx, g, root, repo, p.Candidate, ":refs/heads/"+p.Candidate)
 	}()
 
-	// 2. The gate: evals of the source tip (rolling), then ci.yml on the candidate.
-	if to == "rolling" {
-		if has[evalsWorkflow] {
-			if p.Evals, err = e.dispatchAndWait(ctx, c, repo, evalsWorkflow, src, srcSHA, nil, false); err != nil {
-				return err
-			}
-			if p.Evals.Conclusion != "success" {
-				return Errorf(ExitBlocked, "release: %s ended %s on %s (%s); nothing was promoted", evalsWorkflow, p.Evals.Conclusion, short(srcSHA), p.Evals.URL)
-			}
-		} else {
-			p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
-		}
-	}
+	// 2. The gate: ci.yml on the candidate.
 	if p.Gate, err = e.dispatchAndWait(ctx, c, repo, gateWorkflow, p.Candidate, p.Commit, map[string]any{"gate": gateFor(to)}, true); err != nil {
 		return err
 	}
@@ -408,7 +483,8 @@ func (e *Env) afterLanding(ctx context.Context, c *github.Client, tok identity.T
 
 // bookkeep runs after the gated commit landed: it stamps the shipped stories
 // released, publishes the release notes, records the rung and the measure
-// due dates on the ledger, and writes the Release's Shipping evidence.
+// due dates on the ledger, writes the Release's Shipping evidence, and
+// refreshes the product brain when the repository has one.
 func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue, p *Promotion, notes tell.Draft, utm tell.UTM, now time.Time, final bool) error {
 	owner, name, _ := github.SplitRepo(repo)
 	for _, s := range p.Stories {
@@ -442,7 +518,102 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 	if _, err := lw.Write(ctx, ledger.Commit{Message: fmt.Sprintf("release: #%d %s %s (%s)", p.Release, p.Target, p.Tag, p.PromotedBy), Files: files}); err != nil {
 		return err
 	}
+	defer e.releaseCheckpoint(ctx, c, tok)
 	return e.shippingEvidence(ctx, c, repo, is, *p, final)
+}
+
+// productionGate is the Production Engineer's release gate (Decision #324),
+// read from ref, the exact source commit being promoted. When it defines SLOs, the error
+// budget recorded on the ledger must be fresh (production.StaleAfter), and
+// while any budget is spent only Bugs ship: a Story ships only with an
+// accepted error-budget waiver. When its ops catalog names rollback actions,
+// each must have run successfully through aayudha-ops at least once, so no
+// release depends on a rollback nobody has tried.
+func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity.Token, gitOut func(string, ...string) (string, error), root, repo, ref string, shipping []int, kind map[int]string) error {
+	if b, err := gitOut(root, "show", ref+":"+production.SLOPath); err == nil && strings.TrimSpace(b) != "" {
+		defs, err := production.ParseSLOs([]byte(b))
+		if err != nil {
+			return Errorf(ExitBlocked, "release: %v", err)
+		}
+		st, err := e.sloStatus(ctx, tok.Value)
+		switch {
+		case err != nil:
+			return Wrap(ExitExternal, err)
+		case st == nil:
+			return Errorf(ExitBlocked, "release: %s defines SLOs but no error budget is recorded; run `aayu slo --telemetry <export> --record` first", production.SLOPath)
+		}
+		if why := st.Stale(e.Now().UTC(), defs); why != "" {
+			return Errorf(ExitBlocked, "release: %s; run `aayu slo --telemetry <export> --record` first", why)
+		}
+		if spent := st.Spent(); len(spent) > 0 {
+			var held []string
+			for _, s := range shipping {
+				if kind[s] == "bug" {
+					continue
+				}
+				ws, err := e.waivers(ctx, repo, s, nil)
+				if err != nil {
+					return err
+				}
+				if !slices.ContainsFunc(ws, func(w verify.Waiver) bool { return strings.HasPrefix(w.Title, "Waive the error-budget floor on #") }) {
+					held = append(held, fmt.Sprintf("#%d (%s)", s, pick(kind[s], "unknown type")))
+				}
+			}
+			if len(held) > 0 {
+				return Errorf(ExitBlocked, "release: the error budget of %s is spent (%s), so only Bugs ship until it recovers; %s would ship. Ship the fixes first, or a person accepts an error-budget waiver on each (`aayu decide --waiver error-budget <n>`)",
+					strings.Join(spent, ", "), production.StatusPath, strings.Join(held, ", "))
+			}
+		}
+	}
+	b, err := gitOut(root, "show", ref+":"+ops.Path)
+	if err != nil || strings.TrimSpace(b) == "" {
+		return nil
+	}
+	cat, err := ops.Parse([]byte(b))
+	if err != nil {
+		return Errorf(ExitBlocked, "release: %v", err)
+	}
+	var rollbacks []string
+	for _, a := range cat.Actions {
+		if a.Rollback != "" && a.Rollback != "none" && !slices.Contains(rollbacks, a.Rollback) {
+			rollbacks = append(rollbacks, a.Rollback)
+		}
+	}
+	if len(rollbacks) == 0 {
+		return nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	tried := map[string]bool{}
+	opts := &gh.ListWorkflowRunsOptions{Status: "success", ListOptions: gh.ListOptions{PerPage: 100}}
+	for page := 0; page < 10; page++ {
+		runs, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, initrepo.OpsWorkflow, opts)
+		if github.NotFound(err) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		for _, r := range runs.WorkflowRuns {
+			if m := runNameRE.FindStringSubmatch(r.GetName()); m != nil && r.GetConclusion() == "success" {
+				tried[m[1]] = true
+			}
+		}
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	var untried []string
+	for _, r := range rollbacks {
+		if !tried[r] {
+			untried = append(untried, r)
+		}
+	}
+	if len(untried) > 0 {
+		return Errorf(ExitBlocked, "release: rollback action(s) %s in %s have never run successfully through %s; try each once (`aayu respond <incident> --action <name>`, approved by a person) before a release depends on it",
+			strings.Join(untried, ", "), ops.Path, initrepo.OpsWorkflow)
+	}
+	return nil
 }
 
 func pick(v, def string) string {
@@ -659,6 +830,107 @@ func (e *Env) dispatchAndWait(ctx context.Context, c *github.Client, repo, workf
 	return e.waitRun(ctx, c, repo, workflow, id, sha, retry)
 }
 
+// evaluated checks that sha, the dev commit a rolling promotion merges, has
+// tier-2 results for every gating group: an artifact eval-results-<sha>-<group>
+// on a completed evals.yml run of that commit, which is what the rolling
+// gate's evals-gate downloads. It never dispatches evals.yml. When sha has
+// none, it names the newest dev commit not yet on dst that has them, and the
+// two ways on: promote that commit with --at, or dispatch once on dev's
+// newest commit and run release again.
+func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(string, ...string) (string, error), root, repo string, n int,
+	src, dst, sha string, chosen bool) (*RunRef, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	// results reports the newest completed run of commit h, and the gating
+	// groups of h's own evals/eval.toml (what the gate checks when h is
+	// promoted) none of h's completed runs has results for. It asks for h's
+	// runs by commit, so a commit whose run is far down dev's run list still
+	// counts, and looks only where the gate's evals-gate looks: h's newest 20
+	// runs (ci.yml, `gh run list --commit h --limit 20`).
+	results := func(h string) (*RunRef, []string, error) {
+		var cfg struct {
+			Groups []struct {
+				Name string `toml:"name"`
+				Gate string `toml:"gate"`
+			} `toml:"groups"`
+		}
+		if b, err := gitOut(root, "show", h+":evals/eval.toml"); err == nil {
+			if err := toml.Unmarshal([]byte(b), &cfg); err != nil {
+				return nil, nil, Errorf(ExitBlocked, "release: evals/eval.toml at %s: %v", short(h), err)
+			}
+		}
+		var gating []string
+		for _, g := range cfg.Groups {
+			if g.Gate != "advisory" { // as evals.Config.Gates
+				gating = append(gating, g.Name)
+			}
+		}
+		runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
+			&gh.ListWorkflowRunsOptions{HeadSHA: h, ListOptions: gh.ListOptions{PerPage: 20}})
+		if err != nil {
+			return nil, nil, Wrap(ExitExternal, err)
+		}
+		have := map[string]bool{}
+		var ref, newest *RunRef // the newest completed run with results, and the newest completed run
+		for _, r := range runs.WorkflowRuns {
+			if r.GetHeadSHA() != h || r.GetStatus() != "completed" {
+				continue
+			}
+			run := &RunRef{Workflow: evalsWorkflow, ID: r.GetID(), URL: r.GetHTMLURL(), Conclusion: r.GetConclusion(), Attempts: max(r.GetRunAttempt(), 1)}
+			if newest == nil {
+				newest = run
+			}
+			arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, r.GetID(), &gh.ListOptions{PerPage: 100})
+			if err != nil {
+				return nil, nil, Wrap(ExitExternal, err)
+			}
+			for _, a := range arts.Artifacts {
+				if g, ok := strings.CutPrefix(a.GetName(), "eval-results-"+h+"-"); ok && !a.GetExpired() {
+					have[g] = true
+					if ref == nil {
+						ref = run
+					}
+				}
+			}
+		}
+		if ref == nil {
+			ref = newest
+		}
+		var missing []string
+		for _, g := range gating {
+			if !have[g] {
+				missing = append(missing, g)
+			}
+		}
+		if ref == nil {
+			return nil, []string{"no completed run"}, nil
+		}
+		return ref, missing, nil
+	}
+	ref, missing, err := results(sha)
+	if err != nil || len(missing) == 0 {
+		return ref, err
+	}
+	why := fmt.Sprintf("release: %s %s has no completed %s run with results for every gating group (missing: %s); nothing was promoted",
+		map[bool]string{true: "--at", false: src + "'s newest commit"}[chosen], short(sha), evalsWorkflow, strings.Join(missing, ", "))
+	revs, _ := gitOut(root, "rev-list", "--first-parent", "origin/"+dst+"..origin/"+src)
+	for _, h := range strings.Fields(revs) {
+		if h == sha {
+			continue
+		}
+		r, m, err := results(h)
+		if err != nil {
+			return nil, err
+		}
+		if len(m) == 0 {
+			return nil, Errorf(ExitBlocked, "%s. Either promote %s, the newest %s commit that has them (run %s): `aayu release %d --to rolling --at %s`; "+
+				"or dispatch once on %s's newest commit: `gh workflow run %s --ref %s`, wait for it to finish, and run this again",
+				why, short(h), src, r.URL, n, short(h), src, evalsWorkflow, src)
+		}
+	}
+	return nil, Errorf(ExitBlocked, "%s. No %s commit since %s has them: dispatch once on %s's newest commit: `gh workflow run %s --ref %s`, wait for it to finish, and run this again",
+		why, src, dst, src, evalsWorkflow, src)
+}
+
 // waitPushRun waits for the run of workflow that a push of sha (a tag) started.
 func (e *Env) waitPushRun(ctx context.Context, c *github.Client, repo, workflow, sha string) (*RunRef, error) {
 	owner, name, _ := github.SplitRepo(repo)
@@ -833,6 +1105,15 @@ func (e *Env) shippingEvidence(ctx context.Context, c *github.Client, repo strin
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s → %s** on %s by @%s: `%s` as `%s`, tag `%s`.\n\n", p.Source, p.Target, p.PromotedAt, p.PromotedBy, short(p.Commit), p.Message, p.Tag)
+	switch {
+	case p.Agent != "" && p.Approval != nil:
+		fmt.Fprintf(&b, "- Run under an agent marker (`%s`) with @%s's account, approved by @%s through the device code (%s)\n", p.Agent, p.PromotedBy, p.Approval.Login, p.Approval.Via)
+	case p.Agent != "":
+		fmt.Fprintf(&b, "- Run by an agent (`%s`) under @%s's account\n", p.Agent, p.PromotedBy)
+	}
+	if r := p.Request; r != nil {
+		fmt.Fprintf(&b, "- Stable release requested by @%s (%s) %s\n", r.Author, r.Via, r.URL)
+	}
 	fmt.Fprintf(&b, "- Artifact identity: commit `%s`, tree `%s`, merging %s `%s`\n", p.Commit, p.Tree, p.Source, p.SourceSHA)
 	for _, r := range []*RunRef{p.Evals, p.Gate, p.ReleaseRun} {
 		if r != nil {
@@ -895,6 +1176,15 @@ func promotionText(out io.Writer, p Promotion) error {
 		fmt.Fprintf(out, " = %s", short(p.Commit))
 	}
 	fmt.Fprintf(out, ", tag %s (candidate %s)\n", p.Tag, p.Candidate)
+	switch {
+	case p.Agent != "" && p.Approval != nil:
+		fmt.Fprintf(out, "  run under an agent marker (%s) with @%s's account, approved by @%s through the device code\n", p.Agent, p.PromotedBy, p.Approval.Login)
+	case p.Agent != "":
+		fmt.Fprintf(out, "  run by an agent (%s) under @%s\n", p.Agent, p.PromotedBy)
+	}
+	if r := p.Request; r != nil {
+		fmt.Fprintf(out, "  stable release requested by @%s (%s) %s\n", r.Author, r.Via, r.URL)
+	}
 	for _, r := range []*RunRef{p.Evals, p.Gate, p.ReleaseRun} {
 		if r != nil {
 			fmt.Fprintf(out, "  %s: %s %s\n", r.Workflow, r.Conclusion, r.URL)
@@ -920,4 +1210,44 @@ func promotionText(out io.Writer, p Promotion) error {
 		fmt.Fprintf(out, "  note: %s\n", s)
 	}
 	return nil
+}
+
+// stableRequest finds the stable-release request for version on Release n: a
+// comment whose first non-blank line is "Stable release: <version>", written
+// after the rolling snapshot (rollingAt) by a non-bot account with write,
+// maintain, or admin access, and carrying no aayudha marker (aayu never writes
+// one). It returns nil when there is none. In solo mode an agent holds the
+// person's token, so GitHub cannot tell who typed the comment: aayu writes no
+// such comment, and the pre-tool hook refuses an agent's command that would.
+func (e *Env) stableRequest(ctx context.Context, c *github.Client, repo string, n int, version, rollingAt string, botLogins []string) (*StableRequest, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	access := map[string]bool{}
+	for _, cm := range cs {
+		first, _, _ := strings.Cut(strings.TrimSpace(cm.GetBody()), "\n")
+		v, ok := strings.CutPrefix(strings.TrimSpace(first), StableRequestPrefix)
+		u := cm.GetUser()
+		if !ok || strings.TrimSpace(v) != version || strings.Contains(cm.GetBody(), "<!-- aayudha:") || cm.GetCreatedAt().UTC().Format(time.RFC3339) <= rollingAt || // both UTC RFC 3339, so they order as text
+			identity.IsBot(identity.Account{Login: u.GetLogin(), Type: u.GetType()}, botLogins) {
+			continue
+		}
+		ok, seen := access[u.GetLogin()]
+		if !seen {
+			lvl, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, u.GetLogin())
+			if err != nil {
+				return nil, Wrap(ExitExternal, err)
+			}
+			ok = lvl.GetPermission() == "admin" || lvl.GetPermission() == "write" || lvl.GetRoleName() == "maintain"
+			access[u.GetLogin()] = ok
+		}
+		if ok {
+			return &StableRequest{Via: "comment", Author: u.GetLogin(), URL: cm.GetHTMLURL(), At: cm.GetCreatedAt().UTC().Format(time.RFC3339)}, nil
+		}
+	}
+	return nil, nil
 }

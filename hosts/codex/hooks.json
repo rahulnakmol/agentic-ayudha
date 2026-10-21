@@ -20,6 +20,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "aayu hook post-tool --host codex --skills 0.0.0"
+          }
+        ]
+      }
     ]
   }
 }

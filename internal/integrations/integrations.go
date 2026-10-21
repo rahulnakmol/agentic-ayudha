@@ -252,12 +252,41 @@ func DoJSON(hc *http.Client, req *http.Request, out any) error {
 		return fmt.Errorf("%w: %s %s: %w", ErrProvider, req.Method, req.URL.Redacted(), err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("%w: %s %s: %s: %s", ErrProvider, req.Method, req.URL.Redacted(), resp.Status, excerpt(body))
+		return fmt.Errorf("%w: %w", ErrProvider, &HTTPError{Method: req.Method, URL: req.URL.Redacted(), Status: resp.StatusCode, StatusText: resp.Status, Body: body, Header: resp.Header})
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("%w: %s %s: undecodable response: %w", ErrProvider, req.Method, req.URL.Redacted(), err)
 	}
 	return nil
+}
+
+// HTTPError is a provider's answer outside 2xx: an adapter reads its status
+// and body to say what is wrong with a person's setup and how to fix it
+// (Decision #449). Its message carries only the start of the body,
+// credential-redacted.
+type HTTPError struct {
+	Method, URL string
+	Status      int
+	StatusText  string
+	Body        []byte
+	Header      http.Header
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("%s %s: %s: %s", e.Method, e.URL, e.StatusText, excerpt(e.Body))
+}
+
+// Check is one capability an adapter offers, tried with its cheapest read
+// (doctor, Decision #449): a person learns in one command which of their
+// setup works. A failed check says what is wrong and the exact fix.
+type Check struct {
+	Capability string   `json:"capability"`      // what aayudha uses it for
+	Scopes     []string `json:"scopes"`          // the read scopes it needs
+	Verbs      []string `json:"verbs,omitempty"` // the aayu verbs that use it
+	OK         bool     `json:"ok"`
+	Detail     string   `json:"detail"`            // what the read showed, or what is wrong
+	Fix        string   `json:"fix,omitempty"`     // the exact change that fixes a failure
+	Request    string   `json:"request,omitempty"` // the read it made
 }
 
 // NewRequest builds a request with a JSON body (when body is not nil) and the

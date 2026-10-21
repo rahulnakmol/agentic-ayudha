@@ -1,0 +1,9 @@
+# Weekly dependency and security patch sweep (WP5.10, Decision #324). The deps floor runs with no model; the agent in
+# the user's own session turns each fixable advisory into a Bug for the AI Native Engineer to build, so patches ship
+# through the normal ladder (and still ship while an error budget is spent: release lets Bugs through). The cron is in
+# [time] tz.
+description = "Weekly patch sweep: run the dependency floor and file a Bug for each fixable vulnerable dependency."
+command = ["verify", "--floor", "deps"]
+cron = "0 11 * * 3"
+hosts = ["amp", "cursor", "claude", "codex"]
+prompt = "If the deps floor passed with no finding, stop without reporting. Otherwise, for each vulnerable dependency with a fixed version, check `gh issue list --label type:bug --state open --search <package>` for an open Bug; if there is none, file one with `AAYU_AGENT=1 aayu grill bug --title … --body … --create`, carrying the advisory, the fixed version, and a Completion Goal whose criterion is the deps floor passing. Report each advisory in one line with its Bug. Never bump a dependency or open a pull request from this loop."

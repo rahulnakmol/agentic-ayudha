@@ -26,7 +26,10 @@ const (
 	LeaseTTL   = 4 * time.Hour
 )
 
-var leaseTag = regexp.MustCompile(`<!-- aayudha:lease holder=(\S+) expires=(\S+) -->`)
+var (
+	leaseTag    = regexp.MustCompile(`<!-- aayudha:lease holder=(\S+) expires=(\S+) -->`)
+	releasedTag = regexp.MustCompile(`<!-- aayudha:lease-released expires=(\S+) -->`)
+)
 
 // Lease is the lock comment of a story.
 type Lease struct {
@@ -56,6 +59,23 @@ func readLease(ctx context.Context, c *github.Client, owner, name string, n int)
 		}
 	}
 	return nil, nil
+}
+
+// releasedLeaseExpiry is when the newest released lease of story n was due
+// to expire; zero when no released lock comment records one.
+func releasedLeaseExpiry(ctx context.Context, c *github.Client, owner, name string, n int) (time.Time, error) {
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	var last time.Time
+	for _, cm := range cs {
+		if m := releasedTag.FindStringSubmatch(cm.GetBody()); m != nil {
+			if exp, err := time.Parse(time.RFC3339, m[1]); err == nil && exp.After(last) {
+				last = exp
+			}
+		}
+	}
+	return last, err
 }
 
 // leaseHolder names this build: the writing login and the machine.
@@ -145,7 +165,8 @@ func (e *Env) releaseLease(ctx context.Context, c *github.Client, repo string, n
 		return nil, err
 	}
 	target := fmt.Sprintf("%s#%d", repo, n)
-	body := fmt.Sprintf("<!-- aayudha:lease-released -->\n**Lease released** (held by `%s`, expiring %s): %s.", cur.Holder, cur.Expires.UTC().Format(time.RFC3339), why)
+	exp := cur.Expires.UTC().Format(time.RFC3339)
+	body := fmt.Sprintf("<!-- aayudha:lease-released expires=%s -->\n**Lease released** (held by `%s`, expiring %s): %s.", exp, cur.Holder, exp, why)
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.issue.comment.edit", Target: target,
 		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", repo, cur.CommentID)}, Payload: map[string]any{"lease": cur.Holder, "released": why}},
 		func(ctx context.Context) (any, error) {

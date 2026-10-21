@@ -17,11 +17,13 @@ This repository runs the aayudha verbs as host skills, installed by `aayu instal
 
 Installed for: OpenAI Codex. The `aayudha` MCP server serves the verbs as tools (write verbs only with `[mcp] expose_writes = true`).
 Host hooks run `aayu hook <name>` only: `session-start` reports skill copies out of sync with the lock,
-`pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes and blocks shell commands that
-run a human-only verb, and `status-line` shows where the work stands.
+`pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes, shell commands that run a
+human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
+allowlist, and `status-line` shows where the work stands.
 
 Before you change anything for a request, run `aayu grill story --assess --idea "<the person's words>" --json` (the
 grill skill). On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file,
 ready, or build anything. Work only on the issue the person asked for: never pick up an open or Ready story on your
-own.
+own. `aayu build` holds a story the person has not asked for in this session: ask them, and pass their words with
+`--asked "<their words>"`.
 <!-- END aayudha:hosts -->

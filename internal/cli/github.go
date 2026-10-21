@@ -16,7 +16,9 @@ func (e *Env) newGitHub(tok identity.Token, ident, capability string) (*github.C
 	if err != nil {
 		return nil, err
 	}
-	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, WriteGap: e.GitHubGap}
+	// The run's HTTP timeout bounds each GitHub request too (Bug #822): the
+	// client builds its own http.Client from the transport alone.
+	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, Timeout: e.HTTP.Timeout, WriteGap: e.GitHubGap, Writes: e.writes}
 	if e.GitHubGap < 0 {
 		o.ServerRetries = -1 // tests without write gaps inject one-shot 5xx failures and want them seen
 	}
@@ -46,7 +48,9 @@ func (e *Env) BotGitHub(ctx context.Context, capability string) (*github.Client,
 	r := e.Resolver()
 	var broker identity.Minter
 	id := l.Config.Identity
-	if identity.Configured(id) == identity.KindApp {
+	// The broker mints with the person's token; an agent that already holds
+	// the bot's token (AAYU_BOT_TOKEN, a bot-only session) needs neither.
+	if identity.Configured(id) == identity.KindApp && e.Getenv("AAYU_BOT_TOKEN") == "" {
 		h, err := r.Human(ctx)
 		if err != nil {
 			return nil, identity.Bot{}, Wrap(ExitBlocked, err)
@@ -91,5 +95,5 @@ func (e *Env) Ledger(ctx context.Context, tok identity.Token, ident, tag string)
 	if err != nil {
 		return nil, err
 	}
-	return &ledger.Writer{Dir: root, Repo: repo, Token: tok.Value, Log: log, Identity: ident, Tag: tag}, nil
+	return &ledger.Writer{Dir: root, Repo: repo, Token: tok.Value, Log: log, Identity: ident, Tag: tag, OnAttempt: e.LedgerAttempt}, nil
 }

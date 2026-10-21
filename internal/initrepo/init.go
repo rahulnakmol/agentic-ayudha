@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/prbody"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
@@ -76,6 +78,15 @@ const (
 	LedgerRuleset        = "aayudha-ledger"
 	LedgerHistoryRuleset = "aayudha-ledger-history"
 )
+
+// protectedRefs are the branches both ledger rulesets cover: the ledger and
+// the brain vault `aayu brain` writes, protected alike (same rules, same
+// bypass actors).
+var protectedRefs = []string{"refs/heads/ledger", "refs/heads/brain"}
+
+// brainRef is the brain branch; an adopted ruleset that lacks it is reported,
+// never edited.
+const brainRef = "refs/heads/brain"
 
 // writeRole is the repository's write role as a ruleset bypass actor; it
 // covers maintain and admin too (current_user_can_bypass is "always" for the
@@ -292,13 +303,17 @@ func (in *Init) ownsUnchanged(path string, current []byte) bool {
 // FormPath is where init installs a type's issue form.
 func FormPath(t workitems.Type) string { return ".github/ISSUE_TEMPLATE/" + workitems.FormFile(t) }
 
+// PRTemplatePath is where init installs the pull request template, whose
+// sections `aayu inspect` checks (prbody.Check).
+const PRTemplatePath = ".github/pull_request_template.md"
+
 func (in *Init) forms(context.Context) error {
 	for _, t := range workitems.Types {
 		if err := in.writeFile("forms", FormPath(t), workitems.Form(t, workitems.FormOptions{IssueTypes: in.Repo.Org})); err != nil {
 			return err
 		}
 	}
-	return nil
+	return in.writeFile("forms", PRTemplatePath, prbody.Template())
 }
 
 func (in *Init) ledger(ctx context.Context) error {
@@ -383,6 +398,7 @@ type rulesetDetail struct {
 	Conditions  struct {
 		RefName struct {
 			Include []string `json:"include"`
+			Exclude []string `json:"exclude"`
 		} `json:"ref_name"`
 	} `json:"conditions"`
 	Rules []struct {
@@ -415,6 +431,64 @@ func (d rulesetDetail) protectsLedger() bool {
 	return slices.Contains(types, "deletion") && slices.Contains(types, "non_fast_forward")
 }
 
+// brainAdvice tells the person how to protect the brain branch with an
+// adopted ruleset that does not cover it yet; aayudha never edits the team's
+// own ruleset. It is empty when the ruleset includes the branch (by name, by
+// pattern, or with ~ALL) and no exclusion (which beats an inclusion) exempts it.
+func (d rulesetDetail) brainAdvice() string {
+	var advice []string
+	if !slices.ContainsFunc(d.Conditions.RefName.Include, func(x string) bool {
+		return refMatch(x, brainRef)
+	}) {
+		advice = append(advice, fmt.Sprintf("add %q to ruleset %q (id %d) conditions.ref_name.include", brainRef, d.Name, d.ID))
+	}
+	for _, x := range d.Conditions.RefName.Exclude {
+		if refMatch(x, brainRef) {
+			advice = append(advice, fmt.Sprintf("remove the exclusion %q from ruleset %q (id %d) conditions.ref_name.exclude", x, d.Name, d.ID))
+		}
+	}
+	if advice == nil {
+		return ""
+	}
+	return fmt.Sprintf("; it does not protect %s: %s so the brain branch cannot be force-pushed or deleted either", brainRef, strings.Join(advice, ", and "))
+}
+
+// refMatch reports whether a ruleset ref-name pattern matches ref as GitHub
+// does: ~ALL matches every ref, ** crosses slashes, * and ? stay within one
+// path segment, and [...] is a character class.
+func refMatch(pattern, ref string) bool {
+	if pattern == "~ALL" {
+		return true
+	}
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; c {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				b.WriteString(".*")
+				i++
+			} else {
+				b.WriteString("[^/]*")
+			}
+		case '?':
+			b.WriteString("[^/]")
+		case '[':
+			if j := strings.IndexByte(pattern[i+1:], ']'); j >= 0 {
+				b.WriteString(pattern[i : i+j+2])
+				i += j + 1
+			} else {
+				b.WriteString(`\[`)
+			}
+		default:
+			b.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	return err == nil && re.MatchString(ref)
+}
+
 func (in *Init) rest(ctx context.Context, method, path string, body, out any) error {
 	req, err := in.GH.REST.NewRequest(ctx, method, strings.TrimPrefix(path, "/"), body)
 	if err != nil {
@@ -436,7 +510,7 @@ func (in *Init) ruleset(ctx context.Context) error {
 	if errors.As(err, &er) && er.Response != nil && er.Response.StatusCode == http.StatusForbidden && strings.Contains(er.Message, "Upgrade to GitHub") {
 		in.State.RulesetsUnapplied = "GitHub answered 403: " + er.Message
 		in.note("ruleset", "ruleset", LedgerRuleset, "not applied",
-			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger branch is unprotected: anyone with write access can force-push or delete it. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
+			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger and brain branches are unprotected: anyone with write access can force-push or delete them. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
 		return nil
 	}
 	if err == nil {
@@ -456,7 +530,13 @@ func (in *Init) applyRulesets(ctx context.Context) error {
 	}
 	o, recorded := in.State.Object("ruleset", LedgerRuleset)
 	if recorded && o.Adopted && listed(o.ID) {
-		in.note("ruleset", "ruleset", o.Name, "unchanged", "the team's own ruleset; aayudha leaves it as it is")
+		// The detail only adds the brain advice; failing to read it changes nothing.
+		d := rulesetDetail{Name: LedgerRuleset}
+		advice := ""
+		if err := in.rest(ctx, http.MethodGet, "/repos/"+r.FullName+"/rulesets/"+o.ID, nil, &d); err == nil {
+			advice = d.brainAdvice()
+		}
+		in.note("ruleset", "ruleset", d.Name, "unchanged", "the team's own ruleset; aayudha leaves it as it is"+advice)
 		return nil
 	}
 	if !recorded || o.Adopted {
@@ -467,7 +547,7 @@ func (in *Init) applyRulesets(ctx context.Context) error {
 			}
 			if d.protectsLedger() {
 				in.State.Put(Object{Kind: "ruleset", Name: LedgerRuleset, ID: strconv.FormatInt(d.ID, 10), Adopted: true})
-				in.note("ruleset", "ruleset", d.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it")
+				in.note("ruleset", "ruleset", d.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it"+d.brainAdvice())
 				return nil
 			}
 		}
@@ -487,7 +567,7 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 	r := in.Repo
 	body := map[string]any{
 		"name": name, "target": "branch", "enforcement": "active",
-		"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"refs/heads/ledger"}, "exclude": []string{}}},
+		"conditions":    map[string]any{"ref_name": map[string]any{"include": protectedRefs, "exclude": []string{}}},
 		"rules":         []map[string]any{},
 		"bypass_actors": []map[string]any{},
 	}
@@ -511,16 +591,50 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 			}
 			body["bypass_actors"] = append(body["bypass_actors"].([]map[string]any), map[string]any{"actor_id": a.ActorID, "actor_type": a.ActorType, "bypass_mode": a.BypassMode})
 		}
-		if has && slices.Equal(d.ruleTypes(), rules) {
-			in.note("ruleset", "ruleset", name, "unchanged", "")
+		// Keep any refs the ruleset already includes and add the missing ones
+		// (an older init covered refs/heads/ledger only). The include list is
+		// part of the update's idempotency key, so a run that already updated
+		// this ruleset (the 0.1 migration) still adds the brain branch.
+		include := slices.Clone(d.Conditions.RefName.Include)
+		for _, ref := range protectedRefs {
+			if !slices.Contains(include, ref) {
+				include = append(include, ref)
+			}
+		}
+		// An exclusion beats an inclusion (GitHub ref-name conditions), so an
+		// exclusion of a protected ref itself is dropped; a pattern that also
+		// matches other refs is kept, and the note says what it still lets through.
+		var exclude, shadow []string
+		for _, x := range d.Conditions.RefName.Exclude {
+			if slices.Contains(protectedRefs, x) {
+				continue
+			}
+			exclude = append(exclude, x)
+			for _, ref := range protectedRefs {
+				if refMatch(x, ref) {
+					shadow = append(shadow, fmt.Sprintf("exclusion %q still exempts %s; remove it from ruleset %q to protect that branch", x, ref, name))
+				}
+			}
+		}
+		if exclude == nil {
+			exclude = []string{}
+		}
+		body["conditions"] = map[string]any{"ref_name": map[string]any{"include": include, "exclude": exclude}}
+		warn := strings.Join(shadow, "; ")
+		if has && slices.Equal(d.ruleTypes(), rules) && len(include) == len(d.Conditions.RefName.Include) && len(exclude) == len(d.Conditions.RefName.Exclude) {
+			in.note("ruleset", "ruleset", name, "unchanged", warn)
 			return nil
 		}
-		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name),
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name, strings.Join(include, ",")+"!"+strings.Join(exclude, ",")),
 			Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
 			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) }); err != nil {
 			return err
 		}
-		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger; force pushes and deletion stay blocked (D-4.2b.h)")
+		msg := "write-access humans write the ledger and brain branches; force pushes and deletion stay blocked"
+		if warn != "" {
+			msg = warn
+		}
+		in.note("ruleset", "ruleset", name, "updated", msg)
 		return nil
 	}
 	var created rulesetDetail
@@ -574,7 +688,7 @@ func (in *Init) config(context.Context) error {
 	} else if err := in.writeFile("config", ConfigPath, []byte(b.String())); err != nil {
 		return err
 	}
-	if err := in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nworktrees/\nconfig.local.toml\n")); err != nil {
+	if err := in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nworktrees/\nconfig.local.toml\nconfig.local.json\n")); err != nil {
 		return err
 	}
 	return in.writeFile("config", SeedReadmePath, []byte(SeedReadme))
@@ -627,7 +741,16 @@ func AgentsSection(r Repo) hosts.AgentsSection {
 	b.WriteString("- Run `aayu ready <issue> --check` before asking for Ready; `aayu ready <issue>` posts the Ready snapshot. Do not\n")
 	b.WriteString("  edit a Ready issue's body: the Ready guard strips `status:ready` when it drifts.\n")
 	b.WriteString("- The `ledger` branch holds snapshots, proof, and actions segments. Never commit code to it or merge it.\n")
-	b.WriteString("- Every GitHub write goes through `aayu`; agents never write with `gh` directly.")
+	b.WriteString("- Every GitHub write goes through `aayu`; agents never write with `gh` directly.\n")
+	b.WriteString("- Every pull request that is not docs-only gets a review by a model of another family than the builder's: by\n")
+	b.WriteString("  default the merge gate's CI review (the `code-review` environment's model, rung B), or the agent app that\n")
+	b.WriteString("  `[inspect] reviewer` names (rung A). When no other family can be shown, the review is a labelled same-family\n")
+	b.WriteString("  review (rung C). Rung C never counts toward the streak; it counts for merge on proof only where\n")
+	b.WriteString("  `[autonomy] proof_rungs` lists C. `aayu build` asks for the review after each push and writes `Aayudha-Host`,\n")
+	b.WriteString("  `Aayudha-Model`, and `Aayudha-Effort` trailers. For a pull request `aayu build` did not open, put\n")
+	b.WriteString("  `Aayudha-Host: <host>` and `Aayudha-Model: <model>` lines in its body, one per model used, then an\n")
+	b.WriteString("  `Aayudha-Effort: <level>` line when you know it, and run `aayu inspect <pr>` after the last push.\n")
+	b.WriteString("- Write every pull request body to `.github/pull_request_template.md`; `aayu inspect` checks its sections.")
 	return hosts.AgentsSection{ID: AgentsSectionID, Body: b.String()}
 }
 

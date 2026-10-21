@@ -45,15 +45,19 @@ evidence".
 
 | Cost | At Level 2 |
 |---|---|
-| Keys | None in CI: product CI never calls a model. `inspect` reads the review of an agent app you install on your account (Claude, Codex, or Cursor), and triage runs from your own agent |
+| Keys | One in CI: the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in the repository's `code-review` environment, which only the base branches and the default branch can reach. A review app can review instead, with no key in CI. Triage runs from your own agent |
 | CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, and an incident runner you trigger by hand |
 | CI minutes | About 10 minutes per push to a story's pull request in this repository (8 for the floors, 2 for the review); yours depend on your tests |
-| Model spend | None in CI. The reviewer app bills through your own subscription to it |
+| Model spend | The review model's calls, billed by its provider to your key. `[budget] per_pr_inspect_max` caps each pull request at 5 USD by default; a diff over 120 kB can go past it by the review parts already started ([known limits](../releases/v0.3.0.md#known-limits)). A review app bills through your own subscription to it instead |
 | Storage | None to set up: screenshots and recordings stay in each CI run's `aayudha-pack` file for `[proof] retention_days` (90 by default, GitHub's limit is 90 days on a public repository), and `ship` copies the pack without them to the ledger. A private bucket (S3, R2, Azure Blob Storage, or Google Cloud Storage) is optional, for longer retention |
 
-> **Needs setup:** nothing beyond a reviewer app installed on your account (`aayu doctor` detects it). Proof needs
-> no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the pull request, and
-> `ship` checks it came from that run and records it under your name.
+> **Needs setup:** the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in **Settings → Environments →
+> code-review**, which `aayu init --gates` creates ([code review in the merge gate](how-review.md)). Or a review app
+> installed on your account, named in `[inspect] reviewer` and `[inspect] apps` in the pull request that adds the
+> merge gate. A private repository on GitHub Free
+> has no environments, so there init cannot create `code-review`: choose a review app, or set `[inspect] reviewer = "human"`
+> with `[autonomy] approver` set to the person who reviews, or make the repository public or upgrade. Proof needs no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the
+> pull request, and `ship` checks it came from that run and records it under your name.
 
 **Good for:** teams that let agents write real code and need to know it is safe to merge.
 
@@ -84,7 +88,7 @@ event loops, and `init --integrations` for PostHog, Sentry, and your cloud.
 | Keys | The GitHub App is free; `init` creates it and stores its key as a secret. Read-only tokens for PostHog and Sentry. Read-only cloud access, with no stored key when it runs in GitHub Actions |
 | CI changes | Optional: a loops workflow that only records events, with no model |
 | CI minutes | Little: loops run in your agent's scheduler, and the Actions fallback is capped at 2,000 minutes a month by default |
-| Model spend | Loops and autonomous merges use your agent more often, billed by your agent's plan as usual. Default caps: 25 USD per story and 100 USD per day per repository. When a cap trips, agents pause and a person is paged |
+| Model spend | Loops and autonomous merges use your agent more often, billed by your agent's plan as usual. Default caps on metered (pay-as-you-go) spend: 60 USD per story and 100 USD per day per repository; subscription use is not counted. When a cap trips, agents pause and a person is paged |
 | Other | PostHog bills by usage on its side; Sentry adds no cost |
 
 > **Honest status:** this repository runs at Level 2, with some loops. It has no bot App installed yet, so its agents
@@ -99,7 +103,7 @@ switched on.
 | From | To | Run |
 |---|---|---|
 | Nothing | Level 1 | `aayu tour` (it runs `aayu init`, then `aayu install --host <your host> --apply`) |
-| Level 1 | Level 2 | `aayu init --gates`, install a reviewer app (Claude, Codex, or Cursor) and name it in `[inspect] apps`, and commit the new workflows through a pull request |
+| Level 1 | Level 2 | `aayu init --gates`, commit the new workflows through a pull request, and add `AAYU_REVIEW_MODEL_KEY` to the `code-review` environment (or name a review app in `[inspect] reviewer` and `[inspect] apps` in that same pull request) |
 | Level 2 | Level 3 | `aayu init --identity`, `aayu install --loops`, then `aayu init --integrations` for the services you use |
 
 Every step is idempotent: running it again changes nothing. And `aayu uninit` removes what `init` created.

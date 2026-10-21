@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
@@ -25,7 +27,57 @@ func (e *Env) SecretStore() *secrets.Store {
 
 // Resolver returns the identity resolver for this invocation (WP1.4).
 func (e *Env) Resolver() identity.Resolver {
-	return identity.Resolver{Getenv: e.Getenv, CI: e.CI, GH: e.GHToken, Secrets: e.SecretStore()}
+	r := identity.Resolver{Getenv: e.Getenv, CI: e.CI, GH: e.GHToken, Secrets: e.SecretStore()}
+	if e.MCP {
+		r.Hint = mcpTokenHint
+	}
+	return r
+}
+
+// mcpTokenHint says why the MCP server may find no token that the shell
+// finds (D-3.2b.p): a host may start it without the person's environment.
+const mcpTokenHint = ". This is the aayudha MCP server, which a host may start without your shell's environment: Cursor passes it only " + cursorMCPEnvList +
+	", so AAYU_GITHUB_TOKEN, GH_TOKEN, GH_CONFIG_DIR, and XDG_CONFIG_HOME do not reach it. Use a source that needs none of them: `gh auth login` with gh's default config folder, or `aayu auth set-secret " + identity.HumanTokenSecret + "`; `aayu doctor` checks it"
+
+// cursorMCPEnv are the only variables Cursor's CLI gives a stdio MCP server
+// besides its mcp.json env (the MCP SDK's default environment, and PWD):
+// seen in cursor-agent 2026.10.16-e3cb207 (D-3.2b.p).
+var cursorMCPEnv = []string{"HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER", "PWD"}
+
+const cursorMCPEnvList = "HOME, LOGNAME, PATH, SHELL, TERM, USER, and PWD"
+
+// cursorMCPResolver resolves the human token the way the aayudha MCP server
+// does when Cursor starts it: from Cursor's variables only, with gh and the
+// secrets store seeing the same.
+func (e *Env) cursorMCPResolver() identity.Resolver {
+	var environ []string
+	for _, k := range cursorMCPEnv {
+		if v := e.Getenv(k); v != "" {
+			environ = append(environ, k+"="+v)
+		}
+	}
+	getenv := func(k string) string {
+		if slices.Contains(cursorMCPEnv, k) {
+			return e.Getenv(k)
+		}
+		return ""
+	}
+	gh := e.GHToken
+	if gh == nil {
+		gh = func(ctx context.Context) (string, error) {
+			path, err := exec.LookPath("gh")
+			if err != nil {
+				return "", err
+			}
+			cmd := exec.CommandContext(ctx, path, "auth", "token")
+			cmd.Env = environ
+			out, err := cmd.Output()
+			return strings.TrimSpace(string(out)), err
+		}
+	}
+	// The keychain is the system's, reached from this process; a keychain an
+	// MCP server cannot reach without the session's variables is not seen.
+	return identity.Resolver{Getenv: getenv, GH: gh, Secrets: secrets.Default(getenv, environ)}
 }
 
 func runAuth(ctx context.Context, e *Env, in Values) error {
@@ -45,8 +97,11 @@ func runAuth(ctx context.Context, e *Env, in Values) error {
 	store := e.SecretStore()
 	switch action {
 	case "set-secret":
-		if e.Agent() {
-			return Errorf(ExitBlocked, "auth set-secret is for humans only and is refused when AAYU_AGENT=1")
+		if sig := e.agentSignal(); sig != "" { // no terminal needed: a person may pipe the value in
+			refusal := Errorf(ExitBlocked, "auth set-secret is for humans only and is refused for an agent lane (%s)", sig)
+			if _, err := e.presenceCheck(ctx, Pending{What: "auth set-secret " + name}, AccessAny, refusal); err != nil {
+				return err
+			}
 		}
 		fmt.Fprintf(e.Err, "Enter the value for %s on one line (input is read from stdin, never from arguments):\n", name)
 		line, err := bufio.NewReader(e.In).ReadString('\n')

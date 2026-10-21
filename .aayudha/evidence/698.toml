@@ -1,0 +1,14 @@
+# Which tests prove Bug #698's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # AMP_THREAD_ID at a terminal: a device code naming the loops, then the Amp thread starts after approval
+tests = ["internal/cli:TestInstallLoopsApplyPresence"]
+
+[[criterion]]
+id = 2 # the code is denied: exit 4, no Amp thread
+tests = ["internal/cli:TestInstallLoopsApplyPresence"]
+
+[[criterion]]
+id = 3 # AMP_THREAD_ID and no terminal: the agent-lane refusal, no device code
+tests = ["internal/cli:TestInstallLoopsApplyPresence"]

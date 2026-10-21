@@ -28,6 +28,7 @@ func (e *Env) agentRunner() mcp.Runner {
 	}
 	opts.Environ = append(append([]string(nil), opts.Environ...), "AAYU_AGENT=1")
 	opts.Dir = e.Dir
+	opts.MCP = true
 	return func(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		full := append(append([]string{args[0]}, globalArgs(e)...), args[1:]...) // before any "--"
 		return Run(ctx, full, IO{In: strings.NewReader(""), Out: stdout, Err: stderr}, opts)

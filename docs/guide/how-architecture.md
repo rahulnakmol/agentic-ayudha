@@ -35,7 +35,7 @@ the workflow templates that `aayu init --gates` installs (`internal/initrepo/*.y
 
 ## Four surfaces for one verb
 
-The registry (`internal/verbs/registry.go`) declares 32 verbs and 15 plumbing commands. Each command lists the
+The registry (`internal/verbs/registry.go`) declares 34 verbs and 15 plumbing commands. Each command lists the
 surfaces it appears on:
 
 - **CLI.** Every command. `internal/cli/root.go` builds one cobra command per registry entry at start-up, with

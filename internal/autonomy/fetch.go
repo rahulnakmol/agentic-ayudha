@@ -16,8 +16,9 @@ import (
 const MaxPRs = 100
 
 // Fetch reads the newest merged PRs (up to limit) and, for the agent PRs among
-// them, their files, reviews, commits, and comments; for later revert PRs their
-// commits; and the Bug and Incident issues opened since the oldest of them.
+// them, their files, reviews, commits, comments, and review rung (GateRung);
+// for later revert PRs their commits; and the Bug and Incident issues opened
+// since the oldest of them.
 func Fetch(ctx context.Context, c *github.Client, repo string, r Rules, limit int) ([]PR, []Issue, error) {
 	owner, name, err := github.SplitRepo(repo)
 	if err != nil {
@@ -35,7 +36,7 @@ func Fetch(ctx context.Context, c *github.Client, repo string, r Rules, limit in
 				continue
 			}
 			pr := PR{Number: p.GetNumber(), Title: p.GetTitle(), Body: p.GetBody(), Author: p.GetUser().GetLogin(),
-				AuthorBot: p.GetUser().GetType() == "Bot", MergedAt: p.GetMergedAt().UTC(), MergeSHA: p.GetMergeCommitSHA()}
+				AuthorBot: p.GetUser().GetType() == "Bot", Head: p.GetHead().GetSHA(), MergedAt: p.GetMergedAt().UTC(), MergeSHA: p.GetMergeCommitSHA()}
 			for _, l := range p.Labels {
 				pr.Labels = append(pr.Labels, l.GetName())
 			}
@@ -92,8 +93,9 @@ func Fetch(ctx context.Context, c *github.Client, repo string, r Rules, limit in
 			return nil, nil, err
 		}
 		for _, cm := range comments {
-			p.Comments = append(p.Comments, Comment{Body: cm.GetBody(), At: cm.GetCreatedAt().UTC()})
+			p.Comments = append(p.Comments, Comment{Body: cm.GetBody(), At: cm.GetCreatedAt().UTC(), Login: cm.GetUser().GetLogin(), Updated: cm.GetUpdatedAt().UTC()})
 		}
+		p.Rung = GateRung(ctx, c, owner, name, p.Number, p.Head)
 	}
 	if len(prs) == 0 {
 		return prs, nil, nil

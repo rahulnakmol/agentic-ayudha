@@ -126,3 +126,42 @@ func TestCheckLeavesCodeSpanLinks(t *testing.T) {
 		t.Fatalf("copy %q (%d tagged), want %q", d.Copy, d.Tagged, want)
 	}
 }
+
+// A host's draft (D-7.5b): no superlative, no exclamation mark when the brand
+// avoids them, no sentence naming an unproven Feature even unlinked, a named
+// proven Feature linked at least once, and announcing kinds link one.
+func TestCheckDraft(t *testing.T) {
+	proven := map[int]Feature{7: {Number: 7, Title: "Export filtered claims", URL: "https://github.com/o/r/issues/7"}}
+	unproven := []Feature{{Number: 20, Title: "Team workspaces"}}
+	quiet := Brand{Avoid: []string{"exclamation marks"}, Source: "design/brand.yaml"}
+	for _, tt := range []struct {
+		name, kind, md string
+		b              Brand
+		want           []string // problem reasons, in order
+	}{
+		{"clean launch", "launch", "Export the claims you filtered as a CSV file (#7). It works at least as well with 12,480 claims; the most important step is the filter.\n\n![Export](img/x.png)\n\n```\nthe best code\n```\n", quiet, nil},
+		{"superlatives", "guide", "The fastest way, and the `best` flag.\nOur most reliable export.\n", Default, []string{`"fastest" is a superlative`, `"most reliable" is a superlative`}},
+		{"exclamation marks", "guide", "Try it now!\n", quiet, []string{"an exclamation mark: the brand avoids them (design/brand.yaml)"}},
+		{"exclamation marks allowed", "guide", "Try it now!\n", Default, nil},
+		{"alert markers are not exclamation marks", "guide", "> [!NOTE]\n> Try it now.\n\n> [!WARNING]\n> Try it now!\n\n> [!TIP] Try it now.\n\n> > [!NOTE]\n\n> Plain text.\n> [!CAUTION]\n\n> Plain text,\nlazy line.\n> [!NOTE]\n\nIntro.\n> [!IMPORTANT]\n> Try it now.\n\n- A list item.\n\n  > [!TIP]\n\n> `x` [!NOTE]\n\n<pre>\n\n> [!NOTE]\n</pre>\n\n<div>\n> [!TIP]\n\n> [!NOTE]\n", quiet, []string{"an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark", "an exclamation mark"}},
+		{"unproven named", "guide", "Teams will share a workspace soon. A team has one export space.\n", Default, []string{`names #20 "Team workspaces"`}},
+		{"unproven words in separate sentences", "guide", "Your team exports claims. Each workspace keeps its own.\n", Default, nil},
+		{"unproven words far apart", "guide", "Your team can export the filtered claims to one shared workspace.\n\nSee #7.\n", Default, nil},
+		{"proven named, never linked", "guide", "You can export the claims you have filtered.\n", Default, []string{`names #7 "Export filtered claims" without linking it`}},
+		{"proven named, linked later", "guide", "You can export the claims you have filtered.\n\nSee its proof: #7.\n", Default, nil},
+		{"launch links nothing", "launch", "Reviewing claims is calmer now.\n", Default, []string{"launch copy links no proven Feature"}},
+	} {
+		_, probs := CheckDraft(tt.md, "o/r", tt.kind, proven, unproven, tt.b, UTM{})
+		var got []string
+		for _, p := range probs {
+			got = append(got, p.Reason)
+		}
+		ok := len(got) == len(tt.want)
+		for i := 0; ok && i < len(got); i++ {
+			ok = strings.Contains(got[i], tt.want[i])
+		}
+		if !ok {
+			t.Errorf("%s: problems %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

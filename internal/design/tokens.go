@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -160,11 +161,15 @@ type Mismatch struct {
 	Where    string `json:"where"`
 	Value    string `json:"value"`
 	Property string `json:"property,omitempty"`
+	Line     string `json:"line,omitempty"` // the source text a literal was read from
 }
 
 func (m Mismatch) String() string {
 	if m.Property != "" {
 		return fmt.Sprintf("%s %s %s at %s", m.Kind, m.Property, m.Value, m.Where)
+	}
+	if m.Line != "" {
+		return fmt.Sprintf("%s %s at %s (%q)", m.Kind, m.Value, m.Where, m.Line)
 	}
 	return fmt.Sprintf("%s %s at %s", m.Kind, m.Value, m.Where)
 }
@@ -213,24 +218,126 @@ func pxValue(s string) (float64, bool) {
 }
 
 // literalColor finds colour values in markup and CSS: after an attribute's
-// quote, a declaration's colon, or an argument separator, so text such as
-// "#1042" is not read as a colour.
-var literalColor = regexp.MustCompile(`[:=("',]\s*(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))`)
+// quote, a declaration's colon, a function's opening parenthesis, or an
+// argument separator, so text such as "#1042" or an issue reference in
+// parentheses, "(#423)", is not read as a colour.
+var literalColor = regexp.MustCompile(`(?:[:="',]|[\w-]\()\s*(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))`)
+
+// In HTML and SVG, comments and text content are prose, not styles: a title
+// "(mockup: default, #571)" names a story. The text of <style> and <script>
+// stays, since it is code.
+var (
+	markupComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+	markupCode    = regexp.MustCompile(`(?is)<style\b[^>]*>.*?</style\s*>|<script\b[^>]*>.*?</script\s*>`)
+	markupText    = regexp.MustCompile(`>[^<]+<`)
+)
+
+// markupProse blanks the comments and text content of HTML or SVG markup,
+// keeping tags, attributes, the code of <style> and <script> blocks, every
+// newline, and the length, so offsets still point into the original.
+func markupProse(s string) string {
+	blanked := func(m string) string {
+		b := []byte(m)
+		blank(b)
+		return string(b)
+	}
+	s = markupComment.ReplaceAllStringFunc(s, blanked)
+	var b strings.Builder
+	last := 0
+	for _, loc := range append(markupCode.FindAllStringIndex(s, -1), []int{len(s), len(s)}) {
+		b.WriteString(markupText.ReplaceAllStringFunc(s[last:loc[0]], func(m string) string {
+			return ">" + blanked(m[1:len(m)-1]) + "<"
+		}))
+		b.WriteString(s[loc[0]:loc[1]])
+		last = loc[1]
+	}
+	return b.String()
+}
+
+// commentMask marks the comments of JavaScript, TypeScript, or CSS source:
+// /* … */ when it is closed and, unless css, // to the end of the line,
+// outside string literals. JSX text cannot be told from code without a
+// parser, so a "comment" may really be JSX text; CheckLiterals skips only
+// what cannot be a colour in code there.
+func commentMask(s string, css bool) []bool {
+	mask := make([]bool, len(s))
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case quote != 0:
+			if c == '\\' {
+				i++
+			} else if c == quote || (c == '\n' && quote != '`') {
+				quote = 0
+			}
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '/' && i+1 < len(s) && s[i+1] == '*' && strings.Contains(s[i+2:], "*/"):
+			end := i + 2 + strings.Index(s[i+2:], "*/") + 2
+			for j := i; j < end; j++ {
+				mask[j] = true
+			}
+			i = end - 1
+		case c == '/' && i+1 < len(s) && s[i+1] == '/' && !css:
+			for ; i < len(s) && s[i] != '\n'; i++ {
+				mask[i] = true
+			}
+		}
+	}
+	return mask
+}
+
+// excerpt is the source line around text[start:end], at most about 80
+// characters, so a mismatch shows what was read as a colour.
+func excerpt(text string, start, end int) string {
+	from := strings.LastIndexByte(text[:start], '\n') + 1
+	to := strings.IndexByte(text[end:], '\n')
+	to = map[bool]int{true: len(text), false: end + to}[to < 0]
+	from, to = max(from, start-40), min(to, end+40)
+	return strings.TrimSpace(text[from:to])
+}
+
+func blank(b []byte) {
+	for i := range b {
+		if b[i] != '\n' {
+			b[i] = ' '
+		}
+	}
+}
 
 // CheckLiterals returns the colour literals in a text artifact (an SVG or HTML
-// mockup) that are not token values. CSS custom properties (var(--…)) are
-// token references and pass.
+// mockup, or code) that are not token values, each at its file and line.
+// CSS custom properties (var(--…)) are token references and pass. In an
+// .html, .htm, or .svg file, comments and text content are not read; in CSS,
+// comments are not read. In JavaScript or TypeScript, a comment's bare
+// "#572" after ":", "=", or "," names a story and is skipped, but a quoted
+// literal or rgb() in one is still read: it may be JSX text, not a comment.
 func (t *Tokens) CheckLiterals(where string, text []byte) []Mismatch {
 	var out []Mismatch
 	seen := map[string]bool{}
-	for _, m := range literalColor.FindAllStringSubmatch(string(text), -1) {
-		hex, ok := ParseColor(m[1])
+	s := string(text)
+	var mask []bool
+	js := false
+	switch strings.ToLower(path.Ext(where)) {
+	case ".html", ".htm", ".svg":
+		s = markupProse(s)
+	case ".css":
+		mask = commentMask(s, true)
+	case ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs":
+		mask, js = commentMask(s, false), true
+	}
+	for _, loc := range literalColor.FindAllStringSubmatchIndex(s, -1) {
+		if mask != nil && mask[loc[2]] && (!js || strings.IndexByte(":=,", s[loc[0]]) >= 0) {
+			continue
+		}
+		hex, ok := ParseColor(s[loc[2]:loc[3]])
 		if !ok || seen[hex] {
 			continue
 		}
 		seen[hex] = true
 		if _, tok := t.Colors[hex]; !tok {
-			out = append(out, Mismatch{Kind: "colour", Where: where, Value: hex})
+			out = append(out, Mismatch{Kind: "colour", Where: fmt.Sprintf("%s:%d", where, 1+strings.Count(s[:loc[2]], "\n")), Value: hex, Line: excerpt(string(text), loc[2], loc[3])})
 		}
 	}
 	return out

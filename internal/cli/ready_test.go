@@ -84,6 +84,9 @@ func readyTree(t *testing.T) *fake.GitHub {
 // WP2.7 accept: fixtures pass or fail Ready with the expected messages.
 func TestReadyCheckFixtures(t *testing.T) {
 	g := readyTree(t)
+	// A Decision offers a real choice: one numbered option fails Ready, two pass.
+	g.AddIssue("One way only", fixtureBody(t, "decision", func(f map[string]string) { f["options"] = "1. **In-house.** We build the engine." }), "type:decision") // #7
+	g.AddIssue("Two ways", fixtureBody(t, "decision", nil), "type:decision")                                                                                      // #8
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
 	tests := []struct {
@@ -96,6 +99,9 @@ func TestReadyCheckFixtures(t *testing.T) {
 		{"4", ExitBlocked, []string{"completion_goal: criterion 2 is unmapped (no evidence kind); start it with one of [screenshot], [recording], [sr-transcript], [api-trace], [metric]"}},
 		{"5", ExitBlocked, []string{"reversible: Reversible is required at Decision-ready"}},
 		{"6", 0, nil}, // a Story without a parent Feature is Ready (D-2.1c)
+		{"7", ExitBlocked, []string{"options: 1 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
+			"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
+		{"8", 0, nil},
 	}
 	for _, tt := range tests {
 		code, out, errOut := run(t, env, opts, "ready", tt.issue, "--check", "--json", "--repo", "o/r")
@@ -107,6 +113,9 @@ func TestReadyCheckFixtures(t *testing.T) {
 		}
 		if code != tt.code || !slices.Equal(got, tt.want) {
 			t.Errorf("ready %s --check: exit %d %q, want %d %q (%s)", tt.issue, code, got, tt.code, tt.want, errOut)
+		}
+		if tt.issue == "2" && (res.Threshold != "2 of 2" || res.Environment != "staging with seed data" || res.Scenario != "Open the list with no items.") {
+			t.Errorf("ready 2 --check: threshold %q, scenario %q, environment %q; want the story's fields (D-3.4i)", res.Threshold, res.Scenario, res.Environment)
 		}
 	}
 	if w := g.Writes(); len(w) != 0 {

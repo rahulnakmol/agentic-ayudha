@@ -33,8 +33,8 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/danieljoos/wincred` | v1.2.3 | MIT | Windows Credential Manager, via go-keyring | <https://github.com/danieljoos/wincred> |
 | `filippo.io/age` | v1.3.2 | BSD-3-Clause | Encrypted secrets file (WP1.3) and token broker hand-over (WP1.4), direct | <https://github.com/FiloSottile/age> |
 | `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | <https://github.com/FiloSottile/hpke> |
-| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://go.googlesource.com/crypto> |
-| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://go.googlesource.com/sys> |
+| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://github.com/golang/crypto> |
+| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://github.com/golang/sys> |
 | `go.opentelemetry.io/otel` | v1.46.0 | Apache-2.0 | Traces of verb runs (WP1.8), direct; with `otel/sdk` and `otel/trace` | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/sdk` | v1.46.0 | Apache-2.0 | Tracer provider (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/trace` | v1.46.0 | Apache-2.0 | Trace API (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
@@ -53,9 +53,9 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/segmentio/encoding` | v0.5.4 | MIT | JSON codec, via go-sdk | <https://github.com/segmentio/encoding> |
 | `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | <https://github.com/segmentio/asm> |
 | `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | <https://github.com/yosida95/uritemplate> |
-| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://go.googlesource.com/oauth2> |
-| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
-| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
+| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://github.com/golang/oauth2> |
+| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://github.com/golang/sync> |
+| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://github.com/golang/time> |
 | `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
 | `github.com/yuin/goldmark` | v1.8.6 | MIT | Markdown drafts of `brief` parsed and rendered to HTML (WP7.3), direct | <https://github.com/yuin/goldmark> |
 | `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
@@ -64,22 +64,39 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
 | `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
 | `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | <https://github.com/charmbracelet/bubbletea> |
+| `charm.land/bubbles/v2` | v2.2.1 | MIT | `inbox` on a terminal: the spinner (WP5.6c), direct | <https://github.com/charmbracelet/bubbles> |
+| `github.com/charmbracelet/harmonica` | v0.2.0 | MIT | `inbox` on a terminal: the spring that glides the list's highlight, direct | <https://github.com/charmbracelet/harmonica> |
+| `github.com/sahilm/fuzzy` | v0.1.3 | MIT | `inbox` on a terminal: the finder's fzf-style fuzzy match, direct | <https://github.com/sahilm/fuzzy> |
 | `charm.land/lipgloss/v2` | v2.0.6 | MIT | Colour, themes, and tables on a person's terminal (WP1.1b), direct | <https://github.com/charmbracelet/lipgloss> |
 | `github.com/charmbracelet/ultraviolet` | v0.0.0-20260811164956-006e29f97886 | MIT | Terminal input and rendering, via bubbletea and lipgloss | <https://github.com/charmbracelet/ultraviolet> |
 | `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | Terminal colour detection, via bubbletea | <https://github.com/charmbracelet/colorprofile> |
-| `github.com/charmbracelet/x/ansi` | v0.11.8 | MIT | ANSI sequences, via bubbletea and lipgloss | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/ansi` | v0.11.8 | MIT | ANSI sequences, via bubbletea and lipgloss; direct for the inbox's widths | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/term` | v0.2.2 | MIT | Terminal detection and width for the CLI experience (WP1.1b), direct; also via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/termios` | v0.1.1 | MIT | Terminal modes, via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/windows` | v0.2.2 | MIT | Windows console, via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | Text width, via ultraviolet | <https://github.com/clipperhouse/displaywidth> |
 | `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | Text segmentation, via displaywidth | <https://github.com/clipperhouse/uax29> |
 | `github.com/lucasb-eyer/go-colorful` | v1.4.1 | MIT | Colour conversion, via bubbletea and lipgloss | <https://github.com/lucasb-eyer/go-colorful> |
-| `github.com/mattn/go-runewidth` | v0.0.24 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
+| `github.com/mattn/go-runewidth` | v0.0.27 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
 | `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | <https://github.com/muesli/cancelreader> |
 | `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | <https://github.com/rivo/uniseg> |
 | `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |
 | `github.com/mattn/go-isatty` | v0.0.24 | MIT | Terminal detection, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/mattn/go-isatty> |
 | `github.com/ncruces/go-strftime` | v1.0.0 | MIT | Time formatting, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/ncruces/go-strftime> |
+
+### Colour palettes (`[ui] theme`, in `internal/ui/ui.go`)
+
+The named themes use colour values from each project's published palette. Each project is MIT-licensed; the
+values are recorded here with their source.
+
+| Theme | Palette | Licence | Source |
+|---|---|---|---|
+| `nord` | Nord, by Arctic Ice Studio and Sven Greb | MIT | <https://www.nordtheme.com/docs/colors-and-palettes>, <https://github.com/nordtheme/nord> |
+| `catppuccin-mocha`, `catppuccin-latte` | Catppuccin Mocha and Latte | MIT | <https://catppuccin.com/palette>, <https://github.com/catppuccin/palette> |
+| `gruvbox-dark`, `gruvbox-light` | Gruvbox, by Pavel Pertsev | MIT/X11 (stated in its README; no licence file) | <https://github.com/morhetz/gruvbox> |
+| `dracula` | Dracula, by Zeno Rocha | MIT | <https://draculatheme.com/spec>, <https://github.com/dracula/dracula-theme> |
+| `tokyonight` | Tokyo Night (Night), by enkia | MIT | <https://github.com/enkia/tokyo-night-vscode-theme> |
+| `solarized` | Solarized, by Ethan Schoonover | MIT | <https://ethanschoonover.com/solarized/>, <https://github.com/altercation/solarized> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -118,6 +135,22 @@ These run only in this repository's GitHub Actions workflows. Versions are pinne
 | [pnpm](https://github.com/pnpm/pnpm) | MIT | Installs the Node workspace and runs its licence scan (`pnpm licenses list`) |
 | [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |
 | [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |
+
+### Eval fixtures (not distributed)
+
+Four open-source codebases are kept, with their licence files, as fixtures for the `survey` skill's evals
+(`evals/cases/survey/repos/`, WP5.9): two whole, two as the subsets named below. They are test data: never built,
+linked, or embedded in the binary.
+
+| Component | Version | Licence | Use | Source |
+|---|---|---|---|---|
+| tiny-js | commit 8214477 (2026-02-24) | MIT | C++ fixture for `survey/tinyjs-rust` and `survey/tinyjs-backlog`; line endings normalised to LF, `.gitignore` dropped | <https://github.com/gfwilliams/tiny-js> |
+| Parsedown | commit 4e433a8 (2026-02-18) | MIT | PHP fixture for `survey/parsedown-modern-php`; `.github/`, `.gitignore`, and `.gitattributes` dropped | <https://github.com/erusev/parsedown> |
+| MINPACK | commit 12f30bc (2022-10-06) | MIT (repository, Ondřej Čertík) and the Minpack Copyright Notice (1999) of the University of Chicago, a BSD-style licence with an acknowledgment clause (the MINPACK code), both in its `LICENSE` | Fortran fixture for `survey/minpack-traps`; a subset: `src/`, `examples/`, the seven `ex/` drivers and their data files `ex/file21`-`ex/file23`, the build files, `fpm.toml`, the readme, and the licence | <https://github.com/certik/minpack> |
+| Maruku | commit 4d88d0e (2025-01-04) | MIT | Ruby fixture for `survey/maruku-compat` and `survey/maruku-backlog`; a subset: `lib/`, `bin/`, `data/entities.xml`, `spec/*.rb`, 20 of the 162 `spec/block_docs`, the readme, licence, gemspec, Gemfile, and Rakefile | <https://github.com/bhollis/maruku> |
+
+The MINPACK fixture includes software developed by the University of Chicago, as Operator of Argonne National
+Laboratory (the acknowledgment its licence asks for).
 
 ### Design system (`packages/design-system/`, WP6.1–6.3)
 

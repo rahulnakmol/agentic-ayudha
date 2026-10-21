@@ -14,14 +14,15 @@ var (
 	rules  = Rules{Bots: []string{"aayu-machine"}, Days: 14, Layers: layers}
 )
 
-// history returns n correction-free bot PRs on files, numbered from first and
-// merged a day apart starting at start, newest last.
+// history returns n correction-free bot PRs on files, each reviewed by a
+// different family (rung A), numbered from first and merged a day apart
+// starting at start, newest last.
 func history(first, n int, start time.Time, files ...string) []PR {
 	var out []PR
 	for i := 0; i < n; i++ {
 		at := start.Add(time.Duration(i) * 24 * time.Hour)
 		out = append(out, PR{Number: first + i, Title: fmt.Sprintf("feat: change %d", first+i), Author: "aayudha[bot]", AuthorBot: true,
-			MergedAt: at, MergeSHA: fmt.Sprintf("%040d", first+i), Files: files,
+			MergedAt: at, MergeSHA: fmt.Sprintf("%040d", first+i), Files: files, Rung: "A",
 			Reviews: []Review{{Login: "founder", State: "APPROVED", At: at.Add(-time.Hour)}},
 			Commits: []Commit{{SHA: fmt.Sprintf("c%039d", first+i), Login: "aayudha[bot]", Bot: true, Message: "feat: x\n\nAayudha-Checkpoint: 1/1", Parents: 1}}})
 	}
@@ -63,6 +64,21 @@ func TestStreakAtThreshold(t *testing.T) {
 	}
 }
 
+// Decision #469, detail 8: only a proven review (different-family, or a
+// person's) counts. A same-family (C) or unknown-rung merge neither counts
+// nor breaks the streak, but a correction on one still breaks it.
+func TestStreakSkipsUnprovenReviews(t *testing.T) {
+	prs := history(1, 6, t0, "ui/a.tsx")
+	prs[1].Rung, prs[2].Rung, prs[3].Rung, prs[4].Rung = "C", "", "human", "B"
+	if s, _ := streakOf(t, prs, nil, "L01"); s.Streak != 4 || s.Skipped != 2 || s.Merges != 6 || s.LastBreak != 0 {
+		t.Errorf("A, C, unknown, human, B, A: %+v; want a streak of 4 with 2 skipped", s)
+	}
+	prs[1].Labels = []string{LabelCorrection}
+	if s, _ := streakOf(t, prs, nil, "L01"); s.Streak != 3 || s.Skipped != 1 || s.LastBreak != 2 {
+		t.Errorf("a correction on the same-family merge: %+v; want a streak of 3 broken at #2", s)
+	}
+}
+
 // WP5.7 accept: each correction kind resets the streak of every layer in the
 // corrected PR's footprint, and its near miss does not.
 func TestCorrectionKinds(t *testing.T) {
@@ -84,10 +100,13 @@ func TestCorrectionKinds(t *testing.T) {
 			func(p *PR, _ *[]PR, _ *[]Issue) {
 				p.Commits = append(p.Commits, Commit{SHA: "h1", Login: "founder", Message: "fix: typo", Parents: 1})
 			},
-			// a merge of the base branch and a commit by a configured machine user are not corrections
+			// a merge of the base branch, a commit by a configured machine user, and an agent's commit
+			// under a person's account that declares its model are not corrections
 			func(p *PR, _ *[]PR, _ *[]Issue) {
 				p.Commits = append(p.Commits, Commit{SHA: "m1", Login: "founder", Message: "Merge branch 'dev'", Parents: 2},
-					Commit{SHA: "b1", Login: "aayu-machine", Message: "chore: regenerate", Parents: 1})
+					Commit{SHA: "b1", Login: "aayu-machine", Message: "chore: regenerate", Parents: 1},
+					Commit{SHA: "a1", Login: "founder", Message: "fix: x\n\nAayudha-Host: amp\nAayudha-Model: claude-opus-5-5", Parents: 1},
+					Commit{SHA: "a2", Login: "founder", Message: "fix: y\n\nAayudha-Host: amp", Parents: 1})
 			}},
 		{KindPostPass,
 			func(p *PR, _ *[]PR, _ *[]Issue) {
@@ -136,6 +155,39 @@ func TestCorrectionKinds(t *testing.T) {
 			if corrected && (len(cs) != 1 || cs[0].Kind != tt.kind || cs[0].PR != newest || fmt.Sprint(cs[0].Layers) != "[L01 L02]") {
 				t.Errorf("%s: corrections %+v", tt.kind, cs)
 			}
+		}
+	}
+}
+
+// An agent's commit outside aayu build, under a person's account, is not a
+// correction when it says so with a well-formed trailer; a person's commit,
+// or one with a stray, empty, or unknown line, still is.
+func TestAgentCommitTrailers(t *testing.T) {
+	thread := "Amp-Thread-ID: https://ampcode.com/threads/T-01a14215-cfcd-705d-a4b0-2b257ff86949"
+	for msg, correction := range map[string]bool{
+		"fix: a\n\nAayudha-Host: amp":                                    false,
+		"fix: a\n\nAayudha-Host: claude\nAayudha-Model: claude-opus-5-5": false,
+		"fix: a\n\n" + thread:                                            false,
+		"fix: a\n\nSigned-off-by: R <r@example.com>":                     true,
+		"fix: a\n\nAayudha-Model:":                                       true,
+		"fix: a\n\nAayudha-Model: claude-opus-5-5":                       true, // a model alone names no agent
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Model: mystery-1":          true,
+		"fix: a\n\nAayudha-Host: notepad":                                true,
+		"fix: a\n\nAayudha-Host:":                                        true,
+		"fix: a\n\nAmp-Thread-ID: see the thread":                        true,
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Host: codex":               true,
+		"fix: a\n\nAayudha-Host: amp\nAayudha-Model: mystery model":      true,
+		"fix: a\n\nAayudha-Host: amp extra":                              true,
+		// A body that quotes a trailer is not a trailer block.
+		"fix: a\n\nAayudha-Host: amp\nwas wrong, so I fixed it by hand":                    true,
+		"fix: a\n\nAayudha-Host: amp\n\nSigned-off-by: R <r@example.com>":                  true,
+		"fix: a\n\nAayudha-Checkpoint: 1/1 was quoted\n\nSigned-off-by: R <r@example.com>": true,
+		"fix: a\n\nBody.\n\nAayudha-Host: amp\nSigned-off-by: R <r@example.com>":           false,
+	} {
+		p := PR{Number: 1, Author: "founder", Labels: []string{LabelAgentAuthored}, MergedAt: t0,
+			Commits: []Commit{{SHA: "c1", Login: "founder", Message: msg, Parents: 1}}}
+		if got := len((Rules{}).Detect([]PR{p}, nil)) == 1; got != correction {
+			t.Errorf("%q: correction %v, want %v", msg, got, correction)
 		}
 	}
 }

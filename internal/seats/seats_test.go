@@ -27,8 +27,8 @@ func TestRenderCodeowners(t *testing.T) {
 		// No hand-written owners: the first seat human owns their layer alone;
 		// a second human makes every line name both, so neither is a sole owner.
 		{"product repo without CODEOWNERS, two humans", "",
-			map[verbs.SeatID]string{verbs.UXResearcher: "ann", verbs.RevenueArchitect: "bob"},
-			BlockBegin + "\n/packages/design-system/  @ann @bob\n/examples/benefits-qa/web/  @ann @bob\n/internal/telemetry/  @bob @ann\n/examples/benefits-qa/analytics/  @bob @ann\n" + BlockEnd + "\n"},
+			map[verbs.SeatID]string{verbs.UXResearcher: "ann", verbs.DataAIArchitect: "bob"},
+			BlockBegin + "\n/packages/design-system/  @ann @bob\n/examples/benefits-qa/web/  @ann @bob\n/internal/models/  @bob @ann\n/internal/evals/  @bob @ann\n/evals/  @bob @ann\n/examples/benefits-qa/answer/  @bob @ann\n/internal/telemetry/  @bob @ann\n/examples/benefits-qa/analytics/  @bob @ann\n" + BlockEnd + "\n"},
 		{"re-rendering replaces the old block", hand + "\n" + BlockBegin + "\n/stale/  @zed\n" + BlockEnd + "\n",
 			nil, hand},
 	}

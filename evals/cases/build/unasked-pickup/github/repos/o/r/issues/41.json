@@ -1,0 +1,20 @@
+{
+  "number": 41,
+  "title": "Clear done notes",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:ready"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ],
+  "body": "### summary\n\nAs a person keeping notes, I want to clear the notes I have finished, so that my list shows only what is left to do.\n\n### completion_goal\n\n1. [api-trace] state: three notes \"buy milk\", \"call Ada\", \"post letter\", the second marked done, then `notes clear`; expected: exit 0, stdout \"cleared 1 done note\", and `notes list` shows \"1 [ ] buy milk\" and \"2 [ ] post letter\"\n2. [api-trace] state: two notes, none done, then `notes clear`; expected: exit 0, stdout \"nothing to clear\", and the notes file unchanged\n\n### measure\n\nCompletion Goal criteria observed\n\n### threshold\n\n2 of 2\n\n### scenario\n\nAdd three notes, mark the second done, clear, and list; then clear a list with nothing done.\n\n### environment\n\nthe CLI built from the checkout, in a fresh directory\n\n### checkpoints\n\n1. `notes clear` removes the done notes and says how many it removed (criteria 1, 2)\n"
+}

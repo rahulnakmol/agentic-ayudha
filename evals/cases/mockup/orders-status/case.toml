@@ -1,0 +1,19 @@
+# mockup (WP6.5) from the recorded research and wireframe stages of the same Feature. output/ is a recorded run
+# (tier 1); tier 2 reruns it. The floors: `aayu mockup`'s checks (token-only colours, every wireframe state) against
+# the pinned wireframe manifest, every Completion Goal state, and lane B's a11y floor on each HTML mockup in
+# Chromium (n/a in tier 1 without AAYU_FLOOR_WEB=1).
+skill = "mockup"
+description = "Design-system mockups for Feature #420's states."
+input = "input.md"
+artifacts = ["output/stage.json"]
+
+[ux]
+output = "output"
+feature = 420
+team = "startup"
+upstream = ["../../research/orders-status/output", "../../wireframe/orders-status/output"]
+states = ["list", "empty", "error"]
+context = ["evals/cases/mockup/design-system.md", "packages/design-system/src/styles/tokens.css"]
+
+[tier2]
+rubric = "rubric.md"

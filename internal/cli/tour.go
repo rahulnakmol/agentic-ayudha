@@ -22,8 +22,8 @@ func init() { register("tour", runTour) }
 // Level 1 (docs/guide/adopt.md) with the real commands, init and install, each
 // of which still asks its own confirmations. It writes nothing itself.
 func runTour(ctx context.Context, e *Env, _ Values) error {
-	if e.Agent() {
-		return WithNext(Errorf(ExitBlocked, "tour sets a repository up for a person; agents are refused (AAYU_AGENT=1)"), "aayu next")
+	if sig := e.agentSignal(); sig != "" {
+		return WithNext(Errorf(ExitBlocked, "tour sets a repository up for a person; agents are refused (%s)", sig), "aayu next")
 	}
 	if !e.isTerminal(e.In) {
 		return WithNext(Errorf(ExitBlocked, "tour asks a few questions, so it needs a terminal; without one, run init and install yourself"), "aayu init")

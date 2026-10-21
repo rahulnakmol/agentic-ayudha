@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,7 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 )
 
-// Flow metrics (docs/research/video-learnings-2026-10.md P1, Appendix B
+// Flow metrics (private research note video-learnings-2026-10.md P1, Appendix B
 // S-7.6e): how long each delivered story waited in each stage, how often a
 // person had to step in, how much of inspect's advice was acted on, how many
 // stories escaped as Bugs, and what kind of change merged. They come from
@@ -46,6 +47,25 @@ func reviewOf(s inspect.State) *Review {
 		}
 	}
 	return r
+}
+
+// GateWriter is the account the merge gate writes its inspect comment as
+// with the workflow's token; Source.GateWriters adds the bot App and the
+// machine user a repository configures.
+const GateWriter = "github-actions[bot]"
+
+// roundsOf is how many judged review rounds the merge gate's inspect comment
+// on PR p records (Story #568): the comment is kept in place, so the newest
+// one created before the merge holds the state at merge. Only the gate's own
+// comment counts, since anyone can post the marker. 0 is none recorded.
+func roundsOf(p autonomy.PR, writers []string) int {
+	n := 0
+	for _, c := range p.Comments {
+		if slices.ContainsFunc(append([]string{GateWriter}, writers...), func(w string) bool { return strings.EqualFold(w, c.Login) }) && strings.Contains(c.Body, inspect.Marker) && !cmp.Or(c.Updated, c.At).After(p.MergedAt) {
+			n = len(inspect.ParseState(c.Body).Rounds)
+		}
+	}
+	return n
 }
 
 // Bug is a Bug issue and the issue and PR numbers its body links.
@@ -370,7 +390,7 @@ func hoursCell(from, to time.Time) string {
 // markdown renders the flow section.
 func (f Flow) markdown(p func(string, ...any), stories int) {
 	p("## Flow (reported, not gated)\n\n")
-	p("No finding comes from this section (P1 of docs/research/video-learnings-2026-10.md). Ready is the story's first `status:ready` label; " +
+	p("No finding comes from this section (P1 of the private research note video-learnings-2026-10.md). Ready is the story's first `status:ready` label; " +
 		"the first checkpoint is the earliest in `build/<n>/state.json` on the ledger; gate green is when the first successful `aayudha-merge-gate.yml` run " +
 		"on the merged head completed; ship is the merge. A stage counts only the stories that have both of its ends.\n\n")
 	if len(f.Stories) == 0 {

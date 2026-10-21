@@ -1,0 +1,7 @@
+{
+  "states": [
+    {"id": "list", "title": "Orders list with three orders and their delivery status", "file": "list.md"},
+    {"id": "empty", "title": "No orders yet", "file": "empty.md"},
+    {"id": "error", "title": "Orders could not load", "file": "error.md"}
+  ]
+}

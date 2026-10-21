@@ -39,11 +39,24 @@ Never open a PR against `rolling` or `main`. Promotions are done by the maintain
    `commits`, `security`, `docs`, `release-snapshot` ([.github/workflows/ci.yml](.github/workflows/ci.yml)) and
    `protected-paths`. Jobs that a PR's paths cannot affect report "skipped", which counts as passing. `build`
    also runs the coverage ratchet: [ratchets.toml](ratchets.toml) says what it checks and how to tighten the floor.
-5. The PR is squash-merged. Then delete the branch and the worktree:
+5. The PR is squash-merged into `dev` once every required check is green and inspect's disposition at the head
+   is `merge`, never with a red required check or an open fix finding. A Story PR (its body says `Refs #n` for
+   a Story) merges only through `aayu ship <pr>`, which merges it on proof and lands its proof. A Story PR in the
+   narrow set (`[autonomy] always_person`) waits for a person: ship comments **Ready to ship**, and a person ships
+   it from `aayu inbox`. If ship refuses for anything else, it is not merged. An agent's PR carries the
+   `agent-authored` label and an `Aayudha-Host:` line (and an `Aayudha-Model:` line per known model) in its body
+   and in each commit's trailers, so the autonomy streak counts it. Then delete the branch and the worktree:
 
    ```sh
    git worktree remove ../wt-<branch> && git branch -D <branch>
    ```
+
+When the build plan cannot be enforced as written, build the closest enforceable alternative and record it in the PR
+description under a "Deviation from the plan:" heading: what the plan assumed, what you found, and what you built
+instead. The squash commit message keeps it, so `git log` is the record. Real decisions are aayu Decision issues.
+Appendix B of the plan, the decision log up to 2026-10-17, is archived privately; IDs such as D-5.5c.24 in code and
+docs refer to it, and no new rows are added. Research notes live in the private repository `rahulnakmol/agentic-ayudha-research`; cite one as
+"private research note `<file>`" with its section, never as a link or a path.
 
 From PR11 onward every work package is tracked as a Story issue on this repository with a Completion Goal
 (ground rule 1); before that, work is tracked in the build plan.
@@ -60,21 +73,37 @@ Only the repository admin identity can move `rolling` and `main` or create `v*` 
 `rolling-main-promotion` and `release-tags`). The gate runs on the exact merge commit that will land, built on
 a throwaway `promote/…` branch, so what was tested is what ships.
 
-`aayu release <release-issue> --to rolling|main --yes` (WP7.8) runs exactly the steps below for a Release issue.
+The explicit stable-release request is a comment on the Release issue whose first line is
+`Stable release: vX.Y.Z`, written after the Release's rolling snapshot by a person (not a bot) with write, maintain,
+or admin access. An agent never writes it; `aayu release --to main` refuses without it.
+
+`aayu release <release-issue> --to rolling|main` (WP7.8), which an agent may run, executes exactly the steps below
+for a Release issue.
 It also re-runs failed gate jobs once, stamps the stories the promotion shipped `released`, publishes the release
 notes, records the shipping evidence on the ledger and in the Release, and makes the Goals above the stories due
 for `measure`. `--dry-run` shows what would ship. The commands below are the same procedure by hand.
 
 ### `dev` → `rolling`
 
+The source is the newest `dev` commit that already has tier-2 results for every gating group: an
+`eval-results-<sha>-<group>` artifact on a completed `evals.yml` run of that commit, for each group
+`go run ./internal/evals/cmd/eval -groups -gating` prints. That is what the gate's `evals-gate` downloads. Pushes to
+`dev` and the nightly run share one concurrency group, so in a busy merge window the intermediate commits get no run
+and only the newest does. If dev's newest commit has no results yet, either promote the newest older commit that has
+them, or dispatch once on the newest (`gh workflow run evals.yml --ref dev`), wait for it, and check again. Never
+dispatch again to get a better result. `aayu release <n> --to rolling` does this check, never dispatches, and names
+both choices; `--at <sha>` promotes the older commit.
+
 ```sh
 git fetch origin
+src="$(git rev-parse origin/dev)"                 # or the newest older dev commit with results
+for id in $(gh run list --workflow evals.yml --commit "$src" --status completed --json databaseId --jq '.[].databaseId'); do
+  gh api "repos/{owner}/{repo}/actions/runs/$id/artifacts" --jq '.artifacts[].name'
+done                                              # every gating group's eval-results-$src-<group> must be listed
 ts="$(date -u +%Y%m%dT%H%MZ)"; cand="promote/rolling-$ts"; wt="../wt-promote-rolling-$ts"
 git worktree add "$wt" -b "$cand" origin/rolling && cd "$wt"
-git merge --no-ff --signoff origin/dev -m "Rolling snapshot: $ts"
+git merge --no-ff --signoff "$src" -m "Rolling snapshot: $ts"
 git push origin "$cand"
-gh workflow run evals.yml --ref dev && sleep 15          # tier-2 skill evals of the dev tip, which evals-gate reads
-gh run watch "$(gh run list --workflow evals.yml --branch dev --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
 gh workflow run ci.yml --ref "$cand" -f gate=rolling && sleep 15
 gh run watch "$(gh run list --workflow ci.yml --branch "$cand" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')" --exit-status
 git push origin HEAD:rolling                      # fast-forward to the gated commit
@@ -224,7 +253,10 @@ job `generate-drift` fails on any difference.
 These paths need a human CODEOWNER review (see [.github/CODEOWNERS](.github/CODEOWNERS)):
 
 `.github/`, `skills/`, `ops/`, `seats/`, `CONSTRAINTS.md`, `internal/config/defaults.toml`, `.aayudha/config.toml`,
-`.agents/`, `.claude/`.
+`.agents/`, `.claude/`; the plugin bundle (`.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, the
+`hosts/*/hooks.json` files, `hosts/amp/aayudha.ts`); and every host's executable config in the checkout
+(`.mcp.json`, `.cursor/`, `.codex/`, `.amp/plugins/`, `.github/hooks/`), the `aayudha:host-config` block that
+`aayu init --gates` writes.
 
 ## Identities and approvals
 

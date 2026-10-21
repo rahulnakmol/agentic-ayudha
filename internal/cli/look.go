@@ -83,6 +83,9 @@ func (e *Env) voice(seat verbs.SeatID, command string) ui.Voice {
 	var p seats.Persona
 	if b, err := fs.ReadFile(e.Assets, seats.PersonaPath(seat)); err == nil && toml.Unmarshal(b, &p) == nil && p.Purpose != "" {
 		v.Name, v.Intro = p.Name, clause(p.Purpose)
+		if p.Title != "" {
+			v.Seat = p.Title
+		}
 		if len(p.Questions) > 0 {
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(command))

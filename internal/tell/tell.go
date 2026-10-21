@@ -162,28 +162,13 @@ func Check(md, repo string, proven map[int]Feature, b Brand, u UTM) (Draft, []Pr
 	}
 	cited := map[int]bool{}
 	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
-	open := "" // the run that opened the current fenced code block (CommonMark)
-	for i, line := range lines {
-		if m := fence.FindStringSubmatch(line); m != nil {
-			switch {
-			case open == "" && (m[1][0] != '`' || !strings.Contains(m[2], "`")):
-				open = m[1]
-				continue
-			case open != "" && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "":
-				open = ""
-				continue
-			}
-		}
-		if open != "" {
+	for i, p := range proseLines(md) {
+		line := lines[i]
+		if p == "" && line != "" { // inside a fenced code block, or its fence
 			continue
 		}
 		spans := codeSpans(line)
-		prose := []byte(line)
-		for _, s := range spans {
-			for j := s[0]; j < s[1]; j++ {
-				prose[j] = ' '
-			}
-		}
+		prose := []byte(p)
 		for _, n := range refs(string(prose), repo) {
 			if _, ok := proven[n]; ok {
 				cited[n] = true
@@ -222,6 +207,189 @@ func Check(md, repo string, proven map[int]Feature, b Brand, u UTM) (Draft, []Pr
 	sort.Ints(d.Cited)
 	d.Copy = strings.Join(lines, "\n")
 	return d, probs
+}
+
+// Superlatives are refused in a host's draft whatever the brand says: a
+// superlative claims a comparison no pack proves (the Marketer & Documenter's
+// voice: "no superlatives").
+var Superlatives = []string{"best", "fastest", "easiest", "simplest", "quickest", "smartest", "greatest", "biggest", "finest",
+	"safest", "strongest", "smoothest", "cleanest", "ultimate", "unmatched", "unparalleled", "unrivalled", "unrivaled",
+	"unbeatable", "perfect", "perfectly", "flawless", "flawlessly"}
+
+// mostRE is a "most" or "least" superlative of a quality only a comparison
+// could prove.
+var mostRE = regexp.MustCompile(`(?i)\b(?:most|least)\s+(?:powerful|advanced|intuitive|innovative|reliable|secure|complete|comprehensive|efficient|popular|trusted|loved|accurate|flexible|robust|elegant|beautiful|productive)\b`)
+
+// claimKinds are the kinds whose copy announces Features, so it links at
+// least one proven Feature when there is one.
+var claimKinds = []string{"release", "changelog", "launch"}
+
+// CheckDraft is Check plus the rules for copy a host wrote (`tell --from`):
+// no superlative; no exclamation mark when the brand avoids them; no sentence
+// that names a Feature without authoritative packs (a sentence names one when
+// it has every content word of its title), linked or not; a proven Feature the
+// draft names is linked at least once; and release, changelog, and launch
+// copy links a proven Feature when there is one. The repository's own pages
+// (tell docs --site) and release's generated notes take Check alone.
+func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Feature, b Brand, u UTM) (Draft, []Problem) {
+	d, probs := Check(md, repo, proven, b, u)
+	noBang := slices.ContainsFunc(b.Avoid, func(a string) bool { return strings.Contains(strings.ToLower(a), "exclamation") })
+	sup := map[string]bool{}
+	for _, w := range Superlatives {
+		sup[w] = true
+	}
+	named := map[int]int{} // proven Feature -> first line naming it
+	raw := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
+	quoted := false // the previous line is inside a top-level blockquote, a lazy continuation line included
+	htmlEnd := ""   // inside a raw HTML block: its closing tag, or "\n" when a blank line ends it
+	for i, line := range proseLines(md) {
+		if htmlEnd == "" && htmlRE.MatchString(line) {
+			htmlEnd = "\n"
+			if m := htmlTextRE.FindStringSubmatch(line); m != nil {
+				htmlEnd = "</" + strings.ToLower(m[1]) + ">"
+			}
+		}
+		inHTML := htmlEnd != "" // a marker in raw HTML renders as text
+		if htmlEnd == "\n" && strings.TrimSpace(line) == "" || htmlEnd != "\n" && strings.Contains(strings.ToLower(line), htmlEnd) {
+			htmlEnd = ""
+		}
+		opens := !inHTML && quoteRE.MatchString(raw[i])
+		if opens && !quoted && alertRE.MatchString(raw[i]) { // only alone on the blockquote's first line, code spans included
+			line = ""
+		}
+		quoted = opens || (quoted && !inHTML && strings.TrimSpace(raw[i]) != "")
+		text := linkURL.ReplaceAllString(line, " ")
+		for _, w := range word.FindAllString(text, -1) {
+			if sup[strings.ToLower(w)] {
+				probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("%q is a superlative: it claims a comparison no pack proves; say what the Feature does instead", w)})
+			}
+		}
+		if m := mostRE.FindString(text); m != "" {
+			probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("%q is a superlative: it claims a comparison no pack proves; say what the Feature does instead", m)})
+		}
+		if noBang && strings.Contains(strings.ReplaceAll(text, "![", "["), "!") {
+			probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("an exclamation mark: the brand avoids them (%s)", b.Source)})
+		}
+		for _, s := range sentenceRE.Split(text, -1) {
+			for _, f := range unproven {
+				if names(s, f.Title) {
+					probs = append(probs, Problem{Line: i + 1, Ref: f.Number, Reason: fmt.Sprintf("names #%d %q, which has no authoritative packs: leave it out of the copy, without a hint that it is coming", f.Number, f.Title)})
+				}
+			}
+			for n, f := range proven {
+				if _, seen := named[n]; !seen && names(s, f.Title) {
+					named[n] = i + 1
+				}
+			}
+		}
+	}
+	for n, line := range named {
+		if !slices.Contains(d.Cited, n) {
+			probs = append(probs, Problem{Line: line, Ref: n, Reason: fmt.Sprintf("names #%d %q without linking it: link the Feature (#%d) so the reader can see its proof", n, proven[n].Title, n)})
+		}
+	}
+	if slices.Contains(claimKinds, kind) && len(proven) > 0 && len(d.Cited) == 0 {
+		probs = append(probs, Problem{Line: 1, Reason: fmt.Sprintf("%s copy links no proven Feature: claim at least one and link it as #N", kind)})
+	}
+	sort.SliceStable(probs, func(i, j int) bool { return probs[i].Line < probs[j].Line })
+	return d, probs
+}
+
+var sentenceRE = regexp.MustCompile(`[.!?;:]\s+`)
+
+// alertRE is a GitHub alert marker (`> [!NOTE]`), alone on its line. GitHub
+// renders it as syntax only on the first line of a top-level blockquote (one
+// may follow a paragraph directly), so CheckDraft skips it only there; a
+// nested, indented, or later marker renders as text and its "!" is refused.
+// An indented one may sit in a list item, where GitHub renders no alert, so
+// only a marker at the start of its line counts.
+var alertRE = regexp.MustCompile(`^>\s*\[!(?i:note|tip|important|warning|caution)\]\s*$`)
+
+// quoteRE is a line of a top-level blockquote.
+var quoteRE = regexp.MustCompile(`^ {0,3}>`)
+
+// htmlRE starts a raw HTML block, where CommonMark renders a line as text.
+// It errs wide: a tag that opens no block only stops an alert marker from
+// being skipped, so the check refuses rather than accepts.
+var htmlRE = regexp.MustCompile(`^ {0,3}<[A-Za-z/!?]`)
+
+// htmlTextRE starts a raw HTML block that only its closing tag ends; a blank
+// line ends the others.
+var htmlTextRE = regexp.MustCompile(`^ {0,3}<(?i)(pre|script|style|textarea)\b`)
+
+// stop words carry no Feature name.
+var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "from": true, "your": true, "our": true,
+	"its": true, "their": true, "into": true, "new": true, "all": true, "any": true, "via": true}
+
+// names reports whether a sentence names a Feature: the title has at least
+// two content words (three letters or more, not a stop word, plurals folded)
+// and the sentence has them all, in any order, within a run of three words
+// more than the title has ("Teams will share a workspace" names Team
+// workspaces; "Note: the file holds the claims" does not name Claim notes).
+func names(sentence, title string) bool {
+	norm := func(w string) string {
+		w = strings.ToLower(w)
+		if len(w) > 3 && strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss") {
+			w = w[:len(w)-1]
+		}
+		return w
+	}
+	want := map[string]bool{}
+	for _, w := range word.FindAllString(title, -1) {
+		if len(w) >= 3 && !stop[strings.ToLower(w)] {
+			want[norm(w)] = true
+		}
+	}
+	if len(want) < 2 {
+		return false
+	}
+	ws := word.FindAllString(sentence, -1)
+	for i := range ws {
+		if !want[norm(ws[i])] {
+			continue
+		}
+		have := map[string]bool{}
+		for j := i; j < len(ws) && j < i+len(want)+3; j++ {
+			if w := norm(ws[j]); want[w] {
+				have[w] = true
+			}
+		}
+		if len(have) == len(want) {
+			return true
+		}
+	}
+	return false
+}
+
+// proseLines returns the draft's lines with fenced code blocks and inline
+// code spans blanked, as Check reads them.
+func proseLines(md string) []string {
+	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
+	out := make([]string, len(lines))
+	open := ""
+	for i, line := range lines {
+		if m := fence.FindStringSubmatch(line); m != nil {
+			switch {
+			case open == "" && (m[1][0] != '`' || !strings.Contains(m[2], "`")):
+				open = m[1]
+				continue
+			case open != "" && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "":
+				open = ""
+				continue
+			}
+		}
+		if open != "" {
+			continue
+		}
+		prose := []byte(line)
+		for _, s := range codeSpans(line) {
+			for j := s[0]; j < s[1]; j++ {
+				prose[j] = ' '
+			}
+		}
+		out[i] = string(prose)
+	}
+	return out
 }
 
 // codeSpans returns the byte ranges of a line's inline code spans: a run of n

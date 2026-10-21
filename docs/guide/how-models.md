@@ -18,27 +18,77 @@ included.
 
 | Lane | What it does | Amp | Cursor | Claude Code |
 |---|---|---|---|---|
-| `build` | Writes code and artifacts | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `spec` | Specs, decisions, briefs, copy | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `plan` | Slices and plans work | Amp medium | Claude Opus 5.5 | Claude Opus 5.5 |
-| `review` | Adversarial code and spec review | GPT-6.1 Sol | Grok 4.7 | GPT-6.1 Sol |
-| `ui-review` | Visual and interaction critique | Amp high | Gemini 3.1 Pro | Gemini 3.1 Pro |
-| `chore` | Cheap mechanical work | Amp low | Haiku 5.5 | Haiku 5.5 |
+| `build` | Writes code and artifacts | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `spec` | Specs, decisions, briefs, copy | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `plan` | Slices and plans work | Amp medium | Grok 4.7 (legacy plan: Claude Opus 5.5) | Claude Opus 5.5 |
+| `review` | Adversarial code and spec review | GPT-6.1 Sol | Grok 4.6 (legacy plan: Grok 4.7) | GPT-6.1 Sol |
+| `ui-review` | Visual and interaction critique | Amp high | Grok 4.6 (legacy plan: Gemini 3.8 Flash) | Gemini 3.8 Flash |
+| `chore` | Cheap mechanical work | Amp low | Composer 2.5 (legacy plan: Haiku 5.5) | Haiku 5.5 |
+
+Cursor's column follows `[hosts.cursor] plan` (the review-ladder decision of 2026-10-17). Cursor's plans from 12 October 2026, `x` and the
+default, include only Cursor's own models (Grok 4.7, 4.6, 4.5, and Composer 2.5); Claude, GPT, and Gemini are
+list-price pay-as-you-go there. aayu cannot tell the plans apart, so it defaults to the one that never spends
+list-price money by surprise. Set `plan = "legacy"` for a legacy Pro, Pro+, or Ultra plan, which still includes Claude
+and Gemini, in your user config (or `AAYU_HOSTS__CURSOR__PLAN`); the plan is yours, so a checkout's config cannot set
+it. A checkpoint records the build model the plan picked, so a later plan change does not relabel past builds. On `x` every lane is one family, so `review` and `ui-review` use another Grok tier and their reviews are
+labelled same-family; the merge gate's reviewer app can still be of another family. Composer's base model is
+unpublished, so its family is unknown, and a review between it and any build is same-family.
 
 Three rules shape this table:
 
 - **The family rule.** A reviewer must come from a different model family than the builder. A model that wrote the
   code is a poor judge of it, and two models from the same vendor tend to share blind spots. `review` and `ui-review`
-  are marked `Adversarial`, and their defaults are never in the builder's family.
+  are marked `Adversarial`, and their defaults are never in the builder's family, except on a host plan that includes
+  one family (Cursor's `x`), where the review is labelled same-family.
 - **Host exclusions.** A host lists the families it cannot run. Cursor excludes the `openai` family, so the `review`
-  lane on Cursor defaults to Grok 4.7 (`xai`) instead of GPT-6.1 Sol.
+  lane on Cursor defaults to Grok (`xai`) instead of GPT-6.1 Sol.
 - **Host-managed modes.** On Amp, the default is a mode (Amp low, medium, high) and the host picks the model behind
   it. The binary cannot call a mode, so a direct call from an Amp session uses the Claude Code default for that lane
   (`DirectHost`).
 
 The `review` default also names an escalation: GPT-6 Astra at high reasoning effort, used when a caller marks a
-review as heavy. The `ui-review` default on Cursor and Claude Code is `gemini-3.1-pro-low`, because that is the only
-Gemini 3.1 Pro model the AI gateway serves.
+review as heavy. The `ui-review` default on Cursor, Claude Code, and Codex is Gemini 3.8 Flash at high reasoning
+effort (`gemini-3.8-flash`, `google` family), so it is never in the family of an anthropic or OpenAI builder. Every
+model judgement of a UI goes through this lane: `aayu review`'s lane A, `polish`, which re-runs it, and `aayu verify`'s
+advisory look at its screenshots, which never decides whether a floor holds. It is
+interim until the AI gateway routes the target, `gemini-4-argon-high`, which needs a paid Google plan.
+
+> **Needs setup:** without Copilot (below), the ui-review lane needs a model key: the AI gateway's
+> (`[models.gateway]`) or Google's. Without one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
+> instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`. Verify sends only
+> screenshots that its redaction pass read with OCR, so it also needs `tesseract` installed.
+
+**Gemini 4 Argon through Copilot (the default where Copilot is set up).** The binary's ui-review calls (review lane
+A, `aayu polish`, and verify's screenshot review) run on Gemini 4 Argon at high effort through Copilot CLI whenever
+`copilot` is on your `PATH` and signed in, on any host. Otherwise they run on `gemini-3.8-flash` at high effort through
+the AI gateway, as above.
+
+- **How it runs.** `copilot --model gemini-4-argon --reasoning-effort high`, the prompt on stdin, the screenshots as
+  attachments, no tools, in an empty directory with a fresh `COPILOT_HOME`, so no repository hooks, MCP servers, or
+  custom instructions load. It signs in with the `copilot` secret, else `COPILOT_GITHUB_TOKEN`, which goes to that
+  process only, with `COPILOT_GH_HOST` (else `GH_HOST`) for a GitHub Enterprise host.
+- **What it costs.** Each call is charged the AI credits Copilot reports: input at 2 USD and visible output at 10 USD per
+  million tokens, with reasoning not billed, about 0.043 USD for a lane A call (two probes, 2026-10-18). The budget
+  breaker counts it like any other call.
+- **When it falls back.** When `copilot` is not installed or not signed in, lane A uses flash from the start, and
+  stderr and the label say why (`gemini-3.8-flash (gemini-4-argon through Copilot is unavailable: …)`). When a call
+  fails or its reply misses the schema, that call and every later one go to flash (`… (the Copilot route failed: …)`).
+  The review always runs.
+- **Reviewer and builder.** Argon is google family, so it still never reviews a google builder's work.
+- **Turning it off.** In your user config (a repository's config cannot set this row):
+
+  ```toml
+  [models.ui-review.copilot]
+  model = ""   # lane A always uses gemini-3.8-flash through the gateway
+  ```
+
+  Another Copilot model ID in that row runs that model through Copilot instead.
+
+> **Honest status:** the ux evals that gate this lane measured `gemini-3.8-flash` only. CI has no Copilot credential,
+> so it always takes the fallback, and its numbers are flash's. A local run with Copilot signed in reviews on Argon,
+> which those gating runs did not measure.
+
+`CopilotCLI` and `CopilotReady` in `internal/models/copilot.go`, `TestCopilotCLI` and `TestCopilotUIReviewRoute`.
 
 ## How `aayu models` resolves a lane
 
@@ -75,7 +125,9 @@ family equals the builder's, and a reviewer with no concrete family at all.
 
 `RouteFor` in `internal/models/client.go` decides where a call goes. When `[models.gateway] base_url` is set, every
 model goes to that one AI gateway, with the key from the secret that `[models.gateway] secret` names, sent as a Bearer
-token. Otherwise each family goes to its own provider, with a key in a secret named after the family.
+token. Otherwise each family goes to its own provider, with a key in a secret named after the family. `base_url` and
+`secret` are read only from the user config, `AAYU_MODELS__GATEWAY__*` variables, or `--set`, never from the checkout:
+a PR's `.aayudha/config.toml` cannot choose where your keys are sent (`Load` in `internal/config/load.go`).
 
 The client speaks three wire formats:
 
@@ -101,14 +153,20 @@ and where the cost came from. `Cost` in `internal/models/gateway.go` picks the f
 
 1. `reported`: the cost the endpoint returned in `usage.cost`.
 2. `price-table`: tokens times the `[[models.prices]]` entry for the model ID.
-3. `fallback-rate`: 15 USD per million input tokens and 75 USD per million output tokens. This is deliberately high,
-   so an unpriced model trips the breaker early rather than never.
+3. `list-price`: tokens times the model's published price in `models.ListPrices` (`internal/models/prices.go`), each
+   with its provider's pricing page and the date it was read. The AI gateway the evals use reports no cost, so this
+   is what they are charged (Appendix B D-3.4p).
+4. `fallback-rate`: 15 USD per million input tokens and 75 USD per million output tokens. This is deliberately high,
+   so an unpriced model trips the breaker early rather than never; the evals name such a model in their results'
+   warnings.
 
-Anthropic cache read and cache write tokens count as input at the full input rate.
+Cache reads and cache writes are charged at their own rates when the price has them, and a prompt past a model's
+long-context threshold is charged at its long-context rates.
 
-The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, or if the story or
-the local day has already reached its limit. After each call, `Add` adds the spend. When a story reaches
-`per_story_usd` or the day reaches `per_day_usd` (reaching the limit exactly counts), it writes the pause file
+The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, if the story has
+gone over its limit, or if the local day has reached its limit. After each call, `Add` adds the spend. When a story
+goes over `per_story_usd` (exactly the limit is still allowed, as it is for a build's `cost_usd`) or the day reaches
+`per_day_usd` (reaching it exactly counts), it writes the pause file
 `.aayudha/state/paused`, pages through `[notify]`, and returns `ErrBudget`. The CLI maps that error to exit code 6.
 Pages are keyed by scope, and `[notify]` sends each key at most once per local day, so a tripped breaker pages once.
 While the pause file exists, every direct call is refused, and the loop guard (`aayu hook loop:<name>`, the first step
@@ -117,7 +175,11 @@ of every scheduled loop) exits 6 too. `aayu resume` removes the pause file.
 The other `[budget]` keys are enforced elsewhere. `per_pr_inspect_max` caps `inspect` spend on one pull request across
 all its cycles. `ci_minutes_month` makes the loop guard exit 6 in GitHub Actions once the loops' runs this month have
 used that many minutes. `[autonomy.budget]` is a different budget: the wall time, spend, and failed attempts one `build` of a story may use.
-When `build` exceeds it, the story moves to `status:blocked`, the owner is paged, and `build` exits 4.
+Its `cost_usd` applies only when model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's
+key is configured, or a host reports its spend in `AAYU_COST_USD`. Otherwise there is no cost limit, because
+subscription use reports no cost. `per_story_usd` is at least `cost_usd`, so the breaker never stops a story before its
+build budget does. When `build` exceeds the budget, the story moves to `status:blocked`, the owner is paged, and
+`build` exits 4.
 
 ## Key data and file formats
 
@@ -139,7 +201,8 @@ var Lanes = []Lane{
     {ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
     {ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
         reviewDefault(HostAmp),
-        {Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
+        {Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+        {Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanLegacy},
         reviewDefault(HostClaude),
     }},
     …
@@ -164,14 +227,17 @@ type ModelDefault struct {
 The budget defaults, from `internal/config/defaults.toml`:
 
 ```toml
+# A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
+# direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
+# since subscription use reports no cost.
 [autonomy.budget]
 wall_hours = 8
-cost_usd = 25.0
+cost_usd = 60.0
 attempts = 3
 
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]
-per_story_usd = 25.0
+per_story_usd = 60.0 # at least autonomy.budget.cost_usd, so the breaker never stops a story before its build budget
 per_day_usd = 100.0
 per_pr_inspect_max = 5.0
 ci_minutes_month = 2000

@@ -4,8 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
+	osuser "os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -85,14 +88,151 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// #667: the bucket and its secret come only from the user config and
+	// dev's committed config. A person who runs proof push in a checkout of
+	// an agent's branch sends nothing to the bucket that checkout names.
+	evil := fakes3.New(t, "sk")
+	env["AAYU_SECRET_OTHER"] = "ak:sk"
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket, its secret, and its retention are read only from") {
+		t.Fatalf("push with a bucket only the checkout names: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	if fgh.Files == nil {
+		fgh.Files = map[string]string{}
+	}
+	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.Mu.Unlock()
+	for _, args := range [][]string{{"--set", "proof.media=s3://evil/x?endpoint=" + evil.Server.URL, "--set", "proof.media_secret=other"}, {"--set", "proof.media_secret=other"}, {"--set", "proof.retention_days=1"}} {
+		if code, _, errOut := run(t, env, opts, append([]string{"proof", "push", "2", "--media", "--repo", "o/r"}, args...)...); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket, its secret, and its retention are read only from") {
+			t.Fatalf("push with %v: %d %s", args, code, errOut)
+		}
+	}
+	// XDG_CONFIG_HOME is the run's environment: a user config it points at,
+	// here in the checkout, is not the account's and names no secret.
+	xdg := filepath.Join(dir, ".evil")
+	if err := os.MkdirAll(filepath.Join(xdg, "aayudha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(xdg, "aayudha", "config.toml"), []byte("version = 1\n[proof]\nmedia_secret = \"other\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env["XDG_CONFIG_HOME"] = xdg
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, `media_secret "other"`) {
+		t.Fatalf("push with a user config XDG_CONFIG_HOME points into the checkout: %d %s", code, errOut)
+	}
+	// An account the system's user database does not list (an LDAP or
+	// container UID) has no trusted user config, and the refusal says so.
+	noHome := opts
+	noHome.UserHome = func() (string, error) { return "", errors.New("uid 54321 is not in /etc/passwd") }
+	if code, _, errOut := run(t, env, noHome, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "(no user config is trusted: uid 54321 is not in /etc/passwd)") {
+		t.Fatalf("push when the account's home is unknown: %d %s", code, errOut)
+	}
+	delete(env, "XDG_CONFIG_HOME")
+	// dev's config that cannot be read, or does not load, trusts nothing.
+	for _, f := range []struct{ fail, file, want string }{
+		{"GET /repos/o/r/git/ref/heads/dev", cfg, "500"},
+		{"GET /repos/o/r/contents/.aayudha/config.toml", cfg, "dev's .aayudha/config.toml cannot be read or does not load"},
+		{"", "version = [", "dev's .aayudha/config.toml cannot be read or does not load"},
+	} {
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.FailAfter, fgh.Files[".aayudha/config.toml"] = f.fail, 0, f.file
+		fgh.Mu.Unlock()
+		if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, f.want) {
+			t.Fatalf("push when %q fails with %q committed: %d %s", f.fail, f.file, code, errOut)
+		}
+	}
+	// A directory where dev's config should be is no config either.
+	fgh.Mu.Lock()
+	fgh.Fail = ""
+	delete(fgh.Files, ".aayudha/config.toml")
+	fgh.Files[".aayudha/config.toml/x"] = ""
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "it is a directory") {
+		t.Fatalf("push when dev's config is a directory: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	delete(fgh.Files, ".aayudha/config.toml/x")
+	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.Mu.Unlock()
+	// The push-access check that cannot be read trusts nothing either: the
+	// account (the identity lookup also reads GET /user once first), its
+	// permission, or an installation token's repositories.
+	fgh.Mu.Lock()
+	viewer := fgh.Viewer
+	fgh.Mu.Unlock()
+	for _, f := range []struct {
+		fail         string
+		after        int
+		installation bool
+	}{
+		{"GET /user", 1, false},
+		{"GET /repos/o/r/collaborators/" + viewer + "/permission", 0, false},
+		{"GET /installation/repositories", 0, true},
+	} {
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.FailAfter = f.fail, f.after
+		if f.installation {
+			fgh.InstallationTokens = map[string][]string{"human-token": {"o/r"}}
+		}
+		fgh.Mu.Unlock()
+		if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "500") {
+			t.Fatalf("push when %q fails: %d %s", f.fail, code, errOut)
+		}
+		fgh.Mu.Lock()
+		fgh.Fail, fgh.InstallationTokens = "", nil
+		fgh.Mu.Unlock()
+	}
+	// The account's own user config that does not load trusts nothing.
+	badHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(badHome, ".config", "aayudha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(badHome, ".config", "aayudha", "config.toml"), []byte("version = ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	badOpts := opts
+	badOpts.UserHome = func() (string, error) { return badHome, nil }
+	if code, _, errOut := run(t, env, badOpts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "config:") {
+		t.Fatalf("push when the account's user config does not load: %d %s", code, errOut)
+	}
+	if len(evil.Objects) != 0 || len(s3.Objects) != 0 {
+		t.Fatalf("a refused push uploaded: %d to the checkout's bucket, %d to dev's", len(evil.Objects), len(s3.Objects))
+	}
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "aayu auth set-secret proof-media") {
 		t.Fatalf("push without bucket keys: %d %s", code, errOut)
 	}
 	env["AAYU_SECRET_PROOF_MEDIA"] = "ak:sk"
+	// The repository may be one an agent pointed origin at, with its bucket
+	// committed on dev: without push access to it, its config names no
+	// bucket that receives the person's secret.
+	fgh.Mu.Lock()
+	if fgh.Permissions == nil {
+		fgh.Permissions = map[string]string{}
+	}
+	fgh.Permissions[fgh.Viewer] = "read"
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has read access to o/r, so its committed config cannot name the proof media bucket") || len(s3.Objects) != 0 {
+		t.Fatalf("push to a repository the account cannot push to: %d %s, %d objects", code, errOut, len(s3.Objects))
+	}
+	// A GitHub App installation token has no account (GET /user refuses
+	// it): the repository must be one its installation was granted.
+	fgh.Mu.Lock()
+	fgh.Permissions[fgh.Viewer] = "maintain" // reported as write
+	fgh.InstallationTokens = map[string][]string{"human-token": {"o/other"}}
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the GitHub App installation behind this token was not granted o/r") || len(s3.Objects) != 0 {
+		t.Fatalf("push with an installation token not granted the repository: %d %s, %d objects", code, errOut, len(s3.Objects))
+	}
+	fgh.Mu.Lock()
+	fgh.InstallationTokens["human-token"] = []string{"o/other", "O/R"}
+	fgh.Mu.Unlock()
 	code, out, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r", "--json")
 	if code != 0 {
-		t.Fatalf("push: %d %s %s", code, out, errOut)
+		t.Fatalf("push with an installation token granted the repository: %d %s %s", code, out, errOut)
 	}
+	fgh.Mu.Lock()
+	fgh.InstallationTokens = nil
+	fgh.Mu.Unlock()
 	var pushed proof.PushResult
 	_ = json.Unmarshal([]byte(out), &pushed)
 	if pushed.Authority != proof.Advisory || pushed.Path != "proof/2/"+headA+"/advisory/pack.json" || len(s3.Objects) != 1 || s3.Rejected != 0 {
@@ -106,6 +246,50 @@ func TestProofPushVerifyCLI(t *testing.T) {
 			t.Fatalf("proof comment on #%d: %+v", n, cs)
 		}
 	}
+	// A repository with no dev branch: aayu init maps [branches] dev in the
+	// default branch's committed config, and the branch it maps is trusted.
+	// main's config names no bucket, so the push succeeds only when it
+	// follows the mapping to trunk's config.
+	mainSHA, trunkSHA := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	fgh.Mu.Lock()
+	base, def := fgh.Pulls[prN].Base, fgh.Default
+	fgh.Pulls[prN].Base.Ref, fgh.Default = "trunk", "main"
+	fgh.Refs["heads/main"], fgh.Refs["heads/trunk"] = mainSHA, trunkSHA
+	fgh.RefFiles = map[string]map[string]string{
+		mainSHA:  {".aayudha/config.toml": "version = 1\n[branches]\ndev = \"trunk\"\n"},
+		trunkSHA: {".aayudha/config.toml": cfg + "[branches]\ndev = \"trunk\"\n"},
+	}
+	fgh.Fail, fgh.FailAfter = "GET /repos/o/r", 0
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code == 0 || !strings.Contains(errOut, "500") {
+		t.Fatalf("push when the repository's default branch cannot be read: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	fgh.Fail = ""
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
+		t.Fatalf("push in a repository whose default branch maps dev: %d %s", code, errOut)
+	}
+	// main maps no branch: a dev branch an agent pushed, with its bucket
+	// committed, is not trusted for being called dev.
+	devSHA := strings.Repeat("c", 40)
+	fgh.Mu.Lock()
+	oldDev := fgh.Refs["heads/dev"]
+	fgh.Refs["heads/dev"] = devSHA
+	fgh.RefFiles[mainSHA] = map[string]string{".aayudha/config.toml": "version = 1\n"}
+	fgh.RefFiles[devSHA] = map[string]string{".aayudha/config.toml": cfg}
+	objs := len(s3.Objects)
+	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "main's committed .aayudha/config.toml") || len(s3.Objects) != objs {
+		t.Fatalf("push with a bucket only a branch named dev commits: %d %s, %d new objects", code, errOut, len(s3.Objects)-objs)
+	}
+	fgh.Mu.Lock()
+	fgh.Pulls[prN].Base, fgh.Default = base, def
+	delete(fgh.Refs, "heads/main")
+	delete(fgh.Refs, "heads/trunk")
+	fgh.Refs["heads/dev"] = oldDev
+	fgh.RefFiles = nil
+	fgh.Mu.Unlock()
 	// Pushing again replaces the comment in place.
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != 0 {
 		t.Fatalf("second push: %s", errOut)
@@ -228,4 +412,45 @@ func must(b []byte, err error) []byte {
 		panic(err)
 	}
 	return b
+}
+
+// #667: the trusted user config is the account's, so the run's HOME, which an
+// agent's environment can set, does not move it.
+func TestAccountHomeIgnoresHOME(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "agent-home"))
+	if h, err := accountHome(); err != nil || h == "" || h == os.Getenv("HOME") {
+		t.Fatalf("accountHome() = %q, %v; HOME is %q", h, err, os.Getenv("HOME"))
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return
+	}
+	// A static build falls back to $HOME for a UID /etc/passwd does not
+	// list (an unmapped container UID): that home is never trusted.
+	u, err := osuser.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := passwdFile
+	t.Cleanup(func() { passwdFile = old })
+	passwdFile = filepath.Join(t.TempDir(), "passwd")
+	for _, c := range []struct {
+		db string
+		ok bool
+	}{
+		{"root:x:0:0:root:/root:/bin/sh\n", u.Uid == "0" && u.HomeDir == "/root"},
+		{"agent:x:" + u.Uid + ":0::/tmp/elsewhere:/bin/sh\n", false},
+		{"root:x:0:0:root:/root:/bin/sh\nme:x:" + u.Uid + ":0::" + u.HomeDir + ":/bin/sh\n", true},
+	} {
+		if err := os.WriteFile(passwdFile, []byte(c.db), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if h, err := accountHome(); (err == nil) != c.ok || c.ok && h != u.HomeDir {
+			t.Errorf("accountHome() with %q = %q, %v; want ok %t", c.db, h, err, c.ok)
+		}
+	}
+	// A user database that cannot be read trusts no home.
+	passwdFile = filepath.Join(t.TempDir(), "missing")
+	if h, err := accountHome(); err == nil {
+		t.Errorf("accountHome() with no user database = %q, want an error", h)
+	}
 }

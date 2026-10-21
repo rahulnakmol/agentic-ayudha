@@ -119,9 +119,46 @@ func TestNonTokenColourFailsRegardlessOfPixels(t *testing.T) {
 
 func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 	tok := tokens(t)
-	svg := []byte(`<svg><rect fill="#1F5BD1"/><rect fill="var(--ay-color-surface)"/><text fill="#fff">ok</text><rect stroke="#ff00aa"/></svg>`)
-	if got := tok.CheckLiterals("list.svg", svg); len(got) != 1 || got[0].Value != "#ff00aa" {
+	svg := []byte(`<svg><rect fill="#1F5BD1"/><rect fill="var(--ay-color-surface)"/><text fill="#fff">ok</text><rect stroke="#ff00aa"/>` +
+		`<text>Order #1042 (#423)</text><rect style="filter: drop-shadow(#00ff00 0 1px)"/></svg>`)
+	if got := tok.CheckLiterals("list.svg", svg); len(got) != 2 || got[0].Value != "#ff00aa" || got[1].Value != "#00ff00" {
 		t.Fatalf("literals: %v", got)
+	}
+	// Story references in a title, a comment, and text are prose (D-6.5i); the same value in a style, a
+	// presentation attribute, or a script's string is a colour.
+	html := []byte(`<title>Choose a window (mockup: default, #571)</title><!-- state default (#571), see #572, #573 -->` +
+		`<p>Stories #571, #572</p><style>.a { background: linear-gradient(#1f5bd1, #574); }</style>` +
+		`<svg><rect fill="#575"/></svg><script>const c = ["#fff", "#576"]</script>`)
+	got := tok.CheckLiterals("default.html", html)
+	var vals []string
+	for _, m := range got {
+		vals = append(vals, m.Value)
+	}
+	if strings.Join(vals, " ") != "#557744 #557755 #557766" {
+		t.Fatalf("html literals: %v", got)
+	}
+	if got := tok.CheckLiterals("Page.tsx", []byte(`<p>Stories #571, #572</p>`)); len(got) != 1 {
+		t.Fatalf("code is read whole: %v", got)
+	}
+	// A story reference in a comment is not a colour, wherever the comment
+	// starts; an off-token colour in the code still fails at its line,
+	// including a quoted one after a URL in JSX text ("https://", "//cdn"),
+	// which reads like a comment, and one after an unclosed "/*".
+	tsx := []byte("// slot-full: #572, see #573\n/* states: #571,\n   #574 */\nconst u = \"https://x.example/a\", c = \"#ff00aa\";\n" +
+		"const d = { color: \"#575\" }; // was: #576\n" +
+		"<p>https://x.example <span style={{color:\"#577\"}} /></p>\n<p>a /* b <span style={{color:\"#578\"}} /></p>\n" +
+		"const v = items[i]// prior story: #572\n<p>Image: //cdn.example/x <span style={{color:\"#579\"}} /></p>\n")
+	got = tok.CheckLiterals("src/Page.tsx", tsx)
+	var at []string
+	for _, m := range got {
+		at = append(at, m.Value+"@"+strings.TrimPrefix(m.Where, "src/Page.tsx:"))
+	}
+	if strings.Join(at, " ") != "#ff00aa@4 #557755@5 #557777@6 #557788@7 #557799@9" || !strings.Contains(got[1].String(), `color: \"#575\"`) {
+		t.Fatalf("tsx literals: %v", got)
+	}
+	css := []byte("/* brand was #572 */\n.a { background: url(https://x.example/i.png); color: #ff00aa; }\n")
+	if got := tok.CheckLiterals("a.css", css); len(got) != 1 || got[0].Value != "#ff00aa" || got[0].Where != "a.css:2" {
+		t.Fatalf("css literals: %v", got)
 	}
 	colour, typo := tok.CheckVariables([]Variable{
 		{Name: "color/brand/default", Type: "COLOR", Value: "#1f5bd1"},
@@ -160,8 +197,9 @@ func TestFlagAndCodeConnect(t *testing.T) {
 	mapped := CodeConnect(map[string][]byte{
 		"src/Button.figma.tsx": []byte(`figma.connect(Button, "https://www.figma.com/design/AbCdEf123/Aayudha-UI?node-id=1-2&m=dev", {})`),
 		"Badge.kt":             []byte(`@FigmaConnect(url = "https://figma.com/file/AbCdEf123/x?node-id=9%3A4")`),
+		"Table.figma.tsx":      []byte(`figma.connect(Table, "https://www.figma.com/design/AbCdEf123/x?node-id=3-30")`), // a second part that starts with 3
 	})
-	if got := mapped["AbCdEf123"]; len(got) != 2 || got[0] != "1:2" || got[1] != "9:4" {
+	if got := mapped["AbCdEf123"]; len(got) != 3 || got[0] != "1:2" || got[1] != "3:30" || got[2] != "9:4" {
 		t.Fatalf("code connect: %v", mapped)
 	}
 	if miss := Unmapped(mapped, "AbCdEf123", []string{"1:2", "3:3"}); len(miss) != 1 || miss[0] != "3:3" {

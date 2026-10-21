@@ -300,8 +300,8 @@ func runHalt(ctx context.Context, e *Env, in Values) error {
 
 // runResume clears the halt variable and the [budget] breaker's pause file.
 func runResume(ctx context.Context, e *Env, _ Values) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "resume is for humans only and is refused when AAYU_AGENT=1")
+	if err := e.requireHuman(ctx, "resume", AccessWrite); err != nil {
+		return err
 	}
 	c, _, err := e.HumanGitHub(ctx)
 	if err != nil {

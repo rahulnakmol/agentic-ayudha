@@ -1,0 +1,10 @@
+{
+  "flags": {
+    "orders-delivery-status": {
+      "state": "ENABLED",
+      "variants": {"on": true, "off": false},
+      "defaultVariant": "off",
+      "targeting": {"if": [{"===": [{"var": "environment"}, "preview"]}, "on", "off"]}
+    }
+  }
+}

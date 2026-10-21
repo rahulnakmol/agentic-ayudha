@@ -1,0 +1,19 @@
+# Decision-pack case (WP5.1b, D-5.1l, D-5.1u): a stuck human asks where the quarter's budget and engineer time go; the
+# topic routes it to the Founder twin, the sage the founder consults for clarity and perspective, which counsels and never
+# rules: it weighs operations, technology, and product, names the perspective that dominates and why, recommends one
+# option, says what not to do and what would change its mind, and labels the door, at the scaleup stage. Its own
+# grounding and rubric: a build, reuse, or skip call (reuse: the hosted engine; skip: no engine, only the three rules
+# hard-coded). The directory keeps its D-5.1l name, which merged Appendix B rows cite. Tier 2 has the decide skill write the pack again for the judge.
+skill = "decide"
+description = "The Founder twin's counsel as a decision pack: build a rules engine, reuse a hosted one, or skip an engine and hard-code the three rules clinics ask for most."
+input = "../founder-grounding.md"
+artifacts = ["output/pack.md"]
+
+[pack]
+seat = "founder"
+stage = "scaleup"
+question = "Should this quarter's budget and engineer time go on building our own rules engine, on reusing a hosted rules engine, or on skipping an engine and hard-coding only the three rules clinics ask for most, for follow-up booking?"
+draft = "output/pack.md"
+
+[tier2]
+rubric = "../founder-rubric.md"

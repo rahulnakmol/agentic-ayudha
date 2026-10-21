@@ -1,0 +1,7 @@
+[[criterion]]
+id = 1
+tests = ["./internal/integrations/hostcall:TestNewEntry"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/integrations/hostcall:TestNewEntry"]

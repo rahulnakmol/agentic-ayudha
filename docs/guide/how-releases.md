@@ -45,9 +45,17 @@ path filters that let a pull request skip jobs are off for dispatches. On top of
 `aayu release <release> --to rolling|main` drives those three steps for one Release work item, then does the
 bookkeeping. It lives in `internal/cli/release.go`.
 
-- **Refusals first.** It refuses agents (`AAYU_AGENT=1`), refuses CI, and refuses a token that belongs to a bot or
-  to a login in `[identity] bot_logins`. The registry marks it human identity, TTY confirmation, and halt gate, and
-  never exposes it over MCP (the Model Context Protocol server that hosts call).
+- **Refusals first.** It refuses CI, and refuses a token that belongs to a bot or to a login in
+  `[identity] bot_logins`. An agent may run it under a person's account (founder policy): there
+  is no TTY prompt for agents, because the gate is the control. A person at a terminal is still asked to confirm,
+  or passes `--yes`. The registry marks it human identity, stable-request, and halt gate, and exposes it over MCP
+  (the Model Context Protocol server that hosts call) only where `expose_writes` allows writes.
+- **The stable-release request.** `--to main` needs an explicit request that an agent cannot make. Either a person
+  confirms at their own terminal, or a comment on the Release issue has the first line `Stable release: vX.Y.Z`
+  and is written after the Release's rolling snapshot, by an account that is not a bot and has write, maintain,
+  or admin access, with no `<!-- aayudha:` marker. aayu never writes such a comment, and the pre-tool hook refuses
+  an agent's shell command that would. Without one the rung exits 4 and promotes nothing; the ledger records who
+  asked and where.
 - **Checks before anything moves.** The Release issue must pass Ready. Every story it lists must be in the
   promoted range or already shipped. Promoting to `main` needs a `vX.Y.Z` version that has no tag yet, and the
   Release's `rolling` rung must be on the ledger with its commit still on `rolling`.
@@ -69,7 +77,9 @@ bookkeeping. It lives in `internal/cli/release.go`.
 | `rolling` | `rolling-<date>`, then `rolling-<date>.<n>` for the n-th snapshot of a day | lightweight | `rolling-2026-10-12.4` |
 | `main` | `vX.Y.Z` | annotated, `Release vX.Y.Z: <title>` | none yet |
 
-`.goreleaser.yaml` ignores `rolling-*` tags, so a snapshot tag is never parsed as a version.
+A snapshot build never reads a `rolling-*` tag as its version. Before goreleaser runs, `ci.yml` and `installers.yml`
+set `GORELEASER_CURRENT_TAG` to the newest `v*` tag (a release ranks above its prereleases), so a snapshot is named
+after the next patch, for example `0.2.1-snapshot.a7efe40`.
 
 ## The signed build
 
@@ -157,8 +167,11 @@ checks the cosign signature. `installers.yml` proves that the Scoop manifest ref
 
 > **Honest status:** v0.1.0 was released on 15 October 2026 (tag `v0.1.0`, commit `78bd4ae` on `main`): the tag
 > check, the signed build, provenance, and the smoke installs on Linux and macOS passed. Its Homebrew, Scoop, and winget
-> jobs failed, so the tap and the bucket are still empty and `install.sh` is the way to install. The promotion record
-> below is the earlier rolling snapshot `rolling-2026-10-12.4`, which carried the story.
+> jobs failed, so at that release the tap and the bucket stayed empty and `install.sh` was the way to install. Since
+> v0.2.0, Homebrew and Scoop have aayudha (the tap's cask and the bucket's manifest are at 0.2.0). winget does not
+> yet: its package has passed validation and is waiting for a moderator in
+> [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680). The promotion record below is the earlier rolling snapshot
+> `rolling-2026-10-12.4`, which carried the story.
 
 ## A real promotion record
 
@@ -224,8 +237,9 @@ Story 70 was referenced by a pull request in the range but had not merged, so it
    branch, and no stamp; a dry run moves nothing (`internal/cli/release.go`, `TestReleaseLadder`).
 2. A failure before landing promotes nothing, and a failure after landing still exits non-zero
    (`internal/cli/release.go`, `TestReleaseFailsClosed`, `TestReleaseRefusesBeforeLanding`).
-3. Only a human, at a terminal, outside CI, can promote (`refuseNonHuman` and `humanAccount` in
-   `internal/cli/tell.go`; `release` gates in `internal/verbs/registry.go`).
+3. Only a person's own account, outside CI, can promote, and `main` moves only on a person's stable-release
+   request (`humanAccount` in `internal/cli/tell.go`; `stableRequest` in `internal/cli/release.go`;
+   `StableRequestCommand` in `internal/hosts/hook.go`; `TestReleaseLadder`).
 4. A `v*` release is built only from an annotated tag on `main` (`verify-tag` in `.github/workflows/release.yml`).
 5. `install.sh` installs nothing unless the signature names `release.yml` on the exact tag and the archive matches
    its signed checksum (the `release-snapshot` job in `.github/workflows/ci.yml`, on every pull request that

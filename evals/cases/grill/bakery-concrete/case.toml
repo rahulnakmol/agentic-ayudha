@@ -17,13 +17,37 @@ calls = [
   ["ready", "43", "--check"],
 ]
 
-# The request names one screen and one format: other screens, currencies, or rounding rules would be invented.
-scope = [
-  { pattern = '(?i)\b(euro|dollar|€|\$|currenc(y|ies)|round(ing|ed)?)\b', why = "a currency or rounding rule the request does not state" },
-  { pattern = '(?i)`/(menu|order/(details|options|pickup))`|`/order`', why = "a screen the request does not name" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", ]
+
+# The request names one screen and one format: other screens, currencies, or rounding rules would be invented.
+[[scope]]
+pattern = '(?i)\b(euro|dollar|€|\$|currenc(y|ies)|round(ing|ed)?)\b'
+why = "a currency or rounding rule the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['expected: the total in euro, rounded to 2 decimals', 'rounded to the nearest cent']
+negated = ['expected: the total, not rounded']
+near_miss = ['European customers see the menu', 'pickup around noon']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)`/(menu|order/(details|options|pickup))`|`/order`'
+why = "a screen the request does not name"
+# naming a screen to exclude it still names a screen the request does not
+match = ['state: `/menu` with the seeded menu', 'state: `/order/pickup`']
+negated = ['state: any page except `/menu`']
+near_miss = ['state: the menu page', 'POST /api/orders creates 1 order', 'state: `/orders`']
+negated_fires = true
+
+# The first rule matches "dollar" but not the plural; this rule adds "dollars" and leaves that one as it was, since a
+# changed rule needs an eval-bar waiver and an added one does not (D-4.3s, D-4.3t).
+[[scope]]
+pattern = '(?i)\bdollars\b'
+why = "a currency or rounding rule the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['expected: the total in dollars', 'prices shown in US Dollars']
+negated = ['expected: the total, not in dollars']
+near_miss = ['a dollar-sign icon', 'the Dollarsaver coupon app', 'the total in pounds, like "£12.50"']
+negated_fires = true

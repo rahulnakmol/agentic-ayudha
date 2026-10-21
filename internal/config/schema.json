@@ -111,7 +111,7 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
+          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
         },
         "media_secret": {
           "type": "string",
@@ -173,6 +173,38 @@
           "type": "integer",
           "minimum": 0,
           "description": "Days after a merge in which a linked Bug or Incident counts as a correction of the PR."
+        },
+        "proof": {
+          "type": "boolean",
+          "description": "Merge a PR into the integration branch on proof alone: required checks green, the pack verified with its floors holding, inspect at merge with a proof_rungs rung, and nothing in the narrow set."
+        },
+        "proof_rungs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Review rungs at the head (A, B, C) that let ship merge on proof."
+        },
+        "always_person": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "The narrow set: paths (a trailing / for a directory, else a glob) whose change always needs a person per PR."
+        },
+        "always_person_config": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "TOML config files whose always_person_sections need a person when they change."
+        },
+        "always_person_sections": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Config tables (by first key) that decide who may approve or bypass."
         }
       },
       "additionalProperties": false,
@@ -196,6 +228,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Business hours before a reversible Decision's recommendation applies provisionally (V8)."
+        },
+        "solo_provisional_after_hours": {
+          "type": "integer",
+          "minimum": 12,
+          "description": "In solo mode (at most one human), the shorter window before a reversible Decision's recommendation applies provisionally (V8); at least 12, and read only from .aayudha/config.toml."
         },
         "escalate_to": {
           "type": "string",
@@ -300,6 +337,10 @@
             "type": "string",
             "description": "Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or \u003cproject\u003e.\u003cdataset\u003e of the GA4 BigQuery export (gcp)."
           },
+          "allow_pii": {
+            "type": "boolean",
+            "description": "posthog, sentry: let an agent call the host MCP tools that return personal data (person records, replay content, raw LLM prompts, support tickets). Off by default (Decision #449)."
+          },
           "transport": {
             "type": "string",
             "enum": [
@@ -340,7 +381,7 @@
       "properties": {
         "dast": {
           "type": "boolean",
-          "description": "Run the ZAP baseline floor (WP4.6)."
+          "description": "Run the ZAP floor for web and api platforms (Decision #485)."
         },
         "platforms": {
           "items": {
@@ -373,6 +414,10 @@
               "production": {
                 "type": "boolean",
                 "description": "A production environment: verify refuses to capture it (exit 4), and any target on its host."
+              },
+              "active_scan": {
+                "type": "boolean",
+                "description": "Let the DAST floor run its active rules against this URL although verify did not start the app on a loopback host (Decision #485); read only from .aayudha/config.toml."
               }
             },
             "additionalProperties": false,
@@ -519,6 +564,9 @@
                 "max_high": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "skipped_blocks_ship": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false,
@@ -547,6 +595,10 @@
           "additionalProperties": false,
           "type": "object",
           "description": "Floor thresholds; CONSTRAINTS.md documents each one."
+        },
+        "new_floors_blocking_from": {
+          "type": "string",
+          "description": "Date (UTC, YYYY-MM-DD) from which the floors Decision #480 added fail; before it, or empty, their misses are advisory."
         },
         "drift_blocking_from": {
           "type": "string",
@@ -612,6 +664,10 @@
           },
           "type": "array",
           "description": "Logins whose reviews never count as a human pass (machine users and other bots)."
+        },
+        "device_client_id": {
+          "type": "string",
+          "description": "Client ID (public) of the GitHub OAuth App or GitHub App, with Device Flow enabled, that a person approves human-only commands through from any device; unset, the repository variable AAYUDHA_DEVICE_CLIENT_ID or AAYUDHA_APP_CLIENT_ID."
         }
       },
       "additionalProperties": false,
@@ -732,6 +788,28 @@
       "type": "object",
       "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
     },
+    "scope": {
+      "properties": {
+        "budget_percent": {
+          "type": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "description": "Drift from a release's accepted baseline, in percent of its effort points, that changes may reach without a person's accepted Decision."
+        },
+        "effort_points": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 5,
+          "minItems": 5,
+          "description": "Effort points, each at least 1, of XS, S, M, L, and XL, in that order: the weights of Stories and Bugs in a plan and its drift."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "A release's change budget after its baseline, and the effort weights drift is measured in (aayu scope)."
+    },
     "team": {
       "properties": {
         "stage": {
@@ -765,9 +843,21 @@
             "auto",
             "saffron",
             "contrast",
-            "mono"
+            "mono",
+            "nord",
+            "catppuccin-mocha",
+            "catppuccin-latte",
+            "gruvbox-dark",
+            "gruvbox-light",
+            "dracula",
+            "tokyonight",
+            "solarized"
           ],
-          "description": "Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."
+          "description": "Colour theme: auto (the terminal's own 16 colours, so a themed terminal's palette and its light or dark background apply; default), saffron (warm true colour for dark terminals), contrast (bright and bold), mono (no hue), or a named palette for a terminal that is not themed: nord, catppuccin-mocha, catppuccin-latte, gruvbox-dark, gruvbox-light, dracula, tokyonight, or solarized (dark or light by the terminal's background)."
+        },
+        "motion": {
+          "type": "boolean",
+          "description": "Animate the full-screen inbox (loading, the next card, the selection, results); default true. false keeps it still. --plain, AAYU_PLAIN=1, [ui] plain, TERM=dumb, and NO_COLOR are always still."
         }
       },
       "additionalProperties": false,
@@ -817,22 +907,23 @@
         "reviewer": {
           "type": "string",
           "enum": [
-            "auto",
-            "claude",
+            "ci",
             "codex",
+            "coderabbit",
+            "greptile",
+            "claude",
             "cursor",
-            "amp",
             "human",
             "model"
           ],
-          "description": "Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."
+          "description": "The one review tool of the merge gate. ci (the default): the merge gate calls the model the code-review environment names (variables AAYU_REVIEW_MODEL_URL and AAYU_REVIEW_MODEL, secret AAYU_REVIEW_MODEL_KEY) and fails closed until they are set; codex, coderabbit, greptile, claude, cursor: that installed app (a same-family app is a labelled rung-C review; CodeRabbit and Greptile count as rung A for any builder); human: a person; model: the review lane's model (aayudha's evals). When the chosen tool cannot review (a usage-limit or quota reply, or no reply within 30 minutes), the next installed app in the order codex, coderabbit, greptile, claude, cursor reviews, then ci, then a person."
         },
         "apps": {
           "items": {
             "type": "string"
           },
           "type": "array",
-          "description": "Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."
+          "description": "Agent apps installed on the repository's org or account that review pull requests: codex, coderabbit, greptile, claude, cursor. aayu doctor and aayu install detect them."
         },
         "app_families": {
           "additionalProperties": {
@@ -840,6 +931,21 @@
           },
           "type": "object",
           "description": "Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."
+        },
+        "paid_reviewer": {
+          "type": "string",
+          "description": "Rung B: the model ID (grok-4.7, gemini-3.8-flash, ...) the CI review calls when the code-review environment's AAYU_REVIEW_MODEL names none, and the fallback when no installed app can review the head. It must be of a family the builder cannot be; each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."
+        },
+        "paid_effort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "description": "Reasoning effort every review model call is made at (low, medium, high, xhigh); empty: high, and medium for Claude Opus, Claude Fable, and GPT-6 Astra. Every review asks for fast (priority) serving."
         }
       },
       "additionalProperties": false,
@@ -888,6 +994,65 @@
       "additionalProperties": false,
       "type": "object",
       "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
+    },
+    "build": {
+      "properties": {
+        "in_flight": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__IN_FLIGHT or --set may only lower it."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The build-ready loop (aayu build --next): how many items it has in progress at once."
+    },
+    "hosts": {
+      "properties": {
+        "cursor": {
+          "properties": {
+            "plan": {
+              "type": "string",
+              "enum": [
+                "",
+                "x",
+                "legacy"
+              ],
+              "description": "x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini. Read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."
+    },
+    "approvals": {
+      "properties": {
+        "approvers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "GitHub logins of the people whose /aayu approve reply on a batch counts as their approval. Their GitHub credentials must be in no agent's reach (aayu doctor checks); with none, every batch needs the device code."
+        },
+        "device_for": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "one-way",
+              "all"
+            ]
+          },
+          "type": "array",
+          "description": "Batches that always need the device code, even when comment approvals are on: one-way (any irreversible item: an irreversible Decision, a floor waiver) or all."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."
     }
   },
   "additionalProperties": false,

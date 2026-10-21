@@ -1,0 +1,17 @@
+# research (WP6.5) for a Feature with data but no usability evidence yet, at the scaleup team stage: the stage
+# carries a Research plan. output/ is a recorded run (tier 1); tier 2 reruns it. The floors: `aayu research`'s
+# checks, references only from the host's search results (two are images, which must be dropped), quotations word
+# for word from the data, and the scaleup Research plan as a heading.
+skill = "research"
+description = "A research plan and pinned references for choosing a delivery window."
+input = "input.md"
+artifacts = ["output/stage.json", "output/notes.md"]
+
+[ux]
+output = "output"
+feature = 570
+team = "scaleup"
+practice = "research-plans"
+
+[tier2]
+rubric = "rubric.md"

@@ -49,6 +49,9 @@ type Source struct {
 	Autonomy bool // read merged-PR history for corrections and streaks
 	Flow     bool // read the merge gate's runs for retro's flow metrics
 	Streak   int  // [autonomy] streak
+	// GateWriters are the accounts besides GateWriter the merge gate writes
+	// its inspect comment as: the bot App ("<slug>[bot]") and the machine user.
+	GateWriters []string
 }
 
 // Fetch reads every source up to in.Until into d and records the segment
@@ -599,7 +602,8 @@ func (d *Data) fetchAutonomy(ctx context.Context, s Source, in *Inputs) error {
 		if !s.Rules.Agent(p) {
 			continue
 		}
-		a := AgentPR{Number: p.Number, MergedAt: p.MergedAt, Layers: s.Rules.Layers.Footprint(p.Files)}
+		a := AgentPR{Number: p.Number, MergedAt: p.MergedAt, Layers: s.Rules.Layers.Footprint(p.Files), Rung: p.Rung}
+		a.Rounds = roundsOf(p, s.GateWriters)
 		for _, f := range p.Files {
 			if rest, ok := strings.CutPrefix(f, "skills/"); ok {
 				if sk, _, ok := strings.Cut(rest, "/"); ok && !slices.Contains(a.Skills, sk) {

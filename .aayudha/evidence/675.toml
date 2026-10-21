@@ -1,0 +1,19 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 5
+tests = ["./internal/cli:TestInspectThroughApp"]

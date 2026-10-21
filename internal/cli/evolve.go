@@ -47,7 +47,7 @@ const (
 
 var skillName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
-// P4 of docs/research/video-learnings-2026-10.md (Appendix B S-7.7c): a
+// P4 of the private research note video-learnings-2026-10.md (Appendix B S-7.7c): a
 // skill changes only on evidence from at least two accepted Feedback issues,
 // and at most once a month.
 const (
@@ -95,15 +95,24 @@ func runEvolve(ctx context.Context, e *Env, in Values) error {
 	case !slices.Contains(labels, workitems.LabelNeedsGrill):
 		return Errorf(ExitBlocked, "evolve: Feedback #%d is not accepted (a human accepts it with the %s label)", n, workitems.LabelNeedsGrill)
 	}
-	evidence, err := skillEvidence(ctx, c, repo, skill)
+	all, err := acceptedFeedback(ctx, c, repo)
 	if err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	var evidence []int
+	for _, x := range all {
+		if x.Feedback == n && x.Skill == skill && x.Refused != "" {
+			return Errorf(ExitBlocked, "evolve: %s", x.Refused)
+		}
+		if x.Skill == skill && x.Refused == "" {
+			evidence = append(evidence, x.Feedback)
+		}
 	}
 	switch {
 	case !slices.Contains(evidence, n):
 		return Errorf(ExitBlocked, "evolve: Feedback #%d does not name skill `%s` in its title", n, skill)
 	case len(evidence) < EvolveMinFeedback:
-		return Errorf(ExitBlocked, "evolve: a skill changes only on at least %d accepted retro Feedback issues that name it; skill `%s` has #%d only (P4)", EvolveMinFeedback, skill, n)
+		return Errorf(ExitBlocked, "evolve: a skill changes only on at least %d accepted retro Feedback issues that name it and are prose corrections; skill `%s` has #%d only", EvolveMinFeedback, skill, n)
 	}
 	dev := e.devBranch()
 	res := EvolveResult{Evidence: evidence, Feedback: n, Skill: skill, Worktree: filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("evolve-%s-%d", skill, n)), Branch: fmt.Sprintf("%s%s-%d", EvolveBranchPrefix, skill, n)}
@@ -182,12 +191,15 @@ type EvolveCandidate struct {
 	Feedback int    `json:"feedback"`
 	Title    string `json:"title"`
 	Skill    string `json:"skill,omitempty"` // named in the title as skill `<name>`
+	Layer    string `json:"fix_layer,omitempty"`
+	Refused  string `json:"refused,omitempty"` // why its fix layer keeps it from a skill rewrite (S-7.7d)
 }
 
 var titleSkill = regexp.MustCompile("skill `([a-z][a-z0-9-]*)`")
 
 // acceptedFeedback lists the open retro Feedback a human accepted, with the
-// skill each names in its title.
+// skill each names in its title, its fix layer, and why that layer keeps it
+// from a skill rewrite.
 func acceptedFeedback(ctx context.Context, c *github.Client, repo string) ([]EvolveCandidate, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	list, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
@@ -205,22 +217,17 @@ func acceptedFeedback(ctx context.Context, c *github.Client, repo string) ([]Evo
 		if m := titleSkill.FindStringSubmatch(is.GetTitle()); m != nil {
 			cand.Skill = m[1]
 		}
+		var st FixLayer
+		if cand.Layer = workitems.FixLayerOf(github.IssueLabels(is)); cand.Layer == workitems.FixCodebase || cand.Layer == workitems.FixCheck || cand.Layer == workitems.FixReview {
+			if st, err = fixLayerState(ctx, c, repo, cand.Feedback); err != nil {
+				return nil, err
+			}
+		}
+		cand.Refused = evolveRefusal(cand.Feedback, cand.Layer, st)
 		out = append(out, cand)
 	}
 	slices.SortFunc(out, func(a, b EvolveCandidate) int { return a.Feedback - b.Feedback })
 	return out, nil
-}
-
-// skillEvidence is the accepted retro Feedback that names skill.
-func skillEvidence(ctx context.Context, c *github.Client, repo, skill string) ([]int, error) {
-	all, err := acceptedFeedback(ctx, c, repo)
-	var out []int
-	for _, x := range all {
-		if x.Skill == skill {
-			out = append(out, x.Feedback)
-		}
-	}
-	return out, err
 }
 
 // recentEvolvePR is an evolve PR for skill, other than branch's own, opened
@@ -267,7 +274,9 @@ func listEvolve(ctx context.Context, e *Env) error {
 	}
 	per := map[string]int{}
 	for _, x := range out {
-		per[x.Skill]++
+		if x.Refused == "" {
+			per[x.Skill]++
+		}
 	}
 	return e.Emit(out, func(w io.Writer) error {
 		if len(out) == 0 {
@@ -279,8 +288,10 @@ func listEvolve(ctx context.Context, e *Env) error {
 			switch {
 			case x.Skill == "":
 				fmt.Fprintln(w, "  names no skill: evolve does not take it")
+			case x.Refused != "":
+				fmt.Fprintf(w, "  not for evolve: %s\n", x.Refused)
 			case per[x.Skill] < EvolveMinFeedback:
-				fmt.Fprintf(w, "  waiting: skill `%s` needs %d accepted Feedback issues, has %d\n", x.Skill, EvolveMinFeedback, per[x.Skill])
+				fmt.Fprintf(w, "  waiting: skill `%s` needs %d accepted prose Feedback issues, has %d\n", x.Skill, EvolveMinFeedback, per[x.Skill])
 			default:
 				fmt.Fprintf(w, "  aayu evolve --skill %s --feedback %d\n", x.Skill, x.Feedback)
 			}
@@ -296,6 +307,53 @@ func or(s, def string) string {
 	return s
 }
 
+// evolveBody is the evolve PR's description in the pull request format
+// (internal/prbody), every section written, since no agent edits it later.
+func evolveBody(res *EvolveResult) string {
+	// One bullet per id, so no sentence grows with the lists.
+	var ids, ev strings.Builder
+	for _, x := range res.Cases {
+		fmt.Fprintf(&ids, "  - `evals/cases/%s`\n", x.ID)
+	}
+	for _, x := range res.Evidence {
+		fmt.Fprintf(&ev, "- #%d\n", x)
+	}
+	return fmt.Sprintf(`## What this does
+
+This changes the %[1]s skill so that agents stop making the mistake that Feedback #%[2]d reports.
+
+## Why
+
+People corrected the same prose mistake in the %[1]s skill at least two times. This accepted Feedback reports it:
+
+%[3]s
+## What changed
+
+- The %[1]s skill has new or changed instructions.
+- New eval cases repeat the mistake:
+%[4]s
+## How we know it works
+
+- The new eval cases fail on the current %[1]s skill and pass with this change.
+- The eval-first check in CI runs them again.
+- After the merge, the skills table of `+"`aayu retro`"+` shows the correction rate before and after.
+
+## Risk and rollback
+
+The risk is low. The change is to skill text only. A person who owns `+"`skills/`"+` reviews it, and it ships through rolling. To roll back, run `+"`aayu install --pin <previous version>`"+`.
+
+## For reviewers
+
+<details><summary>Technical detail</summary>
+
+Opened by `+"`aayu evolve`"+` (WP7.7), eval-first: each case's `+"`before/`"+` run fails tier 1 on the current skill. Each Feedback in Why is classified as a prose correction. Never auto-merged: `+"`skills/`"+` is a protected path.
+
+</details>
+
+Refs #%[2]d
+`, res.Skill, res.Feedback, ev.String(), ids.String())
+}
+
 // openEvolvePR opens the evolve PR (or finds the open one) and labels it
 // agent-authored and aayu:evolve.
 func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, res *EvolveResult) error {
@@ -307,22 +365,8 @@ func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, 
 	if len(open) > 0 {
 		res.PR = open[0].GetNumber()
 	} else {
-		var ids []string
-		for _, x := range res.Cases {
-			ids = append(ids, "`evals/cases/"+x.ID+"`")
-		}
 		title := fmt.Sprintf("feat(skills): evolve %s for Feedback #%d (WP7.7)", res.Skill, res.Feedback)
-		var ev []string
-		for _, x := range res.Evidence {
-			ev = append(ev, fmt.Sprintf("#%d", x))
-		}
-		body := fmt.Sprintf("Refs #%d\n\nOpened by `aayu evolve` (WP7.7), eval-first: %s reproduces the accepted Feedback on the current `%s` skill "+
-			"(its `before/` run fails tier 1) and passes with this skill diff. CI's eval-first gate re-checks it.\n\n"+
-			"- Evidence: %s, the accepted retro Feedback that names this skill (at least two, P4).\n"+
-			"- Correction rate of agent PRs that changed this skill: the skills table of `aayu retro`, before and after this merges.\n"+
-			"- Never auto-merged: `skills/` is a protected path, so a human CODEOWNER reviews it. It ships through `rolling`.\n"+
-			"- Rollback: `aayu install --pin <previous version>`. `aayu retro` reports whether the problem comes back.\n",
-			res.Feedback, strings.Join(ids, ", "), res.Skill, strings.Join(ev, ", "))
+		body := evolveBody(res)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", res.Feedback),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},

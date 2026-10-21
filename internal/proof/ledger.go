@@ -18,7 +18,7 @@ import (
 // ErrMediaRefused: proof media never go to the ledger or Git LFS. They stay in
 // the merge gate's run artifact, and only an opt-in [proof] media bucket keeps
 // them longer (Appendix B S-4.2b).
-var ErrMediaRefused = errors.New("refused: [proof] media names no bucket; proof media never go to the ledger or Git LFS, they stay in the merge gate's aayudha-pack run artifact (S-4.2b)")
+var ErrMediaRefused = errors.New("refused: [proof] media names no bucket; proof media never go to the ledger or Git LFS, they stay in the merge gate's aayudha-pack run artifact")
 
 // ErrNoPack means the ledger holds no pack for the story.
 var ErrNoPack = errors.New("no proof pack on the ledger")

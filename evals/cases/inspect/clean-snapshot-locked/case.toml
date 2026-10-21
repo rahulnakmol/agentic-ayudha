@@ -1,0 +1,17 @@
+# Seeded-defect PR for inspect (WP4.8b): Clean control: the snapshot endpoint of race-snapshot, with the copy taken
+# under the lock. The clean twin of a defect case: same story and shape, no defect, tests that match the criteria
+# (they pass under go test -race). Added after run 38980397572 (Appendix B D-4.8d.4).
+# Synthetic: written for this eval. The head's files are kept as <path>.txt so this repository's build, linters,
+# and scanners never compile them.
+skill = "inspect"
+description = "Clean control: the metrics snapshot copied under the lock"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `GET /metrics` after three `Inc(\"orders\")`; expected: returns {\"orders\":3}",
+  "2. [api-trace] state: `GET /metrics` while 100 goroutines call Inc; expected: returns without a race (go test -race)",
+]

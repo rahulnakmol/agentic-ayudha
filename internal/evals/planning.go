@@ -45,6 +45,7 @@ func (h *Harness) runPlanning(ctx context.Context, c Case, lane verbs.LaneID, bo
 		System:    body + "\n\nReply with the draft you produce as JSON: " + shape + ".",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true,
 	}
 	var raw json.RawMessage
 	if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, schema, &raw); err != nil {

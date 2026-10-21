@@ -1,5 +1,5 @@
-# Failed checks go back to the builder (P3, #231; Appendix B S-7.1c, S-7.1e). A scheduled sweep once each weekday morning
-# (D-7.1f) replaces the check_suite event loop deferred from 0.2: for each story delegated to a cloud agent, the sync sends a
+# Failed checks go back to the builder (#231). A scheduled sweep once each weekday morning
+# replaces the check_suite event loop deferred from 0.2: for each story delegated to a cloud agent, the sync sends a
 # failed required check back to the agent that built it, within the two-cycle cap. The cron is in [time] tz.
 description = "Failed-check sweep: send each delegated story's failed required check back to its builder."
 command = ["status", "--work"]

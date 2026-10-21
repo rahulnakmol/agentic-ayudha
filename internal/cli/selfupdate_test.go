@@ -82,7 +82,7 @@ func selfUpdate(t *testing.T, srv *httptest.Server, v Verifier, version string, 
 	if err := os.WriteFile(exe, []byte(oldBinary), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errs := run(t, env, Options{
+	code, out, errs := run(t, env, Options{IsTerminal: stdinTTY,
 		Build:      BuildInfo{Version: version},
 		Executable: func() (string, error) { return exe, nil },
 		SelfUpdate: SelfUpdateOptions{APIBase: srv.URL, Verifier: v, GOOS: "linux", GOARCH: "amd64"},
@@ -129,9 +129,9 @@ func TestSelfUpdate(t *testing.T) {
 
 func TestSelfUpdateDefersToPackageManagers(t *testing.T) {
 	for dir, want := range map[string]string{
-		"/opt/homebrew/Cellar/aayudha/0.1.0/bin":                     "brew upgrade aayudha",
-		`C:\Users\a\scoop\apps\aayudha\current`:                      "scoop update aayudha",
-		`C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\aayudha`: "winget upgrade aayudha",
+		"/opt/homebrew/Cellar/aayudha/0.1.0/bin": "brew upgrade aayudha",
+		`C:\Users\a\scoop\apps\aayudha\current`:  "scoop update aayudha",
+		`C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\AkmolsInc.AgenticAyudha_Microsoft.Winget.Source_8wekyb3d8bbwe`: "winget upgrade --id AkmolsInc.AgenticAyudha",
 	} {
 		if _, cmd := packageManager(dir + "/aayudha"); cmd != want {
 			t.Errorf("packageManager(%s) = %q, want %q", dir, cmd, want)

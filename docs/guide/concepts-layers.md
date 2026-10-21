@@ -5,7 +5,7 @@ aayudha names nine of them, the **layers**. Each one has an owner seat, and each
 layer, matched by its path. So every story knows which parts it touches, its **footprint**, and who should look at
 them.
 
-![Story 131 points to two layers: L04 Domain and policy, from the policy folder, owned by the Quality Architect; and L05 Intelligence, from the answer folder, owned by the AI Native Engineer.](img/layers.svg)
+![Story 131 points to two layers: L04 Domain and policy, from the policy folder, owned by the Quality Architect; and L05 Intelligence, from the answer folder, owned by the Data & AI Architect.](img/layers.svg)
 
 *Story 131's footprint: two layers, two owners.*
 

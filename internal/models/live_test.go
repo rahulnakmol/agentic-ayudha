@@ -56,7 +56,7 @@ func TestGatewayLive(t *testing.T) {
 		owners[m.ID] = m.OwnedBy
 	}
 	for _, id := range []string{verbs.ModelClaudeOpus, verbs.ModelClaudeSonnet, verbs.ModelClaudeHaiku, verbs.ModelClaudeFable,
-		verbs.ModelGPTSol, verbs.ModelGPTAstra, verbs.ModelGrok, verbs.ModelGeminiPro} {
+		verbs.ModelGPTSol, verbs.ModelGPTAstra, verbs.ModelGrok, verbs.ModelGemini} {
 		owner, ok := owners[id]
 		if !ok {
 			t.Errorf("gateway does not list %s", id)
@@ -66,7 +66,7 @@ func TestGatewayLive(t *testing.T) {
 	}
 
 	gw := config.Models{Gateway: config.Gateway{BaseURL: base, Secret: "ai-gateway"}}
-	for _, id := range []string{verbs.ModelClaudeHaiku, verbs.ModelGPTSol, verbs.ModelGrok, verbs.ModelGeminiPro} {
+	for _, id := range []string{verbs.ModelClaudeHaiku, verbs.ModelGPTSol, verbs.ModelGrok, verbs.ModelGemini} {
 		route, err := RouteFor(gw, id, verbs.FamilyOf(id))
 		if err != nil {
 			t.Fatal(err)

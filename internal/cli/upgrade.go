@@ -11,18 +11,20 @@ import (
 
 func init() { register("upgrade", runUpgrade) }
 
-func runUpgrade(_ context.Context, e *Env, in Values) error {
+func runUpgrade(ctx context.Context, e *Env, in Values) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return Errorf(ExitUsage, "upgrade: not inside a git repository")
 	}
-	changes, err := upgrade.Plan(root, upgrade.Current, upgrade.Default)
+	changes, err := upgrade.Plan(root, upgrade.Current, upgrade.Default, e.CI || config.InCI(e.Getenv))
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
 	apply := in.Bool("apply") && !e.DryRun
-	if apply && e.Agent() {
-		return Errorf(ExitBlocked, "upgrade --apply rewrites protected files (.aayudha/config.toml) and is refused when AAYU_AGENT=1; a human applies it")
+	if apply {
+		if err := e.requireHuman(ctx, "upgrade --apply (it rewrites protected files)", AccessAdmin); err != nil {
+			return err
+		}
 	}
 	if apply {
 		if err := upgrade.Apply(root, changes); err != nil {

@@ -1,0 +1,14 @@
+# Which tests prove Bug #170's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # ship --solo-bypass from a host agent's shell without AAYU_AGENT: exit 4 naming the agent lane, nothing merged (live Amp and Claude Code records; Cursor's CLI source record and its marker in the unit test)
+tests = ["internal/cli:TestHostShellRecords", "internal/cli:TestShipMobileWaiverAndSoloBypass"]
+
+[[criterion]]
+id = 2 # the same command by a person in a terminal outside any host, every other solo-mode condition met: accepted
+tests = ["internal/cli:TestShipMobileWaiverAndSoloBypass", "internal/cli:TestHostShellRecords"]
+
+[[criterion]]
+id = 3 # plan --solo-bypass, decide --accept, release, and resume from each host's shell: refused as an agent lane with exit 4
+tests = ["internal/cli:TestHostShellRecords", "internal/cli:TestHumanOnlyRefusedInHostShells"]

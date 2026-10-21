@@ -20,3 +20,22 @@ func TestFrontmatterPaths(t *testing.T) {
 		t.Errorf("frontmatter lacks %q:\n%s", want, fm)
 	}
 }
+
+// A skill page lists every step the registry reserves for a person, and names no build-plan reference
+// (docs/guide/AGENTS.md); a verb with none says so instead of an empty list.
+func TestSkillHuman(t *testing.T) {
+	ship, _ := verbs.Find("ship")
+	got := skillHuman(ship)
+	for _, want := range []string{"own GitHub identity", "never offered to agents", "solo-mode bypass", "`--solo-bypass`: Solo mode only"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ship lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Appendix B") || strings.Contains(skillUsage(ship), "Appendix B") {
+		t.Errorf("ship names a plan reference:\n%s", got)
+	}
+	status, _ := verbs.Find("status")
+	if got := skillHuman(status); !strings.Contains(got, "reserves no step") {
+		t.Errorf("status: %s", got)
+	}
+}

@@ -26,7 +26,8 @@ for you when it ships work, and the `release-measure` [loop](guide-loops.md) can
 from [the story](journey-8-learn.md).
 
 Need to know whether *your change* caused the difference, not just whether the number moved? Plan an `experiment`
-before the release and `readout` after. That needs PostHog or GrowthBook and enough traffic.
+before the release and `readout` after. That needs PostHog and enough traffic (`readout` can also read GrowthBook);
+connecting PostHog is in [PostHog and Sentry](guide-integrations.md).
 
 ## Learn from the work: retro
 
@@ -51,6 +52,8 @@ These flow numbers are a baseline, reported and never gated. Do not change a sto
 When the agents keep making the same mistake, `evolve` turns accepted Feedback into a better skill. It is careful on
 purpose:
 
+- it takes only Feedback **classified as prose**: a mistake that a type, an invariant, a lint rule, or a test could
+  prevent becomes a Story instead (`aayu retro --classify`), because the code is the most lasting place for a fix;
 - it acts only when **at least two** accepted Feedback issues point at the same skill;
 - it changes a skill **at most once a month**;
 - it writes a failing test for the skill first, then **rewrites** the guidance rather than piling on rules;

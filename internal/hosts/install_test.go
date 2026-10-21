@@ -31,6 +31,8 @@ func fixtureAssets(t *testing.T) fstest.MapFS {
 		"skills/alpha/references/QUESTIONS.md": {Data: []byte("# Questions\n\n1. What is the goal?\n")},
 		"skills/beta/SKILL.md":                 {Data: []byte("---\nname: beta\ndescription: \"Second fixture skill.\"\n---\n\n# beta\n\nRun `aayu ready 1 --check`.\n")},
 		"hosts/amp/aayudha.ts":                 {Data: tmpl},
+		"hosts/commands/common/next.md":        {Data: []byte("---\ndescription: The next step.\nallowed-tools: Bash(aayu next --json)\n---\n\n# Next\n\nRun `aayu next --json`.\n")},
+		"hosts/commands/codex/codex.md":        {Data: []byte("---\ndescription: Hand a story to Codex.\nargument-hint: <story>\n---\n\n# Codex\n\nRun `aayu build n --delegate codex`.\n")},
 	}
 }
 
@@ -280,7 +282,7 @@ func TestHooks(t *testing.T) {
 	if r, _ := RunHook("pre-tool", verbs.HostCursor, "", pause, nil); !strings.Contains(r.Stdout, `"permission":"deny"`) {
 		t.Errorf("cursor deny JSON: %q", r.Stdout)
 	}
-	if _, err := RunHook("post-tool", verbs.HostClaude, "", pause, nil); err == nil {
+	if _, err := RunHook("rm-rf", verbs.HostClaude, "", pause, nil); err == nil {
 		t.Error("unknown hook accepted")
 	}
 	for _, h := range Hooks {

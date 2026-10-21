@@ -170,6 +170,16 @@ func Readback(s Spec) []string {
 		checks = append(checks, c.Run)
 	}
 	out = append(out, "Proof that an agent can work here: "+orStr(strings.Join(checks, " && "), "none"))
+	if len(s.Gate) > 0 {
+		var jobs []string
+		for _, g := range s.Gate {
+			jobs = append(jobs, g.Job)
+		}
+		out = append(out, "Local gate before a push (.agents/check --full, pre-push hook): CI jobs "+strings.Join(jobs, ", "))
+		if gaps := GateGaps(s); len(gaps) > 0 {
+			out = append(out, "Local gate gaps (it fails on them until "+SpecPath+" [[gate]] gives commands or a reason): "+strings.Join(gaps, ", "))
+		}
+	}
 	out = append(out, "Hosts: "+strings.Join(s.Hosts, ", "))
 	return out
 }

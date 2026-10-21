@@ -17,6 +17,7 @@ ledger. Effort budgets: XS 1, S 2, M 3, L 5 checkpoints (`skills/retro/SKILL.md`
 
 Stories #201 and #205 merged within budget (Effort XS, 1 checkpoint each), with no correction and no floor miss.
 Feedback filed by the report: #224 (estimate miss on #212) and #225 (correction rate of `build`).
+The report's next window runs from 2026-10-10 to 2026-10-23; the next retro report is due on 2026-10-23.
 
 ## Story #212 "Purge proof media by kind"
 
@@ -73,4 +74,5 @@ and a migration, which the plan does not have."
 
 ## Cost
 
-Story #212 spent 11.80 USD of model calls (`[budget] per_story_usd` is 25.0 in `CONSTRAINTS.md`; within budget).
+Story #212 spent 11.80 USD of model calls (`retro/2026-10-09/report.md`, from the `actions.jsonl` segments); `[budget] per_story_usd`
+is 25.0 in `CONSTRAINTS.md`, so it is within budget.

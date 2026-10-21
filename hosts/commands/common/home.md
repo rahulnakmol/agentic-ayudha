@@ -12,5 +12,6 @@ measurements due, and `next`.
 Tell me, in a few short lines, where the work stands. Name issues and pull requests by number. Then give the next
 step from `next.command` and `next.why`.
 
-If `next.human_only` is true, the step is for me to run in my own terminal: say so, and do not run it. Otherwise,
-offer to take it with the matching aayudha skill.
+If `next.human_only` is true, the step is for me to run in my own terminal: say so, and do not run it. When that step
+is `aayu inbox`, offer to show what waits with `/aayudha:inbox` (read-only). Otherwise, offer to take it with the
+matching aayudha skill.

@@ -41,8 +41,8 @@ func runSeat(ctx context.Context, e *Env, in Values) error {
 	if action == "list" {
 		return seatList(e, root, l.Config)
 	}
-	if e.Agent() {
-		return Errorf(ExitBlocked, "seat %s: seat changes are protected-path and ruleset writes; only a human runs them", action)
+	if err := e.requireHuman(ctx, "seat "+action, AccessAdmin); err != nil {
+		return err
 	}
 	if _, ok := verbs.FindSeat(verbs.SeatID(slug)); !ok {
 		var ids []string
@@ -68,7 +68,7 @@ func runSeat(ctx context.Context, e *Env, in Values) error {
 		if action == "remove" {
 			q = fmt.Sprintf("Return the %s seat to solo (config, CODEOWNERS, its human's open stories, and the solo-mode ruleset)?", slug)
 		}
-		if err := e.confirmOrBlock("seat "+action, q); err != nil {
+		if err := e.confirmOrBlock(ctx, "seat "+action, q); err != nil {
 			return err
 		}
 	}

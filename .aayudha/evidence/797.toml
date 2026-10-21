@@ -1,0 +1,26 @@
+# Which tests prove Story #797's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a refused merge (conflict with dev) at 120x34 and 72x34: three plain lines, the short status, no ship offered, every line the width
+tests = ["internal/cli:TestInboxFailureCards"]
+
+[[criterion]]
+id = 2 # every row of the inventory: what happened, what changed on GitHub, who acts next, with no technical words
+tests = ["internal/cli:TestInboxFailureWords", "internal/cli:TestInboxFailureCards", "internal/cli:TestInboxSigninWords", "internal/cli:TestInboxLoginScreen", "internal/cli:TestInboxNotReady"]
+
+[[criterion]]
+id = 3 # d shows the step, GitHub's answer, the request and the commit under the three lines; d again hides them
+tests = ["internal/cli:TestInboxFailureCards", "internal/cli:TestInboxFailureWords"]
+
+[[criterion]]
+id = 4 # merged, then a later step failed: done, "Merged #n into dev", a warning naming the step and who acts
+tests = ["internal/cli:TestInboxFailureCards", "internal/cli:TestInboxFailureWords"]
+
+[[criterion]]
+id = 5 # an item that changed since it was read: what changed, nothing written, the card as it is now
+tests = ["internal/cli:TestInboxFailureCards", "internal/cli:TestInboxApprovesHumanReviews"]
+
+[[criterion]]
+id = 6 # --plain: the same three lines, wrapped
+tests = ["internal/cli:TestInbox"]

@@ -112,6 +112,45 @@ func TestReadyFailures(t *testing.T) {
 			[]string{"reversible: Reversible is required at Decision-ready"}},
 		{"decision reversible maybe", with(decision, func(c *Item) { c.Fields[FieldReversible] = "maybe" }), StageReady,
 			[]string{`reversible: Reversible = "maybe": want one of true, false`}},
+		{"decision with one option", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship with the floor waived." }), StageReady,
+			[]string{"options: 1 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
+				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
+		// A Decision written before options were numbered reads its letters
+		// as numbers, A = 1 (founder, 2026-10-18); ready --check warns.
+		{"decision with lettered options", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house. B: SurveyJS." }), StageReady, nil},
+		{"decision with options lettered out of order", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house.\nC: SurveyJS." }), StageReady,
+			[]string{"options: option C is lettered out of order; want B, so each option keeps the letter the person knows it by"}},
+		{"decision with prose and no options", with(decision, func(c *Item) { c.Fields["options"] = "We could build it or buy it." }), StageReady,
+			[]string{"options: 0 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
+				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
+		{"decision with options numbered out of order", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a\n3. **B.** b" }), StageReady,
+			[]string{"options: option 3 is numbered out of order; want 2, so each option keeps the number the person picks it by"}},
+		{"decision with two recommendations", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b (recommended)" }), StageReady,
+			[]string{"options: 2 options are marked \"(recommended)\"; mark one, the one the Recommendation names"}},
+		{"decision with ten options", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j"
+		}), StageReady, []string{"options: 10 options; offer at most 9, so the person picks each with one key"}},
+		{"decision with two options of one name", with(decision, func(c *Item) { c.Fields["options"] = "1. **Roll out.** to 5%.\n2. **Roll out.** to 50%." }), StageReady,
+			[]string{"options: options 1 and 2 are both named \"Roll out\"; give each its own name, so accepting it by name is unambiguous"}},
+		{"decision with a nameless option", with(decision, func(c *Item) { c.Fields["options"] = "1. (recommended)\n2. **Use a vendor.** b" }), StageReady,
+			[]string{"options: option 1 has no name; start it with its name, \"1. **Name.** what it does\""}},
+		{"decision whose marker and Recommendation disagree", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b"
+			c.Fields["recommendation"] = "Option 2, because it is faster."
+		}), StageReady, []string{"options: option 1 is marked \"(recommended)\" but the Recommendation opens with option 2; make them agree"}},
+		{"decision recommending an option it lacks", with(decision, func(c *Item) { c.Fields["recommendation"] = "Option 3, the cheapest." }), StageReady,
+			[]string{"recommendation: opens with option 3, but the Decision has options 1-2"}},
+		{"decision recommending option 0", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b"
+			c.Fields["recommendation"] = "Option 0."
+		}), StageReady, []string{"recommendation: opens with option 0, but the Decision has options 1-2"}},
+		{"decision recommending nothing it offers", with(decision, func(c *Item) { c.Fields["recommendation"] = "Something else entirely." }), StageReady,
+			[]string{"recommendation: opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}},
+		{"decision whose Recommendation compares before it recommends", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **Buy.** a\n2. **Build.** b"
+			c.Fields["recommendation"] = "Faster than Build, so Buy."
+		}), StageReady, []string{"recommendation: opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}},
+		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
 			[]string{"parent: #2 is a initiative; a Story's parent must be a feature"}},
@@ -300,5 +339,80 @@ func TestFormsPassGitHubFormSchema(t *testing.T) {
 		if len(checkForm([]byte(broken))) == 0 {
 			t.Errorf("checker accepted a broken form:\n%s", broken)
 		}
+	}
+}
+
+// An option's label is its bold title, without a "(recommended …)" marker,
+// and a ** inside a code span does not end it; indented trade-offs and
+// fenced lines are not options.
+func TestParseOptions(t *testing.T) {
+	os, ps := ParseOptions("1. **Seat `p` owning L07 (with `ops/**` moved) (recommended, see the Evaluation).** It owns L07.\n" +
+		"   - Trade-off: gains a; costs b.\n" +
+		"   1. not an option\n" +
+		"```\n2. not an option either\n```\n" +
+		"~~~\n2. nor this\n```\n2. nor this, inside the tilde fence\n~~~not-a-close\n2. nor this, still fenced\n~~~\n" +
+		"2. **Keep the hat** (L07 stays put).\n" +
+		"3. Do nothing: nothing changes.")
+	want := []Option{
+		{N: 1, Name: "Seat `p` owning L07 (with `ops/**` moved)", Text: "It owns L07.", Recommended: true},
+		{N: 2, Name: "Keep the hat", Text: "(L07 stays put)."},
+		{N: 3, Name: "Do nothing", Text: "nothing changes."},
+	}
+	if len(ps) != 0 || !slices.Equal(os, want) {
+		t.Errorf("ParseOptions = %+v %v\nwant %+v", os, ps, want)
+	}
+	// The Recommendation's opening designates the option, whatever it goes on
+	// to name: a number first, else the longest name it opens with.
+	waiver, _ := ParseOptions("1. **Waive.** a\n2. **Don't waive.** b")
+	for rec, want := range map[string]int{
+		"Option 2, because Option 1 costs more.": 2, "**Option 2: keep it.**": 2, "2. Keep it.": 2,
+		"Waive, rather than Don't waive.": 1, "Don't waive, until the evidence is in.": 2, "Waiver policy says no.": -1, "Option 0.": 0,
+	} {
+		if got := RecommendedOption(waiver, rec); got != want {
+			t.Errorf("RecommendedOption(%q) = %d, want %d", rec, got, want)
+		}
+	}
+	kelvin, _ := ParseOptions("1. **\u212a.** a\n2. **Other.** b")
+	if got := RecommendedOption(kelvin, "k, because it is cold."); got != 1 {
+		t.Errorf("RecommendedOption with a name that folds across byte lengths = %d, want 1", got)
+	}
+	if _, ps := ParseOptions("1. **\u03a3.** a\n2. **\u03c2.** b"); len(ps) != 1 {
+		t.Errorf("names equal under EqualFold: %v, want one duplicate problem", ps)
+	}
+	// A plain option's name is kept whole, however long.
+	long := "Keep the current engine and revisit it next quarter once the volumes are known"
+	if os, _ := ParseOptions("1. " + long + "\n2. Swap it"); len(os) != 2 || os[0].Name != long {
+		t.Errorf("long plain option = %+v", os)
+	}
+	// Prose that names a number is not a second option.
+	if os, ps := ParseOptions("1. **Keep.** Complete phase 2. before launch."); len(os) != 1 || len(ps) != 1 {
+		t.Errorf("prose with a number = %+v %v", os, ps)
+	}
+	// A Decision written before options were numbered: its lettered, bulleted,
+	// or named top-level lines are options 1, 2, … with their own letters, or
+	// A, B, … by position; a Recommendation may open with the letter.
+	for in, want := range map[string][]Option{
+		"A: in-house.\nB) SurveyJS: a vendor.\n  - Trade-off: indented, not an option.": {{N: 1, Name: "in-house", Letter: "A"}, {N: 2, Name: "SurveyJS", Text: "a vendor.", Letter: "B"}},
+		"(A) Keep it.\n**B.** Drop it.":                                 {{N: 1, Name: "Keep it", Letter: "A"}, {N: 2, Name: "Drop it", Letter: "B"}},
+		"- **Keep it**: as is.\n- **Drop it** (recommended): now.":      {{N: 1, Name: "Keep it", Text: "as is.", Letter: "A"}, {N: 2, Name: "Drop it", Text: "now.", Letter: "B", Recommended: true}},
+		"A vendor engine is cheaper.\nwaive: ship it.\nfix: no waiver.": {{N: 1, Name: "waive", Text: "ship it.", Letter: "A"}, {N: 2, Name: "fix", Text: "no waiver.", Letter: "B"}},
+	} {
+		if os, ps := ParseOptions(in); len(ps) != 0 || !slices.Equal(os, want) || !Lettered(os) || os[1].Ref() != "2 (B)" {
+			t.Errorf("lettered ParseOptions(%q) = %+v %v\nwant %+v", in, os, ps, want)
+		}
+	}
+	lettered, _ := ParseOptions("A: in-house.\nB: SurveyJS.")
+	for rec, want := range map[string]int{"Option B, because it is faster.": 2, "B.": 2, "b, the vendor.": -1, "A vendor is faster.": -1, "SurveyJS.": 2, "Option 1.": 1, "D.": 4} {
+		if got := RecommendedOption(lettered, rec); got != want {
+			t.Errorf("lettered RecommendedOption(%q) = %d, want %d", rec, got, want)
+		}
+	}
+	if got := RecommendedOption(waiver, "B."); got != -1 || Lettered(waiver) || waiver[1].Ref() != "2" {
+		t.Errorf("a letter designates only a lettered option: RecommendedOption(B.) = %d, Ref %q", got, waiver[1].Ref())
+	}
+	// Options numbered inline on one line count, in sequence only.
+	os, ps = ParseOptions("1. Keep CALC_DEBUG. 2. Replace it with a --debug flag, as step 4. says.")
+	if len(ps) != 0 || len(os) != 2 || os[0].Name != "Keep CALC_DEBUG" || os[1].N != 2 || os[1].Name != "Replace it with a --debug flag, as step 4" {
+		t.Errorf("inline options = %+v %v", os, ps)
 	}
 }

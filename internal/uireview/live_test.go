@@ -53,7 +53,7 @@ type liveResult struct {
 }
 
 // TestReviewLive is the WP6.6 acceptance against the real ui-review lane
-// (gemini-3.1-pro-low through the AI gateway) and the real lane B tools:
+// (gemini-3.8-flash through the AI gateway) and the real lane B tools:
 // each planted defect is caught by lane A in at least 2 of 3 runs and by lane
 // B; the clean page ships from both lanes; polish (the build lane's model
 // applying the critique, standing in for the host) removes all three on the
@@ -109,7 +109,7 @@ func TestReviewLive(t *testing.T) {
 	site := fixtureSite(t, polished)
 	b := testBrowser(t)
 	b.Work = out // keep the screenshots for the run's artifact
-	reviewer := &Reviewer{Tools: b, Complete: laneA, Model: rev.Model, Effort: "medium", K: K, MinTargetPx: 44, Now: time.Now}
+	reviewer := &Reviewer{Tools: b, Complete: laneA, Model: rev.Model, Effort: rev.Effort, K: K, MinTargetPx: 44, Now: time.Now}
 	run := func(id, path string) *Critique {
 		c, _, err := reviewer.Review(ctx, []State{{ID: id, URL: site.URL + path}})
 		if err != nil {

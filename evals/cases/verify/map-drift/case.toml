@@ -1,0 +1,15 @@
+# Recorded verify session (D-3.4f) on story #31 of the notes CLI (../testdata/notes, with the branch in testdata/branch/): the
+# branch adds a `-json` flag that no feature maps, so `aayu verify --map` reports drift. The person allows a map update
+# once they have heard it. A good session previews the floors, proposes the map change (the flag on the add-and-list
+# feature and checks that drive `notes -json list` for both criteria), makes it after the yes, leaves `aayu verify
+# --map` clean without weakening any check, runs the new checks, and reports the result as a preview.
+skill = "verify"
+description = "Bring the feature map in step with a branch's new flag, with checks that drive it, and report a preview."
+input = "input.txt"
+repo = "../testdata/notes"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+references = ["feature-maps.md"] # the map contract the skill links to; a host lets the skill read it (D-3.4j)
+session = "session.toml"

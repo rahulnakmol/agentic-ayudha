@@ -257,10 +257,15 @@ func (p *Pack) FloorsHold() bool {
 // SkippedMobile is the detail of a mobile story's mobile floor in 0.1 (WP4.9).
 const SkippedMobile = "skipped: mobile"
 
+// SkippedDAST starts the detail of a web or api story's dast floor with no
+// runnable target (Decision #485, G3).
+const SkippedDAST = "skipped: dast:"
+
 // BlocksShip reports whether a skipped floor blocks ship without a waiver:
-// a mobile story's skipped mobile floor does (WP4.9).
+// a mobile story's skipped mobile floor does (WP4.9), and so does a web or
+// api story's dast floor with nothing to scan.
 func BlocksShip(c Check) bool {
-	return c.Result == Skipped && c.Floor == "mobile" && c.Detail == SkippedMobile
+	return c.Result == Skipped && (c.Floor == "mobile" && c.Detail == SkippedMobile || c.Floor == "dast" && strings.HasPrefix(c.Detail, SkippedDAST))
 }
 
 // MediaExts are the media file extensions. Media never go to the ledger: they

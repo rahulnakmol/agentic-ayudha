@@ -203,7 +203,7 @@ func TestPromptsResourcesAndExitCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := pp.Messages[0].Content.(*sdk.TextContent).Text; !strings.Contains(text, "Speak and work as Athena, the Engineering Manager twin") ||
+	if text := pp.Messages[0].Content.(*sdk.TextContent).Text; !strings.Contains(text, "Speak and work as Drona, the Engineering Manager twin") ||
 		!strings.Contains(text, "**Retrospective memo**") || strings.Contains(text, "**Retro note**") || !strings.Contains(text, "**Evidence rule (every seat).**") {
 		t.Errorf("persona prompt:\n%s", text)
 	}

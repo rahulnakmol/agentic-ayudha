@@ -1,0 +1,21 @@
+# SLO case (Decision #324): the Production Engineer twin reviews the SLO set of a claims service at the scaleup stage,
+# from the real output of `aayu slo --telemetry` over today's export (incident #7, 3h55m of a 28-day window, so its
+# measure reads "SPENT") beside the last weekly record (written for this eval). Reading the partial measure as the
+# budget, and recording it, would stop every Story at release. output/slo.md is a recorded answer (tier 1);
+# planted/slo.md adds an uncited cause, which the evidence rule must catch. Tier 2 has the slo skill write it again
+# and the judge score it.
+skill = "slo"
+description = "Shesha reviews the claims SLO set after an incident, with a partial export, at the scaleup stage."
+input = "grounding.md"
+artifacts = ["output/slo.md"]
+
+[persona]
+seat = "production-engineer"
+stage = "scaleup"
+practice = "slo-error-budgets"
+draft = "output/slo.md"
+planted = "planted/slo.md"
+task = "It is Thursday 15 October, after incident #7; the weekly error-budget review is due and the release is tomorrow, Friday 16 October. From the grounding, write the SLO set for claim submission at this team stage, with ops/slos.toml as you would keep it, and say what the budget means for tomorrow's release."
+
+[tier2]
+rubric = "../rubric.md"

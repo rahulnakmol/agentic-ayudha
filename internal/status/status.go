@@ -373,14 +373,19 @@ func refs(ns []int) string {
 	return strings.Join(out, " ")
 }
 
+// SpendNote says what the spend columns count: aayu's metered model calls
+// (the gateway and AAYU_COST_USD). Work in a subscription host session
+// reports no cost, so 0.00 USD is not the real cost.
+const SpendNote = "Metered spend: aayu's own model calls from the actions log; subscription use not counted, and spend a host reports in AAYU_COST_USD shows in build's output only."
+
 // Table renders a rollup tree as markdown, one row per Goal, Initiative, and Feature.
 func Table(roots []*Rollup) string {
 	var b strings.Builder
-	b.WriteString("| Item | Items | Done | Ready | In progress | Blocked | Health (on/at/off) | Risk (l/m/h) | Decisions near SLA | Shipped, unmeasured | Proof | Streak | Cost |\n")
+	b.WriteString("| Item | Items | Done | Ready | In progress | Blocked | Health (on/at/off) | Risk (l/m/h) | Decisions near SLA | Shipped, unmeasured | Proof | Streak | Metered spend |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	var row func(r *Rollup, depth int)
 	row = func(r *Rollup, depth int) {
-		fmt.Fprintf(&b, "| %s#%d %s %s | %d | %d | %d | %d | %d | %d/%d/%d | %d/%d/%d | %d | %d | %s | %s | $%.2f |\n",
+		fmt.Fprintf(&b, "| %s#%d %s %s | %d | %d | %d | %d | %d | %d/%d/%d | %d/%d/%d | %d | %d | %s | %s | %.2f USD |\n",
 			strings.Repeat("· ", depth), r.Number, r.Type, strings.ReplaceAll(r.Title, "|", "\\|"), r.Items, r.Done(), r.ByStatus["ready"], r.ByStatus["in-progress"], len(r.Blocked),
 			r.ByHealth["on-track"], r.ByHealth["at-risk"], r.ByHealth["off-track"], r.ByRisk["low"], r.ByRisk["medium"], r.ByRisk["high"],
 			len(r.DecisionsNearSLA), len(r.ShippedUnmeasured), r.ProofCoverage, r.Streak, r.CostUSD)
@@ -391,6 +396,7 @@ func Table(roots []*Rollup) string {
 	for _, r := range roots {
 		row(r, 0)
 	}
+	b.WriteString("\n" + SpendNote + "\n")
 	return b.String()
 }
 
@@ -424,7 +430,7 @@ func Digest(repo string, roots []*Rollup, at time.Time) string {
 		if len(r.OverBudget) > 0 {
 			fmt.Fprintf(&b, "  over budget: %s\n", refs(r.OverBudget))
 		}
-		fmt.Fprintf(&b, "  provisional decisions: %d (deadlines %s); proof coverage %s; streak %s; cost $%.2f\n", len(r.Provisional), r.ProvisionalHours, r.ProofCoverage, r.Streak, r.CostUSD)
+		fmt.Fprintf(&b, "  provisional decisions: %d (deadlines %s); proof coverage %s; streak %s; metered spend %.2f USD (subscription use not counted)\n", len(r.Provisional), r.ProvisionalHours, r.ProofCoverage, r.Streak, r.CostUSD)
 	}
 	return b.String()
 }

@@ -4,6 +4,12 @@
   "additionalProperties": false,
   "description": "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
   "properties": {
+    "approve": {
+      "description": "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`.",
+      "type": "boolean",
+      "x-aayu-human-only": true,
+      "x-aayu-type": "bool"
+    },
     "dismiss": {
       "description": "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it.",
       "type": "string",
@@ -26,7 +32,7 @@
       "x-aayu-type": "pr"
     },
     "reason": {
-      "description": "Why the finding is dismissed (with --dismiss).",
+      "description": "Why the finding is dismissed (with --dismiss), or what you checked (with --approve).",
       "type": "string",
       "x-aayu-human-only": true,
       "x-aayu-type": "string"

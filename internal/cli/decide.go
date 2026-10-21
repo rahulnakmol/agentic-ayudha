@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,21 +26,23 @@ func init() { register("decide", runDecide) }
 // decisionStep is one Decision's SLA state and what the sweep did about it.
 type decisionStep struct {
 	decide.Step
-	Title       string   `json:"title"`
-	Authority   string   `json:"authority"`
-	Login       string   `json:"authority_login,omitempty"`
-	Reversible  bool     `json:"reversible"`
-	Waiver      bool     `json:"waiver,omitempty"`
-	Provisional bool     `json:"provisional"`
-	RatifyBy    string   `json:"ratify_by,omitempty"`
-	Constrains  []int    `json:"constrains,omitempty"` // items shown blocked while it is open
-	Did         []string `json:"did"`
+	Title       string             `json:"title"`
+	Authority   string             `json:"authority"`
+	Login       string             `json:"authority_login,omitempty"`
+	Reversible  bool               `json:"reversible"`
+	Waiver      bool               `json:"waiver,omitempty"`
+	Provisional bool               `json:"provisional"`
+	RatifyBy    string             `json:"ratify_by,omitempty"`
+	Constrains  []int              `json:"constrains,omitempty"` // items shown blocked while it is open
+	Options     []workitems.Option `json:"options,omitempty"`    // by the Decision's own numbers (decide.Options)
+	Did         []string           `json:"did"`
 }
 
 type decideReport struct {
 	Repo      string         `json:"repo"`
 	Decisions []decisionStep `json:"decisions,omitempty"`
 	Accepted  *acceptReport  `json:"accepted,omitempty"`
+	Batch     []acceptReport `json:"batch,omitempty"` // every Decision of a batch (decide a,b --accept x,y), Accepted first
 	Waiver    *waiverReport  `json:"waiver,omitempty"`
 	DryRun    bool           `json:"dry_run,omitempty"`
 }
@@ -86,11 +89,18 @@ func runDecide(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitUsage, "decide: --seat and --draft need --pack")
 	}
 	n := 0
+	var nums []int // a batch: decide 324,283 --accept 1,2
 	if in.Has("decision") {
-		if !issueArg.MatchString(in.String("decision")) {
-			return Errorf(ExitUsage, "decide: %q is not an issue; a question needs --pack", in.String("decision"))
+		for _, part := range strings.Split(in.String("decision"), ",") {
+			if !issueArg.MatchString(strings.TrimSpace(part)) {
+				return Errorf(ExitUsage, "decide: %q is not an issue; a question needs --pack", in.String("decision"))
+			}
+			nums = append(nums, issueNumber(strings.TrimSpace(part)))
 		}
-		n = issueNumber(in.String("decision"))
+		n = nums[0]
+		if len(nums) > 1 && !in.Has("accept") {
+			return Errorf(ExitUsage, "decide: a list of Decisions is a batch for --accept (aayu decide 324,283 --accept 1,2)")
+		}
 	}
 	switch {
 	case in.Has("accept") && in.Has("waiver"):
@@ -104,7 +114,14 @@ func runDecide(ctx context.Context, e *Env, in Values) error {
 		if n == 0 {
 			return Errorf(ExitUsage, "decide --accept <option> needs the Decision")
 		}
-		return decideAccept(ctx, e, &l.Config, repo, n, strings.TrimSpace(in.String("accept")))
+		options := []string{strings.TrimSpace(in.String("accept"))}
+		if len(nums) > 1 {
+			options = strings.Split(in.String("accept"), ",")
+			for i := range options {
+				options[i] = strings.TrimSpace(options[i])
+			}
+		}
+		return decideAccept(ctx, e, &l.Config, repo, nums, options)
 	}
 	return decideSweep(ctx, e, &l.Config, pol, repo, n)
 }
@@ -178,6 +195,7 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 		key, value := decide.Authority(cfg, d)
 		st := decisionStep{Step: pol.Evaluate(d, now), Title: d.Title, Authority: key + " = " + value, Login: decide.Login(cfg, value),
 			Reversible: d.Reversible(), Waiver: d.Waiver(), Provisional: slices.Contains(d.Labels, workitems.LabelProvisional), Constrains: constrains(d), Did: []string{}}
+		st.Options, _ = decide.Options(d.Item)
 		if t, ok := decide.RatifyBy(d.Body); ok {
 			st.RatifyBy = t.UTC().Format(time.RFC3339)
 		}
@@ -246,9 +264,38 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 				fmt.Fprintf(w, "; did: %s", strings.Join(s.Did, ", "))
 			}
 			fmt.Fprintln(w)
+			for _, o := range s.Options {
+				fmt.Fprintf(w, "  %s\n", optionLine(o))
+			}
+			if len(s.Options) > 0 {
+				fmt.Fprintf(w, "  accept one with `aayu decide %d --accept <number>`\n", s.Number)
+			}
 		}
 		return nil
 	})
+}
+
+// optionLine is one option as every surface shows it: "2. Name (recommended)",
+// or "2 (B). Name" for a lettered option.
+func optionLine(o workitems.Option) string {
+	s := fmt.Sprintf("%s. %s", o.Ref(), o.Name)
+	if o.Recommended {
+		s += " (recommended)"
+	}
+	return s
+}
+
+// optionList is a Decision's options on one line, for messages.
+func optionList(it workitems.Item) string {
+	os, _ := decide.Options(it)
+	if len(os) == 0 {
+		return "it has no numbered options"
+	}
+	out := make([]string, len(os))
+	for i, o := range os {
+		out[i] = optionLine(o)
+	}
+	return strings.Join(out, "; ")
 }
 
 func refsOf(ns []int) string {
@@ -323,8 +370,8 @@ func closeIssue(ctx context.Context, c *github.Client, repo string, n int, reaso
 // humanCaller resolves the human running a human-only action and refuses
 // agents and bot identities (trust model §0.1).
 func humanCaller(ctx context.Context, e *Env, cfg *config.Config, what string) (*github.Client, string, error) {
-	if e.Agent() {
-		return nil, "", Errorf(ExitBlocked, "%s is human-only and is refused when AAYU_AGENT=1", what)
+	if err := e.requireHuman(ctx, what, AccessWrite); err != nil {
+		return nil, "", err
 	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
@@ -340,63 +387,316 @@ func humanCaller(ctx context.Context, e *Env, cfg *config.Config, what string) (
 	return c, u.Login, nil
 }
 
-// decideAccept records a human's acceptance of an option: the Decision
-// section, status:done, decision:provisional cleared (ratified or reverted),
-// the issue closed, and every Decision it supersedes closed.
-func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, n int, option string) error {
-	c, login, err := humanCaller(ctx, e, cfg, "decide --accept")
+// humanLogin is a client under the person's own token and their login. It
+// fails when there is no token, or when the token is a bot identity's.
+func (e *Env) humanLogin(ctx context.Context, cfg *config.Config) (*github.Client, string, error) {
+	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	owner, name, _ := github.SplitRepo(repo)
-	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+	u, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
 	if err != nil {
-		return err
+		return nil, "", Wrap(ExitExternal, err)
 	}
-	d, err := loadDecision(ctx, c, repo, is)
-	if err != nil {
-		return err
+	if identity.IsBot(identity.Account{Login: u.Login, Type: u.Type}, cfg.Identity.BotLogins) {
+		return nil, "", Errorf(ExitBlocked, "decide --accept: %s is a bot identity; only a human may do this", u.Login)
 	}
+	return c, u.Login, nil
+}
+
+// acceptable checks that login may accept option (its number or its name) of
+// the open, Decision-ready Decision d, and returns the option: the checks
+// decide --accept makes before it writes anything.
+func acceptable(cfg *config.Config, d decide.Decision, option, login string) (workitems.Option, error) {
 	if d.State != "open" {
-		return Errorf(ExitBlocked, "decide: #%d is closed", n)
+		return workitems.Option{}, Errorf(ExitBlocked, "decide: #%d is closed", d.Number)
 	}
 	if ps := workitems.Validate(d.Item, workitems.StageReady); len(ps) > 0 {
 		msgs := make([]string, len(ps))
 		for i, p := range ps {
 			msgs[i] = p.String()
 		}
-		return Errorf(ExitBlocked, "decide: #%d is not Decision-ready: %s", n, strings.Join(msgs, "; "))
+		return workitems.Option{}, Errorf(ExitBlocked, "decide: #%d is not Decision-ready: %s", d.Number, strings.Join(msgs, "; "))
 	}
 	key, value := decide.Authority(cfg, d)
-	if want := decide.Login(cfg, value); want != "" && !strings.EqualFold(want, login) {
-		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", n, want, key, value, login)
+	// No login (a bot-only agent's comment batch): the reply's author is
+	// checked against the authority when it arrives (approveFromComment).
+	if want := decide.Login(cfg, value); login != "" && want != "" && !strings.EqualFold(want, login) {
+		return workitems.Option{}, Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", d.Number, want, key, value, login)
 	}
-	if !decide.MatchOption(d.Item.Fields["options"], option) {
-		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d", option, n)
+	o, ok := decide.Pick(d.Item, option)
+	if !ok {
+		return workitems.Option{}, Errorf(ExitUsage, "decide: %q is not one of the options of #%d; accept one by its number or its name: %s", option, d.Number, optionList(d.Item))
 	}
-	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
-	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
+	return o, nil
+}
+
+// decideAccept records a person's acceptance of one option for each of the
+// Decisions in nums, as one batch (Story #481): every Decision is checked
+// before anything is written. A person at their own terminal accepts by
+// running it. Anywhere else the batch goes to the person as one comment on
+// the first Decision: approved by an approver's reply when comment approvals
+// are on (approve.go; the command then exits 4 and accepts nothing itself),
+// else by one device code that covers every item.
+func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, nums []int, options []string) error {
+	if len(nums) != len(options) {
+		return Errorf(ExitUsage, "decide --accept: %d Decision(s) but %d option(s); give one option per Decision, in order (aayu decide 324,283 --accept 1,2)", len(nums), len(options))
+	}
+	if len(nums) > batchMax {
+		return Errorf(ExitUsage, "decide --accept: at most %d Decisions in one batch", batchMax)
+	}
+	// The person's account, when this session has it. An agent that writes
+	// only as the bot (the setup comment approval needs) has none: it reads and
+	// posts the batch as the bot, and the reply carries the person's authority.
+	// A person who already passed the presence check in this invocation
+	// (inbox at a marked terminal) is not an agent run.
+	agentRun := (e.agentSignal() != "" || !e.isTerminal(e.In)) && e.approval == nil
+	c, login, herr := e.humanLogin(ctx, cfg)
+	if herr != nil && !agentRun {
+		return herr
+	}
+	var bc *github.Client
+	var bot identity.Bot
+	berr := errors.New("a person at their own terminal accepts as themselves")
+	if agentRun {
+		bc, bot, berr = e.BotGitHub(ctx, "")
+	}
+	reader := c
+	if herr != nil {
+		if berr != nil {
+			return herr
+		}
+		reader = bc
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	ds := make([]decide.Decision, len(nums))
+	b := &batch{Repo: repo, Issue: nums[0], Command: termText(e.commandLine()), Posted: e.Now().UTC().Format(time.RFC3339Nano)}
+	for i, n := range nums {
+		if slices.Contains(nums[:i], n) {
+			return Errorf(ExitUsage, "decide --accept: #%d is in the batch twice", n)
+		}
+		is, _, err := reader.REST.Issues.Get(ctx, owner, name, n)
+		if err != nil {
+			return err
+		}
+		if ds[i], err = loadDecision(ctx, reader, repo, is); err != nil {
+			return err
+		}
+		o, err := acceptable(cfg, ds[i], options[i], login)
+		if err != nil {
+			return err
+		}
+		options[i] = o.Name // recorded by its name, whether typed as its number or its name
+		b.Items = append(b.Items, batchDecision(ds[i], o))
+	}
+	// Accepting a Decision closes every one it supersedes, so a batch never
+	// also accepts one of those.
+	for _, d := range ds {
+		links, _ := workitems.ParseLinks(d.Item.Fields[workitems.FieldLinks])
+		for _, lk := range links {
+			if lk.Kind == "supersedes" && slices.Contains(nums, lk.Number) {
+				return Errorf(ExitUsage, "decide --accept: #%d supersedes #%d, so accepting #%d closes #%d; leave #%d out", d.Number, lk.Number, d.Number, lk.Number, lk.Number)
+			}
+		}
+	}
+	via, writer := "", c
+	if agentRun && reader.DryRun() { // no batch, no code: a dry run only says what it would ask
+		fmt.Fprintf(e.Out, "dry run: batch %s on #%d would ask a person to approve, and nothing was posted:\n", b.hash(), b.Issue)
+		for i, it := range b.Items {
+			fmt.Fprintf(e.Out, "  %d. %s %s\n", i+1, it.Effect, it.Door)
+		}
+		return nil
+	}
+	if agentRun {
+		if berr == nil {
+			writer = bc
+			if why := e.commentApprovalsOff(ctx, writer, cfg, bot, b.Items); why == "" {
+				return e.postCommentBatch(ctx, writer, cfg, b)
+			} else {
+				b.Why = why
+			}
+		} else {
+			b.Why = fmt.Sprintf("the bot identity is not available (%v).", berr)
+		}
+		if herr != nil {
+			return WithNext(Errorf(ExitBlocked, "decide --accept: comment approval is off for this batch (%s), and the device code needs the person's own GitHub account, which this session does not hold: %v", strings.TrimSuffix(b.Why, "."), herr),
+				"a person runs the command where their account is, or the repository turns comment approval on (docs/guide/how-trust.md)")
+		}
+		if err := e.deviceBatch(ctx, writer, b, login); err != nil {
+			return err
+		}
+		// The Decisions as they are now must be the ones the person approved.
+		for i := range ds {
+			fresh, why, err := unchangedDecision(ctx, c, repo, b.Items[i])
+			if err != nil {
+				return err
+			}
+			if why != "" {
+				return e.batchVoid(ctx, writer, b, fmt.Sprintf("Decision #%d changed while the code was waiting", nums[i]))
+			}
+			ds[i] = fresh
+		}
+		via = "approved through GitHub's device flow"
+	}
+	rep := decideReport{Repo: repo, DryRun: c.DryRun()}
+	for i, d := range ds {
+		if via != "" && i > 0 {
+			// Again at its write: an edit while the earlier ones were written
+			// is not what the person approved.
+			fresh, why, err := unchangedDecision(ctx, c, repo, b.Items[i])
+			if err != nil {
+				return err
+			}
+			if why != "" {
+				done := refsOf(nums[:i])
+				msg := fmt.Sprintf("Accepted %s; #%d was not accepted: %s while the batch was applied; the rest was not applied.", done, nums[i], why)
+				_ = b.show(ctx, writer, b.render(batchStatus{Done: msg, Next: "ask for the remaining Decisions again: it posts a new batch"}))
+				return Errorf(ExitBlocked, "decide --accept: %s", msg)
+			}
+			d = fresh
+		}
+		ar, err := acceptDecision(ctx, e, c, repo, d, options[i], login, via)
+		if err != nil {
+			return err
+		}
+		if via != "" {
+			line := fmt.Sprintf("#%d accepted: option %d (%s), by @%s through the device code", d.Number, b.Items[i].N, mdText(options[i]), login)
+			if _, err := writer.UpsertComment(ctx, repo, d.Number, fmt.Sprintf("<!-- aayudha:batch-accepted %s -->", b.hash()),
+				fmt.Sprintf("<!-- aayudha:batch-accepted %s -->\n%s (batch `%s`).\n", b.hash(), line, b.hash()), actions.Action{Kind: "github.comment.batch-result"}); err != nil {
+				return err
+			}
+		}
+		if i == 0 {
+			rep.Accepted = &ar
+		}
+		rep.Batch = append(rep.Batch, ar)
+	}
+	if len(rep.Batch) == 1 {
+		rep.Batch = nil
+	}
+	return e.Emit(rep, func(w io.Writer) error {
+		for _, a := range append([]acceptReport{*rep.Accepted}, rep.Batch[min(1, len(rep.Batch)):]...) {
+			fmt.Fprintf(w, "#%d accepted: %s, by @%s", a.Decision, a.Option, a.By)
+			if via != "" {
+				fmt.Fprint(w, " through the device code")
+			}
+			if len(a.Superseded) > 0 {
+				fmt.Fprintf(w, "; superseded %s", refsOf(a.Superseded))
+			}
+			fmt.Fprintln(w)
+		}
+		return nil
+	})
+}
+
+// postCommentBatch posts b for an approver's reply and accepts nothing: the
+// aayudha-approve workflow applies the reply (approve.go).
+func (e *Env) postCommentBatch(ctx context.Context, c *github.Client, cfg *config.Config, b *batch) error {
+	b.Mode, b.Mention = batchByComment, cfg.Approvals.Approvers
+	if _, bot, err := e.BotGitHub(ctx, ""); err == nil {
+		if open, _, shown, err := openBatch(ctx, c, b.Repo, b.Issue, bot.Login, "", e.Now()); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if open != nil {
+			return WithNext(Errorf(ExitBlocked, "batch %s is still open on #%d; one batch at a time per issue", shown, b.Issue),
+				fmt.Sprintf("wait for the approver's reply on #%d, or start the batch on another Decision", b.Issue))
+		}
+	}
+	if err := postComment(ctx, c, b.Repo, b.Issue, "github.comment.batch", b.render(batchStatus{})); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	return WithNext(Errorf(ExitBlocked, "posted batch %s on #%d for %s; nothing is accepted until an approver replies `/aayu approve all %s` (or `approve 1 3 %s`, `skip 2 %s`) there", b.hash(), b.Issue, strings.Join(b.Mention, ", "), b.hash(), b.hash(), b.hash()),
+		fmt.Sprintf("wait for the approver's reply on #%d; the aayudha-approve workflow applies it", b.Issue))
+}
+
+// deviceBatch asks for one device code that covers every item of b. The
+// batch comment carries the code to the person's phone and, when no
+// approval comes, says what happened and the one next step.
+func (e *Env) deviceBatch(ctx context.Context, c *github.Client, b *batch, login string) error {
+	b.Mode, b.Mention = batchByDevice, []string{login}
+	effects := make([]string, len(b.Items))
+	for i, it := range b.Items {
+		effects[i] = it.Effect + " " + it.Door
+	}
+	shown := "" // the batch as the person saw it with the code
+	p := Pending{What: "decide --accept", Effect: effects,
+		Code: func(ctx context.Context, code deviceCodeReply, expires time.Time) error {
+			shown = b.render(batchStatus{Code: &code, Expires: expires})
+			if err := b.show(ctx, c, shown); err != nil {
+				return Wrap(ExitExternal, fmt.Errorf("posting the batch on #%d: %w", b.Issue, err))
+			}
+			fmt.Fprintf(e.Err, "Posted batch %s on #%d with the code.\n", b.hash(), b.Issue)
+			return nil
+		},
+		Failed: func(ctx context.Context, what, next string) {
+			_ = b.show(ctx, c, b.render(batchStatus{Done: what, Next: next}))
+		},
+	}
+	if err := e.requireApproval(ctx, p, AccessWrite); err != nil {
 		return err
 	}
-	body := workitems.SetSection(d.Body, "Decision", decide.Accepted(option, login, e.Now(), provisional))
-	_, err = c.Write(ctx, actions.Action{Kind: "github.issue.decision-accept", Target: fmt.Sprintf("%s#%d", repo, n),
-		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/%d", repo, n)}, Payload: map[string]any{"option": option, "by": login}},
+	if e.approval != nil && shown != "" {
+		// Anyone with the bot's token could have edited the batch while the
+		// code was waiting: the approval covers only what the person saw.
+		owner, name, _ := github.SplitRepo(b.Repo)
+		cm, _, err := c.REST.Issues.GetComment(ctx, owner, name, b.comment)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if cm.GetBody() != shown {
+			return e.batchVoid(ctx, c, b, "the batch comment changed while the code was waiting")
+		}
+	}
+	if e.approval != nil {
+		done := fmt.Sprintf("Approved by @%s through the device code at %s.", e.approval.Login, e.Now().UTC().Format("15:04 UTC"))
+		if err := b.show(ctx, c, b.render(batchStatus{Done: done})); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+	}
+	return nil
+}
+
+// batchVoid ends a device batch whose approval no longer holds: nothing is
+// done, and the comment says why and the next step.
+func (e *Env) batchVoid(ctx context.Context, c *github.Client, b *batch, why string) error {
+	next := "ask for the command again; it posts a new batch with a new code: " + b.Command
+	_ = b.show(ctx, c, b.render(batchStatus{Done: "Not applied: " + why + "; nothing was done.", Next: next}))
+	return WithNext(Errorf(ExitBlocked, "decide --accept: %s; nothing was done", why), next)
+}
+
+// acceptDecision writes the acceptance of option on Decision d, by login:
+// the Decision section (with how it was approved, when via says), status:done,
+// decision:provisional cleared (ratified or reverted), the issue closed, and
+// every Decision it supersedes closed.
+func acceptDecision(ctx context.Context, e *Env, c *github.Client, repo string, d decide.Decision, option, login, via string) (acceptReport, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	n := d.Number
+	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
+	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
+		return acceptReport{}, err
+	}
+	text := decide.Accepted(option, login, e.Now(), provisional)
+	if via != "" {
+		text += " " + strings.ToUpper(via[:1]) + via[1:] + "."
+	}
+	body := workitems.SetSection(d.Body, "Decision", text)
+	_, err := c.Write(ctx, actions.Action{Kind: "github.issue.decision-accept", Target: fmt.Sprintf("%s#%d", repo, n),
+		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/%d", repo, n)}, Payload: map[string]any{"option": option, "by": login, "via": via}},
 		func(ctx context.Context) (any, error) {
 			_, _, err := c.REST.Issues.Update(ctx, owner, name, n, gh.UpdateIssueRequest{Body: gh.Ptr(body)})
 			return nil, err
 		})
 	if err != nil {
-		return err
+		return acceptReport{}, err
 	}
 	if provisional {
 		if err := removeLabel(ctx, c, repo, n, workitems.LabelProvisional); err != nil {
-			return err
+			return acceptReport{}, err
 		}
 	}
 	if err := closeIssue(ctx, c, repo, n, "completed"); err != nil {
-		return err
+		return acceptReport{}, err
 	}
-	rep := decideReport{Repo: repo, Accepted: &acceptReport{Decision: n, Option: option, By: login}, DryRun: c.DryRun()}
+	ar := acceptReport{Decision: n, Option: option, By: login}
 	links, _ := workitems.ParseLinks(d.Item.Fields[workitems.FieldLinks])
 	for _, lk := range links {
 		if lk.Kind != "supersedes" {
@@ -404,31 +704,24 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		}
 		old, _, err := c.REST.Issues.Get(ctx, owner, name, lk.Number)
 		if err != nil {
-			return err
+			return ar, err
 		}
 		_, err = c.UpsertComment(ctx, repo, lk.Number, decide.SupersededMarker,
 			fmt.Sprintf("%s\nSuperseded by #%d, accepted by @%s (%s).\n", decide.SupersededMarker, n, login, option), actions.Action{Kind: "github.comment.decision-superseded"})
 		if err != nil {
-			return err
+			return ar, err
 		}
 		if old.GetState() == "open" {
 			if err := setStatus(ctx, c, repo, lk.Number, github.IssueLabels(old), "cancelled"); err != nil {
-				return err
+				return ar, err
 			}
 			if err := closeIssue(ctx, c, repo, lk.Number, "not_planned"); err != nil {
-				return err
+				return ar, err
 			}
 		}
-		rep.Accepted.Superseded = append(rep.Accepted.Superseded, lk.Number)
+		ar.Superseded = append(ar.Superseded, lk.Number)
 	}
-	return e.Emit(rep, func(w io.Writer) error {
-		fmt.Fprintf(w, "#%d accepted: %s, by @%s", n, option, login)
-		if len(rep.Accepted.Superseded) > 0 {
-			fmt.Fprintf(w, "; superseded %s", refsOf(rep.Accepted.Superseded))
-		}
-		fmt.Fprintln(w)
-		return nil
-	})
+	return ar, nil
 }
 
 // decideWaiver files a floor-waiver Decision on story or bug n: never
@@ -508,7 +801,7 @@ func emitWaiver(e *Env, rep decideReport) error {
 		case rep.Waiver.Existing:
 			fmt.Fprintf(w, "floor waiver #%d for %s on #%d is already open\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item)
 		default:
-			fmt.Fprintf(w, "floor waiver #%d for %s on #%d filed; a human accepts it with `aayu decide %d --accept waive`\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item, rep.Waiver.Decision)
+			fmt.Fprintf(w, "floor waiver #%d for %s on #%d filed with two options, 1. Waive and 2. Don't waive (recommended); a human accepts one with `aayu decide %d --accept <number>`\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item, rep.Waiver.Decision)
 		}
 		return nil
 	})

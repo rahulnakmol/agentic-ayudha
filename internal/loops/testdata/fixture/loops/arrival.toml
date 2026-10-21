@@ -1,0 +1,5 @@
+description = "Triage each new intake issue."
+command = ["triage"]
+on = "issues.opened"
+filter = { label = "intake" }
+prompt = "Choose --as from each issue's text."

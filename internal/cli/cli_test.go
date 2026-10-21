@@ -41,14 +41,39 @@ func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args
 			return get(k)
 		}
 	}
+	if opts.UserHome == nil { // the account's home is the test's HOME, never the developer's
+		opts.UserHome = func() (string, error) { return opts.Getenv("HOME"), nil }
+	}
 	if opts.Dir == "" {
 		opts.Dir = t.TempDir()
 	}
 	if opts.GHToken == nil { // never pick up the developer's real gh login
 		opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }
 	}
+	if opts.GHAccounts == nil { // never pick up the developer's real gh accounts
+		opts.GHAccounts = func(context.Context) (map[string]string, error) { return nil, nil }
+	}
+	if opts.GitCredential == nil { // never pick up the developer's real git credential helper
+		opts.GitCredential = func(context.Context, string) (string, error) {
+			return "", errors.New("git credentials disabled in tests")
+		}
+	}
 	code = Run(context.Background(), args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
+}
+
+// stdinTTY makes run's stdin a person's interactive terminal, as a human-only
+// action needs when no agent marker is set (Bug #170); stdout and stderr stay
+// pipes, so output is the plain text tests compare.
+func stdinTTY(stream any) bool { _, ok := stream.(*strings.Reader); return ok }
+
+// hostShells is the environment each host gives the shell commands its agent
+// runs, without AAYU_AGENT (Bug #170): what a skill's shell call sees.
+var hostShells = map[string]map[string]string{
+	"amp":    {"AGENT": "amp", "AMP_THREAD_ID": "T-0000"},
+	"cursor": {"CURSOR_AGENT": "1"},
+	"claude": {"CLAUDECODE": "1"},
+	"codex":  {"CODEX_THREAD_ID": "019a-thread"},
 }
 
 // withHandler temporarily implements a registry command for a test.
@@ -177,8 +202,13 @@ func TestModelsShowAndActionsChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, errs := run(t, nil, Options{Dir: repo}, "models", "show", "--host", "cursor", "--set", "models.review.cursor.model=gpt-6.1-sol")
-	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.7\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
+	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.6\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
 		t.Fatalf("exit %d\n%s%s", code, out, errs)
+	}
+	// The opt-in Copilot route is shown as the route real calls take.
+	code, out, errs = run(t, nil, Options{Dir: repo}, "models", "show", "--host", "copilot", "--set", "models.ui-review.copilot.model=gemini-4-argon")
+	if code != 0 || !regexp.MustCompile(`ui-review\s+copilot\s+gemini-4-argon\s+google\s+config\s+copilot copilot-cli\s+\(key: copilot\)`).MatchString(out) {
+		t.Fatalf("Copilot route: exit %d\n%s%s", code, out, errs)
 	}
 
 	// The actions log written through Env.Actions verifies, and a tampered copy does not.

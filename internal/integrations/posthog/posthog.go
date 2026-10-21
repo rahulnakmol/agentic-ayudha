@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -241,3 +242,57 @@ func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integratio
 		FetchedAt:   c.now().UTC(),
 	}, nil
 }
+
+// Query runs one query node (a LogsQuery, an ErrorTrackingQuery) on the
+// project's query endpoint after checking the key reads only, and returns the
+// answer as PostHog sent it with the exact request. The production sources
+// parse the answer; its digest lets a cited query be checked later
+// (Decision #449).
+func (c *Client) Query(ctx context.Context, name string, node map[string]any) ([]byte, string, error) {
+	scope, err := c.Scope(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := scope.Check("posthog"); err != nil {
+		return nil, "", err
+	}
+	path := "/api/projects/" + c.project + "/query/"
+	body, err := json.Marshal(map[string]any{"query": node, "name": name})
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %w", integrations.ErrQuery, err)
+	}
+	src := "POST " + c.base + path + " " + string(body)
+	req, err := c.request(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, src, err
+	}
+	var raw json.RawMessage
+	if err := integrations.DoJSON(c.hc, req, &raw); err != nil {
+		return nil, src, err
+	}
+	return raw, src, nil
+}
+
+// Get reads one list under the project (alerts, annotations) with a GET and
+// returns the answer as PostHog sent it with the exact request.
+func (c *Client) Get(ctx context.Context, resource string, v url.Values) ([]byte, string, error) {
+	if !resourceName.MatchString(resource) {
+		return nil, "", fmt.Errorf("%w: posthog resource %q: want a list name such as alerts", integrations.ErrQuery, resource)
+	}
+	path := "/api/projects/" + c.project + "/" + resource + "/"
+	if len(v) > 0 {
+		path += "?" + v.Encode()
+	}
+	src := "GET " + c.base + path
+	req, err := c.request(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, src, err
+	}
+	var raw json.RawMessage
+	if err := integrations.DoJSON(c.hc, req, &raw); err != nil {
+		return nil, src, err
+	}
+	return raw, src, nil
+}
+
+var resourceName = regexp.MustCompile(`^[a-z][a-z_]{0,40}$`)

@@ -58,6 +58,7 @@ func run(ctx context.Context) error {
 	groups := flag.Bool("groups", false, "print the tier-2 group names as a JSON array and exit")
 	gating := flag.Bool("gating", false, "with -groups: only the groups whose results gate a promotion (gate is not advisory, D-7.3h)")
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
+	steps := flag.String("steps", "", "tier 2: save each run's steps here as they return, and resume the finished ones found here")
 	gate := flag.Bool("evolve-gate", false, "eval-first gate (WP7.7): fail an evolve PR (evolve/ branch or Aayudha-Evolve commit) that adds no reproducing eval case")
 	baseRef := flag.String("base", "", "base commit of the PR (-evolve-gate)")
 	headRef := flag.String("head", "HEAD", "head commit of the PR (-evolve-gate); fetched from origin by SHA when missing")
@@ -135,6 +136,7 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		h.Steps = *steps
 		if *only != "" {
 			re, err := regexp.Compile(*only)
 			if err != nil {
@@ -147,6 +149,13 @@ func run(ctx context.Context) error {
 			return err
 		}
 		res.Group = *group
+		if !res.Scored() {
+			for _, c := range res.Cases {
+				fmt.Printf("  %s: not run: %s\n", c.Case, c.NotRun)
+			}
+			fmt.Printf("::notice::No case of group %s ran, so no results file is written: the group has no results for %s.\n", *group, *sha)
+			return nil
+		}
 		res.Verdict, res.Reasons = evals.Compare(res, base, cfg)
 		if base != nil {
 			res.Baseline = base.SHA
@@ -162,6 +171,9 @@ func run(ctx context.Context) error {
 			return err
 		}
 		fmt.Printf("wrote %s (%.4f USD at the charged rate)\n", *out, res.CostUSD)
+		for _, w := range res.Warnings {
+			fmt.Printf("::warning::%s\n", w)
+		}
 		return verdict(res, base, cfg)
 	}
 	return errors.New("pass -tier 1, -tier 2, or -compare <file>")
@@ -266,6 +278,10 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 	}
 	fmt.Printf("tier 2 %s: pass^%d %.2f, mean %.2f (%s): %s\n", cur.SHA, cur.K, cur.PassK, cur.Mean, against, v)
 	for _, c := range cur.Cases {
+		if c.NotRun != "" {
+			fmt.Printf("  %s: not run: %s\n", c.Case, c.NotRun)
+			continue
+		}
 		fmt.Printf("  %s on %s (%s): pass^%d %.0f, mean %.2f over %d completed run(s), %d error(s)\n", c.Case, c.Model, c.Family, cur.K, c.PassK, c.Mean, len(c.Runs)-c.Errors, c.Errors)
 		for i, r := range c.Runs {
 			var calls []string
@@ -275,6 +291,9 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 			fmt.Printf("    run %d %s score %d: %s\n", i+1, r.Status, r.Score, strings.Join(calls, "; "))
 			if r.Status == evals.RunError {
 				fmt.Printf("      %s; reply: %q\n", r.Error, r.Excerpt)
+			}
+			if sc := r.SelfCheck; sc != nil {
+				fmt.Printf("      self-check: first draft judged %d (not counted), %d item(s) changed\n", sc.FirstScore, len(sc.Changed))
 			}
 		}
 	}
@@ -306,6 +325,9 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, n := range l.Notices {
+		fmt.Fprintln(os.Stderr, "eval:", n)
+	}
 	clock, err := l.Config.Clock()
 	if err != nil {
 		return nil, err
@@ -329,7 +351,7 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 	}
 	gw := &models.Gateway{
 		Models:   m,
-		Resolver: models.Resolver{Models: m, Log: func(s string) { fmt.Fprintln(os.Stderr, s) }},
+		Resolver: models.Resolver{Models: m, Hosts: l.Config.Hosts, Log: func(s string) { fmt.Fprintln(os.Stderr, s) }},
 		Actions:  log,
 		Breaker:  &models.Breaker{Budget: budget, Clock: clock, Now: time.Now, PauseFile: filepath.Join(tmp, "paused")},
 		Key: func(name string) (string, error) {

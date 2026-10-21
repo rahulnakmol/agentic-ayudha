@@ -64,6 +64,40 @@
         }
       }
     },
+    "rollout": {
+      "$comment": "Required when the product defines SLOs in ops/slos.toml (Decision #324).",
+      "type": "object",
+      "required": [
+        "watch",
+        "rollback_trigger",
+        "rollback"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "flag": {
+          "type": "string"
+        },
+        "canary": {
+          "type": "string"
+        },
+        "watch": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rollback_trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rollback": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "open_questions": {
       "type": "array",
       "items": {

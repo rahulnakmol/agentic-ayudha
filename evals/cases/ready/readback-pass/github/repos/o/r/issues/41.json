@@ -1,0 +1,20 @@
+{
+  "number": 41,
+  "title": "Show the pickup time on the order confirmation",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ],
+  "body": "### summary\n\nAs a customer collecting an order, I want the confirmation to show my pickup time, so that I know when to come to the shop.\n\n### completion_goal\n\n1. [screenshot] state: the order confirmation at 1280 px wide after the seeded customer pays for the 09:30 pickup slot on Saturday 17 October; expected: the order number and \"Pickup Sat 17 Oct, 09:30\" under it\n2. [api-trace] state: GET /api/orders/1001 for the seeded order; expected: 200 with pickup_at \"2026-10-17T09:30:00+01:00\"\n3. [screenshot] state: the same confirmation at 390 px wide; expected: the order number and the pickup time show without horizontal scrolling\n\n### measure\n\nCompletion Goal criteria observed\n\n### threshold\n\n3 of 3\n\n### scenario\n\nAs the seeded customer, order one loaf for the 09:30 Saturday slot, pay with the seeded test card, and look at the confirmation at 1280 px and 390 px; call GET /api/orders/1001.\n\n### environment\n\nlocal app with the seeded customer, the payment stub, and the clock fixed at Friday 16 October 2026, 18:00; never production\n"
+}

@@ -17,13 +17,26 @@ calls = [
   ["ready", "42", "--check"],
 ]
 
-# The human parked frame rates and the confirmation celebration: neither may become a criterion.
-scope = [
-  { pattern = '(?i)\bfps\b|frame[- ]?rate|\b60\s*(fps|frames)', why = "a frame rate, which the human parked" },
-  { pattern = '(?i)celebrat|confetti', why = "the confirmation celebration, which the human parked" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/motion.md", "vague/ux.md"]
+
+# The human parked frame rates and the confirmation celebration: neither may become a criterion.
+[[scope]]
+pattern = '(?i)\bfps\b|frame[- ]?rate|\b60\s*(fps|frames)'
+why = "a frame rate, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['animates at 60 fps', 'a steady frame rate']
+negated = ['with no frame-rate target']
+near_miss = ['the confirmation frames the order number', 'a 60-second timer']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)celebrat|confetti'
+why = "the confirmation celebration, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['a confetti burst on confirmation', 'it celebrates the order']
+negated = ['no confetti on confirmation']
+near_miss = ['confectionery on the menu']
+negated_fires = true

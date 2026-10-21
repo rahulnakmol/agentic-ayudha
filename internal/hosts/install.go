@@ -12,12 +12,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -25,14 +27,17 @@ import (
 // Repository paths install manages (WP3.2).
 const (
 	LockPath       = ".aayudha/lock.toml"
-	AgentsSkills   = ".agents/skills" // Amp and Cursor
-	ClaudeSkills   = ".claude/skills" // Claude Code
+	AgentsSkills   = ".agents/skills"           // Amp and Cursor
+	ClaudeSkills   = ".claude/skills"           // Claude Code
+	ClaudeCommands = ".claude/commands/aayudha" // Claude Code: /aayudha:<name>; Cursor reads only top-level command files
 	AgentsMD       = "AGENTS.md"
 	ClaudeMD       = "CLAUDE.md"
 	ClaudeMCP      = ".mcp.json"
 	ClaudeSettings = ".claude/settings.json"
 	CursorMCP      = ".cursor/mcp.json"
 	CursorHooks    = ".cursor/hooks.json"
+	CursorCommands = ".cursor/commands"   // Cursor reads only the top-level files: aayudha-<name>.md is /aayudha-<name>
+	CursorCLI      = ".cursor/cli.json"   // the Cursor CLI's project permissions
 	CodexConfig    = ".codex/config.toml" // project config: Codex loads it for trusted projects only
 	CodexHooks     = ".codex/hooks.json"
 	AmpPlugin      = ".amp/plugins/aayudha.ts"
@@ -40,6 +45,54 @@ const (
 	ServerName     = "aayudha"                   // MCP server name in every host
 	LockVersion    = 1
 )
+
+// ExecutableConfig are the repository files install writes that a host runs
+// or obeys: hooks, MCP server commands, permissions, and plugins. A host reads
+// them from whatever branch is checked out, so doctor fails when one differs
+// from what install writes (ConfigDrift), and init --gates makes their
+// changes need a code owner (HostConfigOwners).
+var ExecutableConfig = []string{ClaudeMCP, ClaudeSettings, CursorMCP, CursorHooks, CursorCLI, CodexConfig, CodexHooks, CopilotHooks, AmpPlugin}
+
+// HostConfigOwners are the root-anchored CODEOWNERS patterns that cover
+// ExecutableConfig, and .agents/, whose setup script the hosts' clouds run.
+var HostConfigOwners = []string{"/.mcp.json", "/.claude/", "/.cursor/", "/.codex/", "/.amp/plugins/", "/.github/hooks/", "/.agents/"}
+
+// AayudhaConfig names the ExecutableConfig files under root that carry an
+// aayudha hook, MCP server, or plugin. Without a readable lock.toml doctor
+// cannot plan, so these are what it cannot vouch for.
+func AayudhaConfig(root string) []string {
+	var out []string
+	for _, f := range ExecutableConfig {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
+		if err == nil && (f == AmpPlugin || aayuHookLike.Match(b) || bytes.Contains(b, []byte(`"`+ServerName+`"`)) || bytes.Contains(b, []byte("mcp_servers."+ServerName))) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ConfigDrift names the ExecutableConfig files among a plan's repository
+// edits whose content would change in meaning: a JSON file is compared parsed,
+// so key order and spacing alone are no drift.
+func ConfigDrift(edits []Edit) []string {
+	var out []string
+	for _, e := range edits {
+		if e.Home || !slices.Contains(ExecutableConfig, e.Path) || sameConfig(e.Old, e.New) {
+			continue
+		}
+		out = append(out, e.Path)
+	}
+	return out
+}
+
+func sameConfig(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil {
+		return reflect.DeepEqual(x, y)
+	}
+	norm := func(b []byte) string { return strings.TrimSpace(strings.ReplaceAll(string(b), "\r\n", "\n")) }
+	return a != nil && b != nil && norm(a) == norm(b)
+}
 
 // AllHosts returns every host ID in registry order.
 func AllHosts() []verbs.HostID {
@@ -50,7 +103,8 @@ func AllHosts() []verbs.HostID {
 	return out
 }
 
-// SkillDir is where a host reads project skills.
+// SkillDir is the project skill directory a host reads natively. install
+// before D-3.2b.g wrote each installed host's; SkillDirs is what it writes now.
 func SkillDir(h verbs.HostID) string {
 	if h == verbs.HostClaude {
 		return ClaudeSkills
@@ -58,11 +112,34 @@ func SkillDir(h verbs.HostID) string {
 	return AgentsSkills
 }
 
+// SkillDirs are the directories install keeps aayudha's skill copies in for
+// the lock's hosts, chosen so each host reads one copy of each skill
+// (D-3.2b.g). Claude Code reads only .claude/skills and Codex only
+// .agents/skills. Cursor reads .agents/skills and, with its Third-Party
+// Imports setting (on by default), .claude/skills too; Amp reads both and
+// keeps the first of each name. So Cursor and Amp share Claude Code's copies
+// when it is installed, and .agents/skills holds copies only for Codex or
+// when Claude Code is not installed. With Claude Code, Codex, and Cursor all
+// installed, Cursor reads both: Doubles reports it. Copilot reads all three
+// of .github/skills, .agents/skills, and .claude/skills and keeps the first of
+// each name, so it shares whichever copies are there.
+func (l Lock) SkillDirs() []string {
+	has := func(h verbs.HostID) bool { return slices.Contains(l.Hosts, string(h)) }
+	var dirs []string
+	if has(verbs.HostClaude) {
+		dirs = append(dirs, ClaudeSkills)
+	}
+	if has(verbs.HostCodex) || len(dirs) == 0 && (has(verbs.HostCursor) || has(verbs.HostAmp) || has(verbs.HostCopilot)) {
+		dirs = append(dirs, AgentsSkills)
+	}
+	sort.Strings(dirs)
+	return dirs
+}
+
 // Options configure one install plan.
 type Options struct {
 	Root          string         // repository root
 	Home          string         // the user's home directory
-	CodexHome     string         // Codex's configuration directory ($CODEX_HOME); "" is Home/.codex
 	Hosts         []verbs.HostID // empty: the hosts in lock.toml, else every host
 	Assets        fs.FS          // embedded tree with skills/ and hosts/
 	Binary        string         // absolute path of the aayu binary hooks and MCP registrations run
@@ -109,13 +186,14 @@ type Lock struct {
 	Pin           string               `toml:"pin"`
 	Hosts         []string             `toml:"hosts"`
 	Skills        map[string]LockSkill `toml:"skills"`
-	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
-	// mirrors from .agents/skills to the hosts that do not read it.
+	// ProductSkills are the product's own verify skills (WP4.5b.3) in
+	// .agents/skills that Claude Code reaches through a pointer command in
+	// .claude/commands/aayudha (D-3.2b.l).
 	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
 }
 
-// LockProductSkill records one mirrored product skill: its source directory
-// and the hash of what was copied.
+// LockProductSkill records one product skill Claude Code reaches: its source
+// directory and the hash of the pointer install wrote.
 type LockProductSkill struct {
 	Source string `toml:"source"`
 	SHA256 string `toml:"sha256"`
@@ -151,7 +229,8 @@ func renderLock(l Lock) []byte {
 	for i, h := range l.Hosts {
 		q[i] = fmt.Sprintf("%q", h)
 	}
-	fmt.Fprintf(&b, "hosts = [%s]\n\n[skills]\n", strings.Join(q, ", "))
+	fmt.Fprintf(&b, "hosts = [%s]\n", strings.Join(q, ", "))
+	b.WriteString("\n[skills]\n")
 	names := make([]string, 0, len(l.Skills))
 	for n := range l.Skills {
 		names = append(names, n)
@@ -269,9 +348,10 @@ func (o Options) text(b []byte) []byte {
 
 // planner accumulates edits, and notes for edits it could not plan.
 type planner struct {
-	o     Options
-	edits []Edit
-	notes []string
+	o         Options
+	edits     []Edit
+	notes     []string
+	unmanaged []string
 }
 
 func (p *planner) abs(rel string, home bool) string {
@@ -329,6 +409,10 @@ type Result struct {
 	Edits []Edit
 	Lock  Lock
 	Notes []string // edits install could not plan and a human must make
+	// Unmanaged are ExecutableConfig files holding an aayudha entry install
+	// leaves alone because it is outside aayudha's block: drift doctor cannot
+	// repair, since install will not rewrite it.
+	Unmanaged []string
 }
 
 // Plan computes every edit install would make. It reads the repository and the
@@ -384,43 +468,44 @@ func Plan(o Options) (*Result, error) {
 		lock.Skills[name] = LockSkill{Version: o.SkillsVersion, SHA256: HashSkill(m)}
 	}
 
-	var dirs []string
-	for _, h := range hostList {
-		if d := SkillDir(verbs.HostID(h)); !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
-		}
-	}
-	sort.Strings(dirs)
+	dirs := lock.SkillDirs()
 	for _, d := range dirs {
 		if err := p.skillCopies(d, src, old.Skills); err != nil {
 			return nil, err
 		}
 	}
-	if slices.Contains(dirs, ClaudeSkills) {
-		// The product's verify skills live where Amp, Cursor, and Codex read
-		// them; Claude Code gets a copy, recorded so a later install removes
-		// the copy of a skill the product deleted.
-		prod, err := p.productSkills(src)
-		if err != nil {
+	// A directory an earlier install filled that no host needs now loses
+	// aayudha's copies, so no host lists a skill twice; the product's own
+	// skills there stay.
+	before := old.SkillDirs()
+	for _, h := range old.Hosts {
+		if d := SkillDir(verbs.HostID(h)); !slices.Contains(before, d) {
+			before = append(before, d)
+		}
+	}
+	for _, d := range before {
+		if slices.Contains(dirs, d) || p.underSymlink(d) {
+			continue
+		}
+		if fi, err := os.Lstat(p.abs(d, false)); err != nil || !fi.IsDir() {
+			continue
+		}
+		previous := maps.Clone(old.Skills)
+		if previous == nil {
+			previous = map[string]LockSkill{}
+		}
+		for n := range src {
+			previous[n] = LockSkill{}
+		}
+		if err := p.skillCopies(d, nil, previous); err != nil {
 			return nil, err
 		}
-		previous := map[string]LockSkill{}
-		for n, ps := range old.ProductSkills {
-			previous[n] = LockSkill{SHA256: ps.SHA256}
-		}
-		for n, files := range prod {
-			m := map[string][]byte{}
-			for _, f := range files {
-				m[f.rel] = f.data
-			}
-			if lock.ProductSkills == nil {
-				lock.ProductSkills = map[string]LockProductSkill{}
-			}
-			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(m)}
-		}
-		if err := p.skillCopies(ClaudeSkills, prod, previous); err != nil {
-			return nil, err
-		}
+	}
+	if len(dirs) == 2 && slices.Contains(hostList, string(verbs.HostCursor)) {
+		p.notes = append(p.notes, cursorBoth)
+	}
+	if err := p.commands(hostList, src, &lock, old); err != nil {
+		return nil, err
 	}
 	if err := p.write(LockPath, false, o.text(renderLock(lock))); err != nil {
 		return nil, err
@@ -440,7 +525,7 @@ func Plan(o Options) (*Result, error) {
 		}
 		return a.Path < b.Path
 	})
-	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes}, nil
+	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes, Unmanaged: p.unmanaged}, nil
 }
 
 // skillCopies plans real copies of every source skill under dir, removes files
@@ -508,6 +593,167 @@ func (p *planner) skillCopies(dir string, src map[string][]skillFile, previous m
 	return nil
 }
 
+// commands plans what the aayudha plugin would otherwise give a host and
+// install provides itself, since install turns the plugin off (D-3.2b.k), and
+// the product's verify skills for Claude Code (D-3.2b.l).
+//
+// Claude Code: the plugin's commands in .claude/commands/aayudha/, so they keep
+// their names (/aayudha:next, /aayudha:codex, …), and one pointer per product
+// verify skill to its folder in .agents/skills (/aayudha:verify-<product>),
+// instead of a second copy in .claude/skills that Cursor would read too.
+// Cursor reads only top-level files in .claude/commands, so it reads none of
+// these. Codex: the plugin's commands as skills in .agents/skills, named as
+// Codex names a plugin's commands (aayudha:source-command-next, …).
+func (p *planner) commands(hostList []string, src map[string][]skillFile, lock *Lock, old Lock) error {
+	// Mirrors install wrote before D-3.2b.l, whole copies in .claude/skills, go.
+	previous := map[string]LockSkill{}
+	for n := range old.ProductSkills {
+		previous[n] = LockSkill{}
+	}
+	if err := p.skillCopies(ClaudeSkills, nil, previous); err != nil {
+		return err
+	}
+	if slices.Contains(hostList, string(verbs.HostClaude)) {
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostClaude)
+		if err != nil {
+			return err
+		}
+		var files []skillFile
+		for _, c := range cmds {
+			files = append(files, skillFile{rel: c.Name + ".md", data: c.Source})
+		}
+		prod, err := p.productSkills(src)
+		if err != nil {
+			return err
+		}
+		for _, n := range slices.Sorted(maps.Keys(prod)) {
+			var skill []byte
+			for _, f := range prod[n] {
+				if f.rel == "SKILL.md" {
+					skill = f.data
+				}
+			}
+			ptr := ProductPointer(n, skill)
+			files = append(files, skillFile{rel: n + ".md", data: ptr})
+			if lock.ProductSkills == nil {
+				lock.ProductSkills = map[string]LockProductSkill{}
+			}
+			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(map[string][]byte{n + ".md": ptr})}
+		}
+		dir, name := path.Split(ClaudeCommands)
+		if err := p.skillCopies(strings.TrimSuffix(dir, "/"), map[string][]skillFile{name: files}, map[string]LockSkill{name: {}}); err != nil {
+			return err
+		}
+	}
+	if slices.Contains(hostList, string(verbs.HostCursor)) {
+		// Cursor reads neither .claude/commands/aayudha/ nor a subfolder of
+		// its own commands folder, so it gets top-level files named
+		// aayudha-<name>.md (D-3.2b.n). Its command format has no
+		// frontmatter: the first line, the body's heading, is the title.
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCursor)
+		if err != nil {
+			return err
+		}
+		want := map[string]bool{}
+		for _, c := range cmds {
+			rel := CursorCommands + "/" + ServerName + "-" + c.Name + ".md"
+			want[rel] = true
+			if err := p.write(rel, false, p.o.text([]byte(c.Body+"\n"))); err != nil {
+				return err
+			}
+		}
+		entries, _ := os.ReadDir(p.abs(CursorCommands, false))
+		for _, e := range entries {
+			rel := CursorCommands + "/" + e.Name()
+			if !e.IsDir() && strings.HasPrefix(e.Name(), ServerName+"-") && strings.HasSuffix(e.Name(), ".md") && !want[rel] {
+				old, _ := os.ReadFile(p.abs(rel, false))
+				p.edits = append(p.edits, Edit{Kind: Delete, Path: rel, Old: old})
+			}
+		}
+	}
+	if slices.Contains(hostList, string(verbs.HostCodex)) {
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCodex)
+		if err != nil {
+			return err
+		}
+		want := map[string][]skillFile{}
+		for _, c := range cmds {
+			id := "source-command-" + c.Name
+			name, _ := json.Marshal(ServerName + ":" + id)
+			desc, _ := json.Marshal(c.Description)
+			want[ServerName+"-"+id] = []skillFile{{rel: "SKILL.md", data: fmt.Appendf(nil,
+				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, written by `aayu install`. Use this skill when the person runs it. -->\n\n%s\n",
+				name, desc, c.Name, c.Body)}}
+		}
+		previous := map[string]LockSkill{}
+		entries, _ := os.ReadDir(p.abs(AgentsSkills, false))
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ServerName+"-source-command-") {
+				previous[e.Name()] = LockSkill{}
+			}
+		}
+		if err := p.skillCopies(AgentsSkills, want, previous); err != nil {
+			return err
+		}
+	}
+	if slices.Contains(hostList, string(verbs.HostCopilot)) {
+		// Copilot runs a skill as a slash command, and VS Code loads a skill
+		// only when its name is lowercase and hyphenated and matches its
+		// folder: /aayudha-<name>, as in Cursor. Only Copilot reads
+		// .github/skills, so no other host lists them.
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCopilot)
+		if err != nil {
+			return err
+		}
+		want := map[string][]skillFile{}
+		for _, c := range cmds {
+			id := ServerName + "-" + c.Name
+			desc, _ := json.Marshal(c.Description)
+			want[id] = []skillFile{{rel: "SKILL.md", data: fmt.Appendf(nil,
+				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, %s. Use this skill when the person runs it. -->\n\n%s\n",
+				id, desc, c.Name, copilotCommandMark, c.Body)}}
+		}
+		// A command aayu no longer ships is removed only when its SKILL.md
+		// carries the line install writes; a person's own skill is left alone.
+		previous := map[string]LockSkill{}
+		entries, _ := os.ReadDir(p.abs(CopilotSkills, false))
+		for _, e := range entries {
+			b, err := os.ReadFile(filepath.Join(p.abs(CopilotSkills, false), e.Name(), "SKILL.md"))
+			if strings.HasPrefix(e.Name(), ServerName+"-") && err == nil && strings.Contains(string(b), copilotCommandMark) {
+				previous[e.Name()] = LockSkill{}
+			}
+		}
+		if err := p.skillCopies(CopilotSkills, want, previous); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ProductPointer is Claude Code's command for the product's verify skill name
+// whose SKILL.md is skill: its frontmatter without name and paths (a command
+// file takes neither), and a body that points at the skill's folder.
+func ProductPointer(name string, skill []byte) []byte {
+	front, _, _ := strings.Cut(strings.TrimPrefix(string(lf(skill)), "---\n"), "\n---\n")
+	var doc yaml.Node
+	var keep []*yaml.Node
+	if yaml.Unmarshal([]byte(front), &doc) == nil && len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		m := doc.Content[0]
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if k := m.Content[i].Value; k != "name" && k != "paths" {
+				keep = append(keep, m.Content[i], m.Content[i+1])
+			}
+		}
+		m.Content = keep
+		if b, err := yaml.Marshal(m); err == nil {
+			front = strings.TrimSuffix(string(b), "\n")
+		}
+	}
+	dir := AgentsSkills + "/" + name
+	return fmt.Appendf(nil, "---\n%s\n---\n\nThis is the product's verify skill, `%s`, which lives in `%s/`. Read `%s/SKILL.md` and follow it; every path it names is relative to `%s/`.\n\n(Written by `aayu install`; edit the skill in `%s/`, not this pointer.)\n",
+		front, name, dir, dir, dir, dir)
+}
+
 // HookCommand is the exact command a host runs for an aayudha hook. The binary
 // path is always double-quoted, so a path with spaces (C:\Program Files\…) runs.
 func HookCommand(binary, name string, h verbs.HostID) string {
@@ -517,7 +763,15 @@ func HookCommand(binary, name string, h verbs.HostID) string {
 var importsAgents = regexp.MustCompile(`(?m)^@AGENTS\.md\s*$`)
 
 // ourHook matches the commands HookCommand writes, for any binary path.
-var ourHook = regexp.MustCompile(`^"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex)$`)
+var ourHook = regexp.MustCompile(`^(& )?"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex|copilot)$`)
+
+// aayuHookLike matches any command that runs an aayu binary's hook verb, such
+// as one of ours with something appended. Install replaces it like its own,
+// so an altered aayudha hook is drift that a repair removes, never a
+// product hook it keeps next to the real one.
+var aayuHookLike = regexp.MustCompile(`(^|[\s"'/\\&;|])aayu(\.exe)?(\\?")?\s+hook\b`)
+
+func aayuHook(c string) bool { return ourHook.MatchString(c) || aayuHookLike.MatchString(c) }
 
 func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 	existing, err := p.read(AgentsMD, false)
@@ -528,6 +782,20 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		return err
 	}
 	server := map[string]any{"command": p.o.Binary, "args": []any{"mcp"}}
+	if hosts[verbs.HostClaude] || hosts[verbs.HostCopilot] {
+		// Claude Code and Copilot both read the project's .mcp.json. Copilot
+		// passes a stdio server only PATH and wants its tools listed, so with
+		// Copilot the entry names the variables aayu needs (CopilotMCPEnv).
+		entry := maps.Clone(server)
+		if hosts[verbs.HostCopilot] {
+			entry["env"], entry["tools"] = copilotMCPEnv(), []any{"*"}
+		}
+		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
+			obj(m, "mcpServers")[ServerName] = entry
+		}); err != nil {
+			return err
+		}
+	}
 	if hosts[verbs.HostClaude] {
 		cm, err := p.read(ClaudeMD, false)
 		if err != nil {
@@ -542,41 +810,27 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		if err := p.write(ClaudeMD, false, p.o.text(cm)); err != nil {
 			return err
 		}
-		plugin := p.pluginEnabled(verbs.HostClaude)
-		if err := p.mergeJSONIf(ClaudeMCP, !plugin, func(m map[string]any) {
-			if plugin {
-				deleteKey(m, "mcpServers", ServerName)
-			} else {
-				obj(m, "mcpServers")[ServerName] = server
-			}
-		}); err != nil {
-			return err
-		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
-			if plugin {
-				m["enabledMcpjsonServers"] = dropString(m["enabledMcpjsonServers"], ServerName)
-				if len(m["enabledMcpjsonServers"].([]any)) == 0 {
-					delete(m, "enabledMcpjsonServers")
-				}
-			} else {
-				m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
-			}
+			m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			// The repository's copies, hooks, and server serve every teammate,
+			// so the aayudha plugin steps aside here for whoever has it: the
+			// shared project setting overrides the user's (D-3.2b.h).
+			obj(m, "enabledPlugins")[PluginID] = false
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
-			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
+			if sl, ok := m["statusLine"].(map[string]any); !ok || aayuHook(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
 			}
-			setHooks(m, plugin, map[string]any{
+			setHooks(m, map[string]any{
 				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}},
 				"PreToolUse": map[string]any{"matcher": "*",
 					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}},
+				"PostToolUse": map[string]any{"matcher": PostToolMatcher,
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "post-tool", verbs.HostClaude)}}},
 			})
 		}); err != nil {
 			return err
-		}
-		if plugin {
-			p.notes = append(p.notes, pluginNote("Claude Code", ClaudeMCP+" and "+ClaudeSettings))
 		}
 	}
 	if hosts[verbs.HostCursor] {
@@ -587,33 +841,70 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 		if err := p.mergeJSON(CursorHooks, false, func(m map[string]any) {
 			m["version"] = json.Number("1")
-			hk := obj(m, "hooks")
-			hk["sessionStart"] = replaceHooks(hk["sessionStart"], map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)})
-			for _, ev := range []string{"beforeShellExecution", "beforeMCPExecution"} {
-				hk[ev] = replaceHooks(hk[ev], map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)})
-			}
-		}); err != nil {
-			return err
-		}
-	}
-	if hosts[verbs.HostCodex] {
-		plugin := p.pluginEnabled(verbs.HostCodex)
-		if err := p.codexConfig(plugin); err != nil {
-			return err
-		}
-		if err := p.mergeJSONIf(CodexHooks, !plugin, func(m map[string]any) {
-			setHooks(m, plugin, map[string]any{
-				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
-				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
+			pre := map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)}
+			post := map[string]any{"command": HookCommand(p.o.Binary, "post-tool", verbs.HostCursor)}
+			setHooks(m, map[string]any{
+				"sessionStart":         map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)},
+				"beforeShellExecution": pre, "beforeMCPExecution": pre,
+				"afterShellExecution": post, "afterMCPExecution": post,
 			})
 		}); err != nil {
 			return err
 		}
-		if plugin {
-			p.notes = append(p.notes, pluginNote("OpenAI Codex", CodexConfig+" and "+CodexHooks))
-		} else {
-			p.notes = append(p.notes, "Codex runs these hooks only after you trust them: open /hooks in Codex and trust the aayudha hooks (`aayu doctor` reports any it would skip)")
+		// Cursor's print mode (`cursor-agent -p`) runs a shell command or an
+		// MCP tool only when the CLI's permissions allow it (D-3.2b.o). The
+		// hooks still refuse a human-only verb, and the MCP server never
+		// offers one.
+		if err := p.mergeJSON(CursorCLI, false, func(m map[string]any) {
+			perms := obj(m, "permissions")
+			perms["allow"] = addString(addString(perms["allow"], "Shell(aayu)"), "Mcp("+ServerName+":*)")
+			if _, ok := perms["deny"].([]any); !ok { // Cursor refuses a cli.json without both lists
+				perms["deny"] = []any{}
+			}
+		}); err != nil {
+			return err
 		}
+		p.notes = append(p.notes, cursorPlugin, cursorApprove)
+	}
+	if hosts[verbs.HostCodex] {
+		if err := p.codexConfig(); err != nil {
+			return err
+		}
+		if err := p.mergeJSON(CodexHooks, false, func(m map[string]any) {
+			setHooks(m, map[string]any{
+				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
+				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
+				"PostToolUse": map[string]any{"matcher": PostToolMatcher,
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "post-tool", verbs.HostCodex)}}},
+			})
+		}); err != nil {
+			return err
+		}
+		p.notes = append(p.notes, "Codex reads .codex/ only in a project you trust, and runs these hooks only after you trust them in /hooks; until then the aayudha plugin, if you have it, is not turned off here either (`aayu doctor` reports both)")
+	}
+	if hosts[verbs.HostCopilot] {
+		// The whole file is aayudha's. bash runs the quoted path as is;
+		// PowerShell needs the call operator to run a quoted path.
+		entry := func(name string) []any {
+			c := HookCommand(p.o.Binary, name, verbs.HostCopilot)
+			return []any{map[string]any{"type": "command", "bash": c, "powershell": "& " + c}}
+		}
+		hooks := map[string]any{"version": json.Number("1"), "hooks": map[string]any{
+			"sessionStart": entry("session-start"), "preToolUse": entry("pre-tool"),
+			// Copilot sends a failed call to postToolUseFailure, not postToolUse; the hook reads both.
+			"postToolUse": entry("post-tool"), "postToolUseFailure": entry("post-tool"),
+		}}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(hooks); err != nil {
+			return err
+		}
+		if err := p.write(CopilotHooks, false, p.o.text(buf.Bytes())); err != nil {
+			return err
+		}
+		p.notes = append(p.notes, copilotTrust)
 	}
 	if hosts[verbs.HostAmp] {
 		tmpl, err := fs.ReadFile(p.o.Assets, "hosts/amp/aayudha.ts")
@@ -650,31 +941,39 @@ const (
 	codexEnd   = "# END aayudha"
 )
 
+// CodexMCPEnv are the variables Codex copies from its own environment into the
+// aayudha MCP server's (env_vars), in the plugin manifest and in install's
+// block. Codex otherwise gives a stdio server only HOME, PATH, and a few
+// more, so the server would find no GitHub token that the shell finds:
+// these are the places aayu looks for one (AAYU_GITHUB_TOKEN, and gh's token
+// and config folder) and the folder of its own secrets file.
+var CodexMCPEnv = []string{"AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"}
+
 var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
 
-func (p *planner) codexConfig(plugin bool) error {
+func (p *planner) codexConfig() error {
 	old, err := p.read(CodexConfig, false)
 	if err != nil {
 		return err
 	}
 	cmd, _ := json.Marshal(p.o.Binary) // a JSON string is a TOML basic string
-	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + codexEnd + "\n"
 	text := string(lf(old))
+	// The aayudha plugin steps aside in this trusted project: the project
+	// layer overrides the user's [plugins] entry (D-3.2b.h). A table the
+	// product wrote itself stays, since TOML allows it once.
+	plugin := "\n[plugins.\"" + PluginID + "\"]\nenabled = false\n"
+	if strings.Contains(codexBlock.ReplaceAllLiteralString(text, ""), "[plugins.\""+PluginID+"\"]") {
+		plugin = ""
+		p.notes = append(p.notes, CodexConfig+" already has a [plugins.\""+PluginID+"\"] table outside aayudha's block, so install leaves it: set enabled = false there, or Codex lists each aayudha skill twice for anyone with the plugin")
+	}
+	envVars, _ := json.Marshal(CodexMCPEnv) // a JSON string array is a TOML array
+	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\nenv_vars = " + strings.ReplaceAll(string(envVars), ",", ", ") + "\n" + plugin + codexEnd + "\n"
 	switch {
-	case plugin: // the plugin's server serves this repository; drop the block install wrote before
-		if !codexBlock.MatchString(text) {
-			return nil
-		}
-		text = strings.TrimLeft(codexBlock.ReplaceAllLiteralString(text, ""), "\n")
-		if strings.TrimSpace(text) == "" {
-			p.edits = append(p.edits, Edit{Kind: Delete, Path: CodexConfig, Old: old})
-			return nil
-		}
-		text = strings.TrimRight(text, "\n") + "\n"
 	case codexBlock.MatchString(text):
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
 		p.notes = append(p.notes, CodexConfig+" already defines [mcp_servers."+ServerName+"] outside aayudha's block, so install leaves it: point its command at "+string(cmd)+" with args [\"mcp\"]")
+		p.unmanaged = append(p.unmanaged, CodexConfig)
 		return nil
 	case text == "":
 		text = block
@@ -686,12 +985,10 @@ func (p *planner) codexConfig(plugin bool) error {
 
 func (p *planner) agentsSections(lock Lock) []AgentsSection {
 	var dirs []string
-	for _, h := range lock.Hosts {
-		if d := "`" + SkillDir(verbs.HostID(h)) + "/`"; !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
-		}
+	for _, d := range lock.SkillDirs() {
+		dirs = append(dirs, "`"+d+"/`")
 	}
-	sort.Strings(dirs)
+	where := "The skill copies in " + strings.Join(dirs, " and ")
 	var names []string
 	for _, h := range lock.Hosts {
 		if hh, ok := verbs.FindHost(verbs.HostID(h)); ok {
@@ -702,17 +999,18 @@ func (p *planner) agentsSections(lock Lock) []AgentsSection {
 
 This repository runs the aayudha verbs as host skills, installed by `+"`aayu install`"+` (skills version %s).
 
-- The skill copies in %s are managed: do not edit them. `+"`aayu install --apply`"+` or `+"`aayu doctor --fix`"+`
+- %s are managed: do not edit them. `+"`aayu install --apply`"+` or `+"`aayu doctor --fix`"+`
   rewrites them from the binary, and `+"`.aayudha/lock.toml`"+` records their hashes.
 - Inside a skill, the host's model reasons; every external write goes through an `+"`aayu`"+` command, which logs it.
 - `+"`aayu doctor`"+` checks the tools, tokens, configuration, and these copies.
-- Seat charters and the RACI arrive with WP5.1.`, lock.SkillsVersion, strings.Join(dirs, " and "))
+- Seat charters and the RACI arrive with WP5.1.`, lock.SkillsVersion, where)
 	hostsSec := fmt.Sprintf(`## Aayudha hosts
 
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
-`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes and blocks shell commands that
-run a human-only verb, and `+"`status-line`"+` shows where the work stands.
+`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes, shell commands that run a
+human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
+allowlist, and `+"`status-line`"+` shows where the work stands.
 
 %s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
@@ -770,89 +1068,38 @@ func addString(v any, s string) []any {
 	return append(list, s)
 }
 
-// pluginEnabled reports the aayudha marketplace plugin enabled for host.
-func (p *planner) pluginEnabled(host verbs.HostID) bool {
-	ch := p.o.CodexHome
-	if ch == "" {
-		ch = filepath.Join(p.o.Home, ".codex")
-	}
-	return PluginEnabled(host, p.o.Root, p.o.Home, ch)
-}
+// PluginID is the aayudha plugin's ID in Claude Code and Codex: the plugin
+// from this repository's marketplace, which is also named aayudha.
+const PluginID = ServerName + "@" + ServerName
 
-// pluginNote says why install wrote no hooks or MCP registration for a host.
-func pluginNote(host, files string) string {
-	return "the aayudha plugin is enabled for " + host + ", so its hooks and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
-}
+// copilotCommandMark is in every command skill install writes for Copilot.
+const copilotCommandMark = "written by `aayu install`"
 
-// mergeJSONIf is mergeJSON, except that a file that does not exist is created
-// only when create is true.
-// A file left empty is deleted.
-func (p *planner) mergeJSONIf(rel string, create bool, set func(map[string]any)) error {
-	if create {
-		return p.mergeJSON(rel, false, set)
-	}
-	old, err := p.read(rel, false)
-	if err != nil || old == nil {
-		return err
-	}
-	empty := false
-	if err := p.mergeJSON(rel, false, func(m map[string]any) { set(m); empty = len(m) == 0 }); err != nil {
-		return err
-	}
-	if n := len(p.edits); empty && n > 0 && p.edits[n-1].Path == rel {
-		p.edits[n-1] = Edit{Kind: Delete, Path: rel, Old: old}
-	}
-	return nil
-}
+// copilotTrust is the install note for Copilot, which reads a project's
+// .mcp.json and .github/hooks only once its person trusts the folder.
+const copilotTrust = "Copilot loads this repository's MCP server and hooks only after you trust the folder: Copilot CLI asks the first time you start it here (copilot -p never asks, so start copilot once first); VS Code asks through Workspace Trust. The GitHub Copilot host is " + CopilotProven
+
+// The install notes for Cursor, whose plugin aayu cannot turn off per
+// repository and which also reads .claude/skills (D-3.2b.g, D-3.2b.h).
+const (
+	cursorApprove = "Cursor's CLI loads a project's MCP server only after its person approves it: run `cursor-agent mcp enable " + ServerName + "` once in this repository (the Cursor IDE asks on its own), and again if " + CursorMCP + " changes"
+	cursorPlugin  = "Cursor has no setting a repository can commit to turn a plugin off, so if you also use the aayudha Cursor plugin here, Cursor lists each aayudha skill and the MCP server twice: disable the plugin for this workspace in Cursor. aayu doctor sees a plugin only in ~/.cursor/plugins/local, not one installed from a marketplace"
+	cursorBoth    = "Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both (with Third-Party Imports, on by default), so Cursor lists each aayudha skill twice; turn off Third-Party Imports in Cursor's settings, or install for Claude Code or Codex, not both"
+)
 
 // setHooks puts aayudha's entry for each event into m's hooks, replacing the
-// ones it wrote before, or with drop only removes them (and empty events).
-func setHooks(m map[string]any, drop bool, entries map[string]any) {
+// ones it wrote before.
+func setHooks(m map[string]any, entries map[string]any) {
 	hk := obj(m, "hooks")
 	for ev, entry := range entries {
-		if !drop {
-			hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
-			continue
-		}
-		if rest := dropOurs(hk[ev]); len(rest) > 0 {
-			hk[ev] = rest
-		} else {
-			delete(hk, ev)
-		}
+		hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
 	}
-	if len(hk) == 0 {
-		delete(m, "hooks")
-	}
-}
-
-func deleteKey(m map[string]any, key, name string) {
-	if o, ok := m[key].(map[string]any); ok {
-		delete(o, name)
-		if len(o) == 0 {
-			delete(m, key)
-		}
-	}
-}
-
-func dropString(v any, s string) []any {
-	list, _ := v.([]any)
-	out := []any{}
-	for _, x := range list {
-		if x != s {
-			out = append(out, x)
-		}
-	}
-	return out
 }
 
 // replaceHooks drops the entries aayudha wrote before (recognised by their
 // commands) from a host's hook list and appends entry; the product's own hooks
 // stay, in order.
 func replaceHooks(v any, entry map[string]any) []any {
-	return append(dropOurs(v), entry)
-}
-
-func dropOurs(v any) []any {
 	list, _ := v.([]any)
 	var out []any
 	for _, e := range list {
@@ -860,7 +1107,7 @@ func dropOurs(v any) []any {
 			out = append(out, e)
 		}
 	}
-	return out
+	return append(out, entry)
 }
 
 func isOurs(e any) bool {
@@ -869,7 +1116,7 @@ func isOurs(e any) bool {
 		return false
 	}
 	if c, ok := m["command"].(string); ok {
-		return ourHook.MatchString(c)
+		return aayuHook(c)
 	}
 	inner, ok := m["hooks"].([]any)
 	if !ok || len(inner) == 0 {
@@ -878,7 +1125,7 @@ func isOurs(e any) bool {
 	for _, h := range inner {
 		hm, _ := h.(map[string]any)
 		c, _ := hm["command"].(string)
-		if !ourHook.MatchString(c) {
+		if !aayuHook(c) {
 			return false
 		}
 	}
@@ -959,6 +1206,8 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 			rel, key = ClaudeMCP, "mcpServers"
 		case verbs.HostCursor:
 			rel, key = CursorMCP, "mcpServers"
+		case verbs.HostCopilot:
+			rel, key = ClaudeMCP, "mcpServers"
 		case verbs.HostAmp:
 			rel, key, isHome = AmpSettings, "amp.mcpServers", true
 		case verbs.HostCodex:
@@ -978,7 +1227,10 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 		} else if err == nil {
 			var raw map[string]json.RawMessage
 			var servers map[string]struct {
-				Command string `json:"command"`
+				Command string            `json:"command"`
+				Args    []string          `json:"args"`
+				Env     map[string]string `json:"env"`
+				Tools   []string          `json:"tools"`
 			}
 			if err := json.Unmarshal(b, &raw); err != nil {
 				r.Err = err
@@ -986,12 +1238,40 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 				if err := json.Unmarshal(v, &servers); err != nil {
 					r.Err = err
 				}
-				r.Command = servers[ServerName].Command
+				srv := servers[ServerName]
+				r.Command = srv.Command
+				switch {
+				case srv.Command == "" || r.Err != nil:
+				case !slices.Equal(srv.Args, []string{"mcp"}):
+					// Other arguments start the CLI, not the server.
+					r.Err = fmt.Errorf("the %q server runs %s with args %q, not [\"mcp\"]; run `aayu install --host %s --apply`", ServerName, srv.Command, srv.Args, h)
+				case h == string(verbs.HostCopilot):
+					r.Err = copilotServerGaps(srv.Env, srv.Tools)
+				}
 			}
 		}
 		out = append(out, r)
 	}
 	return out
+}
+
+// copilotServerGaps names what the aayudha server entry lacks for Copilot,
+// which starts a stdio server with only PATH and offers no tool the entry does
+// not list: each CopilotMCPEnv variable, and "tools": ["*"].
+func copilotServerGaps(env map[string]string, tools []string) error {
+	var gaps []string
+	for _, k := range CopilotMCPEnv {
+		if env[k] != "${"+k+":-}" {
+			gaps = append(gaps, "env "+k)
+		}
+	}
+	if !slices.Contains(tools, "*") {
+		gaps = append(gaps, `"tools": ["*"]`)
+	}
+	if len(gaps) > 0 {
+		return fmt.Errorf("the %q server lacks what Copilot needs (%s); run `aayu install --host copilot --apply`", ServerName, strings.Join(gaps, ", "))
+	}
+	return nil
 }
 
 // codexRegistration reads aayudha's server from the project's .codex/config.toml.
@@ -1030,6 +1310,7 @@ type SlashCommand struct {
 	Description string `json:"description"`
 	Hint        string `json:"hint,omitempty"`
 	Body        string `json:"body"`
+	Source      []byte `json:"-"` // the file as written, LF
 }
 
 // SlashCommands reads hosts/commands/*/*.md from the embedded assets, by name,
@@ -1051,6 +1332,7 @@ func SlashCommands(assets fs.FS, host verbs.HostID) ([]SlashCommand, error) {
 			continue
 		}
 		text := string(lf(b))
+		c.Source = []byte(text)
 		if rest, ok := strings.CutPrefix(text, "---\n"); ok {
 			if i := strings.Index(rest, "\n---\n"); i >= 0 {
 				for _, l := range strings.Split(rest[:i], "\n") {

@@ -5,9 +5,15 @@ idea into clear promises, checks every change against them before it merges, and
 It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), on your GitHub repository.
 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
-- **Proof before merge.** A merge gate runs fixed checks in your CI and asks a reviewer agent from another vendor.
-  It needs no AI keys in your CI.
-- **A person decides.** Nothing merges or releases without a person's yes, and every bypass is recorded.
+- **Proof before merge.** A merge gate runs fixed checks in your CI, then sends each ready pull request that is not
+  docs-only for review, by default to a review model you choose, with one key in your CI
+  ([who reviews when](docs/releases/v0.3.0.md#whats-new)).
+- **A person decides.** An agent's change merges without a person only on proof, which is off by default, or on a long
+  correction-free streak, and every bypass is recorded
+  ([how a change joins](docs/releases/v0.3.0.md#how-a-change-joins-your-code-now)).
+
+**New in v0.3.0:** a story's pull request can merge on proof, and each project names one review tool. Read
+[what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
 does.
@@ -20,7 +26,7 @@ does.
 curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
 ```
 
-The script installs the latest signed release, aayudha v0.1.0, as `aayudha` with the short name `aayu`. It checks
+The script installs the latest signed release as `aayudha`, with the short name `aayu`. It checks
 the release's signature and checksum before it copies anything. It needs `git` 2.40 or newer and `git-lfs`. Other
 ways to install are in [Install and connect](docs/getting-started.md).
 
@@ -54,11 +60,14 @@ freezes what was agreed. Lost at any point? `aayu next` prints the one next step
 All of it is on [the docs site](https://rahulnakmol.github.io/agentic-ayudha/). Agents can read the same docs as
 Markdown, starting from [llms.txt](https://rahulnakmol.github.io/agentic-ayudha/llms.txt).
 
+What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the release does for you, and how to upgrade.
+
 ## Adopt at your own pace
 
 1. **Level 1, clear work items.** Free, no keys, no CI changes: what the tour sets up.
-2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI, with no AI key; the
-   review comes from an agent app you install, such as Claude or Codex.
+2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI, and a review model
+   you choose, with one key, reviews each ready change that is not docs-only
+   ([who reviews when](docs/releases/v0.3.0.md#whats-new)).
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 

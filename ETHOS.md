@@ -26,3 +26,10 @@ disagree, the principle wins or the change also changes the principle, by PR.
    pretends to be done.
 9. **Pay for what you use.** Budgets cap model and CI spend, expensive floors run only where the change can
    affect them, and the breaker pages a human instead of spending more.
+10. **Fix the system before the prose.** When an agent gets something wrong, the fix goes to the highest layer
+    that can make the mistake impossible or caught for good, and most of the effort goes there: first the codebase
+    (types, invariants, and boundaries that make the right thing the easy thing), then static checks (lint rules,
+    tests, CI checks, `verify`), then prose (skills, `AGENTS.md`, rules) only for what needs judgement, and least
+    into human review, which changes what the environment surfaces rather than asking people to look harder.
+    `retro --classify` records each correction's layer with its reason; a codebase or check correction becomes a
+    Story whose proof is the new type, invariant, rule, or test, and `evolve` rewrites a skill only for a prose one.

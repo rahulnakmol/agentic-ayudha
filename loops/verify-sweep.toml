@@ -1,13 +1,13 @@
 # Nightly behaviour sweep (WP4.5b.4). Every feature-map check runs with no model, so the loop needs no agent: it runs
-# in the free GitHub Actions fallback, and a failed check turns its run red (Appendix B D-7.1f). The weekly
+# in the free GitHub Actions fallback, and a failed check turns its run red. The weekly
 # verify-maintain loop hands the maintain brief to the agent; drift is also caught on every PR by `verify --map`. The
 # cron is in [time] tz.
 description = "Nightly sweep: run every feature-map behaviour check, with no model; a failed check fails the run."
 command = ["verify", "--check", "all"]
 cron = "30 2 * * *"
 agent = false
-# This repository's own setup: its example web product reaches Playwright through the base branch's packages/floors
-# (D-8.1b). A product's copy from `aayu install --loops` leaves setup and setup_run out; add the product's own.
+# This repository's own setup: its example web product reaches Playwright through the base branch's packages/floors.
+# A product's copy from `aayu install --loops` gets its own, from its lockfile.
 setup = ["node", "pnpm"]
 setup_run = [
   "pnpm install --frozen-lockfile --filter @aayudha/floors",

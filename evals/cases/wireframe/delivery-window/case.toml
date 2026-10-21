@@ -1,0 +1,17 @@
+# wireframe (WP6.5) from the recorded research stage of the same Feature. output/ is a recorded run (tier 1); tier 2
+# reruns it. The floors: `aayu wireframe`'s checks against the pinned research manifest, and a wireframe for every
+# state the Completion Goals name.
+skill = "wireframe"
+description = "Low-fidelity wireframes for Feature #570's states."
+input = "input.md"
+artifacts = ["output/stage.json"]
+
+[ux]
+output = "output"
+feature = 570
+team = "scaleup"
+upstream = ["../../research/delivery-window/output"]
+states = ["default", "slot-full", "saved"]
+
+[tier2]
+rubric = "rubric.md"

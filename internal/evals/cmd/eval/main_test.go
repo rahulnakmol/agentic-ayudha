@@ -236,7 +236,7 @@ func withCase(files map[string]string, edit func(string) string) map[string]stri
 // default) gets its whole cap, since every eval call is charged to one story;
 // a smaller cap leaves the breaker as configured (D-5.8d).
 func TestHarnessBudget(t *testing.T) {
-	for cap, want := range map[float64]float64{50: 50, 6: 25} {
+	for cap, want := range map[float64]float64{80: 80, 6: 60} {
 		h, err := harness(t.TempDir(), evals.Config{MaxUSD: cap})
 		if err != nil {
 			t.Fatal(err)

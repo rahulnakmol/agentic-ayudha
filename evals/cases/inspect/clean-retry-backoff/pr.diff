@@ -1,9 +1,9 @@
 diff --git a/internal/rates/retry.go b/internal/rates/retry.go
 new file mode 100644
-index 0000000..a26e978
+index 0000000..30662f5
 --- /dev/null
 +++ b/internal/rates/retry.go
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,45 @@
 +package rates
 +
 +import (
@@ -15,39 +15,46 @@ index 0000000..a26e978
 +// maxWait caps the wait between two tries.
 +const maxWait = 30 * time.Second
 +
-+// Retry calls f up to attempts times, waiting base, then twice as long each
-+// time (at most maxWait), and stops early when ctx is done. It returns nil on
-+// the first success, ctx's error when cancelled, else f's last error.
++// Retry calls f up to attempts times. It waits base before the second call and
++// twice as long before each later one, never more than maxWait. A call that
++// succeeds ends Retry with nil, even if ctx ended during it. Once ctx is done,
++// Retry makes no further call and returns ctx's error. Otherwise, when every
++// call fails, it returns f's last error. It refuses attempts < 1 and base <= 0.
 +func Retry(ctx context.Context, attempts int, base time.Duration, f func(context.Context) error) error {
-+	if attempts < 1 {
-+		return errors.New("rates: attempts must be at least 1")
++	if attempts < 1 || base <= 0 {
++		return errors.New("rates: attempts and base must be positive")
 +	}
 +	var err error
-+	wait := base
++	wait := min(base, maxWait)
 +	for i := 0; i < attempts; i++ {
++		if i > 0 {
++			t := time.NewTimer(wait)
++			select {
++			case <-ctx.Done():
++				t.Stop()
++				return ctx.Err()
++			case <-t.C:
++			}
++			wait = min(wait*2, maxWait)
++		}
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
 +		if err = f(ctx); err == nil {
 +			return nil
 +		}
-+		if i == attempts-1 {
-+			break
-+		}
-+		t := time.NewTimer(wait)
-+		select {
-+		case <-ctx.Done():
-+			t.Stop()
-+			return ctx.Err()
-+		case <-t.C:
-+		}
-+		wait = min(wait*2, maxWait)
++	}
++	if ctx.Err() != nil {
++		return ctx.Err()
 +	}
 +	return err
 +}
 diff --git a/internal/rates/retry_test.go b/internal/rates/retry_test.go
 new file mode 100644
-index 0000000..0e11c5b
+index 0000000..a5d2141
 --- /dev/null
 +++ b/internal/rates/retry_test.go
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,62 @@
 +package rates
 +
 +import (
@@ -59,7 +66,7 @@ index 0000000..0e11c5b
 +
 +func TestRetrySucceedsOnThirdCall(t *testing.T) {
 +	calls := 0
-+	err := Retry(context.Background(), 3, time.Millisecond, func(context.Context) error {
++	err := Retry(context.Background(), 3, 10*time.Millisecond, func(context.Context) error {
 +		calls++
 +		if calls < 3 {
 +			return errors.New("busy")
@@ -71,12 +78,13 @@ index 0000000..0e11c5b
 +	}
 +}
 +
-+func TestRetryStopsWhenCancelled(t *testing.T) {
++func TestRetryStopsWhenCancelledDuringTheFirstWait(t *testing.T) {
 +	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
 +	calls := 0
 +	err := Retry(ctx, 3, time.Second, func(context.Context) error {
 +		calls++
-+		cancel()
++		time.AfterFunc(10*time.Millisecond, cancel) // fires during the 1 s wait
 +		return errors.New("busy")
 +	})
 +	if !errors.Is(err, context.Canceled) || calls != 1 {
@@ -84,8 +92,28 @@ index 0000000..0e11c5b
 +	}
 +}
 +
-+func TestRetryNeedsAnAttempt(t *testing.T) {
-+	if err := Retry(context.Background(), 0, time.Millisecond, nil); err == nil {
-+		t.Fatal("0 attempts accepted")
++func TestRetryReturnsTheLastError(t *testing.T) {
++	calls := 0
++	last := errors.New("still busy")
++	err := Retry(context.Background(), 2, time.Millisecond, func(context.Context) error {
++		calls++
++		if calls == 2 {
++			return last
++		}
++		return errors.New("busy")
++	})
++	if !errors.Is(err, last) || calls != 2 {
++		t.Fatalf("err %v after %d calls", err, calls)
++	}
++}
++
++func TestRetryRefusesBadArguments(t *testing.T) {
++	for _, c := range []struct {
++		attempts int
++		base     time.Duration
++	}{{0, time.Millisecond}, {3, 0}} {
++		if err := Retry(context.Background(), c.attempts, c.base, nil); err == nil {
++			t.Errorf("Retry(%d, %v) accepted", c.attempts, c.base)
++		}
 +	}
 +}

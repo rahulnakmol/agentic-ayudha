@@ -1,0 +1,13 @@
+{
+  "source": "Shaped from the same operation's response schema (getsentry/sentry-api-schema at b1eac6b, read 2026-10-17): autofix is nullable and null when Seer never analysed the issue. Not live-proven.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/issues/8/autofix/",
+      "status": 200,
+      "response": {
+        "autofix": null
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -23,6 +24,7 @@ type StreakState struct {
 	Never      []string       `json:"never_layers,omitempty"`
 	Autonomous bool           `json:"autonomous"`
 	Error      string         `json:"error,omitempty"`
+	Skipped    string         `json:"skipped,omitempty"` // why it was not computed: the human pass was already settled
 }
 
 // PassRule is who may give a story's human pass (WP5.5): the Engineering
@@ -47,6 +49,28 @@ func passRule(cfg *config.Config) PassRule {
 	return PassRule{As: "any-human"}
 }
 
+// who names the people whose pass counts, by login, as allows decides it:
+// the approvers, and, when the footprint touches a never layer, only those
+// who are also a CODEOWNER of it. Text that asks for the pass names them.
+func (p PassRule) who() string {
+	people := p.Approvers
+	if len(p.Never) > 0 {
+		people = p.Owners
+		if len(p.Approvers) > 0 {
+			people = slices.DeleteFunc(slices.Clone(p.Owners), func(o string) bool {
+				return !slices.ContainsFunc(p.Approvers, func(a string) bool { return strings.EqualFold(a, o) })
+			})
+		}
+		if len(people) == 0 {
+			return "nobody configured (no approver is a CODEOWNER of " + strings.Join(p.NeverPath, ", ") + ")"
+		}
+	}
+	if len(people) == 0 {
+		return "a person other than the author"
+	}
+	return "@" + strings.Join(people, " or @")
+}
+
 // allows checks a review that is already a human pass (identity.HumanPass)
 // against the rule.
 func (p PassRule) allows(login string) error {
@@ -60,26 +84,20 @@ func (p PassRule) allows(login string) error {
 	return nil
 }
 
-// neverOwners fills in the never-layer paths of a PR and the logins that are
-// CODEOWNERS of all of them on the base branch.
-func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, root string) error {
-	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
-		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
-	})
-	if err != nil {
-		return err
-	}
-	layers := autonomy.ReadLayers(root)
+// neverOwners fills in the never-layer paths of a PR's files and the logins
+// that are CODEOWNERS of all of them, by the base branch's layers and
+// CODEOWNERS at the policy's tip.
+func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, name string, files []string, pol *shipPolicy) error {
 	for _, f := range files {
-		for _, l := range layers.Footprint([]string{f.GetFilename()}) {
+		for _, l := range pol.Layers.Footprint([]string{f}) {
 			if slices.Contains(p.Never, l) {
-				p.NeverPath = append(p.NeverPath, f.GetFilename())
+				p.NeverPath = append(p.NeverPath, f)
 				break
 			}
 		}
 	}
 	text := ""
-	if fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, ".github/CODEOWNERS", &gh.RepositoryContentGetOptions{Ref: pr.GetBase().GetRef()}); err == nil {
+	if fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, ".github/CODEOWNERS", &gh.RepositoryContentGetOptions{Ref: pol.Tip}); err == nil {
 		text, _ = fc.GetContent()
 	} else if !github.NotFound(err) {
 		return err
@@ -97,10 +115,10 @@ func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, nam
 }
 
 // shipStreak computes the footprint's autonomy streak from merged-PR history.
-func (e *Env) shipStreak(ctx context.Context, c *github.Client, repo, root string, cfg *config.Config, footprint, never []string) StreakState {
-	a := cfg.Autonomy
+func (e *Env) shipStreak(ctx context.Context, c *github.Client, repo string, pol *shipPolicy, footprint, never []string) StreakState {
+	a := pol.Config.Autonomy
 	s := StreakState{Threshold: a.Streak, Layers: map[string]int{}, Never: never}
-	rules := autonomy.Rules{Bots: cfg.Identity.BotLogins, Days: a.CorrectionDays, Layers: autonomy.ReadLayers(root)}
+	rules := autonomy.Rules{Bots: pol.Config.Identity.BotLogins, Days: a.CorrectionDays, Layers: pol.Layers}
 	prs, issues, err := autonomy.Fetch(ctx, c, repo, rules, autonomy.MaxPRs)
 	if err != nil {
 		s.Error = err.Error()
@@ -114,6 +132,73 @@ func (e *Env) shipStreak(ctx context.Context, c *github.Client, repo, root strin
 	}
 	s.Autonomous = len(footprint) > 0 && len(never) == 0 && autonomy.Autonomous(streaks, footprint)
 	return s
+}
+
+// loosens lists how this run's pass policy is looser than base's (#645),
+// counting only what a layer above the defaults set (the checkout, the user
+// config, AAYU_* variables, --set): a bot login, never layer or paired seat it
+// drops, another approver, a cleared bot identity, a shorter streak or
+// correction window, or proof turned on, widened, or with a smaller narrow set. A tighter run is no loosening; ship still judges by base.
+func loosens(run *config.Loaded, base *config.Config) []string {
+	set := func(keys ...string) bool {
+		for _, k := range keys {
+			if name, _ := run.Origin(k); name != "" && name != config.LayerDefault {
+				return true
+			}
+		}
+		return false
+	}
+	missing := func(have, want []string) []string {
+		var out []string
+		for _, w := range want {
+			if !slices.ContainsFunc(have, func(h string) bool { return strings.EqualFold(h, w) }) {
+				out = append(out, w)
+			}
+		}
+		return out
+	}
+	r := &run.Config
+	var out []string
+	if m := missing(r.Identity.BotLogins, base.Identity.BotLogins); len(m) > 0 && set("identity.bot_logins") {
+		out = append(out, "[identity] bot_logins drops "+strings.Join(m, ", "))
+	}
+	if identity.Configured(base.Identity) != "" && identity.Configured(r.Identity) == "" && set("identity.app_id", "identity.machine_user") {
+		out = append(out, "[identity] has no bot identity")
+	}
+	if a := base.Autonomy.Approver; a != "" && !strings.EqualFold(r.Autonomy.Approver, a) && set("autonomy.approver") {
+		out = append(out, fmt.Sprintf("[autonomy] approver is %q, not %q", r.Autonomy.Approver, a))
+	}
+	if m := missing(r.Autonomy.Never, base.Autonomy.Never); len(m) > 0 && set("autonomy.never") {
+		out = append(out, "[autonomy] never drops "+strings.Join(m, ", "))
+	}
+	if x, b := r.Autonomy.Streak, base.Autonomy.Streak; x < b && set("autonomy.streak") {
+		out = append(out, fmt.Sprintf("[autonomy] streak is %d, below %d", x, b))
+	}
+	if x, b := r.Autonomy.CorrectionDays, base.Autonomy.CorrectionDays; x < b && set("autonomy.correction_days") {
+		out = append(out, fmt.Sprintf("[autonomy] correction_days is %d, below %d", x, b))
+	}
+	if r.Autonomy.Proof && !base.Autonomy.Proof && set("autonomy.proof") {
+		out = append(out, "[autonomy] proof is on")
+	}
+	if m := missing(base.Autonomy.ProofRungs, r.Autonomy.ProofRungs); len(m) > 0 && set("autonomy.proof_rungs") {
+		out = append(out, "[autonomy] proof_rungs adds "+strings.Join(m, ", "))
+	}
+	for _, k := range []struct {
+		key        string
+		run, based []string
+	}{{"always_person", r.Autonomy.AlwaysPerson, base.Autonomy.AlwaysPerson}, {"always_person_config", r.Autonomy.AlwaysPersonConfig, base.Autonomy.AlwaysPersonConfig},
+		{"always_person_sections", r.Autonomy.AlwaysPersonSections, base.Autonomy.AlwaysPersonSections}} {
+		if m := missing(k.run, k.based); len(m) > 0 && set("autonomy."+k.key) {
+			out = append(out, fmt.Sprintf("[autonomy] %s drops %s", k.key, strings.Join(m, ", ")))
+		}
+	}
+	for _, slug := range slices.Sorted(maps.Keys(base.Seats)) {
+		if b, x := base.Seats[slug], r.Seats[slug]; b.Mode == "paired" && b.Human != "" &&
+			(x.Mode != "paired" && set("seats."+slug+".mode") || !strings.EqualFold(x.Human, b.Human) && set("seats."+slug+".human")) {
+			out = append(out, fmt.Sprintf("[seats.%s] is not paired with %s", slug, b.Human))
+		}
+	}
+	return out
 }
 
 func intersect(a, b []string) []string {

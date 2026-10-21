@@ -1,0 +1,148 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationReleases and listOrganizationReleaseDeploys: the release bodies are the spec's release example with the version and lastDeploy changed; the deploy bodies follow the deploy schema (the spec has no example). Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/?per_page=100&project=4507",
+      "status": 200,
+      "response": [
+        {
+          "id": 1,
+          "version": "web@2.4.1",
+          "shortVersion": "frontend@1.0.0",
+          "status": "open",
+          "versionInfo": {
+            "package": "frontend",
+            "version": {
+              "raw": "1.0.0",
+              "major": 1,
+              "minor": 0,
+              "patch": 0,
+              "pre": null,
+              "buildCode": null,
+              "components": 3
+            },
+            "description": "1.0.0",
+            "buildHash": null
+          },
+          "ref": null,
+          "url": null,
+          "dateReleased": null,
+          "dateCreated": "2024-01-01T00:00:00Z",
+          "data": {},
+          "newGroups": 0,
+          "owner": null,
+          "commitCount": 0,
+          "lastCommit": null,
+          "deployCount": 2,
+          "lastDeploy": {"id": "12", "environment": "production", "dateStarted": "2026-10-17T08:04:00Z", "dateFinished": "2026-10-17T08:05:30Z", "name": null, "url": null},
+          "authors": [],
+          "projects": [
+            {
+              "id": 4507,
+              "slug": "web",
+              "name": "web",
+              "newGroups": 0,
+              "platform": "javascript",
+              "platforms": [
+                "javascript"
+              ],
+              "hasHealthData": true
+            }
+          ],
+          "firstEvent": null,
+          "lastEvent": null,
+          "currentProjectMeta": {},
+          "userAgent": null
+        },
+        {
+          "id": 1,
+          "version": "web@2.4.0",
+          "shortVersion": "frontend@1.0.0",
+          "status": "open",
+          "versionInfo": {
+            "package": "frontend",
+            "version": {
+              "raw": "1.0.0",
+              "major": 1,
+              "minor": 0,
+              "patch": 0,
+              "pre": null,
+              "buildCode": null,
+              "components": 3
+            },
+            "description": "1.0.0",
+            "buildHash": null
+          },
+          "ref": null,
+          "url": null,
+          "dateReleased": null,
+          "dateCreated": "2024-01-01T00:00:00Z",
+          "data": {},
+          "newGroups": 0,
+          "owner": null,
+          "commitCount": 0,
+          "lastCommit": null,
+          "deployCount": 1,
+          "lastDeploy": {"id": "9", "environment": "production", "dateStarted": "2026-10-16T15:00:00Z", "dateFinished": "2026-10-16T15:02:10Z", "name": null, "url": null},
+          "authors": [],
+          "projects": [
+            {
+              "id": 4507,
+              "slug": "web",
+              "name": "web",
+              "newGroups": 0,
+              "platform": "javascript",
+              "platforms": [
+                "javascript"
+              ],
+              "hasHealthData": true
+            }
+          ],
+          "firstEvent": null,
+          "lastEvent": null,
+          "currentProjectMeta": {},
+          "userAgent": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/web@2.4.1/deploys/",
+      "status": 200,
+      "response": [
+        {
+          "id": "12",
+          "environment": "production",
+          "dateStarted": "2026-10-17T08:04:00Z",
+          "dateFinished": "2026-10-17T08:05:30Z",
+          "name": null,
+          "url": null
+        },
+        {
+          "id": "11",
+          "environment": "staging",
+          "dateStarted": "2026-10-17T07:30:00Z",
+          "dateFinished": "2026-10-17T07:31:00Z",
+          "name": null,
+          "url": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/web@2.4.0/deploys/",
+      "status": 200,
+      "response": [
+        {
+          "id": "9",
+          "environment": "production",
+          "dateStarted": "2026-10-16T15:00:00Z",
+          "dateFinished": "2026-10-16T15:02:10Z",
+          "name": null,
+          "url": null
+        }
+      ]
+    }
+  ]
+}

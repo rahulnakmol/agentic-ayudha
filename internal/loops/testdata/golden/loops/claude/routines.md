@@ -12,6 +12,10 @@ interval a routine allows is one hour. The routine's cloud environment needs the
 To test a routine, run `/schedule run` and name it, or click **Run now** on its page. To test the prompt here first,
 run `aayu install --loops --host claude --run-now <loop>`.
 
+## aayudha arrival
+
+When an issue opens with the label intake: no issues.opened trigger here (Claude Code routines take only pull request and release events), so nothing to set up. The scheduled loop triage runs the same command (Daily at 09:00 Europe/London).
+
 ## aayudha sweep
 
 Mon–Fri at 09:15, 13:15, 17:15 Europe/London.

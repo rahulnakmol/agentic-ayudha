@@ -67,6 +67,18 @@ func TestLive(t *testing.T) {
 			if len(sc.Write) > 0 {
 				t.Fatalf("the live key is write-capable (%v); use a read-only key", sc.Write)
 			}
+			// Decision #449: every capability doctor checks works on a real account.
+			checks, err := Capabilities(ctx, d, tt.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, ch := range checks {
+				if !ch.OK {
+					t.Errorf("%s %s: %s. Fix: %s", tt.source, ch.Capability, ch.Detail, ch.Fix)
+				} else {
+					t.Logf("%s %s: %s", tt.source, ch.Capability, ch.Detail)
+				}
+			}
 			b, err := Baseline(ctx, d, tt.source, integrations.Query{Metric: tt.metric, Window: week})
 			if err != nil {
 				t.Fatal(err)

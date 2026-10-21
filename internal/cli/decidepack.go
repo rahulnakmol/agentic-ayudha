@@ -62,43 +62,17 @@ func decidePack(ctx context.Context, e *Env, cfg *config.Config, repo, target, s
 	issueType := ""
 	if issueArg.MatchString(target) {
 		rep.Issue = issueNumber(target)
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, rep.Issue)
+		is, it, facts, err := issueGrounding(ctx, c, owner, name, rep.Issue)
 		if err != nil {
 			return err
 		}
-		it, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
 		issueType = it.Type
 		rep.Question = is.GetTitle()
 		if s := strings.TrimSpace(it.Fields[workitems.FieldSummary]); s != "" && it.Type == "decision" {
 			rep.Question = s
 		}
-		rep.Facts = append(rep.Facts, issueFact(is, it.Type))
+		rep.Facts = append(rep.Facts, facts...)
 		rep.Untrusted = strings.TrimSpace(is.GetBody())
-		if parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(rep.Issue)); err == nil {
-			pt, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
-			f := issueFact(parent, pt)
-			f.Text = "Parent: " + f.Text
-			rep.Facts = append(rep.Facts, f)
-		} else if !github.NotFound(err) {
-			return err
-		}
-		links, _ := workitems.ParseLinks(it.Fields[workitems.FieldLinks])
-		for i, l := range links {
-			if i == 10 {
-				break
-			}
-			li, _, err := c.REST.Issues.Get(ctx, owner, name, l.Number)
-			if err != nil {
-				if github.NotFound(err) {
-					continue
-				}
-				return err
-			}
-			lt, _ := workitems.TypeOf(li.GetType().GetName(), github.IssueLabels(li))
-			f := issueFact(li, lt)
-			f.Text = fmt.Sprintf("Linked (%s): %s", l.Kind, f.Text)
-			rep.Facts = append(rep.Facts, f)
-		}
 	}
 	for _, q := range []struct{ label, what string }{{"type:decision", "Open Decision"}, {"status:blocked", "Blocked"}} {
 		list, _, err := c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{q.label}, ListOptions: gh.ListOptions{PerPage: 20}})
@@ -171,6 +145,42 @@ func decidePack(ctx context.Context, e *Env, cfg *config.Config, repo, target, s
 		_, err := io.WriteString(w, grounding)
 		return err
 	})
+}
+
+// issueGrounding reads an issue, its parent, and up to ten of its links as cited facts (decide --pack, counsel).
+func issueGrounding(ctx context.Context, c *github.Client, owner, name string, n int) (*gh.Issue, workitems.Item, []packFact, error) {
+	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+	if err != nil {
+		return nil, workitems.Item{}, nil, err
+	}
+	it, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
+	facts := []packFact{issueFact(is, it.Type)}
+	if parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n)); err == nil {
+		pt, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
+		f := issueFact(parent, pt)
+		f.Text = "Parent: " + f.Text
+		facts = append(facts, f)
+	} else if !github.NotFound(err) {
+		return nil, workitems.Item{}, nil, err
+	}
+	links, _ := workitems.ParseLinks(it.Fields[workitems.FieldLinks])
+	for i, l := range links {
+		if i == 10 {
+			break
+		}
+		li, _, err := c.REST.Issues.Get(ctx, owner, name, l.Number)
+		if err != nil {
+			if github.NotFound(err) {
+				continue
+			}
+			return nil, workitems.Item{}, nil, err
+		}
+		lt, _ := workitems.TypeOf(li.GetType().GetName(), github.IssueLabels(li))
+		f := issueFact(li, lt)
+		f.Text = fmt.Sprintf("Linked (%s): %s", l.Kind, f.Text)
+		facts = append(facts, f)
+	}
+	return is, it, facts, nil
 }
 
 // issueFact describes an issue by its number, title, type, state, and labels.

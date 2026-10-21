@@ -1,0 +1,8 @@
+# Weekly error-budget review (WP5.10, Decision #324). Release refuses an error-budget status older than 8 days, so the
+# Production Engineer twin measures every SLO each week from a fresh sanitised export and records it. It runs in the
+# user's own agent session, never in Actions: the export comes from the person's own access. The cron is in [time] tz.
+description = "Weekly error-budget review: measure every SLO from a fresh export, record the budget, and say what it means for the next release."
+command = ["slo"]
+cron = "0 10 * * 1"
+hosts = ["amp", "cursor", "claude", "codex"]
+prompt = "If the output says no SLOs are defined, stop without reporting. Otherwise ask the person for a sanitised OpenTelemetry export of the last 28 days (aggregates are enough, no customer records), then run `aayu slo --telemetry <dir> --record`. Report each SLO's value against its objective, the budget left, and the 1h and 6h burn rates in one line each, cited to slo/status.json. If any budget is spent, say plainly that release ships only Bugs until it recovers, and list the open Bugs that would help. Change nothing else."
