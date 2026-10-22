@@ -11,7 +11,7 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 
 ## v0.3.0
 
-Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
+Released 2026-10-22.
 
 With v0.3.0, aayu builds its own repository, agentic-ayudha: agents open its pull requests with the `agent-authored`
 label (AGENTS.md, "Every agent PR declares itself"), and one person, @rahulnakmol, is the recorded approver
@@ -186,6 +186,7 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - `aayu inbox` no longer refuses a choice with "it changed on GitHub since you read it" when only a card's words changed: it refuses only when the item's kind, its head commit, or the chosen option changed, or, for a Decision, its title, its text, whether it is one-way, or whether the option is recommended; the refusal names what changed, and with `-v` the session log lists the other differences (#850).
 - A pull request at the review cap that names no Story no longer offers a ship that always refuses; its card says to link a Story or merge it on GitHub (#850).
 - A paid CI review whose summary runs over 1200 characters is no longer thrown away, with its findings and verdict, leaving the pull request to a person: inspect cuts the summary at a word boundary and ends it with an ellipsis, and every other limit on the reply still rejects it (#809).
+- On Windows, a `.aayudha` that is a file, not a directory, now fails the config load and names the path, as on Linux and macOS; it no longer reads as no config (#908).
 - `aayu tell`'s draft check no longer reads a GitHub alert marker, such as `> [!NOTE]`, as an exclamation mark; a `!` in the alert's text is still refused (#666).
 - When a reviewer app or a person reviews, the inspect comment's footer now shows the pull request's `[budget] per_pr_inspect_max` cap instead of "of 0.00 USD"; only the footer changed, and a diff reviewed in parts can still spend past the cap (#781, #714).
 - A CI review that fails for a passing reason (a 429 or 5xx reply, an overload or server error in the stream, or a stream that ends early or is reset) is retried once, within the same call time limit and the per-PR budget; the failure note hides IP addresses and names the model that failed (#697).
@@ -197,11 +198,11 @@ proof pack yet. If you already use aayu, do the six upgrade steps on the
 - decide packs and retro answers say only what their sources state and stay within their length (#281, #296, #303, #316, #345, #351, #357, #361, #365, #368, #372, #433, #440).
 - counsel says only what its source says, names a claimed approval without repeating it, and gives no assurance from floors alone (#558, #569, #612).
 - The research, wireframe, mockup, prototype, review, polish, and baseline skills keep one choice as one group, reuse the page's design values, and keep a mockup's saved state working (#311, #338, #347, #354, #383, #391, #410, #426, #439, #470, #506, #508, #597, #626).
-- The build, verify, and ready skills write the evidence and feature maps without asking, read back the whole Completion Goal, and wait a turn for your yes (#300, #314, #326, #344, #355, #362, #374, #415).
+- The build, verify, and ready skills write the evidence and feature maps without asking, read back the whole Completion Goal, and wait a turn for your yes (#300, #314, #326, #344, #355, #362, #374, #415). build says what an in-step feature map is, and words a wait or a refusal so that it never claims a build has started (#858).
 - survey verifies every claim against the code and cites a code path or a run for every fact about behaviour, output, numbers, or defaults (#353, #366, #381, #419, #454, #584, #619).
-- tell restates criteria without extrapolating (#291), and slice adds no restrictions the Feature does not state (#308).
+- tell restates criteria without extrapolating (#291), keeps a negative criterion negative (#857), and gives no reason for the changes it leaves undescribed (#896); slice adds no restrictions the Feature does not state (#308).
 - inspect reports only defects it can show from the diff, posts a peer finding once, and counts Codex's security-review findings in its review (#288, #310, #567).
-- Skill drafts keep unverified markers out of table cells and leave out claims that something is absent (#421).
+- Skill drafts keep unverified markers out of table cells and leave out claims that something is absent (#421). Every seat's evidence rule now forbids a claim beyond its source (#866).
 - The seat evidence check counts Bicep and Terraform citations (#363).
 - The `doctor` mcp row counts plugin servers, and the agents row shows versions (#459).
 - The design token check skips story references in JS and CSS comments and names each literal's line (#506).
