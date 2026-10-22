@@ -300,12 +300,21 @@ type file struct {
 // in for macOS and Windows.
 var readFile = os.ReadFile
 
-// entries returns the names in dir, or nil when dir does not exist.
+// entries returns the names in dir, or nil when dir does not exist. A dir
+// that is not a directory fails: on Windows os.ReadDir can list a regular
+// file as empty with no error, which would read as no config.
 func entries(dir string) (map[string]bool, error) {
-	des, err := os.ReadDir(dir)
+	fi, err := os.Stat(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	if !fi.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", dir)
+	}
+	des, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
