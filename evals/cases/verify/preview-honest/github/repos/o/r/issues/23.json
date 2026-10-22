@@ -1,0 +1,17 @@
+{
+  "number": 23,
+  "title": "Undo a done note",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:in-progress"
+    },
+    {
+      "name": "effort:S"
+    }
+  ],
+  "body": "### summary\n\nAs a person keeping notes, I want to undo a note I marked done by mistake, so that my list shows what is still to do.\n\n### completion_goal\n\n1. [api-trace] state: two notes, then `notes done 1`; expected: exit 0, stdout \"done 1: buy milk\", and `notes list` shows \"1 [x] buy milk\"\n2. [api-trace] state: one note, then `notes done 5`; expected: exit 1, stderr \"no such note: 5 (there are 1)\", and the list unchanged\n3. [api-trace] state: note 1 marked done, then `notes undone 1`; expected: exit 0, stdout \"undone 1: buy milk\", and `notes list` shows \"1 [ ] buy milk\"\n\n### measure\n\nCompletion Goal criteria observed\n\n### threshold\n\n3 of 3\n\n### scenario\n\nAdd two notes, mark the first done, undo it, and try a number that does not exist.\n\n### environment\n\nthe CLI built from the checkout, in a fresh directory\n"
+}

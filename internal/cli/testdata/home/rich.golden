@@ -10,9 +10,10 @@
   Blocked                [2m0[m
   Failing floors         [2m0[m
   Measurements due       [2m0[m
+[33m! WARN[m 1 open Feedback issue(s) without a fix layer (#5 Feedback: persona outputs present inferences as facts); classify each by the highest layer that can fix it for good: `aayu retro --classify <issue> --layer codebase|check|prose|review --reason "<why this layer>"`
 
 [1;35mNext →[m [36maayu ship 4[m
   PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it. [2m(Engineering Manager, for a person to run)[m
 -- stderr --
-[3;35mAthena (Engineering Manager): Here is where the work stands.[m
-[3;35m— Athena (Engineering Manager): Small steps, real proof?[m
+[3;35mDrona (Engineering Manager): Here is where the work stands.[m
+[3;35m— Drona (Engineering Manager): Small steps, real proof?[m

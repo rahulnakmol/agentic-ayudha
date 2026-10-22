@@ -46,7 +46,7 @@ reopened.
 
 - The coverage floor blocked CP4 and was met at CP5 without a waiver (`ledger/packs/212/pack.json`).
 - The human review on PR #219 named the root cause in one sentence, which made CP3 and CP4 direct.
-- Spend stayed at 11.80 USD against the 25.0 `[budget] per_story_usd` in `CONSTRAINTS.md`.
+- Spend stayed at 11.80 USD (`retro/2026-10-09/report.md`) against the 25.0 `[budget] per_story_usd` in `CONSTRAINTS.md`.
 
 ## Decisions requested
 
@@ -78,4 +78,4 @@ PR #219 has a changes-requested review and needs a human pass before `ship`; no 
 | Coverage of changed lines, CP4 / CP5 | 86.4 % / 93.1 % (floor 90.0) | `ledger/packs/212/pack.json`, `CONSTRAINTS.md` |
 | Corrections on PR #219 | 2 (review, commit `a41c9e2`) | `retro/2026-10-09/report.md` |
 | `build` correction rate | 33 % (threshold 20 %) | #225 |
-| Model spend | 11.80 USD (budget 25.0) | `CONSTRAINTS.md` |
+| Model spend | 11.80 USD (budget 25.0) | `retro/2026-10-09/report.md`, `CONSTRAINTS.md` |

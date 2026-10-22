@@ -1,0 +1,40 @@
+<!-- Hand-made for docs/guide/guide-integrations.md; edit by hand. Facts: internal/integrations/providers/providers.go, internal/cli/grill.go, measure.go, experiment.go, internal/production/doc.go. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 564" width="460" height="564" role="img" aria-labelledby="integrations-title integrations-desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="integrations-title">Analytics and error data enter the loop read-only: PostHog and Sentry feed Shape and Learn, and production questions become queries a person runs</title>
+<desc id="integrations-desc">PostHog and Sentry connect with read-only keys that aayu checks before any data call. They feed the baseline when grill shapes a Goal, and measure when Learn compares the Goal with that baseline. PostHog feeds experiment, and PostHog or GrowthBook feeds readout. In production, investigate and runbook write bounded hogql and sentry query templates for a person to run; aayu does not call the providers there. aayu never writes to either provider.</desc>
+<defs><marker id="arrow-integrations" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5bd1"/></marker></defs>
+<rect width="460" height="564" fill="#ffffff"/>
+<rect x="12.0" y="12" width="212.0" height="62" rx="10" fill="#eef3fd" stroke="#1f5bd1" stroke-width="2"/>
+<text x="24.0" y="37" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">PostHog</text>
+<text x="24.0" y="59" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">events, users</text>
+<rect x="236.0" y="12" width="212.0" height="62" rx="10" fill="#eef3fd" stroke="#1f5bd1" stroke-width="2"/>
+<text x="248.0" y="37" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Sentry</text>
+<text x="248.0" y="59" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">crash-free rates, errors</text>
+<line x1="230.0" y1="74" x2="230.0" y2="96" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-integrations)"/>
+<rect x="32" y="98" width="396" height="54" rx="27" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="230.0" y="120" font-size="14" fill="#b4441d" font-weight="bold" text-anchor="middle">Read-only key, scope checked first</text>
+<text x="230.0" y="140" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">a write-capable key is refused before any data call</text>
+<line x1="230.0" y1="152" x2="230.0" y2="174" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-integrations)"/>
+<rect x="12" y="178" width="436" height="74" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="200" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">1. Shape</text>
+<text x="436" y="200" font-size="13" fill="#1d2330" font-weight="bold" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">grill</text>
+<text x="24" y="222" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">A Goal's baseline: posthog:users or</text>
+<text x="24" y="240" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">sentry:crash_free_sessions, fetched, never typed</text>
+<rect x="12" y="260" width="436" height="74" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="282" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">7. Learn</text>
+<text x="436" y="282" font-size="13" fill="#1d2330" font-weight="bold" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">measure</text>
+<text x="24" y="304" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">The Goal measured again, with the same query, over</text>
+<text x="24" y="322" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">a new window</text>
+<rect x="12" y="342" width="436" height="74" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="364" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">7. Learn</text>
+<text x="436" y="364" font-size="13" fill="#1d2330" font-weight="bold" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">experiment, readout</text>
+<text x="24" y="386" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">experiment: the baseline rate, from PostHog only.</text>
+<text x="24" y="404" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">readout: per-arm counts from PostHog or GrowthBook</text>
+<rect x="12" y="424" width="436" height="74" rx="10" fill="#fdf6e3" stroke="#9a6700" stroke-width="1.5"/>
+<text x="24" y="446" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Production</text>
+<text x="436" y="446" font-size="13" fill="#1d2330" font-weight="bold" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">investigate, runbook</text>
+<text x="24" y="468" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Bounded hogql and sentry query templates. A person</text>
+<text x="24" y="486" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">runs them; aayu does not call the provider here</text>
+<rect x="12" y="506" width="436" height="46" rx="10" fill="#eef1f6" stroke="#535b6b" stroke-width="2"/>
+<text x="230.0" y="534" font-size="14" fill="#1d2330" font-weight="bold" text-anchor="middle">aayu never writes to PostHog or Sentry.</text>
+</svg>

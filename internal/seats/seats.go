@@ -1,4 +1,4 @@
-// Package seats implements WP5.1: the generated parts of the twelve seat
+// Package seats implements WP5.1: the generated parts of the fourteen seat
 // charters and of the AGENTS.md RACI section, and `aayu seat add|remove|list`,
 // which pair a seat with a human (config, CODEOWNERS, onboarding issue) and
 // switch the WP0.1 solo-mode policy when a second human arrives.
@@ -35,7 +35,7 @@ func AgentsSection(personas map[verbs.SeatID]Persona) hosts.AgentsSection {
 	var b strings.Builder
 	b.WriteString(`## Seats and RACI (aayudha)
 
-Twelve seats share the work. Each verb has exactly one Accountable seat; that seat's agent twin executes it in the
+Fourteen seats share the work. Each verb has exactly one Accountable seat; that seat's agent twin executes it in the
 verb's model lane, and the seat that owns its thresholds or policy may differ (` + "`verify`" + ` runs against the Quality
 Architect's floors). Each layer has exactly one owner seat. A seat runs solo (agent twin only) or paired with a human
 (` + "`[seats.<slug>]`" + `, set by ` + "`aayu seat add <slug> --human <login>`" + `; ` + "`aayu seat list`" + ` shows them). Act as the Accountable

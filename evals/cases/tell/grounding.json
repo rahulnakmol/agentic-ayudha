@@ -1,0 +1,207 @@
+{
+  "repo": "acme/benefits-qa",
+  "product": "Benefits QA is a web app where claims reviewers at a benefits insurer filter, review, and audit insurance claims.",
+  "team_stage": "startup",
+  "proven_features": [
+    { "number": 7, "title": "Export filtered claims", "url": "https://github.com/acme/benefits-qa/issues/7" },
+    { "number": 15, "title": "Saved filters", "url": "https://github.com/acme/benefits-qa/issues/15" },
+    { "number": 16, "title": "Claim notes", "url": "https://github.com/acme/benefits-qa/issues/16" }
+  ],
+  "unproven_features": [
+    { "number": 9, "title": "Bulk reassignment", "url": "https://github.com/acme/benefits-qa/issues/9" },
+    { "number": 20, "title": "Team workspaces", "url": "https://github.com/acme/benefits-qa/issues/20" }
+  ],
+  "releases": [
+    {
+      "tag": "v1.4.0",
+      "date": "2026-09-14",
+      "shipped": [
+        { "number": 12, "type": "story", "title": "CSV export of filtered claims", "feature": 7 }
+      ]
+    },
+    {
+      "tag": "v1.5.0",
+      "date": "2026-10-16",
+      "shipped": [
+        { "number": 18, "type": "story", "title": "Save and reopen a claims filter", "feature": 15 },
+        { "number": 19, "type": "story", "title": "Share a saved filter by link", "feature": 15 },
+        { "number": 22, "type": "story", "title": "Add a note to a claim", "feature": 16 },
+        { "number": 21, "type": "story", "title": "Reassign selected claims to another reviewer", "feature": 9 },
+        { "number": 26, "type": "bug", "title": "Date filter dropped the last day of a range" }
+      ]
+    }
+  ],
+  "features": [
+    {
+      "number": 7,
+      "title": "Export filtered claims",
+      "status": "released",
+      "summary": "Reviewers export the claims they have filtered to a CSV file, so they can audit them offline.",
+      "problem": "Reviewers copy claims into spreadsheets by hand to audit them offline; with long lists this takes hours and rows get lost.",
+      "scope": "In scope: CSV export of the filtered claims list with the shown columns. Out of scope: PDF, scheduled exports, exports of other lists.",
+      "result": "Target met: CSV exports per reviewer per week = 4.2 against the target >= 3 (baseline 0, change +4.2). Window: 2026-09-14 to 2026-10-12 (UTC, half-open). Query: posthog events export_csv, distinct reviewers. Measured 2026-10-12 by `aayu measure`.",
+      "packs": [
+        {
+          "id": "P1",
+          "story": 12,
+          "authority": "authoritative",
+          "floors": [
+            { "floor": "coverage", "result": "pass", "value": 94, "threshold": 90 },
+            { "floor": "a11y", "result": "pass", "detail": "WCAG 2.2 AA: 0 critical, 0 serious" },
+            { "floor": "keyboard", "result": "pass" },
+            { "floor": "screen-reader", "result": "skipped", "detail": "skipped: the Linux merge gate cannot run a screen reader" }
+          ],
+          "criteria": [
+            {
+              "id": 1,
+              "evidence_kind": "recording",
+              "text": "state: the claims list with filters applied; expected: Export CSV in the list toolbar downloads a CSV file of every claim matching the filters",
+              "evidence": [{ "path": "recordings/1.webm", "kind": "recording" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The recording shows Export CSV in the toolbar downloading claims.csv, which holds the 37 claims the filtered list shows."
+            },
+            {
+              "id": 2,
+              "evidence_kind": "api-trace",
+              "text": "state: four of six columns shown with the Columns picker; expected: the CSV holds only the shown columns, in the order shown",
+              "evidence": [{ "path": "evidence/criterion-2.jsonl", "kind": "api-trace" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The API trace's CSV header and rows hold the four shown columns only, in the list's order."
+            },
+            {
+              "id": 3,
+              "evidence_kind": "recording",
+              "text": "state: a list of more than 10,000 claims; expected: the list keeps responding while the file is prepared",
+              "evidence": [{ "path": "recordings/3.webm", "kind": "recording" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The recording shows the list scrolling while the export is prepared on 12,480 claims."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "title": "Saved filters",
+      "status": "released",
+      "summary": "Reviewers save a filter of the claims list under a name, reopen it later, and share it with another reviewer by link.",
+      "problem": "Reviewers rebuild the same filters (status, date range, claim type) by hand every morning, and describe them to each other in chat.",
+      "scope": "In scope: save, reopen, and share by link a filter of the claims list. Out of scope: scheduled filters, filters of other lists, editing another reviewer's saved filter.",
+      "result": "Not measured yet: the measure window opens on 2026-10-16.",
+      "packs": [
+        {
+          "id": "P2",
+          "story": 18,
+          "authority": "authoritative",
+          "floors": [
+            { "floor": "coverage", "result": "pass", "value": 92, "threshold": 90 },
+            { "floor": "a11y", "result": "pass", "detail": "WCAG 2.2 AA: 0 critical, 0 serious" },
+            { "floor": "keyboard", "result": "pass" }
+          ],
+          "criteria": [
+            {
+              "id": 1,
+              "evidence_kind": "recording",
+              "text": "state: a filter of status and date range applied to the claims list; expected: Save filter stores it under the name the reviewer types, and the name appears under Saved filters in the sidebar",
+              "evidence": [{ "path": "recordings/1.webm", "kind": "recording" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The recording shows Save filter storing \"Pending dental, last 7 days\" and the name appearing under Saved filters."
+            },
+            {
+              "id": 2,
+              "evidence_kind": "api-trace",
+              "text": "state: a saved filter reopened in a new session; expected: the list shows the claims matching the saved filter's conditions at the time it is reopened",
+              "evidence": [{ "path": "evidence/criterion-2.jsonl", "kind": "api-trace" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The trace reopens the saved filter in a new session and the list query carries the saved status and date-range conditions."
+            }
+          ]
+        },
+        {
+          "id": "P3",
+          "story": 19,
+          "authority": "authoritative",
+          "floors": [
+            { "floor": "coverage", "result": "pass", "value": 91, "threshold": 90 },
+            { "floor": "a11y", "result": "pass", "detail": "WCAG 2.2 AA: 0 critical, 0 serious" },
+            { "floor": "keyboard", "result": "pass" }
+          ],
+          "criteria": [
+            {
+              "id": 1,
+              "evidence_kind": "api-trace",
+              "text": "state: a saved filter; expected: Copy link gives a link that opens the claims list with the same filter for another signed-in reviewer",
+              "evidence": [{ "path": "evidence/criterion-1.jsonl", "kind": "api-trace" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The trace opens the copied link as a second reviewer and the list query matches the saved filter."
+            },
+            {
+              "id": 2,
+              "evidence_kind": "api-trace",
+              "text": "state: a shared link opened by a reviewer who did not save the filter; expected: they can apply the filter but cannot rename or delete it",
+              "evidence": [{ "path": "evidence/criterion-2.jsonl", "kind": "api-trace" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "Rename and delete requests from the second reviewer return 403; applying the filter returns 200."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Claim notes",
+      "status": "released",
+      "summary": "Reviewers add notes to a claim, so the next reviewer sees why it was held or queried.",
+      "problem": "Reasons for holding or querying a claim live in personal notebooks and email, so the next reviewer starts again.",
+      "scope": "In scope: plain-text notes on a claim with author and time. Out of scope: editing or deleting notes, attachments, mentions.",
+      "result": "Not measured yet: the measure window opens on 2026-10-16.",
+      "packs": [
+        {
+          "id": "P4",
+          "story": 22,
+          "authority": "authoritative",
+          "floors": [
+            { "floor": "coverage", "result": "pass", "value": 93, "threshold": 90 },
+            { "floor": "a11y", "result": "pass", "detail": "WCAG 2.2 AA: 0 critical, 0 serious" },
+            { "floor": "keyboard", "result": "pass" },
+            { "floor": "screen-reader", "result": "skipped", "detail": "skipped: the Linux merge gate cannot run a screen reader" }
+          ],
+          "criteria": [
+            {
+              "id": 1,
+              "evidence_kind": "recording",
+              "text": "state: a claim's page; expected: Add note saves a plain-text note shown with its author and the time it was added",
+              "evidence": [{ "path": "recordings/1.webm", "kind": "recording" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The recording shows Add note saving a note that appears with the reviewer's name and time."
+            },
+            {
+              "id": 2,
+              "evidence_kind": "api-trace",
+              "text": "state: a note added by one reviewer; expected: another reviewer opening the claim sees the note, newest first",
+              "evidence": [{ "path": "evidence/criterion-2.jsonl", "kind": "api-trace" }],
+              "inspect_verdict": "met",
+              "inspect_judgement": "The second reviewer's claim request returns both notes, newest first."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Bulk reassignment",
+      "status": "in-progress",
+      "unproven": "Story #21 shipped in v1.5.0 with an advisory pack only (a local run, not the merge gate's), so the Feature has no authoritative pack for it."
+    },
+    {
+      "number": 20,
+      "title": "Team workspaces",
+      "status": "in-progress",
+      "unproven": "No story under it has shipped."
+    }
+  ],
+  "docs": [
+    { "path": "docs/getting-started.md", "title": "Getting started: sign in and open the claims list" },
+    { "path": "docs/filters.md", "title": "Filter the claims list by status, date range, and claim type" }
+  ]
+}

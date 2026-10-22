@@ -67,8 +67,8 @@ type ghRelease struct {
 }
 
 func runSelfUpdate(ctx context.Context, e *Env, _ Values) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "self-update replaces the binary and is refused when AAYU_AGENT=1; ask a human to run it")
+	if err := e.requireHuman(ctx, "self-update", AccessAny); err != nil {
+		return err
 	}
 	exe, err := e.Executable()
 	if err != nil {
@@ -191,7 +191,7 @@ func packageManager(exe string) (name, cmd string) {
 	case strings.Contains(p, "/scoop/apps/") || strings.Contains(p, "/scoop/shims/"):
 		return "Scoop", "scoop update aayudha"
 	case strings.Contains(p, "/winget/packages/") || strings.Contains(p, "/windowsapps/"):
-		return "winget", "winget upgrade aayudha"
+		return "winget", "winget upgrade --id AkmolsInc.AgenticAyudha"
 	}
 	return "", ""
 }

@@ -114,22 +114,73 @@ building it. Whenever you are unsure, `aayu next` reads the repository and names
 
 ## Optional: your first proven pull request (another half hour)
 
-To have every pull request checked before it merges, move to Level 2. The merge gate with no AI key in CI arrives in
-aayudha 0.2; if `aayu version` prints 0.1.x, run `aayu self-update` first, or, until 0.2 is released, install the
-integration build with `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`.
+To have every pull request checked before it merges, move to Level 2. The review in your own CI arrives in aayudha
+0.3.
 
-1. `aayu init --gates` adds the merge gate workflow. Commit it through a pull request and merge it. The gate runs
-   from your base branch's copy, so it starts checking from the next pull request.
-2. Install a reviewer app on your GitHub account whose models come from a different vendor than the ones that
-   build. Building with Claude Code? Install Codex. Building with Codex? Install Claude. On Cursor or Amp, pick the
-   app whose vendor differs from the model you build with. Name it in `[inspect] apps`. `aayu doctor`'s
-   `reviewer-apps` row shows the apps it detected and says why one cannot review.
+If `aayu version` prints 0.2.x or older, run `aayu self-update` first. If you installed aayu with Homebrew, Scoop, or
+winget, self-update only prints that tool's upgrade command, so run that command.
+
+Until 0.3 is released, install the integration build with
+`go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`. Go leaves your installed `aayu` as it was, so
+point `aayu` at the new build for this shell:
+
+- macOS or Linux: `alias aayu="$(go env GOPATH)/bin/aayudha"`, or `alias aayu="$(go env GOBIN)/aayudha"` if
+  `go env GOBIN` prints a folder.
+- Windows PowerShell: `Set-Alias aayu "$(go env GOPATH)\bin\aayudha.exe"`, or
+  `Set-Alias aayu "$(go env GOBIN)\aayudha.exe"` if `go env GOBIN` prints a folder.
+
+1. `aayu init --gates` adds the merge gate workflow and creates the `code-review` environment, with Grok 4.7 at
+   `https://api.x.ai/v1` filled in. Commit the workflow through a pull request and merge it. The gate runs from your
+   base branch's copy, so it starts checking from the next pull request. If a review app or a person will review
+   instead of the CI model, put that choice from step 2 in this same pull request.
+
+   **You should see** an `environment code-review` line in init's report, and the workflow file in the merged pull
+   request. If the line is missing, read the note below step 2. If init stops with an error before its report, such
+   as a failed GitHub call, see [Tour problems](troubleshooting.md#tour), then run `aayu doctor`.
+2. In **Settings → Environments → code-review**, add the secret `AAYU_REVIEW_MODEL_KEY`: your key for that endpoint.
+   The review model must come from a vendor other than the one that builds; change `AAYU_REVIEW_MODEL_URL` and
+   `AAYU_REVIEW_MODEL` to use another. [Code review in the merge gate](how-review.md) explains each setting.
+
+   A review app, such as Codex, CodeRabbit, or Greptile, can review instead: set `[inspect] reviewer` to its name and
+   list it in `[inspect] apps`. CodeRabbit and Greptile review every pull request on their own.
+
+   Codex, Claude, and Cursor review only when asked. `aayu build` asks after each push; for a pull request it did not
+   open, run `aayu inspect <pr>` in your own terminal.
+
+   The gate reads `.aayudha/config.toml` from your base branch. A later pull request is checked with the default
+   `ci`, which fails without the key, so make this change in step 1's pull request.
+
+   > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
+   > not create `code-review`. Choose a review app as above, or set `[inspect] reviewer = "human"` with `[autonomy] approver`
+   > set to the person who reviews, or make the repository public or upgrade. Put these settings in step 1's pull request, as above.
+
+   **You should see** `AAYU_REVIEW_MODEL_KEY` under **Environment secrets** on the `code-review` page. `aayu doctor`
+   cannot read the environment, so the gate's first run is where a wrong key shows: if it fails, see
+   [the merge gate in troubleshooting](troubleshooting.md#merge-gate). With a review app instead, the
+   `reviewer-apps` row of `aayu doctor` passes, and the app's installation page lists this repository: doctor cannot
+   tell whether the app is installed. With `human`, `aayu config show` lists your `[inspect] reviewer` and
+   `[autonomy] approver`.
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
 
-**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. Your CI
-needs no AI key: the review comes from the app you installed. [A pull request is ready](guide-review.md) walks you
-through it.
+**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict.
+[A pull request is ready](guide-review.md) walks you through it.
+
+The review runs only after the checks and proof pass. If they fail, the inspect check is skipped and the gate names
+the failure.
+
+The inspect comment's **Review:** field, under its heading, names the review model, for example
+`different-family review (B, paid): grok-4.7 (xai)`. The model reviews only when its family differs from the
+builder's and the author has write access.
+
+Otherwise the comment names the app or person that reviews instead. It also names any listed Codex, Claude, or Cursor
+it skipped, since those review only when asked.
+
+With `human`, a GitHub review alone does not count, so the gate stays at `no-reply`. The `[autonomy] approver`
+reviews the pull request, then runs `aayu inspect <pr> --approve --reason "<what you checked>"`, or approves its card
+in `aayu inbox`.
+
+If a setting is missing, the gate fails and names it: see [Merge gate problems](troubleshooting.md#merge-gate).
 
 ## What's next
 

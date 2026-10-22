@@ -1,0 +1,17 @@
+{
+  "number": 31,
+  "title": "List notes as JSON",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:in-progress"
+    },
+    {
+      "name": "effort:S"
+    }
+  ],
+  "body": "### summary\n\nAs a person who scripts around my notes, I want `notes list` to print JSON when I ask, so that a script can read the list without parsing text.\n\n### completion_goal\n\n1. [api-trace] state: two notes, the second marked done, then `notes -json list`; expected: exit 0 and stdout `[{\"n\":1,\"text\":\"buy milk\",\"done\":false},{\"n\":2,\"text\":\"call Ada\",\"done\":true}]`\n2. [api-trace] state: no notes, then `notes -json list`; expected: exit 0 and stdout `[]`\n\n### measure\n\nCompletion Goal criteria observed\n\n### threshold\n\n2 of 2\n\n### scenario\n\nAdd two notes, mark the second done, list them as JSON; list an empty file as JSON.\n\n### environment\n\nthe CLI built from the checkout, in a fresh directory\n"
+}

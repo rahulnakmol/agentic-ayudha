@@ -87,6 +87,12 @@ func (e *Env) openAudit(ctx context.Context, in Values, verb string, full bool) 
 	rules := autonomy.Rules{Bots: cfg.Identity.BotLogins, Days: cfg.Autonomy.CorrectionDays, Layers: autonomy.ReadLayers(config.RepoRoot(e.Dir))}
 	a.src = audit.Source{GH: a.c, Repo: a.repo, Store: a.store, Now: e.Now(), Rules: rules, Never: cfg.Autonomy.Never,
 		Suites: full && verb == "audit", Autonomy: full, Flow: verb == "retro", Streak: cfg.Autonomy.Streak}
+	if cfg.Identity.AppSlug != "" {
+		a.src.GateWriters = append(a.src.GateWriters, cfg.Identity.AppSlug+"[bot]")
+	}
+	if cfg.Identity.MachineUser != "" {
+		a.src.GateWriters = append(a.src.GateWriters, cfg.Identity.MachineUser)
+	}
 	if rp := in.String("replay"); rp != "" {
 		if in.Has("since") || in.Has("until") || in.Has("ledger") {
 			return nil, Errorf(ExitUsage, "%s --replay takes its window and ledger commit from the snapshot", verb)
@@ -140,8 +146,12 @@ func auditConfigHash(cfg config.Config, dev string) string {
 		RetentionDays  int
 		PerStoryUSD    float64
 		Dev            string
+		// The gate writers whose inspect state audit trusts; omitted when
+		// unset, so reports recorded before they counted stay replayable.
+		AppSlug     string `json:",omitempty"`
+		MachineUser string `json:",omitempty"`
 	}{cfg.Identity.BotLogins, cfg.Decisions.SLAHours, cfg.Time, cfg.Autonomy.CorrectionDays, cfg.Autonomy.Never, cfg.Autonomy.Streak,
-		cfg.Proof.Media, cfg.Proof.MediaSecret, cfg.Proof.RetentionDays, cfg.Budget.PerStoryUSD, dev})
+		cfg.Proof.Media, cfg.Proof.MediaSecret, cfg.Proof.RetentionDays, cfg.Budget.PerStoryUSD, dev, cfg.Identity.AppSlug, cfg.Identity.MachineUser})
 	sum := sha256.Sum256(b)
 	return "audit-config:sha256:" + hex.EncodeToString(sum[:])
 }

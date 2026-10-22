@@ -66,6 +66,8 @@ type delegation struct {
 	root     string
 	body     string // the story's body (untrusted; quoted in the brief as data)
 	bot      identity.Bot
+	wallEnd  time.Time // when the build's wall-time budget ends; zero without one
+	lease    *Lease    // the story's lease as last renewed during a usage-limit wait
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -78,6 +80,7 @@ const (
 	dlgCapped    = "capped"
 	dlgFailed    = "failed"
 	dlgMerged    = "merged"
+	dlgPaused    = "paused" // the local receiver hit its subscription usage limit
 )
 
 const delegateMarker = "<!-- aayudha:delegate -->"
@@ -403,7 +406,7 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 	for _, ev := range d.state.Events {
 		fmt.Fprintf(&body, "| %s | %s | %s |\n", ev.At, ev.Status, strings.ReplaceAll(ev.Detail, "|", `\|`))
 	}
-	fmt.Fprintf(&body, "\nBrief SHA-256 `%s`. The receiver has no merge rights: the merge gate and inspect review its PR, and a human ships it with `aayu ship`.", short(d.state.BriefHash))
+	fmt.Fprintf(&body, "\nBrief SHA-256 `%s`. The receiver has no merge rights: the merge gate and inspect review its PR, and `aayu ship` merges it with every gate (or it waits in a person's `aayu inbox`).", short(d.state.BriefHash))
 	return e.replaceComment(ctx, d.c, d.repo, d.story, delegateMarker, body.String())
 }
 
@@ -564,7 +567,7 @@ func (e *Env) findDelegatedPR(ctx context.Context, d *delegation, task delegate.
 		return 0, nil
 	}
 	title := "feat: " + strings.ToLower(d.title[:1]) + d.title[1:]
-	body := fmt.Sprintf("Refs #%d\n\nBuilt by %s (`aayu build --delegate %s`) from the delegation brief (SHA-256 `%s`); aayu opened this PR from the branch it pushed. The merge gate and inspect review it; a human ships it with `aayu ship`.\n", d.story, d.receiver, d.receiver, short(d.state.BriefHash))
+	body := fmt.Sprintf("Refs #%d\n\nBuilt by %s (`aayu build --delegate %s`) from the delegation brief (SHA-256 `%s`); aayu opened this PR from the branch it pushed. The merge gate and inspect review it; `aayu ship` merges it with every gate (or it waits in a person's `aayu inbox`).\n", d.story, d.receiver, d.receiver, short(d.state.BriefHash))
 	var pr *gh.PullRequest
 	if _, err := d.c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: d.repo, Story: fmt.Sprintf("#%d", d.story),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + d.repo + "/pulls"}, Payload: map[string]any{"head": task.Branch, "base": d.dev, "title": title, "delegate": d.receiver}},
@@ -616,12 +619,11 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	if err != nil {
 		return nil, true, Wrap(ExitExternal, err)
 	}
-	var st inspect.State
-	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), inspect.Marker) {
-			st = inspect.ParseState(cm.GetBody())
-		}
+	var id config.Identity
+	if l, err := e.Config(); err == nil {
+		id = l.Config.Identity
 	}
+	st := inspectState(comments, viewer(ctx, d.c), id)
 	r := st.Result
 	page := func(why string) {
 		sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("delegate:%s#%d", d.repo, d.story), Subject: fmt.Sprintf("aayu: delegated #%d needs a human", d.story),
@@ -671,6 +673,14 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, e.saveDelegation(ctx, d)
 	}
 	switch {
+	case st.Stopped != "" && st.Stopped == head || r != nil && r.Head == head && r.Disposition == inspect.StepBack:
+		// The review stopped at its round cap on this head: no fix prompt
+		// goes to the receiver; a person reviews it or reopens review.
+		d.event(now, dlgCapped, fmt.Sprintf("the review stopped after %d rounds at %s (step-back)", inspect.MaxRounds, short(head)))
+		page(fmt.Sprintf("the review stopped after %d rounds (step-back)", inspect.MaxRounds))
+		report()
+		_ = e.saveDelegation(ctx, d)
+		return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d's review stopped after %d rounds; a person reviews it or comments `%s` (paged)", d.story, d.state.PR, inspect.MaxRounds, inspect.ReopenCommand)
 	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
 		// inspect stops at its cap and will not review this head: a human takes over.
 		d.event(now, dlgCapped, fmt.Sprintf("%d fix cycles; inspect will not review %s", st.Cycles, short(head)))
@@ -689,7 +699,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	case r.Disposition == inspect.Merge:
 		d.event(now, dlgReady, fmt.Sprintf("inspect merge on %s", short(head)))
 		report()
-		res.Next = fmt.Sprintf("PR #%d is ready for a human pass: `aayu ship %d`", d.state.PR, d.state.PR)
+		res.Next = fmt.Sprintf("PR #%d is merge-ready: `aayu ship %d`", d.state.PR, d.state.PR)
 		return nil, true, e.saveDelegation(ctx, d)
 	case r.Disposition == inspect.Rebuild:
 		d.event(now, dlgCapped, "inspect asked for a rebuild: the story or plan needs rework")
@@ -747,16 +757,92 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 		if l, err := e.Config(); err == nil && l.Config.Delegate.LocalTimeoutMinutes > 0 {
 			limit = time.Duration(l.Config.Delegate.LocalTimeoutMinutes) * time.Minute
 		}
-		ctx, cancel := context.WithTimeout(ctx, limit)
-		defer cancel()
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
-		return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
-			out, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
-			if p := delegate.Proved(out, prompt); p != "" {
-				d.state.Proved = p
+		for {
+			var out string
+			err := func() error {
+				ctx, cancel := context.WithTimeout(ctx, limit)
+				defer cancel()
+				if !d.wallEnd.IsZero() { // a run never outlasts the build's wall-time budget
+					var stop context.CancelFunc
+					ctx, stop = context.WithDeadline(ctx, d.wallEnd)
+					defer stop()
+				}
+				return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
+					var err error
+					out, err = e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+					if p := delegate.Proved(out, prompt); p != "" {
+						d.state.Proved = p
+					}
+					return err
+				})
+			}()
+			if err == nil {
+				return nil
 			}
-			return err
-		})
+			// A subscription usage limit pauses the build until its window
+			// resets, then runs the receiver again (founder decision,
+			// 2026-10-17). A pause is no failed attempt; the wall clock runs on.
+			limited, resets := delegate.UsageLimit(out, e.Now(), time.Local)
+			if !limited {
+				return err
+			}
+			name := delegate.Names[d.receiver]
+			switch {
+			case resets.IsZero():
+				return &usagePause{why: fmt.Sprintf("%s's subscription usage limit was reached and it printed no reset time", name)}
+			case !d.wallEnd.IsZero() && !resets.Add(time.Minute).Before(d.wallEnd):
+				return &usagePause{afterWall: true, why: fmt.Sprintf("%s's subscription usage limit resets at %s, after the build's wall-time budget ends at %s",
+					name, resets.UTC().Format(time.RFC3339), d.wallEnd.UTC().Format(time.RFC3339))}
+			}
+			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
+			_ = e.saveDelegation(ctx, d)
+			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
+			// The story's lease is renewed before each stretch of the wait, so it
+			// never lapses to another builder while this one is paused.
+			// At least a minute, even for a reset already past, so a limit that
+			// has not lifted yet is not retried in a tight loop.
+			for wait := max(resets.Sub(e.Now())+time.Minute, time.Minute); wait > 0; {
+				step := min(wait, LeaseTTL/2)
+				l, err := e.takeLease(ctx, d.c, d.repo, d.story, leaseHolder(d.bot.Login), nil)
+				if err != nil {
+					pp.Done(ui.StatusFail, "could not renew the story's lease while paused")
+					return err
+				}
+				d.lease = &l
+				if err := e.pauseFor(ctx, step); err != nil {
+					pp.Done(ui.StatusFail, "stopped while paused")
+					return err
+				}
+				wait -= step
+			}
+			pp.Done(ui.StatusPass, "the window reset")
+			d.event(e.Now(), dlgWorking, "resumed after the usage limit reset")
+		}
+	}
+}
+
+// usagePause is a local receiver's subscription usage limit that build cannot
+// wait out in this run: no reset time, or one after the wall-time budget.
+type usagePause struct {
+	why       string
+	afterWall bool // the reset comes after the wall-time budget: a rerun then needs a fresh budget
+}
+
+func (p *usagePause) Error() string { return p.why }
+
+// pauseFor waits for d or until ctx ends (Options.Sleep in tests).
+func (e *Env) pauseFor(ctx context.Context, d time.Duration) error {
+	if e.Sleep != nil {
+		return e.Sleep(ctx, d)
+	}
+	t := time.NewTimer(max(d, 0))
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 

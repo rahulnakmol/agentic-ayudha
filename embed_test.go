@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,22 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/skills"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
+
+// TestPrivateRecordsStayOut keeps the founder's decision of 2026-10-17: this repository is public, so the research
+// notes and the Appendix B decision log are archived in the private repository rahulnakmol/agentic-ayudha-research,
+// and the recorded Bug #173 halt runs and the Appendix B generator are deleted. None of them may be tracked here again.
+func TestPrivateRecordsStayOut(t *testing.T) {
+	out, err := exec.Command("git", "ls-files", "--", "docs/research", "docs/appendix-b", "testdata/workflow-halt", "internal/appendixb").Output()
+	if err != nil {
+		t.Skipf("not a git checkout: %v", err)
+	}
+	for _, f := range strings.Fields(string(out)) {
+		t.Errorf("%s is tracked: research notes and the Appendix B log are archived in the private repository "+
+			"rahulnakmol/agentic-ayudha-research, and testdata/workflow-halt and internal/appendixb were deleted. "+
+			"Cite a note as \"private research note <file>\"; record a deviation in the PR description under "+
+			"\"Deviation from the plan:\"", f)
+	}
+}
 
 // TestSkillLint runs the WP3.1 skill lint (internal/skills) over the embedded skills/ tree, which is what
 // ships in the binary and what `aayu install` copies. CI runs it in the `build` job. It replaces the WP0.4

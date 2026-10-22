@@ -32,19 +32,21 @@ It installs `aayudha` only; add `alias aayu=aayudha` for the short name. It is n
 ### Windows
 
 In Git Bash, run the same `install.sh` line; it installs `aayudha.exe` and `aayu.exe`. In PowerShell, use
-[Scoop](https://scoop.sh) once the bucket is published:
+[Scoop](https://scoop.sh):
 
 ```powershell
 scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
 scoop install aayudha
 ```
 
-Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install rahulnakmol.aayudha`)
+Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install --id AkmolsInc.AgenticAyudha`, or `winget install aayudha`)
 come the same way. Scoop and winget check the archive's SHA-256 from their manifest; only
 `install.sh` checks the cosign signature.
 
-> **Honest status:** none of the three package managers has aayudha yet. The v0.1.0 release's Homebrew, Scoop, and
-> winget jobs did not complete, so the tap and the bucket are empty. Use `install.sh`, in Git Bash on Windows.
+> **Honest status:** Homebrew and Scoop have v0.2.0. winget does not have it yet: the package
+> (`AkmolsInc.AgenticAyudha`, v0.2.0) is waiting for validation and a moderator in
+> [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680). Until it merges,
+> use Scoop or `install.sh` on Windows.
 
 ### Check the machine
 
@@ -97,7 +99,7 @@ the verb through the binary, so every GitHub write goes through the actions log.
 4. `inspect` reviews the pull request against its plan and proof pack.
 5. `ship` squash-merges it after a green merge gate and a human pass.
 
-`aayu status` rolls up progress and proof coverage. The [verbs reference](README.md#verbs) lists all 32
+`aayu status` rolls up progress and proof coverage. The [verbs reference](README.md#verbs) lists all 34
 verbs; each skill's page explains its steps.
 
 ## Where to go next

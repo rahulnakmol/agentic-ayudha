@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,11 +16,13 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/uireview"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -32,8 +35,27 @@ var (
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
-	storyBranch  = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
+	hostTrailer  = regexp.MustCompile(`(?m)^Aayudha-Host:\s*(\S+)\s*$`)
+	// effortTrailer is the builder's reasoning effort, one token, written on
+	// the line after Aayudha-Model (AAYU_EFFORT).
+	effortTrailer   = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
+	delegateTrailer = regexp.MustCompile(`(?m)^Aayudha-Delegate:\s*(\S+)\s*$`)
+	storyBranch     = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
 )
+
+// declared is the builder declaration in a PR body or commit message, as
+// counsel reads it: every Aayudha-Model value, and the first Aayudha-Host
+// value (named is false without one). Aayudha-Effort is no model, so it is
+// not read here.
+func declared(text string) (models []string, host string, named bool) {
+	for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
+		models = append(models, m[1])
+	}
+	if h := hostTrailer.FindStringSubmatch(text); h != nil {
+		return models, h[1], true
+	}
+	return models, "", false
+}
 
 // VerifyResult is what verify reports.
 type VerifyResult struct {
@@ -49,12 +71,98 @@ type VerifyResult struct {
 	Problems   []string      `json:"problems,omitempty"`
 	NoSnapshot bool          `json:"no_ready_snapshot,omitempty"`
 	Waivers    []string      `json:"waivers,omitempty"`
-	Gate       []string      `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
+	// IgnoredWaivers are closed waiver Decisions that do not count: the
+	// floor-waiver authority neither closed them nor is named (Bug #599).
+	IgnoredWaivers []string `json:"ignored_waivers,omitempty"`
+	Gate           []string `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
 	// RetentionDays is how long the merge gate keeps the pack as its
 	// aayudha-pack run artifact (--ci with a pack; S-4.2b).
 	RetentionDays int `json:"retention_days,omitempty"`
 	// Artifacts is where a preview without a pack keeps the floors' artifacts.
 	Artifacts string `json:"artifacts_dir,omitempty"`
+	// ScreenshotReview is the advisory model look at the run's screenshots.
+	// It is never a floor: Hold and the merge gate ignore it.
+	ScreenshotReview *ScreenshotReview `json:"screenshot_review,omitempty"`
+}
+
+// ScreenshotReview is verify's advisory judgement of its screenshots by the
+// ui-review lane, through the same reviewer as `aayu review`'s lane A (k
+// runs, findings that Agree runs report). It goes into the pack as
+// reports/screenshot-review.json, labelled with the model and effort.
+type ScreenshotReview struct {
+	Advisory    bool               `json:"advisory"` // always true: never a floor (ground rule 7)
+	Model       string             `json:"model,omitempty"`
+	Effort      string             `json:"effort,omitempty"`
+	Disposition string             `json:"disposition,omitempty"`
+	Findings    []uireview.Finding `json:"findings,omitempty"`
+	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
+}
+
+// screenshotReview runs the ui-review lane on the web floor's screenshots
+// (screens/N.png) whose pixels its redaction pass read with OCR and found
+// free of personal data (OCRScanned); no other screenshot is sent to a model.
+// The findings go on the ledger as a report, so they get the same PII scan:
+// if it matches, none is kept.
+// builderModel is the head's Aayudha-Model trailer, for the family check. Any
+// failure (no model key, a family clash, a gateway error) is recorded as
+// skipped: the judgement is advisory and never stops verify.
+func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int, builderModel string) *ScreenshotReview {
+	var shots []verify.Evidence
+	unscanned := 0
+	for _, a := range arts {
+		switch {
+		case a.Kind != "screenshot" || !strings.HasPrefix(a.Path, "screens/"): // a behaviour control's are never eligible
+		case a.OCRScanned:
+			shots = append(shots, a)
+		default:
+			unscanned++
+		}
+	}
+	if len(shots)+unscanned == 0 {
+		return nil
+	}
+	sr := &ScreenshotReview{Advisory: true}
+	if len(shots) == 0 {
+		sr.Skipped = fmt.Sprintf("no screenshot passed the OCR redaction scan (%d not scanned; is tesseract installed?)", unscanned)
+		return sr
+	}
+	rv, err := e.reviewer(ctx, nil, story, false, builderModel)
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	sr.Model, sr.Effort = rv.Model, rv.Effort
+	dir, err := os.MkdirTemp("", "aayudha-verify-shots-")
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	var caps []uireview.Capture
+	for i, a := range shots {
+		f := filepath.Join(dir, fmt.Sprintf("%d.png", i))
+		if err := os.WriteFile(f, a.Data, 0o600); err != nil {
+			sr.Skipped = err.Error()
+			return sr
+		}
+		caps = append(caps, uireview.Capture{ID: a.Path, URL: a.Path, Rest: f})
+	}
+	l, err := uireview.LaneA(ctx, rv.Complete, caps, rv.K, rv.MinTargetPx, rv.Effort, rv.Model)
+	if rv.Used != nil {
+		sr.Model = rv.Used()
+		l.Relabel(rv.Model, sr.Model)
+	}
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	b, _ := json.Marshal(l.Findings)
+	if pii := verify.ScanPII(string(b)); len(pii) > 0 {
+		sr.Skipped = "the model's findings quoted personal data, so none is kept: " + strings.Join(pii, "; ")
+		return sr
+	}
+	sr.Disposition, sr.Findings = l.Disposition, l.Findings
+	return sr
 }
 
 // writeArtifacts replaces dir with the artifacts, by their pack paths.
@@ -143,6 +251,12 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	if in.Bool("map") {
 		return e.verifyMap(ctx, root, maintain)
+	}
+	if in.Bool("security") {
+		return e.verifySecurity(ctx, root, l, in.String("since"))
+	}
+	if in.Has("since") {
+		return Errorf(ExitUsage, "verify --since runs with --security")
 	}
 	head, err := gitIn(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
@@ -290,7 +404,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
 	if res.Story > 0 && !rep.Hold {
-		ws, err := e.waivers(ctx, repo, res.Story)
+		ws, err := e.waivers(ctx, repo, res.Story, &res.IgnoredWaivers)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
@@ -303,6 +417,17 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Artifacts = append(rep.Artifacts, ev...)
 	res.Checks, res.Hold, res.Problems = rep.Checks, rep.Hold, problems
+	// The advisory screenshot judgement, after Hold is settled: it is
+	// recorded in the pack and never changes the verdict (ground rule 7).
+	builderModel := ""
+	if m := modelTrailer.FindStringSubmatch(msg); m != nil {
+		builderModel = m[1]
+	}
+	if sr := e.screenshotReview(ctx, rep.Artifacts, res.Story, builderModel); sr != nil {
+		res.ScreenshotReview = sr
+		b, _ := json.MarshalIndent(sr, "", "  ")
+		rep.Artifacts = append(rep.Artifacts, verify.Evidence{Path: "reports/screenshot-review.json", Kind: "report", Data: b})
+	}
 
 	if res.Story > 0 && !res.NoSnapshot {
 		ident := identity.KindHumanFallback
@@ -455,8 +580,10 @@ func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, s
 // of type decision that a human accepted with `decide --accept waive`
 // (WP5.6), so they are closed as completed, by someone who is not a bot, with
 // "waive, accepted by @<login>" in their Decision section. A filed but
-// unaccepted waiver waives nothing (rule 7).
-func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Waiver, error) {
+// unaccepted waiver waives nothing (rule 7), and neither does one the
+// floor-waiver authority did not accept (decide.WaiverAcceptedBy): it
+// adds each of those to ignored when it is not nil (Bug #599).
+func (e *Env) waivers(ctx context.Context, repo string, story int, ignored *[]string) ([]verify.Waiver, error) {
 	c, _, err := e.readClient(ctx)
 	if err != nil {
 		return nil, err
@@ -469,10 +596,15 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Wai
 	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
 		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(story), &o)
 	})
-	if err != nil {
+	if err != nil || len(subs) == 0 {
 		return nil, err
 	}
 	var out []verify.Waiver
+	parent, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+	if err != nil {
+		return nil, err
+	}
+	parentType, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
 	for _, s := range subs {
 		is := (*gh.Issue)(s)
 		if t, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); t != "decision" {
@@ -487,6 +619,11 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Wai
 			return nil, err
 		}
 		if by := full.GetClosedBy(); by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, l.Config.Identity.BotLogins) {
+			continue
+		} else if err := decide.WaiverAcceptedBy(&l.Config, parentType, by.GetLogin(), v["Decision"]); err != nil {
+			if ignored != nil {
+				*ignored = append(*ignored, fmt.Sprintf("#%d: %v", is.GetNumber(), err))
+			}
 			continue
 		}
 		out = append(out, verify.Waiver{Decision: is.GetNumber(), Title: is.GetTitle(), Body: is.GetBody(), Links: v["Links"]})
@@ -522,8 +659,21 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 	for _, x := range res.Waivers {
 		fmt.Fprintf(w, "  waived: %s\n", x)
 	}
+	for _, x := range res.IgnoredWaivers {
+		fmt.Fprintf(w, "  waiver ignored: %s\n", x)
+	}
 	for _, g := range res.Gate {
 		fmt.Fprintf(w, "  merge gate: %s\n", g)
+	}
+	if sr := res.ScreenshotReview; sr != nil {
+		if sr.Skipped != "" {
+			fmt.Fprintf(w, "  screenshot review (advisory): skipped: %s\n", sr.Skipped)
+		} else {
+			fmt.Fprintf(w, "  screenshot review (advisory, %s at %s effort, not a floor): %s, %d finding(s)\n", sr.Model, sr.Effort, sr.Disposition, len(sr.Findings))
+			for _, f := range sr.Findings {
+				fmt.Fprintf(w, "    %s %s (severity %d): %s\n", f.State, f.Kind, f.Severity, f.Summary)
+			}
+		}
 	}
 	switch {
 	case res.Pack != "":

@@ -3,6 +3,7 @@ package audit
 import (
 	"fmt"
 
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -215,6 +216,57 @@ func TestAuditPlanReviewBypass(t *testing.T) {
 	}
 }
 
+// Decision #469: the report counts the agent merges in the window by their
+// review's rung, and leaves out merges outside it.
+func TestAuditReviewRungs(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(5), Until: at(24)}
+	d := &Data{Dev: "dev", AgentPRs: []AgentPR{{Number: 1, MergedAt: at(6), Rung: "A"}, {Number: 2, MergedAt: at(7), Rung: "C"}, {Number: 3, MergedAt: at(8), Rung: "C"},
+		{Number: 4, MergedAt: at(9)}, {Number: 5, MergedAt: at(10), Rung: "human"}, {Number: 6, MergedAt: at(2), Rung: "A"}, {Number: 7, MergedAt: at(24), Rung: "B"}}}
+	md := string(Build(in, d).Markdown())
+	if want := "- Review rungs of agent merges among the newest 100 merged PRs (Decision #469): different-family (A) 1; paid different-family (B) 0; a person's 1; same-family (C) 2; none recorded 1"; !strings.Contains(md, want) {
+		t.Errorf("report lacks %q:\n%s", want, md)
+	}
+	// With no rung on record (a snapshot from before the ladder), the line is
+	// left out, so a replayed report stays byte for byte the same.
+	for i := range d.AgentPRs {
+		d.AgentPRs[i].Rung = ""
+	}
+	if md = string(Build(in, d).Markdown()); strings.Contains(md, "Review rungs") || strings.Contains(md, "Review rounds") {
+		t.Errorf("a report with no rung or rounds on record shows the line:\n%s", md)
+	}
+	// Story #568, criterion 9: the rounds each agent merge's review took to
+	// pass, only for merges in the window that have rounds on record.
+	// The rounds come from the gate's inspect comment's state at merge: a
+	// review that failed on round 1 and passed on round 2 is 2, and a state
+	// comment created after the merge (a later re-run) is not read.
+	st := inspect.State{Rounds: []inspect.Round{{Head: "h1", Disposition: inspect.Fix}, {Head: "h2", Disposition: inspect.Merge}}}
+	later := inspect.State{Rounds: append(st.Rounds, inspect.Round{Head: "h3", Disposition: inspect.Merge})}
+	res := inspect.Result{PR: 2, Head: "h2", Disposition: inspect.Merge}
+	// Another account's marker comment is never read, even a newer one.
+	gate := "github-actions[bot]"
+	pr := autonomy.PR{Number: 2, MergedAt: at(7), Comments: []autonomy.Comment{{Body: "lgtm", At: at(6), Login: "founder"},
+		{Body: inspect.Comment(res, st, 5), At: at(6), Login: gate}, {Body: inspect.Comment(res, later, 5), At: at(6), Login: "mallory"},
+		{Body: inspect.Comment(res, later, 5), At: at(8), Login: gate}}}
+	if n := roundsOf(pr, nil); n != 2 {
+		t.Errorf("rounds of a review that passed on round 2: %d", n)
+	}
+	// Nor is one created before the merge and edited in place after it.
+	edited := autonomy.PR{Number: 2, MergedAt: at(7), Comments: append(slices.Clone(pr.Comments), autonomy.Comment{Body: inspect.Comment(res, later, 5), At: at(6), Updated: at(8), Login: gate})}
+	if n := roundsOf(edited, nil); n != 2 {
+		t.Errorf("rounds of a state edited after the merge: %d", n)
+	}
+	// The gate writing as the configured bot App counts too.
+	app := slices.Clone(pr.Comments)
+	app[1].Login, app[3].Login = "aayu-gate[bot]", "aayu-gate[bot]"
+	if n := roundsOf(autonomy.PR{Number: 2, MergedAt: at(7), Comments: app}, []string{"aayu-gate[bot]"}); n != 2 {
+		t.Errorf("rounds of the App-written state: %d", n)
+	}
+	d.AgentPRs[1].Rounds, d.AgentPRs[3].Rounds, d.AgentPRs[5].Rounds = roundsOf(pr, nil), 1, 3
+	if md, want := string(Build(in, d).Markdown()), "- Review rounds to pass of agent merges (Story #568, from each PR's inspect state at merge): #2 2; #4 1\n"; !strings.Contains(md, want) {
+		t.Errorf("report lacks %q:\n%s", want, md)
+	}
+}
+
 // Flow metrics (P1, S-7.6e) on hand-computed, asymmetric data: #1 waits 24 h
 // for a person after its gate went green and was touched three times; #2 has
 // no build record, ships an hour after green, and escapes as Bug #9. Bug #8
@@ -338,5 +390,33 @@ func TestRetroRecurrence(t *testing.T) {
 	}
 	if md := string(r.Markdown()); !strings.Contains(md, "| #23 | `slice` | #8 | 2026-10-12T05:00:00Z | no |") || !strings.Contains(md, "| #20 | `grill` | #5 | 2026-10-12T10:00:00Z | **yes**: Feedback #30 |") {
 		t.Errorf("report:\n%s", md)
+	}
+}
+
+// retro counts every Feedback issue opened before the cursor by its fix layer
+// (S-7.7d); a PR, another type, and Feedback opened after the cursor are not
+// counted.
+func TestRetroFixLayers(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(48)}
+	fb := func(n int, created time.Time, labels ...string) Item {
+		return Item{Number: n, Title: "Feedback", CreatedAt: created, Labels: append([]string{"type:feedback"}, labels...)}
+	}
+	d := &Data{Dev: "dev", Items: []Item{fb(1, at(1), "fix:codebase"), fb(2, at(2), "fix:check"), fb(3, at(3), "fix:check", "needs:grill"),
+		fb(4, at(4), "fix:prose"), fb(5, at(5)), fb(6, at(50), "fix:review"), {Number: 7, PR: true, Labels: []string{"type:feedback", "fix:prose"}, CreatedAt: at(1)},
+		{Number: 8, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(1)},
+		// Fix Stories by their fix:<layer> label (D-7.7e): #9 merged by the
+		// cursor, #10 done without a PR, #11 merged after the cursor, #12 a
+		// Story opened after it, #13 a Story with no fix label.
+		{Number: 9, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(2)},
+		{Number: 10, Labels: []string{"type:story", "status:done", "fix:codebase"}, CreatedAt: at(2)},
+		{Number: 11, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(2)},
+		{Number: 12, Labels: []string{"type:story", "fix:review"}, CreatedAt: at(49)},
+		{Number: 13, Labels: []string{"type:story", "status:done"}, CreatedAt: at(2)}},
+		PRs: []PR{{Number: 20, Base: "dev", MergedAt: at(10), Refs: []int{9}}, {Number: 21, Base: "dev", MergedAt: at(50), Refs: []int{11}}}}
+	md := string(BuildRetro(in, d, 0).Markdown())
+	for _, want := range []string{"| codebase | 1 | #1 | 1 | #10 |", "| check | 2 | #2, #3 | 3 | #9 |", "| prose | 1 | #4 | 0 | — |", "| review | 0 | — | 0 | — |", "| unclassified | 1 | #5 | 0 | — |"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("report lacks %q:\n%s", want, md)
+		}
 	}
 }

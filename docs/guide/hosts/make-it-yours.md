@@ -42,13 +42,33 @@ theme = "saffron"
 
 | Theme | What it looks like |
 |---|---|
-| `auto` (the default) | Your terminal's own 16 colours, so it follows your light or dark terminal theme |
+| `auto` (the default) | Your terminal's own 16 colours, so a Nord, Catppuccin, Gruvbox, or any other terminal theme applies as it is. The inbox asks the terminal whether its background is light or dark and keeps text readable on either |
 | `saffron` | Warm true colour, made for dark terminals |
 | `contrast` | Bright, bold colours for low vision |
 | `mono` | No colour at all: bold and underline only |
+| `nord`, `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `gruvbox-light`, `dracula`, `tokyonight` | That project's published palette, for a terminal that is not themed. The full-screen inbox paints the palette's own background |
+| `solarized` | Solarized, dark or light to match your terminal's background |
+
+If your terminal already uses one of these themes, keep `auto`: it uses the terminal's colours directly. Every named
+palette keeps each colour at 3:1 or more against its background, and muted text at 4:1 or more. The selection in
+the inbox is reverse video, so it takes your theme's own colours.
 
 Colours only ever repeat what the words say. A check is always written `PASS`, `WARN`, `FAIL`, or `N/A`, with or
 without its colour and symbol.
+
+## Motion
+
+The full-screen inbox moves a little: a skeleton while it first reads GitHub, the next card sliding in, the
+selection gliding, a ✓ on a finished item before it leaves the list, a progress bar while it tidies, and a small
+shake when an action is refused. Each movement takes about a fifth of a second, and a key you press acts at once.
+To keep it still, set this in `~/.config/aayudha/config.toml`:
+
+```toml
+[ui]
+motion = false
+```
+
+Plain mode, `NO_COLOR`, and `TERM=dumb` are always still.
 
 ## Plain mode
 

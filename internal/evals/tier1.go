@@ -140,6 +140,13 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 	if c.Brief != nil {
 		add("brief", tier1Brief(ctx, c, assets), false)
 	}
+	if c.Tell != nil {
+		add("tell", tier1Tell(c), false)
+	}
+	if c.Survey != nil {
+		lines, na := tier1Survey(ctx, c, assets)
+		add("survey", lines, na)
+	}
 	if c.Persona != nil {
 		add("persona", tier1Persona(c, assets), false)
 	}
@@ -147,8 +154,17 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		add("pack", tier1Pack(c, assets), false)
 	}
 
+	if c.UX != nil {
+		lines, na := tier1UX(ctx, root, c, assets)
+		add("ux", lines, na)
+	}
+
 	if c.Transcript != "" {
 		add("concrete", tier1Concrete(c, assets), false)
+	}
+
+	if c.Tier2 != nil && c.Tier2.Session != "" {
+		add("session", tier1Session(ctx, c, assets), false)
 	}
 
 	calls, writes, na := runCalls(ctx, c, assets)

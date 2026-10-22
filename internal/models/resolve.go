@@ -21,7 +21,8 @@ const (
 	SourceDefault  = "default"  // the registry default for the lane and host
 	SourceConfig   = "config"   // [models.<lane>.<host>]
 	SourceFallback = "fallback" // configured family not available on the host; registry default used
-	SourceDirect   = "direct"   // host-managed on this host; the binary's direct call uses DirectHost's default
+	SourceDirect   = "direct"   // host-managed, or a Copilot catalog model, on this host; the binary's direct call uses DirectHost's row
+	SourceOff      = "off"      // [models.ui-review.copilot] model = "": the binary's Copilot route is off
 )
 
 // Resolved is the model a lane uses on a host.
@@ -40,7 +41,19 @@ type Resolved struct {
 // per substitution.
 type Resolver struct {
 	Models config.Models
+	Hosts  config.Hosts // the host plans that pick a lane's default (Decision #469)
 	Log    func(string)
+}
+
+// plan is host's plan: [hosts.cursor] plan for Cursor, x when unset.
+func (r Resolver) plan(host verbs.HostID) string {
+	if host != verbs.HostCursor {
+		return ""
+	}
+	if r.Hosts.Cursor.Plan == verbs.PlanLegacy {
+		return verbs.PlanLegacy
+	}
+	return verbs.PlanX
 }
 
 func (r Resolver) logf(format string, args ...any) {
@@ -49,13 +62,13 @@ func (r Resolver) logf(format string, args ...any) {
 	}
 }
 
-func registryDefault(lane verbs.LaneID, host verbs.HostID) (verbs.ModelDefault, error) {
+func registryDefault(lane verbs.LaneID, host verbs.HostID, plan string) (verbs.ModelDefault, error) {
 	l, ok := verbs.FindLane(lane)
 	if !ok {
 		return verbs.ModelDefault{}, fmt.Errorf("unknown lane %q", lane)
 	}
 	for _, d := range l.Defaults {
-		if d.Host == host {
+		if d.Host == host && (d.Plan == "" || d.Plan == plan) {
 			return d, nil
 		}
 	}
@@ -69,7 +82,7 @@ func (r Resolver) Resolve(lane verbs.LaneID, host verbs.HostID) (Resolved, error
 	if !ok {
 		return Resolved{}, fmt.Errorf("unknown host %q", host)
 	}
-	d, err := registryDefault(lane, host)
+	d, err := registryDefault(lane, host, r.plan(host))
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -78,9 +91,16 @@ func (r Resolver) Resolve(lane verbs.LaneID, host verbs.HostID) (Resolved, error
 	if !ok {
 		return def, nil
 	}
+	if c.Model == "" && lane == verbs.LaneUIReview && host == verbs.HostCopilot {
+		def.Source, def.Note = SourceOff, "the Copilot route is off ([models.ui-review.copilot] model = \"\")"
+		return def, nil
+	}
 	fam := verbs.Family(c.Family)
 	if fam == "" {
 		fam = verbs.FamilyOf(c.Model)
+	}
+	if fam == "" && host == verbs.HostCopilot && verbs.CopilotSelector(c.Model) {
+		fam = verbs.FamilyHostManaged // Copilot reports the model per response
 	}
 	if fam == "" {
 		return Resolved{}, fmt.Errorf("[models.%s.%s] model %q: unknown family; set family", lane, host, c.Model)
@@ -102,18 +122,25 @@ func (r Resolver) ResolveDirect(lane verbs.LaneID, host verbs.HostID, heavy bool
 	if err != nil {
 		return res, err
 	}
-	if res.Family == verbs.FamilyHostManaged {
+	// Copilot's rows, its defaults and a person's [models.<lane>.copilot],
+	// name models in Copilot's own catalog (claude-opus-5.5), which the
+	// gateway does not route.
+	copilotOnly := host == verbs.HostCopilot
+	if res.Family == verbs.FamilyHostManaged || copilotOnly {
 		alt, err := r.Resolve(lane, verbs.DirectHost)
 		if err != nil {
 			return alt, err
 		}
 		alt.Source = SourceDirect
 		alt.Note = fmt.Sprintf("%s is a host-managed mode on %s; the direct call uses the %s default %s", res.Display, host, verbs.DirectHost, alt.Model)
+		if copilotOnly && res.Family != verbs.FamilyHostManaged {
+			alt.Note = fmt.Sprintf("%s is a model in Copilot's catalog; the direct call uses the %s default %s", res.Display, verbs.DirectHost, alt.Model)
+		}
 		r.logf("models: %s lane: %s", lane, alt.Note)
 		res = alt
 	}
 	if heavy && res.Source != SourceConfig {
-		if d, err := registryDefault(lane, res.Host); err == nil && d.EscalationID != "" {
+		if d, err := registryDefault(lane, res.Host, r.plan(res.Host)); err == nil && d.EscalationID != "" {
 			res.Model, res.Display, res.Effort = d.EscalationID, d.Escalation, d.EscalationEffort
 		}
 	}

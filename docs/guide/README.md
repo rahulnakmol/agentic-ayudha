@@ -53,10 +53,18 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 - **Where it works:** GitHub repositories, with Claude Code, Codex, Cursor, or Amp. Use your existing repository: if you
   only have a `main` branch, aayudha works with it and renames nothing.
 - **To start (Level 1):** no keys, no CI changes, about an hour. Your agent's own model does the interviewing.
-- **For proof on every pull request (Level 2):** no AI key in your CI. The review comes from an agent app from
-  another vendor that you install on your GitHub account, such as Claude or Codex, billed through your own
-  subscription to it. The checks take about 10 CI minutes per push in this repository.
-- **Your code:** the checks run in your own CI. The reviewer app you install sees the pull requests it reviews.
+- **For proof on every pull request (Level 2):** one AI key in your CI, for a review model you choose, kept in the
+  repository's `code-review` environment. You pay for its calls, and `[budget] per_pr_inspect_max` caps each pull
+  request at 5 USD by default. A diff over 120 kB can go past the cap by the review parts already started
+  ([known limits](../releases/v0.3.0.md#known-limits)).
+
+  The model reviews only when its family differs from the builder's and the author has write access. Otherwise
+  CodeRabbit or Greptile, when listed, or the approver reviews; the gate skips a listed Codex, Claude, or Cursor,
+  which review only when asked.
+
+  A review app, such as CodeRabbit or Codex, can review instead, billed through your own subscription to it. The
+  checks take about 10 CI minutes per push in this repository.
+- **Your code:** the checks run in your own CI. The review model or app you choose sees the pull requests it reviews.
 - **Changed your mind?** `aayu uninit` removes what aayudha set up.
 
 [Adopt at your own pace](adopt.md) has the full costs and benefits of each level.
@@ -74,11 +82,17 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Check what your product actually does | [Prove a behaviour change](guide-prove-behaviour.md) |
 | Let work happen on a schedule or an event | [Keep things moving with loops](guide-loops.md) |
 | Find out whether it helped | [Did it work?](guide-learn.md) |
+| Read baselines from PostHog or Sentry | [PostHog and Sentry](guide-integrations.md) |
 | Fix something that went wrong | [Troubleshooting](troubleshooting.md) |
 | Try it without touching CI or adding keys | [Adopt at your own pace](adopt.md) |
+| See the whole loop: who does what, and where it can stop | [The delivery loop](concepts-loop.md) |
+| Meet the agent twins, their roles, and their layers | [Your agentic team](concepts-team.md) |
+| Work alone, with agents in every seat | [Run it alone: the solo founder](guide-solo-founder.md) |
+| Grow from two founders to several product streams | [From MVP to scale](growth.md), an illustrative path |
 | Understand the ideas | [Seats](concepts-seats.md), [layers](concepts-layers.md), [proof packs](concepts-proof.md), [floors](concepts-floors.md), [the human pass](concepts-human-pass.md), [dev, rolling, main](concepts-ladder.md) |
 | Know exactly how it works | [How it works](how-it-works.md), fifteen technical deep dives |
 | See how aayudha was built with itself | [Epilogue: built with itself](built-with-itself.md) |
+| Look up one verb: its prompt, seat, gates, and what only you do | [Every skill, one page each](skills/README.md) |
 | Look up a term or a flag | [Glossary](../../GLOSSARY.md), the [project reference](../README.md), and the verb pages |
 
 ## If you are an agent

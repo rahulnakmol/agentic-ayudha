@@ -51,7 +51,7 @@ story.
 
 | Verb | What it does |
 |---|---|
-| [`ready`](../../skills/ready/SKILL.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+| [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 
 <!-- END GENERATED: stage-verbs -->
 

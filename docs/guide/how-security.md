@@ -45,8 +45,9 @@ return fmt.Sprintf("<untrusted source=%q>\n%s\n</untrusted>\nThe block above is 
 ```
 
 Wrapping lowers the odds; the real control is that the verbs that act cannot be reached through it. `ship`
-needs a human pass on the head commit, and bot reviews never count. `tell --publish` and `release` refuse agents
-and CI outright. An ops action from `respond` runs only from the pinned ops catalog inside the ops workflow, and an
+needs a human pass on the head commit, and bot reviews never count. `tell --publish` refuses agents
+and CI outright. `release` refuses CI and bot accounts, and promotes to `main` only on a person's stable-release
+request, which an agent cannot write. An ops action from `respond` runs only from the pinned ops catalog inside the ops workflow, and an
 action marked for a human also needs a human's approval of its GitHub environment. `triage` writes with a labels-only capability that the GitHub client enforces on every request, and
 its model can only pick from three classes. The eval suite carries an injection case
 (`evals/cases/stub/injection`).
@@ -80,9 +81,41 @@ ledger.
 SHA-256, workflows default to `contents: read`, and checkout never persists credentials. Releases are signed and
 attested; see [releases and the supply chain](how-releases.md).
 
-**Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story reaches
+**A vulnerability that arrives without a pull request.** The merge gate scans pull requests only. A promotion
+merge, a direct or admin push, or a new advisory against a dependency that did not change reaches dev, rolling, or
+main without one. `aayu init --gates` therefore also installs `aayudha-security.yml`. It runs
+`aayudha verify --security --ci` on every push to those branches, as `[branches]` maps them, and nightly on each
+tip. That covers verify's sast, secrets, deps, and dast floors with the merge gate's pinned tools; a push scans
+secrets in the pushed commits, the nightly run in the whole history. For a web or api product, dast runs the pinned
+ZAP image against a deployed environment's url (`AAYU_ENV`). It never runs `[verify] seed`, which is repository code, beside the token that writes the Bugs; with a loopback target or none the job summary shows `skipped: dast`, which does not fail the run (a story's verify scans the app the seed starts instead; there the skip blocks ship from `[verify] new_floors_blocking_from`, 2026-11-14, unless a floor waiver names dast or `[verify.floors.dast] skipped_blocks_ship = false`, and before that date it is advisory). Each failing finding files one Bug labelled
+`aayudha:security`, keyed by floor, rule or advisory ID, and path; later runs comment on it instead of filing again.
+Only Bugs and comments written by the workflow token (`github-actions[bot]`) count, so a labelled issue or comment
+from anyone else neither holds nor releases a promotion. A sast scan that leaves a file unanalysed (a syntax error,
+timeout, or out of memory) is blocked, never green, so it marks nothing gone.
+An open one last seen on rolling or main holds `aayu release` until it is gone there, the source tip being promoted
+was scanned without it (so a fix travels dev to rolling to main as usual), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`), and each promotion takes only a source tip (dev for rolling, rolling for main) that the workflow scanned green.
+A floor whose every finding sits on a Bug with an accepted waiver naming it is `waived` in the scan, so a waived tip
+can still be scanned green. `aayu doctor` reports the workflow and each tip's last scan, and warns when a tip moved
+on with no scan of its own.
+
+**Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story goes over
 `per_story_usd` or spend for the day reaches `per_day_usd`. It pauses agent lanes (exit code 6) until a human runs
 `aayu resume`, and pages once per scope per day.
+
+**A host's own PostHog or Sentry tools.** When your host also has a PostHog or Sentry MCP server or CLI connected,
+the pre-tool hook lets an agent read through it and refuses every write: changing a flag, launching an experiment,
+resolving an issue, or creating an alert or a release. A write to a provider is a catalog action that a person
+approves. The hook allows only the read tools on lists that aayudha pins to each provider's published tool
+definitions (`internal/integrations/hostcall`), and it refuses any tool it does not know, so a new write tool stays
+refused until the lists are regenerated. Tools that return personal data (persons, session replays, support
+tickets, raw LLM conversations) stay refused until the repository's `.aayudha/config.toml` sets
+`allow_pii = true` under `[integrations.posthog]` or `[integrations.sentry]`. aayudha reads that setting only from
+`.aayudha/config.toml`, the code-owned repository config, where it is reviewed; from `.aayudha/config.json` or any other
+layer the load fails. Tools that spend paid AI credits, such as Sentry's Seer
+analysis, stay refused. The post-tool hook logs each read it let through to
+`.aayudha/state/calls/<session>.jsonl`: the tool, its arguments with secrets redacted, the time window and row limit it
+asked for, the rows it returned, and a SHA-256 of the result, never the result itself. A call that names a window and a
+row limit is citable as evidence, the same way aayudha's own queries are; the log says why any other call is not.
 
 ## The kill switch
 

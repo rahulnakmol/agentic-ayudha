@@ -85,6 +85,11 @@ func TestBriefCLI(t *testing.T) {
 		cm.User.Login = "aayudha-bot[bot]"
 		fgh.Issues[prN].Comments = append(fgh.Issues[prN].Comments, cm)
 	}
+	// The merge gate writes as the bot App; a later one for the same head from someone else is not inspect's (Bug #601).
+	env["AAYU_IDENTITY__APP_SLUG"] = "aayudha-bot"
+	forged := &fake.Comment{ID: 990, Body: state(headA, "unmet")}
+	forged.User.Login = "mallory"
+	fgh.Issues[prN].Comments = append(fgh.Issues[prN].Comments, forged)
 	fgh.Mu.Unlock()
 
 	code, out, errOut = run(t, env, opts, "brief", "2", "--repo", "o/r", "--json")

@@ -1,0 +1,192 @@
+package doctor
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+)
+
+// Story #487 criterion 5: the security-workflow row fails when the workflow
+// is missing, names each mapped tip's latest push run, and warns on a red tip
+// and on a nightly run more than 48 hours old.
+func TestSecurityWorkflowRow(t *testing.T) {
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	run := func(conclusion string, at time.Time) map[string]any {
+		return map[string]any{"head_sha": "abcdef1234567", "status": "completed", "conclusion": conclusion, "created_at": at}
+	}
+	probe := func(installed bool, sets []string, runs map[string]map[string]any) (*Probe, *[]string) {
+		files := map[string]string{"go.mod": "module m\n"}
+		if installed {
+			files[".github/workflows/"+SecurityWorkflow] = "name: aayudha-security\n"
+		}
+		var asked []string
+		p := &Probe{Root: repoWith(t, files), Config: load(t, sets...), Repo: "o/r", Now: func() time.Time { return now },
+			API: func(_ context.Context, path string, out any) error {
+				asked = append(asked, path)
+				if _, br, ok := strings.Cut(path, "/branches/"); ok {
+					sha := "abcdef1234567"
+					if r, ok := runs["tip="+br]; ok {
+						sha = r["sha"].(string)
+					}
+					b, _ := json.Marshal(map[string]any{"commit": map[string]any{"sha": sha}})
+					return json.Unmarshal(b, out)
+				}
+				key := path[strings.Index(path, "event="):]
+				var rs []map[string]any
+				if r, ok := runs[key]; ok && r["error"] == true {
+					return errors.New("403 Forbidden")
+				} else if ok {
+					rs = append(rs, r)
+				}
+				b, _ := json.Marshal(map[string]any{"workflow_runs": rs})
+				return json.Unmarshal(b, out)
+			}}
+		return p, &asked
+	}
+	green := map[string]map[string]any{
+		"event=push&branch=dev":     run("success", now.Add(-time.Hour)),
+		"event=push&branch=rolling": run("success", now.Add(-time.Hour)),
+		"event=push&branch=main":    run("success", now.Add(-time.Hour)),
+		"event=schedule":            run("success", now.Add(-9*time.Hour)),
+	}
+	ctx := context.Background()
+
+	p, _ := probe(false, nil, green)
+	if r := checkSecurityWorkflow(ctx, p); r.Status != Fail || !strings.Contains(r.Detail, "aayu init --gates") {
+		t.Fatalf("missing: %+v", r)
+	}
+	p, _ = probe(true, nil, green)
+	if r := checkSecurityWorkflow(ctx, p); r.Status != Pass || len(r.Lines) != 4 || !strings.Contains(r.Lines[2], "main: success at abcdef1") {
+		t.Fatalf("all green: %+v", r)
+	}
+	red := map[string]map[string]any{}
+	for k, v := range green {
+		red[k] = v
+	}
+	red["event=push&branch=main"] = run("failure", now.Add(-time.Hour))
+	p, _ = probe(true, nil, red)
+	if r := checkSecurityWorkflow(ctx, p); r.Status != Warn || !strings.Contains(r.Detail, "1 branch tip(s) failed") || !strings.Contains(r.Lines[2], "main: failure") {
+		t.Fatalf("red main: %+v", r)
+	}
+	stale := map[string]map[string]any{}
+	for k, v := range green {
+		stale[k] = v
+	}
+	stale["event=schedule"] = run("success", now.Add(-49*time.Hour))
+	p, _ = probe(true, nil, stale)
+	if r := checkSecurityWorkflow(ctx, p); r.Status != Warn || !strings.Contains(r.Lines[3], "more than 48 hours ago") {
+		t.Fatalf("stale nightly: %+v", r)
+	}
+	// No completed result is not green: a tip never scanned or still scanning,
+	// and a fresh nightly run that failed or has not finished.
+	for name, change := range map[string]func(map[string]map[string]any){
+		"rolling never scanned": func(m map[string]map[string]any) { delete(m, "event=push&branch=rolling") },
+		"rolling in progress": func(m map[string]map[string]any) {
+			m["event=push&branch=rolling"] = map[string]any{"head_sha": "abcdef1234567", "status": "in_progress", "created_at": now}
+		},
+		"nightly failed":   func(m map[string]map[string]any) { m["event=schedule"] = run("failure", now.Add(-time.Hour)) },
+		"no nightly run":   func(m map[string]map[string]any) { delete(m, "event=schedule") },
+		"nightly unread":   func(m map[string]map[string]any) { m["event=schedule"] = map[string]any{"error": true} },
+		"push runs unread": func(m map[string]map[string]any) { m["event=push&branch=dev"] = map[string]any{"error": true} },
+		// The latest run is green but of an older commit: the branch moved on without a run.
+		"rolling advanced with no run": func(m map[string]map[string]any) { m["tip=rolling"] = map[string]any{"sha": "fedcba9876543"} },
+		"nightly running": func(m map[string]map[string]any) {
+			m["event=schedule"] = map[string]any{"head_sha": "abcdef1234567", "status": "in_progress", "created_at": now}
+		},
+	} {
+		m := map[string]map[string]any{}
+		for k, v := range green {
+			m[k] = v
+		}
+		change(m)
+		p, _ = probe(true, nil, m)
+		if r := checkSecurityWorkflow(ctx, p); r.Status != Warn || strings.Contains(r.Detail, "every scanned tip is green") {
+			t.Errorf("%s: %+v", name, r)
+		}
+	}
+	// Mapped branches (coexistence, no rolling): the rows follow the map. A slash in a name is part of the one
+	// {branch} parameter (Codex review of #500).
+	p, asked := probe(true, []string{"branches.dev=trunk", "branches.main=release/2026"}, green)
+	r := checkSecurityWorkflow(ctx, p)
+	if got := strings.Join(*asked, " "); !strings.Contains(got, "branch=trunk") || !strings.Contains(got, "/branches/release%2F2026") || strings.Contains(got, "branch=rolling") || strings.Contains(got, "branch=dev") {
+		t.Fatalf("mapped branches asked: %s (%+v)", got, r)
+	}
+}
+
+// Decision #485 G2 and G4: doctor names the runtime the dast floor will use
+// (docker before podman, rootless Podman said so), warns when [verify]
+// platforms is unset, and is n/a for a CLI.
+func TestContainerRuntimeRow(t *testing.T) {
+	probe := func(found ...string) *Probe {
+		p := healthy(t)
+		p.LookPath = func(n string) (string, error) {
+			if slices.Contains(found, n) {
+				return "/usr/bin/" + n, nil
+			}
+			return "", errors.New("not found")
+		}
+		overlay(p, map[string]string{
+			"podman --version": "podman version 4.3.1\n",
+			"podman info --format {{.Host.Security.Rootless}}": "true\n",
+		})
+		return p
+	}
+	ctx := context.Background()
+	for found, want := range map[string]string{"docker podman": "container runtime: docker 29.9.0", "podman": "container runtime: podman 4.3.1 (rootless)"} {
+		r := checkDAST(ctx, probe(strings.Fields(found)...))
+		if r.Status != Pass || !slices.Contains(r.Lines, want) {
+			t.Errorf("%s: %s %v, want %q", found, r.Status, r.Lines, want)
+		}
+	}
+	for platforms, want := range map[string]string{"": "[verify] platforms is unset", "cli": "n/a: no web or api"} {
+		p := probe("docker")
+		p.Config.Config.Verify.Platforms = strings.Fields(platforms)
+		if r := checkDAST(ctx, p); !strings.Contains(r.Detail, want) || (platforms == "") != (r.Status == Warn) {
+			t.Errorf("platforms %q: %s %q", platforms, r.Status, r.Detail)
+		}
+	}
+	p := probe("docker")
+	p.Config.Config.Verify.DAST = false
+	if r := checkDAST(ctx, p); r.Status != Warn || !strings.Contains(strings.Join(r.Lines, "\n"), "[verify] dast = false") || !strings.Contains(strings.Join(r.Lines, "\n"), "aayu decide <story> --waiver dast") {
+		t.Errorf("dast off: %+v", r)
+	}
+	p = probe("docker")
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "https://staging.example.test", ActiveScan: true}}
+	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "active scan ([verify.environments.local] active_scan = true)") {
+		t.Errorf("opted-in URL: %+v", r)
+	}
+	p = probe("docker")
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "https://staging.example.test"}}
+	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "passive scan only") {
+		t.Errorf("a URL verify does not start: %+v", r)
+	}
+	// CodeRabbit on #509: verify refuses a production target, by its own flag or by a host it shares with one.
+	for name, envs := range map[string]map[string]config.Environment{
+		"flagged":     {"local": {URL: "https://app.example.com", Production: true}},
+		"shared host": {"local": {URL: "https://app.example.com:8443"}, "prod": {URL: "https://app.example.com", Production: true}},
+	} {
+		p = probe("docker")
+		p.Config.Config.Verify.Environments = envs
+		if r := checkDAST(ctx, p); r.Status != Fail || !strings.Contains(strings.Join(r.Lines, "\n"), "is a production environment") {
+			t.Errorf("%s: %+v", name, r)
+		}
+	}
+	// A host and port with no scheme is not a URL verify can scan: it blocks the floor, so doctor must not pass it.
+	// Nor is one with surrounding space, which verify does not trim.
+	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080", "//127.0.0.1:8080", " http://127.0.0.1:8080 ", "\thttp://127.0.0.1:8080"} {
+		// With or without a container runtime: a missing runtime must not soften the failure.
+		for _, found := range [][]string{{"docker"}, nil} {
+			p = probe(found...)
+			p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: bad}}
+			if r := checkDAST(ctx, p); r.Status != Fail || !strings.Contains(r.Detail, "blocked") || !strings.Contains(strings.Join(r.Lines, "\n"), "is not an absolute http or https URL") {
+				t.Errorf("%s %v: %+v", bad, found, r)
+			}
+		}
+	}
+}

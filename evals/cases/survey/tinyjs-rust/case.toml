@@ -1,0 +1,39 @@
+# survey (WP5.9): tiny-js (github.com/gfwilliams/tiny-js at 8214477, MIT; repos/tiny-js, CRLF normalised, its
+# .gitignore dropped), a C++ JavaScript interpreter with a readme and no product docs, built by Make and CMake. The
+# person asks for the analysis and a Rust rebuild with the same behaviour. The host has run `aayu survey`, every
+# `--module`, and read the files below; no person is in the session, so every question stays open. Floors: `aayu
+# survey --draft` (every citation resolves, bases, no observed product claim, target from the request), no answered
+# question, and the scope rule. output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md),
+# amended for the capability-map and runner floors: the header's value and lexer API, run_tests, and each case set's
+# runners.
+skill = "survey"
+description = "Survey a legacy C++ interpreter at three levels and plan a Rust rebuild with parity case sets."
+input = "request.txt"
+repo = "../repos/tiny-js"
+artifacts = ["output/survey.json"]
+
+[survey]
+kind = "draft"
+draft = "output/survey.json"
+# Written and judged section by section (survey-sections-2026-10.md): rubric/<section>.md each holds one of
+# rubric.md's criteria whole; rubric.md stays the bar the eval-bar ratchet tracks.
+rubrics = "rubric"
+read = [
+  "README.md", "Makefile", "CMakeLists.txt", "Script.cpp", "TinyJS.h",
+  "TinyJS.cpp:1-200", "TinyJS.cpp:640-650", "TinyJS.cpp:955-970", "TinyJS.cpp:1220-1420", "TinyJS.cpp:1725-1800",
+  "TinyJS_Functions.cpp:36-80", "TinyJS_Functions.cpp:145-255", "TinyJS_MathFunctions.cpp:255-295",
+  "run_tests.cpp:30-60", "run_tests.cpp:190-294", "tests/test001.js", "tests/test022.js",
+]
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true

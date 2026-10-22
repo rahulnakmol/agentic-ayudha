@@ -25,6 +25,13 @@ WARN  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: admin:org, del
 PASS  bot-identity  bot identity: GitHub App aayudha-bot[bot] (laptops mint tokens through the aayudha-token.yml broker)
 ## bot-identity fail
 WARN  bot-identity  bot identity: not configured; agent writes run under the human identity, tagged identity:human-fallback
+## approvals pass
+PASS  approvals  approvals: a reply from rahulnakmol approves a batch; one-way doors need the device code
+                   GH_TOKEN -> @aayudha-bot[bot]
+## approvals fail
+FAIL  approvals  approvals: this agent session (AMP_THREAD_ID) can reach an approver's GitHub credential: @rahulnakmol (git credential helper). An agent here could write an `/aayu approve` reply in their name, so batches from here need the device code. Remove it from every agent's environment (docs/guide/how-trust.md, Approving by reply)
+                   GH_TOKEN -> @aayudha-bot[bot]
+                   git credential helper -> @rahulnakmol
 ## config pass
 PASS  config  config is valid
 ## config fail
@@ -37,7 +44,7 @@ FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is
 ## host pass
 PASS  host  host amp (from AMP_THREAD_ID)
 ## host fail
-WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, GitHub Copilot, or Cursor); pass --host when running outside one
 ## secrets pass
 PASS  secrets  secrets backends: env, file
                  unavailable: keychain (no Secret Service)
@@ -51,22 +58,46 @@ FAIL  skills-copies  skill copies differ from .aayudha/lock.toml; aayu doctor --
                        .claude/skills/ready is missing
                        .claude/skills/status was edited or is stale
 ## mcp pass
-PASS  mcp  aayudha MCP server registered for claude at this aayu's version
+PASS  mcp  aayudha MCP server: claude from .mcp.json at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## provider-mcp pass
+PASS  provider-mcp  no PostHog or Sentry MCP server registered with a host
+## provider-mcp fail
+FAIL  provider-mcp  3 PostHog or Sentry MCP server(s); aayudha's pre-tool hook lets them read and refuses their writes; the lines say what to tighten
+                      posthog "posthog" (claude, .mcp.json): a PostHog or Sentry key is written into this file, which the repository shares. Fix: revoke that key now, then reference an environment variable instead (for example "Authorization": "Bearer ${POSTHOG_API_KEY}") or move the server to your user config
+                      posthog "posthog" (claude, .mcp.json): the server offers PostHog's write tools. Fix: add readonly=true to the URL (https://mcp.posthog.com/mcp?readonly=true) or the header x-posthog-read-only: true, so it lists only read tools
+                      posthog "posthog" (claude, .mcp.json): the server is not pinned to one project, so an agent can switch projects. Fix: add project_id=<your project ID> to the URL, or the header x-posthog-project-id
+                      sentry "sentry" (claude, .mcp.json): the server offers Sentry skills beyond inspect (seer starts paid runs; triage and project-management write). Fix: limit it to the inspect skill: ?skills=inspect on https://mcp.sentry.dev/mcp, or --skills=inspect for npx @sentry/mcp-server
+                      sentry "sentry" (claude, .mcp.json): the server is not limited to one organization. Fix: use https://mcp.sentry.dev/mcp/<org>/<project>
+                      sentry "sentry" (claude, .mcp.json): the hosted server signs in with OAuth, and Sentry grants that token write scopes whatever skills you pick. Fix: prefer a read-only token: run npx @sentry/mcp-server --access-token=${SENTRY_ACCESS_TOKEN} --skills=inspect (stdio), with the token aayudha's doctor accepts
+                      sentry "sentry-local" (claude, .mcp.json): set up to read only
 ## codex-hooks pass
 PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
 ## codex-hooks fail
 FAIL  codex-hooks  Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them
                      plugin aayudha@aayudha: the PreToolUse hook is not trusted yet; trust it in Codex's /hooks
+## copilot pass
+PASS  copilot  not installed for GitHub Copilot here
+## copilot fail
+FAIL  copilot  GitHub Copilot is not set up safely here; the lines say what to fix
+                 no aayudha hooks in .github/hooks/aayudha.json, so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`
+                 aayu's GitHub token (AAYU_GITHUB_TOKEN) is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token
+                 Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks
+                 live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills, the aayudha MCP tool, the hooks, each Auto tier, a HydraFusion Critique turn); VS Code agent mode is not live-proven
+## host-config pass
+PASS  host-config  not installed for a host here
+## host-config fail
+FAIL  host-config  a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply` [blocking]
+                     .github/hooks/aayudha.json
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass
 PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
 FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
-                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts, and design media need [proof] media
 ## ledger-rulesets pass
 N/A  ledger-rulesets  aayu init has not run here (no .aayudha/state.json)
 ## ledger-rulesets fail
@@ -109,7 +140,7 @@ FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only 
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail
-WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), docker (dast floor: ZAP), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
+WARN  optional-tools  7 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
 ## worktrees pass
 PASS  worktrees  no leaked worktrees
 ## worktrees fail
@@ -132,26 +163,52 @@ PASS  agents  local CLIs signed in: codex, cursor, claude, amp; cloud agents con
                 claude: /usr/bin/x 1.0.0, signed in; cloud: claude --cloud with a claude.ai account
                 amp: /usr/bin/x 1.0.0, signed in; cloud: no Amp project recorded for this repository: `aayu install --env --host amp --cloud` finds it and proves the orb environment
 ## reviewer-apps pass
-PASS  reviewer-apps  merge-gate reviewer: codex (openai), unless it is of the builder's family; then the next app, else a human
-                       claude (@claude review, family anthropic): not detected
+PASS  reviewer-apps  merge-gate reviewer: codex (openai); its review counts as different-family only for a builder of another family (a review service always does), and is labelled same-family otherwise
                        codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o
+                       coderabbit (@coderabbitai review, family review-service): not detected
+                       greptile (@greptileai, family review-service): not detected
+                       claude (@claude review, family anthropic): not detected
                        cursor (@cursor, family host-managed): not detected
                        amp (no mention, family host-managed): not detected
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
 ## reviewer-apps fail
 WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; add them to [inspect] apps (the gate reads config only)
-                       claude (@claude review, family anthropic): not detected
                        codex (@codex review, family openai): detected: chatgpt-codex-connector[bot] replied on #3
+                       coderabbit (@coderabbitai review, family review-service): not detected
+                       greptile (@greptileai, family review-service): not detected
+                       claude (@claude review, family anthropic): not detected
                        cursor (@cursor, family host-managed): detected: check run "Cursor Bugbot" on #3
                        amp (no mention, family host-managed): not detected
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
-                       no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
-                       falling back to a human review
+## review-rung pass
+PASS  review-rung  C  same-family review: codex (openai), no other family reachable; it never counts toward the streak, so a person passes every PR
+                     builder any of [anthropic openai] (amp picks the model for its modes)
+                     move up (free): coderabbit (review-service): install it and add it to [inspect] apps, and set [inspect] reviewer = "coderabbit"; greptile (review-service): install it and add it to [inspect] apps, and set [inspect] reviewer = "greptile"; cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's, and set [inspect] reviewer = "cursor"
+                     move up (paid): set [inspect] reviewer = "ci", the default, and set up the code-review environment (Settings → Environments → code-review, deployment branches: the base branches only): variables AAYU_REVIEW_MODEL_URL (the model endpoint's base URL, such as https://api.x.ai/v1) and AAYU_REVIEW_MODEL (the model ID, such as grok-4.7), secret AAYU_REVIEW_MODEL_KEY (its key); `aayu init --gates` creates it
+## review-rung fail
+FAIL  review-rung  no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (ci, the default; codex, coderabbit, greptile, claude, cursor, or human) in .aayudha/config.toml, or run aayu install
+                     builder any of [anthropic openai] (amp picks the model for its modes)
 ## retired-workflows pass
 PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail
 WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
-                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model; triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+## security-workflow pass
+PASS  security-workflow  installed; every scanned tip is green
+                           dev: success at 0123456
+                           rolling: success at 0123456
+                           main: success at 0123456
+                           nightly: success, 2026-10-18T03:23:00Z
+## security-workflow fail
+FAIL  security-workflow  not installed: no scan of pushes to dev, rolling, and main, and none nightly; run `aayu init --gates` and commit .github/workflows/aayudha-security.yml through a pull request
+## dast pass
+PASS  dast  the dast floor runs here
+              target: http://127.0.0.1:8080, active scan if [verify] seed starts it (an app already answering there gets the passive scan only)
+              container runtime: docker 29.9.0
+## dast fail
+WARN  dast  the dast floor cannot run here as configured
+              target: none ([verify.environments.local] url is unset), so a web or api story records skipped: dast, which blocks its ship from [verify] new_floors_blocking_from unless waived. Give verify a start command ([verify] seed, e.g. ["./scripts/serve.sh"]) and its URL ([verify.environments.local] url = "http://127.0.0.1:8080"), or waive: aayu decide <story> --waiver dast
+              container runtime: none; install Docker or Podman to scan locally (the merge gate and aayudha-security.yml run it in CI)
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
@@ -166,8 +223,15 @@ PASS  leases  1 live build lease(s)
 WARN  leases  2 stale build lease(s); `aayu gc` reclaims them
                 #9: bot@ci, expired 2026-01-01T00:00:00Z
                 #10: labelled leased without a lock comment
+## feedback-layers pass
+PASS  feedback-layers  1 open Feedback issue(s), each with a fix layer
+## feedback-layers fail
+WARN  feedback-layers  2 open Feedback issue(s) without a fix layer; evolve refuses them until each is classified: `aayu retro --classify <issue> --layer codebase|check|prose|review --reason "<why this layer>"`
+                         #6 Feedback: b
+                         #8 Feedback: c
 ## coexistence pass
-PASS  coexistence  coexistence report: nothing to coexist with
+PASS  coexistence  coexistence report: init adds alongside the existing setup
+                     existing workflow aayudha-security.yml (checks: ): init leaves it byte-identical and adds aayudha/* checks alongside
 ## coexistence fail
 WARN  coexistence  coexistence report: 2 name collision(s) init must resolve
                      existing workflow aayudha-token.yml (checks: mint): init leaves it byte-identical and adds aayudha/* checks alongside

@@ -126,7 +126,9 @@ func (e *Env) reviewSetup(ctx context.Context, n int) (head string, story int, s
 
 // reviewer builds the two lanes: lane A on the ui-review lane through the
 // model gateway, its family checked against the builder's (reviewer ≠ builder).
-func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep bool) (*uireview.Reviewer, error) {
+// builderModel is the head's builder when the caller knows it; else the
+// story's local pack names it, if that pack proves the current head.
+func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep bool, builderModel string) (*uireview.Reviewer, error) {
 	l, err := e.Config()
 	if err != nil {
 		return nil, err
@@ -143,9 +145,10 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	if host == "" {
 		host = verbs.DirectHost
 	}
-	builder := verbs.Family("")
-	if root := config.RepoRoot(e.Dir); root != "" && story > 0 {
-		if p, err := proof.LoadLocal(proof.LocalDir(root, story)); err == nil && p.Model != "" {
+	builder := verbs.FamilyOf(builderModel)
+	if root := config.RepoRoot(e.Dir); builder == "" && root != "" && story > 0 {
+		head, _ := gitIn(ctx, root, "rev-parse", "HEAD")
+		if p, err := proof.LoadLocal(proof.LocalDir(root, story)); err == nil && p.Model != "" && p.PRHeadSHA == head {
 			builder = verbs.FamilyOf(p.Model)
 		}
 	}
@@ -154,19 +157,83 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 			builder = bm.Family
 		}
 	}
-	key := fmt.Sprintf("#%d", story)
+	// The budget's per-story key: a storyless run (story 0) is charged to the
+	// day only, never to a synthetic story.
+	key := ""
+	if story > 0 {
+		key = fmt.Sprintf("#%d", story)
+	}
 	if err := models.CheckFamilies(key, builder, rev.Family); err != nil {
 		return nil, Wrap(ExitBlocked, err)
 	}
-	effort := "medium"
+	// The lane's effort (high for gemini-3.8-flash); --deep raises a lower one.
+	effort := rev.Effort
+	if effort == "" {
+		effort = "medium"
+	}
 	if deep {
 		effort = "high"
 	}
-	return &uireview.Reviewer{Tools: b, Model: rev.Model, Effort: effort, K: uireview.K, MinTargetPx: l.Config.Verify.Floors.A11y.MinTargetPx, Now: e.Now,
-		Complete: func(ctx context.Context, req models.Request) (models.Response, error) {
-			resp, _, err := gw.Do(ctx, models.Call{Story: key, Seat: string(verbs.UXResearcher), Lane: verbs.LaneUIReview, Host: verbs.DirectHost, Req: req})
-			return resp, err
-		}}, nil
+	r := &uireview.Reviewer{Tools: b, Model: rev.Model, Effort: effort, K: uireview.K, MinTargetPx: l.Config.Verify.Floors.A11y.MinTargetPx, Now: e.Now}
+	call := func(ctx context.Context, host verbs.HostID, req models.Request) (models.Response, error) {
+		resp, _, err := gw.Do(ctx, models.Call{Story: key, Seat: string(verbs.UXResearcher), Lane: verbs.LaneUIReview, Host: host, Req: req})
+		return resp, err
+	}
+	r.Complete = func(ctx context.Context, req models.Request) (models.Response, error) {
+		return call(ctx, verbs.DirectHost, req)
+	}
+	// The Copilot route: lane A runs on the copilot row's model (Gemini 4
+	// Argon at high effort by default) through Copilot CLI wherever copilot is
+	// installed and signed in. It fails closed: when Copilot is unavailable,
+	// or a call fails or misses the schema, that call and every later one go
+	// to the lane's gateway route, and stderr and the label say so. It never
+	// skips the review. [models.ui-review.copilot] model = "" turns it off.
+	cp, err := gw.Resolver.Resolve(verbs.LaneUIReview, verbs.HostCopilot)
+	if err != nil {
+		return nil, Wrap(ExitUsage, err)
+	}
+	if !models.CopilotRouted(cp) {
+		return r, nil
+	}
+	if err := models.CheckFamilies(key, builder, cp.Family); err != nil {
+		return nil, Wrap(ExitBlocked, err)
+	}
+	if err := gw.CopilotReady(); err != nil {
+		why := strings.TrimPrefix(err.Error(), models.ErrCopilot.Error()+": ")
+		fmt.Fprintf(e.Err, "ui-review: %s through Copilot is unavailable (%s); lane A uses %s (%s)\n", cp.Model, why, rev.Model, effort)
+		r.Used = func() string { return rev.Model + " (" + cp.Model + " through Copilot is unavailable: " + why + ")" }
+		return r, nil
+	}
+	via, used, failed := cp.Model+" via Copilot", false, ""
+	r.Model = via
+	r.Used = func() string {
+		switch {
+		case failed == "":
+			return via
+		case used:
+			return via + ", then " + rev.Model + " (the Copilot route failed: " + failed + ")"
+		}
+		return rev.Model + " (the Copilot route failed: " + failed + ")"
+	}
+	r.Complete = func(ctx context.Context, req models.Request) (models.Response, error) {
+		if failed == "" {
+			resp, err := call(ctx, verbs.HostCopilot, req)
+			if err == nil {
+				err = models.ValidReply(resp.Text, req.Format)
+			}
+			if err == nil || errors.Is(err, models.ErrBudget) {
+				used = used || err == nil
+				return resp, err
+			}
+			failed = strings.SplitN(err.Error(), "\n", 2)[0]
+			if len(failed) > 160 {
+				failed = failed[:160] + "…"
+			}
+			fmt.Fprintf(e.Err, "ui-review: the Copilot route (%s) failed: %s; lane A falls back to %s (%s)\n", cp.Model, failed, rev.Model, effort)
+		}
+		return call(ctx, verbs.DirectHost, req)
+	}
+	return r, nil
 }
 
 // review runs both lanes on the PR's states and keeps the critique and the
@@ -186,7 +253,7 @@ func (e *Env) review(ctx context.Context, n int, deep bool) (*uireview.Critique,
 		return nil, "", err
 	}
 	defer done()
-	r, err := e.reviewer(ctx, b, story, deep)
+	r, err := e.reviewer(ctx, b, story, deep, "")
 	if err != nil {
 		return nil, "", err
 	}

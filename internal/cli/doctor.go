@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -20,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func init() { register("doctor", runDoctor) }
@@ -29,8 +32,8 @@ var originRepo = regexp.MustCompile(`github\.com[:/]([A-Za-z0-9-]+/[A-Za-z0-9._-
 // probe builds the doctor probe for this invocation.
 func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p := &doctor.Probe{
-		Root: config.RepoRoot(e.Dir), Getenv: e.Getenv, LookPath: e.lookPath(), Exec: e.exec(), Combined: e.Exec,
-		Secrets: e.SecretStore(), Version: e.Build.Version, Host: e.Host, TracePath: e.TracePath(), Repo: e.Repo,
+		Root: config.RepoRoot(e.Dir), CI: e.CI || config.InCI(e.Getenv), Getenv: e.Getenv, LookPath: e.lookPath(), Exec: e.exec(), Combined: e.Exec,
+		Secrets: e.SecretStore(), Version: e.Build.Version, Host: e.Host, TracePath: e.TracePath(), Repo: e.Repo, Verbose: e.Verbose, Now: e.Now,
 	}
 	if p.Combined == nil {
 		p.Combined = agentenv.CombinedExec
@@ -38,6 +41,7 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p.Config, p.ConfigErr = e.Config()
 	r := e.Resolver()
 	p.Human = r.Human
+	p.CursorMCPHuman = e.cursorMCPResolver().Human
 	p.WhoAmI = func(ctx context.Context, t identity.Token) (identity.User, error) {
 		return identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), t)
 	}
@@ -51,8 +55,34 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p.Integration = func(ctx context.Context, name string) (integrations.Scope, error) {
 		return providers.Check(ctx, e.integrationDeps(p.Repo), name)
 	}
+	p.Capabilities = func(ctx context.Context, name string) ([]integrations.Check, error) {
+		return providers.Capabilities(ctx, e.integrationDeps(p.Repo), name)
+	}
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
+	}
+	if p.Root != "" {
+		_, ok, err := hosts.ReadLock(p.Root)
+		switch found := hosts.AayudhaConfig(p.Root); {
+		case err == nil && ok:
+			p.HostConfig = e.hostConfigDrift
+		case len(found) > 0:
+			// The lock says what install wrote; without it, aayudha's entries cannot be checked.
+			if err == nil {
+				err = errors.New(hosts.LockPath + " is missing")
+			}
+			p.HostConfig = func(context.Context) ([]string, error) {
+				return nil, fmt.Errorf("%s carry aayudha's hooks or MCP server, but %w: run `aayu install --apply` to rewrite them", strings.Join(found, ", "), err)
+			}
+		}
+	}
+	p.Reachable = func(ctx context.Context) []identity.Reach { return e.reachable(ctx, p.Repo) }
+	p.Agent = e.agentSignal()
+	// Copilot's stored login is not readable, and a data-residency tenant has
+	// its own endpoint: then aayu does not ask, rather than send its token to
+	// the public one.
+	if hosts.CopilotToken(e.Getenv) != "" && hosts.CopilotOnGitHubCom(e.Getenv) {
+		p.CopilotModels = e.copilotEnabledModels
 	}
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
@@ -220,4 +250,43 @@ func renderDoctorHuman(p *ui.Printer, rs []doctor.Result) {
 	}
 	p.Printf("%s", p.Table([]string{"Status", "Check", "Detail"}, rows))
 	p.Println(fmt.Sprintf("%d pass, %d warn, %d fail, %d not yet available", tally[doctor.Pass], tally[doctor.Warn], tally[doctor.Fail], tally[doctor.NA]))
+}
+
+// hostConfigDrift plans aayu install as this binary would run it and names
+// the executable host config files that would change.
+func (e *Env) hostConfigDrift(ctx context.Context) ([]string, error) {
+	o, err := e.installOptions()
+	if err != nil {
+		return nil, err
+	}
+	if o.Binary, err = e.binaryPath(ctx); err != nil {
+		return nil, err
+	}
+	res, err := hosts.Plan(o)
+	if err != nil {
+		return nil, err
+	}
+	return append(hosts.ConfigDrift(res.Edits), res.Unmanaged...), nil
+}
+
+// copilotEnabledModels asks Copilot which models the account it signs in with may
+// pick. The token goes only to Copilot's own endpoint.
+func (e *Env) copilotEnabledModels(ctx context.Context) (map[verbs.Family][]string, error) {
+	tok := hosts.CopilotToken(e.Getenv)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hosts.CopilotModelsURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := e.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", hosts.CopilotModelsURL, resp.Status)
+	}
+	return hosts.CopilotFamilies(resp.Body)
 }

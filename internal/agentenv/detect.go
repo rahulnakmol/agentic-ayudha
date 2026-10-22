@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,11 +29,60 @@ type Agent struct {
 	Name        string   `json:"name"`
 	CLI         string   `json:"cli,omitempty"` // the CLI's path; "" when not installed
 	Version     string   `json:"version,omitempty"`
-	SignedIn    bool     `json:"signed_in"`
+	Warnings    []string `json:"warnings,omitempty"` // what the CLI printed beside its version, such as a stderr warning
+	SignedIn    bool     `json:"signed_in"`          // the CLI can answer here: signed in, or (Codex) a model provider with its own credentials
+	Via         string   `json:"via,omitempty"`      // how it answers when that is not its own sign-in: "the model provider <id>"
 	Cloud       bool     `json:"cloud"`
 	CloudDetail string   `json:"cloud_detail"`
 	Install     []string `json:"install,omitempty"`
 	SignIn      []string `json:"sign_in,omitempty"`
+}
+
+// codexProvider reports whether a Codex that is not signed in answers through
+// its configured model provider (Appendix B D-5.5c.24). `codex login status`
+// knows only Codex's own sign-in, and a wrapper may point Codex at another
+// CODEX_HOME, so aayu asks Codex itself: `codex doctor --json` resolves the
+// configuration the way `codex exec` does, and its auth.credentials check is
+// ok when the active provider needs no OpenAI sign-in and has what it needs
+// (an auth command, or its env_key set). A credential in an environment
+// variable other than CODEX_API_KEY does not count: a local receiver's
+// scrubbed environment never passes a model provider's key (D-5.5c.5).
+func codexProvider(ctx context.Context, p Probe, cli string) (bool, string) {
+	c, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := p.Exec(c, p.Root, cli, "doctor", "--json")
+	if err != nil && out == "" {
+		return false, ""
+	}
+	var report struct {
+		Checks map[string]struct { // by check ID
+			Status  string         `json:"status"`
+			Details map[string]any `json:"details"`
+		} `json:"checks"`
+	}
+	// Codex may print warnings before the report.
+	if i := strings.Index(out, "\n{"); i >= 0 && !strings.HasPrefix(out, "{") {
+		out = out[i+1:]
+	}
+	if json.Unmarshal([]byte(out), &report) != nil {
+		return false, ""
+	}
+	provider, ok := "", false
+	for id, ch := range report.Checks {
+		detail := func(k string) string { v, _ := ch.Details[k].(string); return v }
+		switch id {
+		case "config.load":
+			provider = detail("model provider")
+		case "auth.credentials":
+			env := detail("provider auth env var")
+			ok = ch.Status == "ok" && detail("model provider requires OpenAI auth") == "false" &&
+				(env == "" || strings.HasPrefix(env, "CODEX_API_KEY "))
+		}
+	}
+	if !ok || provider == "" {
+		return false, ""
+	}
+	return true, "the model provider " + provider
 }
 
 // CombinedExec runs a command for Detect: combined output, error on a nonzero exit.
@@ -47,6 +97,8 @@ func CombinedExec(ctx context.Context, dir, name string, args ...string) (string
 // nothing over the network itself: PATH lookups, `--version`, each CLI's
 // local sign-in status, aayu's secret store and config, and the committed
 // verification record (for the Amp project). Each probe gets five seconds.
+// One exception: a Codex that is not signed in is asked `codex doctor --json`,
+// which also checks that its model provider's endpoint answers.
 func Detect(ctx context.Context, p Probe) []Agent {
 	if p.Getenv == nil {
 		p.Getenv = func(string) string { return "" }
@@ -68,9 +120,9 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		}
 		return ""
 	}
-	version := func(bin string) string {
+	version := func(bin string) (string, []string) {
 		out, _ := run(bin, "--version")
-		return firstLine(out)
+		return cliVersion(out)
 	}
 	var out []Agent
 
@@ -80,14 +132,19 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		SignIn:  []string{"codex login"}}
 	chatgpt := false
 	if cx.CLI != "" {
-		cx.Version = version(cx.CLI)
+		cx.Version, cx.Warnings = version(cx.CLI)
 		st, ok := run(cx.CLI, "login", "status")
 		cx.SignedIn = ok && !strings.Contains(strings.ToLower(st), "not logged in")
 		chatgpt = cx.SignedIn && strings.Contains(st, "ChatGPT")
+		if !cx.SignedIn {
+			cx.SignedIn, cx.Via = codexProvider(ctx, p, cx.CLI)
+		}
 	}
 	switch {
 	case cx.CLI == "":
 		cx.CloudDetail = "the codex CLI is not installed; Codex cloud hand-offs go through `codex cloud exec`"
+	case cx.Via != "":
+		cx.CloudDetail = "codex runs through " + cx.Via + "; cloud tasks need a ChatGPT login"
 	case !cx.SignedIn:
 		cx.CloudDetail = "codex is not signed in; cloud tasks need a ChatGPT login"
 	case !chatgpt:
@@ -104,7 +161,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		Install: []string{"curl https://cursor.com/install -fsS | bash"},
 		SignIn:  []string{"cursor-agent login"}}
 	if cu.CLI != "" {
-		cu.Version = version(cu.CLI)
+		cu.Version, cu.Warnings = version(cu.CLI)
 		st, ok := run(cu.CLI, "status")
 		cu.SignedIn = ok && st != "" && !strings.Contains(strings.ToLower(st), "not logged in")
 	}
@@ -125,7 +182,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		SignIn:  []string{"claude auth login"}}
 	method := ""
 	if cl.CLI != "" {
-		cl.Version = version(cl.CLI)
+		cl.Version, cl.Warnings = version(cl.CLI)
 		if st, _ := run(cl.CLI, "auth", "status", "--json"); strings.Contains(st, "{") {
 			var a struct {
 				LoggedIn   bool   `json:"loggedIn"`
@@ -153,7 +210,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		Install: []string{"curl -fsSL https://ampcode.com/install.sh | bash"},
 		SignIn:  []string{"amp login"}}
 	if am.CLI != "" {
-		am.Version = version(am.CLI)
+		am.Version, am.Warnings = version(am.CLI)
 		st, ok := run(am.CLI, "account", "list")
 		am.SignedIn = p.Getenv("AMP_API_KEY") != "" || (ok && st != "" && !strings.Contains(st, "No saved accounts"))
 	}
@@ -179,7 +236,25 @@ func Detect(ctx context.Context, p Probe) []Agent {
 	return out
 }
 
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(l)
+var (
+	versionLine = regexp.MustCompile(`\d+\.\d+`)
+	warningLine = regexp.MustCompile(`(?i)^(warning|warn|error|note)\b`)
+)
+
+// cliVersion splits a CLI's --version output, stdout and stderr together,
+// into its version line and the other lines it printed: Codex can print
+// "WARNING: proceeding, even though we could not create PATH aliases: …"
+// on stderr before its version.
+func cliVersion(out string) (string, []string) {
+	version, rest := "", []string(nil)
+	for _, l := range strings.Split(out, "\n") {
+		switch l = strings.TrimSpace(l); {
+		case l == "":
+		case version == "" && versionLine.MatchString(l) && !warningLine.MatchString(l):
+			version = l
+		default:
+			rest = append(rest, l)
+		}
+	}
+	return version, rest
 }

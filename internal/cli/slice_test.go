@@ -53,7 +53,7 @@ func TestSlice(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	feature := featureIssue(t, g, "slice/proof-retention-6-layer/github/repos/o/r/issues/40.json") // #1
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}
 	draft := func(edit func(*planning.SliceDraft)) string {
 		return evalDraft(t, "slice/proof-retention-6-layer/output/slice.json", func(d *planning.SliceDraft) { d.Feature = feature.Number; edit(d) })
 	}
@@ -159,7 +159,7 @@ func TestPlan(t *testing.T) {
 	story.Parent, feature.Subs = feature.Number, []int{2}
 	dir, bare := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	draft := func(edit func(*planning.PlanDraft)) string {
 		return evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) { d.Story = story.Number; edit(d) })
 	}
@@ -187,15 +187,28 @@ func TestPlan(t *testing.T) {
 			t.Errorf("%s: exit %d, want 4 with %q:\n%s", name, code, tc.want, out)
 		}
 	}
-	code, out := plan(draft(func(*planning.PlanDraft) {}), "--create")
+	// A product with SLOs needs a rollout that watches one of them (Decision #324).
+	_ = os.MkdirAll(filepath.Join(dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "ops", "slos.toml"), []byte("version = 1\n[[slo]]\nname = \"config-load\"\nservice = \"app\"\njourney = \"Load my settings\"\nsli = \"availability\"\nobjective = 99.9\nwindow = \"28d\"\n"), 0o644)
+	if code, out := plan(draft(func(*planning.PlanDraft) {})); code != ExitBlocked || !strings.Contains(out, "the product has SLOs (config-load), so the plan needs a rollout") {
+		t.Fatalf("no rollout: %d %s", code, out)
+	}
+	if code, out := plan(draft(func(d *planning.PlanDraft) {
+		d.Rollout = &planning.Rollout{Watch: []string{"the error rate"}, RollbackTrigger: "errors", Rollback: "revert"}
+	})); code != ExitBlocked || !strings.Contains(out, "rollout: watch at least one SLO by name (config-load)") {
+		t.Fatalf("a rollout watching no SLO: %d %s", code, out)
+	}
+	code, out := plan(draft(func(d *planning.PlanDraft) {
+		d.Rollout = &planning.Rollout{Flag: "none: a one-time migration", Watch: []string{"config-load burn rate"}, RollbackTrigger: "config-load 1h burn rate above 14.4", Rollback: "the down migration"}
+	}), "--create")
 	if code != 0 || !strings.Contains(out, "EM plan-time review required (never layers L07)") || !strings.Contains(out, "wrote specs/2/plan.json") {
 		t.Fatalf("plan: %d %s", code, out)
 	}
 	var rec PlanRecord
-	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec); err != nil || !rec.Review.Required || rec.Review.ApprovedBy != "" || len(rec.Checkpoints) != 1 {
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec); err != nil || !rec.Review.Required || rec.Review.ApprovedBy != "" || len(rec.Checkpoints) != 1 || rec.Rollout == nil {
 		t.Fatalf("plan record: %v %+v", err, rec)
 	}
-	if code, _, errOut := run(t, env, opts, "plan", "2", "--approve", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+	if code, _, errOut := run(t, env, opts, "plan", "2", "--approve", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("approve by an agent: %d %s", code, errOut)
 	}
 	human := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
@@ -206,7 +219,7 @@ func TestPlan(t *testing.T) {
 	if code, _, errOut := run(t, human, opts, "plan", "2", "--approve", "--solo-bypass", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "pass one") {
 		t.Fatalf("approve and bypass together: %d %s", code, errOut)
 	}
-	if code, _, errOut := run(t, env, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+	if code, _, errOut := run(t, env, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("bypass by an agent: %d %s", code, errOut)
 	}
 	if code, _, errOut := run(t, human, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, `post a comment on the story starting "Solo-mode bypass:"`) {
@@ -248,7 +261,7 @@ func TestSliceSources(t *testing.T) {
 	const fixture = "slice/proof-retention-6-layer/github/repos/o/r/issues/40.json"
 	feature := featureIssue(t, g, fixture) // #1
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}
 
 	code, out, errOut := run(t, env, opts, "slice", "1", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "#1: Feature #1, footprint L02, L03, L04, L06, L07, L09 from expected paths ") ||
@@ -306,7 +319,7 @@ func TestSliceText(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	feature := featureIssue(t, g, "slice/proof-retention-6-layer/github/repos/o/r/issues/40.json") // #1
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}
 	draft := func(edit func(*planning.SliceDraft)) string {
 		return evalDraft(t, "slice/proof-retention-6-layer/output/slice.json", func(d *planning.SliceDraft) { d.Feature = feature.Number; edit(d) })
 	}
@@ -360,7 +373,7 @@ func TestPlanFootprint(t *testing.T) {
 	}
 	dir, bare := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	draft := func(n int) string {
 		return evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) { d.Story = n })
 	}
@@ -429,13 +442,13 @@ func TestPlanApprove(t *testing.T) {
 	dir, bare := ledgerCheckout(t)
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
 	human := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 
 	// A review (--approve) and a solo-mode bypass of one (--solo-bypass) both need a plan, a ledger, and a human.
 	root := t.TempDir()
 	git(t, root, "init", "--quiet", "--bare", "origin.git")
 	git(t, root, "clone", "--quiet", "origin.git", "work")
-	noLedger := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: filepath.Join(root, "work")}
+	noLedger := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: filepath.Join(root, "work")}
 	for _, flag := range []string{"--approve", "--solo-bypass"} {
 		if code, _, errOut := run(t, human, opts, "plan", "2", flag, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no plan on the ledger") {
 			t.Fatalf("%s without a plan: %d %s", flag, code, errOut)

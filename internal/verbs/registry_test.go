@@ -7,15 +7,19 @@ import (
 	"testing"
 )
 
-// wantVerbs is the verb list from docs/BUILD-PLAN.md V7 / WP0.3, in plan order.
-var wantVerbs = strings.Fields(`grill slice plan decide triage build verify inspect ship release proof ready
+// wantVerbs is the verb list from docs/BUILD-PLAN.md V7 / WP0.3, in plan order, with counsel (Story #478) after decide,
+// then chart, the Data & AI Architect's verb (Decision #283, Appendix B S-5.1g),
+// then survey (WP5.9, Decision #287), then the Production Engineer's verbs (WP5.10, Decision #324), then scope (v0.3.0);
+// brain, the product brain (v0.3.0), follows triage among the Product Strategist's verbs.
+var wantVerbs = strings.Fields(`grill slice plan decide counsel triage brain build verify inspect ship release proof ready
 research wireframe mockup prototype review polish baseline experiment readout respond status audit retro
-measure evolve brief tell init install doctor`)
+measure evolve brief tell init install doctor chart survey investigate slo runbook scope`)
 
 // wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order,
-// then the three WP1.1b adds by founder request (Appendix B S-1.1b).
+// then the three WP1.1b adds by founder request (Appendix B S-1.1b), with the
+// founder's inbox (Story #431) before completion.
 var wantPlumbing = strings.Fields(`config auth actions models mcp self-update upgrade version halt resume gc
-uninit hook seat lfs-agent next tour completion`)
+uninit hook seat lfs-agent next tour inbox completion`)
 
 func names(cs []Command) []string {
 	out := make([]string, len(cs))
@@ -32,14 +36,14 @@ func TestRegistry(t *testing.T) {
 		name  string
 		check func() error
 	}{
-		{"32 verbs in plan order", func() error {
-			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 32 {
+		{"32 verbs in plan order with counsel after decide, then chart, survey, and the Production Engineer's", func() error {
+			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 40 {
 				return fmt.Errorf("verbs = %v, want %v", got, wantVerbs)
 			}
 			return nil
 		}},
-		{"15 plumbing commands in plan order, then the 3 of WP1.1b", func() error {
-			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 18 {
+		{"15 plumbing commands in plan order, then the 3 of WP1.1b and inbox", func() error {
+			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 19 {
 				return fmt.Errorf("plumbing = %v, want %v", got, wantPlumbing)
 			}
 			return nil
@@ -86,7 +90,7 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"12 seats with unique IDs", func() error {
+		{"14 seats with unique IDs (the thirteenth is Decision #283, the fourteenth Decision #324)", func() error {
 			ids := make([]string, len(Seats))
 			for i, s := range Seats {
 				ids[i] = string(s.ID)
@@ -94,8 +98,8 @@ func TestRegistry(t *testing.T) {
 					return fmt.Errorf("seat %q has no name", s.ID)
 				}
 			}
-			if len(Seats) != 12 {
-				return fmt.Errorf("%d seats, want 12", len(Seats))
+			if len(Seats) != 14 {
+				return fmt.Errorf("%d seats, want 14", len(Seats))
 			}
 			return unique(ids)
 		}},
@@ -113,6 +117,12 @@ func TestRegistry(t *testing.T) {
 				if l.Name == "" || len(l.Paths) == 0 {
 					return fmt.Errorf("layer %s needs a name and at least one path glob", l.ID)
 				}
+			}
+			return nil
+		}},
+		{"the integration adapters and their host-call guard are contracts, L06 (Decision #449)", func() error {
+			if l, _ := FindLayer(L06); !slices.Contains(l.Paths, "internal/integrations/**") {
+				return fmt.Errorf("L06 paths %v lack internal/integrations/**", l.Paths)
 			}
 			return nil
 		}},
@@ -229,26 +239,38 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"every lane has a default per host and adversarial lanes differ from the builder family", func() error {
+		{"every lane has a default per host and plan, and adversarial lanes differ from the builder family", func() error {
 			build, _ := FindLane(LaneBuild)
 			for _, l := range Lanes {
 				for _, h := range Hosts {
-					d, ok := defaultFor(l, h.ID)
-					if !ok || d.Model == "" || d.Family == "" {
-						return fmt.Errorf("lane %s has no default for host %s", l.ID, h.ID)
+					plans := []string{""}
+					if h.ID == HostCursor {
+						plans = []string{PlanX, PlanLegacy}
 					}
-					if d.Family != FamilyHostManaged && (d.ID == "" || FamilyOf(d.ID) != d.Family) {
-						return fmt.Errorf("lane %s on %s: model ID %q does not belong to family %s", l.ID, h.ID, d.ID, d.Family)
-					}
-					if d.EscalationID != "" && FamilyOf(d.EscalationID) != d.Family {
-						return fmt.Errorf("lane %s on %s: escalation %q changes family", l.ID, h.ID, d.EscalationID)
-					}
-					if slices.Contains(h.Excludes, d.Family) {
-						return fmt.Errorf("lane %s on %s: default family %s is excluded on that host", l.ID, h.ID, d.Family)
-					}
-					b, _ := defaultFor(build, h.ID)
-					if l.Adversarial && d.Family != FamilyHostManaged && d.Family == b.Family {
-						return fmt.Errorf("lane %s on %s uses builder family %s", l.ID, h.ID, d.Family)
+					for _, plan := range plans {
+						d, ok := defaultFor(l, h.ID, plan)
+						// Composer's lineage is unpublished (Decision #469,
+						// detail 10): its family is unknown, and a note says so.
+						unknown := d.Family == "" && FamilyOf(d.ID) == "" && d.Note != ""
+						if !ok || d.Model == "" || d.Family == "" && !unknown {
+							return fmt.Errorf("lane %s has no default for host %s (plan %q)", l.ID, h.ID, plan)
+						}
+						if d.Family != FamilyHostManaged && !unknown && (d.ID == "" || FamilyOf(d.ID) != d.Family) {
+							return fmt.Errorf("lane %s on %s: model ID %q does not belong to family %s", l.ID, h.ID, d.ID, d.Family)
+						}
+						if d.EscalationID != "" && FamilyOf(d.EscalationID) != d.Family {
+							return fmt.Errorf("lane %s on %s: escalation %q changes family", l.ID, h.ID, d.EscalationID)
+						}
+						if slices.Contains(h.Excludes, d.Family) {
+							return fmt.Errorf("lane %s on %s: default family %s is excluded on that host", l.ID, h.ID, d.Family)
+						}
+						// A plan that includes one family reviews within it,
+						// with another model of the family, labelled same-family
+						// (Decision #469, detail 7): only Cursor's x plan.
+						b, _ := defaultFor(build, h.ID, plan)
+						if l.Adversarial && d.Family != FamilyHostManaged && d.Family == b.Family && (plan != PlanX || d.ID == b.ID) {
+							return fmt.Errorf("lane %s on %s uses builder family %s", l.ID, h.ID, d.Family)
+						}
 					}
 				}
 			}
@@ -264,9 +286,9 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
-func defaultFor(l Lane, h HostID) (ModelDefault, bool) {
+func defaultFor(l Lane, h HostID, plan string) (ModelDefault, bool) {
 	for _, d := range l.Defaults {
-		if d.Host == h {
+		if d.Host == h && (d.Plan == "" || d.Plan == plan) {
 			return d, true
 		}
 	}

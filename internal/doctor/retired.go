@@ -14,7 +14,7 @@ import (
 // this version does not, with the reason; init offers to remove them and doctor
 // warns while one is present.
 var RetiredWorkflows = map[string]string{
-	"aayudha-triage.yml": "classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention",
+	"aayudha-triage.yml": "classifies intake issues with a model in CI, and product CI never calls a model; triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention",
 }
 
 // Retired is a retired workflow present in a checkout.

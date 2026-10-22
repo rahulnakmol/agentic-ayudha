@@ -1,2 +1,2 @@
 Admins delete user accounts
-Only an admin may delete a user account with `DELETE /admin/users/{id}`. Anyone else gets 403.
+Only an admin may delete a user account with `DELETE /admin/users/{id}`. A request without a signed-in user gets 401; a signed-in user who is not an admin gets 403.

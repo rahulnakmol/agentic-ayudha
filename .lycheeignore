@@ -1,0 +1,4 @@
+# Links lychee (the CI docs job) does not check. Recorded tell copy in the eval fixtures (evals/cases/tell, D-7.5b)
+# links into a fictional repository and that repository's docs pages.
+^https://github\.com/acme/benefits-qa/
+^file://.*/evals/cases/tell/[^/]+/output/

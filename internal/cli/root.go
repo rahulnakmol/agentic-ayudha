@@ -33,6 +33,7 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 		fmt.Fprintf(io.Err, "aayu: %v\n", err)
 		return ExitInternal
 	}
+	e.args = args
 	root := newRoot(e)
 	root.SetArgs(args)
 	cmd, err := root.ExecuteContextC(ctx)
@@ -123,7 +124,7 @@ Exit codes:
 	pf.BoolVar(&e.JSON, "json", false, "write machine-readable JSON to stdout")
 	pf.StringVar(&e.Repo, "repo", "", "GitHub repository as owner/name (default: the current checkout's origin)")
 	pf.StringVar(&e.Host, "host", "", "host running aayudha: "+strings.Join(hosts, ", ")+" (default: detected)")
-	pf.BoolVar(&e.Yes, "yes", false, "answer yes to confirmations (human only; refused when AAYU_AGENT=1)")
+	pf.BoolVar(&e.Yes, "yes", false, "answer yes to confirmations (human only, on a terminal; refused for agent lanes)")
 	pf.BoolVarP(&e.Verbose, "verbose", "v", false, "write diagnostics to stderr")
 	pf.BoolVar(&e.CI, "ci", false, "running in CI: accept GITHUB_TOKEN as the human token; bot writes need AAYU_BOT_TOKEN")
 	pf.StringArrayVar(&e.Set, "set", nil, "override a config value for this run, as key=value (repeatable)")
@@ -131,8 +132,8 @@ Exit codes:
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		e.startTrace(cmd)
-		if e.Yes && e.Agent() {
-			return Errorf(ExitBlocked, "--yes is for humans only and is refused when AAYU_AGENT=1")
+		if sig := e.agentSignal(); e.Yes && sig != "" {
+			return Errorf(ExitBlocked, "--yes is for humans only and is refused for an agent lane (%s)", sig)
 		}
 		if e.Repo != "" && !repoPattern.MatchString(e.Repo) {
 			return Errorf(ExitUsage, "--repo %q: want owner/name", e.Repo)
@@ -148,7 +149,7 @@ Exit codes:
 				return err
 			}
 			if root := config.RepoRoot(e.Dir); root != "" {
-				if err := upgrade.Check(root, upgrade.Current); err != nil {
+				if err := upgrade.Check(root, upgrade.Current, e.CI || config.InCI(e.Getenv)); err != nil {
 					return Errorf(ExitUsage, "%s: refused: %v (read-only commands still work)", c.Name, err)
 				}
 			}

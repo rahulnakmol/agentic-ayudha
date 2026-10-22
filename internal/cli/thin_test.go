@@ -8,13 +8,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -30,7 +34,7 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	git(t, dir, "config", "user.name", "Builder")
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_MODEL": "claude-opus-5-5"}
-	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	opts = Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -67,6 +71,14 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	if !strings.Contains(pr.Body, "Refs #2") || pr.Base.Ref != "dev" {
 		t.Fatalf("PR: %+v", pr)
 	}
+	// Under the CI review, the default, the merge gate reviews the head: the
+	// push asks no app and no person.
+	g.Mu.Lock()
+	asked := slices.ContainsFunc(g.Issues[res.PR].Comments, func(c *fake.Comment) bool { return strings.Contains(c.Body, inspect.RequestMarker) })
+	g.Mu.Unlock()
+	if asked || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "CI review reviews") }) {
+		t.Fatalf("build asked for a review under the CI review: notes %v", res.Notes)
+	}
 	return g, env, opts, dir, bare, res.PR, head
 }
 
@@ -77,10 +89,16 @@ func holds(context.Context, string) (bool, string, error) { return true, "floors
 // aayudha-pack artifact (no bot App: CI could not write the ledger).
 func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check, footprint ...string) {
 	t.Helper()
-	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(2))
+	gateRunFor(t, g, dir, 2, prN, head, checks, footprint...)
+}
+
+// gateRunFor is gateRun for any story.
+func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head string, checks []proof.Check, footprint ...string) {
+	t.Helper()
+	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(story))
 	snap, _ := ready.ParseSnapshot(b)
 	files := map[string][]byte{}
-	p := &proof.Pack{Repo: "o/r", Story: 2, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
+	p := &proof.Pack{Repo: "o/r", Story: story, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
 		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks, Footprint: footprint}
 	for _, c := range snap.Criteria {
 		rel := "evidence/criterion-" + strconv.Itoa(c.N) + ".jsonl"
@@ -93,7 +111,7 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 	p.Artifacts = append(p.Artifacts, proof.NewArtifact("media/criterion-1.png", "screenshot", files["media/criterion-1.png"]))
 	p.Criteria[0].Evidence = append(p.Criteria[0].Evidence, "media/criterion-1.png")
 	tmp := t.TempDir()
-	if err := proof.WriteLocal(filepath.Join(tmp, "2"), p, files); err != nil {
+	if err := proof.WriteLocal(filepath.Join(tmp, strconv.Itoa(story)), p, files); err != nil {
 		t.Fatal(err)
 	}
 	var zb bytes.Buffer
@@ -112,9 +130,24 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	id := int64(9000 + len(g.Runs))
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
 	g.Artifacts[id] = []fake.ArtifactZip{{ID: id + 1, Name: "aayudha-pack", Zip: zb.Bytes()}}
 	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
+}
+
+// closedPullLists counts the list requests for merged PRs, which only the
+// autonomy streak makes in ship.
+func closedPullLists(g *fake.GitHub) int {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	n := 0
+	for _, r := range g.Requests {
+		if r.Method == "GET" && r.Path == "/repos/o/r/pulls" {
+			n++
+		}
+	}
+	return n
 }
 
 func review(login, typ, state, commit string) fake.Review {
@@ -231,6 +264,7 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("ship with skipped: mobile: %d %s", code, out)
 	}
 	// The gate re-ran on a new head after a waiver Decision was filed under the story.
+	first := head
 	git(t, BuildWorktree(dir, 2), "commit", "--quiet", "--allow-empty", "-m", "chore: re-run the gate")
 	head = git(t, BuildWorktree(dir, 2), "rev-parse", "HEAD")
 	g.Mu.Lock()
@@ -244,17 +278,60 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): pb}}); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, `post a PR comment starting "Solo-mode bypass:"`) {
+	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+` first: a PR comment starting "Solo-mode bypass:"`) {
 		t.Fatalf("solo bypass without the comment: %d %s", code, out)
 	}
-	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("solo bypass by an agent: %d %s", code, errOut)
 	}
 	g.Mu.Lock()
-	g.Issues[prN].Comments = append(g.Issues[prN].Comments, &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story."})
-	g.Issues[prN].Comments[0].User.Login, g.Issues[prN].Comments[0].User.Type = "founder", "User"
+	// Bug #799: a bypass written for an earlier head is not one for this head.
+	stale := &fake.Comment{ID: 76, Body: "Solo-mode bypass: one human, no bot App; the merge gate is green on the head `" + short(first) + "`."}
+	stale.User.Login, stale.User.Type = "founder", "User"
+	g.Issues[prN].Comments = append(g.Issues[prN].Comments, stale)
 	g.Mu.Unlock()
+	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+" first") {
+		t.Fatalf("solo bypass with a comment for an earlier head: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	bypass := &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story at " + head[:12] + "."}
+	bypass.User.Login, bypass.User.Type, bypass.HTMLURL = "founder", "User", "https://github.com/o/r/pull/"+strconv.Itoa(prN)+"#issuecomment-77"
+	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
+	g.Mu.Unlock()
+	// Bug #170: with every solo-mode condition met, an agent running ship --solo-bypass through its host's shell
+	// with the founder's token (no AAYU_AGENT) never completes it, even on a terminal: it waits for a person's
+	// device code (Story #481), and when none comes nothing is merged; with no terminal and no marker, the same.
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	g.Mu.Unlock()
+	agentOpts := opts
+	agentOpts.DevicePoll = time.Millisecond
+	for host, marker := range hostShells {
+		agentEnv := maps.Clone(env)
+		maps.Copy(agentEnv, marker)
+		if code, _, errOut := run(t, agentEnv, agentOpts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "was not approved: the request was denied") {
+			t.Fatalf("solo bypass from a %s shell: %d %s", host, code, errOut)
+		}
+	}
+	noTTY := agentOpts
+	noTTY.IsTerminal = nil
+	if code, _, errOut := run(t, env, noTTY, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "was not approved") {
+		t.Fatalf("solo bypass with no terminal and no marker: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if merged {
+		t.Fatal("a refused solo bypass merged the PR")
+	}
+	// A person in a terminal outside any host: accepted as before, without
+	// reading the merged-PR history for the streak, which cannot change a
+	// settled pass (#701).
+	g.Reset()
 	code, out := ship("--solo-bypass")
+	if n := closedPullLists(g); n != 0 {
+		t.Errorf("a solo-bypass ship read the merged-PR history for the streak: %d list(s)", n)
+	}
 	if code != 0 || !strings.Contains(out, "human pass: solo-bypass by founder") {
 		t.Fatalf("solo bypass: %d %s", code, out)
 	}
@@ -266,7 +343,7 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("Complete section:\n%s", body)
 	}
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
-	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
+	if !strings.Contains(rec, `"skipped": "the human pass is settled: solo-bypass"`) || !strings.Contains(rec, `issuecomment-77"`) || !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
 		t.Fatalf("ship record: %s", rec)
 	}
 }

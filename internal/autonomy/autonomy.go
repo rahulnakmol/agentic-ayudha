@@ -33,6 +33,11 @@ const (
 	LabelAgentAuthored = "agent-authored"
 	LabelHumanFallback = "identity:human-fallback"
 	CheckpointTrailer  = "Aayudha-Checkpoint:"
+	// HostTrailer and ModelTrailer mark a commit an agent made outside aayu
+	// build, as build's checkpoints carry them too: the host and the model that
+	// wrote it, self-reported like the agent-authored label.
+	HostTrailer  = "Aayudha-Host:"
+	ModelTrailer = "Aayudha-Model:"
 )
 
 // Review is a PR review.
@@ -54,8 +59,13 @@ type Commit struct {
 
 // Comment is a PR conversation comment.
 type Comment struct {
-	Body string    `json:"body"`
-	At   time.Time `json:"at"`
+	Body  string    `json:"body"`
+	At    time.Time `json:"at"`
+	Login string    `json:"login,omitempty"` // the author; empty in a snapshot taken before it was recorded
+	// Updated is the comment's last edit; zero in a snapshot taken before
+	// it was recorded. A comment edited in place (inspect's) holds the
+	// state as of then.
+	Updated time.Time `json:"updated,omitzero"`
 }
 
 // PR is a merged pull request with what the corrections need.
@@ -66,6 +76,8 @@ type PR struct {
 	Author    string    `json:"author"`
 	AuthorBot bool      `json:"author_bot"`
 	Labels    []string  `json:"labels"`
+	Head      string    `json:"head,omitempty"`
+	Rung      string    `json:"rung,omitempty"` // the review ladder's rung at head (GateRung), "" when unknown
 	MergedAt  time.Time `json:"merged_at"`
 	MergeSHA  string    `json:"merge_sha"`
 	Files     []string  `json:"files"`
@@ -135,7 +147,7 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 			}
 		}
 		for _, c := range p.Commits {
-			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !strings.Contains(c.Message, CheckpointTrailer) {
+			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !agentCommit(c.Message) {
 				who := c.Login
 				if who == "" {
 					who = "an unlinked author"
@@ -163,6 +175,69 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 		}
 	}
 	return out
+}
+
+var (
+	hostTrailerLine  = regexp.MustCompile(`(?m)^` + HostTrailer + `(.*)$`)
+	modelTrailerLine = regexp.MustCompile(`(?m)^` + ModelTrailer + `(.*)$`)
+	// Amp writes this trailer on the commits of a thread.
+	ampThreadLine = regexp.MustCompile(`(?m)^Amp-Thread-ID: https://ampcode\.com/threads/T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ \t]*$`)
+	trailerLine   = regexp.MustCompile(`^[A-Za-z0-9-]+:( |$)`)
+)
+
+// trailers is a commit message's trailer block: its last paragraph, when
+// every line of it is a "Key: value" trailer; otherwise nothing, so a line
+// quoted in the body is never read as a trailer.
+func trailers(msg string) string {
+	paras := strings.Split(strings.TrimSpace(strings.ReplaceAll(msg, "\r\n", "\n")), "\n\n")
+	last := paras[len(paras)-1]
+	if len(paras) < 2 {
+		return ""
+	}
+	for _, l := range strings.Split(last, "\n") {
+		if !trailerLine.MatchString(l) {
+			return ""
+		}
+	}
+	return last
+}
+
+// agentCommit reports whether a commit message says an agent made it: a build
+// checkpoint; or one Aayudha-Host trailer naming a known host, or an Amp
+// thread's Amp-Thread-ID trailer, with every Aayudha-Model trailer, if any,
+// naming a model of a known family. A person's follow-up commit carries none
+// of these, and a stray, empty, or unknown line counts as a person's, so it
+// stays a correction. Only the trailer block counts. Detect asks only of
+// commits on agent PRs.
+func agentCommit(msg string) bool {
+	msg = trailers(msg)
+	if strings.Contains(msg, CheckpointTrailer) {
+		return true
+	}
+	switch h := hostTrailerLine.FindAllStringSubmatch(msg, -1); {
+	case len(h) > 1:
+		return false
+	case len(h) == 1:
+		if _, ok := verbs.FindHost(verbs.HostID(oneToken(h[0][1]))); !ok {
+			return false
+		}
+	case !ampThreadLine.MatchString(msg):
+		return false
+	}
+	for _, m := range modelTrailerLine.FindAllStringSubmatch(msg, -1) {
+		if id := oneToken(m[1]); id == "" || verbs.FamilyOf(id) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// oneToken is a trailer's value when it is a single word, else "".
+func oneToken(v string) string {
+	if f := strings.Fields(v); len(f) == 1 {
+		return f[0]
+	}
+	return ""
 }
 
 func short(sha string) string {
@@ -198,14 +273,19 @@ func refers(text string, n int) bool {
 type LayerStreak struct {
 	Layer      string `json:"layer"`
 	Streak     int    `json:"streak"`
-	Merges     int    `json:"agent_merges"` // agent PRs on this layer in the scanned history
-	Never      bool   `json:"never"`        // [autonomy] never: always needs a human pass
-	Autonomous bool   `json:"autonomous"`   // streak >= threshold and not a never-layer
+	Merges     int    `json:"agent_merges"`      // agent PRs on this layer in the scanned history
+	Skipped    int    `json:"skipped,omitempty"` // agent merges since the last correction whose review was not proven (rung C or unknown), not counted
+	Never      bool   `json:"never"`             // [autonomy] never: always needs a human pass
+	Autonomous bool   `json:"autonomous"`        // streak >= threshold and not a never-layer
 	LastBreak  int    `json:"last_correction_pr,omitempty"`
 }
 
 // Streaks counts, per layer, the agent PRs on that layer merged after its
-// newest corrected agent PR. threshold is [autonomy] streak.
+// newest corrected agent PR whose review was proven (Proven: a
+// different-family or a person's review). An agent PR reviewed same-family
+// (rung C), or with no rung on record, is skipped: it neither counts nor
+// breaks the streak, though a correction on it still breaks it (Decision
+// #469, detail 8). threshold is [autonomy] streak.
 func (r Rules) Streaks(prs []PR, corrections []Correction, threshold int, never []string) []LayerStreak {
 	corrected := map[int]bool{}
 	for _, c := range corrections {
@@ -227,6 +307,10 @@ func (r Rules) Streaks(prs []PR, corrections []Correction, threshold int, never 
 			}
 			if corrected[p.Number] {
 				broken, s.LastBreak = true, p.Number
+				continue
+			}
+			if !Proven(p.Rung) {
+				s.Skipped++
 				continue
 			}
 			s.Streak++
@@ -275,6 +359,15 @@ func footprint(l verify.LayerGlobs, files []string) []string {
 // back to the registry's layer table.
 func ReadLayers(root string) verify.LayerGlobs {
 	if l := verify.ReadLayers(root); len(l) > 0 && root != "" {
+		return l
+	}
+	return LayersFrom("")
+}
+
+// LayersFrom is ReadLayers for LAYERS.md's text, read from elsewhere (a base
+// revision): the registry's layers when it names none.
+func LayersFrom(text string) verify.LayerGlobs {
+	if l := verify.ParseLayers(text); len(l) > 0 {
 		return l
 	}
 	out := verify.LayerGlobs{}

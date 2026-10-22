@@ -1,6 +1,9 @@
 # Seeded-defect PR for inspect (WP4.8b): DeleteUser forbids admins and lets everyone else delete (security).
 # Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
 # as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+# The story said "anyone else gets 403" while the handler and its test give a caller with no session 401, which every
+# reviewer rightly flagged in runs 38980397572 and 39008726458; it now says 401 for no session, 403 for a signed-in
+# non-admin, as the code and the test do (founder, 2026-10-17; Appendix B D-4.8d.8). Not yet measured.
 skill = "inspect"
 description = "DeleteUser forbids admins and lets everyone else delete (security)"
 input = "pr.diff"

@@ -23,7 +23,7 @@ func repoPersonas(t *testing.T) map[verbs.SeatID]Persona {
 	return ps
 }
 
-// TestPersonas: all twelve personas are complete, every playbook entry has a
+// TestPersonas: all fourteen personas are complete, every playbook entry has a
 // public source, and no persona text uses a word on the brand's avoid list or
 // an exclamation mark (design/brand.yaml).
 func TestPersonas(t *testing.T) {
@@ -103,7 +103,12 @@ func TestPersonaValidateRejects(t *testing.T) {
 		{"stage artefacts overlap", clone(func(p *Persona) {
 			p.Practices[0].Enterprise = Depth{Artefact: p.Practices[0].Startup.Artefact + " in full", Shape: "x"}
 		}), "stage artefacts must be distinct"},
-		{"two-word name", clone(func(p *Persona) { p.Name = "Athena Pallas" }), "want one capitalised word"},
+		{"Olympian name", clone(func(p *Persona) { p.Name = "Hermes" }), "a Greek or Roman name"},
+		{"retired Greek twin name", clone(func(p *Persona) { p.Name = "Nestor" }), "a Greek or Roman name"},
+		{"principal deity", clone(func(p *Persona) { p.Name = "Vishnu" }), "a principal deity"},
+		{"principal deity's consort", clone(func(p *Persona) { p.Name = "Lakshmi" }), "a principal deity"},
+		{"title with article", clone(func(p *Persona) { p.Title = "the Founder's Sage" }), "without a leading"},
+		{"two-word name", clone(func(p *Persona) { p.Name = "Drona Acharya" }), "want one capitalised word"},
 	}
 	for _, tt := range tests {
 		got := strings.Join(tt.p.Validate(), "\n")
@@ -111,35 +116,90 @@ func TestPersonaValidateRejects(t *testing.T) {
 			t.Errorf("%s: got %q, want it to mention %q", tt.name, got, tt.want)
 		}
 	}
+	// The founder's names for the fourteen twins (2026-10-17) all pass.
+	for _, name := range []string{"Atri", "Arjun", "Vishwa", "Shuka", "Drona", "Nakul", "Shesha", "Hanu", "Nala", "Yama", "Sanjay", "Vidhi", "Sauti", "Kuber"} {
+		if v := clone(func(p *Persona) { p.Name = name }).Validate(); len(v) > 0 {
+			t.Errorf("name %q refused: %v", name, v)
+		}
+	}
 }
 
 // TestSkillBlockVoiceAndStandard: verify is spoken by the AI Native Engineer
 // twin against the Quality Architect's standard; inspect is the EM's voice and
 // standard, executed in the review lane.
+// A title replaces the seat beside the twin's name everywhere it is introduced;
+// without one the seat name stays (D-5.1v).
+func TestPersonaTitle(t *testing.T) {
+	sage := Persona{Seat: verbs.Founder, Name: "Atri", Title: "Founder's Sage"}
+	if got := sage.Heading(); got != "Atri, the Founder's Sage" {
+		t.Errorf("Heading with a title = %q", got)
+	}
+	if got := agentsVoices(map[verbs.SeatID]Persona{verbs.Founder: sage}); !strings.Contains(got, "- **Atri**, Founder's Sage: ") {
+		t.Errorf("AGENTS.md line with a title: %q", got)
+	}
+	em := Persona{Seat: verbs.EngineeringManager, Name: "Drona"}
+	if got, role := em.Heading(), em.Role(); got != "Drona, the Engineering Manager twin" || role != "Engineering Manager" {
+		t.Errorf("without a title: Heading %q, Role %q", got, role)
+	}
+}
+
 func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	ps := repoPersonas(t)
 	v, _ := verbs.Find("verify")
 	b := ps[v.Seat].SkillBlock(v, ps[verbs.PolicyOwner(v)])
-	if !strings.Contains(b, "## Voice: Talos, the AI Native Engineer (+SRE hat) twin") ||
-		!strings.Contains(b, "Talos speaks and runs `verify` in the chore lane; the standard is Themis's, the Quality Architect's") {
+	if !strings.Contains(b, "## Voice: Nakul, the AI Native Engineer twin") ||
+		!strings.Contains(b, "Nakul speaks and runs `verify` in the chore lane; the standard is Yama's, the Quality Architect's") {
 		t.Errorf("verify block does not split voice and standard:\n%s", b)
 	}
 	in, _ := verbs.Find("inspect")
 	b = ps[in.Seat].SkillBlock(in, ps[verbs.PolicyOwner(in)])
-	if !strings.Contains(b, "`inspect` runs in the review lane; Athena owns both the voice and the standard.") {
+	if !strings.Contains(b, "`inspect` runs in the review lane; Drona owns both the voice and the standard.") {
 		t.Errorf("inspect block:\n%s", b)
 	}
-	for _, must := range []string{EvidenceRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {
+	for _, must := range []string{EvidenceRule, WritingRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {
 		if !strings.Contains(b, must) {
 			t.Errorf("inspect block lacks %q", must)
 		}
 	}
 }
 
+// TestWritingRule: the one-sentence writing rule renders wherever the evidence
+// rule does (skill block, charter, MCP prompt, AGENTS.md), reaches a generated
+// skill, and points at a reference doc that exists.
+func TestWritingRule(t *testing.T) {
+	if s, ok := strings.CutPrefix(WritingRule, "**Writing rule.** "); !ok || strings.Count(s, ". ") != 0 || !strings.HasSuffix(s, ".") {
+		t.Errorf("WritingRule is not one labelled sentence: %q", WritingRule)
+	}
+	ps := repoPersonas(t)
+	p := ps[verbs.AINativeEngineer]
+	b, _ := verbs.Find("build")
+	for name, got := range map[string]string{
+		"SkillBlock":     p.SkillBlock(b, p),
+		"CharterSection": p.CharterSection(),
+		"Prompt":         p.Prompt(config.StageStartup, "test"),
+		"agentsVoices":   agentsVoices(ps),
+	} {
+		if !strings.Contains(got, EvidenceRule+"\n\n"+WritingRule+"\n") {
+			t.Errorf("%s lacks the writing rule after the evidence rule", name)
+		}
+	}
+	root := filepath.Join("..", "..")
+	skill, err := os.ReadFile(filepath.Join(root, "skills", "build", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(skill), WritingRule) {
+		t.Error("skills/build/SKILL.md lacks the writing rule: run go generate ./...")
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "brief", "references", "writing.md")); err != nil {
+		t.Errorf("the writing rule points at a missing doc: %v", err)
+	}
+}
+
 // TestCheckGrounding: the evidence rule on a twin's output. Each case differs
 // from a passing one by the single thing the rule must catch.
 func TestCheckGrounding(t *testing.T) {
-	grounding := "Tombstone in internal/ledger/tombstone.go:12-16; LAYERS.md L07; #212; PR #219; commit `a41c9e2`; run 38259017355"
+	grounding := "Tombstone in internal/ledger/tombstone.go:12-16; LAYERS.md L07; #212; PR #219; commit `a41c9e2`; run 38259017355; infra/appinsights.bicep:12"
 	tests := []struct {
 		name, md string
 		want     string // "" passes
@@ -166,6 +226,15 @@ func TestCheckGrounding(t *testing.T) {
 		{"bold label then a claim", "**A. Add `Kind` to `Tombstone`.** Every tombstone needs a migration.", "uncited claim"},
 		{"short lead-in", "When a criterion changes stored state in L07, the plan includes:\n\n- an L07 checkpoint (#212)", ""},
 		{"long claim ending with a colon", "The ledger package already stores the kind of every purged object in a separate migration file, as follows:", "uncited claim"},
+		// Decision #283: a point marked as not evidenced is not stated as fact; its citations are still checked.
+		{"marked assumption", "Assumption: the latency budget is two seconds until the human sets one.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"marked in code or bold", "`Assumption:` the latency budget is two seconds.\n\n**Unverified:** the cost is low.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"marked unverified", "Unverified: the ledger may hold 40 000 tombstones.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"unmarked assumption", "We assume the latency budget is two seconds.\n\nThe tombstone lacks the kind (#212).", "uncited claim"},
+		{"a marked point still cites only real sources", "Assumption: the migration in #300 is small.\n\nThe tombstone lacks the kind (#212).", "cites #300"},
+		// D-5.1g.j: infrastructure files are sources too, resolved like any other path.
+		{"an infrastructure file", "Events are kept for 90 days, with no per-person delete shown (`infra/appinsights.bicep:12`).", ""},
+		{"an invented infrastructure file", "Events are kept for 90 days (`infra/logs.bicep:3`).", "cites infra/logs.bicep"},
 		{"code fences are evidence quotes", "The struct (#212):\n\n```go\ntype Tombstone struct{ SHA string } // the migration\n```", ""},
 	}
 	for _, tt := range tests {

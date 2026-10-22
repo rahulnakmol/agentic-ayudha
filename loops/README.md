@@ -1,7 +1,7 @@
 # loops
 
-Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`). Event loops (`on`, `filter`) are
-deferred to a later version (Appendix B S-7.1e): `loops.Parse` refuses them.
+Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`) or, as an event loop, when a
+GitHub event happens (`on`, `filter`; see [Event loops](#event-loops)). The first event loop is `triage-opened`.
 
 ```toml
 description = "Founder digest: the status rollup of every open Goal, paged through [notify]."
@@ -11,7 +11,7 @@ agent = false                      # needs no model and runs with the workflow t
 hosts = ["amp", "cursor"]          # optional; default amp, cursor, claude, codex (agent = false: actions)
 prompt = "…"                       # optional, agent loops: what the tool's agent does with the output
 bot = false                        # true when the command writes as the bot: an agent loop (the workflow token is not)
-setup = ["node", "pnpm"]           # optional, agent = false only: pinned tool setups, once the guard says it is due
+setup = ["node", "pnpm"]           # optional, agent = false only: pinned tool setups (node, pnpm, bun), once due
 setup_run = ["pnpm install --frozen-lockfile"]  # optional, agent = false only: the product's own commands, after setup
 ```
 
@@ -23,14 +23,102 @@ refuses a mix: `actions` or `setup` on an agent loop, and an agent tool, `bot = 
 `agent = false` loop. Here `digest` and `verify-sweep` have `agent = false`; every other loop is an agent loop.
 
 This repository's loops are also the defaults a product gets: `aayu install --loops` in a repository with no
-`loops/*.toml` writes them, without `setup` and `setup_run` (this repository's own), and renders them for every tool
-(Appendix B D-7.1g). `triage-daily` (each weekday morning) replaces the
+`loops/*.toml` writes them and renders them for every tool (Appendix B D-7.1g). This repository's own `setup` and
+`setup_run` are replaced by the product's, from its lockfile (D-7.1h): `pnpm-lock.yaml` sets up node and pnpm, `bun.lock`
+or `bun.lockb` sets up Bun, both set up all three and install with pnpm, and `package-lock.json` sets up node and runs
+`npm ci`. Each then installs the Playwright browser through the same package manager; with no lockfile there is no
+setup. `triage-daily` (09:00, 13:00, 17:00 and 21:00 each weekday) replaces the
 retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` lists every open intake issue with no
 model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed
 required check back to its builder (#231), `release-measure` (weekly) runs `measure` when a release was published
-that week, and `evolve` (monthly) takes the Feedback filed since. They do on a schedule what the deferred event loops
-did on arrival.
+that week, and `evolve` (monthly) takes the Feedback filed since. `triage-opened` triages on arrival where the tool
+has a trigger for it; `triage-daily` stays as its fallback.
+
+## Event loops
+
+An event loop starts when a GitHub event happens, in your own tool, and has no `cron`:
+
+```toml
+description = "Triage on arrival: classify each new intake issue as feedback, bug, or incident, by label only."
+command = ["triage"]               # the same command as triage-daily: it lists what to act on
+on = "issues.opened"               # the one event for now; other events can follow
+filter = { label = "intake" }      # required: the label the issue has when it opens
+prompt = "…"
+```
+
+`loops.Parse` accepts only `issues.opened`, and requires `filter.label`. It refuses `cron` with `on`, `agent = false`,
+a `{…}` subject in the command, and a host with no trigger for the event. The run does not read the event's text: the
+command lists the open intake issues, and the agent reads each one as untrusted data and changes its labels only
+(`aayu triage <n> --as`). The guard still starts every run: `aayu hook loop:triage-opened` exits 4 while the
+repository is halted and 6 while the `[budget]` breaker has paused agent lanes. Otherwise it is always due.
+
+Which tools have a trigger for an issue that opens (checked 2026-10-18):
+
+| Tool | Trigger | What `triage-opened` renders |
+|---|---|---|
+| Amp | An orb spawner: a GitHub subscription that starts a new thread in an orb for each newly opened issue, filtered by a label the issue has when it opens ([docs](https://ampcode.com/docs/github)) | `loops/amp/triage-opened.json`, the input of `create_github_subscription` (`filter_kind` `issue-opened`, `issue_label` `intake`, `destination` `new-orb`) |
+| Cursor | No issue-opened trigger. The `git_label` trigger fires when a label is added to an issue ([docs](https://cursor.com/docs/cloud-agent/automations), and the `cursor_platform_workflow` resource of the `cursor/cursor` provider) | A `git_label` trigger on issues, label `intake`, on added, in `loops/cursor/aayudha-loops.tf`, and an `/automate` prompt |
+| Claude Code | None: a routine's GitHub trigger takes pull request and release events only ([docs](https://code.claude.com/docs/en/routines)) | A note in `loops/claude/routines.md`; `triage-daily` covers it |
+| Codex | None: event tasks take GitHub pull request activity only, on the web ([docs](https://learn.chatgpt.com/docs/automations)) | A note in `loops/codex/scheduled-tasks.md`; `triage-daily` covers it |
+
+Some issues have no intake label when they open: an issue opened without a form, or through the API. No triage run
+sees them, on arrival or on the schedule: `aayu triage` lists only open issues with the `intake` label. A person adds
+the `intake` label by hand; then the next `triage-daily` run triages the issue (Cursor's label trigger starts at once;
+Amp's spawner does not, because it fires only when the issue opens). `triage-daily` also triages any intake issue that
+an event run missed. The Cursor trigger depends on GitHub's `labeled` event for the label the form adds as
+the issue opens: we expect this, but we have not seen it in a live Cursor run yet.
+
+No event loop runs in GitHub Actions, and no model key or tool token goes to Actions for one. An Amp spawner starts
+one orb for each matching issue. A flood of intake issues starts a flood of runs, each billed to you; the guard stops
+them when you run `aayu halt` or when the `[budget]` breaker trips, and you can pause the spawner in Amp.
+
+In `loops/active.json` an event loop is recorded like any loop: Amp's ID is `subscription <ID>`. `aayu doctor` shows
+it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event and has the
+scheduled loop with the same command set up, and names that loop. With no such loop set up there, it is `missing`.
+
+`build-ready` (every two hours each weekday, 09:00 to 17:00) builds what is Ready, with no person to start each build. It is an
+agent loop, and the binary decides everything except the code:
+
+1. `aayu build --next ship` lists the loop's own open pull requests, oldest first, and changes nothing. The agent runs
+   `aayu ship <pr>` on each. ship merges on proof, or refuses and says why; a pull request that needs a person waits
+   as **Ready to ship** in `aayu inbox`. The loop never passes `--solo-bypass` or `--admin` and never merges another way.
+2. `aayu build --next pick` first blocks each of the loop's claims whose lease ran out more than 4 hours ago with no
+   pull request (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Within those
+   4 hours the claim keeps its slot, so a builder that resumes keeps its story. Then it counts what the
+   loop has in flight: its open pull requests, its live claims with no pull request yet, and any Ready item with a
+   live lease (a claim another pick is still setting up). Under `[build] in_flight`
+   (default 1, so one item from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
+   open Story or Bug, `status:ready`, passes Ready with an undrifted snapshot, and has no open pull request and no
+   live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and
+   `status:in-progress`, and the loop's name on `build/<n>/state.json` on the ledger. It cuts the worktree as
+   `aayu build <n>` does. A local lock (`.aayudha/state/build-next.lock`) lets one pick at a time run on a machine.
+   The loop's definition, `[build] in_flight`, and a loop build's `[autonomy.budget]` and `[budget]` limits come
+   from the integration branch's tip on GitHub, as merged. That branch is your user config's `[branches] dev`, else
+   the one the default branch's committed config names, else the default branch. A checkout's file, `AAYU_*`, or
+   `--set` never names that branch, adds the loop, or loosens a limit; a local value may only tighten one.
+   `aayu ship` does not merge a loop PR whose story is `status:blocked`, even when the loop listed it.
+   Across machines, each pick appends a line to `build/loop-claims.jsonl` on the ledger before it claims; the ledger's
+   one history orders concurrent picks, and a pick that comes after another for the same item or the last slot claims
+   nothing.
+3. The queue: when an open Release has an accepted baseline from `aayu scope` (`releases/<vX.Y.Z>/baseline-<n>.json`
+   on the ledger), the loop builds only the Stories and Bugs of the newest baseline of the lowest such version, in the
+   baseline's order, and nothing outside it. Without one, every `status:ready` Story and Bug by priority (P0 first,
+   none last), then age.
+4. The agent builds the one item it claimed with the build skill, to a pull request. When it cannot get there,
+   `aayu build <n> --stop "<why>"` blocks the item with that reason and pages its owner; the loop never retries it.
+
+The loop's definition in the repository is the person's standing ask: `--next` runs only where
+`loops/build-ready.toml` exists; the file is in the narrow set (`[autonomy] always_person`), so only a person adds or
+changes it, and each pick goes to the actions log as build's ask (`build.asked`). It sets no
+`bot = true`: build and ship write under the bot when one is set up, and otherwise under the person's own token,
+tagged as a human fallback, so the loop runs today without the bot App.
+
+The Production Engineer's loops (WP5.10, Decision #324) are agent loops, so telemetry and its credentials stay in your
+own session: `alert-triage` (twice each weekday) reports fast-burning SLOs and open incidents with no investigation
+note, `error-budget-review` (weekly) measures every SLO from a fresh sanitised export and records the budget that
+`release` reads, and `patch-sweep` (weekly) runs the deps floor and files a Bug for each fixable advisory. None of them
+runs a catalog action: a person approves every one through `aayu respond`.
 
 `verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4). The sweep runs every
 behaviour check with no model in Actions, and its run is red when a check fails. The maintain pass is an agent loop:
@@ -66,7 +154,8 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 - `.github/workflows/aayudha-loops.yml`: the GitHub Actions fallback, with a job for each `agent = false` loop only.
   Actions cron is UTC, so each loop has one cron per UTC offset of the zone, and the guard runs only the one for
   today's offset.
-- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh).
+- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh), or,
+  for an event loop, of `create_github_subscription`.
 - `loops/cursor/aayudha-loops.tf`: Cursor Automations as `cursor_platform_workflow` resources of Cursor's Terraform
   provider; apply them with `terraform apply` and `CURSOR_TOKEN`. `loops/cursor/automate.md` has the same loops as
   prompts for Cursor's `/automate` skill, for a user without Terraform or a key.
@@ -82,7 +171,13 @@ loop twice. It sets up no `agent = false` loop, and says that Actions runs those
 codex), or takes `--host`, and warns when `loops/active.json` records loops in another tool. Then:
 
 - Amp: with `--apply`, one headless Amp thread per loop in an orb of the project (`amp -ox`) calls `set_schedule` with
-  the rendered input and keeps that schedule (one schedule per thread); each loop is recorded.
+  the rendered input and keeps that schedule (one schedule per thread), or, for an event loop,
+  `create_github_subscription` with the project's ID added; each loop is recorded. When Amp returns an equivalent
+  subscription that already exists, which keeps its own title, instructions, and paused state, the thread updates it
+  to the rendered input and enables it. aayu waits up to five minutes for an event loop's thread to end its turn
+  (`amp threads export`), and records the subscription ID from its final reply. On a re-install, a scheduled loop's new thread
+  pauses the schedule that `loops/active.json` records on its older thread (`update_schedule`, `enabled: false`), and
+  install names that thread; a recorded ID that names no thread gets a step to pause it by hand.
 - Cursor: with `--apply`, `terraform apply` of `loops/cursor/aayudha-loops.tf` when `terraform` and `CURSOR_TOKEN` are
   there, recording each loop; without them, the `/automate` prompts in `loops/cursor/automate.md`.
 - Claude Code and Codex: the prompts in `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to paste.

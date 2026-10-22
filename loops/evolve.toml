@@ -1,4 +1,4 @@
-# Monthly skill evolution (WP7.7; P4, Appendix B S-7.7c). The cron is in [time] tz. It lists accepted retro Feedback;
+# Monthly skill evolution (WP7.7). The cron is in [time] tz. It lists accepted retro Feedback;
 # a skill is evolved only on two accepted Feedback issues that name it, at most once a month.
 description = "Monthly evolve: list the skills with two accepted retro Feedback issues, ready for an eval case and a skill rewrite."
 command = ["evolve"]

@@ -14,9 +14,12 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func misses(context.Context, string) (bool, string, error) { return false, "coverage fail", nil }
@@ -134,7 +137,8 @@ func TestBuildLeaseAttemptsResume(t *testing.T) {
 }
 
 // WP5.5 build budget: a second verify miss on a never layer blocks before the
-// attempts budget, and spend over [autonomy.budget] cost_usd blocks at once.
+// attempts budget, and metered spend over [autonomy.budget] cost_usd blocks at
+// once, but only when aayu's own model calls are pay-as-you-go.
 func TestBuildNeverLayerAndCost(t *testing.T) {
 	g, env, opts, dir, _, _, _ := thinFixture(t)
 	wt := BuildWorktree(dir, 2)
@@ -156,9 +160,64 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready again: %s", errOut)
 	}
-	env["AAYU_COST_USD"] = "30"
-	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: 30.00 USD spent, budget 25.00 USD") {
-		t.Fatalf("over the cost budget: %d %s %s", code, out, errOut)
+	// The cost limit (60 USD) applies only when aayu's own calls are
+	// pay-as-you-go: a direct provider's key here. Spend is appended to the
+	// clone's actions log, which build reads.
+	logged := func(usd string) {
+		t.Helper()
+		p := filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString(`{"kind":"model.call","story":"#2","status":"done","cost_usd":` + usd + "}\n")
+		_ = f.Close()
+	}
+	notBlocked := func(what string) {
+		t.Helper()
+		if _, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") {
+			t.Fatalf("%s: blocked: %s %s", what, out, errOut)
+		}
+	}
+	env["AAYU_SECRET_ANTHROPIC"] = "model-key"
+	logged("60")
+	notBlocked("metered, at 60 USD")
+	logged("0.01")
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 60.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("metered, over the cost budget: %d %s %s", code, out, errOut)
+	}
+	// With no metered key or endpoint there is no cost limit, though the log
+	// shows 100 USD for the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	delete(env, "AAYU_SECRET_ANTHROPIC")
+	logged("39.99")
+	_ = os.WriteFile(filepath.Join(wt, "notes.txt"), []byte("a checkpoint\n"), 0o644)
+	_, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+	if strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") ||
+		!strings.Contains(out, "metered spend 100.00 USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)") {
+		t.Fatalf("no metered key, 100 USD logged: %s %s", out, errOut)
+	}
+	// Spend a host reports in AAYU_COST_USD is metered: it counts, and the
+	// limit applies to it.
+	env["AAYU_COST_USD"] = "0.01"
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("AAYU_COST_USD reported, over the cost budget: %d %s %s", code, out, errOut)
+	}
+	// A cap set to 0 on purpose says so, rather than blaming a missing key;
+	// a per_story_usd kept below cost_usd is the limit that stops the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "notes2.txt"), []byte("another checkpoint\n"), 0o644)
+	_, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "autonomy.budget.cost_usd=0")
+	if strings.Contains(out+errOut, "cost budget breached") || !strings.Contains(out, "metered spend 100.01 USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)") {
+		t.Fatalf("cost_usd = 0: %s %s", out, errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "budget.per_story_usd=25"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 25 (subscription use not counted)") {
+		t.Fatalf("per_story_usd 25 below cost_usd 60: %d %s %s", code, out, errOut)
 	}
 }
 
@@ -185,7 +244,7 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 		!strings.HasSuffix(out, "--dry-run: nothing was changed\n") {
 		t.Fatalf("gc --dry-run: %d %s %s", code, out, errOut)
 	}
-	if !contains(g.LabelNames(2), LeaseLabel) || !contains(g.LabelNames(stray.Number), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease-released -->") != "" {
+	if !contains(g.LabelNames(2), LeaseLabel) || !contains(g.LabelNames(stray.Number), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease-released") != "" {
 		t.Fatalf("gc --dry-run changed the leases: %v %v", g.LabelNames(2), g.LabelNames(stray.Number))
 	}
 	code, out, errOut = run(t, env, opts, "gc", "--repo", "o/r")
@@ -199,7 +258,7 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 	g.Mu.Lock()
 	assignees := g.Issues[2].Assignees
 	g.Mu.Unlock()
-	if contains(g.LabelNames(2), LeaseLabel) || len(assignees) != 0 || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released -->"), "reclaimed by `aayu gc`") {
+	if contains(g.LabelNames(2), LeaseLabel) || len(assignees) != 0 || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released"), "reclaimed by `aayu gc`") {
 		t.Fatalf("after gc: labels %v assignees %v", g.LabelNames(2), assignees)
 	}
 	if !contains(g.LabelNames(other.Number), LeaseLabel) {
@@ -239,15 +298,33 @@ func TestShipPassRules(t *testing.T) {
 	g.Pulls[prN].Files = []string{"internal/cli/x.go", "internal/config/x.go", "internal/ledger/x.go"}
 	g.Files = map[string]string{}
 	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
+	// The approver and the layers are the base branch's committed policy (#645).
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"reviewer2\"\n"
+	if b, err := os.ReadFile("../../LAYERS.md"); err == nil {
+		g.Files["LAYERS.md"] = string(b)
+	} else {
+		t.Fatal(err)
+	}
 	g.Pulls[prN].Reviews = []fake.Review{review("aayudha-bot[bot]", "Bot", "APPROVED", head), review("reviewer", "User", "APPROVED", head)}
 	g.Mu.Unlock()
 	ship := func(args ...string) (int, string) {
-		code, out, errOut := run(t, env, opts, append([]string{"ship", strconv.Itoa(prN), "--repo", "o/r", "--set", "autonomy.approver=reviewer2"}, args...)...)
+		code, out, errOut := run(t, env, opts, append([]string{"ship", strconv.Itoa(prN), "--repo", "o/r"}, args...)...)
 		return code, out + errOut
 	}
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") {
 		t.Fatalf("never layer without the EM review: %d %s", code, out)
 	}
+	// With proof off, a narrow-set path holds the streak back, and the
+	// refusal says so rather than naming a merge on proof (#680).
+	g.Mu.Lock()
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".aayudha/config.local.json")
+	g.Mu.Unlock()
+	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") || !strings.Contains(out, "; no merge on the streak: it touches .aayudha/config.local.json") || strings.Contains(out, "no merge on proof") {
+		t.Fatalf("never layer without the EM review, a narrow-set path, proof off: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files = g.Pulls[prN].Files[:3]
+	g.Mu.Unlock()
 	// A solo-mode plan-review bypass satisfies the plan check (the human pass is checked next).
 	bypass := PlanRecord{Story: 2, Footprint: []string{"L02", "L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
 		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/c/1"}}}
@@ -277,16 +354,20 @@ func TestShipPassRules(t *testing.T) {
 	g.Mu.Lock()
 	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Mu.Unlock()
+	g.Reset()
 	if code, out := ship(); code != 0 || !strings.Contains(out, "human pass: review by reviewer2") {
 		t.Fatalf("ship: %d %s", code, out)
+	}
+	if n := closedPullLists(g); n != 0 { // an approving review settles the pass: the streak is not read (#701)
+		t.Errorf("a review-pass ship read the merged-PR history for the streak: %d list(s)", n)
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
 	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
-		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || len(sr.Streak.Layers) != 2 {
+		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || sr.Streak.Skipped != "the human pass is settled: review" {
 		t.Fatalf("ship record: %+v", sr)
 	}
-	if contains(g.LabelNames(2), LeaseLabel) || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released -->"), "shipped in #"+strconv.Itoa(prN)) {
+	if contains(g.LabelNames(2), LeaseLabel) || !strings.Contains(comment(g, 2, "<!-- aayudha:lease-released"), "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease after ship: %v", g.LabelNames(2))
 	}
 }
@@ -400,7 +481,7 @@ func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
 		!strings.Contains(out, "note: verify could not run on the checkpoint: go: not found") || !strings.Contains(out, "#2: branch "+branch+" pushed; PR #") {
 		t.Fatalf("build with a verify error: %d %s", code, out)
 	}
-	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") {
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") || !strings.Contains(msg, "Aayudha-Host: amp") {
 		t.Fatalf("checkpoint commit:\n%s", msg)
 	}
 	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" || st.Checkpoints[0].Model != "claude-build-1" {
@@ -505,16 +586,17 @@ func TestBuildWithoutLedger(t *testing.T) {
 
 // WP5.5 build under a bot App: the lease holder is the App's [bot] login,
 // which GitHub cannot assign, so the story gets the lock comment and label but
-// no assignee. Without the human's token the App's token broker cannot be
-// reached, and build exits 4.
+// no assignee. With neither the bot's token nor the human's (which the App's
+// token broker needs), build exits 4. A bot-only session (AAYU_BOT_TOKEN and
+// no human token, Decision #488) needs no broker.
 func TestBuildUnderBotApp(t *testing.T) {
 	g, env, opts, _, _ := buildSetup(t)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
 	app := []string{"build", "2", "--repo", "o/r", "--json", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot"}
-	if code, _, errOut := run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "PATH": os.Getenv("PATH")}, opts, app...); code != ExitBlocked {
-		t.Fatalf("build under the App without a human token: %d %s", code, errOut)
+	if code, _, errOut := run(t, map[string]string{"PATH": os.Getenv("PATH")}, opts, app...); code != ExitBlocked || !strings.Contains(errOut, "no GitHub token found") {
+		t.Fatalf("build under the App without any token: %d %s", code, errOut)
 	}
 	env["AAYU_BOT_TOKEN"] = "bot-token"
 	code, out, errOut := run(t, env, opts, app...)
@@ -685,5 +767,687 @@ func TestBuildDropsTheTypePrefix(t *testing.T) {
 	g.Mu.Unlock()
 	if code != 0 || pr == nil || pr.Title != "feat: show empty list" || !strings.HasPrefix(git(t, res.Worktree, "log", "-1", "--format=%s"), "feat: show empty list (#2,") {
 		t.Fatalf("PR title: %d %+v %s", code, pr, errOut)
+	}
+}
+
+// D-5.5c.20: an agent does not pick up a Ready story the person did not ask
+// for. build warns and stops before the lease; the person's words (--asked) or
+// the person's own grill in the same session let it start.
+func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	git(t, dir, "config", "user.name", "Builder")
+	git(t, dir, "config", "user.email", "builder@example.com")
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	agent := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": session}
+	}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	if code, _, errOut := run(t, person, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	code, _, errOut := run(t, agent("s1"), opts, "build", "2", "--repo", "o/r")
+	g.Mu.Lock()
+	assignees := len(g.Issues[2].Assignees)
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(errOut, `build #2 "Show empty list": the person has not asked for this story in this session (CODEX_THREAD_ID)`) ||
+		!strings.Contains(errOut, `aayu build 2 --asked "<their words>"`) {
+		t.Fatalf("unasked pickup: %d %s", code, errOut)
+	}
+	if labels := g.LabelNames(2); !contains(labels, "status:ready") || contains(labels, LeaseLabel) || assignees != 0 {
+		t.Fatalf("held story was taken: labels %v assignees %d", labels, assignees)
+	}
+	if _, err := os.Stat(BuildWorktree(dir, 2)); err == nil {
+		t.Fatal("held story got a worktree")
+	}
+	// The gate reads the human-only guard's marker list (hosts.AgentMarkers): a
+	// cross-host convention holds too, and Cursor's CURSOR_TRACE_ID, which its
+	// terminal sets for a person, does not (below).
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AGENT": "goose"}, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "in this session (AGENT)") {
+		t.Fatalf("AGENT=goose pickup: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, agent("s1"), opts, "build", "2", "--repo", "o/r", "--asked", "yes, build #2"); code != 0 || !contains(g.LabelNames(2), LeaseLabel) {
+		t.Fatalf("asked pickup: %d %s", code, errOut)
+	}
+	if log, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); !strings.Contains(string(log), `"words":"yes, build #2"`) {
+		t.Fatalf("the person's words are not in the actions log:\n%s", log)
+	}
+	// A story the person's grill filed passes in that session only.
+	body := fixtureBody(t, "story", nil)
+	code, out, errOut := run(t, agent("s1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show totals", "--body", body, "--labels", "effort:S", "--create")
+	var res GrillResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill: %d %s", code, errOut)
+	}
+	n := strconv.Itoa(res.Issue)
+	if code, _, errOut := run(t, person, opts, "ready", n, "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %s: %s", n, errOut)
+	}
+	if code, _, errOut := run(t, agent("s2"), opts, "build", n, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another session's grilled story: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
+		t.Fatalf("own grilled story: %d %s", code, errOut)
+	}
+	// The same holds across two Copilot sessions.
+	copilot := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "COPILOT_AGENT_SESSION_ID": session}
+	}
+	code, out, errOut = run(t, copilot("c1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show averages", "--body", body, "--labels", "effort:S", "--create")
+	res = GrillResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill in Copilot: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(res.Issue), "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %d: %s", res.Issue, errOut)
+	}
+	if code, _, errOut := run(t, copilot("c2"), opts, "build", strconv.Itoa(res.Issue), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another Copilot session's grilled story: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready 6: %s", errOut)
+	}
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CURSOR_TRACE_ID": "t"}, opts, "build", "6", "--repo", "o/r"); code != 0 {
+		t.Fatalf("a person in Cursor's terminal: %d %s", code, errOut)
+	}
+}
+
+// Under GitHub Copilot, aayu cannot name the model: the checkpoint commit
+// records every model Copilot reported in the session that ran build, most
+// recent first, and a HydraFusion critic apart from them, for inspect's
+// different-family rule. The build record holds one model, so with two
+// families it names none: naming the latest would hide the other.
+func TestBuildRecordsCopilotModels(t *testing.T) {
+	_, env, opts, dir, bare := buildSetup(t)
+	copilotHome := t.TempDir()
+	env["COPILOT_HOME"] = copilotHome
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	session := filepath.Join(copilotHome, "session-state", "s-1")
+	_ = os.MkdirAll(session, 0o755)
+	_ = os.WriteFile(filepath.Join(session, "events.jsonl"), []byte(`{"type":"assistant.message","data":{"model":"gpt-6-luna"}}
+{"type":"session.fusion_resolved","data":{"pattern":"critique","secondaryModel":"gpt-6-luna"}}
+{"type":"assistant.message","data":{"model":"claude-opus-5.5","fusion":{"phaseKind":"draft","sourceModel":"claude-opus-5.5"}}}
+`), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "state"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "copilot-session.json"), []byte(`{"session_id":"s-1"}`), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 {
+		t.Fatalf("build: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json"); code != 0 {
+		t.Fatalf("build (checkpoint): %d %s", code, errOut)
+	}
+	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
+	if want := "Aayudha-Host: copilot\nAayudha-Model: claude-opus-5.5\nAayudha-Model: gpt-6-luna\nAayudha-Critic-Model: gpt-6-luna"; !strings.Contains(msg, want) {
+		t.Fatalf("checkpoint commit lacks the Copilot trailers:\n%s", msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
+	}
+}
+
+// A checkpoint records the build model the host's plan picks when the build
+// runs, so a later plan change cannot relabel who built it (Decision #469).
+func TestBuilderModelRecordsThePlanDefault(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ host, set, want string }{
+		{"cursor", "", "grok-4.7"},
+		{"cursor", "hosts.cursor.plan=legacy", "claude-opus-5-5"},
+		{"amp", "", ""}, // host-managed: Amp picks the model
+	} {
+		e, err := newEnv(IO{}, Options{Dir: repo, Getenv: func(string) string { return "" }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.set != "" {
+			e.Set = []string{c.set}
+		}
+		e.Host = c.host
+		if got, _ := e.builderModel(); got != c.want {
+			t.Errorf("%s %q: builder model %q, want %q", c.host, c.set, got, c.want)
+		}
+	}
+}
+
+// sessionReply is a reviewer's reply to a session review: fix with one P1 on
+// a.go quoting `var <word> = 1`, or merge when word is empty; unmet makes a
+// criterion unmet.
+func sessionReply(word string, unmet ...int) models.Response {
+	findings, disp := "[]", "merge"
+	if word != "" {
+		disp = "fix"
+		findings = `[{"severity":"P1","category":"bug","file":"a.go","line":3,"quote":"var ` + word + ` = 1","title":"` + word + ` is wrong","detail":"d","fix":"f","confidence":0.9,"criterion":0}]`
+	}
+	verdict := func(n int) string {
+		if slices.Contains(unmet, n) {
+			return "unmet"
+		}
+		return "met"
+	}
+	return models.Response{Model: "grok-4.7", Text: `{"disposition":"` + disp + `","summary":"s","findings":` + findings + `,"criteria":[{"id":1,"verdict":"` + verdict(1) + `","evidence":"e"},{"id":2,"verdict":"` + verdict(2) + `","evidence":"e"}]}`}
+}
+
+// Decision #656, the session half: before each push build has a reviewer of
+// another family review the branch. A fix holds the push; a decline with a
+// reason releases it and goes into the PR body's self-attested summary; after
+// inspect.MaxRounds rounds a push goes out with what is left open; a review
+// that cannot run lets the push go out, and the summary says why.
+func TestBuildSessionReviewLoop(t *testing.T) {
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
+	model := &models.Fake{}
+	var routes []string
+	opts.ModelClient = func(r models.Route, key string) models.Client {
+		routes = append(routes, r.BaseURL+" "+key)
+		return model
+	}
+	// The same three names as the merge gate's code-review environment.
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	build := func(args ...string) (int, BuildResult, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"build", "2", "--repo", "o/r", "--json"}, args...)...)
+		var res BuildResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, errOut
+	}
+	write := func(word string) {
+		_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar "+word+" = 1\n"), 0o644)
+	}
+	pushed := func() string { return git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list") }
+	body := func() string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Issues[prN].Body != g.Pulls[prN].Body {
+			t.Fatalf("the PR's issue body differs from its pull request body:\n%s", g.Issues[prN].Body)
+		}
+		return g.Pulls[prN].Body
+	}
+
+	// Round 1 finds a P1: the checkpoint is committed but not pushed, and the
+	// builder reads what to fix.
+	model.Replies = []models.Response{sessionReply("first")}
+	before := pushed()
+	write("first")
+	_ = os.MkdirAll(filepath.Join(wt, ".aayudha", "evidence"), 0o755)
+	_ = os.WriteFile(filepath.Join(wt, ".aayudha", "evidence", "2.toml"), []byte("[[criterion]]\nid = 1\ntests = [\"./a:TestA\"]\n"), 0o644)
+	id := inspect.FindingID("a.go", "bug", "first is wrong")
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+	if code != ExitBlocked || pushed() != before || len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" ||
+		!slices.Equal(routes, []string{"https://review.example/v1 review-key"}) || model.Requests[0].ServiceTier != models.TierPriority || model.Requests[0].Effort != "high" ||
+		!strings.Contains(out, "session review round 1 by grok-4.7: fix; not pushed yet") || !strings.Contains(out, "  "+id+" P1 a.go:3: first is wrong") ||
+		!strings.Contains(out, "    fix: f") || !strings.Contains(out, "--decline") || !strings.Contains(model.Requests[0].Messages[0].Content, "criterion 1: ./a:TestA") {
+		t.Fatalf("round 1: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := build("--decline", "nope: why"); code != ExitUsage || !strings.Contains(errOut, "nope is not an open item") {
+		t.Fatalf("decline of an unknown item: %d %s", code, errOut)
+	}
+	if code, _, errOut := build("--decline", id); code != ExitUsage || !strings.Contains(errOut, `write "<id>: <why>", one a line`) {
+		t.Fatalf("decline without a reason: %d %s", code, errOut)
+	}
+	// The decline releases the push without calling the reviewer again.
+	code, res, errOut := build("--decline", id+": the quoted line is the story's own example")
+	if code != 0 || len(model.Requests) != 1 || pushed() == before {
+		t.Fatalf("after the decline: %d %+v %s", code, res.Review, errOut)
+	}
+	b := body()
+	for _, want := range []string{"Session review (self-attested)", "not a review that counts", "| 1 | `", "grok-4.7 (xai)", "**Declined by the builder, with its reason:**", "`" + id + "` P1 first is wrong (a.go:3): the quoted line is the story's own example", "Refs #2"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
+	}
+	// A run on the pushed head has nothing new to review.
+	if code, _, errOut := build(); code != 0 || len(model.Requests) != 1 {
+		t.Fatalf("a run on the pushed head: %d %s, %d calls", code, errOut, len(model.Requests))
+	}
+
+	// Three more rounds after that push: two hold it, the third pushes at the
+	// cap. An unmet criterion is an item to fix too.
+	for i, word := range []string{"second", "third", "fourth"} {
+		model.Replies = []models.Response{sessionReply(word, 2)}
+		before = pushed()
+		write(word)
+		code, res, errOut = build()
+		if i < 2 && (code != ExitBlocked || pushed() != before || !slices.ContainsFunc(res.Review.Open, func(it sessionItem) bool { return it.ID == "C2" })) ||
+			i == 2 && (code != 0 || pushed() == before) {
+			t.Fatalf("round %d (%s): %d %+v %s", i+2, word, code, res.Review, errOut)
+		}
+	}
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 3/3") || !strings.Contains(msg, "Aayudha-Attempt: 3") {
+		t.Fatalf("a review fix is the same checkpoint's next attempt:\n%s", msg)
+	}
+	b = body()
+	if !strings.Contains(b, "| 4 | `") || !strings.Contains(b, "**Left open at the round cap:**\n\n- `C2` criterion criterion 2 unmet\n- `"+inspect.FindingID("a.go", "bug", "fourth is wrong")+"` P1 fourth is wrong") ||
+		!strings.Contains(b, "**Fixed (not raised by a later round):**") || strings.Count(b, sessionReviewStart) != 1 {
+		t.Fatalf("PR body after the cap:\n%s", b)
+	}
+
+	// A review that cannot run does not hold the push.
+	model.Err = errors.New("gateway down")
+	before = pushed()
+	write("fifth")
+	code, res, errOut = build()
+	if code != 0 || pushed() == before || res.Review == nil || !strings.Contains(res.Review.Skipped, "could not run") ||
+		!strings.Contains(body(), "The last push went out without a session review: the review by grok-4.7 could not run") {
+		t.Fatalf("a review that cannot run: %d %+v %s\n%s", code, res.Review, errOut, body())
+	}
+
+	// A rebuild with no finding holds the push too: the builder answers the
+	// verdict itself.
+	model.Err = nil
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[{"id":1,"verdict":"unclear","evidence":"no trace"},{"id":2,"verdict":"met","evidence":"e"}]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != "C1" || res.Review.Open[0].Title != "criterion 1 unclear" {
+		t.Fatalf("a rebuild with an unclear criterion: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].Severity != "verdict" || res.Review.Open[0].Detail != "the approach is wrong" {
+		t.Fatalf("a rebuild with nothing behind it: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", res.Review.Open[0].ID+": the story asks for this approach"); code != 0 {
+		t.Fatalf("declining the verdict: %d %s", code, errOut)
+	}
+	// A decline answers its round only: the first round's declined finding,
+	// raised again on a later head, is open again.
+	model.Replies = []models.Response{sessionReply("first")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("first again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != id {
+		t.Fatalf("a declined finding raised again: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", id+": still the story's own example"); code != 0 || !strings.Contains(body(), "`"+id+"` P1 first is wrong (a.go:3): still the story's own example") {
+		t.Fatalf("declining it again: %d %s\n%s", code, errOut, body())
+	}
+
+	// A P2 that a later round raises again stays open, though inspect does not
+	// post it twice.
+	model.Err = nil
+	p2 := func(word string) models.Response {
+		r := sessionReply(word)
+		r.Text = strings.Replace(r.Text, `"severity":"P1"`, `"severity":"P2"`, 1)
+		return r
+	}
+	model.Replies = []models.Response{p2("sixth")}
+	write("sixth")
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 {
+		t.Fatalf("a P2: %d %+v %s", code, res.Review, errOut)
+	}
+	p2id := res.Review.Open[0].ID
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("unrelated\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id {
+		t.Fatalf("the P2 raised again: %d %+v %s", code, res.Review, errOut)
+	}
+	// A review that cannot run does not release a held push: the open item
+	// still waits for a fix the reviewer sees, or a decline.
+	model.Err = errors.New("gateway down")
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("unseen fix\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || pushed() != before || len(res.Review.Open) != 1 || res.Review.Open[0].ID != p2id || !strings.Contains(res.Review.Skipped, "could not run") {
+		t.Fatalf("a held push when the review cannot run: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Err = nil
+
+	// The spend the build's ledger record keeps still caps the PR when the
+	// worktree's own state is gone, as on a resume elsewhere, with the merge
+	// gate's spend: no new review call. The PR body's figure is not read.
+	stateFile := filepath.Join(git(t, wt, "rev-parse", "--absolute-git-dir"), sessionReviewFile)
+	_ = os.Remove(stateFile)
+	paid := sessionReply("")
+	paid.TokensIn = 100_000
+	model.Replies = []models.Response{paid}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("paid\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(res.Review.Open) != 0 {
+		t.Fatalf("a paid round that merges: %d %+v %s", code, res.Review, errOut)
+	}
+	var rec BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &rec)
+	spent := rec.ReviewUSD
+	if spent <= 0 || !strings.Contains(body(), "Spent on the session review: ") {
+		t.Fatalf("no session review spend on the ledger (%v) or in the PR body:\n%s", spent, body())
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Body = strings.ReplaceAll(g.Pulls[prN].Body, "Spent on the session review: ", "Spent: ")
+	g.Issues[prN].Body = g.Pulls[prN].Body
+	g.Mu.Unlock()
+	if err := os.Remove(stateFile); err != nil {
+		t.Fatal(err)
+	}
+	// The merge gate's inspect spends from the same cap: 1 USD on its record.
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":1,\"hashes\":[]} -->\n")
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = strconv.FormatFloat(spent+1, 'f', -1, 64)
+	calls := len(model.Requests)
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("resumed\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
+		t.Fatalf("a resume past the PR's review budget: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	// A build-ready loop's build spends within dev's committed cap: a run's
+	// larger per_pr_inspect_max does not lift it.
+	var ls BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &ls)
+	ls.Loop = BuildLoop
+	lb, _ := json.Marshal(ls)
+	putLedger(t, bare, BuildLedgerPath(2), string(lb))
+	g.Mu.Lock()
+	g.Refs["heads/dev"] = "d0000000000000000000000000000000000000de"
+	g.RefFiles = map[string]map[string]string{"d0000000000000000000000000000000000000de": {".aayudha/config.toml": "[budget]\nper_pr_inspect_max = " + strconv.FormatFloat(spent+1, 'f', -1, 64) + "\n"}}
+	g.Mu.Unlock()
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "1000"
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("loop\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
+		t.Fatalf("a loop build's review spent past dev's committed cap: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &ls)
+	ls.Loop = ""
+	lb, _ = json.Marshal(ls)
+	putLedger(t, bare, BuildLedgerPath(2), string(lb))
+	// A cap of 0 is no cap to inspect: the session makes no review call at
+	// all, and a review endpoint it would refuse does not stop the push.
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = "0"
+	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("uncapped\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max is 0") {
+		t.Fatalf("a zero per-PR cap: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	delete(env, "AAYU_BUDGET__PER_PR_INSPECT_MAX")
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+
+	// A review that trips the budget breaker stops the build: nothing is pushed.
+	costly := sessionReply("")
+	costly.TokensIn = 50_000_000
+	model.Replies = []models.Response{costly}
+	env["AAYU_BUDGET__PER_DAY_USD"] = "1"
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("budget\n"), 0o644)
+	if code, _, errOut := build(); code != ExitBudget || pushed() != before {
+		t.Fatalf("a tripped breaker: %d %s", code, errOut)
+	}
+	// The checkpoint it committed is on the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a review error is not recorded: %v %+v", err, bst.Checkpoints)
+	}
+	delete(env, "AAYU_BUDGET__PER_DAY_USD")
+	_ = os.Remove(filepath.Join(opts.Dir, ".aayudha", "state", "paused"))
+
+	// A review endpoint that is not https is refused before any call.
+	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
+	calls = len(model.Requests)
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("again\n"), 0o644)
+	if code, _, errOut := build(); code != ExitUsage || !strings.Contains(errOut, inspect.ReviewModelURLVar) || len(model.Requests) != calls {
+		t.Fatalf("an http endpoint: %d %s", code, errOut)
+	}
+}
+
+// A checkpoint the session review holds is kept on its own ref, never the PR
+// branch, and --resume on another machine continues from it.
+func TestBuildSessionReviewHeldCheckpointResumes(t *testing.T) {
+	_, env, opts, dir, bare, _, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("held")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	branch := "story/2-show-empty-list"
+	before := git(t, bare, "rev-parse", "refs/heads/"+branch)
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar held = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	head := git(t, wt, "rev-parse", "HEAD")
+	if got := git(t, bare, "rev-parse", heldRef(branch)); got != head || git(t, bare, "rev-parse", "refs/heads/"+branch) != before {
+		t.Fatalf("held ref %s, branch moved: want %s on the held ref only", got, head)
+	}
+	gone := func() {
+		t.Helper()
+		git(t, dir, "worktree", "remove", "--force", wt)
+		git(t, dir, "branch", "-D", branch)
+	}
+	gone()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from the held checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// The story branch was never pushed, only the held ref: a build without
+	// --resume says so, and --resume continues from the held ref.
+	gone()
+	git(t, bare, "update-ref", "-d", "refs/heads/"+branch)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "--resume") {
+		t.Fatalf("a held-only story without --resume: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from a held-only checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+	// Once the reviewer is satisfied the branch is pushed and the held ref is
+	// gone, so a later rewrite of the branch cannot send a resume back to it.
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar fixed = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || git(t, bare, "rev-parse", "refs/heads/"+branch) != git(t, wt, "rev-parse", "HEAD") {
+		t.Fatalf("the push after the hold: %d %s", code, errOut)
+	}
+	if refs := git(t, bare, "for-each-ref", "refs/aayudha/held/"); refs != "" {
+		t.Fatalf("the held ref outlives the push: %s", refs)
+	}
+}
+
+// A reviewer of the builder's family never reviews in the session: the push
+// goes out unreviewed, and the PR body says so.
+func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env["AAYU_MODEL"] = "grok-4.7"
+	env["AAYU_INSPECT__PAID_REVIEWER"] = "grok-4.7"
+	env["AAYU_SECRET_XAI"] = "xai-key"
+	_ = os.WriteFile(filepath.Join(BuildWorktree(opts.Dir, 2), "a.txt"), []byte("x\n"), 0o644)
+	// The open PR cannot be read before the review: nothing is pushed.
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/pulls"
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("the PR list fails: %d %s", code, errOut)
+	}
+	// The verified checkpoint reaches the ledger all the same.
+	var bst BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &bst); err != nil || len(bst.Checkpoints) == 0 ||
+		bst.Checkpoints[len(bst.Checkpoints)-1].Commit != git(t, BuildWorktree(opts.Dir, 2), "rev-parse", "HEAD") {
+		t.Fatalf("the checkpoint before a PR-list failure is not recorded: %v %+v", err, bst.Checkpoints)
+	}
+	// The PR body cannot be updated: the push went out, and build says so.
+	g.Mu.Lock()
+	g.Fail = "PATCH /repos/o/r/pulls/" + strconv.Itoa(prN)
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "500") {
+		t.Fatalf("a failed body update: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(BuildWorktree(opts.Dir, 2), "a.txt"), []byte("y\n"), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	g.Mu.Lock()
+	b := g.Pulls[prN].Body
+	g.Mu.Unlock()
+	if code != 0 || len(model.Requests) != 0 || res.Review == nil || !strings.Contains(res.Review.Skipped, "no reviewer model of a family other than the builder's") ||
+		!strings.Contains(b, "The last push went out without a session review: no reviewer model of a family other than the builder's") {
+		t.Fatalf("same family: %d %+v %s\n%s", code, res.Review, errOut, b)
+	}
+}
+
+// The PR body declares the builder (AGENTS.md) and the session review picks a
+// reviewer of none of the declared families: build's own Claude line keeps a
+// Claude reviewer out, and a person's added GPT line keeps OpenAI out too. The
+// person's text and line survive the next push, and build's lines come back.
+func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
+	g, env, opts, _, _, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	env[inspect.ReviewModelVar] = "claude-sonnet-5-5" // the builder's family: refused
+	env["AAYU_EFFORT"] = "medium"
+	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
+	if b := body(); !strings.Contains(b, "\nAayudha-Model: claude-opus-5-5\n") {
+		t.Fatalf("the PR body does not declare the builder's model:\n%s", b)
+	}
+	wt := BuildWorktree(opts.Dir, 2)
+	family := func() verbs.Family {
+		t.Helper()
+		if len(model.Requests) == 0 {
+			t.Fatal("no reviewer was called")
+		}
+		return verbs.FamilyOf(model.Requests[len(model.Requests)-1].Model)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("one\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic {
+		t.Fatalf("a Claude-built PR: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	// A person rewrites the body and declares GPT as well.
+	g.Mu.Lock()
+	g.Pulls[prN].Body = "Refs #2\n\nA person's note.\n\nAayudha-Model: gpt-6.1-sol\n"
+	g.Mu.Unlock()
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("two\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic || family() == verbs.FamilyOpenAI {
+		t.Fatalf("Claude and GPT declared: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	b := body()
+	for _, want := range []string{"A person's note.", "\nAayudha-Model: gpt-6.1-sol\n", "\nAayudha-Model: claude-opus-5-5\n", "\nAayudha-Effort: medium\n", "the reviewers are of none of [anthropic openai]"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
+	}
+	// A held round's head, retried after a declaration names the reviewer's
+	// own family, is reviewed again by another reviewer: the first one's
+	// cached result is not the new reviewer's.
+	model.Replies = []models.Response{sessionReply("held")}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("three\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	first, calls := model.Requests[len(model.Requests)-1].Model, len(model.Requests)
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\nAayudha-Model: " + first + "\n"
+	g.Mu.Unlock()
+	model.Replies = []models.Response{sessionReply("")}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || len(model.Requests) != calls+1 || family() == verbs.FamilyOf(first) {
+		t.Fatalf("the held head after %s is declared: %d %s %s, %d new calls, reviewer %v", first, code, out, errOut, len(model.Requests)-calls, family())
+	}
+}
+
+// The review context comes from the committed head only: never a file outside
+// the repository, an uncommitted one, or a symlink.
+func TestGitSourceReadsOnlyCommittedFiles(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet")
+	_ = os.MkdirAll(filepath.Join(dir, "p"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "p", "a.go"), []byte("package p\n"), 0o644)
+	_ = os.Symlink("/etc/hostname", filepath.Join(dir, "p", "link.go"))
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "-m", "c")
+	_ = os.WriteFile(filepath.Join(dir, "p", "new.go"), []byte("package p\n"), 0o644)
+	src, ctx := gitSource(dir), context.Background()
+	if b, err := src.File(ctx, "p/a.go"); err != nil || string(b) != "package p\n" {
+		t.Fatalf("committed file: %q %v", b, err)
+	}
+	for _, p := range []string{"p/link.go", "p/new.go", "../x.go", "/etc/hostname"} {
+		if _, err := src.File(ctx, p); err == nil {
+			t.Fatalf("%s was read", p)
+		}
+	}
+	if fs, err := src.Dir(ctx, "p"); err != nil || !slices.Equal(fs, []string{"p/a.go"}) {
+		t.Fatalf("dir p: %v %v", fs, err)
+	}
+	if fs, err := src.Dir(ctx, "."); err != nil || len(fs) != 0 {
+		t.Fatalf("dir .: %v %v", fs, err)
+	}
+	if _, err := src.Dir(ctx, ".."); err == nil {
+		t.Fatal("a directory outside the repository was listed")
+	}
+}
+
+// The effort is written only from a source that knows it: AAYU_EFFORT, or
+// the lane that named the model; a host-managed lane names neither.
+func TestBuilderModelEffort(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ host, set, env, model, effort string }{
+		{"codex", "", "", "gpt-6.1-sol", ""}, // no build lane names an effort today
+		{"codex", "", "high", "gpt-6.1-sol", "high"},
+		{"amp", "", "", "", ""},
+		{"amp", "", "low", "", "low"},
+	} {
+		e, err := newEnv(IO{}, Options{Dir: repo, Getenv: func(k string) string {
+			if k == "AAYU_EFFORT" {
+				return c.env
+			}
+			return ""
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.set != "" {
+			e.Set = []string{c.set}
+		}
+		e.Host = c.host
+		if m, eff := e.builderModel(); m != c.model || eff != c.effort {
+			t.Errorf("%s %q AAYU_EFFORT=%q: %q, %q; want %q, %q", c.host, c.set, c.env, m, eff, c.model, c.effort)
+		}
+	}
+}
+
+// In an Amp thread, the checkpoint names the thread's Agent model as Amp's
+// CLI reports it, without the provider prefix, and its agent mode as the
+// effort; never a model Amp did not name, such as claude-amp-medium.
+func TestBuildRecordsAmpModel(t *testing.T) {
+	_, env, opts, _, bare := buildSetup(t)
+	env["AMP_THREAD_ID"] = "T-01a14ffc-40d7-77f3-af07-12103e2b5846"
+	usage, _ := os.ReadFile(filepath.Join("..", "hosts", "testdata", "amp-usage.txt"))
+	thread, _ := os.ReadFile(filepath.Join("..", "hosts", "testdata", "amp-thread.txt"))
+	var calls []string
+	opts.Exec = func(_ context.Context, _, name string, args ...string) (string, error) {
+		call := name + " " + strings.Join(args, " ")
+		calls = append(calls, call)
+		switch call {
+		case "amp threads usage T-01a14ffc-40d7-77f3-af07-12103e2b5846 --details":
+			return string(usage), nil
+		case "amp threads markdown T-01a14ffc-40d7-77f3-af07-12103e2b5846":
+			return string(thread), nil
+		}
+		return "", errors.New("unexpected command: " + call)
+	}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json", "--asked", "yes, build #2")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 {
+		t.Fatalf("build: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json", "--asked", "yes, build #2"); code != 0 {
+		t.Fatalf("build (checkpoint): %d %s %q", code, errOut, calls)
+	}
+	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
+	if want := "Aayudha-Model: claude-opus-5-5\nAayudha-Effort: medium\nAayudha-Host: amp"; !strings.Contains(msg, want) || strings.Count(msg, "Aayudha-Model:") != 1 {
+		t.Fatalf("checkpoint commit lacks the Amp declaration %q:\n%s", want, msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "claude-opus-5-5" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }

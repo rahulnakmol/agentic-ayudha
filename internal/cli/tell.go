@@ -78,7 +78,7 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitUsage, "tell --site builds the docs site from the repository: use it with tell docs, without --from or --publish (the Pages workflow deploys it)")
 	}
 	if publish {
-		if err := e.refuseNonHuman("tell --publish"); err != nil {
+		if err := e.refuseNonHuman(ctx, "tell --publish"); err != nil {
 			return err
 		}
 		if !in.Has("from") {
@@ -135,7 +135,7 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 	} else if draft != nil {
-		d, probs := tell.Check(string(draft), repo, proven, brand, rep.UTM)
+		d, probs := tell.CheckDraft(string(draft), repo, kind, proven, rep.Unproven, brand, rep.UTM)
 		rep.Draft, rep.Problems = &d, probs
 		if len(probs) == 0 {
 			rep.CopyPath = filepath.Join(e.stateDir(), "tell", kind, campaign+".md")
@@ -339,16 +339,13 @@ func (e *Env) provenFeatures(ctx context.Context, c *github.Client, repo string)
 	return proven, unproven, note, nil
 }
 
-// refuseNonHuman refuses a human-only act (tell --publish, release) for agent
+// refuseNonHuman refuses a human-only act (tell --publish) for agent
 // lanes and in CI, where the token is a workflow or bot token.
-func (e *Env) refuseNonHuman(what string) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "%s is a human's act; it is refused for agents (AAYU_AGENT=1)", what)
-	}
+func (e *Env) refuseNonHuman(ctx context.Context, what string) error {
 	if e.CI {
 		return Errorf(ExitBlocked, "%s is a human's act; it is refused in CI, where the token is a workflow or bot token", what)
 	}
-	return nil
+	return e.requireHuman(ctx, what, AccessWrite)
 }
 
 // humanAccount checks that tok is a human's own account: not a GitHub bot or

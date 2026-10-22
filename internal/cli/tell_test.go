@@ -137,9 +137,10 @@ func TestTellGuideCitesOnlyProvenFeatures(t *testing.T) {
 		{"a story, not a Feature", "Fixed in o/r#" + strconv.Itoa(story) + ".\n", "#" + strconv.Itoa(story) + " is not a Feature"},
 		{"unproven feature by a root-relative link", "[Bulk upload](/o/r/issues/" + strconv.Itoa(unproven) + ")\n", "#" + strconv.Itoa(unproven) + " is not a Feature"},
 		{"avoided word", "A seamless questionnaire (#1).\n", `"seamless" is on the brand's avoid list (default)`},
+		{"unproven feature named, not linked", "Bulk upload is coming soon.\n", "names #" + strconv.Itoa(unproven) + ` "Bulk upload", which has no authoritative packs`},
 	} {
 		code, rep, _ := tellRun(t, env, opts, "guide", "--from", draft("bad.md", tt.text))
-		if code != ExitBlocked || len(rep.Problems) != 1 || !strings.Contains(rep.Problems[0].Reason, tt.want) {
+		if code != ExitBlocked || len(rep.Problems) == 0 || !strings.Contains(rep.Problems[0].Reason, tt.want) {
 			t.Errorf("%s: exit %d %+v, want 4 and %q", tt.name, code, rep.Problems, tt.want)
 		}
 	}
@@ -168,7 +169,7 @@ func TestTellPublishHumanOnly(t *testing.T) {
 		extra []string
 		want  string
 	}{
-		{"agent lane", agent, nil, nil, "refused for agents"},
+		{"agent lane", agent, nil, nil, "refused for an agent lane"},
 		{"CI token", env, nil, []string{"--ci"}, "refused in CI"},
 		{"GitHub bot account", env, func() { g.ViewerType = "Bot" }, nil, "is a bot identity"},
 		{"configured bot login", env, func() { g.ViewerType = "User" }, []string{"--set", "identity.bot_logins=founder"}, "founder is a bot identity"},
@@ -276,6 +277,10 @@ func TestTellDocsSite(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dir, "docs", "guide", "img"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "README.md"), []byte("# Welcome\n\n![Nine steps](img/journey.svg)\n\nRead the [overview](../../README.md).\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "img", "journey.svg"), []byte("<svg/>"), 0o644)
+	// The guide's skill pages replace the embedded skills on the site, in journey-stage order after their index.
+	_ = os.MkdirAll(filepath.Join(dir, "docs", "guide", "skills"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "skills", "README.md"), []byte("# Every skill\n\nSee [grill](grill.md).\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "skills", "grill.md"), []byte("# `grill`: turn an idea into a work item\n\nBack to [every skill](README.md).\n"), 0o644)
 	guided := filepath.Join(t.TempDir(), "guided")
 	if code, _, errOut := tellRun(t, env, opts, "docs", "--site", guided); code != 0 {
 		t.Fatalf("guided site: %d %s", code, errOut)
@@ -284,7 +289,8 @@ func TestTellDocsSite(t *testing.T) {
 		"index.html":                 `<img src="docs/guide/img/journey.svg" alt="Nine steps">`,
 		"overview.html":              `<a href="constraints.html">CONSTRAINTS.md</a>`,
 		"docs/guide/img/journey.svg": `<svg/>`,
-		"skills/grill.html":          `<a href="../overview.html">README</a>`,
+		"skills/grill.html":          `<a href="../skills/index.html">every skill</a>`,
+		"skills/index.html":          `<a href="../skills/grill.html">grill</a>`,
 	} {
 		if b, err := os.ReadFile(filepath.Join(guided, filepath.FromSlash(file))); err != nil || !strings.Contains(string(b), want) {
 			t.Errorf("guided %s lacks %s (%v)", file, want, err)

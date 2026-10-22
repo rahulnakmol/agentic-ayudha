@@ -10,7 +10,8 @@ import (
 )
 
 // streakRepo serves three merged PRs, newest first: #3 a clean bot PR on
-// internal/cli (L02), #2 a bot PR on internal/cli and internal/github (L02,
+// internal/cli (L02) that the merge gate's log shows reviewed by another
+// family (rung A), #2 a bot PR on internal/cli and internal/github (L02,
 // L06) with a changes-requested review, and #1 a human's PR on internal/cli.
 func streakRepo(t *testing.T) *fake.GitHub {
 	t.Helper()
@@ -18,6 +19,10 @@ func streakRepo(t *testing.T) *fake.GitHub {
 	bot := map[string]any{"login": "aayudha[bot]", "type": "Bot"}
 	pr := func(n int, user map[string]any, merged string) map[string]any {
 		return map[string]any{"number": n, "title": "feat: change", "user": user, "merged_at": merged, "merge_commit_sha": strings.Repeat("a", 39) + string(rune('0'+n))}
+	}
+	withHead := func(p map[string]any, sha string) map[string]any {
+		p["head"] = map[string]any{"sha": sha}
+		return p
 	}
 	commit := func(sha string, author map[string]any, msg string) map[string]any {
 		return map[string]any{"sha": sha, "author": author, "commit": map[string]any{"message": msg}, "parents": []any{map[string]any{"sha": "p"}}}
@@ -31,7 +36,7 @@ func streakRepo(t *testing.T) *fake.GitHub {
 	}
 	g.Static = map[string]any{
 		"/repos/o/r/pulls": []any{
-			pr(3, bot, "2026-10-03T10:00:00Z"), pr(2, bot, "2026-10-02T10:00:00Z"),
+			withHead(pr(3, bot, "2026-10-03T10:00:00Z"), "d3"), pr(2, bot, "2026-10-02T10:00:00Z"),
 			pr(1, map[string]any{"login": "founder", "type": "User"}, "2026-10-01T10:00:00Z"),
 			map[string]any{"number": 4, "title": "closed unmerged", "user": bot},
 		},
@@ -44,6 +49,9 @@ func streakRepo(t *testing.T) *fake.GitHub {
 		"/repos/o/r/issues/2/comments": []any{},
 		"/repos/o/r/pulls/2/reviews":   []any{map[string]any{"user": map[string]any{"login": "founder", "type": "User"}, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-02T09:00:00Z"}},
 	}
+	g.Runs = []fake.WorkflowRun{{ID: 801, Path: ".github/workflows/" + autonomy.MergeGateWorkflow, HeadSHA: "d3", Event: "pull_request_target", Status: "completed", Conclusion: "success"}}
+	g.RunJobs = map[int64][]fake.CheckRun{801: {{ID: 8011, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
+	g.JobLogs = map[int64]string{8011: "2026-10-03T09:00:00.0000000Z inspect #3 at d3: merge (reviewed by claude[bot])\n2026-10-03T09:00:00.0000000Z   review: different-family review (A): claude (anthropic), builder openai\n"}
 	return g
 }
 
@@ -67,7 +75,8 @@ func TestStatusStreak(t *testing.T) {
 		got[s.Layer] = s
 	}
 	if rep.Scanned != 3 || len(rep.Corrections) != 1 || rep.Corrections[0].PR != 2 || rep.Corrections[0].Kind != autonomy.KindChangesRequested ||
-		got["L02"].Streak != 1 || got["L02"].Merges != 2 || got["L02"].LastBreak != 2 || got["L06"].Streak != 0 || got["L01"].Merges != 0 {
+		got["L02"].Streak != 1 || got["L02"].Merges != 2 || got["L02"].LastBreak != 2 || got["L06"].Streak != 0 || got["L01"].Merges != 0 ||
+		rep.Rungs["A"] != 1 || rep.Rungs[""] != 1 || len(rep.Rungs) != 2 {
 		t.Fatalf("report: %+v", rep)
 	}
 

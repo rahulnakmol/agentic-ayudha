@@ -17,15 +17,36 @@ calls = [
   ["ready", "51", "--check"],
 ]
 
-# The human parked result caching and new loading feedback and deferred a CI budget; none may become a criterion.
-# A cold or warm cache as a test condition is not result caching (D-5.3b.g).
-scope = [
-  { pattern = '(?i)\bcach(e|es|ed|ing)\s+(the\s+)?(search\s+)?results?\b|\bresults?\s+cach|\bcache[sd]?\s+(per|by)\s+query|\bper[- ]query\s+cach|\bmemoi[sz]', why = "result caching, which the human parked" },
-  { pattern = '(?i)\b(spinner|skeleton|loading (state|indicator|feedback))\b', why = "loading feedback, which the human parked" },
-  { pattern = '(?i)\b(ci|k6|budget gate|pipeline)\b', why = "a CI budget, which the human deferred" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/performance.md"]
+
+# The human parked result caching and new loading feedback and deferred a CI budget; none may become a criterion.
+# A cold or warm cache as a test condition is not result caching (D-5.3b.g).
+[[scope]]
+pattern = '(?i)\bcach(e|es|ed|ing)\s+(the\s+)?(search\s+)?results?\b|\bresults?\s+cach|\bcache[sd]?\s+(per|by)\s+query|\bper[- ]query\s+cach|\bmemoi[sz]'
+why = "result caching, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['cache the search results', 'a per-query cache', 'memoize the query']
+negated = ['do not cache the search results']
+near_miss = ['the browser cache is not touched']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b(spinner|skeleton|loading (state|indicator|feedback))\b'
+why = "loading feedback, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['a spinner while results load', 'a loading indicator']
+negated = ['no spinner while results load']
+near_miss = ['results finish loading within 300 ms']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b(ci|k6|budget gate|pipeline)\b'
+why = "a CI budget, which the human deferred"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['a k6 check in CI', 'a budget gate in the pipeline']
+negated = ['not checked in CI']
+near_miss = ['search by city']
+negated_fires = true

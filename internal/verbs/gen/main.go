@@ -6,6 +6,8 @@
 //   - docs/README.md: only the regions between the BEGIN/END GENERATED markers (the verbs and plumbing tables)
 //   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage);
 //     docs/guide/journey-*.md: only the stage-verbs region (the verbs of that step)
+//   - docs/guide/skills/<verb>.md: only the skill-card, skill-usage, skill-gates, and skill-human regions (a new
+//     verb gets a page with the headings to write under); docs/guide/skills/README.md: only the skill-index region
 //   - LAYERS.md and docs/RACI.md: whole files
 //   - seats/<seat>/CHARTER.md: only the regions between the BEGIN/END GENERATED: persona and raci markers
 //   - AGENTS.md: only the aayudha:raci section (internal/hosts.RenderAgentsMD), with the twins' voices
@@ -36,7 +38,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
-// personas are the twelve seat personas (WP5.1b), loaded once by run.
+// personas are the fourteen seat personas (WP5.1b), loaded once by run.
 var personas map[verbs.SeatID]seats.Persona
 
 const (
@@ -64,7 +66,7 @@ func run() error {
 	if personas, err = seats.LoadPersonas(os.DirFS(".")); err != nil {
 		return err
 	}
-	steps := []func() error{genReadme, genVerbMap, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
+	steps := []func() error{genReadme, genVerbMap, genSkillPages, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -185,7 +187,7 @@ func genVerbMap() error {
 			if first {
 				stage, first = fmt.Sprintf("[%s](%s)", st.Title, page), false
 			}
-			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, verbLink(c, "../../"), cell(c.Reader))
+			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, verbLink(c), cell(c.Reader))
 		}
 	}
 	s, err := replaceRegion(path, string(b), "verb-map", m.String())
@@ -208,7 +210,7 @@ func genVerbMap() error {
 		v.WriteString("| Verb | What it does |\n|---|---|\n")
 		for _, c := range verbs.Verbs {
 			if slices.Contains(stages, c.Stage) {
-				fmt.Fprintf(&v, "| %s | %s |\n", verbLink(c, "../../"), cell(c.Reader))
+				fmt.Fprintf(&v, "| %s | %s |\n", verbLink(c), cell(c.Reader))
 			}
 		}
 		s, err := replaceRegion(p, string(b), "stage-verbs", v.String())
@@ -222,12 +224,9 @@ func genVerbMap() error {
 	return nil
 }
 
-// verbLink is a verb's name in code, linked to its skill page when it has one.
-func verbLink(c verbs.Command, root string) string {
-	if c.Has(verbs.SurfaceSkill) {
-		return fmt.Sprintf("[%s](%s%s/%s/SKILL.md)", code(c.Name), root, skillsDir, c.Name)
-	}
-	return code(c.Name)
+// verbLink is a verb's name in code, linked to its page in the guide (docs/guide/skills).
+func verbLink(c verbs.Command) string {
+	return fmt.Sprintf("[%s](skills/%s.md)", code(c.Name), c.Name)
 }
 
 // ---- LAYERS.md -------------------------------------------------------------
@@ -321,6 +320,8 @@ Model calling: ` + code("none") + ` is deterministic; ` + code("host") + ` means
 Settled defaults per host. Configuration (` + code("[models.<lane>.<host>]") + `, WP1.2) overrides them; the model gateway
 resolves them (WP1.6). Model IDs are as the AI gateway lists them; the family belongs to the model, not the endpoint.
 Cursor cannot run the openai family, so a GPT model configured for Cursor falls back to the lane's Cursor default.
+Cursor's defaults follow ` + code("[hosts.cursor] plan") + ` (the review-ladder decision of 2026-10-17): ` + code("x") + `, the default, for a plan that includes only
+Cursor's own models, or ` + code("legacy") + ` for one that still includes Claude and Gemini.
 When the binary calls a model itself and the host's default is a host-managed mode, it uses the Claude Code default.
 
 ` + verbs.ReviewerFamilyRule + `
@@ -361,7 +362,14 @@ When the binary calls a model itself and the host's default is a host-managed mo
 			if d.ID != "" {
 				id = code(d.ID)
 			}
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", name, h.Name, cell(model), id, d.Family, cell(alt))
+			host, fam := h.Name, string(d.Family)
+			if d.Plan != "" {
+				host += fmt.Sprintf(" (%s plan)", d.Plan)
+			}
+			if fam == "" {
+				fam = "unknown"
+			}
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", name, host, cell(model), id, fam, cell(alt))
 		}
 	}
 	return writeFile("docs/RACI.md", []byte(b.String()))
@@ -395,7 +403,7 @@ func genCharters() error {
 	}
 	for _, e := range entries {
 		if e.IsDir() && !want[e.Name()] {
-			return fmt.Errorf("seats/%s is not one of the twelve registry seats", e.Name())
+			return fmt.Errorf("seats/%s is not one of the fourteen registry seats", e.Name())
 		}
 	}
 	return nil

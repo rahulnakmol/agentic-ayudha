@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,6 +54,9 @@ func runInstallEnv(ctx context.Context, e *Env, in Values) error {
 	}
 	hosts := agentenv.Hosts
 	if e.Host != "" && e.Host != "all" {
+		if !slices.Contains(agentenv.Hosts, e.Host) {
+			return Errorf(ExitUsage, "install --env: aayu sets up no agent environment for %s yet; name one of %s with --host", e.Host, strings.Join(agentenv.Hosts, ", "))
+		}
 		hosts = []string{e.Host}
 	}
 	if r := in.String("record"); r != "" {
@@ -122,6 +126,18 @@ func runInstallEnv(ctx context.Context, e *Env, in Values) error {
 	if apply && !e.DryRun {
 		if err := agentenv.Write(root, s); err != nil {
 			return err
+		}
+		if len(s.Gate) > 0 { // git keeps hooks per clone, so the pre-push hook is installed, not committed (Story #399)
+			hooks, err := e.exec()(ctx, root, "git", "rev-parse", "--path-format=absolute", "--git-path", "hooks")
+			if err == nil {
+				var p string
+				if p, err = agentenv.InstallPrePush(strings.TrimSpace(hooks)); err == nil {
+					rep.Notes = append(rep.Notes, "installed the pre-push hook "+p+": git push runs the local gate (.agents/check --full) first")
+				}
+			}
+			if err != nil {
+				rep.Notes = append(rep.Notes, "pre-push hook not installed: "+err.Error())
+			}
 		}
 	}
 	var failed []string

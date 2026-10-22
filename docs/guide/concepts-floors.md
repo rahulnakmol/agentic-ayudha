@@ -18,7 +18,8 @@ misses, and a miss blocks the merge. No model, however persuasive, can overrule 
 | Dependencies | No critical or high known vulnerabilities |
 | Accessibility | WCAG 2.2 AA: no serious or critical violations; every state works by keyboard, with reduced motion, and at 200 % text; touch targets at least 44 by 44 pixels |
 | Page speed | Your own budgets, for example a score of at least 90 |
-| Optional | Screen reader, web security scan (DAST), API load, and mobile, when you switch them on |
+| Web security scan (DAST) | No high-risk alerts from a scan of your running web app or API; attacks run only against the copy `verify` starts itself |
+| Optional | Screen reader, API load, and mobile, when you switch them on |
 
 Floors run only where a change can affect them: a story with no screens skips the accessibility and speed floors,
 and the pack says so.

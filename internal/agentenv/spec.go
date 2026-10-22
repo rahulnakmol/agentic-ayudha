@@ -61,7 +61,8 @@ type Tool struct {
 	Version  string            `toml:"version,omitempty"` // the pinned version
 	Accept   []string          `toml:"accept,omitempty"`  // "lo hi" version ranges an installed copy may satisfy (hi empty: open)
 	SHA256   map[string]string `toml:"sha256,omitempty"`  // amd64, arm64
-	Via      string            `toml:"via,omitempty"`     // corepack, toolchain, tarball, rustup
+	Via      string            `toml:"via,omitempty"`     // corepack, toolchain, tarball, rustup; aayu: source, release
+	Path     string            `toml:"path,omitempty"`    // aayu: the absolute path the committed Amp plugin calls
 	Evidence string            `toml:"evidence"`
 }
 
@@ -88,6 +89,19 @@ type EnvVar struct {
 	Evidence string `toml:"evidence"`
 }
 
+// GateJob is one CI job a pull request must pass and how the local gate
+// (`.agents/check --full`) mirrors it (Story #399): the commands that run its
+// checks here, and, for what cannot run here, why it runs only in CI. Discover
+// finds the jobs in the workflows; the commands are the repository's own, kept
+// across rediscovery (KeepPins). A job with neither is a gap: the gate fails on
+// it, naming it.
+type GateJob struct {
+	Job      string   `toml:"job"`              // the job's check name
+	Workflow string   `toml:"workflow"`         // the workflow file that defines it
+	Run      []string `toml:"run,omitempty"`    // bash commands, in order; the job fails at the first that fails
+	Remote   string   `toml:"remote,omitempty"` // what of it runs only in CI, and why
+}
+
 // Answer is one interview answer: the value and whether the human said it or
 // accepted the default.
 type Answer struct {
@@ -108,6 +122,7 @@ type Spec struct {
 	EnvFile  string            `toml:"env_file,omitempty"` // .env.example copied to this name when absent
 	Checks   []Step            `toml:"checks"`
 	Steps    []Step            `toml:"steps"` // custom setup steps the human added
+	Gate     []GateJob         `toml:"gate"`  // the local gate's mirror of the required CI jobs; not part of the environment
 	Notes    []string          `toml:"notes"`
 	Answers  map[string]Answer `toml:"answers"`
 }
@@ -135,7 +150,10 @@ func (s *Spec) HasHost(h string) bool {
 // Requirements is what the code asks for, without resolved pins: a spec is
 // stale when the code's requirements change ("the toolchain changed").
 func (s *Spec) Requirements() string {
-	type tool struct{ Name, Want string }
+	type tool struct {
+		Name, Want string
+		Path       string `json:",omitempty"` // omitted when empty, so older specs keep their fingerprint
+	}
 	r := struct {
 		Tools                     []tool
 		Packages, Browsers, Hosts []string
@@ -148,7 +166,7 @@ func (s *Spec) Requirements() string {
 	}
 	for _, t := range s.Tools {
 		if t.Name != "corepack" { // Resolve adds it; the code does not ask for it
-			r.Tools = append(r.Tools, tool{t.Name, t.Want})
+			r.Tools = append(r.Tools, tool{t.Name, t.Want, t.Path})
 		}
 	}
 	for _, d := range s.Deps {

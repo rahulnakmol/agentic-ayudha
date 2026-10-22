@@ -18,9 +18,9 @@ there is one Go value per command, unit tests check that value, and every other 
 
 The registry holds more than verbs:
 
-- `Verbs`: the 32 verbs, in plan order.
+- `Verbs`: the 34 verbs: the 32 of the plan, in plan order, then `chart` (WP5.1g) and `survey` (WP5.9).
 - `Plumbing`: the 15 plumbing commands, built with the `plumb` helper (no lane, no layers, CLI only).
-- `Seats`: the twelve seats.
+- `Seats`: the fourteen seats.
 - `LayerTable`: the nine layers (L01 to L09), each with one owner seat and the path globs that place a file in it.
 - `Hosts`: Amp, Cursor, Claude Code, and OpenAI Codex, with model families a host cannot run.
 - `Lanes`: the six model lanes (`build`, `spec`, `plan`, `review`, `ui-review`, `chore`) with per-host defaults.
@@ -109,7 +109,7 @@ root (or reaches it), writes only when bytes differ, and is deterministic.
 
 | Generator | Source | Writes |
 |---|---|---|
-| `internal/verbs/gen` | the registry and `raci.go` | `docs/README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
+| `internal/verbs/gen` | the registry and `raci.go` | `docs/README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; the generated regions of each skill page `docs/guide/skills/<verb>.md` (a new verb gets a page) and its index; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
 | `internal/config/gen` | `internal/config/defaults.toml` | `CONSTRAINTS.md` |
 | `internal/workitems/gen` | the work-item schema in `internal/workitems` | `work-items/forms/aayudha-<type>.yml` and a region of `work-items/README.md` |
 | `internal/loops/gen` | `loops/*.toml` | `.github/workflows/aayudha-loops.yml`, `loops/amp/<name>.json`, `loops/cursor/aayudha-loops.tf` |
@@ -170,8 +170,8 @@ Before it writes anything, `internal/verbs/gen` runs `verbs.LintRACI`. The lint 
 per command, a RACI entry for every verb whose Consulted and Informed seats are known, unique, and distinct from the
 Accountable seat, and one known owner seat per layer. A registry that breaks it fails `go generate` and CI.
 
-`TestRegistry` in `internal/verbs/registry_test.go` checks the rest: exactly 32 verbs and 15 plumbing commands in
-plan order, unique names, one stage per verb, twelve seats, nine layers, known gates and lanes, one-line summaries
+`TestRegistry` in `internal/verbs/registry_test.go` checks the rest: exactly 34 verbs and 15 plumbing commands in
+plan order, unique names, one stage per verb, fourteen seats, nine layers, known gates and lanes, one-line summaries
 of at most 200 characters, valid modes and exposures, surfaces that follow exposure, input rules (an enum has
 values, a human-only input is never required), and a default for every lane on every host.
 
@@ -196,7 +196,7 @@ if the second run changes anything.
 
 1. Every command has exactly one Accountable seat, and every layer exactly one owner. Enforced by `verbs.LintRACI`
    in `internal/verbs/raci.go` (`TestLintRACI`), run first by `internal/verbs/gen/main.go`.
-2. The registry holds 32 verbs and 15 plumbing commands, each with valid fields. Enforced in
+2. The registry holds 34 verbs and 15 plumbing commands, each with valid fields. Enforced in
    `internal/verbs/registry_test.go` (`TestRegistry`).
 3. Generated files match the registry byte for byte. Enforced by the `generate-drift` job in
    `.github/workflows/ci.yml`.

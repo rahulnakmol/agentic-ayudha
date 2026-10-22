@@ -73,6 +73,9 @@ type GateInput struct {
 type GateResult struct {
 	Pass  bool
 	Lines []string
+	// Unapproved are the protected paths that failed for want of a
+	// CODEOWNER's approval; empty when the gate failed for another reason.
+	Unapproved []string
 }
 
 // ProtectedPathsGate implements the protected-paths check (WP0.1, extended by
@@ -113,6 +116,7 @@ func ProtectedPathsGate(in GateInput) GateResult {
 			continue
 		}
 		res.Pass = false
+		res.Unapproved = append(res.Unapproved, path)
 		line := fmt.Sprintf("FAIL %s (%s): needs an approval on the head commit from a human CODEOWNER (%s) who is not the author",
 			path, pattern, "@"+strings.Join(owners, ", @"))
 		if len(why) > 0 {

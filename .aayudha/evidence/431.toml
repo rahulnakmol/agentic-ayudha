@@ -1,0 +1,26 @@
+# Which tests prove story #431's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # refused for agents and without a terminal, with no write
+tests = ["internal/cli:TestInbox"]
+
+[[criterion]]
+id = 2 # the six kinds of step, each once, with a recommendation and the keys
+tests = ["internal/cli:TestInbox"]
+
+[[criterion]]
+id = 3 # accept on each: decide --accept, close as replaced, mark merged, close as fixed; skip writes nothing; the person's identity
+tests = ["internal/cli:TestInbox"]
+
+[[criterion]]
+id = 4 # choose another on a Decision accepts that option and clears the provisional label
+tests = ["internal/cli:TestInbox"]
+
+[[criterion]]
+id = 5 # home and next point to the inbox only when it has steps
+tests = ["internal/cli:TestInboxOnHome", "internal/cli:TestHomeModes"]
+
+[[criterion]]
+id = 6 # the pre-tool hook blocks aayu inbox in an agent's shell
+tests = ["internal/cli:TestInbox", "internal/verbs:TestRegistry"]

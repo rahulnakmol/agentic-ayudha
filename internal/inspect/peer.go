@@ -55,7 +55,7 @@ func crossCheck(ctx context.Context, r Reviewer, in Input, fs []Finding) (map[st
 		list.WriteString("\n")
 	}
 	msg := "## Findings to check\n\n" + triage.Untrusted("other-reviewer", list.String()) + "\n\n" + reviewMaterial(in)
-	req := models.Request{System: VerifySystem, MaxTokens: 3000, Messages: []models.Message{{Role: "user", Content: msg}}}
+	req := models.Request{System: VerifySystem, MaxTokens: 3000, Messages: []models.Message{{Role: "user", Content: msg}}, Stream: true}
 	var v verdicts
 	var spent float64
 	err := models.Structured(ctx, func(ctx context.Context, q models.Request) (models.Response, error) {
@@ -74,13 +74,78 @@ func crossCheck(ctx context.Context, r Reviewer, in Input, fs []Finding) (map[st
 	return refuted, spent, nil
 }
 
+// pairPeer pairs each of B's findings with at most one of A's that names the
+// same problem, since each reviewer reports a defect once: first by Same, then,
+// among those still unpaired, by samePeer. It returns, for each of b, the
+// index of its pair in a, or -1.
+func pairPeer(a, b []Finding) []int {
+	pair := make([]int, len(b))
+	for j := range pair {
+		pair[j] = -1
+	}
+	taken := make([]bool, len(a))
+	for _, match := range []func(x, y Finding) bool{Same, samePeer} {
+		for j, f := range b {
+			if pair[j] >= 0 {
+				continue
+			}
+			for i, g := range a {
+				if !taken[i] && match(g, f) {
+					pair[j], taken[i] = i, true
+					break
+				}
+			}
+		}
+	}
+	return pair
+}
+
+// samePeer catches one defect that two reviewers reported in a way Same
+// misses (D-4.8d.8): on the same line under different categories, with
+// overlapping wording (stemmed title and detail, at least 0.25); or in the same
+// category within 10 lines, anchored on its cause and its symptom, with titles
+// that share roots (at least 0.15). In the review eval's runs 39005146661 to
+// 39009139501, such duplicates measured 0.38 and 0.18 to 0.38; distinct
+// findings in one file at most 0.13 and 0.08.
+func samePeer(a, b Finding) bool {
+	if a.File != b.File || a.Line == 0 || b.Line == 0 {
+		return false
+	}
+	if a.Line == b.Line {
+		return jaccard(stems(a.Title+" "+a.Detail), stems(b.Title+" "+b.Detail)) >= 0.25
+	}
+	return a.Category == b.Category && abs(a.Line-b.Line) <= 10 && jaccard(stems(a.Title), stems(b.Title)) >= 0.15
+}
+
+// unpaired returns the findings of a and of b that pairPeer left without a
+// pair: each goes to the other reviewer for the asymmetric check.
+func unpaired(a, b []Finding, pair []int) (onlyA, onlyB []Finding) {
+	for i, f := range a {
+		if !slices.Contains(pair, i) {
+			onlyA = append(onlyA, f)
+		}
+	}
+	for j, f := range b {
+		if pair[j] < 0 {
+			onlyB = append(onlyB, f)
+		}
+	}
+	return onlyA, onlyB
+}
+
 // mergePeer combines two reviewers' cleaned findings: a finding both raised
-// is confirmed; one only one raised goes to the other for the asymmetric
-// check. A refuted finding is dropped, unless it is a P0 in a protected
-// category, which is kept and marked disputed.
-func mergePeer(a, b []Finding, refutedByB, refutedByA map[string]string) (keep []Finding, drop []Dropped) {
-	all := append(slices.Clone(a), b...)
-	merged, _ := Dedupe(all)
+// (paired by pairPeer) is confirmed; one only one raised went to the other
+// for the asymmetric check. A refuted finding is dropped, unless it is a P0 in
+// a protected category, which is kept and marked disputed.
+func mergePeer(a, b []Finding, pair []int, refutedByB, refutedByA map[string]string) (keep []Finding, drop []Dropped) {
+	merged := slices.Clone(a)
+	for j, f := range b {
+		if pair[j] >= 0 {
+			absorb(&merged[pair[j]], f)
+		} else {
+			merged = append(merged, f)
+		}
+	}
 	for _, f := range merged {
 		reason, refuted := "", false
 		if len(f.Sources) == 1 {
@@ -103,17 +168,6 @@ func mergePeer(a, b []Finding, refutedByB, refutedByA map[string]string) (keep [
 		}
 	}
 	return keep, drop
-}
-
-// singleSource returns the findings of fs that the other list has no match for.
-func singleSource(fs, other []Finding) []Finding {
-	var out []Finding
-	for _, f := range fs {
-		if !slices.ContainsFunc(other, func(o Finding) bool { return Same(f, o) }) {
-			out = append(out, f)
-		}
-	}
-	return out
 }
 
 // worst returns the more severe of two dispositions.

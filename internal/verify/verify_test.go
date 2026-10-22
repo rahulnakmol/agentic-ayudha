@@ -262,6 +262,103 @@ func TestScannerFloorsFindings(t *testing.T) {
 	}
 }
 
+// Codex review of #500: a failing floor exposes only the severities over their
+// maximum, so a finding within its allowance files no security Bug.
+func TestScannerFloorsFindingsOverBudget(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	semgrep := func(id, sev, impact string) string {
+		return fmt.Sprintf(`{"check_id":%q,"path":"main.go","start":{"line":3},"extra":{"severity":%q,"metadata":{"impact":%q}}}`, id, sev, impact)
+	}
+	osv := func(id, score string) string {
+		return fmt.Sprintf(`{"package":{"name":%q,"version":"1.0.0","ecosystem":"Go"},"groups":[{"ids":[%q],"max_severity":%q}]}`, "example.com/"+id, id, score)
+	}
+	cases := []struct {
+		name, tool, flag, report string
+		floor                    Floor
+		set                      func(r *Run)
+		want                     []string
+	}{
+		// One critical over max_critical = 0; three highs within max_high = 3.
+		{"sast", "semgrep", "--output", `{"results":[` + strings.Join([]string{semgrep("crit", "ERROR", "CRITICAL"), semgrep("h1", "ERROR", "HIGH"), semgrep("h2", "ERROR", "HIGH"), semgrep("h3", "ERROR", "HIGH")}, ",") + `],"errors":[]}`,
+			SAST{}, func(r *Run) { r.Floors.SAST.MaxHigh = 3 }, []string{"crit"}},
+		// The other way round: one critical within max_critical = 1; one high over max_high = 0.
+		{"deps", "osv-scanner", "--output", `{"results":[{"source":{"path":"go.mod"},"packages":[` + osv("GO-crit", "9.8") + "," + osv("GO-high", "7.5") + `]}]}`,
+			Deps{}, func(r *Run) { r.Floors.Deps.MaxCritical = 1 }, []string{"GO-high example.com/GO-high"}},
+	}
+	for _, c := range cases {
+		bin := t.TempDir()
+		fakeTool(t, bin, c.tool, c.flag, c.report, 0)
+		r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		c.set(r)
+		res := Execute(context.Background(), r, []Floor{c.floor})
+		var got []string
+		for _, f := range res.Findings {
+			got = append(got, f.ID)
+		}
+		if res.Checks[0].Result != proof.Fail || !slices.Equal(got, c.want) {
+			t.Errorf("%s: %s, findings %v, want only %v", c.name, res.Checks[0].Result, got, c.want)
+		}
+	}
+}
+
+// Codex review of #500: a semgrep scan that left part of the tree unanalysed
+// never passes, since a finding there would go unreported; a partly parsed
+// file, as semgrep reports for scripts embedded in workflow YAML, still passes.
+func TestSASTUnanalysed(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	report := func(errs string) string { return `{"results":[],"errors":[` + errs + `]}` }
+	cases := []struct {
+		name, report string
+		code         int
+		want         string
+	}{
+		{"partial parsing", report(`{"level":"warn","type":["PartialParsing",[{"path":"ci.yml"}]],"path":"ci.yml"},{"level":"warn","type":"Internal matching error","path":"ci.yml"}`), 0, proof.Pass},
+		{"syntax error", report(`{"level":"warn","type":"Syntax error","path":"web.js"}`), 0, proof.Blocked},
+		{"timeout", report(`{"level":"warn","type":"Timeout","path":"big.go"}`), 0, proof.Blocked},
+		{"fatal level", report(`{"level":"error","type":"Some new error","path":""}`), 0, proof.Blocked},
+		{"exit 2", report(""), 2, proof.Blocked},
+	}
+	for _, c := range cases {
+		bin := t.TempDir()
+		fakeTool(t, bin, "semgrep", "--output", c.report, c.code)
+		r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if got := Execute(context.Background(), r, []Floor{SAST{}}).Checks[0]; got.Result != c.want {
+			t.Errorf("%s: %s (%s), want %s", c.name, got.Result, got.Detail, c.want)
+		}
+	}
+}
+
+// Codex review of #500: a gitleaks or osv-scanner run that exits with an error
+// never passes, whatever report it left; osv-scanner's own codes for found
+// vulnerabilities (1) and no packages (128) are results.
+func TestScannerErrorExits(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	osvHigh := `{"results":[{"packages":[{"package":{"name":"golang.org/x/text","version":"0.3.0","ecosystem":"Go"},"groups":[{"ids":["GO-2020-0015"],"max_severity":"7.5"}]}]}]}`
+	cases := []struct {
+		name  string
+		floor Floor
+		tool  string
+		flag  string
+		code  int
+		out   string
+		want  string
+	}{
+		{"gitleaks error", Secrets{}, "gitleaks", "--report-path", 1, `[]`, proof.Blocked},
+		{"gitleaks clean", Secrets{}, "gitleaks", "--report-path", 0, `[]`, proof.Pass},
+		{"osv general error", Deps{}, "osv-scanner", "--output", 127, `{"results":[]}`, proof.Blocked},
+		{"osv found", Deps{}, "osv-scanner", "--output", 1, osvHigh, proof.Fail},
+		{"osv no packages", Deps{}, "osv-scanner", "--output", 128, `{"results":[]}`, proof.Pass},
+	}
+	for _, c := range cases {
+		bin := t.TempDir()
+		fakeTool(t, bin, c.tool, c.flag, c.out, c.code)
+		r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if got := Execute(context.Background(), r, []Floor{c.floor}).Checks[0]; got.Result != c.want {
+			t.Errorf("%s: %s (%s), want %s", c.name, got.Result, got.Detail, c.want)
+		}
+	}
+}
+
 // WP4.4 accept with the real tools (run by the CI security job, which
 // installs the pinned semgrep, gitleaks, and osv-scanner): planted findings
 // fail each floor; a clean fixture passes. The planted fixtures are written

@@ -26,7 +26,7 @@ func runModels(_ context.Context, e *Env, _ Values) error { // action: show
 	if err != nil {
 		return err
 	}
-	r := models.Resolver{Models: l.Config.Models, Log: func(s string) { e.Logf("%s", s) }}
+	r := models.Resolver{Models: l.Config.Models, Hosts: l.Config.Hosts, Log: func(s string) { e.Logf("%s", s) }}
 	var rows []modelRow
 	for _, lane := range verbs.Lanes {
 		for _, h := range verbs.Hosts {
@@ -38,7 +38,7 @@ func runModels(_ context.Context, e *Env, _ Values) error { // action: show
 				return Wrap(ExitUsage, err)
 			}
 			route := "host-managed (the host picks the model)"
-			if rt, err := models.RouteFor(l.Config.Models, res.Model, res.Family); err == nil {
+			if rt, err := models.RouteOf(l.Config.Models, res); err == nil {
 				route = fmt.Sprintf("%s %s %s (key: %s)", rt.Via, rt.Style, rt.BaseURL, rt.Secret)
 			}
 			rows = append(rows, modelRow{res, route})

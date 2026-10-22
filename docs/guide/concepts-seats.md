@@ -1,6 +1,6 @@
 # Seats and pairing
 
-A delivery team works because everyone knows their job. aayudha gives its agents the same clarity: twelve **seats**,
+A delivery team works because everyone knows their job. aayudha gives its agents the same clarity: fourteen **seats**,
 each a role with its own responsibilities, such as Product Strategist or Engineering Manager. Every verb belongs to
 exactly one seat, so there is never a question of who is accountable for a step.
 
@@ -24,19 +24,21 @@ aayu seat add product-strategist --human <github-login>
 aayu seat list
 ```
 
-## The twelve seats
+## The fourteen seats
 
 | Seat | In plain words | Some of its verbs |
 |---|---|---|
 | Founder | Final authority; sets up repositories and accepts decisions | `init`, `decide` |
 | Product Strategist | Turns ideas into clear, checked work | `grill`, `slice`, `ready`, `triage` |
 | Code Architect | Plans how each story is built, layer by layer | `plan` |
+| Data & AI Architect | Designs the data and evidence behind numbers and AI answers, and measures them | `chart`, `measure` |
 | Engineering Manager | Reviews, ships, and keeps delivery healthy | `inspect`, `ship`, `status`, `retro` |
-| AI Native Engineer | Builds, runs the checks, handles incidents | `build`, `verify`, `respond`, `evolve` |
+| AI Native Engineer | Builds the software and runs the checks | `build`, `verify`, `evolve` |
+| Production Engineer | Runs the software in production: incidents, SLOs, runbooks, rollbacks | `respond` |
 | Quality Architect | Owns the floors and the proof packs | `proof` |
 | UX Researcher | Designs and reviews the screens | `research`, `wireframe`, `review`, `polish` |
 | DevOps Tinkerer | Releases, installs, and keeps the tooling working | `release`, `install`, `doctor` |
-| Revenue Architect | Measures outcomes and runs experiments | `measure`, `experiment`, `readout` |
+| Revenue Architect | Sets the targets and runs experiments | `experiment`, `readout` |
 | Mentalist | Explains work to any audience | `brief` |
 | Marketer and Documenter | Writes docs and launch copy from proven work | `tell` |
 | Auditor | Checks the record and reports on it | `audit` |
@@ -52,10 +54,11 @@ aayu seat list
 - **Room to grow.** Start solo. Pair a teammate with the seats they care about when they join, and their reviews
   become required for their layers.
 
-On a small team you do not manage twelve seats. They all run solo by default; you pair a person only where you want
+On a small team you do not manage fourteen seats. They all run solo by default; you pair a person only where you want
 their review.
 
-Full details are in the [RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).
+Every twin, its layers, and its model lanes are on [your agentic team](concepts-team.md). Full details are in the
+[RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).
 > **Under the hood:** seats, verbs, and their RACI are declared once in the verb registry; see
 > [the verb registry and code generation](how-registry.md).
 

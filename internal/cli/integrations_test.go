@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -79,13 +81,19 @@ func TestDoctorIntegrations(t *testing.T) {
 		return in
 	}
 	r := &fixture.Replayer{T: t, Rec: &fixture.Recording{Interactions: []fixture.Interaction{
+		// The approvals row asks who each token-shaped variable is (Story #481): the GitHub key is one.
+		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`),
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
+		// Decision #449: doctor then tries each PostHog capability with a cheap read.
+		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
+		{Method: "POST", URL: "https://eu.posthog.com/api/projects/12345/query/", Status: 200, Response: []byte(`{"results":[[1]]}`)},
 		ok("https://sentry.io/api/0/", "", `{"auth":{"scopes":["event:read","project:write"]},"user":{"username":"founder"}}`),
 		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`), // fine-grained: no X-OAuth-Scopes
 		ok("https://api.figma.com/v1/me", "", `{"id":"1197346","handle":"Rahul"}`),
 	}}}
 	env := map[string]string{"AAYU_SECRET_POSTHOG": "phx_test", "AAYU_SECRET_SENTRY": "sntrys_test", "AAYU_SECRET_GITHUB_READ": "github_pat_test",
-		"AAYU_SECRET_FIGMA": "figd_test", "AAYU_SECRET_MOBBIN": "mobbin_oauth_test"}
+		"AAYU_SECRET_FIGMA": "figd_test", "AAYU_SECRET_MOBBIN": "mobbin_oauth_test",
+		"AAYU_INTEGRATIONS__MOBBIN__URL": mobbin.URL} // a url off the provider's cloud is the person's, never the checkout's (Bug #598)
 	repo := gitInit(t, "dev", map[string]string{".aayudha/config.toml": `version = 1
 [integrations.posthog]
 secret = "posthog"
@@ -107,7 +115,6 @@ scope = "read"
 [integrations.mobbin]
 secret = "mobbin"
 scope = "read"
-url = "` + mobbin.URL + `"
 `})
 	_, out, errs := run(t, env, Options{Dir: repo, Exec: realGitWithLFS, LookPath: noTools, HTTP: &http.Client{Transport: local{r}},
 		Secrets: secrets.New(secrets.Env{Getenv: func(k string) string { return env[k] }})}, "doctor")
@@ -117,6 +124,7 @@ url = "` + mobbin.URL + `"
 	}
 	for _, want := range []string{
 		"posthog: reachable as personal API key aayudha; read-only scope verified (query:read, insight:read per GET /api/personal_api_keys/@current/)",
+		"posthog, HogQL queries (query:read; used by measure, grill, experiment, readout): works: project 12345 answered SELECT 1",
 		"sentry: reachable, but the key is write-capable (project:write per GET /api/0/); read verbs refuse it",
 		"github: reachable as rahulnakmol; the provider does not report this key's scope, so configured scope read is trusted",
 		"figma: reachable as Rahul; the provider does not report this key's scope, so configured scope read is trusted",
@@ -125,5 +133,21 @@ url = "` + mobbin.URL + `"
 		if !strings.Contains(out, want) {
 			t.Errorf("doctor output lacks %q:\n%s%s", want, out, errs)
 		}
+	}
+}
+
+// TestDoctorRefusesCheckoutIntegrationURL (Bug #598): a checkout config that
+// points an integration at another host fails the config row, and the stored
+// key never leaves: the host receives no request.
+func TestDoctorRefusesCheckoutIntegrationURL(t *testing.T) {
+	var got atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { got.Add(1) }))
+	defer srv.Close()
+	env := map[string]string{"AAYU_SECRET_POSTHOG": "phx_test"}
+	repo := gitInit(t, "dev", map[string]string{".aayudha/config.toml": "version = 1\n[integrations.posthog]\nsecret = \"posthog\"\nscope = \"read\"\nproject = \"12345\"\nurl = \"" + srv.URL + "\"\n"})
+	_, out, _ := run(t, env, Options{Dir: repo, Exec: realGitWithLFS, LookPath: noTools, HTTP: srv.Client(),
+		Secrets: secrets.New(secrets.Env{Getenv: func(k string) string { return env[k] }})}, "doctor")
+	if !regexp.MustCompile(`FAIL +config +config is invalid`).MatchString(out) || !strings.Contains(out, "[integrations.posthog] url") || got.Load() != 0 {
+		t.Errorf("doctor sent %d request(s) to the checkout's url; want 0 and the config refusal:\n%s", got.Load(), out)
 	}
 }

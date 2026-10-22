@@ -19,6 +19,13 @@ permissions:
   contents: read
   pull-requests: read
 
+# One gate run per PR: a push or an edit cancels the PR's older runs, whose heads no longer merge. A re-run (what
+# protected-paths-rerun.yml posts after a review) replays its old run's payload, which may name an older head, so it
+# gets a group per head commit: it never cancels the newer head's only run, and re-runs of one head collapse.
+concurrency:
+  group: protected-paths-${{ github.event.pull_request.number }}${{ github.run_attempt != '1' && format('-rerun-{0}', github.event.pull_request.head.sha) || '' }}
+  cancel-in-progress: true
+
 jobs:
   # The job name is a required status check in the protected-paths-codeowner-review ruleset; do not rename.
   protected-paths:

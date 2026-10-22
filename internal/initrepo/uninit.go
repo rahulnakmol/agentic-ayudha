@@ -153,6 +153,9 @@ func (in *Init) removeFile(f File) error {
 	}
 	if f.Section != "" {
 		next := hosts.RemoveAgentsSection(cur, f.Section)
+		if f.Section == hostConfigSection {
+			next = []byte(RenderHostConfigOwners(string(cur), ""))
+		}
 		if bytes.Equal(next, cur) {
 			in.forgetFile(f.Path)
 			return nil
@@ -161,7 +164,7 @@ func (in *Init) removeFile(f File) error {
 			in.note("uninit", "file", f.Path, "planned", "remove section "+f.Section)
 			return nil
 		}
-		if f.Created && strings.TrimSpace(string(next)) == "# AGENTS.md" {
+		if rest := strings.TrimSpace(string(next)); f.Created && (rest == "# AGENTS.md" || rest == "" && f.Section == hostConfigSection) {
 			err = os.Remove(full)
 		} else {
 			err = os.WriteFile(full, next, 0o644)

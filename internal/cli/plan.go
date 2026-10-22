@@ -33,6 +33,7 @@ type PlanRecord struct {
 	BodyHash    string                `json:"body_hash"`
 	Footprint   []string              `json:"footprint"`
 	Checkpoints []planning.Checkpoint `json:"checkpoints"`
+	Rollout     *planning.Rollout     `json:"rollout,omitempty"`
 	Review      planning.Review       `json:"em_review"`
 	PlannedAt   string                `json:"planned_at"`
 	PlannedBy   string                `json:"planned_by"`
@@ -163,6 +164,17 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	res.PlanReport = planning.CheckPlan(story, footprint, never, d)
+	if defs, _, err := readSLOs(config.RepoRoot(e.Dir)); err != nil {
+		return Wrap(ExitUsage, err)
+	} else if defs != nil {
+		var names []string
+		for _, o := range defs.SLOs {
+			names = append(names, o.Name)
+		}
+		if ps := planning.CheckRollout(d, names); len(ps) > 0 {
+			res.Problems, res.Pass = append(res.Problems, ps...), false
+		}
+	}
 	for i, cp := range d.Checkpoints {
 		for _, ref := range cp.Checks {
 			if !known[ref] {
@@ -173,7 +185,7 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 	}
 	if res.Pass && in.Bool("create") {
 		res.DryRun = c.DryRun()
-		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Review: res.Review,
+		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Rollout: d.Rollout, Review: res.Review,
 			PlannedAt: e.Now().UTC().Format(time.RFC3339), PlannedBy: c.Identity()}
 		if res.FromPlan && !res.DryRun {
 			add := make([]string, 0, len(res.Footprint))
@@ -239,8 +251,8 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 // (never an agent) who is the EM seat's paired human, else the [autonomy]
 // approver, else, in solo mode, the one human, recorded as such.
 func (e *Env) approvePlan(ctx context.Context, repo string, n int, cfg *config.Config) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "plan --approve is the Engineering Manager's review; it is refused for agents")
+	if err := e.requireHuman(ctx, "plan --approve (the Engineering Manager's review)", AccessWrite); err != nil {
+		return err
 	}
 	_, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
@@ -295,8 +307,8 @@ func (e *Env) approvePlan(ctx context.Context, repo string, n int, cfg *config.C
 // a bypass (em_review.bypass), never as an approval, so `ship` accepts it,
 // and the ship record and `audit` list it as a plan-review bypass.
 func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *config.Config) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "plan --solo-bypass is a human's decision; it is refused for agents")
+	if err := e.requireHuman(ctx, "plan --solo-bypass", AccessAdmin); err != nil {
+		return err
 	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
@@ -324,12 +336,12 @@ func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *con
 		return Errorf(ExitUsage, "plan --solo-bypass: #%d's plan was already reviewed by %s; no bypass is needed", n, p.Review.ApprovedBy)
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	url, err := soloModeComment(ctx, c, owner, name, n, me.Login, cfg, "plan --solo-bypass", "a comment on the story")
+	url, err := soloModeComment(ctx, c, owner, name, n, me.Login, cfg, "plan --solo-bypass", "a comment on the story", "")
 	if err != nil {
 		return err
 	}
 	p.Review.Bypass = &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: me.Login, RecordedAt: e.Now().UTC().Format(time.RFC3339), Comment: url,
-		Note: "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"}
+		Note: "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"}
 	b, _ := json.MarshalIndent(p, "", "  ")
 	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: solo-mode plan-review bypass of #%d recorded by %s (no review)", n, me.Login), Files: map[string][]byte{PlanLedgerPath(n): append(b, '\n')}}); err != nil {
 		return Wrap(ExitExternal, err)

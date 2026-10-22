@@ -1,0 +1,14 @@
+# Which tests prove Bug #601's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a forged later state leaves the cap: inspect outside CI stops at it, and the inbox still lists the PR
+tests = ["internal/cli:TestInspectStateTrustedWriter", "internal/cli:TestInbox"]
+
+[[criterion]]
+id = 2 # --dismiss refuses a finding that only a forged state names, and writes nothing to the ledger
+tests = ["internal/cli:TestInspectStateTrustedWriter"]
+
+[[criterion]]
+id = 3 # a delegated build's follow-up and brief use only the trusted state
+tests = ["internal/cli:TestDelegateCycleCapPages", "internal/cli:TestBriefCLI"]

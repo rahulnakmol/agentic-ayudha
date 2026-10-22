@@ -1,0 +1,40 @@
+# survey (D-5.9i, D-5.9j): MINPACK in its original fixed form (github.com/certik/minpack at 12f30bc; the repository is
+# MIT, the MINPACK code under the Minpack Copyright Notice (1999) of the University of Chicago; repos/minpack holds
+# src/, examples/, the seven ex/ drivers and their data files ex/file21-23, the build files, and the readme, without
+# the netlib distribution files ex/file01-20). The person asks for the analysis, the traps a port must check, what not
+# to carry over, and a move to modern Fortran with the same results. The host has run `aayu survey`, every `--module`,
+# the six drivers under `--golden --probe` (probes/: a Release-flags build and an -O1 sanitiser build as --check-bin,
+# and coverage), and read the files below; no person is in the session, so every question stays open and every
+# do-not-carry entry stays proposed. Floors: `aayu survey --draft` (citations resolve, probe: facts included; bases;
+# trap rules; do-not-carry and contract shape; a level only the request or an answer decides; exact needs exact
+# evidence; steps avoid the do-not-carry entries in their modules), no answered question, and the scope rule.
+# output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md),
+# amended for the capability-map and runner floors (the sample drivers and examples, ucodrv, each case set's runners).
+skill = "survey"
+description = "Survey legacy fixed-form Fortran: traps checked with runtime evidence, a do-not-carry list, and a compatibility contract for a modern-Fortran port."
+input = "request.txt"
+repo = "../repos/minpack"
+artifacts = ["output/survey.json"]
+
+[survey]
+kind = "draft"
+draft = "output/survey.json"
+probes = ["probes/release-flags.json", "probes/sanitisers.json"]
+read = [
+  "README.rst", "CMakeLists.txt", "cmake/UserOverride.cmake", "src/CMakeLists.txt", "fpm.toml:1-21",
+  "src/minpack.f90", "src/lmder1.f", "src/dpmpar.f", "src/enorm.f:1-60", "src/hybrd1.f:1-30", "src/hybipt.f:1-20",
+  "src/lmdipt.f:1-20", "src/covar.f:1-20", "ex/lmddrv.f", "ex/file22", "examples/example_lmder1.f90:40-75",
+]
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "traps.md", "compatibility.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true

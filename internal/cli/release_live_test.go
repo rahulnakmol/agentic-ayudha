@@ -106,8 +106,8 @@ func liveAPI(t *testing.T, token, method, path string, body any) []byte {
 // aayu-scratch-* repository (created, made public, given aayudha's promotion
 // rulesets, and deleted with AAYU_LIVE_ADMIN_TOKEN when set) with dev, rolling, main, and
 // ledger, stand-in workflows, a Goal > Feature > Story tree, the story's PR
-// squash-merged into dev, and a Release that includes it. `release --to
-// rolling` under the human token runs the evals and the gate on the
+// squash-merged into dev, evals dispatched once on dev, and a Release that includes it. `release --to
+// rolling` under the human token checks the evals run and runs the gate on the
 // candidate, lands the snapshot and its tag through the admin-only rulesets,
 // and stamps the story released; `release --to main` tags v0.1.0, waits for
 // the tag's release run, sets tell's notes on the GitHub Release, and closes
@@ -218,9 +218,26 @@ func TestReleaseLive(t *testing.T) {
 		}
 		time.Sleep(2 * time.Second)
 	}
+	// release never dispatches evals (#524): as CONTRIBUTING.md says, dispatch them once on dev's newest commit
+	// and wait for the run to finish. The scratch repository has no evals/eval.toml, so it has no gating groups
+	// and a completed run is enough.
+	liveAPI(t, tok, "POST", "/repos/"+repo+"/actions/workflows/evals.yml/dispatches", map[string]any{"ref": "dev"})
+	for i := 0; ; i++ {
+		var runs struct {
+			TotalCount int `json:"total_count"`
+		}
+		_ = json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/actions/workflows/evals.yml/runs?head_sha=%s&status=completed", repo, merged["sha"]), nil), &runs)
+		if runs.TotalCount > 0 {
+			break
+		}
+		if i == 60 {
+			t.Fatalf("no completed evals.yml run on dev's %v five minutes after the dispatch", merged["sha"])
+		}
+		time.Sleep(5 * time.Second)
+	}
 
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "PATH": os.Getenv("PATH")}
-	opts := Options{Dir: dir, RunPoll: 5 * time.Second}
+	opts := Options{Dir: dir, RunPoll: 5 * time.Second, IsTerminal: stdinTTY} // a person at a terminal: --to main needs no request comment
 	release := func(to string) (Promotion, string) {
 		t.Helper()
 		var (

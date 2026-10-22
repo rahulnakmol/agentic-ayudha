@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,7 +13,10 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/uireview"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
@@ -20,7 +27,7 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -112,7 +119,7 @@ func TestVerifyRefusesProduction(t *testing.T) {
 	git(t, dir, "checkout", "--quiet", "-b", "story/2-x")
 	git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: x")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_ENV": "prod"}
-	code, out, errOut := run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, "verify", "--repo", "o/r")
+	code, out, errOut := run(t, env, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, "verify", "--repo", "o/r")
 	if code != ExitBlocked || !strings.Contains(errOut, "production environment") {
 		t.Fatalf("verify against production: %d %s %s", code, out, errOut)
 	}
@@ -128,49 +135,63 @@ func TestVerifyRefusesProduction(t *testing.T) {
 // which does not hold (the gate and ship refuse it); a floor-waiver Decision
 // under the story waives it and the pack records the Decision.
 func TestVerifyMobileSkipAndWaiver(t *testing.T) {
+	skipAndWaiver(t, "mobile", `["web", "ios"]`, func(d string) bool { return d == proof.SkippedMobile })
+}
+
+// Decision #485 G3: an api story with no runnable target gets a blocking
+// "skipped: dast: no runnable target" that says how to fix it, and a
+// floor-waiver Decision naming dast releases it the same way.
+func TestVerifyDASTWaiver(t *testing.T) {
+	skipAndWaiver(t, "dast", `["api"]`, func(d string) bool {
+		return strings.HasPrefix(d, "skipped: dast: no runnable target") && strings.Contains(d, "[verify] seed") && strings.Contains(d, "aayu decide <story> --waiver dast")
+	})
+}
+
+func skipAndWaiver(t *testing.T, floor, platforms string, detail func(string) bool) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
-	git(t, dir, "checkout", "--quiet", "-b", "story/2-mobile")
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-"+floor)
 	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
 	git(t, dir, "add", "cov.info")
-	git(t, dir, "commit", "--quiet", "-m", "feat: mobile")
-	cfg := "version = 1\n[verify]\nplatforms = [\"web\", \"ios\"]\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	git(t, dir, "commit", "--quiet", "-m", "feat: "+floor)
+	// Past the new floors' advisory period, so a new blocking skip blocks.
+	cfg := "version = 1\n[verify]\nplatforms = " + platforms + "\nnew_floors_blocking_from = \"2026-01-01\"\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
-	verifyMobile := func() (int, string) {
-		code, out, errOut := run(t, env, opts, "verify", "--floor", "mobile", "--repo", "o/r")
+	verifyFloor := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "verify", "--floor", floor, "--repo", "o/r")
 		return code, out + errOut
 	}
-	code, out := verifyMobile()
+	code, out := verifyFloor()
 	p, err := proof.LoadLocal(proof.LocalDir(dir, 2))
 	if code != ExitFloor || err != nil {
-		t.Fatalf("mobile story: %d %s %v", code, out, err)
+		t.Fatalf("%s story: %d %s %v", floor, code, out, err)
 	}
-	if c, _ := p.Check("mobile"); c.Result != proof.Skipped || c.Detail != proof.SkippedMobile || p.FloorsHold() {
-		t.Fatalf("mobile check: %+v", c)
+	if c, _ := p.Check(floor); c.Result != proof.Skipped || !detail(c.Detail) || p.FloorsHold() {
+		t.Fatalf("%s check: %+v", floor, c)
 	}
 	// A filed waiver waives nothing until a human accepts it (WP5.6).
-	code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", "mobile", "--repo", "o/r", "--json")
+	code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", floor, "--repo", "o/r", "--json")
 	var filed decideReport
 	if err := json.Unmarshal([]byte(out), &filed); code != 0 || err != nil {
 		t.Fatalf("decide --waiver: %d %s %s", code, out, errOut)
 	}
 	d := g.Issues[filed.Waiver.Decision]
-	if code, out = verifyMobile(); code != ExitFloor {
+	if code, out = verifyFloor(); code != ExitFloor {
 		t.Fatalf("with an unaccepted waiver: %d %s", code, out)
 	}
 	if code, out, errOut := run(t, env, opts, "decide", strconv.Itoa(d.Number), "--accept", "waive", "--repo", "o/r"); code != 0 {
 		t.Fatalf("accept the waiver: %d %s %s", code, out, errOut)
 	}
-	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, "waived: mobile by #"+strconv.Itoa(d.Number)) {
+	if code, out = verifyFloor(); code != 0 || !strings.Contains(out, "waived: "+floor+" by #"+strconv.Itoa(d.Number)) {
 		t.Fatalf("with a waiver: %d %s", code, out)
 	}
 	p, _ = proof.LoadLocal(proof.LocalDir(dir, 2))
-	if c, _ := p.Check("mobile"); c.Result != proof.Waived || c.Waiver != "#"+strconv.Itoa(d.Number) || !p.FloorsHold() {
+	if c, _ := p.Check(floor); c.Result != proof.Waived || c.Waiver != "#"+strconv.Itoa(d.Number) || !p.FloorsHold() {
 		t.Fatalf("waived check: %+v", c)
 	}
 }
@@ -182,7 +203,7 @@ func TestVerifyGateCI(t *testing.T) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -352,5 +373,251 @@ func TestVerifyMaintainHandoff(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d tracking issues, want 1", n)
+	}
+}
+
+// TestVerifyScreenshotReview: verify's screenshot judgement goes through the
+// ui-review lane at its high effort, through the same reviewer as `aayu
+// review`'s lane A, and is labelled advisory with the model and effort. With
+// Copilot not signed in, it runs on the gateway's flash and the label says why
+// Argon did not run. A gateway failure is recorded as skipped rather than
+// stopping verify.
+func TestVerifyScreenshotReview(t *testing.T) {
+	dir := t.TempDir()
+	fakeModel := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+	newE := func(client models.Client) *Env {
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k"}[k]
+			},
+			GHToken:     func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(models.Route, string) models.Client { return client }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
+	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, "")
+	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini+" (gemini-4-argon through Copilot is unavailable: not signed in: set the copilot secret or COPILOT_GITHUB_TOKEN)" ||
+		sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
+		t.Fatalf("screenshot review: %+v", sr)
+	}
+	if len(fakeModel.Requests) != uireview.K {
+		t.Fatalf("%d lane A calls, want %d", len(fakeModel.Requests), uireview.K)
+	}
+	// One image, and a prompt that says it is the only input (no focused
+	// screenshot, markup, or tree to judge focus or labels from).
+	if r := fakeModel.Requests[0]; r.Effort != "high" || r.Model != verbs.ModelGemini || len(r.Messages[0].Images) != 1 ||
+		!strings.Contains(r.System, "no markup") || strings.Contains(r.Messages[0].Content, "<untrusted") {
+		t.Fatalf("lane A request: model %s, effort %q, %d images, system %q", r.Model, r.Effort, len(r.Messages[0].Images), r.System)
+	}
+	broken := &models.Fake{Err: errors.New("gateway down")}
+	if sr := newE(broken).screenshotReview(context.Background(), arts, 0, ""); sr == nil || !sr.Advisory || sr.Skipped == "" {
+		t.Fatalf("a failing gateway: %+v", sr)
+	}
+	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0, ""); sr != nil {
+		t.Fatalf("no screenshots: %+v", sr)
+	}
+	// A storyless run is charged to the day, not to a synthetic story #0.
+	e := newE(fakeModel)
+	log, err := os.ReadFile(e.ActionsPath())
+	if err != nil || !strings.Contains(string(log), `"kind":"model.call"`) || strings.Contains(string(log), `"story":`) {
+		t.Fatalf("storyless model calls carry a story key (%v):\n%s", err, log)
+	}
+	// A Google-built head gets no Google review (reviewer ≠ builder), and a
+	// screenshot the redaction pass did not read with OCR (a behaviour
+	// control's, or any when tesseract is missing) is never sent to the model.
+	calls := len(fakeModel.Requests)
+	if sr := e.screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
+		t.Fatalf("Google builder: %+v", sr)
+	}
+	unscanned := []verify.Evidence{{Path: "screens/2.png", Kind: "screenshot", Data: png}, {Path: "behaviour/f/c/shot.png", Kind: "screenshot", Data: png}}
+	if sr := e.screenshotReview(context.Background(), unscanned, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "OCR") || len(fakeModel.Requests) != calls {
+		t.Fatalf("unscanned screenshots: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
+	}
+	if sr := e.screenshotReview(context.Background(), unscanned[1:], 0, ""); sr != nil {
+		t.Fatalf("a behaviour control's screenshot alone: %+v", sr)
+	}
+	// Findings that quote personal data from the page are not kept: the
+	// report goes on the ledger.
+	leak := models.Response{Text: `{"findings":[{"kind":"contrast","heuristic":4,"severity":3,"element":"jane.doe@acme.io","summary":"low contrast","fix":"darken"}],"nielsen":[0,0,0,0,0,0,0,0,0,0],"personas":[],"rebuild":false}`}
+	leaky := &models.Fake{Replies: []models.Response{leak, leak, leak}}
+	if sr := newE(leaky).screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(sr.Findings) != 0 || !strings.Contains(sr.Skipped, "personal data") || strings.Contains(sr.Skipped, "jane.doe@acme.io") {
+		t.Fatalf("findings quoting personal data: %+v", sr)
+	}
+}
+
+// TestCopilotUIReviewRoute: with Copilot signed in, the binary's ui-review
+// calls run on Gemini 4 Argon through Copilot by default, at the lane's
+// effort, charged the credits Copilot reports. It fails closed: when copilot
+// cannot be run or its reply does not parse, that call and every later one go
+// to the gateway's flash-high route, the label says so, and the review still
+// happens. [models.ui-review.copilot] model = "" turns the route off.
+func TestCopilotUIReviewRoute(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}}
+	argon := laneAReply("contrast")
+	argon.CostUSD = 0.043
+	setup := func(model string, copilot models.Client) (*Env, *models.Fake, string) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".config", "aayudha"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		row := "[models.ui-review.copilot]\nmodel = \"" + model + "\"\n"
+		if model == "default" {
+			row = ""
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".config", "aayudha", "config.toml"), []byte("version = 1\n"+row), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gateway := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+		var log strings.Builder
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: &log}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k", "COPILOT_GITHUB_TOKEN": "copilot-tok"}[k]
+			},
+			GHToken: func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(r models.Route, key string) models.Client {
+				if r.Via == models.CopilotRoute.Via {
+					if key != "copilot-tok" {
+						t.Errorf("the Copilot route got key %q, want COPILOT_GITHUB_TOKEN", key)
+					}
+					return copilot
+				}
+				return gateway
+			}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, gateway, e.ActionsPath()
+	}
+
+	cp := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, logPath := setup("default", cp)
+	sr := e.screenshotReview(context.Background(), arts, 0, "")
+	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
+		t.Fatalf("Copilot route: %+v, %d Copilot and %d gateway calls", sr, len(cp.Requests), len(gateway.Requests))
+	}
+	if r := cp.Requests[0]; r.Model != "gemini-4-argon" || r.Effort != "high" || len(r.Messages[0].Images) != 1 {
+		t.Fatalf("Copilot request: model %s, effort %q", r.Model, r.Effort)
+	}
+	if b, _ := os.ReadFile(logPath); !strings.Contains(string(b), `"via":"copilot"`) || !strings.Contains(string(b), `"cost_source":"reported"`) || !strings.Contains(string(b), `"cost_usd":0.043`) {
+		t.Fatalf("actions log does not charge the reported credits:\n%s", b)
+	}
+
+	for name, copilot := range map[string]*models.Fake{
+		"copilot missing":   {Err: fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", models.ErrCopilot)},
+		"reply is not JSON": {Replies: []models.Response{{Text: "Sure! Here is my review."}}},
+		"stderr is long":    {Err: fmt.Errorf("%w: copilot: exit status 1: %s", models.ErrCopilot, strings.Repeat("x", 300))},
+	} {
+		e, gateway, _ := setup("gemini-4-argon", copilot)
+		sr := e.screenshotReview(context.Background(), arts, 0, "")
+		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
+			!strings.HasPrefix(sr.Model, verbs.ModelGemini+" (the Copilot route failed: ") {
+			t.Errorf("%s: %+v, %d Copilot and %d gateway calls", name, sr, len(copilot.Requests), len(gateway.Requests))
+		}
+		if !strings.Contains(e.IO.Err.(*strings.Builder).String(), "lane A falls back to "+verbs.ModelGemini+" (high)") {
+			t.Errorf("%s: the fallback is not reported: %q", name, e.IO.Err.(*strings.Builder).String())
+		}
+		if strings.Count(sr.Model, "x") > 160 {
+			t.Errorf("%s: the label carries the whole failure: %q", name, sr.Model)
+		}
+	}
+
+	// A Copilot route that fails after a good reply says both in the label.
+	partial := &models.Fake{Replies: []models.Response{argon, {Text: "not JSON"}}}
+	e, gateway, _ = setup("gemini-4-argon", partial)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(partial.Requests) != 2 || len(gateway.Requests) != uireview.K-1 ||
+		!strings.HasPrefix(sr.Model, "gemini-4-argon via Copilot, then "+verbs.ModelGemini+" (the Copilot route failed: ") {
+		t.Errorf("partial Copilot run: %+v, %d Copilot and %d gateway calls", sr, len(partial.Requests), len(gateway.Requests))
+	}
+
+	// The opt-in model is held to reviewer != builder too: Opus through
+	// Copilot cannot review an Anthropic builder's work.
+	opus := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("claude-opus-5.5", opus)
+	if sr := e.screenshotReview(context.Background(), arts, 0, "claude-opus-5-5"); sr == nil || !strings.Contains(sr.Skipped, "equals builder family") || len(opus.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("same-family opt-in: %+v, %d Copilot and %d gateway calls", sr, len(opus.Requests), len(gateway.Requests))
+	}
+
+	// model = "" turns the Copilot route off: lane A runs on the gateway's
+	// flash, labelled plainly, without trying Copilot.
+	off := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("", off)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || sr.Model != verbs.ModelGemini || len(off.Requests) != 0 || len(gateway.Requests) != uireview.K {
+		t.Errorf("route off: %+v, %d Copilot and %d gateway calls", sr, len(off.Requests), len(gateway.Requests))
+	}
+
+	// A mistyped opt-in model is a configuration error to fix, not a silent
+	// switch to the paid default route.
+	typo := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("argon-4", typo)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "argon-4") || len(typo.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("mistyped opt-in: %+v, %d Copilot and %d gateway calls", sr, len(typo.Requests), len(gateway.Requests))
+	}
+}
+
+// Bug #599: a closed waiver counts only when the floor-waiver authority
+// closed it and its Decision section names that login; with no authority
+// login configured (the day-one path), any person's acceptance counts.
+func TestWaiverAuthority(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-mobile")
+	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
+	git(t, dir, "add", "cov.info")
+	git(t, dir, "commit", "--quiet", "-m", "feat: mobile")
+	cfg := "version = 1\n[verify]\nplatforms = [\"web\", \"ios\"]\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	configure := func(approver string) {
+		_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg+"[autonomy]\napprover = \""+approver+"\"\n"), 0o644)
+	}
+	verifyMobile := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "verify", "--floor", "mobile", "--repo", "o/r")
+		return code, out + errOut
+	}
+	// accepted files a mobile waiver and has the founder accept it.
+	accepted := func() *fake.Issue {
+		code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", "mobile", "--repo", "o/r", "--json")
+		var filed decideReport
+		if err := json.Unmarshal([]byte(out), &filed); code != 0 || err != nil {
+			t.Fatalf("decide --waiver: %d %s %s", code, out, errOut)
+		}
+		if code, out, errOut := run(t, env, opts, "decide", strconv.Itoa(filed.Waiver.Decision), "--accept", "waive", "--repo", "o/r"); code != 0 {
+			t.Fatalf("accept the waiver: %d %s %s", code, out, errOut)
+		}
+		return g.Issues[filed.Waiver.Decision]
+	}
+	configure("founder")
+	// Closed by another person with write access, and closed by the founder
+	// with another login in its section: neither waives the floor.
+	other := accepted()
+	misnamed := accepted()
+	g.Mu.Lock()
+	other.ClosedBy = &fake.Account{Login: "mallory", Type: "User"}
+	misnamed.Body = strings.Replace(misnamed.Body, "accepted by @founder", "accepted by @mallory", 1)
+	g.Mu.Unlock()
+	code, out := verifyMobile()
+	if code != ExitFloor || strings.Contains(out, "waived: mobile") ||
+		!strings.Contains(out, fmt.Sprintf("waiver ignored: #%d: closed by @mallory, not the floor-waiver authority @founder", other.Number)) ||
+		!strings.Contains(out, fmt.Sprintf("waiver ignored: #%d: its Decision section does not name the floor-waiver authority @founder", misnamed.Number)) {
+		t.Fatalf("waivers the authority neither closed nor is named in: %d\n%s", code, out)
+	}
+	// The day-one path: no authority login, so another person's waiver counts.
+	configure("")
+	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, fmt.Sprintf("waived: mobile by #%d", other.Number)) || strings.Contains(out, "waiver ignored") {
+		t.Fatalf("no authority configured: %d\n%s", code, out)
+	}
+	// The authority's own waiver counts; the other two stay ignored.
+	configure("founder")
+	own := accepted()
+	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, fmt.Sprintf("waived: mobile by #%d", own.Number)) || strings.Count(out, "waiver ignored") != 2 {
+		t.Fatalf("the authority's waiver: %d\n%s", code, out)
 	}
 }

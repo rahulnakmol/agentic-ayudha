@@ -1,4 +1,4 @@
-# Decision pack: where a purge records its kind (Daedalus, Code Architect twin; scaleup)
+# Decision pack: where a purge records its kind (Vishwa, Code Architect twin; scaleup)
 
 ## Question
 
@@ -49,7 +49,7 @@ to an overrun already at 5 against 2 (`retro/2026-10-09/report.md`).
 
 ## Pre-mortem
 
-Pythia, the Mentalist twin, assumed option 1 failed. Likeliest reasons:
+Sanjay, the Mentalist twin, assumed option 1 failed. Likeliest reasons:
 
 - A reader built before the change meets a new tombstone and refuses it (`internal/audit/purges.go:20-31`). Early
   warning: a compatibility test that feeds the old reader a new record.

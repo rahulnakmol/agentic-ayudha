@@ -7,8 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	osuser "os/user"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -66,7 +70,9 @@ func (e *Env) private(ctx context.Context, c *github.Client, repo string) bool {
 }
 
 // proofStore builds the repository's proof store: its ledger under tok, and
-// the [proof] media bucket with credentials from the secrets store.
+// the [proof] media bucket with credentials from the secrets store. The
+// bucket, the name of its secret, and the retention its lifecycle rule
+// sets come only from trustedProof (#667).
 func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Token, ident, tag string) (*proof.Store, error) {
 	l, err := e.Config()
 	if err != nil {
@@ -76,13 +82,17 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	if err != nil {
 		return nil, err
 	}
+	pc, err := e.trustedProof(ctx, c, repo, l)
+	if err != nil {
+		return nil, err
+	}
 	w, err := e.Ledger(ctx, tok, ident, tag)
 	if err != nil {
 		return nil, err
 	}
-	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: l.Config.Proof.RetentionDays}
-	if m := l.Config.Proof.Media; m != "" {
-		name := l.Config.Proof.MediaSecret
+	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: pc.RetentionDays}
+	if m := pc.Media; m != "" {
+		name := pc.MediaSecret
 		if name == "" {
 			name = DefaultMediaSecret
 		}
@@ -99,6 +109,179 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	}
 	return s, nil
 }
+
+// accountConfigDir is the account's user config directory
+// (~/.config/aayudha), found from the system's user database: XDG_CONFIG_HOME
+// and HOME are the run's environment, which could name a directory in the
+// checkout. It is "" with why when no user config is trusted.
+func (e *Env) accountConfigDir() (dir, skipped string) {
+	home := e.UserHome
+	if home == nil {
+		home = accountHome
+	}
+	if h, err := home(); err != nil {
+		skipped = fmt.Sprintf(" (no user config is trusted: %v)", err)
+	} else if h != "" {
+		dir = filepath.Join(h, ".config", "aayudha")
+	}
+	return dir, skipped
+}
+
+// trustedProof is the [proof] media bucket, the name of its secret, and the
+// retention its lifecycle rule sets, from sources the person controls
+// (#667): the defaults, the account's user config (~/.config/aayudha, from
+// the system's user database), and the integration branch's
+// committed .aayudha/config.toml at its tip (only the defaults and the user
+// config when that file cannot be found). The integration branch is the
+// user config's [branches] dev, else the one the default branch's committed
+// config maps (aayu init writes [branches] dev there when a repository has
+// no dev), else the default branch.
+// The checkout, config.local, AAYU_* variables and --set may belong to an
+// agent whose branch the person has checked out, and naming a bucket there
+// would send the person's local secret to it, so a run whose values differ
+// is refused before any secret is read.
+func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, run *config.Loaded) (config.Proof, error) {
+	userDir, skipped := e.accountConfigDir()
+	user, err := config.Load(config.Sources{UserDir: userDir})
+	if err != nil {
+		return config.Proof{}, Wrap(ExitUsage, fmt.Errorf("config: %w", err))
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	// load is the user config over branch's committed .aayudha/config.toml at
+	// its tip; found is false when the branch does not exist. A file there
+	// that cannot be read (a directory, or one over the API's 1 MB) or does
+	// not load is no config the run may be judged against.
+	load := func(branch string) (l *config.Loaded, found bool, err error) {
+		ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+branch)
+		if github.NotFound(err) {
+			return &config.Loaded{Config: user.Config}, false, nil
+		}
+		if err != nil {
+			return nil, false, Wrap(ExitExternal, err)
+		}
+		var text string
+		fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, ".aayudha/config.toml", &gh.RepositoryContentGetOptions{Ref: ref.GetObject().GetSHA()})
+		switch {
+		case github.NotFound(err):
+			err = nil
+		case err == nil && fc == nil:
+			err = errors.New("it is a directory")
+		case err == nil:
+			text, err = fc.GetContent()
+		}
+		if err == nil {
+			l, err = config.Load(config.Sources{UserDir: userDir, RepoTOML: []byte(text), RepoSource: ".aayudha/config.toml on " + branch})
+		}
+		if err != nil {
+			return nil, true, Errorf(ExitBlocked, "%s's .aayudha/config.toml cannot be read or does not load, so the proof media bucket cannot be trusted: %v", branch, err)
+		}
+		return l, true, nil
+	}
+	// A branch is trusted only by name from the user config or the default
+	// branch's committed config, never because it is called dev: an agent
+	// that can push a branch could create one where none exists.
+	branch := user.Config.Branches.Dev
+	if branch == "" {
+		r, _, err := c.REST.Repositories.Get(ctx, owner, name)
+		if err != nil {
+			return config.Proof{}, Wrap(ExitExternal, err)
+		}
+		branch = r.GetDefaultBranch()
+	}
+	trusted, _, err := load(branch)
+	if err == nil && user.Config.Branches.Dev == "" && trusted.Config.Branches.Dev != "" && trusted.Config.Branches.Dev != branch {
+		branch = trusted.Config.Branches.Dev
+		trusted, _, err = load(branch)
+	}
+	if err != nil {
+		return config.Proof{}, err
+	}
+	t, r := trusted.Config.Proof, run.Config.Proof
+	// Without --repo the repository is the checkout's origin remote, which
+	// an agent can point at a repository it controls, with its bucket
+	// committed on dev. A bucket is trusted only from a repository the
+	// account aayu acts as can push to, as the person's own repositories are.
+	if t.Media != "" {
+		why, err := cannotPush(ctx, c, owner, name)
+		if err != nil {
+			return config.Proof{}, err
+		}
+		if why != "" {
+			return config.Proof{}, Errorf(ExitBlocked, "%s, so its committed config cannot name the proof media bucket that receives your secret; "+
+				"check the checkout's origin remote, or pass --repo with the repository you push to", why)
+		}
+	}
+	if r.Media != t.Media || t.Media != "" && (r.MediaSecret != t.MediaSecret || r.RetentionDays != t.RetentionDays) {
+		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket, its secret, and its retention are read only from the user config and %s's committed .aayudha/config.toml%s; "+
+			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q, media_secret %q and retention_days %d, not %q, %q and %d; "+
+			"remove those settings, or change %s through a reviewed PR", branch, skipped, r.Media, r.MediaSecret, r.RetentionDays, t.Media, t.MediaSecret, t.RetentionDays, branch)
+	}
+	return t, nil
+}
+
+// cannotPush says why the token behind c cannot push to owner/name ("" when
+// it can). A person's token needs write or admin access for its account. A
+// GitHub App installation token has no account (GET /user refuses it with
+// 403), so the repository must be one its installation was granted.
+func cannotPush(ctx context.Context, c *github.Client, owner, name string) (string, error) {
+	me, resp, err := c.REST.Users.Get(ctx, "")
+	if err == nil {
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, me.GetLogin())
+		if err != nil {
+			return "", Wrap(ExitExternal, err)
+		}
+		if p := permissionOf(perm); p != "admin" && p != "write" {
+			return fmt.Sprintf("@%s has %s access to %s/%s", me.GetLogin(), p, owner, name), nil
+		}
+		return "", nil
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		return "", Wrap(ExitExternal, err)
+	}
+	repos, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Repository, *gh.Response, error) {
+		l, resp, err := c.REST.Apps.ListRepos(ctx, &o)
+		if err != nil {
+			return nil, resp, err
+		}
+		return l.Repositories, resp, nil
+	})
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	if !slices.ContainsFunc(repos, func(r *gh.Repository) bool { return strings.EqualFold(r.GetFullName(), owner+"/"+name) }) {
+		return fmt.Sprintf("the GitHub App installation behind this token was not granted %s/%s", owner, name), nil
+	}
+	return "", nil
+}
+
+// accountHome is the home directory of the account running aayu, from the
+// system's user database (os/user), which the run's HOME does not change.
+// Outside Windows and macOS a build without cgo (every release binary)
+// reads /etc/passwd, and when the UID has no entry there os/user falls back
+// to $HOME and $USER, which the run sets. So the home must be the one
+// /etc/passwd gives the UID, or no user config is trusted.
+func accountHome() (string, error) {
+	u, err := osuser.Current()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return u.HomeDir, nil
+	}
+	b, err := os.ReadFile(passwdFile)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if f := strings.Split(line, ":"); len(f) >= 7 && f[2] == u.Uid && f[5] == u.HomeDir {
+			return u.HomeDir, nil
+		}
+	}
+	return "", fmt.Errorf("%s gives UID %s no home %q, so it came from the environment", passwdFile, u.Uid, u.HomeDir)
+}
+
+// passwdFile is the user database that confirms accountHome (a variable for tests).
+var passwdFile = "/etc/passwd"
 
 // inMergeGate reports whether this process is the base-branch merge gate in
 // CI (WP4.8): a pull_request_target run (the base branch's copy of the file,
@@ -260,7 +443,7 @@ func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool)
 		return Errorf(ExitBlocked, "no local pack for #%d in %s: run `aayu verify` first", story, dir)
 	}
 	if e.CI {
-		return Errorf(ExitUsage, "proof push --ci: CI writes nothing to the ledger; the merge gate keeps its pack as the aayudha-pack run artifact and `aayu ship` lands it (S-4.2b)")
+		return Errorf(ExitUsage, "proof push --ci: CI writes nothing to the ledger; the merge gate keeps its pack as the aayudha-pack run artifact and `aayu ship` lands it")
 	}
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {

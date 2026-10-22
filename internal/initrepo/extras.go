@@ -2,9 +2,18 @@ package initrepo
 
 import (
 	"bytes"
+	"cmp"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -18,14 +27,22 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
+	gh "github.com/google/go-github/v90/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 )
 
 // The Ready guard (WP2.7) template init --gates installs.
@@ -42,26 +59,63 @@ var mergeGateTemplate string
 //go:embed aayudha-ops.yml
 var opsTemplate string
 
+//go:embed aayudha-approve.yml
+var approveTemplate string
+
+// PythonTools is the hashed lock of the Python floor tools (semgrep, lizard,
+// and their dependencies): one CPython 3.12 manylinux x86_64 wheel each.
+//
+//go:embed python-tools.txt
+var PythonTools string
+
+//go:embed aayudha-security.yml
+var securityTemplate string
+
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, and the
-// WP5.7 streak. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, the
+// WP5.7 streak, the Story #481 approvals, and the security workflow (Decision #480). None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
 	StreakWorkflow     = "aayudha-streak.yml"
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
 	OpsWorkflow        = "aayudha-ops.yml"
+	ApproveWorkflow    = "aayudha-approve.yml"
+	SecurityWorkflow   = doctor.SecurityWorkflow
 )
 
 // GateWorkflows renders the workflows init --gates installs, by file name.
-// version is the aayudha version the guard installs (a tag, or dev).
-func GateWorkflows(version string) map[string][]byte {
+// version is the aayudha version the guard installs (a tag, or dev);
+// branches are the repository's dev, rolling, and main as [branches] maps
+// them (empty ones are skipped; none given: dev, rolling, main).
+func GateWorkflows(version string, branches ...string) map[string][]byte {
+	var on []string
+	for _, b := range branches {
+		if b != "" && !slices.Contains(on, b) {
+			on = append(on, b)
+		}
+	}
+	if len(on) == 0 {
+		on = []string{"dev", "rolling", "main"}
+	}
+	quoted := make([]string, len(on))
+	for i, b := range on {
+		quoted[i] = strconv.Quote(b)
+	}
+	// Quoted, so a branch name with YAML flow syntax in it (release,2026) stays one pattern. The matrix list is JSON
+	// inside an expression's single-quoted literal, where an apostrophe is written twice.
+	list, _ := json.Marshal(on)
+	security := strings.NewReplacer("{{VERSION}}", GuardVersion(version), "{{BRANCHES}}", "["+strings.Join(quoted, ", ")+"]",
+		"{{BRANCHES_JSON}}", strings.ReplaceAll(string(list), "'", "''"), "{{BRANCH_LIST}}", strings.Join(on, ", "),
+		"{{PYTHON_TOOLS}}", pythonToolLines("          ")).Replace(securityTemplate)
 	return map[string][]byte{
+		SecurityWorkflow:   []byte(security),
 		TokenWorkflow:      identity.BrokerWorkflow,
 		ReadyGuardWorkflow: []byte(strings.ReplaceAll(readyGuardTemplate, "{{VERSION}}", GuardVersion(version))),
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 		MergeGateWorkflow:  []byte(strings.ReplaceAll(mergeGateTemplate, "{{VERSION}}", GuardVersion(version))),
 		OpsWorkflow:        []byte(strings.ReplaceAll(opsTemplate, "{{VERSION}}", GuardVersion(version))),
+		ApproveWorkflow:    []byte(strings.ReplaceAll(approveTemplate, "{{VERSION}}", GuardVersion(version))),
 	}
 }
 
@@ -80,6 +134,9 @@ func GuardVersion(v string) string {
 type Extras struct {
 	Projects, Gates, Identity, Integrations, VerifySkill bool
 	Version                                              string
+	// Branches are the repository's dev, rolling, and main branches as its
+	// [branches] maps them: the security workflow's push triggers.
+	Branches []string
 	// Assets are the embedded asset trees (hosts/verify-skill/ for --verify-skill).
 	Assets fs.FS
 	// Maintainer is the agent the human chose to maintain the feature maps
@@ -149,8 +206,8 @@ func (in *Init) retired(x Extras) error {
 	return nil
 }
 
-func (in *Init) gates(_ context.Context, x Extras) error {
-	wfs := GateWorkflows(x.Version)
+func (in *Init) gates(ctx context.Context, x Extras) error {
+	wfs := GateWorkflows(x.Version, x.Branches...)
 	for _, name := range slices.Sorted(func(y func(string) bool) {
 		for k := range wfs {
 			if !y(k) {
@@ -167,8 +224,121 @@ func (in *Init) gates(_ context.Context, x Extras) error {
 			return err
 		}
 	}
+	if err := in.hostConfigOwners(); err != nil {
+		return err
+	}
+	// A plan without environments (a private repository on GitHub Free) leaves the CI review unavailable, as the
+	// ledger rulesets are; any other failure stops init, so the key is never left reachable by another branch.
+	if err := in.reviewEnvironment(ctx, x.Branches); err != nil {
+		var er *gh.ErrorResponse
+		if !errors.As(err, &er) || er.Response == nil || er.Response.StatusCode != http.StatusForbidden || !strings.Contains(er.Message, "Upgrade to GitHub") {
+			return fmt.Errorf("the %s environment: %w", inspect.ReviewEnvironment, err)
+		}
+		in.note("gates", "environment", inspect.ReviewEnvironment, "not created", "this repository's GitHub plan has no environments ("+er.Message+"), so the CI review cannot run: set [inspect] reviewer to a review app or human, or make the repository public or upgrade, then run aayu init --gates again")
+	}
 	in.note("gates", "secrets", "AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY", "unchanged",
 		"the broker needs the bot App's client ID (repository variable) and private key (repository secret); init --identity sets both. Model keys for CI lanes go in repository or environment secrets")
+	return nil
+}
+
+type branchPolicy struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// reviewEnvironment creates the code-review environment the merge gate's
+// inspect job runs under (docs/guide/how-review.md): deployment limited to
+// the base branches and the default branch, so no PR branch reaches its key.
+// A pull_request_target run takes its workflow from the default branch, and
+// GitHub checks environment rules against that branch (since 2025-12-08), so
+// the default branch must be listed. The review model's endpoint and ID are
+// variables, pre-filled with the recommended model, and a note says to set
+// the key. A second run keeps the values a person changed.
+func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error {
+	r, name := in.Repo, inspect.ReviewEnvironment
+	base := "/repos/" + r.FullName + "/environments/" + name
+	if d := cmp.Or(r.Default, "main"); !slices.Contains(branches, d) {
+		branches = append(slices.Clone(branches), d)
+	}
+	if in.dry() {
+		in.note("gates", "environment", name, "planned", "deployment branches "+strings.Join(branches, ", ")+"; variables "+inspect.ReviewModelURLVar+", "+inspect.ReviewModelVar)
+		return nil
+	}
+	// An environment that admits any branch (or none exists) gets the custom policy.
+	var cur struct {
+		Policy *struct {
+			Custom bool `json:"custom_branch_policies"`
+		} `json:"deployment_branch_policy"`
+	}
+	if err := in.rest(ctx, http.MethodGet, base, nil, &cur); err != nil && !github.NotFound(err) {
+		return err
+	}
+	if cur.Policy == nil || !cur.Policy.Custom {
+		policy := map[string]any{"deployment_branch_policy": map[string]any{"protected_branches": false, "custom_branch_policies": true}}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.put", Target: r.FullName, Request: &actions.Request{Method: http.MethodPut, Path: base}, Payload: map[string]any{"name": name}},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, base, policy, nil) }); err != nil {
+			return err
+		}
+	}
+	// Every page: a rule left on a later one would still admit its ref.
+	var have struct {
+		Policies []branchPolicy `json:"branch_policies"`
+	}
+	for page := 1; ; page++ {
+		var got struct {
+			Policies []branchPolicy `json:"branch_policies"`
+		}
+		if err := in.rest(ctx, http.MethodGet, fmt.Sprintf("%s/deployment-branch-policies?per_page=100&page=%d", base, page), nil, &got); err != nil {
+			return err
+		}
+		have.Policies = append(have.Policies, got.Policies...)
+		if len(got.Policies) < 100 {
+			break
+		}
+	}
+	// Any other rule (a wildcard, a tag, an old branch) would let that ref reach the key, so it goes.
+	for _, p := range have.Policies {
+		if p.Type != "tag" && slices.Contains(branches, p.Name) {
+			continue
+		}
+		path := fmt.Sprintf("%s/deployment-branch-policies/%d", base, p.ID)
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.branch.delete", Target: r.FullName, Request: &actions.Request{Method: http.MethodDelete, Path: path}, Payload: map[string]any{"name": p.Name, "type": p.Type}},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodDelete, path, nil, nil) }); err != nil {
+			return err
+		}
+		in.note("gates", "environment", name, "changed", fmt.Sprintf("removed the deployment rule %s (%s): only the base branches and the default branch may reach the review model's key", p.Name, cmp.Or(p.Type, "branch")))
+	}
+	for _, b := range branches {
+		if b == "" || slices.ContainsFunc(have.Policies, func(p branchPolicy) bool { return p.Name == b && p.Type != "tag" }) {
+			continue
+		}
+		body := map[string]any{"name": b, "type": "branch"}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.branch", Target: r.FullName, Request: &actions.Request{Method: http.MethodPost, Path: base + "/deployment-branch-policies"}, Payload: body},
+			func(ctx context.Context) (any, error) {
+				return nil, in.rest(ctx, http.MethodPost, base+"/deployment-branch-policies", body, nil)
+			}); err != nil {
+			return err
+		}
+	}
+	for _, v := range [][2]string{{inspect.ReviewModelURLVar, inspect.RecommendedReviewURL}, {inspect.ReviewModelVar, inspect.RecommendedReviewModel}} {
+		err := in.rest(ctx, http.MethodGet, base+"/variables/"+v[0], nil, nil)
+		if !github.NotFound(err) {
+			if err != nil {
+				return err
+			}
+			continue // a person's value stays
+		}
+		body := map[string]any{"name": v[0], "value": v[1]}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.variable.create", Target: r.FullName, Request: &actions.Request{Method: http.MethodPost, Path: base + "/variables"}, Payload: body},
+			func(ctx context.Context) (any, error) {
+				return nil, in.rest(ctx, http.MethodPost, base+"/variables", body, nil)
+			}); err != nil {
+			return err
+		}
+	}
+	in.note("gates", "environment", name, "written", fmt.Sprintf("deployment branches %s; %s = %s and %s = %s (change either for another endpoint or model); set the secret %s, the endpoint's key, in Settings → Environments → %s",
+		strings.Join(branches, ", "), inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelVar, inspect.RecommendedReviewModel, inspect.ReviewModelKeyVar, name))
 	return nil
 }
 
@@ -242,6 +412,16 @@ func (in *Init) projects(ctx context.Context, x Extras) error {
 	return nil
 }
 
+// AppPermissions are the permissions agent lanes and CI need: what the
+// manifest asks for, and what the created App must hold before its key is
+// stored.
+var AppPermissions = map[string]string{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+
+// ErrAppNotConverted is a manifest code GitHub would not convert (404 or 422):
+// someone else may have converted it first and holds the key, so the App must
+// be deleted, never installed.
+var ErrAppNotConverted = errors.New("GitHub did not turn the code into the App's key")
+
 // AppManifest is the GitHub App manifest init --identity registers: the
 // permissions agent lanes and CI need, no webhook.
 func AppManifest(r Repo, redirect string) string {
@@ -249,9 +429,72 @@ func AppManifest(r Repo, redirect string) string {
 	if len(name) > 34 {
 		name = name[:34]
 	}
+	perms, _ := json.Marshal(AppPermissions)
 	return fmt.Sprintf(`{"name":%q,"url":"https://github.com/rahulnakmol/agentic-ayudha","redirect_url":%q,"public":false,`+
-		`"hook_attributes":{"url":"https://example.invalid/aayudha-no-webhook","active":false},`+
-		`"default_permissions":{"contents":"write","issues":"write","pull_requests":"write","actions":"read","checks":"read","metadata":"read"}}`, name, redirect)
+		`"hook_attributes":{"url":"`+noWebhook+`","active":false},`+
+		`"default_permissions":%s}`, name, redirect, perms)
+}
+
+// noWebhook is the manifest's webhook URL: a reserved name nothing answers,
+// with the hook off and no events, so the App sends nothing anywhere.
+const noWebhook = "https://example.invalid/aayudha-no-webhook"
+
+// appHookURL asks GitHub, as the new App (a JWT signed with its key), where
+// its webhook points. Whatever page posted the manifest could have changed it
+// to add a webhook and events, so the key is stored only for an App that
+// sends nothing (Codex security review of #603).
+func appHookURL(ctx context.Context, base string, appID int64, pemKey string) (string, error) {
+	blk, _ := pem.Decode([]byte(pemKey))
+	if blk == nil {
+		return "", errors.New("the App's key is not a PEM key")
+	}
+	var key *rsa.PrivateKey
+	if k, err := x509.ParsePKCS1PrivateKey(blk.Bytes); err == nil {
+		key = k
+	} else if k, err := x509.ParsePKCS8PrivateKey(blk.Bytes); err == nil {
+		key, _ = k.(*rsa.PrivateKey)
+	}
+	if key == nil {
+		return "", errors.New("the App's key is not an RSA key")
+	}
+	enc := base64.RawURLEncoding
+	now := time.Now().Unix()
+	claims, _ := json.Marshal(map[string]any{"iat": now - 60, "exp": now + 300, "iss": strconv.FormatInt(appID, 10)})
+	signing := enc.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`)) + "." + enc.EncodeToString(claims)
+	sum := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(base, "/")+"/app/hook/config", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+signing+"."+enc.EncodeToString(sig))
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET /app/hook/config: HTTP %d", resp.StatusCode)
+	}
+	var cfg struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
+		return "", err
+	}
+	return cfg.URL, nil
+}
+
+// appSettings is where the person deletes an App on r's owner.
+func appSettings(r Repo) string {
+	if r.Org {
+		return "https://github.com/organizations/" + r.Owner + "/settings/apps"
+	}
+	return "https://github.com/settings/apps"
 }
 
 func (in *Init) app(ctx context.Context, x Extras) error {
@@ -287,15 +530,63 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		ClientID string `json:"client_id"`
 		PEM      string `json:"pem"`
 		HTMLURL  string `json:"html_url"`
+		Owner    struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Permissions map[string]string `json:"permissions"`
+		Events      []string          `json:"events"`
 	}
-	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app"),
-		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/" + code + "/conversions"}},
+	// One action per one-time code: a rerun after a refused App converts its
+	// new code instead of reusing the refused one's record. The log keeps a
+	// hash of the code, never the code.
+	sum := sha256.Sum256([]byte(code))
+	status := 0 // GitHub's answer to a failed conversion; 0 when none arrived
+	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app", hex.EncodeToString(sum[:6])),
+		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/{code}/conversions"}},
 		func(ctx context.Context) (any, error) {
-			err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv)
-			return map[string]any{"id": conv.ID, "slug": conv.Slug}, err // the PEM is never logged
+			// The error names the conversion URL, which carries the one-time
+			// code, and the actions log records the error: return only
+			// GitHub's status, never the error itself.
+			if err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv); err != nil {
+				var er *gh.ErrorResponse
+				if errors.As(err, &er) && er.Response != nil {
+					status = er.Response.StatusCode
+					return nil, fmt.Errorf("the conversion failed: GitHub answered %d", status)
+				}
+				return nil, errors.New("the conversion failed: the request did not complete")
+			}
+			return map[string]any{"id": conv.ID, "slug": conv.Slug}, nil // the PEM is never logged
 		})
+	if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("GitHub answered %d: the code may already have been used by someone else, who would then hold the App's key. Do not install the App: delete it at %s, then run aayu init --identity again", status, appSettings(r)))
+		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, status, appSettings(r))
+	}
 	if err != nil {
-		return err
+		// A 5xx or a lost connection: GitHub created the App when it
+		// redirected, and may have converted the code, so the App is not
+		// one aayu holds the key of.
+		why := "the request did not complete"
+		if status != 0 {
+			why = fmt.Sprintf("GitHub answered %d", status)
+		}
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%s). Do not install the App: delete it at %s, then run aayu init --identity again", why, appSettings(r)))
+		return fmt.Errorf("%w (%s); do not install the App: delete it at %s", ErrAppNotConverted, why, appSettings(r))
+	}
+	// Store the key only for the App aayu asked for, with exactly the
+	// permissions asked for: the browser that posted the manifest is outside
+	// aayu's control, and a narrower App leaves the agent lanes unable to work.
+	other := !maps.Equal(conv.Permissions, AppPermissions)
+	hook := noWebhook
+	if !other && len(conv.Events) == 0 && strings.EqualFold(conv.Owner.Login, r.Owner) {
+		var herr error
+		if hook, herr = appHookURL(ctx, in.GH.REST.BaseURL(), conv.ID, conv.PEM); herr != nil {
+			hook = "unknown (" + herr.Error() + ")"
+		}
+	}
+	if !strings.EqualFold(conv.Owner.Login, r.Owner) || other || len(conv.Events) > 0 || hook != noWebhook {
+		conv.PEM = ""
+		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", permissions other than those aayu asked for, events, or webhook "+hook+"). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
+		return fmt.Errorf("%w: the created App %s is not the one aayu asked for; do not install it: delete it at %s", ErrAppNotConverted, conv.Slug, appSettings(r))
 	}
 	in.State.Put(Object{Kind: "app", Name: "bot", ID: strconv.FormatInt(conv.ID, 10), External: true})
 	in.State.Identity = identity.KindApp
@@ -410,8 +701,9 @@ type Integration struct {
 // Integrations lists the external services init --integrations offers.
 var Integrations = []Integration{
 	{"bucket", "Proof media bucket (S3, R2, Azure Blob, or Cloud Storage; private): required on public repositories (V3). Storage and egress are billed by your provider; aayudha sets lifecycle rules from [proof] retention_days (WP4.2, WP7.2b.2)."},
-	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only project API key; usage-based pricing on PostHog's side."},
-	{"sentry", "Sentry: error and performance read for baselines and respond. Read-only auth token (event:read, project:read); no extra cost."},
+	// The scopes are the ones aayu doctor checks, so the two never disagree.
+	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only personal API key (" + strings.Join(posthog.Scopes(), ", ") + "); usage-based pricing on PostHog's side."},
+	{"sentry", "Sentry: error and performance read for baselines, investigate, slo, and runbook. Read-only auth token (" + strings.Join(sentry.Scopes(), ", ") + "); no extra cost."},
 	{"growthbook", "GrowthBook: experiment and flag read for experiment and readout. Read-only key; no extra cost on the open-source plan."},
 	{"azure", "Azure: Application Insights read (Log Analytics query API) for grill baselines and measure --live. A read-only app registration (Monitoring Reader, Log Analytics Reader) that GitHub Actions reaches through OIDC federation, no stored key; Log Analytics bills per GB scanned, usually cents per run (WP7.2b)."},
 	{"aws", "AWS: CloudWatch RUM read (Logs Insights and GetAppMonitorData) for grill baselines and measure --live. A read-only IAM role that GitHub Actions assumes through OIDC, no stored key; Logs Insights bills per GB scanned (WP7.2b)."},
@@ -591,4 +883,122 @@ func (in *Init) updateFile(step, path string, content []byte) error {
 	in.State.PutFile(File{Path: path, SHA256: hash(content), Created: errors.Is(statErr, os.ErrNotExist)})
 	in.note(step, "file", path, "written", "")
 	return nil
+}
+
+// The CODEOWNERS block init --gates owns: the files a host runs from the
+// checkout (hosts.HostConfigOwners). Lines outside it are never changed, and
+// it never loosens one: each path keeps the owners a hand-written line gives it.
+const (
+	hostConfigSection = "host-config" // its File.Section, so uninit removes only the block
+	HostConfigBegin   = "# BEGIN aayudha:host-config (written by `aayu init --gates`: the hooks, MCP servers, and plugins a host runs from this repository)"
+	HostConfigEnd     = "# END aayudha:host-config"
+)
+
+// hostConfigOwners makes a change to any host's executable config need a code
+// owner: a branch can change a hook or MCP command, and a host runs it from
+// the checkout. Each pattern is owned by the person who ran init and by every
+// owner a hand-written line already gives that path, since the block's line
+// is the last match. The block goes before aayu seat's, whose lines win.
+func (in *Init) hostConfigOwners() error {
+	if !seats.ValidLogin(in.Repo.HumanLogin) {
+		in.note("gates", "file", "CODEOWNERS", "kept", "no human login to own the host config")
+		return nil
+	}
+	path := seats.CodeownersPath(in.Root)
+	full := filepath.Join(in.Root, filepath.FromSlash(path))
+	old, err := os.ReadFile(full)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	next := []byte(RenderHostConfigOwners(string(old), in.Repo.HumanLogin))
+	switch {
+	case bytes.Equal(old, next):
+		in.note("gates", "file", path, "unchanged", "")
+		return nil
+	case in.dry():
+		in.note("gates", "file", path, "planned", "block aayudha:host-config")
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(full, next, 0o644); err != nil {
+		return err
+	}
+	in.State.PutFile(File{Path: path, SHA256: hash(next), Created: len(old) == 0, Section: hostConfigSection})
+	in.note("gates", "file", path, "written", "block aayudha:host-config: changes to host hooks and MCP servers need a code owner")
+	return nil
+}
+
+// RenderHostConfigOwners returns existing CODEOWNERS text with the
+// host-config block rebuilt for login, or removed when login is "".
+func RenderHostConfigOwners(existing, login string) string {
+	var hand, seatsBlock []string
+	inHost, inSeats := false, false
+	for _, l := range strings.Split(strings.TrimRight(existing, "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(l, "# BEGIN aayudha:host-config"):
+			inHost = true
+		case inHost:
+			inHost = strings.TrimSpace(l) != HostConfigEnd
+		case strings.HasPrefix(l, "# BEGIN aayudha:seats"):
+			inSeats = true
+			seatsBlock = append(seatsBlock, l)
+		case inSeats:
+			seatsBlock = append(seatsBlock, l)
+			inSeats = strings.TrimSpace(l) != seats.BlockEnd
+		default:
+			hand = append(hand, l)
+		}
+	}
+	rules := identity.ParseCodeowners(strings.Join(hand, "\n"))
+	block := []string{HostConfigBegin}
+	for _, pat := range hosts.HostConfigOwners {
+		path := strings.TrimPrefix(pat, "/")
+		// A path a hand-written line already protects keeps exactly its
+		// owners: adding the login would let it alone approve.
+		owners := []string{login}
+		if o, _, ok := identity.Owners(rules, path); ok && len(o) > 0 {
+			owners = o
+		}
+		block = append(block, pat+"  @"+strings.Join(owners, " @"))
+		// A narrower hand-written line under pat would lose to the block's
+		// line, the later match: restate it after, with its owners.
+		var seen []string
+		for _, r := range rules {
+			sub := strings.TrimPrefix(r.Pattern, "/")
+			if !strings.HasSuffix(path, "/") || sub == path || !strings.HasPrefix(sub, path) || slices.Contains(seen, sub) {
+				continue
+			}
+			seen = append(seen, sub)
+			if o, _, ok := identity.Owners(rules, sub); ok && len(o) > 0 {
+				block = append(block, r.Pattern+"  @"+strings.Join(o, " @"))
+			}
+		}
+	}
+	block = append(block, HostConfigEnd)
+	text := strings.TrimRight(strings.Join(hand, "\n"), "\n")
+	parts := []string{}
+	if strings.TrimSpace(text) != "" {
+		parts = append(parts, text)
+	}
+	if login != "" {
+		parts = append(parts, strings.Join(block, "\n"))
+	}
+	if len(seatsBlock) > 0 {
+		parts = append(parts, strings.Join(seatsBlock, "\n"))
+	}
+	return strings.Join(parts, "\n\n") + "\n"
+}
+
+// pythonToolLines is the lock's requirement lines (no comments), each after
+// the first indented for a workflow's run block.
+func pythonToolLines(indent string) string {
+	var lines []string
+	for _, l := range strings.Split(PythonTools, "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n"+indent)
 }

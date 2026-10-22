@@ -32,6 +32,13 @@
   ],
   "failing_floors": [],
   "measure_due": [],
+  "unclassified_feedback": [
+    {
+      "number": 5,
+      "title": "Feedback: persona outputs present inferences as facts"
+    }
+  ],
+  "inbox": [],
   "next": {
     "command": "aayu ship 4",
     "why": "PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it.",

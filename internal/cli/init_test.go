@@ -1,25 +1,39 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/nacl/box"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -54,7 +68,7 @@ type initReport struct {
 
 func runInitCmd(t *testing.T, g *fake.GitHub, dir string, args ...string) (int, initReport, string) {
 	t.Helper()
-	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, append(args, "--json")...)
+	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, append(args, "--json")...)
 	var rep initReport
 	if out != "" {
 		if err := json.NewDecoder(strings.NewReader(out)).Decode(&rep); err != nil {
@@ -122,8 +136,13 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if rep.Counts["created"] != nLabels-1+3 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and two rulesets created
 		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and two rulesets", rep.Counts, nLabels-1)
 	}
-	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it.
-	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole]" {
+	// Story #487: the label aayudha-security.yml files its Bugs under, and finds them again by, exists from the start.
+	if !slices.ContainsFunc(g.Labels, func(l *fake.Label) bool { return l.Name == SecurityLabel }) {
+		t.Fatalf("init did not create %s", SecurityLabel)
+	}
+	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it. The brain
+	// branch (`aayu brain`'s vault) is protected alike, by the same two rulesets.
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole] on [refs/heads/ledger refs/heads/brain]" {
 		t.Fatalf("ledger rulesets: %s", got)
 	}
 	first := snapshot(t, dir)
@@ -169,6 +188,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	g.Rulesets = slices.DeleteFunc(g.Rulesets, func(rs map[string]any) bool { return rs["name"] == initrepo.LedgerHistoryRuleset })
 	g.Rulesets[0]["rules"] = []any{map[string]any{"type": "deletion"}, map[string]any{"type": "non_fast_forward"}, map[string]any{"type": "update"}}
 	g.Rulesets[0]["bypass_actors"] = []any{map[string]any{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}}
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger"}, "exclude": []any{}}}
 	g.Mu.Unlock()
 	g.Reset()
 	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 1 || rep.Counts["updated"] != 1 {
@@ -177,23 +197,52 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if w := g.Writes(); len(w) != 2 || w[0].Method != "POST" || w[1].Method != "PUT" {
 		t.Fatalf("migration writes %v, want the history ruleset created before the old one is narrowed", w)
 	}
-	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole]" {
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole] on [refs/heads/ledger refs/heads/brain]" {
 		t.Fatalf("ledger rulesets after the migration: %s", got)
 	}
 
-	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "S-4.2b") {
+	// Rulesets an init before the brain branch created (rules and actors right, include only the ledger):
+	// a rerun adds refs/heads/brain to both, keeping any other ref they include, and drops an exclusion of
+	// refs/heads/brain itself, which would beat the inclusion; a wider exclusion stays.
+	g.Mu.Lock()
+	for _, rs := range g.Rulesets {
+		rs["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/archive"}, "exclude": []any{"refs/heads/brain", "refs/heads/tmp-*"}}}
+	}
+	g.Mu.Unlock()
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 0 || rep.Counts["updated"] != 2 {
+		t.Fatalf("rerun on rulesets without brain: exit %d, counts %v: %s", code, rep.Counts, errOut)
+	}
+	if w := g.Writes(); len(w) != 2 || w[0].Method != "PUT" || w[1].Method != "PUT" {
+		t.Fatalf("brain upgrade writes %v, want two ruleset updates", w)
+	}
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/archive refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole] on [refs/heads/ledger refs/heads/archive refs/heads/brain]" {
+		t.Fatalf("ledger rulesets after the brain upgrade: %s", got)
+	}
+	g.Mu.Lock()
+	for _, rs := range g.Rulesets {
+		if x := fmt.Sprint(rs["conditions"].(map[string]any)["ref_name"].(map[string]any)["exclude"]); x != "[refs/heads/tmp-*]" {
+			t.Errorf("exclusions after the brain upgrade: %s, want only refs/heads/tmp-*", x)
+		}
+	}
+	g.Mu.Unlock()
+
+	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "aayudha-pack run artifact") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
 }
 
-// ledgerRulesets renders the fake's ledger rulesets: name, rule types, and
-// bypass actors.
+// ledgerRulesets renders the fake's ledger rulesets: name, rule types,
+// bypass actors, and the refs they include.
 func ledgerRulesets(g *fake.GitHub) string {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	b, _ := json.Marshal(g.Rulesets)
 	var rs []struct {
-		Name   string
+		Name       string
+		Conditions struct {
+			RefName struct{ Include []string } `json:"ref_name"`
+		}
 		Rules  []struct{ Type string }
 		Bypass []struct {
 			ActorID   int64  `json:"actor_id"`
@@ -211,7 +260,7 @@ func ledgerRulesets(g *fake.GitHub) string {
 		for _, a := range r.Bypass {
 			by = append(by, fmt.Sprint(a.ActorID, " ", a.ActorType))
 		}
-		out = append(out, fmt.Sprintf("%s: %v bypass %v", r.Name, rules, by))
+		out = append(out, fmt.Sprintf("%s: %v bypass %v on %v", r.Name, rules, by, r.Conditions.RefName.Include))
 	}
 	slices.Sort(out)
 	return strings.Join(out, "; ")
@@ -254,8 +303,23 @@ func TestInitWithoutRulesets(t *testing.T) {
 	if files[".aayudha/config.toml"] == "" || !strings.Contains(files["AGENTS.md"], "aayudha:work-items") {
 		t.Fatal("init stopped before the config and agents steps")
 	}
+	// Both local config files stay out of git (Bug #640).
+	if gi := files[".aayudha/.gitignore"]; !strings.Contains(gi, "\nconfig.local.toml\n") || !strings.Contains(gi, "\nconfig.local.json\n") {
+		t.Fatalf(".aayudha/.gitignore does not ignore both local config files:\n%s", gi)
+	}
 	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
 		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
+	}
+	// The same plan has no environments: --gates still completes and says the CI review cannot run here.
+	code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes", "--gates")
+	said = ""
+	for _, c := range rep.Changes {
+		if c.Kind == "environment" {
+			said = c.Result + ": " + c.Detail
+		}
+	}
+	if code != 0 || !strings.HasPrefix(said, "not created: ") || !strings.Contains(said, "[inspect] reviewer to a review app or human") {
+		t.Fatalf("init --gates without environments: exit %d, said %q: %s", code, said, errOut)
 	}
 	g.Mu.Lock()
 	g.RulesetsUnavailable = false
@@ -327,8 +391,49 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 	if len(g.IssueTypes) != 10 || !strings.Contains(snapshot(t, dir)[initrepo.FormPath(workitems.Types[3])], "\ntype: \"Story\"\n") {
 		t.Errorf("organization: %d issue types; forms must set the type", len(g.IssueTypes))
 	}
-	_ = rep
-	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "x"}, Options{GitHubAPI: g.URL(), Dir: dir}, "uninit", "--external"); code != 0 || !strings.Contains(out, "no external resources") {
+	// The team's ruleset protects the ledger but not the brain branch: init never edits it, and says exactly
+	// what to change, once, on every run until it is changed.
+	advice := `it does not protect refs/heads/brain: add "refs/heads/brain" to ruleset "ledger-writers" (id 99) conditions.ref_name.include`
+	rulesetNotes := func(rep initReport) []string {
+		var notes []string
+		for _, c := range rep.Changes {
+			if c.Step == "ruleset" {
+				notes = append(notes, c.Name+" "+c.Result+": "+c.Detail)
+			}
+		}
+		return notes
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.HasPrefix(notes[0], "ledger-writers adopted: ") || !strings.Contains(notes[0], advice) {
+		t.Errorf("adoption notes %q, want one adopted note saying %q", notes, advice)
+	}
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || len(g.Writes()) != 0 {
+		t.Fatalf("rerun: exit %d, writes %v: %s", code, g.Writes(), errOut)
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.HasPrefix(notes[0], "ledger-writers unchanged: ") || !strings.Contains(notes[0], advice) {
+		t.Errorf("rerun notes %q, want one unchanged note saying %q", notes, advice)
+	}
+	// An exclusion beats an inclusion: a matching pattern still leaves brain unprotected.
+	g.Mu.Lock()
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/brain"}, "exclude": []any{"**/brain"}}}
+	g.Mu.Unlock()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun with a matching exclusion: exit %d: %s", code, errOut)
+	}
+	exclusion := `it does not protect refs/heads/brain: remove the exclusion "**/brain" from ruleset "ledger-writers" (id 99) conditions.ref_name.exclude`
+	if notes := rulesetNotes(rep); len(notes) != 1 || !strings.Contains(notes[0], exclusion) || strings.Contains(notes[0], "include") {
+		t.Errorf("notes with an exclusion that matches brain: %q, want %q", notes, exclusion)
+	}
+	g.Mu.Lock()
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/b*"}}} // a pattern covers brain
+	g.Mu.Unlock()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun after the team added brain: exit %d: %s", code, errOut)
+	}
+	if notes := rulesetNotes(rep); len(notes) != 1 || strings.Contains(notes[0], "refs/heads/brain") {
+		t.Errorf("notes once the team's ruleset includes brain: %q", notes)
+	}
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "x"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), Dir: dir}, "uninit", "--external"); code != 0 || !strings.Contains(out, "no external resources") {
 		t.Errorf("uninit --external: %d %s", code, out)
 	}
 	if code, _, errOut := runInitCmd(t, g, dir, "uninit", "--yes"); code != 0 {
@@ -361,18 +466,26 @@ func TestInitExtras(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "triage.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * 1-5\"\n"), 0o644)
 	var manifest string
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
 		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
 			manifest = m("http://127.0.0.1:1/callback")
 			return "code-1", nil
 		}}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	// A code-review environment someone made earlier, which also admits feature branches.
+	// Its 101st rule sits on the second page of GitHub's list.
+	old := []string{"feature/*"}
+	for i := range 100 {
+		old = append(old, fmt.Sprintf("old/%d", i))
+	}
+	g.Environments = map[string]*fake.Environment{inspect.ReviewEnvironment: {Policy: map[string]any{"protected_branches": false, "custom_branch_policies": true}, Branches: old, Variables: map[string]string{}}}
 	args := []string{"init", "--yes", "--json", "--gates", "--projects", "--identity", "--integrations"}
 	code, out, errOut := run(t, env, opts, args...)
 	if code != 0 {
@@ -386,10 +499,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-approve.yml", "aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
+	for _, wf := range []string{"aayudha-approve.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -404,10 +517,18 @@ func TestInitExtras(t *testing.T) {
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
 	}
+	// It runs its own security workflow too (Decision #480), on dev, rolling, and main.
+	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", initrepo.SecurityWorkflow)); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.SecurityWorkflow]) {
+		t.Errorf(".github/workflows/%s is not the template rendered for dev", initrepo.SecurityWorkflow)
+	}
 	// D-7.1f: the no-agent digest renders only for Actions, the triage agent loop only for the agent tools.
 	if wf := files[".github/workflows/aayudha-loops.yml"]; !strings.Contains(wf, "aayudha@v0.4.0") || !strings.Contains(wf, "loop:digest") || strings.Contains(wf, "triage") ||
 		files["loops/amp/triage.json"] == "" || files["loops/amp/digest.json"] != "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"0 8 * * 1-5"`) {
 		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
+	}
+	// Every host's executable config needs a code owner (the host-config block).
+	if co := files[".github/CODEOWNERS"]; !strings.Contains(co, initrepo.HostConfigBegin) || !strings.Contains(co, "\n/.mcp.json  @") || !strings.Contains(co, "\n/.codex/  @") || !strings.Contains(co, "\n/.github/hooks/  @") {
+		t.Errorf("CODEOWNERS after --gates:\n%s", co)
 	}
 	cfg := files[".aayudha/config.toml"]
 	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]",
@@ -460,7 +581,7 @@ func TestInitExtras(t *testing.T) {
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
 		t.Errorf("manifest: %s", manifest)
 	}
-	for _, leak := range []string{"MIIEsecret"} {
+	for _, leak := range []string{"PRIVATE KEY", strings.Split(appKey(), "\n")[1]} {
 		for p, body := range snapshot(t, dir) {
 			if strings.Contains(body, leak) {
 				t.Errorf("private key in %s", p)
@@ -469,6 +590,22 @@ func TestInitExtras(t *testing.T) {
 		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), leak) {
 			t.Error("private key in the actions log")
 		}
+	}
+
+	// The code-review environment: only the base branches deploy to it (the feature-branch rule is removed), so no PR
+	// branch reaches the review model's key; its two variables carry the recommended endpoint and model, and the key is
+	// left to the person.
+	g.Mu.Lock()
+	ce := g.Environments[inspect.ReviewEnvironment]
+	if ce == nil || ce.Policy["custom_branch_policies"] != true || ce.Policy["protected_branches"] != false ||
+		!slices.Equal(slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }), []string{"dev", "rolling", "main"}) ||
+		ce.Variables[inspect.ReviewModelURLVar] != inspect.RecommendedReviewURL || ce.Variables[inspect.ReviewModelVar] != inspect.RecommendedReviewModel || len(ce.Variables) != 2 {
+		t.Errorf("the code-review environment after --gates: %+v", ce)
+	}
+	ce.Variables[inspect.ReviewModelVar] = "gemini-3.8-flash" // a person's choice survives the next run
+	g.Mu.Unlock()
+	if !strings.Contains(errOut, "set the secret AAYU_REVIEW_MODEL_KEY, the endpoint's key, in Settings → Environments → code-review") && !strings.Contains(out, "set the secret AAYU_REVIEW_MODEL_KEY") {
+		t.Errorf("init does not say to set the review model's key:\n%s\n%s", out, errOut)
 	}
 
 	// Idempotent: the same flags again write nothing.
@@ -485,9 +622,24 @@ func TestInitExtras(t *testing.T) {
 		t.Fatal("second run with extras changed files")
 	}
 
+	// A default branch outside [branches]: pull_request_target checks the environment against it, so init adds it.
+	g.Default = "trunk"
+	if code, _, errOut := run(t, env, opts, args...); code != 0 {
+		t.Fatalf("run with default branch trunk: exit %d: %s", code, errOut)
+	}
+	g.Mu.Lock()
+	if got := slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }); !slices.Equal(got, []string{"dev", "rolling", "main", "trunk"}) {
+		t.Errorf("code-review deployment branches with default branch trunk: %v", got)
+	}
+	g.Mu.Unlock()
+	g.Default = "dev"
+
 	// uninit removes what lives in the repository and lists the rest.
 	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
 		t.Fatalf("uninit: %d %s", code, errOut)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".github", "CODEOWNERS")); err == nil {
+		t.Errorf("uninit left the CODEOWNERS that init created for the host-config block: %q", b)
 	}
 	code, out, _ = run(t, env, opts, "uninit", "--external", "--json")
 	var ext struct {
@@ -527,7 +679,7 @@ func TestInitVerifySkill(t *testing.T) {
 				_ = os.WriteFile(filepath.Join(dir, tc.marker), []byte("{}\n"), 0o644)
 			}
 			env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
-			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+			opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
 			if code, out, errOut := run(t, env, opts, "init", "--yes", "--json", "--verify-skill"); code != 0 {
 				t.Fatalf("init --verify-skill: exit %d: %s\n%s", code, errOut, out)
 			}
@@ -568,7 +720,7 @@ func TestInitRetiredTriageWorkflow(t *testing.T) {
 	triage := filepath.Join(dir, ".github", "workflows", "aayudha-triage.yml")
 	_ = os.MkdirAll(filepath.Dir(triage), 0o755)
 	_ = os.WriteFile(triage, []byte("name: aayudha-triage\non:\n  issues:\njobs: {}\n"), 0o644)
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	change := func(out string) string {
 		var r struct {
@@ -633,5 +785,223 @@ func TestInitVerifySkillMaintainer(t *testing.T) {
 		if got := strings.Contains(string(cfg), "[verify]\nmaintainer = \"amp\""); got != (want != "") || strings.Contains(string(cfg), "codex") {
 			t.Errorf("%q: config:\n%s", answer, cfg)
 		}
+	}
+}
+
+// appKey is a real RSA key for the fake App: init --identity signs a JWT with
+// it to read the App's webhook before it stores the key.
+var appKey = sync.OnceValue(func() string {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}))
+})
+
+// noHook is GitHub's webhook config of an App created from aayu's manifest.
+var noHook = map[string]any{"url": "https://example.invalid/aayudha-no-webhook", "content_type": "form"}
+
+// runIdentity runs `aayu init --yes --identity` against api in a shell whose
+// environment is env. With code set, the manifest flow is the test's browser,
+// which returns that one-time code; without it the real flow runs.
+func runIdentity(t *testing.T, api, code string, env map[string]string) (int, string) {
+	t.Helper()
+	return runIdentityIn(t, checkout(t), t.TempDir(), api, code, env)
+}
+
+// runIdentityIn is runIdentity in a given checkout and home, for a rerun.
+func runIdentityIn(t *testing.T, dir, home, api, code string, env map[string]string) (int, string) {
+	t.Helper()
+	e := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": home}
+	maps.Copy(e, env)
+	var out, errOut bytes.Buffer
+	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
+		IsTerminal: func(any) bool { return true },
+		Getenv:     func(k string) string { return e[k] },
+		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
+		GHAccounts: func(context.Context) (map[string]string, error) { return nil, nil },
+		GitCredential: func(context.Context, string) (string, error) {
+			return "", errors.New("git credentials disabled in tests")
+		}}
+	if code != "" {
+		opts.AppManifestCode = func(context.Context, string, func(string) string) (string, error) { return code, nil }
+	}
+	rc := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: strings.NewReader(""), Out: &out, Err: &errOut}, opts)
+	return rc, out.String() + errOut.String()
+}
+
+// identityGitHub is a fake GitHub whose manifest conversion gives an App
+// owned by owner ("org" for an organization's) with perms.
+func identityGitHub(t *testing.T, owner string, perms map[string]any) *fake.GitHub {
+	kind := "User"
+	if owner == "org" {
+		kind, owner = "Organization", "o"
+	}
+	g := fake.New(t, "o/r", kind)
+	pub, _, _ := box.GenerateKey(rand.Reader)
+	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+	if perms == nil {
+		perms = map[string]any{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+	}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
+	return g
+}
+
+// #578: from a shell whose browser is on another device, init --identity
+// refuses at once with exit 4 and a next step, starts no manifest flow, and
+// sends the code to no page; a desktop browser that never redirects back
+// exits 4 too, never as an internal error. The phone setup itself moved to
+// the owner's token exchange (#594), after Codex's security review of #603.
+func TestInitIdentityRemoteShell(t *testing.T) {
+	defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
+	loopbackWait = 50 * time.Millisecond
+	for _, env := range []map[string]string{
+		{"AMP_ORB": "1", "DISPLAY": ":0"}, // an orb's Terminal tab
+		{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22", "DISPLAY": ":0"},
+		{"CLAUDE_CODE_REMOTE": "true"},
+		{}, // a Linux server or container: no desktop
+	} {
+		if len(env) == 0 && runtime.GOOS != "linux" {
+			continue // darwin and windows count as a desktop: localBrowser's table below covers them
+		}
+		g := identityGitHub(t, "o", nil)
+		code, printed := runIdentity(t, g.URL(), "", env)
+		if code != ExitBlocked || !strings.Contains(printed, "init --identity needs a browser on this machine") || !strings.Contains(printed, "no App was created") ||
+			!strings.Contains(printed, "run `aayu init --identity` in a terminal on the computer whose browser you use") ||
+			strings.Contains(printed, "http://127.0.0.1") || strings.Contains(printed, "https://") && strings.Contains(printed, "manifest") || strings.Contains(printed, "internal error") || len(g.Secrets) != 0 {
+			t.Errorf("%v: exit %d, secrets %v:\n%s", env, code, g.Secrets, printed)
+		}
+		for _, r := range g.Requests {
+			if strings.HasPrefix(r.Path, "/app-manifests/") {
+				t.Errorf("%v: a conversion was attempted: %s", env, r.Path)
+			}
+		}
+	}
+	g := identityGitHub(t, "o", nil)
+	code, printed := runIdentity(t, g.URL(), "", map[string]string{"DISPLAY": ":0"})
+	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "If you created the App on GitHub, aayu never received its key: delete it at https://github.com/settings/apps, then run this again") ||
+		!strings.Contains(printed, "aayu init --identity") || strings.Contains(printed, "internal error") {
+		t.Fatalf("a desktop browser that never redirects back: exit %d:\n%s", code, printed)
+	}
+	for _, tt := range []struct {
+		env  map[string]string
+		goos string
+		want bool
+	}{
+		{map[string]string{}, "darwin", true},
+		{map[string]string{}, "windows", true},
+		{map[string]string{"DISPLAY": ":0"}, "linux", true},
+		{map[string]string{}, "linux", false},
+		{map[string]string{"SSH_TTY": "/dev/pts/0"}, "darwin", false},
+		{map[string]string{"AMP_THREAD_ID": "T-1"}, "darwin", false}, // an agent's shell
+		{map[string]string{"AAYU_REMOTE_BROWSER": "1"}, "darwin", false},
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1"}, "linux", true}, // WSL2 without WSLg
+		{map[string]string{"AAYU_LOCAL_BROWSER": "1", "SSH_TTY": "/dev/pts/0"}, "linux", false},
+	} {
+		if got := localBrowser(func(k string) string { return tt.env[k] }, tt.goos); got != tt.want {
+			t.Errorf("localBrowser(%v, %s) = %v, want %v", tt.env, tt.goos, got, tt.want)
+		}
+	}
+}
+
+// #578: a code GitHub will not convert, or an App other than the one aayu
+// asked for, writes no secret, prints no Install link, and exits 4 saying to
+// delete the App rather than install it.
+func TestInitIdentityRefusesTheApp(t *testing.T) {
+	g := identityGitHub(t, "o", nil)
+	target, _ := url.Parse(g.URL())
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	convStatus := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(convStatus)
+			_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadGateway} {
+		convStatus = status
+		dir := checkout(t)
+		code, printed := runIdentityIn(t, dir, t.TempDir(), srv.URL, "c0de1234c0de5678", nil)
+		// A code GitHub did not consume is still live: the failed action's
+		// record must not hold it.
+		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); len(b) == 0 || strings.Contains(string(b), "c0de1234c0de5678") {
+			t.Errorf("a %d conversion: the actions log is empty or holds the one-time code:\n%s", status, b)
+		}
+		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
+			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
+			t.Fatalf("a %d conversion: exit %d, secrets %v:\n%s", status, code, g.Secrets, printed)
+		}
+		if strings.Contains(printed, "c0de1234c0de5678") {
+			t.Fatalf("a %d conversion printed the one-time code:\n%s", status, printed)
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		g    *fake.GitHub
+		want string
+	}{
+		{"another owner's App", identityGitHub(t, "mallory", map[string]any{"contents": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"wider permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "administration": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"fewer permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "metadata": "read"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"an App with events", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.App["events"] = []string{"push", "issues"}
+			return g
+		}(), "permissions other than those aayu asked for, events"},
+		{"an App with a webhook", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.Static["/app/hook/config"] = map[string]any{"url": "https://attacker.example/hook"}
+			return g
+		}(), "webhook https://attacker.example/hook"},
+		{"an App whose webhook GitHub will not show", func() *fake.GitHub {
+			g := identityGitHub(t, "o", nil)
+			g.Static = nil
+			return g
+		}(), "webhook unknown ("},
+		{"an organization's App with wider permissions", identityGitHub(t, "org", map[string]any{"workflows": "write"}), "delete it at https://github.com/organizations/o/settings/apps"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, printed := runIdentity(t, tt.g.URL(), "c0de1234c0de5678", nil)
+			if code != ExitBlocked || !strings.Contains(printed, tt.want) || len(tt.g.Secrets) != 0 || strings.Contains(printed, "installations/new") {
+				t.Fatalf("exit %d, secrets %v:\n%s", code, tt.g.Secrets, printed)
+			}
+		})
+	}
+	// After a refused App, the person deletes it and reruns: the new App's
+	// code is converted, not answered from the refused run's record, and the
+	// actions log never holds a code.
+	g = identityGitHub(t, "mallory", nil)
+	dir, home := checkout(t), t.TempDir()
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "c0de1234c0de5678", nil); code != ExitBlocked {
+		t.Fatalf("the refused App: exit %d:\n%s", code, printed)
+	}
+	g.App["owner"] = map[string]any{"login": "o"}
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "n3wc0de9n3wc0de9", nil); code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" {
+		t.Fatalf("the rerun after a refused App: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+	}
+	var convs []string
+	for _, r := range g.Requests {
+		if strings.HasPrefix(r.Path, "/app-manifests/") {
+			convs = append(convs, r.Path)
+		}
+	}
+	if !slices.Equal(convs, []string{"/app-manifests/c0de1234c0de5678/conversions", "/app-manifests/n3wc0de9n3wc0de9/conversions"}) {
+		t.Errorf("conversions = %v", convs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), "c0de1234c0de5678") || strings.Contains(string(b), "n3wc0de9n3wc0de9") {
+		t.Error("a one-time code is in the actions log")
+	}
+
+	// The App aayu asked for is stored, and only then is the Install link printed.
+	g = identityGitHub(t, "o", nil)
+	code, printed := runIdentity(t, g.URL(), "c0de1234c0de5678", nil)
+	if code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
+		t.Fatalf("the App aayu asked for: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
 	}
 }

@@ -90,9 +90,12 @@ func run(args []string, out io.Writer) (bool, error) {
 	}
 	var botLogins []string
 	if *repo != "" {
-		l, err := config.Load(config.Sources{RepoDir: *repo})
+		l, err := config.Load(config.Sources{RepoDir: *repo, CI: config.InCI(os.Getenv)})
 		if err != nil {
 			return false, fmt.Errorf("base config: %w", err)
+		}
+		for _, n := range l.Notices {
+			fmt.Fprintln(out, "warning:", n)
 		}
 		botLogins = l.Config.Identity.BotLogins
 	}

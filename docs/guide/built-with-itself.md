@@ -79,7 +79,7 @@ It failed five rounds in a row, each after a real fix. The registers are `eli5` 
 
 The remaining failures were not bugs a rule could decide. The judge marked the simplest register down for everyday
 restatements that the register itself asks for, and the controlled-English register down for passive voice. Six
-charged runs cost 49.43 USD.
+charged runs were recorded at 49.43 USD, at a fallback rate about four times the models' list prices (D-3.4p).
 
 Rather than loosen the test quietly, the founder decided in the open: the `brief` group passes on the mean score, and
 pass^5 is still computed and printed, marked advisory. When even the mean failed for the two plain registers on the
@@ -104,7 +104,8 @@ cost of a vague promise very concrete: 17 reviews where 10 were planned.
   the run and `ship` records it), but separating agent writes from the founder's does. Installing the App is a browser
   step only the founder can take.
 - **Package managers.** v0.1.0 shipped on 15 October 2026, signed, with provenance. Its Homebrew, Scoop, and winget
-  jobs failed, so those three still need their repositories' tokens; `install.sh` works.
+  jobs failed, so at that release only `install.sh` worked. Since v0.2.0, Homebrew and Scoop have aayudha; winget is
+  waiting for a moderator in [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680).
 - **Measurement with real time.** The benefits-qa result is seeded; the real 28-day measurement is due after
   9 November 2026.
 - **Reviews owed after the fact.** The founder still has to review the three plan bypasses and five solo ships from

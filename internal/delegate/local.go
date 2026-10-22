@@ -63,12 +63,20 @@ var receiverKeys = map[string][]string{
 	Amp:    {"AMP_API_KEY"},
 }
 
+// receiverPaths are the paths only the receiver's own CLI reads, kept like
+// HOME: CODEX_HOME is where Codex keeps its sign-in and configuration, so the
+// receiver reads the same Codex home that agentenv.Detect probed with this
+// process's environment (Appendix B D-5.5c.25). It is a path, not a secret.
+var receiverPaths = map[string][]string{
+	Codex: {"CODEX_HOME"},
+}
+
 var keepEnv = regexp.MustCompile(`^(PATH|HOME|USER|LOGNAME|SHELL|TERM|LANG|LC_[A-Z_]+|TZ|TMPDIR|XDG_[A-Z_]+|GOPATH|GOCACHE|GOMODCACHE|GOTOOLCHAIN|GOFLAGS|NODE_PATH|npm_config_cache|PNPM_HOME|COREPACK_HOME)$`)
 
 var secretName = regexp.MustCompile(`(?i)token|secret|passw|credential|api_?key|private`)
 
 // ScrubEnv is the local receiver's environment: the shell and toolchain
-// variables, the receiver's own key, and nothing of GitHub's or aayu's. Git
+// variables, the receiver's own key and home (CODEX_HOME), and nothing of GitHub's or aayu's. Git
 // and gh lose their credentials (no credential helper, no SSH command, an
 // empty gh config), so the receiver cannot push or open a PR; aayu does both.
 // ghConfig is an empty directory for GH_CONFIG_DIR.
@@ -77,7 +85,7 @@ func ScrubEnv(environ []string, receiver, ghConfig string) []string {
 	for _, kv := range environ {
 		k, _, _ := strings.Cut(kv, "=")
 		switch {
-		case slices.Contains(receiverKeys[receiver], k):
+		case slices.Contains(receiverKeys[receiver], k), slices.Contains(receiverPaths[receiver], k):
 			out = append(out, kv)
 		case keepEnv.MatchString(k) && !secretName.MatchString(k):
 			out = append(out, kv)

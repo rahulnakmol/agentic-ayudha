@@ -1,0 +1,19 @@
+[[criterion]]
+id = 1
+tests = ["./internal/production:TestSentrySource"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/production:TestSentrySource"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/production:TestSentrySource"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/production:TestSentrySource"]
+
+[[criterion]]
+id = 5
+tests = ["./internal/production:TestSentrySource"]

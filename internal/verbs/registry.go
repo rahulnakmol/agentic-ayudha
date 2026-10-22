@@ -14,7 +14,7 @@ const SkillVersion = "0.0.0"
 // SeatID is the stable slug of a seat.
 type SeatID string
 
-// Seat is one of the twelve pod seats. Each seat runs solo (agent only) or
+// Seat is one of the fourteen pod seats. Each seat runs solo (agent only) or
 // paired (agent twin plus a human); the mode is configuration, not registry data.
 type Seat struct {
 	ID   SeatID
@@ -99,7 +99,20 @@ type ModelDefault struct {
 	AlternativeID    string // model ID of the alternative, used as a fallback when the default cannot be called
 	ContextTokens    int    // context window cap; 0 means the model default
 	Note             string // e.g. a substitution the gateway forces
+	// Plan is the host plan the default applies to ([hosts.cursor] plan,
+	// Decision #469); empty for every plan.
+	Plan string
 }
+
+// Cursor's plans (Decision #469): since 12 October 2026 a new plan ("x")
+// includes only Cursor's own models (Grok, Composer), and Claude, GPT, and
+// Gemini are list-price pay-as-you-go; a legacy Pro, Pro+, or Ultra plan
+// keeps them included. aayu cannot tell the plans apart, so "x", which never
+// spends list-price money by surprise, is the default.
+const (
+	PlanX      = "x"
+	PlanLegacy = "legacy"
+)
 
 // LaneID identifies a model lane.
 type LaneID string
@@ -292,8 +305,10 @@ func (c Command) Has(s Surface) bool {
 const (
 	ProductStrategist  SeatID = "product-strategist"
 	CodeArchitect      SeatID = "code-architect"
+	DataAIArchitect    SeatID = "data-ai-architect" // the Code Architect's counterpart for data and AI (Decision #283)
 	EngineeringManager SeatID = "engineering-manager"
 	AINativeEngineer   SeatID = "ai-native-engineer"
+	ProductionEngineer SeatID = "production-engineer" // runs the software the AI Native Engineer builds (Decision #324)
 	UXResearcher       SeatID = "ux-researcher-evolutionist"
 	DevOps             SeatID = "devops-devex-tinkerer"
 	QualityArchitect   SeatID = "quality-architect"
@@ -304,12 +319,14 @@ const (
 	Founder            SeatID = "founder"
 )
 
-// Seats lists the twelve seats in charter order.
+// Seats lists the fourteen seats in charter order.
 var Seats = []Seat{
 	{ProductStrategist, "Product Strategist"},
 	{CodeArchitect, "Code Architect"},
+	{DataAIArchitect, "Data & AI Architect"},
 	{EngineeringManager, "Engineering Manager"},
-	{AINativeEngineer, "AI Native Engineer (+SRE hat)"},
+	{AINativeEngineer, "AI Native Engineer"},
+	{ProductionEngineer, "Production Engineer"},
 	{UXResearcher, "UX Researcher & Evolutionist"},
 	{DevOps, "DevOps & DevEx Tinkerer"},
 	{QualityArchitect, "Quality Architect"},
@@ -339,11 +356,11 @@ var LayerTable = []Layer{
 	{L01, "Experience", UXResearcher, []string{"packages/design-system/**", "examples/benefits-qa/web/**"}},
 	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**", "examples/benefits-qa/api/**", "examples/benefits-qa/cmd/**"}},
 	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
-	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
-	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
-	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},
-	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "examples/benefits-qa/store/**"}},
-	{L08, "Analytics / reporting", RevenueArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
+	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
+	{L05, "Intelligence", DataAIArchitect, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
+	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/integrations/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},
+	{L07, "Operational data / state", ProductionEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "ops/**", "examples/benefits-qa/store/**"}},
+	{L08, "Analytics / reporting", DataAIArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
 	{L09, "Platform / operations", DevOps, []string{".github/**", ".agents/**", "embed.go", "go.mod", "go.sum", "examples/benefits-qa/deploy/**"}},
 }
 
@@ -353,6 +370,9 @@ const (
 	HostCursor HostID = "cursor"
 	HostClaude HostID = "claude"
 	HostCodex  HostID = "codex" // OpenAI Codex CLI and IDE extension (WP3.2b)
+	// HostCopilot is GitHub Copilot: Copilot CLI and VS Code agent mode, which
+	// share one runtime and its skill, hook, and MCP formats.
+	HostCopilot HostID = "copilot"
 )
 
 // Hosts lists the primary hosts.
@@ -361,6 +381,7 @@ var Hosts = []Host{
 	{ID: HostCursor, Name: "Cursor", Excludes: []Family{FamilyOpenAI}}, // GPT lanes fall back to Grok on Cursor
 	{ID: HostClaude, Name: "Claude Code"},
 	{ID: HostCodex, Name: "OpenAI Codex"},
+	{ID: HostCopilot, Name: "GitHub Copilot"},
 }
 
 // Lane IDs.
@@ -382,33 +403,89 @@ const (
 	ModelGPTSol       = "gpt-6.1-sol"
 	ModelGPTAstra     = "gpt-6-astra"
 	ModelGrok         = "grok-4.7"
-	ModelGeminiPro    = "gemini-3.1-pro-low"
+	ModelGrokPrior    = "grok-4.6"
+	// ModelComposer is Cursor's own model. Cursor does not publish its base
+	// model, so its family is unknown (Decision #469, detail 10): a review
+	// between it and any other build is same-family (rung C).
+	ModelComposer = "composer-2.5"
+	// ModelGemini is the ui-review lane's model, called at high reasoning
+	// effort (founder: "aayu to default to 3.8-flash-high gemini model for all
+	// UI/UX review"; the gateway has no gemini-3.8-flash-high ID, so "-high" is
+	// the effort). It is interim (D-6.6b): the target is gemini-4-argon-high,
+	// which needs the founder's paid Google plan before the gateway routes it.
+	ModelGemini = "gemini-3.8-flash"
+)
+
+// Model IDs as GitHub Copilot lists them (GET https://api.githubcopilot.com/models,
+// read 2026-10-18): Copilot names Claude models with a dot, the gateway with a dash.
+const (
+	CopilotClaudeOpus   = "claude-opus-5.5"
+	CopilotClaudeSonnet = "claude-sonnet-5.5"
+	CopilotGPTSol       = "gpt-6.1-sol"
+	CopilotGeminiArgon  = "gemini-4-argon"
 )
 
 // PeerReviewCandidates are the review-lane models inspect's peer mode picks
 // its second reviewer from, in order: the first whose family differs from the
 // builder's and the first reviewer's (WP4.8b).
-var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGeminiPro, ModelClaudeOpus}
-
-const geminiNote = "the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro"
+var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGemini, ModelClaudeOpus}
 
 func builderDefaults() []ModelDefault {
 	return []ModelDefault{
 		{Host: HostAmp, Model: "Amp medium", Family: FamilyHostManaged, Escalation: "Amp high"},
-		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
+		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanX},
+		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet, Plan: PlanLegacy},
 		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostCodex, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI, Escalation: "GPT-6 Astra at high reasoning effort", EscalationID: ModelGPTAstra, EscalationEffort: "high"},
+		// Copilot builds with a named model, never an Auto tier: Balance and
+		// Intelligence picked claude-opus-5.5 for a hard prompt, at twice
+		// Sonnet's per-token price, without saying so beforehand.
+		{Host: HostCopilot, Model: "Claude Sonnet 5.5", ID: CopilotClaudeSonnet, Family: FamilyAnthropic,
+			Escalation: "Claude Opus 5.5", EscalationID: CopilotClaudeOpus},
 	}
 }
+
+// Copilot's Auto tiers. aayu cannot pick a model inside Copilot, so a lane on
+// Copilot is the Auto tier the person or the session selects (/model auto
+// <tier> in Copilot CLI, Optimize for in VS Code), and the family is the
+// model Copilot reports for each response.
+const (
+	CopilotEfficiency   = "Copilot Auto (Efficiency)"
+	CopilotBalance      = "Copilot Auto (Balance)"
+	CopilotIntelligence = "Copilot Auto (Intelligence)"
+)
+
+// Copilot model selectors: what [models.<lane>.copilot] model may name
+// besides a concrete Copilot model ID. Each is the Copilot CLI flag pair
+// --model auto --auto-tier <tier>, or --experimental --model hydrafusion for
+// HydraFusion, a research preview and so only ever opt-in
+// (docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
+const (
+	CopilotAutoEfficiency   = "auto:efficiency"
+	CopilotAutoBalance      = "auto:balance"
+	CopilotAutoIntelligence = "auto:intelligence"
+	CopilotHydraFusion      = "hydrafusion"
+)
+
+func copilotAuto(tier, escalation string) ModelDefault {
+	return ModelDefault{Host: HostCopilot, Model: tier, ID: copilotTierID[tier], Family: FamilyHostManaged, Escalation: escalation}
+}
+
+var copilotTierID = map[string]string{CopilotEfficiency: CopilotAutoEfficiency, CopilotBalance: CopilotAutoBalance, CopilotIntelligence: CopilotAutoIntelligence}
 
 func reviewDefault(h HostID) ModelDefault {
 	return ModelDefault{Host: h, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI,
 		Escalation: "GPT-6 Astra at high reasoning effort for heavy reviews", EscalationID: ModelGPTAstra, EscalationEffort: "high"}
 }
 
+func withPlan(d ModelDefault, plan string) ModelDefault {
+	d.Plan = plan
+	return d
+}
+
 func geminiDefault(h HostID) ModelDefault {
-	return ModelDefault{Host: h, Model: "Gemini 3.1 Pro", ID: ModelGeminiPro, Family: FamilyGoogle,
-		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)", Note: geminiNote}
+	return ModelDefault{Host: h, Model: "Gemini 3.8 Flash (high)", ID: ModelGemini, Family: FamilyGoogle, Effort: "high",
+		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)"}
 }
 
 // Lanes lists the model lanes with their settled per-host defaults.
@@ -418,22 +495,45 @@ var Lanes = []Lane{
 	{ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
 	{ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
 		reviewDefault(HostAmp),
-		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
+		// On a new plan the builder is Grok 4.7, and no other family is
+		// included: another tier of the family reviews, labelled same-family
+		// (Decision #469, detail 7).
+		{Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanLegacy},
 		reviewDefault(HostClaude),
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
+		// Copilot reviews with a concrete model (--model) from a family the
+		// builder was not, read from its Aayudha-Model lines: GPT-6.1 Sol on
+		// the default Anthropic build, Claude Opus 5.5 on one with no Anthropic
+		// response, Gemini 4 Argon on one that used both. A build that used all
+		// three is reviewed same-family. HydraFusion Critique stays opt-in
+		// ([models.review.copilot]).
+		{Host: HostCopilot, Model: "GPT-6.1 Sol", ID: CopilotGPTSol, Family: FamilyOpenAI,
+			Alternative: "Claude Opus 5.5 (" + CopilotClaudeOpus + ") when the build has no anthropic response, Gemini 4 Argon (" + CopilotGeminiArgon + ") when it used both anthropic and openai", AlternativeID: CopilotClaudeOpus},
 	}},
+	// Interim model gemini-3.8-flash; the target is gemini-4-argon-high once the
+	// gateway routes it (ModelGemini, D-6.6b).
 	{ID: LaneUIReview, Summary: "Visual and interaction critique of UI.", Adversarial: true, Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp high", Family: FamilyHostManaged},
-		geminiDefault(HostCursor),
+		{Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+		withPlan(geminiDefault(HostCursor), PlanLegacy),
 		geminiDefault(HostClaude),
 		geminiDefault(HostCodex),
+		// The founder's default: Gemini 4 Argon through Copilot wherever it is
+		// available. The binary's lane A calls run it through Copilot CLI on
+		// any host when copilot is installed and signed in, else Gemini 3.8
+		// Flash (high) through the gateway, which the ux evals gate.
+		{Host: HostCopilot, Model: "Gemini 4 Argon (high)", ID: CopilotGeminiArgon, Family: FamilyGoogle, Effort: "high",
+			Alternative: "Gemini 3.8 Flash (high) (" + ModelGemini + ") through the AI gateway when copilot is not installed or signed in, a call fails, or [models.ui-review.copilot] model = \"\"; Argon costs about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed)", AlternativeID: ModelGemini},
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},
-		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		{Host: HostCursor, Model: "Composer 2.5", ID: ModelComposer, Note: "family unknown: Cursor does not publish Composer's base model", Plan: PlanX},
+		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000, Plan: PlanLegacy},
 		{Host: HostClaude, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		{Host: HostCodex, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		copilotAuto(CopilotEfficiency, ""),
 	}},
 }
 
@@ -463,6 +563,8 @@ const (
 	GateEvalFirst     GateID = "eval-first"
 	GateCodeowner     GateID = "codeowner-review"
 	GateTTY           GateID = "tty-confirm"
+	GateStableRequest GateID = "stable-request"
+	GateScopeBudget   GateID = "scope-budget"
 )
 
 // Gates lists every gate a command may declare.
@@ -486,6 +588,8 @@ var Gates = []Gate{
 	{GateEvalFirst, "A failing eval case reproducing the finding exists before the skill diff."},
 	{GateCodeowner, "A human CODEOWNER review on protected paths."},
 	{GateTTY, "Interactive confirmation on a TTY; refused for agents."},
+	{GateStableRequest, "Promoting to main needs a person's stable-release request: their comment \"Stable release: <version>\" on the Release issue after its rolling snapshot, or their yes at a terminal."},
+	{GateScopeBudget, "After a person accepts a release's baseline, drift stays within [scope] budget_percent, or a person accepts the change through GitHub's device flow against an accepted Decision."},
 }
 
 var (
@@ -517,7 +621,9 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 	return Input{Name: name, Type: TypeEnum, Required: required, Positional: positional, Enum: values, Description: desc}
 }
 
-// Verbs lists the 32 verbs in plan order (V7, WP0.3).
+// Verbs lists the 32 verbs in plan order (V7, WP0.3), then chart, the Data & AI
+// Architect's verb (Decision #283, Appendix B S-5.1g), then survey (WP5.9,
+// Decision #287), then the Production Engineer's verbs (WP5.10, Decision #324); brain (v0.3.0) follows triage.
 var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
@@ -575,7 +681,7 @@ var Verbs = []Command{
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("decision", TypeString, "Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on. With --pack, any issue, or a question in quotes."),
-			humanOnly(flag("accept", TypeString, "Option to accept (human identity only).")),
+			humanOnly(flag("accept", TypeString, "Option to accept, by its number or its name (human identity only).")),
 			flag("waiver", TypeString, "Floor to waive; creates a floor-waiver Decision."),
 			readOnlyWith(flag("pack", TypeBool, "On demand, read-only: the owning seat's twin, its persona at the team stage, the cited facts, and the decision-pack outline (WP5.1b)."), "true"),
 			flag("seat", TypeString, "With --pack: the seat whose twin works the decision instead of the one the topic picks."),
@@ -584,6 +690,22 @@ var Verbs = []Command{
 		Outputs:  []string{"decision", "waiver", "decision-pack"},
 		Gates:    []GateID{GateAuthority, GateHumanIdentity},
 		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "counsel", WP: "WP5.6d", Stage: StageExplain,
+		Summary: "Consult the Founder's Sage on any topic, issue, Decision, path, or PR: the call and its door, three readings, one recommendation, cited proof, and the next aayu step; advice only, never a review.",
+		Reader:  "Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides.",
+		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			optPos("topic", TypeString, "A question in quotes, an issue or Decision as #N, or a path in this checkout; or use --pr or --issue."),
+			flag("pr", TypePR, "Pull request to counsel on: its changed files by layer, its proof pack, and its builder family."),
+			flag("issue", TypeIssue, "Issue or Decision to counsel on: it, its parent, and its links."),
+			flag("draft", TypePath, "Markdown counsel the host's model wrote; counsel checks every part, the stage's artefact, and every citation. Without it, counsel prints the grounding and the outline."),
+			readOnlyWith(flag("post", TypeBool, "Post the checked counsel on the PR or issue as one comment labelled counsel, replaced in place on a rerun (through the actions log); needs --draft and --pr or --issue. Never a review or an approval."), "false"),
+		},
+		Outputs:  []string{"counsel", "grounding"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
 		Name: "triage", WP: "WP2.9", Stage: StageOperate,
@@ -599,15 +721,33 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "the host's model passes --as; never in product CI", Exposure: ExposeWrite,
 	},
 	{
+		Name: "brain", WP: "v0.3.0", Stage: StageExplain,
+		Summary: "Keep the product brain: an Obsidian vault on the orphan brain branch; init, checkpoint its generated links, check, or open it.",
+		Reader:  "Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person.",
+		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
+		Inputs: []Input{
+			readOnlyWith(enumIn("action", true, true, "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no pasted Completion Goal line or issue label; open: print how to open the vault in Obsidian.", "init", "checkpoint", "check", "open"), "check", "open"),
+			flag("workstream", TypeString, "With init: add a workstream folder with its own index and map of content, linked up into the root vault."),
+			flag("dir", TypeString, "With check: check a local folder (a worktree of the brain branch) instead of the branch's tip on the remote."),
+		},
+		Outputs:  []string{"vault", "check-report"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
+	},
+	{
 		Name: "build", WP: "WP5.5", Stage: StageBuild,
 		Summary: "Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.",
 		Reader:  "Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: AllLayers(),
 		Inputs: []Input{
-			pos("issue", TypeIssue, "Ready story or bug to build."),
+			optPos("issue", TypeIssue, "Ready story or bug to build; required unless --next."),
+			enumIn("next", false, false, "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.", "ship", "pick"),
+			flag("stop", TypeString, "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires."),
 			flag("resume", TypeBool, "Resume from the last Aayudha-Checkpoint trailer."),
 			enumIn("delegate", false, false, "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).", "codex", "cursor", "claude", "amp", "auto"),
 			flag("local", TypeBool, "With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR."),
+			flag("asked", TypeString, "The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story."),
+			flag("decline", TypeString, "Decline open items of the last session review, one \"<id>: <why>\" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them."),
 		},
 		Outputs:  []string{"pr", "checkpoint-commits", "progress-comment", "delegation"},
 		Gates:    []GateID{GateReady, GateBudget, GateHalt},
@@ -624,21 +764,24 @@ var Verbs = []Command{
 			flag("map", TypeBool, "Only the feature-map drift check (WP4.5b): compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift."),
 			flag("check", TypeString, "Only the behaviour floor, on these feature-map checks: <feature>, <feature>.<check>, or all (the sweep); a run outside the merge gate is a preview."),
 			enumIn("maintain", false, false, "With --map or --check: post the maintain brief on the tracking issue for the agent app [verify] maintainer names, when the map drifted or a check failed (drift), or every time (always).", "drift", "always"),
+			flag("security", TypeBool, "Only the security floors (sast, secrets, deps, dast) on the checked-out commit, with no PR or story: what aayudha-security.yml runs on every push and nightly. With --ci, each failing finding files or updates one aayudha:security Bug."),
+			flag("since", TypeString, "With --security: scan secrets only in the commits after this revision (a push's before); without it, or with all zeros or an unknown revision, the whole history of HEAD."),
 		},
-		Outputs:  []string{"floor-results", "pack", "map-drift"},
+		Outputs:  []string{"floor-results", "pack", "map-drift", "security-bugs"},
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
 		Name: "inspect", WP: "WP4.8", Stage: StageProve,
 		Summary: "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
-		Reader:  "An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild.",
+		Reader:  "A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild.",
 		Seat:    EngineeringManager, Lane: LaneReview, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request to inspect."),
 			enumIn("mode", false, false, "general: one reviewer; peer: two reviewers of different families cross-check each other (default from [inspect]).", "general", "peer"),
 			humanOnly(flag("dismiss", TypeString, "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it.")),
-			humanOnly(flag("reason", TypeString, "Why the finding is dismissed (with --dismiss).")),
+			humanOnly(flag("approve", TypeBool, "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`.")),
+			humanOnly(flag("reason", TypeString, "Why the finding is dismissed (with --dismiss), or what you checked (with --approve).")),
 		},
 		Outputs:  []string{"disposition (merge|fix|rebuild)", "findings", "review-comments"},
 		Gates:    []GateID{GatePack, GateBudget},
@@ -651,7 +794,7 @@ var Verbs = []Command{
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request to ship."),
-			humanOnly(flag("solo-bypass", TypeBool, "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log (Appendix B D2).")),
+			humanOnly(flag("solo-bypass", TypeBool, "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log.")),
 		},
 		Outputs:  []string{"merge-commit", "complete-section", "status:merged"},
 		Gates:    []GateID{GateMergeGate, GateHumanPass},
@@ -665,10 +808,11 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("release", TypeIssue, "Release issue."),
 			enumIn("to", true, false, "Branch to promote to.", "rolling", "main"),
+			flag("at", TypeString, "With --to rolling: promote this dev commit instead of dev's newest, such as the newest one with tier-2 eval results for every gating group."),
 		},
 		Outputs:  []string{"tag", "released-stories", "release-notes"},
-		Gates:    []GateID{GateHumanIdentity, GateTTY, GateHalt},
-		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
+		Gates:    []GateID{GateHumanIdentity, GateStableRequest, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
 		Name: "proof", WP: "WP4.2", Stage: StageProve,
@@ -759,7 +903,7 @@ var Verbs = []Command{
 		Seat:    UXResearcher, Lane: LaneUIReview, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request whose UI to review."),
-			flag("deep", TypeBool, "Run lane A at high effort."),
+			flag("deep", TypeBool, "Run lane A at high effort when the lane's default effort is lower."),
 		},
 		Outputs:  []string{"critique", "disposition (recapture|rebuild|fix|ship)"},
 		Gates:    []GateID{GateBudget},
@@ -824,14 +968,15 @@ var Verbs = []Command{
 		Name: "respond", WP: "WP5.6", Stage: StageOperate,
 		Summary: "Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline.",
 		Reader:  "Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline.",
-		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
+		Seat:    ProductionEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
 		Inputs: []Input{
 			pos("incident", TypeIssue, "Incident issue."),
 			flag("action", TypeString, "Catalog action to propose."),
 			flag("params", TypeString, "Action parameters as key=value pairs separated by commas."),
-			flag("close", TypeBool, "Close the incident: file its linked Bug and the retro entry."),
+			flag("postmortem", TypePath, "Blameless postmortem (Markdown) to check against the incident, its timeline, and its investigation note, and post on the incident (replaced in place)."),
+			flag("close", TypeBool, "Close the incident: file its linked Bug (carrying the investigation note's implicated code and durable fix) and the retro entry; a Sev0 or Sev1 incident needs its postmortem first."),
 		},
-		Outputs:  []string{"timeline", "proposed-action", "linked-bug"},
+		Outputs:  []string{"timeline", "proposed-action", "postmortem", "linked-bug"},
 		Gates:    []GateID{GateCatalog, GateEnvironment, GateHumanIdentity},
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeHost, Exposure: ExposeNever,
 	},
@@ -878,8 +1023,14 @@ var Verbs = []Command{
 			flag("ledger", TypeString, "Ledger commit to read; default the ledger tip."),
 			flag("out", TypePath, "Also write the report to this file."),
 			flag("replay", TypeString, "Regenerate a report from the GitHub inputs snapshot at this ledger path (retro/<date>/…inputs.json); files nothing."),
+			flag("classify", TypeIssue, "Feedback issue to classify by the highest layer that can fix its correction for good (needs --layer and --reason); writes no report."),
+			enumIn("layer", false, false, "With --classify: codebase (a type, invariant, or boundary), check (a lint rule, test, or CI check), prose (skill or AGENTS.md guidance), or review (what is surfaced for human review).",
+				"codebase", "check", "prose", "review"),
+			flag("reason", TypeString, "With --classify: why this is the highest layer that can fix the correction for good."),
+			flag("not-catchable", TypeString, "With --classify: why no type, invariant, lint rule, or test can catch it; required for prose and review, and lets evolve rewrite a skill for a codebase or check correction."),
+			flag("criterion", TypeString, "With --classify and a layer other than prose: the Completion Goal criterion of the Story filed for it, `[evidence] state: …; expected: …`, whose proof is the new type, invariant, lint rule, test, or review surface."),
 		},
-		Outputs:  []string{"retro-report", "feedback-issues"},
+		Outputs:  []string{"retro-report", "feedback-issues", "fix-layer"},
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
@@ -887,7 +1038,7 @@ var Verbs = []Command{
 		Name: "measure", WP: "WP7.2", Stage: StageLearn,
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
 		Reader:  "Measures a Goal against its baseline, the same way as before, and writes the result into the Goal.",
-		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
+		Seat:    DataAIArchitect, Owns: RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
 			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."),
@@ -972,14 +1123,14 @@ var Verbs = []Command{
 		Reader:  "Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
-			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "all"),
+			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "copilot", "all"),
 			flag("apply", TypeBool, "Write the changes instead of showing a diff."),
 			flag("pin", TypeString, "Skill version to pin."),
-			flag("env", TypeBool, "Set up agent environments instead: discover them from the code, ask what it cannot say, and show each host's generated configuration and UI values (Appendix B S-3.2c)."),
+			flag("env", TypeBool, "Set up agent environments instead: discover them from the code, ask what it cannot say, and show each host's generated configuration and UI values."),
 			flag("verify", TypeBool, "With --env: write the files and verify each host's environment in a clean container (setup cold, setup warm, the build and tests), fixing and retrying."),
 			flag("cloud", TypeBool, "With --env: prove the live cloud environment with a probe task where the host's CLI can (Amp, Codex) and record it."),
 			flag("record", TypeString, "With --env --host: record a probe reply copied from the host's UI; with --loops --host: record loops as set up there, <loop>=<ID>[,…] or all=<ID> (an empty ID forgets one)."),
-			flag("loops", TypeBool, "Set up this repository's scheduled loops (loops/*.toml) in the one agent tool you pick from those detected: Amp's schedules and Cursor's Terraform with --apply, a ready prompt per loop for Claude Code and Codex; warns when another tool already runs them (Appendix B S-7.1d, S-7.1e)."),
+			flag("loops", TypeBool, "Set up this repository's scheduled loops (loops/*.toml) in the one agent tool you pick from those detected: Amp's schedules and Cursor's Terraform with --apply, a ready prompt per loop for Claude Code and Codex; warns when another tool already runs them."),
 			humanOnly(flag("run-now", TypeString, "With --loops: test one loop now, once, with the tool's own CLI in this checkout.")),
 		},
 		Outputs:  []string{"skill-copies", "lock", "mcp-registration", "hooks", "agent-environments", "loops"},
@@ -997,6 +1148,124 @@ var Verbs = []Command{
 		},
 		Outputs:  []string{"report"},
 		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeRead, ReadOnly: true,
+	},
+	{
+		Name: "chart", WP: "WP5.1g", Stage: StageBreakDown,
+		Summary: "Chart an issue's data or AI design before planning: decisions, metrics, sources, platform, and retention; or evidence, permissions, abstention, and evals.",
+		Reader:  "Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right.",
+		Seat:    DataAIArchitect, Lane: LaneSpec, Layers: OnlyLayers(L05, L07, L08),
+		Inputs: []Input{
+			pos("issue", TypeIssue, "Feature, Initiative, Story, or Bug whose data or AI design to chart."),
+			enumIn("kind", true, false, "data: decisions, metrics with grain and window, sources, platform and its trigger, retention and deletion; ai: simpler options, evidence and permissions, abstention, and an evaluation set.", "data", "ai"),
+			flag("draft", TypePath, "Markdown chart note the host's model wrote; chart checks every part, the stage's artefact, and every citation. Without it, chart prints the grounding and the outline."),
+			readOnlyWith(flag("create", TypeBool, "Post the checked note on the issue as one comment per kind, replaced in place on a rerun (through the actions log); needs --draft."), "false"),
+		},
+		Outputs:  []string{"chart-note", "grounding"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "survey", WP: "WP5.9", Stage: StageShape,
+		Summary: "Survey a codebase with no product docs: index it, check an evidence-backed analysis and backlog, and capture golden outputs for parity.",
+		Reader:  "Reads a codebase nobody documented, says what it does with a citation for every claim, and drafts the backlog to modernise it.",
+		Seat:    CodeArchitect, Lane: LanePlan, Layers: AllLayers(),
+		Inputs: []Input{
+			optPos("path", TypePath, "Checkout to survey; default the repository root."),
+			flag("out", TypePath, "Directory for the survey's files (index.json, SURVEY.md, backlog.md, golden/); default .aayudha/survey under the surveyed checkout."),
+			flag("budget", TypeInt, "Module size in tokens (about four bytes each) when grouping files; default 20000."),
+			flag("module", TypeString, "Print one module's fact pack (files, targets, entry points, surfaces, markers, symbols, calls in and out) from the index; read-only."),
+			flag("docs", TypePath, "User manuals and notes from outside the checkout (a file or a directory of text, Markdown, HTML, man pages, or PDF through pdftotext), indexed as manual:<name> documents a claim cites by line; their text is written under <out>/manuals."),
+			flag("draft", TypePath, "Survey draft to check, whole or some of its sections (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index, a manual, or a probe, or is marked unknown. Each section is saved with its findings under <out>/sections and resumed by later runs; with every section present it writes survey.json and renders SURVEY.md."),
+			readOnlyWith(flag("sections", TypeBool, "Report the survey sections saved under <out>/sections: which pass, which have problems, and which are missing or stale."), "false"),
+			flag("backlog", TypePath, "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs, and do-not-carry Decisions) against the work-item schema, the survey draft, and its compatibility contract; renders backlog.md and its review digest."),
+			readOnlyWith(flag("create", TypeBool, "With --backlog: file the reviewed backlog as issues through the actions log, skipping items already filed; needs --reviewed."), "false"),
+			flag("reviewed", TypeString, "With --create: the review digest of the exact backlog the person reviewed (printed by --backlog)."),
+			flag("limit", TypeInt, "With --create: the most issues one run files; default 25."),
+			flag("golden", TypePath, "Characterisation cases (JSON) to run against the legacy build (--bin), writing each case's stdout, stderr, and exit code with SHA-256 under golden/."),
+			flag("parity", TypePath, "Characterisation cases (JSON) to replay against the new build (--bin) and compare with the golden outputs; exit 3 on any difference."),
+			flag("compat", TypePath, "A legacy test suite as cases (JSON, each test with its suite and area) to run against the new build (--bin) after --golden ran it on the legacy build: scores passes per area, appends to compat-history.jsonl, exit 3 when a test the legacy build passes fails."),
+			flag("bin", TypeString, "With --golden, --parity, or --compat: the program the cases run as {bin}."),
+			readOnlyWith(flag("run", TypeBool, "With --golden, --parity, or --compat: run the cases' program; without it the cases file is only checked."), "false"),
+			flag("shadow", TypeString, "With --golden --bin <legacy> --run: the new program, run beside the legacy one on the same inputs; reports every difference without golden files, exit 3 on any."),
+			readOnlyWith(flag("probe", TypeBool, "With --golden --bin --run: also run each case twice and under a changed time zone, locale, and HOME (and under strace when installed), writing non-determinism, environment dependencies, and files read and written to probes.json."), "false"),
+			flag("check-bin", TypeString, "With --probe: a sanitiser, checker, or differently optimised build of the legacy program; cases whose stderr carries a checker report, or whose stdout or exit code differs from the capture, are recorded."),
+			flag("coverage", TypePath, "With --probe: an lcov tracefile from running the cases under coverage; records the index's functions the cases never reach."),
+		},
+		Outputs:  []string{"index", "fact-pack", "survey-report", "backlog", "issues", "golden", "parity", "compat", "shadow", "probes"},
+		Gates:    []GateID{GateValidator, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "investigate", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Investigate an incident from bounded telemetry queries to the deployed revision and the implicated code, and check the note; it proposes a mitigation, never runs one.",
+		Reader:  "Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			pos("incident", TypeIssue, "Incident issue."),
+			flag("telemetry", TypePath, "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source."),
+			enumIn("source", false, false, "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter).", "sentry", "posthog"),
+			flag("service", TypeString, "Service to scope every query to; default the only service in the export."),
+			flag("environment", TypeString, "Deployment environment to scope to; default the deploy marker's."),
+			flag("revision", TypeString, "Deployed revision; default the deploy marker serving the window, else service.version on the spans."),
+			flag("from", TypeString, "Window start (RFC 3339, UTC); default an hour before the incident started, or with --source and no start, 24 hours before --to. The window is at most 7 days."),
+			flag("to", TypeString, "Window end, exclusive (RFC 3339, UTC); default the export's last record, or now for --source."),
+			flag("query", TypeString, "Run one more bounded query and log it as qN: <kind> [by f,…] [where k=v …] [limit N] [bucket 5m]."),
+			flag("draft", TypePath, "Investigation note (Markdown) to check: every part, the stage's artefact, cited evidence, two hypotheses, bounded queries, and a mitigation only proposed from the catalog."),
+			readOnlyWith(flag("create", TypeBool, "Post the checked note on the incident, replaced in place, and add a timeline line (through the actions log); needs --draft."), "false"),
+		},
+		Outputs:  []string{"investigation-note", "grounding", "query-log"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "slo", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Define SLOs and error budgets from the user's side, measure them from a sanitised export, and record the budget that gates release.",
+		Reader:  "Sets how reliable the product must be for its users, measures how much room for failure is left, and holds back risky releases when it runs out.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			flag("telemetry", TypePath, "Sanitised OpenTelemetry export directory to measure each SLO in ops/slos.toml from (traces.jsonl), read with no network."),
+			flag("service", TypeString, "Service to scope the baseline queries to; default the only service in the export."),
+			flag("query", TypeString, "Run one more bounded query and log it as qN: <kind> [by f,…] [where k=v …] [limit N]."),
+			flag("draft", TypePath, "SLO document (Markdown) to check: every part, the stage's artefact, cited evidence, objectives as percentages with windows, a burn-rate alert, the budget policy, and a proposed ops/slos.toml in a toml block that parses."),
+			readOnlyWith(flag("create", TypeBool, "Write the checked draft's toml block to ops/slos.toml in the checkout, for a pull request a person reviews; needs --draft."), "false"),
+			readOnlyWith(flag("record", TypeBool, "Record each SLO's measure and budget on the ledger (slo/status.json), which release reads; needs --telemetry."), "false"),
+		},
+		Outputs:  []string{"slo-document", "slo-status", "query-log"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "runbook", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Write and check runbooks: confirm a known failure with a bounded query, mitigate it only through the ops catalog, verify it, and roll it back.",
+		Reader:  "Writes down how to spot and fix each known production problem with the approved actions, so whoever is on call can follow it.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			flag("draft", TypePath, "Runbook entry (Markdown) to check: every part, the stage's artefact, cited evidence, an SLO named, a bounded confirm query, a catalog action, its rollback, and no executed change."),
+			readOnlyWith(flag("create", TypeBool, "Write the checked draft to ops/runbooks/<name>.md in the checkout, for a pull request a person reviews; needs --draft."), "false"),
+		},
+		Outputs:  []string{"runbook", "runbook-findings"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "scope", WP: "v0.3.0", Stage: StageBreakDown,
+		Summary: "Plan a release's scope in its version milestone, draft it, have a person baseline it, hand it off, assign Feedback, and hold drift to the change budget.",
+		Reader:  "Plans what a release contains, freezes it once a person accepts it, and stops later changes beyond the budget unless a person decides.",
+		Seat:    ProductStrategist, Lane: LanePlan, Layers: AllLayers(),
+		Inputs: []Input{
+			pos("release", TypeIssue, "Release issue (Version vX.Y.Z) whose scope to plan; without another flag, scope reports the plan, its points, and its drift."),
+			flag("add", TypeIssue, "Initiative, Feature, Story, or Bug to add to the release's milestone; after a baseline it counts as drift."),
+			flag("drop", TypeIssue, "Item to remove from the release's milestone, so it rides a later release; after a baseline it counts as drift."),
+			flag("assign", TypeIssue, "Feedback issue to assign with --to; sets its milestone and horizon label, never its body, and is not drift."),
+			enumIn("to", false, false, "With --assign: this release, the next release milestone, or the backlog.", "this", "next", "backlog"),
+			flag("draft", TypeBool, "Snapshot the plan on the ledger (releases/<version>/draft.json) and ask a person to accept it; refuses an unsized, XL, or unsliced plan."),
+			flag("decision", TypeIssue, "Accepted Decision that names the Release: with --add, --drop, or --draft over budget, it asks a person to accept the change; never applies it."),
+			humanOnly(flag("accept", TypeBool, "Accept the Release's waiting request, a drafted baseline or a change over budget, through GitHub's device flow every time; aayu inbox shows the same card.")),
+			flag("handoff", TypeBool, "Hand the baselined plan off: write the Release's includes links and post the plan on it."),
+		},
+		Outputs:  []string{"release-plan", "scope-draft", "scope-baseline", "scope-drift"},
+		Gates:    []GateID{GateScopeBudget, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 }
 
@@ -1034,7 +1303,8 @@ var Plumbing = []Command{
 		flag("external", TypeBool, "Also list orphaned external resources.")),
 	plumb("hook", "WP3.2", DevOps, IdentityBot, "Entry point for host hooks; hooks call only `aayu hook <name>`.",
 		pos("name", TypeString, "Hook name."),
-		flag("skills", TypeString, "Skills version of the host plugin running the hook; session-start reports a mismatch with this binary (WP3.2b).")),
+		flag("skills", TypeString, "Skills version of the host plugin running the hook; session-start reports a mismatch with this binary (WP3.2b)."),
+		flag("event", TypeString, "The host's event as JSON, for a host that cannot send it on stdin (the Amp plugin).")),
 	plumb("seat", "WP5.1", Founder, IdentityHuman, "Add, remove, or list seats and their paired humans.",
 		enumIn("action", true, true, "Seat operation.", "add", "remove", "list"),
 		optPos("seat", TypeString, "Seat slug."),
@@ -1044,6 +1314,9 @@ var Plumbing = []Command{
 	// `aayu` with no command in a checkout shows the home screen.
 	plumb("next", "WP1.1b", EngineeringManager, IdentityHuman, "Print the single best next step for this repository: the exact command to run and why."),
 	plumb("tour", "WP1.1b", Founder, IdentityHuman, "Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents."),
+	// Story #431 (founder request): the founder's inbox.
+	plumb("inbox", "WP5.6c", Founder, IdentityHuman, "Every human-only step waiting for you, one card at a time with the twin's counsel; Enter takes the recommendation and C clears the housekeeping. Refused for agents and needs a terminal, except --list.",
+		flag("list", TypeBool, "Read-only: print what waits as the same cards, with the counsel and how a person acts on them, as Markdown (or JSON with --json); writes nothing, needs no terminal, and an agent may run it.")),
 	plumb("completion", "WP1.1b", DevOps, IdentityHuman, "Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell.",
 		enumIn("shell", true, true, "Shell to complete for.", "bash", "zsh", "fish", "powershell")),
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Item is a work item or pull request the home screen lists.
@@ -61,6 +62,8 @@ type State struct {
 	AwaitingHuman []Item   `json:"awaiting_human"` // story PRs without a human pass
 	FailingFloors []Floor  `json:"failing_floors"`
 	MeasureDue    []Due    `json:"measure_due"`
+	Unclassified  []Item   `json:"unclassified_feedback"` // open Feedback with no fix:<layer> label (D-7.7e)
+	Inbox         []Item   `json:"inbox"`                 // human-only steps `aayu inbox` lists (Story #431); Detail is the kind
 }
 
 // Level is the adoption level the repository has reached (docs/guide/adopt.md).
@@ -109,6 +112,10 @@ func Candidates(s State) []Step {
 	if len(s.OutOfSync) > 0 {
 		add(Step{Command: "aayu doctor --fix", Why: "the installed skill copies differ from .aayudha/lock.toml (" + s.OutOfSync[0] + ").", Seat: verbs.DevOps, Stage: verbs.StageSetup, HumanOnly: true})
 	}
+	if len(s.Inbox) > 0 {
+		add(Step{Command: "aayu inbox", Why: fmt.Sprintf("%d human-only step(s) wait for you (%s): act on each with one keypress, with the twin's recommendation.", len(s.Inbox), items(s.Inbox, "#")),
+			Seat: verbs.Founder, Stage: verbs.StageShip, HumanOnly: true})
+	}
 	for _, pr := range s.AwaitingHuman {
 		if pr.Gate == "passed" || pr.Gate == "none" {
 			why := fmt.Sprintf("PR #%d (story #%d) passed its merge gate and waits for a person: review and approve it on GitHub, then ship it.", pr.Number, pr.Story)
@@ -136,7 +143,7 @@ func Candidates(s State) []Step {
 		break
 	}
 	for _, d := range s.MeasureDue {
-		add(Step{Command: fmt.Sprintf("aayu measure %d", d.Issue), Why: fmt.Sprintf("%s #%d shipped in %s and its measurement was due on %s.", d.Type, d.Issue, d.Tag, d.Due), Seat: verbs.RevenueArchitect, Stage: verbs.StageLearn})
+		add(Step{Command: fmt.Sprintf("aayu measure %d", d.Issue), Why: fmt.Sprintf("%s #%d shipped in %s and its measurement was due on %s.", d.Type, d.Issue, d.Tag, d.Due), Seat: verbs.DataAIArchitect, Stage: verbs.StageLearn})
 		break
 	}
 	if s.Configured {
@@ -217,6 +224,9 @@ func Render(p *ui.Printer, s State, next Step) {
 		{"Failing floors", count(len(s.FailingFloors)), floors(s.FailingFloors)},
 		{"Measurements due", count(len(s.MeasureDue)), dues(s.MeasureDue)},
 	}
+	if len(s.Inbox) > 0 {
+		rows = append(rows, []string{"Waiting in your inbox", count(len(s.Inbox)), items(s.Inbox, "#")})
+	}
 	if p.Level == ui.Rich {
 		for _, r := range rows {
 			n := p.Style(ui.Muted, r[1])
@@ -233,6 +243,9 @@ func Render(p *ui.Printer, s State, next Step) {
 			}
 			p.Println(line)
 		}
+	}
+	if note := UnclassifiedNote(s.Unclassified); note != "" {
+		p.Println(p.Mark(ui.StatusWarn) + " " + note)
 	}
 	switch {
 	case s.GitHub == GitHubNoToken:
@@ -310,6 +323,16 @@ func journeyLine(p *ui.Printer, at verbs.StageID) string {
 		lead = p.Style(ui.Muted, "Journey  ")
 	}
 	return lead + strings.Join(parts, sep)
+}
+
+// UnclassifiedNote lists the open Feedback issues that have no fix layer with
+// the command that records one (D-7.7e); "" when there are none.
+func UnclassifiedNote(xs []Item) string {
+	if len(xs) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d open Feedback issue(s) without a fix layer (%s); classify each by the highest layer that can fix it for good: `%s`",
+		len(xs), items(xs, "#"), workitems.ClassifyCommand)
 }
 
 func count(n int) string { return fmt.Sprint(n) }

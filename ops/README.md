@@ -1,5 +1,16 @@
 # ops
 
+`ops/` is layer L07, owned by the Production Engineer (Decision #324). It holds what the pod runs production
+with, and every file here is a protected path a person reviews:
+
+- `actions.toml`: the ops action catalog `aayu respond` (WP5.6) runs from (below).
+- `slos.toml`: the product's SLOs, measured by `aayu slo` and gating `aayu release` (schema: `skills/slo/SKILL.md`).
+- `runbooks/*.md`: one runbook per known failure, checked by `aayu runbook` against the catalog and the SLOs.
+
+aayudha is a command-line tool with no production service, so it has no SLOs or runbooks of its own.
+
+## The action catalog
+
 `ops/actions.toml` is the ops action catalog `aayu respond` (WP5.6) runs from. Nothing else can run: an
 action that is not in the catalog is refused.
 

@@ -1,4 +1,9 @@
 # Seeded-defect PR for inspect (WP4.8b): Clean control: a bounded retry with backoff and cancellation.
+# Rewritten after run 38980397572 (Appendix B D-4.8d.3): the first version waited base uncapped (a 1 min base waited
+# 1 min against the story's 30 s cap) and could call f again after cancellation, which every reviewer rightly flagged;
+# its tests also missed criterion 1's 10 ms and criterion 2's "during the first wait". The rewrite's doc comment first
+# promised ctx's error even after a successful last call, which run 39007777502 rightly flagged; it now says a success
+# wins (D-4.8d.6). This version passes go test -race.
 # Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
 # as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
 skill = "inspect"

@@ -38,6 +38,7 @@ type Resolver struct {
 	GH      func(ctx context.Context) (string, error) // `gh auth token`
 	Secrets *secrets.Store
 	Prompt  func(ctx context.Context) (string, error) // nil when there is no TTY
+	Hint    string                                    // appended to the no-token error, for where this resolver runs
 }
 
 func (r Resolver) gh(ctx context.Context) (string, error) {
@@ -75,7 +76,7 @@ func (r Resolver) Human(ctx context.Context) (Token, error) {
 			return Token{v, "prompt"}, nil
 		}
 	}
-	return Token{}, fmt.Errorf("%w: set AAYU_GITHUB_TOKEN, run `gh auth login`, or `aayu auth set-secret %s`", ErrNoToken, HumanTokenSecret)
+	return Token{}, fmt.Errorf("%w: set AAYU_GITHUB_TOKEN, run `gh auth login`, or `aayu auth set-secret %s`%s", ErrNoToken, HumanTokenSecret, r.Hint)
 }
 
 // User is the account behind a token, with the classic-token scopes GitHub reports.
@@ -87,6 +88,14 @@ type User struct {
 }
 
 // WhoAmI calls GET /user with the token.
+// StatusError is GitHub's answer to GET /user when it is not 200 OK.
+type StatusError struct {
+	Code int
+	msg  string
+}
+
+func (e *StatusError) Error() string { return e.msg }
+
 func WhoAmI(ctx context.Context, c *http.Client, api string, t Token) (User, error) {
 	var u User
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api+"/user", nil)
@@ -101,7 +110,7 @@ func WhoAmI(ctx context.Context, c *http.Client, api string, t Token) (User, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return u, fmt.Errorf("GET /user with %s: %s", t, resp.Status)
+		return u, &StatusError{Code: resp.StatusCode, msg: fmt.Sprintf("GET /user with %s: %s", t, resp.Status)}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return u, err

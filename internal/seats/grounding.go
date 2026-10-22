@@ -18,7 +18,9 @@ import (
 // it, because an illustration never replaces evidence. Headings are not
 // claims, including a unit that is only a bold label or a short lead-in ending
 // with a colon; nor is a statement about a template path (retro/<date>/),
-// which needs no grounding and counts as no evidence. With a grounding text,
+// which needs no grounding and counts as no evidence; nor is a unit marked
+// "Assumption:" or "Unverified:", which the rule asks for when a claim cannot be
+// cited. With a grounding text,
 // every citation must name something the grounding contains, so a citation
 // cannot be invented; a twin's own charter or persona.toml is always known
 // (D-5.1d).
@@ -26,9 +28,9 @@ import (
 var (
 	claimCue = regexp.MustCompile(`(?i)\b(code|files?|functions?|methods?|packages?|modules?|layers?|L0[1-9]|architecture|boundar(y|ies)|contracts?|interfaces?|api|schemas?|migrations?|registry|gates?|floors?|thresholds?|coverage|tests?|checkpoints?|packs?|proof|merged?|PRs?|pull requests?|commits?|branch(es)?|builds?|deploy\w*|releases?|incidents?|risks?|regress\w*|bugs?|defects?|estimates?|effort|budgets?|cost|spent|velocity|progress|shipped|blocked|latency|metrics?|baselines?|stor(y|ies)|corrections?|overr?an|flak\w*|struct|fields?|tombstones?|ledger|plan)\b|\d+(\.\d+)?\s?%`)
 
-	citationKinds = []string{"path", "dir", "issue", "adr", "symbol", "commit", "run", "config"}
+	citationKinds = []string{"path", "dir", "issue", "adr", "symbol", "commit", "run", "config", "query"}
 	citationREs   = map[string]*regexp.Regexp{
-		"path":   regexp.MustCompile(`(?:[A-Za-z0-9_.<>-]+/)*[A-Za-z0-9_<>-][A-Za-z0-9_.<>-]*\.(?:go|md|toml|ya?ml|jsonl?|tsx?|m?js|sh|sql|txt|csv|html|css|py)\b(?::\d+(?:-\d+)?)?`),
+		"path":   regexp.MustCompile(`(?:[A-Za-z0-9_.<>-]+/)*[A-Za-z0-9_<>-][A-Za-z0-9_.<>-]*\.(?:go|md|toml|ya?ml|jsonl?|tsx?|m?js|sh|sql|txt|csv|html|css|py|bicep|tf)\b(?::\d+(?:-\d+)?)?`),
 		"dir":    regexp.MustCompile("`[A-Za-z0-9_.-]+/[A-Za-z0-9_.*<>/-]*`"),
 		"issue":  regexp.MustCompile(`(?:^|[^\w&/])#(\d+)\b`),
 		"adr":    regexp.MustCompile(`\bADR-\d+\b`),
@@ -36,9 +38,15 @@ var (
 		"commit": regexp.MustCompile("`([0-9a-f]{7,40})`"),
 		"run":    regexp.MustCompile(`\brun (\d{6,})\b`),
 		"config": regexp.MustCompile("`\\[[a-z_.]+\\]`"),
+		// A bounded telemetry query `aayu investigate` ran and logged (Decision #324), cited as "query q3".
+		"query": regexp.MustCompile(`\bquery (q\d+)\b`),
 	}
 
 	illustration = regexp.MustCompile(`^(?:[*_]{1,2})?(Analogy|Anecdote)\b`)
+	// marked is a unit the twin marks as not evidenced, as the evidence rule asks
+	// of a claim it cannot cite ("Assumption: …", "Unverified: …"): it claims
+	// nothing as fact, so it needs no citation (Decision #283).
+	marked = regexp.MustCompile("^(?:[*_`]{1,2})?(Assumption|Unverified)\\b")
 	// boldLabel is a unit that is only a bold label, such as an option heading
 	// ("**A. Add the field.**"); a heading claims nothing.
 	boldLabel = regexp.MustCompile(`^\*\*[^*]+\*\*:?$`)
@@ -128,6 +136,8 @@ func citations(s string) []string {
 				out = append(out, "#"+m[1])
 			case "symbol", "commit", "run":
 				out = append(out, m[1])
+			case "query":
+				out = append(out, "query "+m[1])
 			default:
 				out = append(out, strings.Trim(m[0], "`"))
 			}
@@ -179,6 +189,8 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 			}
 		case strings.HasSuffix(u.text, "?") && !strings.Contains(strings.TrimSuffix(u.text, "?"), ". "):
 			// a question to the reader claims nothing
+		case marked.MatchString(u.text):
+			// an assumption or an unverified point, marked as such, is not stated as fact
 		case isLabel(u.text):
 			// an option or section heading written as a bold label or a short lead-in claims nothing
 		case template[i] && !cited[i]:

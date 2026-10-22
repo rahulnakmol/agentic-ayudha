@@ -1,0 +1,134 @@
+<!-- Hand-made for docs/guide/concepts-loop.md; edit by hand. Facts: internal/verbs/registry.go, internal/config/defaults.toml, seats/*/persona.toml. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 1902" width="460" height="1902" role="img" aria-labelledby="loop-title loop-desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="loop-title">The delivery loop: seven steps, agent twins do the work, people hold the gates</title>
+<desc id="loop-desc">Seven steps run top to bottom: Shape, Ready, Build, Prove, Ship, Release, and Learn. In each, named agent twins do the work and a person answers, decides, or approves. Between steps sit gates: the Ready snapshot, the budget, the merge gate with its fixed floors and then the human pass before Ship, the promotion gate before Release, and the baseline. Prove sends work back to Build to fix it, and Learn feeds the next goal back to Shape.</desc>
+<defs><marker id="arrow-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5bd1"/></marker></defs>
+<rect width="460" height="1902" fill="#ffffff"/>
+<rect x="16" y="16" width="14" height="14" rx="3" fill="#f3f0fa" stroke="#6941c6" stroke-width="1.5"/>
+<text x="36" y="28" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">Agent twin</text>
+<rect x="128" y="16" width="14" height="14" rx="3" fill="#fdf6e3" stroke="#9a6700" stroke-width="1.5"/>
+<text x="148" y="28" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">You</text>
+<rect x="198" y="16" width="14" height="14" rx="3" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="218" y="28" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">Gate</text>
+<rect x="268" y="16" width="14" height="14" rx="3" fill="#eef1f6" stroke="#535b6b" stroke-width="1.5"/>
+<text x="288" y="28" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="start">Floor</text>
+<rect x="16" y="50" width="392" height="188" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="72" r="12" fill="#1f5bd1"/>
+<text x="38" y="77" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">1</text>
+<text x="58" y="78" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Shape</text>
+<text x="30" y="100" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">grill goal · survey</text>
+<rect x="26" y="112" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="130" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Arjun (Product Strategist) interviews you,</text>
+<text x="36" y="148" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">then files a Goal with a baseline and a</text>
+<text x="36" y="166" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">target.</text>
+<rect x="26" y="184" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="202" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Answer the questions, confirm the readback,</text>
+<text x="36" y="220" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">choose the target.</text>
+<line x1="212.0" y1="238" x2="212.0" y2="250" stroke="#1f5bd1" stroke-width="2"/>
+<rect x="46" y="250" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="212.0" y="268" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Baseline</text>
+<text x="212.0" y="286" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">a measured number before any target</text>
+<line x1="212.0" y1="294" x2="212.0" y2="312" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="316" width="392" height="188" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="338" r="12" fill="#1f5bd1"/>
+<text x="38" y="343" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">2</text>
+<text x="58" y="344" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Ready</text>
+<text x="30" y="366" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">slice · plan · chart · decide · grill story · ready</text>
+<rect x="26" y="378" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="396" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Arjun splits the work into stories with</text>
+<text x="36" y="414" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">numbered promises. Vishwa (Code Architect)</text>
+<text x="36" y="432" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">plans each layer.</text>
+<rect x="26" y="450" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="468" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Accept the Decisions, then say Ready. Review</text>
+<text x="36" y="486" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">plans that touch a risky layer.</text>
+<line x1="212.0" y1="504" x2="212.0" y2="516" stroke="#1f5bd1" stroke-width="2"/>
+<rect x="46" y="516" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="212.0" y="534" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Ready snapshot</text>
+<text x="212.0" y="552" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">the promises are frozen; an edit drops Ready</text>
+<line x1="212.0" y1="560" x2="212.0" y2="578" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="582" width="392" height="188" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="604" r="12" fill="#1f5bd1"/>
+<text x="38" y="609" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">3</text>
+<text x="58" y="610" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Build</text>
+<text x="30" y="632" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">build · design verbs for a screen</text>
+<rect x="26" y="644" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="662" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Nakul (AI Native Engineer) builds one</text>
+<text x="36" y="680" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">checkpoint per layer and checks each. Hanu</text>
+<text x="36" y="698" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">designs any screen.</text>
+<rect x="26" y="716" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="734" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Ask for the story. Nothing else until the</text>
+<text x="36" y="752" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">gate.</text>
+<line x1="212.0" y1="770" x2="212.0" y2="782" stroke="#1f5bd1" stroke-width="2"/>
+<rect x="46" y="782" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="212.0" y="800" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Budget</text>
+<text x="212.0" y="818" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">default 8 hours, 3 attempts, 60 USD metered</text>
+<line x1="212.0" y1="826" x2="212.0" y2="844" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="848" width="392" height="282" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="870" r="12" fill="#1f5bd1"/>
+<text x="38" y="875" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">4</text>
+<text x="58" y="876" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Prove</text>
+<text x="30" y="898" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">verify · inspect · proof</text>
+<rect x="26" y="910" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="928" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Nakul runs the floors Yama (Quality Architect)</text>
+<text x="36" y="946" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">owns. Drona's review comes from another</text>
+<text x="36" y="964" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">vendor's agent app.</text>
+<rect x="26" y="982" width="372" height="28" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="1000" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Read the verdict: merge, fix, or rebuild.</text>
+<rect x="26" y="1018" width="372" height="102" rx="6" fill="#eef1f6" stroke="#535b6b" stroke-width="1.5"/>
+<text x="36" y="1038" font-size="13.5" fill="#1d2330" font-weight="bold" text-anchor="start">Floors: fixed numbers no model can overrule</text>
+<text x="42" y="1058" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ Coverage: 90 % of changed lines</text>
+<text x="42" y="1076" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ Security, dependencies: no high or critical</text>
+<text x="42" y="1094" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ Secrets: none</text>
+<text x="42" y="1112" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ Screens: WCAG 2.2 AA, page speed</text>
+<line x1="212.0" y1="1130" x2="212.0" y2="1142" stroke="#1f5bd1" stroke-width="2"/>
+<rect x="46" y="1142" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="212.0" y="1160" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Merge gate, then human pass</text>
+<text x="212.0" y="1178" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">green CI, a proof pack, then approval or autonomy</text>
+<line x1="212.0" y1="1186" x2="212.0" y2="1204" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="1208" width="392" height="170" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="1230" r="12" fill="#1f5bd1"/>
+<text x="38" y="1235" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">5</text>
+<text x="58" y="1236" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Ship</text>
+<text x="30" y="1258" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">ship</text>
+<rect x="26" y="1270" width="372" height="46" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="1288" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Drona (Engineering Manager) checks the</text>
+<text x="36" y="1306" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">evidence again and writes who approved what.</text>
+<rect x="26" y="1324" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="1342" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Approve the pull request first, or record a</text>
+<text x="36" y="1360" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">solo-mode bypass.</text>
+<line x1="212.0" y1="1378" x2="212.0" y2="1390" stroke="#1f5bd1" stroke-width="2"/>
+<rect x="46" y="1390" width="332" height="44" rx="22" fill="#fdf0ec" stroke="#b4441d" stroke-width="1.5"/>
+<text x="212.0" y="1408" font-size="13.5" fill="#b4441d" font-weight="bold" text-anchor="middle">Gate: Promotion gate</text>
+<text x="212.0" y="1426" font-size="12.5" fill="#1d2330" font-weight="normal" text-anchor="middle">dev, then rolling, then main</text>
+<line x1="212.0" y1="1434" x2="212.0" y2="1452" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="1456" width="392" height="188" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="1478" r="12" fill="#1f5bd1"/>
+<text x="38" y="1483" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">6</text>
+<text x="58" y="1484" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Release</text>
+<text x="30" y="1506" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">release</text>
+<rect x="26" y="1518" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="1536" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Nala (DevOps &amp; DevEx Tinkerer) promotes behind</text>
+<text x="36" y="1554" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">the full gate. Shesha's error budget can hold</text>
+<text x="36" y="1572" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">it back.</text>
+<rect x="26" y="1590" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="1608" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Ask for a release. A stable one waits for your</text>
+<text x="36" y="1626" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">request.</text>
+<line x1="212.0" y1="1644" x2="212.0" y2="1666" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<rect x="16" y="1670" width="392" height="188" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<circle cx="38" cy="1692" r="12" fill="#1f5bd1"/>
+<text x="38" y="1697" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">7</text>
+<text x="58" y="1698" font-size="18" fill="#1d2330" font-weight="bold" text-anchor="start">Learn</text>
+<text x="30" y="1720" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start">measure · readout · retro · evolve · brief · tell</text>
+<rect x="26" y="1732" width="372" height="64" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="36" y="1750" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Shuka measures the Goal. Kuber reads out</text>
+<text x="36" y="1768" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">experiments. Drona runs the retro. Nakul</text>
+<text x="36" y="1786" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">evolves skills.</text>
+<rect x="26" y="1804" width="372" height="46" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="36" y="1822" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Accept or reject the Feedback, review skill</text>
+<text x="36" y="1840" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">changes, publish.</text>
+<path d="M408,888 H424 V622 H412" fill="none" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<text x="430" y="755.0" font-size="12.5" fill="#1f5bd1" font-weight="bold" transform="rotate(90 430 755.0)" text-anchor="middle">fix, at most 2 rounds</text>
+<path d="M408,1710 H446 V90 H412" fill="none" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-loop)"/>
+<text x="452" y="900.0" font-size="12.5" fill="#1f5bd1" font-weight="bold" transform="rotate(90 452 900.0)" text-anchor="middle">the next goal</text>
+<text x="230.0" y="1886" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="middle" font-style="italic">Any time: aayu halt stops every agent, loop, and workflow.</text>
+</svg>

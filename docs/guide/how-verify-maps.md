@@ -33,8 +33,12 @@ strict JSON: an unknown field is a contract error.
 `aayu init --verify-skill` writes a starter skill. It picks the control tool by the stack the repository has:
 `go.mod` gives a Go tool, else `package.json` gives a Node and Playwright tool, else a shell stub that blocks until
 you replace it. The starter map has no features and passes `aayu verify --map`. Init also asks which agent maintains
-the map and offers only the agents it detects. `aayu install` copies root `verify-*` skills to `.claude/skills/` for
-Claude Code; Amp, Cursor, and Codex read `.agents/skills/` directly.
+the map and offers only the agents it detects. The skill has one copy, in `.agents/skills/`, which Amp, Cursor, and
+Codex read directly. For Claude Code, `aayu install` writes a pointer command for each root `verify-*` skill,
+`.claude/commands/aayudha/verify-<product>.md`, so it runs as `/aayudha:verify-<product>`. The pointer carries the
+skill's description and sends Claude Code to the skill's `SKILL.md`, so it follows the skill without a re-sync;
+`doctor` reports a pointer whose description fell behind, and `doctor --fix` updates it. Cursor does not read that
+folder, so it lists each verify skill once.
 
 ### The drift check
 
@@ -124,7 +128,7 @@ it with fewer `check` blocks or assertion keys (`expect`, `stdout`, `exit`, `tes
 not a weakening.
 
 > **Honest status:** `doctor` does not report map drift; only `verify --map` and the floor do. An Actions loop never
-> wakes an app, so the hand-off depends on the person's scheduled run. `install` does not mirror a nested map.
+> wakes an app, so the hand-off depends on the person's scheduled run. `install` writes no Claude Code pointer for a nested map.
 
 ### Red-on-base proof for Bug stories
 
@@ -231,8 +235,10 @@ maintainer = "amp"
    it; inconclusive never blocks; no date stays advisory. Enforced by `redOnBase` in
    [internal/cli/redbase.go](../../internal/cli/redbase.go), `TestRedOnBase`.
 10. `init --verify-skill` writes a map that passes `verify --map` and offers only detected maintainers; `install`
-    mirrors it to Claude Code. Enforced in [internal/initrepo/verifyskill.go](../../internal/initrepo/verifyskill.go),
-    `TestInitVerifySkill`, `TestInitVerifySkillMaintainer`, and `TestInstallMirrorsVerifySkill`.
+    gives Claude Code a pointer command to it and Cursor a single copy. Enforced in
+    [internal/initrepo/verifyskill.go](../../internal/initrepo/verifyskill.go) and `ProductPointer` in
+    [internal/hosts/install.go](../../internal/hosts/install.go), `TestInitVerifySkill`,
+    `TestInitVerifySkillMaintainer`, `TestInstallMirrorsVerifySkill`, and `TestInstallGivesCursorOneCopy`.
 
 ## Where it lives in the code
 

@@ -2,14 +2,19 @@ package evals
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
+	"math/big"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -34,24 +39,42 @@ const (
 
 // Run is one tier-2 run of a case.
 type Run struct {
-	Status  string    `json:"status"`
-	Score   int       `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
-	Pass    bool      `json:"pass"`
-	Floor   string    `json:"floor,omitempty"`
-	Revised bool      `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
-	Reason  string    `json:"reason,omitempty"`
-	Error   string    `json:"error,omitempty"`
-	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
-	Calls   []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
+	Status  string `json:"status"`
+	Score   int    `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
+	Pass    bool   `json:"pass"`
+	Floor   string `json:"floor,omitempty"`
+	Revised bool   `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
+	// RevisedFor is what the deterministic checks found in a persona or pack
+	// run's first draft, the findings it was asked to fix.
+	RevisedFor string    `json:"revised_for,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	Excerpt    string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
+	Calls      []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
 	// Transcript is a grill conversation run's exchanges and final criteria
 	// (WP5.3b), clipped and redacted, so a reader can see what was asked.
 	Transcript *RunTranscript `json:"transcript,omitempty"`
+	// Answer is a persona or decision-pack run's last answer (WP5.1b),
+	// clipped and redacted, so a reader can see what the checks and the judge
+	// saw and say who was wrong.
+	Answer string `json:"answer,omitempty"`
+	// SelfCheck is a survey run's self-verification turn: the first draft's
+	// score, recorded only, and what the turn changed (D-5.9l).
+	SelfCheck *SelfCheck `json:"self_check,omitempty"`
+	// Sections is a survey run written in sections: each section's score,
+	// floors, self-check, tokens, and cost (runSurveySections).
+	Sections []SectionRun `json:"sections,omitempty"`
+	// Session is a session case's turns and what each command answered (D-3.4f).
+	Session []SessionStep `json:"session,omitempty"`
 	// A review case's run (WP4.8b): its variant and what it would post against
 	// the planted defects.
 	Variant string `json:"variant,omitempty"`
 	TP      int    `json:"tp,omitempty"`
 	FP      int    `json:"fp,omitempty"`
 	FN      int    `json:"fn,omitempty"`
+	// Findings is what the review run posted, each marked against the planted
+	// defects, then what it dropped and why.
+	Findings []ReviewFinding `json:"findings,omitempty"`
 }
 
 // RunTranscript is what a results file keeps of a conversation.
@@ -69,11 +92,29 @@ type CallLog struct {
 	Truncated  bool   `json:"truncated,omitempty"`
 	TokensIn   int    `json:"tokens_in"`
 	TokensOut  int    `json:"tokens_out"`
-	MaxTokens  int    `json:"max_tokens"`
-	Error      string `json:"error,omitempty"`
-	// Retried is the dropped connection a call was retried after, once (WP5.8):
-	// the network's error, never the skill's, so it does not cost the run.
-	Retried string `json:"retried,omitempty"`
+	// CachedIn and CacheWriteIn are the parts of TokensIn read from and
+	// written to the provider's prompt cache.
+	CachedIn     int     `json:"cached_in,omitempty"`
+	CacheWriteIn int     `json:"cache_write_in,omitempty"`
+	MaxTokens    int     `json:"max_tokens"`
+	Error        string  `json:"error,omitempty"`
+	CostUSD      float64 `json:"cost_usd"` // this attempt; each retry's cost is on the retry
+	// Step is the saved step (Harness.step) the call belongs to, such as a
+	// survey section, so tokens and cost add up per step.
+	Step string `json:"step,omitempty"`
+	// Retries are the provider faults the call was retried after (WP5.8,
+	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
+	// never the skill's, so it does not cost the run its one allowed error.
+	Retries []Retry `json:"retries,omitempty"`
+}
+
+// Retry is one attempt of a call that met a provider fault and was repeated.
+type Retry struct {
+	Fault     string  `json:"fault"`
+	Model     string  `json:"model,omitempty"`
+	TokensIn  int     `json:"tokens_in,omitempty"`
+	TokensOut int     `json:"tokens_out,omitempty"`
+	CostUSD   float64 `json:"cost_usd"`
 }
 
 // CaseResult is a case's k runs.
@@ -88,6 +129,10 @@ type CaseResult struct {
 	Errors   int          `json:"errors"` // runs with status error, excluded from pass^k and the mean
 	PassK    float64      `json:"pass_k"` // over completed runs: 1 when all of them pass, else 0
 	Mean     float64      `json:"mean"`   // over completed runs
+	// NotRun is why the case did not run here (NotRunError), such as a
+	// fetched manual that did not match its pin: it has no runs, no score,
+	// and no spend, and the bars skip it.
+	NotRun string `json:"not_run,omitempty"`
 }
 
 // Results is evals/results/<sha>.json.
@@ -108,6 +153,9 @@ type Results struct {
 	Baseline string       `json:"baseline,omitempty"` // SHA of the results compared against
 	Verdict  string       `json:"verdict"`            // pass or fail
 	Reasons  []string     `json:"reasons,omitempty"`
+	// Warnings are problems with the run's accounting, such as a model with no
+	// price, that do not change its verdict.
+	Warnings []string `json:"warnings,omitempty"`
 	// Review is the seeded-defect precision and recall per inspect variant (WP4.8b).
 	Review []ReviewSummary `json:"review,omitempty"`
 }
@@ -125,10 +173,17 @@ type Harness struct {
 	Assets  fs.FS // embedded skills/; stub skills live in evals/skills under Root
 	// Inspect is [inspect] from the configuration: the review cases' filters and peer model.
 	Inspect config.Inspect
-	mu      sync.Mutex
-	spent   float64
+	// Steps is the directory each run's steps are saved in as they return
+	// (<case>/<sample>/<step>.json) and resumed from; "" saves nothing.
+	Steps string
+	mu    sync.Mutex
+	spent float64
+	// unpriced counts the calls charged at the fallback rate, by model: such a
+	// model has no price, so its cost (and the max_usd cap) is a guess.
+	unpriced map[string]int
 
 	fallback string // the current case's skill-lane fallback model
+	model    string // the current case's skill-lane model
 }
 
 // skillLane returns the registry lane of the verb the case's skill is, or
@@ -214,8 +269,10 @@ func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(
 	return func(ctx context.Context, req models.Request) (models.Response, error) {
 		resp, err := h.call(ctx, h.Gateway, lane, role, req, log)
 		var se *models.StatusError
-		if role == "skill" && h.fallback != "" && errors.As(err, &se) {
-			// The lane's default model could not be called: use its registry alternative.
+		var st *models.StreamError
+		if role == "skill" && h.fallback != "" && (errors.As(err, &se) || errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")) {
+			// The lane's default model could not be called, or its stream kept
+			// failing on the provider's side: use its registry alternative.
 			resp, err = h.call(ctx, h.withModel(lane, h.fallback), lane, role, req, log)
 		}
 		return resp, err
@@ -232,24 +289,164 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	if spent := h.spentUSD(); spent >= h.Config.MaxUSD {
 		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, spent, h.Config.MaxUSD)
 	}
+	if key, _ := ctx.Value(cacheKey{}).(string); req.CacheKey == "" {
+		req.CacheKey = key
+	}
 	c := models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req}
+	var retries []Retry
 	resp, m, err := gw.Do(ctx, c)
-	var retried string
-	if dropped(err) && ctx.Err() == nil {
-		retried = clip(actions.RedactString(err.Error()), 200)
+	for {
+		fault := providerFault(ctx, resp, err)
+		if fault == "" || runRetries(*log)+len(retries) >= ProviderRetries {
+			break // a reply, a fault of the request or the reply, or the run's retries spent (D-3.4y)
+		}
+		usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
+		h.charge(usd)
+		retries = append(retries, Retry{Fault: fault, Model: m.Model, TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd})
+		if wait := providerWait(err, len(retries)); wait > 0 {
+			if perr := pause(ctx, wait); perr != nil {
+				// Cancelled while backing off: the attempts so far are charged,
+				// so the call is still logged with them.
+				resp, err = models.Response{}, perr
+				break
+			}
+		}
 		resp, m, err = gw.Do(ctx, c)
 	}
-	usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
-	h.mu.Lock()
-	h.spent += usd
-	h.mu.Unlock()
+	usd, source := models.Cost(gw.Models.Prices, m.Model, resp)
+	h.charge(usd)
+	if source == models.CostFallback && err == nil {
+		h.mu.Lock()
+		if h.unpriced == nil {
+			h.unpriced = map[string]int{}
+		}
+		h.unpriced[m.Model]++
+		h.mu.Unlock()
+	}
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retried: retried}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, CostUSD: usd, Retries: retries}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
 	*log = append(*log, l)
 	return resp, err
+}
+
+func (h *Harness) charge(usd float64) {
+	h.mu.Lock()
+	h.spent += usd
+	h.mu.Unlock()
+}
+
+// ProviderRetries is how many provider faults one run (one of a case's k
+// samples) may retry, across all its calls. The next fault errors the run as
+// before, so an outage cannot spend a group's budget (D-3.4y).
+const ProviderRetries = 2
+
+// retryWait is the pause before the nth retry of a 429 or a server error:
+// n times its base, plus up to half again at random, so the retries of
+// parallel runs spread over a gateway outage instead of failing together.
+func retryWait(n int, base time.Duration) time.Duration {
+	d := time.Duration(n) * base
+	j, err := rand.Int(rand.Reader, big.NewInt(int64(d/2)+1))
+	if err != nil {
+		return d
+	}
+	return d + time.Duration(j.Int64())
+}
+
+// maxRetryWait caps one retry's pause, Retry-After included: the gateway's
+// outages while it swaps its binary lasted 40 s to 2 minutes.
+const maxRetryWait = 2 * time.Minute
+
+// pause waits d, or until ctx is done.
+var pause = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
+
+func runRetries(log []CallLog) int {
+	n := 0
+	for _, l := range log {
+		n += len(l.Retries)
+	}
+	return n
+}
+
+// providerFault names a failure of the provider rather than of the skill: a
+// dropped connection, a 5xx (the gateway's 524 included) or a 429, a server
+// error inside a stream, a stream that stalled past the client's timeout, or a
+// reply that loops on one token to the cap. It is "" for a reply and for every
+// fault of the request or of the reply itself (another 4xx, a long reply at the
+// cap, malformed JSON), which stay the run's.
+func providerFault(ctx context.Context, resp models.Response, err error) string {
+	if ctx.Err() != nil || errors.Is(err, models.ErrBudget) {
+		return "" // a tripped breaker refuses every retry
+	}
+	var se *models.StatusError
+	var st *models.StreamError
+	var ne net.Error
+	switch {
+	case err == nil:
+		if unit := repeating(resp.Text); resp.Truncated && unit != "" {
+			return clip(fmt.Sprintf("degenerate reply: %d tokens repeating %q", resp.TokensOut, unit), 200)
+		}
+		return ""
+	case dropped(err),
+		errors.As(err, &se) && (se.Code >= 500 || se.Code == 429),
+		errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error"),
+		errors.As(err, &ne) && ne.Timeout():
+		return clip(actions.RedactString(err.Error()), 200)
+	}
+	return ""
+}
+
+// providerWait is the pause before the nth retry: a 429 waits about 10 s a
+// retry, a 5xx or a stream server error about 30 s (so the two retries span
+// 90-135 s of a gateway outage), with jitter (retryWait), or the reply's
+// Retry-After when that is longer, up to maxRetryWait. A drop, a stall
+// (already minutes long), and a looping reply retry at once.
+func providerWait(err error, n int) time.Duration {
+	var se *models.StatusError
+	var st *models.StreamError
+	var d time.Duration
+	switch {
+	case errors.As(err, &se) && se.Code == 429:
+		d = retryWait(n, 10*time.Second)
+	case errors.As(err, &se) && se.Code >= 500, errors.As(err, &st):
+		d = retryWait(n, 30*time.Second)
+	default:
+		return 0
+	}
+	if se != nil {
+		d = max(d, se.RetryAfter)
+	}
+	return min(d, maxRetryWait)
+}
+
+// repeating returns the unit a reply ends on when its last 2000 characters
+// (whitespace collapsed) are one unit of at most 64 repeated, such as "<br>";
+// otherwise "". A long reply that stopped at the cap honestly does not repeat.
+func repeating(s string) string {
+	rs := []rune(strings.Join(strings.Fields(s), " "))
+	if len(rs) < 2000 {
+		return ""
+	}
+	rs = rs[len(rs)-2000:]
+	for p := 1; p <= 64; p++ {
+		i := p
+		for i < len(rs) && rs[i] == rs[i-p] {
+			i++
+		}
+		if i == len(rs) {
+			return strings.TrimSpace(string(rs[:p]))
+		}
+	}
+	return ""
 }
 
 // dropped reports a connection the network dropped before a reply arrived (a
@@ -348,23 +545,40 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				return nil, fmt.Errorf("judge %s against fallback %s: %w", h.Config.Judge, alt, err)
 			}
 		}
-		h.fallback = alt
+		h.fallback, h.model = alt, m.Model
+		// One prompt-cache key per case: its runs share their prompt prefixes.
+		ctx := context.WithValue(ctx, cacheKey{}, "aayu-eval-"+c.ID)
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
+		if cr.NotRun, err = h.surveyNotRun(ctx, c); err != nil {
+			return nil, err
+		} else if cr.NotRun != "" {
+			res.Cases = append(res.Cases, cr)
+			continue
+		}
 		for i := 0; i < h.Config.K; i++ {
 			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
 				continue
 			}
+			ctx := context.WithValue(ctx, sampleKey{}, i) // a saved step belongs to one sample
 			var run Run
 			switch {
+			case c.UX != nil:
+				run, err = h.runUX(ctx, c, lane, body, string(input), string(rubric))
 			case c.Brief != nil:
 				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
+			case c.Tell != nil:
+				run, err = h.runTell(ctx, c, lane, body, string(input), string(rubric))
+			case c.Survey != nil:
+				run, err = h.runSurvey(ctx, c, lane, body, string(input), string(rubric))
 			case c.Pack != nil:
 				run, err = h.runPack(ctx, c, lane, body, string(input), string(rubric))
 			case c.Persona != nil:
 				run, err = h.runPersona(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Draft != "":
 				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
+			case c.Tier2.Session != "":
+				run, err = h.runSession(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Human != "":
 				run, err = h.runConversation(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			default:
@@ -374,9 +588,10 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				budgetErr = err
 			}
 			if err != nil {
-				calls := run.Calls
-				run = errorRun(err)
-				run.Calls = calls
+				// An error in a later call (a judge, a revision) keeps what the run already produced, its
+				// draft, floor findings, and first-draft scores, and every call it paid for.
+				e := errorRun(err)
+				run.Status, run.Score, run.Pass, run.Error, run.Excerpt = e.Status, 0, false, e.Error, e.Excerpt
 			}
 			cr.Runs = append(cr.Runs, run)
 		}
@@ -400,12 +615,26 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		res.Errors += cr.Errors
 		res.Cases = append(res.Cases, cr)
 	}
-	for _, cr := range res.Cases {
-		res.PassK += cr.PassK / float64(len(res.Cases))
+	ran := ranCases(res.Cases)
+	for _, cr := range ran {
+		res.PassK += cr.PassK / float64(len(ran))
 	}
 	res.Mean = mean(scores)
 	res.CostUSD = h.spentUSD()
+	res.Warnings = h.priceWarnings()
 	return res, nil
+}
+
+// priceWarnings names every model the run charged at the fallback rate.
+func (h *Harness) priceWarnings() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []string
+	for _, m := range slices.Sorted(maps.Keys(h.unpriced)) {
+		out = append(out, fmt.Sprintf("%s has no price (models.ListPrices or [[models.prices]]): its %d call(s) were charged at the fallback rate, %g/%g USD per million input/output tokens, so cost_usd and the max_usd cap are estimates",
+			m, h.unpriced[m], models.FallbackInputPerMTok, models.FallbackOutputPerMTok))
+	}
+	return out
 }
 
 // draft is a skill's tier-2 reply: the work item plus the questions the skill
@@ -423,6 +652,9 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent, open_questions}.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// Every skill call streams: a long reply sends no bytes for minutes
+		// unstreamed, and the gateway's proxy closes it with a 524 at 100 s.
+		Stream: true,
 	}
 	if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, itemSchema, &d); err != nil {
 		var re *models.ReplyError
@@ -444,7 +676,11 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
 	}
 	out, _ := json.MarshalIndent(it, "", "  ")
-	return h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	judged, err := h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	if err != nil {
+		return Run{Answer: answerOf(string(out))}, err // the work item outlives a failed judge
+	}
+	return judged, nil
 }
 
 // judge has the pinned judge score a skill's output against the rubric.
@@ -475,6 +711,10 @@ func (h *Harness) judge(ctx context.Context, input, rubric, out string, open []s
 	}
 	return run, nil
 }
+
+// cacheKey carries a case's prompt-cache key (models.Request.CacheKey) to
+// every call of its runs.
+type cacheKey struct{}
 
 // errorRun records a run the harness could not complete, with a short,
 // redacted excerpt of the last unusable reply.
@@ -539,17 +779,75 @@ func Advisories(cur, base *Results, cfg Config) []string {
 	return notes
 }
 
+// Scored reports whether any case ran. A run in which none did (every case
+// not run) is no evidence for its group: eval writes no results file for it,
+// so a release or the evals gate finds the group's results missing rather
+// than passing, and an earlier run's results for the commit stay the newest.
+func (r *Results) Scored() bool {
+	return len(r.Cases) == 0 || len(ranCases(r.Cases)) > 0
+}
+
+// commonMeans is the baseline's and the current run's mean score over the
+// cases both scored: each case's mean, weighted by its completed runs. When
+// both scored the same cases it is their recorded means.
+func commonMeans(base *Results, cur *Results, ran []CaseResult) (baseMean, curMean float64) {
+	weight := func(c CaseResult) float64 {
+		if n := len(c.Runs) - c.Errors; n > 0 {
+			return float64(n)
+		}
+		return 1
+	}
+	curCase := map[string]CaseResult{}
+	for _, c := range ran {
+		curCase[c.Case] = c
+	}
+	baseRan := ranCases(base.Cases)
+	same := len(baseRan) == len(ran)
+	var bs, cs, bw, cw float64
+	for _, b := range baseRan {
+		c, ok := curCase[b.Case]
+		if !ok {
+			same = false
+			continue
+		}
+		bs, bw = bs+b.Mean*weight(b), bw+weight(b)
+		cs, cw = cs+c.Mean*weight(c), cw+weight(c)
+	}
+	switch {
+	case same:
+		return base.Mean, cur.Mean
+	case bw == 0:
+		return 0, 0 // no case in common: nothing to compare
+	}
+	return bs / bw, cs / cw
+}
+
+// ranCases drops the cases that did not run (CaseResult.NotRun).
+func ranCases(cs []CaseResult) []CaseResult {
+	var out []CaseResult
+	for _, c := range cs {
+		if c.NotRun == "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 	passK := &reasons
 	if g, ok := cfg.Group(cur.Group); ok && g.PassK == PassKAdvisory {
 		passK = &advisory
 	}
-	for _, c := range cur.Cases {
+	ran := ranCases(cur.Cases)
+	if len(ran) == 0 && len(cur.Cases) > 0 {
+		return nil, nil // nothing ran, so nothing is scored: not run is never a failure
+	}
+	for _, c := range ran {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
 		// WP3.4's pass^k bar is a suite bar: one case's pass^5 is 0 or 1, so a single off run in five would
-		// fail a promotion. Per case it is reported, never enforced (D-3.4e); the per-case mean bar, the
+		// fail a promotion. Per case it is reported, never enforced (D-3.4f); the per-case mean bar, the
 		// suite pass^k, and the baseline rules below stay enforced, so a case cannot hide behind the others.
 		if c.PassK < cfg.MinPassK {
 			advisory = append(advisory, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
@@ -565,15 +863,19 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
 	}
 	if base != nil {
-		if drop := base.Mean - cur.Mean; drop > cfg.MaxDrop+1e-9 {
-			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s); at most %.2f allowed", cur.Mean, drop, base.Mean, short(base.SHA), cfg.MaxDrop))
+		// The drop is measured over the cases both runs scored: a case new
+		// since the baseline, or not run in either, is held to the per-case
+		// bar above, never mixed into one side's mean.
+		baseMean, curMean := commonMeans(base, cur, ran)
+		if drop := baseMean - curMean; drop > cfg.MaxDrop+1e-9 {
+			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s) over the cases both scored; at most %.2f allowed", curMean, drop, baseMean, short(base.SHA), cfg.MaxDrop))
 		}
 		baseCase := map[string]CaseResult{}
 		for _, c := range base.Cases {
 			baseCase[c.Case] = c
 		}
-		for _, c := range cur.Cases {
-			if b, ok := baseCase[c.Case]; ok && c.PassK < b.PassK {
+		for _, c := range ran {
+			if b, ok := baseCase[c.Case]; ok && b.NotRun == "" && c.PassK < b.PassK {
 				*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
 			}
 		}
@@ -625,7 +927,7 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 	var last Turn
 	for round := 1; ; round++ {
 		var t Turn
-		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill}
+		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill, Stream: true}
 		if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, schema, &t); err != nil {
 			var re *models.ReplyError
 			if errors.As(err, &re) && !re.Parse && !re.Truncated {

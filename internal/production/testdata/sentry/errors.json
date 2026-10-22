@@ -1,0 +1,37 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation listOrganizationEvents: the body follows the response schema; the rows are invented for the test's project 4507. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=errors&end=2026-10-17T09%3A00%3A00Z&field=release&field=transaction&field=count%28%29&field=min%28timestamp%29&field=max%28timestamp%29&per_page=51&project=4507&query=release%3Aweb%402.4%2A&sort=-count%28%29&start=2026-10-17T08%3A00%3A00Z",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "release": "web@2.4.1",
+            "transaction": "POST /api/checkout/",
+            "count()": 57,
+            "min(timestamp)": "2026-10-17T08:12:03+00:00",
+            "max(timestamp)": "2026-10-17T08:58:40+00:00"
+          }
+        ],
+        "meta": {
+          "fields": {
+            "release": "string",
+            "transaction": "string",
+            "count()": "integer",
+            "min(timestamp)": "date",
+            "max(timestamp)": "date"
+          },
+          "units": {
+            "release": null,
+            "transaction": null,
+            "count()": null,
+            "min(timestamp)": null,
+            "max(timestamp)": null
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,19 +27,58 @@ const (
 	FallbackOutputPerMTok = 75.0
 )
 
-// Cost prices a reply: the endpoint's own figure, else the configured price,
-// else the fallback rate.
+// Cost prices a reply: the endpoint's own figure, else the model's price
+// (PriceOf: config, then the list price), else the fallback rate. Cache reads
+// and writes, which TokensIn includes, are charged at their own rates (a
+// 1-hour cache write at CacheWrite1h), and a
+// prompt past the long-context threshold at the long-context rates.
+//
+// A priority call (Billed) is charged at least at the priority rate, even when
+// the endpoint reports a lower figure of its own, so a spend cap holds.
 func Cost(prices []config.Price, model string, r Response) (usd float64, source string) {
-	if r.CostUSD > 0 {
-		return r.CostUSD, "reported"
+	if r.CostUSD > 0 && r.ServiceTier != TierPriority {
+		return r.CostUSD, CostReported
 	}
-	in, out, source := FallbackInputPerMTok, FallbackOutputPerMTok, "fallback-rate"
-	for _, p := range prices {
-		if p.Model == model {
-			in, out, source = p.InputPerMTok, p.OutputPerMTok, "price-table"
+	p, source, ok := PriceOf(prices, model)
+	if !ok {
+		p, source = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}, CostFallback
+	}
+	rt := p.Short
+	if p.LongAbove > 0 && r.TokensIn > p.LongAbove {
+		rt = p.Long
+	}
+	if r.ServiceTier == TierPriority && p.Priority > 0 {
+		x := p.Priority
+		rt = Rates{Input: rt.Input * x, CachedInput: rt.CachedInput * x, CacheWrite: rt.CacheWrite * x, CacheWrite1h: rt.CacheWrite1h * x, Output: rt.Output * x}
+	}
+	or := func(v float64) float64 {
+		if v == 0 {
+			return rt.Input
 		}
+		return v
 	}
-	return (float64(r.TokensIn)*in + float64(r.TokensOut)*out) / 1e6, source
+	write1h := or(rt.CacheWrite)
+	if rt.CacheWrite1h > 0 {
+		write1h = rt.CacheWrite1h
+	}
+	plain := max(r.TokensIn-r.CachedIn-r.CacheWriteIn, 0)
+	w1h := min(r.CacheWrite1hIn, r.CacheWriteIn)
+	usd = (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn-w1h)*or(rt.CacheWrite) +
+		float64(w1h)*write1h + float64(r.TokensOut)*rt.Output) / 1e6
+	if r.CostUSD > usd {
+		return r.CostUSD, CostReported
+	}
+	return usd, source
+}
+
+// Billed is resp as Cost prices it for req: a call that asked for priority
+// serving is charged at the priority rate whatever tier its reply states, or
+// when it states none, so a spend cap holds.
+func Billed(req Request, resp Response) Response {
+	if req.ServiceTier == TierPriority {
+		resp.ServiceTier = TierPriority
+	}
+	return resp
 }
 
 // ErrBudget means the [budget] circuit breaker has tripped: agent lanes are
@@ -46,8 +86,8 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 var ErrBudget = errors.New("budget limit reached; agent lanes are paused")
 
 // Breaker is the [budget] circuit breaker. It trips when spend for a story
-// reaches per_story_usd or spend for the local day reaches per_day_usd (the
-// boundary itself trips), pauses agent lanes by writing PauseFile, and pages
+// goes over per_story_usd (the boundary build's cost_usd uses) or spend for
+// the local day reaches per_day_usd (that boundary itself trips), pauses agent lanes by writing PauseFile, and pages
 // once per scope per day through Notify.
 type Breaker struct {
 	Budget    config.Budget
@@ -127,7 +167,9 @@ func (b *Breaker) Check(story string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.init()
-	if lim := b.Budget.PerStoryUSD; lim > 0 && story != "" && b.perStory[story] >= lim {
+	// A story trips the breaker only over its limit, the same boundary build's
+	// cost_usd uses, so the breaker never stops a story its build budget allows.
+	if lim := b.Budget.PerStoryUSD; lim > 0 && story != "" && b.perStory[story] > lim {
 		return fmt.Errorf("%w: story %s spent %.2f of %.2f USD", ErrBudget, story, b.perStory[story], lim)
 	}
 	if lim := b.Budget.PerDayUSD; lim > 0 && b.perDay[b.day(b.Now())] >= lim {
@@ -145,8 +187,8 @@ func (b *Breaker) Add(ctx context.Context, story string, usd float64) error {
 	var scope, msg string
 	if story != "" {
 		b.perStory[story] += usd
-		if lim := b.Budget.PerStoryUSD; lim > 0 && b.perStory[story] >= lim {
-			scope, msg = "per_story:"+story, fmt.Sprintf("story %s spent %.2f USD, reaching [budget] per_story_usd = %.2f", story, b.perStory[story], lim)
+		if lim := b.Budget.PerStoryUSD; lim > 0 && b.perStory[story] > lim {
+			scope, msg = "per_story:"+story, fmt.Sprintf("story %s spent %.2f USD, over [budget] per_story_usd = %.2f", story, b.perStory[story], lim)
 		}
 	}
 	if lim := b.Budget.PerDayUSD; scope == "" && lim > 0 && b.perDay[day] >= lim {
@@ -197,7 +239,16 @@ type Call struct {
 // through the gateway or its direct provider, records tokens and cost in the
 // actions log, and trips the breaker when the call reaches a limit.
 func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
-	m, err := g.Resolver.ResolveDirect(c.Lane, c.Host, c.Heavy)
+	// The Copilot route keeps the ui-review lane's copilot row; every other
+	// call resolves its direct model.
+	var m Resolved
+	var err error
+	if c.Lane == verbs.LaneUIReview && c.Host == verbs.HostCopilot {
+		m, err = g.Resolver.Resolve(c.Lane, c.Host)
+	}
+	if err == nil && !CopilotRouted(m) {
+		m, err = g.Resolver.ResolveDirect(c.Lane, c.Host, c.Heavy)
+	}
 	if err != nil {
 		return Response{}, m, err
 	}
@@ -206,7 +257,7 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 			return Response{}, m, err
 		}
 	}
-	route, err := RouteFor(g.Models, m.Model, m.Family)
+	route, err := RouteOf(g.Models, m)
 	if err != nil {
 		return Response{}, m, err
 	}
@@ -225,24 +276,20 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 			return actions.Outcome{}, fmt.Errorf("model key %q: %w", route.Secret, err)
 		}
 		client := g.client(route, key)
+		// A failed call can still have used tokens (a stream that errored after
+		// message_start returns its usage so far): record and charge them.
 		resp, err = client.Complete(ctx, req)
-		if err != nil {
-			return actions.Outcome{}, err
-		}
 		var source string
-		usd, source = Cost(g.Models.Prices, m.Model, resp)
+		usd, source = Cost(g.Models.Prices, m.Model, Billed(req, resp))
 		return actions.Outcome{TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd, Attempts: 1,
-			Result: map[string]any{"cost_source": source, "model": resp.Model}}, nil
+			Result: map[string]any{"cost_source": source, "model": resp.Model}}, err
 	})
-	if err != nil {
-		return resp, m, err
-	}
-	if g.Breaker != nil && !g.Actions.DryRun() {
-		if err := g.Breaker.Add(ctx, c.Story, usd); err != nil {
-			return resp, m, err
+	if g.Breaker != nil && !g.Actions.DryRun() && (err == nil || usd > 0) {
+		if berr := g.Breaker.Add(ctx, c.Story, usd); berr != nil {
+			return resp, m, errors.Join(err, berr)
 		}
 	}
-	return resp, m, nil
+	return resp, m, err
 }
 
 // WithModel is the gateway with lane on host pinned to model, for a call the
@@ -269,6 +316,9 @@ func (g *Gateway) WithModel(lane verbs.LaneID, host verbs.HostID, model string) 
 func (g *Gateway) client(route Route, key string) Client {
 	if g.Client != nil {
 		return g.Client(route, key)
+	}
+	if route.Via == CopilotRoute.Via {
+		return CopilotCLI{Token: key, Path: os.Getenv("PATH"), Host: cmp.Or(os.Getenv("COPILOT_GH_HOST"), os.Getenv("GH_HOST"))}
 	}
 	return HTTPClient{BaseURL: route.BaseURL, Style: route.Style, Key: key, KeyAuth: route.KeyAuth, HTTP: g.HTTP}
 }

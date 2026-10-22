@@ -1,0 +1,11 @@
+[[criterion]]
+id = 1
+tests = ["./internal/models:TestStreamPastAProxyIdleLimit"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/models:TestStreamPastAProxyIdleLimit", "./internal/models:TestMessagesStream"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/models:TestStreamPastAProxyIdleLimit"]

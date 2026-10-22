@@ -13,14 +13,14 @@ const AAYU = "C:\\Program Files\\aayudha\\aayu.exe"
 const VERSION = "1.2.3"
 // hosts/commands/*/*.md, the host-neutral command sources the Claude Code,
 // Codex, and Cursor plugins load too, without /amp (home and next are native below).
-const SHARED: { name: string; description: string; hint?: string; body: string }[] = []
+const SHARED: { name: string; description: string; hint?: string; body: string }[] = [{"name":"codex","description":"Hand a story to Codex.","hint":"\u003cstory\u003e","body":"# Codex\n\nRun `aayu build n --delegate codex`."},{"name":"next","description":"The next step.","body":"# Next\n\nRun `aayu next --json`."}]
 
 // The verbs an agent may run, each sent to the thread as a request to use its skill.
 const SKILL_COMMANDS: { verb: string; title: string; ask?: string; prompt: (n: string) => string }[] = [
 	{ verb: 'grill', title: 'Shape a story with the Product Strategist', prompt: () => 'Use the aayudha grill skill to shape a new story with me, one question at a time.' },
 	{ verb: 'ready', title: 'Check a story for Ready', ask: 'Story or bug number', prompt: (n) => `Use the aayudha ready skill: run \`aayu ready ${n} --check\` and tell me what still blocks Ready.` },
 	{ verb: 'plan', title: 'Plan a story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha plan skill on #${n}: one checkpoint per layer.` },
-	{ verb: 'build', title: 'Build a Ready story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha build skill on #${n}: commit each checkpoint with \`aayu build ${n}\`.` },
+	{ verb: 'build', title: 'Build a Ready story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha build skill on #${n}: I picked it from the palette, so start it with \`aayu build ${n} --asked "build #${n} (command palette)"\`, then commit each checkpoint with \`aayu build ${n}\`.` },
 	{ verb: 'verify', title: 'Verify the floors', prompt: () => 'Use the aayudha verify skill on the current change and report each floor.' },
 	{ verb: 'inspect', title: 'Inspect a pull request', ask: 'Pull request number', prompt: (n) => `Use the aayudha inspect skill on PR #${n}.` },
 ]
@@ -125,11 +125,23 @@ export default function (amp: PluginAPI) {
 		}
 	})
 
-	amp.on('tool.call', async (_event, ctx) => {
-		const r = await ctx.$`${AAYU} hook pre-tool --host amp`
+	amp.on('tool.call', async (event, ctx) => {
+		// The hook reads the call as Claude Code sends it: tool_name and tool_input.
+		const call = JSON.stringify({ tool_name: event.tool, tool_input: event.input })
+		const r = await ctx.$`${AAYU} hook pre-tool --host amp --event ${call}`
 		if (r.exitCode === 2) {
 			return { action: 'reject-and-continue', message: r.stderr.trim() }
 		}
 		return { action: 'allow' }
+	})
+
+	// The post-tool hook logs PostHog and Sentry calls; only MCP tools and the
+	// shell reach them, so no other result starts a process.
+	amp.on('tool.result', async (event, ctx) => {
+		const shell = amp.helpers.shellCommandFromToolCall(event)
+		if (!event.tool.startsWith('mcp__') && !/sentry|posthog/i.test(shell?.command ?? '')) return
+		const input = shell ? { command: shell.command } : event.input
+		const result = JSON.stringify({ tool_name: shell ? 'Bash' : event.tool, tool_input: input, thread_id: event.thread.id, status: event.status, output: event.output ?? null })
+		await ctx.$`${AAYU} hook post-tool --host amp --event ${result}`
 	})
 }

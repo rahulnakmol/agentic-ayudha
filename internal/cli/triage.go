@@ -10,6 +10,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -45,10 +46,20 @@ func (e *Env) Gateway() (*models.Gateway, error) {
 	m := l.Config.Models
 	return &models.Gateway{
 		Models: m, Actions: log, HTTP: e.HTTP, Client: e.ModelClient,
-		Resolver: models.Resolver{Models: m, Log: func(s string) { e.Logf("%s", s) }},
+		Resolver: models.Resolver{Models: m, Hosts: l.Config.Hosts, Log: func(s string) { e.Logf("%s", s) }},
 		Breaker:  br,
 		Key: func(name string) (string, error) {
+			// The CI review's key comes from the code-review environment
+			// under its own name (inspect.ReviewModelKeyVar), else the store.
+			if t := e.Getenv(inspect.ReviewModelKeyVar); name == inspect.ReviewModelSecret && t != "" {
+				return t, nil
+			}
 			v, _, err := e.SecretStore().Get(name)
+			// The Copilot route signs in as Copilot CLI does: the copilot
+			// secret, else COPILOT_GITHUB_TOKEN (never aayu's GitHub token).
+			if t := e.Getenv("COPILOT_GITHUB_TOKEN"); err != nil && name == models.CopilotRoute.Secret && t != "" {
+				return t, nil
+			}
 			return v, err
 		},
 	}, nil

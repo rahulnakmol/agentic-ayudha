@@ -34,7 +34,8 @@ aayu init --verify-skill
 
 It writes a starter **verify skill** at `.agents/skills/verify-<product>/`: a `SKILL.md`, a control tool chosen from
 your stack, and an empty `features/` folder. It asks which agent app should keep the map up to date, and offers only
-the ones it detects. `aayu install` makes the skill available to your agent.
+the ones it detects. `aayu install` makes the skill available to your agent; in Claude Code it is
+`/aayudha:verify-<product>`.
 
 Then ask your agent to fill it in, in plain words:
 

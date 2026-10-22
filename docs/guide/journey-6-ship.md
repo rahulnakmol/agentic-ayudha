@@ -64,7 +64,7 @@ review later. That is what makes the rest of the record trustworthy.
 
 | Verb | What it does |
 |---|---|
-| [`ship`](../../skills/ship/SKILL.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
+| [`ship`](skills/ship.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 
 <!-- END GENERATED: stage-verbs -->
 

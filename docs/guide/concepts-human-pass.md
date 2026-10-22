@@ -14,7 +14,8 @@ A human pass is an approving review on the pull request from a person's GitHub a
 when the account is not a bot, and not one of the bot logins you have configured. That is why agents and CI write
 as a bot identity at Level 3: so an agent's approval can never be mistaken for yours.
 
-`ship` will not merge without one. `release` and publishing with `tell` refuse agents altogether.
+`ship` will not merge without one. Publishing with `tell` refuses agents altogether. `release` lets an agent
+promote behind the full gate, but `main` moves only on a person's stable-release request.
 
 ## Solo mode
 
@@ -41,13 +42,18 @@ approval is required again for the layers that seat owns.
 ## Earning autonomy
 
 At Level 3, a layer can earn the right to merge without waiting for a person: 20 merges in a row on that layer with
-no human correction (no requested changes, no human commits, no reverts, no linked bugs). A protected workflow
-computes the streak from the merge history, so no agent can change it. The risky layers, domain policy, stored data,
+no human correction (no requested changes, no human commits, no reverts, no linked bugs). Only merges whose review
+was by another model family, or by a person, count: a same-family review neither counts nor breaks the streak, and
+neither does a merge with no review on record. A protected workflow computes the streak from the merge history, so
+no agent can change it. The risky layers, domain policy, stored data,
 and the platform, always need a person, whatever the streak.
 
 Terms are defined in the [glossary](../../GLOSSARY.md).
 > **Under the hood:** how a person's approval is told apart from a bot's, and what solo mode checks, is in
 > [trust and identities](how-trust.md).
+
+Working alone every day? [Run it alone: the solo founder](guide-solo-founder.md) has the whole routine, including
+the inbox.
 
 ## What's next
 

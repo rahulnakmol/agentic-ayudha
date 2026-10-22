@@ -1,0 +1,1 @@
+Our sites render Markdown with Maruku, which its own readme calls obsolete. Tell us what it does, what our existing pages depend on that must keep working, what we should not carry over, and how we move to a maintained Ruby Markdown library without breaking existing pages.

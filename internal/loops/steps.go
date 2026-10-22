@@ -42,6 +42,12 @@ func ClaudeRoutines(ls []Loop, repo, branch, tz string) []byte {
 	b.WriteString("To test a routine, run `/schedule run` and name it, or click **Run now** on its page. To test the prompt here first,\n")
 	b.WriteString("run `aayu install --loops --host claude --run-now <loop>`.\n\n")
 	for _, l := range ls {
+		if l.IsEvent() {
+			if !l.Runs(HostClaude) {
+				writeNoTrigger(&b, ls, l, HostClaude, tz, "Claude Code routines take only pull request and release events")
+			}
+			continue
+		}
 		if !l.Runs(HostClaude) {
 			continue
 		}
@@ -67,6 +73,12 @@ func CodexTasks(ls []Loop, repo, branch, tz string) []byte {
 	b.WriteString("Test each prompt before it runs on its own, as the Codex documentation advises: run\n")
 	b.WriteString("`aayu install --loops --host codex --run-now <loop>`, which runs it once with `codex exec`.\n\n")
 	for _, l := range ls {
+		if l.IsEvent() {
+			if !l.Runs(HostCodex) {
+				writeNoTrigger(&b, ls, l, HostCodex, tz, "Codex event tasks take only pull request activity, and only on the web")
+			}
+			continue
+		}
 		if !l.Runs(HostCodex) {
 			continue
 		}
@@ -93,15 +105,30 @@ func CursorAutomate(ls []Loop, repo, branch, tz string, loc *time.Location) ([]b
 		if !l.Runs(HostCursor) {
 			continue
 		}
+		fmt.Fprintf(&b, "## aayudha %s\n\n%s.\n\n", l.Name, l.Label(tz))
+		if l.IsEvent() {
+			writeFence(&b, fmt.Sprintf("/automate Create an automation named \"aayudha %s (%s)\" on the repository github.com/%s, branch %s, that runs as me, with one trigger: Issue label changed, on issues, when the label %q is added (Cursor has no issue-opened trigger; the issue forms add the label as the issue opens). Its prompt, exactly:\n\n%s",
+				l.Name, repo, repo, branch, l.Filter.Label, l.AgentPrompt(repo, branch)))
+			continue
+		}
 		crons, err := l.UTCCrons(loc)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintf(&b, "## aayudha %s\n\n%s.\n\n", l.Name, l.Label(tz))
 		writeFence(&b, fmt.Sprintf("/automate Create an automation named \"aayudha %s (%s)\" on the repository github.com/%s, branch %s, that runs as me, with a scheduled trigger for each of these UTC cron expressions: %s (%s; the prompt's first step skips the one that is not due). Its prompt, exactly:\n\n%s",
 			l.Name, repo, repo, branch, "`"+strings.Join(crons, "`, `")+"`", l.Label(tz), l.AgentPrompt(repo, branch)))
 	}
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n"), nil
+}
+
+// writeNoTrigger says that a tool has no trigger for an event loop's event,
+// and names the scheduled loop that covers it there.
+func writeNoTrigger(b *strings.Builder, ls []Loop, l Loop, host, tz, why string) {
+	fmt.Fprintf(b, "## aayudha %s\n\n%s: no %s trigger here (%s), so nothing to set up.", l.Name, l.Label(tz), l.On, why)
+	if c, ok := Covers(ls, l, host); ok {
+		fmt.Fprintf(b, " The scheduled loop %s runs the same command (%s).", c.Name, c.Label(tz))
+	}
+	b.WriteString("\n\n")
 }
 
 func writeFence(b *strings.Builder, body string) {

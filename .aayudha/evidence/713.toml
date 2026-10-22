@@ -1,0 +1,38 @@
+# Which tests prove story #713's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # 120x34: the grouped list on the left; the card with full title, why, counsel, and one-line choices on the right
+tests = ["internal/cli:TestInboxTUI", "internal/cli:TestInboxAlignment"]
+
+[[criterion]]
+id = 2 # 72x34: the list first, a rule, then the card
+tests = ["internal/cli:TestInboxTUI", "internal/cli:TestInboxAlignment"]
+
+[[criterion]]
+id = 3 # every line the terminal's width; divider, headers, columns, choices, and help descriptions in their cells
+tests = ["internal/cli:TestInboxAlignment"]
+
+[[criterion]]
+id = 4 # x on a needs-you item selects nothing and says why; X, Enter, and C act on housekeeping only
+tests = ["internal/cli:TestInboxSelectsOnlyHousekeeping", "internal/cli:TestInboxTUI"]
+
+[[criterion]]
+id = 5 # writes in the background: two at once, never two on one pull request, the cursor moves on
+tests = ["internal/cli:TestInboxWritesInBackground", "internal/cli:TestInboxWriteFailures"]
+
+[[criterion]]
+id = 6 # the card body is the write's progress, then its result, or where it stopped and what it wrote
+tests = ["internal/cli:TestInboxAcrossWrites", "internal/cli:TestInboxWriteFailures", "internal/cli:TestInboxWritesInBackground"]
+
+[[criterion]]
+id = 7 # q or Ctrl-C during writes asks; w waits for all, q for the ones under way
+tests = ["internal/cli:TestInboxWritesInBackground", "internal/cli:TestInboxTUI", "internal/cli:TestInboxWriteFailures"]
+
+[[criterion]]
+id = 8 # done across sessions with who and when, not counted as the new session's work, until a later read lists it again
+tests = ["internal/cli:TestInboxAcrossWrites", "internal/cli:TestInboxRelisted"]
+
+[[criterion]]
+id = 9 # Tab and Shift-Tab cycle the items that need you
+tests = ["internal/cli:TestInboxAcrossWrites"]

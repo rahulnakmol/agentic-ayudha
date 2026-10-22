@@ -12,18 +12,53 @@ calls = [
   ["ready", "31", "--check"],
 ]
 
+[tier2]
+rubric = "rubric.md"
+references = ["story.md"]
+
 # Unrequested criteria: the request asks only that the empty page say there are no claims and how to start one.
 # Floors (verify) cover accessibility and performance on every story, so criteria for them are invented scope. A
 # tier-2 run scored 2 for a screen-reader criterion and for one about claimants who already have claims (evals.yml
 # runs 38206893151 and 38207978439); the rules are checked before the judge (TestGrillStoryScope keeps both sides).
-scope = [
-  { pattern = '(?i)\[sr-transcript\]|screen[- ]?reader|\bvoiceover\b|\bnvda\b|\bannounce[sd]?\b|\baria-', why = "a screen-reader criterion the request does not ask for" },
-  { pattern = '(?i)\bkeyboard\b|\btab (key|order)\b|\bfocus(ed|able|es)?\b', why = "a keyboard or focus criterion the request does not ask for" },
-  { pattern = '(?i)\bwcag\b|\bcontrast\b|\baxe\b|\baccessib|\btap targets?\b|\b44 ?px\b', why = "an accessibility criterion the floors already enforce" },
-  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b|\blighthouse\b|\b(lcp|cls|tbt)\b|\bload(s|ing)? (time|within)\b|\bperformance\b', why = "a performance budget the request does not state" },
-  { pattern = '(?i)\b(with|has|have)\s+(one or more\s+|existing\s+|some\s+|[1-9][0-9]*\s+)?claims\b', why = "a criterion for claimants who already have claims, which the request does not ask about" },
-]
+[[scope]]
+pattern = '(?i)\[sr-transcript\]|screen[- ]?reader|\bvoiceover\b|\bnvda\b|\bannounce[sd]?\b|\baria-'
+why = "a screen-reader criterion the request does not ask for"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['1. [sr-transcript] state: the claims page', 'VoiceOver announces the total']
+negated = ['no screen-reader criterion']
+near_miss = ['the page announcement banner']
+negated_fires = true
 
-[tier2]
-rubric = "rubric.md"
-references = ["story.md"]
+[[scope]]
+pattern = '(?i)\bkeyboard\b|\btab (key|order)\b|\bfocus(ed|able|es)?\b'
+why = "a keyboard or focus criterion the request does not ask for"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['reachable by keyboard', 'the field is focused']
+negated = ['no keyboard criterion']
+near_miss = ['the tab shows 0 claims']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\bwcag\b|\bcontrast\b|\baxe\b|\baccessib|\btap targets?\b|\b44 ?px\b'
+why = "an accessibility criterion the floors already enforce"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['meets WCAG 2.2 AA', '44px tap targets']
+negated = ['no accessibility criterion beyond the floors']
+near_miss = ['accessed from the claims page']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b|\blighthouse\b|\b(lcp|cls|tbt)\b|\bload(s|ing)? (time|within)\b|\bperformance\b'
+why = "a performance budget the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['the page loads within 2 s', 'a performance budget']
+negated = ['the page need not load within 2 s']
+near_miss = ['the claims list loads']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b(with|has|have)\s+(one or more\s+|existing\s+|some\s+|[1-9][0-9]*\s+)?claims\b'
+why = "a criterion for claimants who already have claims, which the request does not ask about"
+match = ['a claimant with 2 claims', 'a claimant who has existing claims']
+negated = ['a claimant with no claims']
+near_miss = ['a claimant with 0 claims', 'a claimant who has filed claims before']

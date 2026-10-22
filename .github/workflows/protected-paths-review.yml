@@ -11,6 +11,14 @@ permissions: {}
 
 jobs:
   signal:
+    # Only a review the gate can count: internal/identity passes a path only on a human CODEOWNER's approval of the
+    # head commit, keeps each reviewer's latest approval, change request, or dismissal, and ignores bots, the PR
+    # author, and COMMENTED reviews. Any other review skips this job (no runner), and protected-paths-rerun.yml acts
+    # only on a successful signal. Expression string comparisons ignore case, as the gate's login comparison does.
+    if: >-
+      github.event.review.user.type != 'Bot' && !endsWith(github.event.review.user.login, '[bot]') &&
+      github.event.review.user.login != github.event.pull_request.user.login &&
+      github.event.review.state != 'commented'
     runs-on: ubuntu-latest
     steps:
       - name: Halt check (aayu halt, WP5.7)

@@ -92,8 +92,8 @@ func TestReviewAndPolish(t *testing.T) {
 	if crit.LaneA.Disposition != uireview.Fix || crit.LaneB.Disposition != uireview.Fix || len(crit.LaneA.Findings) != 3 || crit.Head != pr.Head.SHA {
 		t.Fatalf("critique: %s", raw)
 	}
-	if len(fake.Requests) != uireview.K || len(fake.Requests[0].Messages[0].Images) != 2 {
-		t.Fatalf("lane A calls: %d", len(fake.Requests))
+	if len(fake.Requests) != uireview.K || len(fake.Requests[0].Messages[0].Images) != 2 || fake.Requests[0].Effort != "high" {
+		t.Fatalf("lane A calls: %d, effort %q", len(fake.Requests), fake.Requests[0].Effort)
 	}
 	g.Mu.Lock()
 	comments := g.Issues[pr.Number].Comments

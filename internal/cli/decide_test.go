@@ -19,7 +19,7 @@ func decisionBody(reversible, links string) string {
 	t, _ := workitems.FindType("decision")
 	return workitems.Render(t, map[string]string{
 		workitems.FieldSummary:    "Which rules engine?",
-		"options":                 "A: in-house. B: a vendor engine.",
+		"options":                 "1. **A.** in-house.\n2. **B.** a vendor engine.",
 		"evaluation":              "A is cheaper to run; B is faster to build.",
 		"recommendation":          "A",
 		workitems.FieldReversible: reversible,
@@ -47,7 +47,8 @@ func decideTree(t *testing.T) *fake.GitHub {
 	return g
 }
 
-// WP5.6 accept: a reversible Decision fixture at 48 business hours gains
+// WP5.6 accept, for a team of two humans (Story #432 shortens the window
+// only in solo mode): a reversible Decision fixture at 48 business hours gains
 // decision:provisional with the escalation comment mentioning founder B; an
 // irreversible one does not. Opened Monday 10:00 London, 24 business hours
 // lapse Wednesday 16:00 and 48 lapse the next Monday 13:00 (12:00 UTC).
@@ -56,10 +57,10 @@ func TestDecideSLA(t *testing.T) {
 	sink := &notify.Fake{}
 	now := time.Date(2026, 10, 19, 11, 59, 0, 0, time.UTC)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: sink}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: sink}
 	sweep := func() []decisionStep {
 		t.Helper()
-		code, out, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--json", "--set", "decisions.escalate_to=founder-b")
+		code, out, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--json", "--set", "decisions.escalate_to=founder-b", "--set", "autonomy.approver=founder-a", "--set", "seats.code-architect.mode=paired", "--set", "seats.code-architect.human=arch")
 		if code != 0 {
 			t.Fatalf("decide sweep: exit %d: %s", code, errOut)
 		}
@@ -115,7 +116,7 @@ func TestDecideSLA(t *testing.T) {
 			t.Errorf("#%d at 48 h: %+v, labels %v", n, s, labels(n))
 		}
 	}
-	if byN[4].Reason != "a floor waiver is never applied provisionally" {
+	if byN[4].Reason != "a waiver is never applied provisionally" {
 		t.Errorf("#4 reason: %q", byN[4].Reason)
 	}
 	// The irreversible Decision re-pages as overdue.
@@ -124,7 +125,7 @@ func TestDecideSLA(t *testing.T) {
 	}
 
 	// The text report names each Decision's state and what it blocks.
-	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b"); code != 0 || !strings.Contains(out, `#2 "Choose the rules engine": provisional; ratify or revert by 2026-10-22T09:00:00Z`) ||
+	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b", "--set", "autonomy.approver=founder-a", "--set", "seats.code-architect.mode=paired", "--set", "seats.code-architect.human=arch"); code != 0 || !strings.Contains(out, `#2 "Choose the rules engine": provisional; ratify or revert by 2026-10-22T09:00:00Z`) ||
 		!strings.Contains(out, "blocks #6 while open") || !strings.Contains(out, "overdue (reversible: false; the lapse only re-pages)") {
 		t.Errorf("text report: exit %d:\n%s", code, out)
 	}
@@ -157,8 +158,10 @@ func TestDecideSLA(t *testing.T) {
 	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A", "--set", "autonomy.approver=someone-else"); code != ExitBlocked {
 		t.Errorf("accept by a human who is not the authority: exit %d, want %d", code, ExitBlocked)
 	}
-	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "C"); code != ExitUsage {
-		t.Errorf("accept of an option the Decision does not list: exit %d, want %d", code, ExitUsage)
+	for _, typed := range []string{"C", "3", "in-house"} { // "in-house" is only prose under option A
+		if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", typed); code != ExitUsage {
+			t.Errorf("accept of %q, which is not an option of the Decision: exit %d, want %d", typed, code, ExitUsage)
+		}
 	}
 	if code, out, errOut := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#2 accepted: A, by @o") {
 		t.Fatalf("accept: exit %d: %s %s", code, out, errOut)
@@ -185,7 +188,7 @@ func TestDecideSLA(t *testing.T) {
 func TestDecideWaiver(t *testing.T) {
 	g := decideTree(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}
 	if code, _, _ := run(t, env, opts, "decide", "6", "--repo", "o/r", "--waiver", "redaction"); code != ExitBlocked {
 		t.Errorf("redaction waiver: exit %d, want %d", code, ExitBlocked)
 	}
@@ -232,7 +235,7 @@ func TestDecideGitHubFailures(t *testing.T) {
 			g := decideTree(t)
 			g.Fail = f
 			env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return at48 }, NotifySink: &notify.Fake{}}
+			opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return at48 }, NotifySink: &notify.Fake{}}
 			if code, _, errOut := run(t, env, opts, append(tt.args, "--repo", "o/r")...); code != ExitExternal {
 				t.Errorf("%v with %s failing: exit %d, want %d: %s", tt.args, f, code, ExitExternal, errOut)
 			}
@@ -259,16 +262,16 @@ func TestDecideRefusals(t *testing.T) {
 		if tt.mutate != nil {
 			tt.mutate(g)
 		}
-		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, append(tt.args, "--repo", "o/r")...)
+		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, append(tt.args, "--repo", "o/r")...)
 		if code != tt.want || len(g.Writes()) != 0 {
 			t.Errorf("%s: exit %d (want %d), writes %v: %s", tt.name, code, tt.want, g.Writes(), errOut)
 		}
 	}
 	g := decideTree(t)
-	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide", "6", "--waiver", "deps", "--dry-run", "--repo", "o/r"); code != 0 || !strings.Contains(out, "planned (dry run)") || len(g.Writes()) != 0 {
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, "decide", "6", "--waiver", "deps", "--dry-run", "--repo", "o/r"); code != 0 || !strings.Contains(out, "planned (dry run)") || len(g.Writes()) != 0 {
 		t.Errorf("dry-run waiver: exit %d: %s", code, out)
 	}
-	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
+	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
 		t.Errorf("no --repo outside a checkout: exit %d, want %d", code, ExitUsage)
 	}
 }
@@ -279,7 +282,7 @@ func TestDecideRefusals(t *testing.T) {
 func TestDecidePack(t *testing.T) {
 	g := decideTree(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
 	pack := func(want int, args ...string) packReport {
 		t.Helper()
 		code, out, errOut := run(t, env, opts, append([]string{"decide", "--repo", "o/r", "--json", "--pack"}, args...)...)
@@ -302,15 +305,15 @@ func TestDecidePack(t *testing.T) {
 			t.Errorf("facts lack %q:\n%s", want, facts)
 		}
 	}
-	if rep.Seat != "engineering-manager" || rep.Twin != "Athena" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
-		!strings.Contains(rep.Persona, "Speak and work as Athena") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+	if rep.Seat != "engineering-manager" || rep.Twin != "Drona" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
+		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "1. **A.** in-house.") || len(rep.Sections) != 8 {
 		t.Errorf("pack for #2: %+v", rep)
 	}
 	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")
-	if q.Seat != "code-architect" || q.Twin != "Daedalus" || q.Issue != 0 || !strings.Contains(q.SeatWhy, `"field"`) {
+	if q.Seat != "code-architect" || q.Twin != "Vishwa" || q.Issue != 0 || !strings.Contains(q.SeatWhy, `"field"`) {
 		t.Errorf("pack for a question: %+v", q)
 	}
-	if o := pack(0, "2", "--seat", "quality-architect"); o.Twin != "Themis" || o.SeatWhy != "--seat" {
+	if o := pack(0, "2", "--seat", "quality-architect"); o.Twin != "Yama" || o.SeatWhy != "--seat" {
 		t.Errorf("--seat: %+v", o)
 	}
 
@@ -340,7 +343,7 @@ In-house, as #2 recommends; a two-way door until #6 ships.
 
 ## Pre-mortem
 
-Pythia: in-house failed because the rules outgrew it; early warning: #6 needs a rule type #2 did not list.
+Sanjay: in-house failed because the rules outgrew it; early warning: #6 needs a rule type #2 did not list.
 
 ## Questions that would change the answer
 
@@ -377,5 +380,91 @@ Reply A or B on #2.
 	}
 	if n := len(g.Writes()); n != 0 {
 		t.Errorf("decide --pack wrote %d times", n)
+	}
+}
+
+// Story #432, criteria 1 and 4, end to end: with no second human configured
+// (solo), the reversible Decision #2 applies at 24 business hours (Wednesday
+// 16:00 London), a minute before it does not, and the waiver #4 and the
+// irreversible #3 and #5 never do; status then lists #2 with its deadline and
+// how to reverse it.
+func TestSoloProvisional(t *testing.T) {
+	g := decideTree(t)
+	now := time.Date(2026, 10, 14, 14, 59, 0, 0, time.UTC)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: &notify.Fake{}}
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 || slices.Contains(g.LabelNames(2), workitems.LabelProvisional) {
+		t.Fatalf("a minute before 24 business hours: exit %d %s, #2 labels %v", code, errOut, g.LabelNames(2))
+	}
+	now = now.Add(time.Minute)
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 {
+		t.Fatalf("decide at 24 business hours: exit %d: %s", code, errOut)
+	}
+	for n, want := range map[int]bool{2: true, 3: false, 4: false, 5: false} {
+		if got := slices.Contains(g.LabelNames(n), workitems.LabelProvisional); got != want {
+			t.Errorf("#%d provisional = %v at 24 solo business hours", n, got)
+		}
+	}
+	g.Mu.Lock()
+	body := g.Issues[2].Body
+	g.Mu.Unlock()
+	if !strings.Contains(body, "within 24 business hours (V8, solo mode)") {
+		t.Errorf("#2 body:\n%s", body)
+	}
+	code, out, _ := run(t, env, opts, "status", "--repo", "o/r")
+	if want := "provisional Decision #2 Choose the rules engine: ratify or revert by 2026-10-19T12:00:00Z with `aayu inbox` or `aayu decide 2 --accept <option>`"; code != 0 || !strings.Contains(out, want) {
+		t.Errorf("status: exit %d, want %q:\n%s", code, want, out)
+	}
+}
+
+// legacyWaiverBody is a Decision written before options were numbered: the
+// real body of a waiver accepted on 2026-10-17, with its Decision section
+// removed so it is open again. Its options are named lines, not numbered.
+const legacyWaiverBody = "### Question\n\nShould #401 ship with its `eval-bar` floor miss waived?\n\n" +
+	"### Options\n\nwaive: #401 ships with the `eval-bar` floor recorded as waived by this Decision.\nfix: no waiver; #401 fixes the miss before it ships.\n\n" +
+	"### Evaluation\n\nA waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.\n\n" +
+	"### Recommendation\n\nfix\n\n### Reversible\n\nfalse\n\n### Links\n\nwaives #401\n"
+
+// A lettered or named Decision reads as options 1 (A), 2 (B), … (founder,
+// 2026-10-18): Ready accepts it with a warning to rewrite it as numbered
+// lines, decide and the inbox show each option's letter with its number, and
+// accepting it by number, letter, or name records the option's name.
+func TestLetteredDecision(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("Waive the eval-bar floor on #401", legacyWaiverBody, "type:decision", "status:planned", workitems.LabelWaiver) // #1
+	story := g.AddIssue("Story with an eval-bar miss", "x", "type:story", "status:in-progress")
+	g.Mu.Lock()
+	delete(g.Issues, story.Number)
+	story.Number = 401
+	g.Issues[401] = story
+	g.Mu.Unlock()
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{IsTerminal: func(any) bool { return true }, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+
+	code, out, errOut := run(t, env, opts, "ready", "1", "--check", "--repo", "o/r")
+	if want := "#1 Waive the eval-bar floor on #401 (decision): passes Ready\n  - warning: options: lettered or named, not numbered, so they read as 1 (A), 2 (B), … in order: " +
+		"rewrite each as a top-level line \"N. **Name.** what it does\"\n"; code != 0 || out != want {
+		t.Errorf("ready --check: exit %d %s\n%q\nwant %q", code, errOut, out, want)
+	}
+	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  1 (A). waive\n  2 (B). fix (recommended)\n") {
+		t.Errorf("decide: exit %d:\n%s", code, out)
+	}
+	if code, out, _ := runIn(t, env, opts, "q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  2 (B). Accept: fix (recommended)\n  1 (A). Accept: waive\n"+
+		"  3. Open #1 on GitHub\n  Enter = 2 (B) · pick 1-3") {
+		t.Errorf("inbox: exit %d:\n%s", code, out)
+	}
+	it, _ := workitems.Parse(1, "Waive the eval-bar floor on #401", legacyWaiverBody, "", []string{"type:decision"})
+	for typed, want := range map[string]string{"1": "waive", "A": "waive", "a": "waive", "WAIVE": "waive", "B": "fix", "2": "fix", "C": ""} {
+		if o, ok := decide.Pick(it, typed); o.Name != want || ok != (want != "") {
+			t.Errorf("Pick(%q) = %+v %v, want %q", typed, o, ok, want)
+		}
+	}
+	// A letter wins over another option's name, as the Recommendation reads it.
+	collide := workitems.Item{Type: "decision", Fields: map[string]string{"options": "A: B\nB: C"}}
+	if o, ok := decide.Pick(collide, "B"); !ok || o.N != 2 {
+		t.Errorf("Pick(B) with option 1 named B = %+v %v, want 2 (B)", o, ok)
+	}
+	if code, out, errOut := run(t, env, opts, "decide", "1", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#1 accepted: waive, by @o") {
+		t.Fatalf("accept A: exit %d: %s %s", code, out, errOut)
 	}
 }

@@ -6,10 +6,10 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Term | Meaning |
 |---|---|
 | `aayudha`, `aayu` | The binary and its short alias. One static Go binary. |
-| Verb | One of the 32 user-facing commands (`grill`, `build`, `ship`, …) declared in the verb registry. Each runs as a CLI command, and most also as a host skill and an MCP tool. |
+| Verb | One of the 34 user-facing commands (`grill`, `build`, `ship`, …) declared in the verb registry. Each runs as a CLI command, and most also as a host skill and an MCP tool. |
 | Plumbing command | A supporting command that is not a verb (`config`, `auth`, `halt`, `upgrade`, …). |
 | Verb registry | `internal/verbs/registry.go`, the single source for verbs, seats, layers, lanes, and gates. Several files are generated from it [WP0.3]. |
-| Seat | One of twelve roles in the pod (Product Strategist, Code Architect, …). Every verb has one Accountable seat; every layer has one owner seat. |
+| Seat | One of fourteen roles in the pod (Product Strategist, Code Architect, …). Every verb has one Accountable seat; every layer has one owner seat. |
 | Twin | The agent half of a seat. A seat is **solo** (twin only) or **paired** (twin plus a human) [WP5.1]. |
 | Persona | A twin's character and practice: name, voice, values, habits, how it pushes back and praises, what it never does, how it grounds itself, and a practice playbook with public sources. Source: `seats/<seat>/persona.toml`, rendered into charters, skills, and AGENTS.md [WP5.1b]. |
 | Team stage | `[team] stage`: `startup`, `scaleup`, or `enterprise`. Sets the depth and ceremony of each twin's practice (a one-page note to a full artefact), never the floors, the evidence rule, or human-only gates [WP5.1b]. |
@@ -28,6 +28,7 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Proof pack | `pack.json` plus artifacts that map every Completion Goal criterion to evidence and record floor results for one PR head SHA [WP4.1]. |
 | Authoritative pack | The pack the merge-gate workflow built in CI, kept as its `aayudha-pack` run artifact and landed on `ledger` by a human's `ship` after checking it came from that run. Packs pushed by an agent are **advisory** [WP4.8, S-4.2b]. |
 | `ledger` | An orphan branch holding Ready snapshots, proof packs, action segments, and audit reports. Not for code. |
+| `brain` | An orphan branch holding the product brain: an Obsidian vault of linked notes on the product's vision, principles, direction, objectives, objections, decisions, and capabilities. Notes link issues and never copy them. Written with `aayu brain` (v0.3.0). |
 | Merge gate | The base-branch workflow that re-runs `verify` on the PR head, keeps the authoritative pack as a run artifact, and comments on the PR [WP4.8, S-4.2b]. |
 | Disposition | The structured verdict of `inspect` (`merge`, `fix`, `rebuild`) or `review` (`recapture`, `rebuild`, `fix`, `ship`). It can downgrade a result, never override a floor. |
 | Human pass | An approving review from a human account (`type != Bot`, not a configured bot login) [WP1.4, WP5.5]. |

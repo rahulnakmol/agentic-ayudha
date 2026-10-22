@@ -245,9 +245,9 @@ jobs:
             exit 1
           fi
           version="${TAG#v}"
-          dir="manifests/r/rahulnakmol/aayudha/$version"
-          branch="rahulnakmol.aayudha-$version"
-          title="New version: rahulnakmol.aayudha version $version"
+          dir="manifests/a/AkmolsInc/AgenticAyudha/$version" # package_identifier in .goreleaser.yaml (D-8.2j)
+          branch="AkmolsInc.AgenticAyudha-$version"
+          title="New version: AkmolsInc.AgenticAyudha version $version"
           # winget-pkgs is too large to clone; write the three manifest files through the contents API.
           gh repo sync rahulnakmol/winget-pkgs --source microsoft/winget-pkgs --branch master
           base="$(gh api repos/microsoft/winget-pkgs/git/ref/heads/master --jq .object.sha)"

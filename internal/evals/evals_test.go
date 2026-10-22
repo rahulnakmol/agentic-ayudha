@@ -3,12 +3,15 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"math"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -21,6 +24,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -257,6 +261,44 @@ func TestTier2WithFakeModels(t *testing.T) {
 	if !strings.Contains(fake.Requests[0].Messages[0].Content, `<untrusted source="eval-input">`) {
 		t.Fatal("eval input reached the skill model unwrapped")
 	}
+	// Charged at the list prices (D-3.4p): five runs of claude-opus-5-5 (4 and 20 USD per
+	// million input and output tokens) and gpt-6.1-sol (2 and 10), with nothing unpriced.
+	if want := 5 * (900*4 + 300*20 + 1500*2 + 40*10) / 1e6; math.Abs(res.CostUSD-want) > 1e-12 || len(res.Warnings) != 0 {
+		t.Errorf("cost %.6f USD, want %.6f; warnings %q", res.CostUSD, want, res.Warnings)
+	}
+	// A model with no price is charged at the fallback rate and named in the results.
+	fake = &models.Fake{Replies: replies}
+	res, err = harness(t, fake, "gpt-9-unpriced").Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "gpt-9-unpriced has no price") || !strings.Contains(res.Warnings[0], "5 call(s)") {
+		t.Errorf("unpriced judge: %v, warnings %q", err, res.Warnings)
+	}
+}
+
+// Every model the harness can call for evals/eval.toml has a published price
+// (D-3.4p): the judge, each lane's direct-host default, alternative, and
+// escalation, and inspect's peer reviewers. A new model, or a new judge, fails
+// here until its price, with its source, is in models.ListPrices.
+func TestEvalModelsArePriced(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := append([]string{cfg.Judge}, verbs.PeerReviewCandidates...)
+	for _, l := range verbs.Lanes {
+		for _, d := range l.Defaults {
+			if d.Host == verbs.DirectHost {
+				used = append(used, d.ID, d.AlternativeID, d.EscalationID)
+			}
+		}
+	}
+	for _, m := range used {
+		if m == "" {
+			continue
+		}
+		if p, src, ok := models.PriceOf(nil, m); !ok || src != models.CostListPrice || p.Short.Input <= 0 || p.Short.Output <= 0 || p.Source == "" || p.Read == "" {
+			t.Errorf("%s: no list price with a source and date (%+v)", m, p)
+		}
+	}
 }
 
 // resetting is a model client whose listed calls (1-based) fail with a dropped
@@ -265,6 +307,7 @@ type resetting struct {
 	*models.Fake
 	n     int
 	drops []int
+	fail  map[int]error // other failures, by call
 }
 
 func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Response, error) {
@@ -272,21 +315,50 @@ func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Re
 	if slices.Contains(r.drops, r.n) {
 		return models.Response{}, &url.Error{Op: "Post", URL: "https://gateway.example/v1/messages", Err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}}
 	}
+	if err := r.fail[r.n]; err != nil {
+		return models.Response{}, err
+	}
 	return r.Fake.Complete(ctx, req)
 }
 
-// TestTier2RetriesDroppedConnection: a reset is retried once and recorded on
-// the call, so the run is scored, not lost (WP5.8); a second reset in a row
-// fails the run, so a broken endpoint still cannot pass silently.
-func TestTier2RetriesDroppedConnection(t *testing.T) {
+// noPause records the retries' pauses instead of waiting them out.
+func noPause(t *testing.T) *[]time.Duration {
+	var waits []time.Duration
+	old := pause
+	pause = func(_ context.Context, d time.Duration) error { waits = append(waits, d); return nil }
+	t.Cleanup(func() { pause = old })
+	return &waits
+}
+
+// TestTier2RetriesServerErrors: the gateway's 524 and a server error inside a
+// stream are retried once, like a reset (host-skills runs 39025583374 and
+// 39032651481, D-3.4o); a 400 is the request's fault and is not.
+func TestTier2RetriesServerErrors(t *testing.T) {
+	noPause(t)
 	cases, _ := stubCases(root)
 	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	var replies []models.Response
 	for i := 0; i < 5; i++ {
 		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
 	}
-	// Call 1 (run 1's skill) drops once; calls 5 and 6 (run 2's judge, then its retry) both drop.
-	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6}}
+	// Run 4's skill reply first loops on "<br>" to the cap, and is sampled again (D-3.4r); run 5's stops at the cap
+	// mid-way through a long reply that does not repeat, and is not (the same cap would stop it again).
+	capped := func(s string) models.Response {
+		return models.Response{Text: s, StopReason: "max_tokens", Truncated: true, TokensOut: 32000}
+	}
+	var long strings.Builder
+	for i := 0; long.Len() < 6000; i++ {
+		long.WriteString("line " + strconv.Itoa(i) + " of the file, ")
+	}
+	replies = slices.Insert(replies, 6, capped(`{"say": "Local preview only. > `+strings.Repeat("<br> ", 3000)))
+	replies = slices.Insert(replies, 9, capped(`{"say": "`+long.String()))
+	// Call 1 (run 1's skill) gets a 524 and call 2 retries it; call 4 (run 2's skill) a stream api_error, retried
+	// by call 5; call 7 (run 3's skill) a 400, which is not retried but goes to the lane's fallback model.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{
+		1: &models.StatusError{Code: 524, Body: "error code: 524"},
+		4: &models.StreamError{Type: "api_error", Message: "Internal server error"},
+		7: &models.StatusError{Code: 400, Body: "bad request"},
+	}}
 	h := harness(t, nil, "gpt-6.1-sol")
 	h.Gateway.Client = func(models.Route, string) models.Client { return client }
 	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
@@ -294,11 +366,232 @@ func TestTier2RetriesDroppedConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs := res.Cases[0].Runs
-	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, "connection reset") || r.Calls[1].Retried != "" {
+	if r := runs[0]; r.Status == RunError || !strings.Contains(faults(r.Calls[0]), "524") {
+		t.Errorf("run 1, a 524: %+v", r)
+	}
+	if r := runs[1]; r.Status == RunError || !strings.Contains(faults(r.Calls[0]), "api_error") {
+		t.Errorf("run 2, a stream api_error: %+v", r)
+	}
+	if r := runs[2]; faults(r.Calls[0]) != "" || !strings.Contains(r.Calls[0].Error, "400") {
+		t.Errorf("run 3, a 400 is not retried: %+v", r)
+	}
+	if r := runs[3]; r.Status == RunError || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), `degenerate reply: 32000 tokens repeating "<br>"`) {
+		t.Errorf("run 4, a reply looping on <br>: %+v", r)
+	}
+	if r := runs[4]; r.Status != RunError || faults(r.Calls[0]) != "" || !strings.Contains(r.Error, "truncated") {
+		t.Errorf("run 5, a long reply at the cap is not retried: %+v", r)
+	}
+}
+
+func faults(l CallLog) string {
+	var f []string
+	for _, r := range l.Retries {
+		f = append(f, r.Fault)
+	}
+	return strings.Join(f, "; ")
+}
+
+// stall is a stream that stopped arriving until the HTTP client's timeout, as
+// in host-skills run 39038277548.
+type stall struct{}
+
+func (stall) Error() string {
+	return "read messages stream: context deadline exceeded (Client.Timeout or context cancellation while reading body)"
+}
+func (stall) Timeout() bool   { return true }
+func (stall) Temporary() bool { return true }
+
+// TestTier2RetriesProviderFaults (D-3.4y): a provider fault (a 429, a stalled
+// stream, a 524, a reply looping on one token) is retried, at most twice a run,
+// and each retry is recorded with its cost; a run whose faults pass the cap
+// errors as before. Only that run counts against the case's one allowed error.
+func TestTier2RetriesProviderFaults(t *testing.T) {
+	waits := noPause(t)
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	ok := models.Response{Text: string(item)}
+	judged := models.Response{Text: `{"score": 5, "reason": "covers the request"}`}
+	looping := models.Response{Text: `{"title": "` + strings.Repeat("<br> ", 3000), StopReason: "max_tokens", Truncated: true, TokensOut: 32000, CostUSD: 0.3}
+	// Run 1: call 1 is a 429. Run 2: call 4 stalls. Run 3: call 7 is a 524 and call 8 loops on <br>. Run 4: calls
+	// 11, 12, and 13 are overloaded, one past the cap, and so is call 14, the lane's fallback. Run 5 has no fault.
+	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
+	client := &resetting{Fake: &models.Fake{Replies: []models.Response{ok, judged, ok, judged, looping, ok, judged, ok, judged}}, fail: map[int]error{
+		1:  &models.StatusError{Code: 429, Body: "rate limited", RetryAfter: 40 * time.Second},
+		4:  stall{},
+		7:  &models.StatusError{Code: 524, Body: "error code: 524", RetryAfter: 5 * time.Minute},
+		11: overloaded, 12: overloaded, 13: overloaded, 14: overloaded,
+	}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	for i, want := range []string{"429", "Client.Timeout", `524; degenerate reply: 32000 tokens repeating "<br>"`} {
+		if r := runs[i]; r.Status != RunPass || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), want) || faults(r.Calls[1]) != "" {
+			t.Errorf("run %d, %s then a reply: %+v", i+1, want, r)
+		}
+	}
+	if rs := runs[2].Calls[0].Retries; len(rs) != 2 || rs[1].CostUSD != 0.3 || rs[1].TokensOut != 32000 {
+		t.Errorf("run 3's retries do not record what the looping reply cost: %+v", rs)
+	}
+	if r := runs[3]; r.Status != RunError || !strings.Contains(r.Error, "overloaded_error") || len(r.Calls[0].Retries) != ProviderRetries {
+		t.Errorf("run 4, three faults and a failed fallback: %+v", r)
+	}
+	if r := runs[4]; r.Status != RunPass || len(r.Calls) != 2 || faults(r.Calls[0])+faults(r.Calls[1]) != "" {
+		t.Errorf("run 5, no fault: %+v", r)
+	}
+	if c := res.Cases[0]; c.Errors != 1 || c.Mean != 5 {
+		t.Errorf("errors %d, mean %v: only run 4 is an error", c.Errors, c.Mean)
+	}
+	// A server error backs off like a 429, so the retries of an outage do not all fail at once: the 429 waits the
+	// 40 s its Retry-After asks (longer than its own 10-15 s), the 524 the 2-minute cap (its Retry-After asks 5),
+	// each overloaded stream 30-45 s and then 60-90 s; a stall and a looping reply do not wait.
+	bounds := [][2]time.Duration{{40, 40}, {120, 120}, {30, 45}, {60, 90}}
+	if len(*waits) != len(bounds) {
+		t.Fatalf("pauses %v, want %d", *waits, len(bounds))
+	}
+	for i, b := range bounds {
+		if w := (*waits)[i]; w < b[0]*time.Second || w > b[1]*time.Second {
+			t.Errorf("pause %d is %v, want %d-%d s", i+1, w, b[0], b[1])
+		}
+	}
+}
+
+// TestTier2RetriesTheModelBeforeItsFallback: a gateway outage answers 502
+// with no tokens (Cloudflare's "error code: 502" while the gateway swaps its
+// binary). The skill's own model is retried, with a pause before each retry,
+// and only then is the lane's fallback called. A stream that keeps failing on
+// the provider's side (overloaded) takes the fallback too. The skill call
+// streams, so a long reply cannot idle into a 524.
+func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
+	var events []string
+	old := pause
+	pause = func(context.Context, time.Duration) error { events = append(events, "pause"); return nil }
+	t.Cleanup(func() { pause = old })
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Run 1: calls 1-3 are 502s, call 4 the fallback, 5 the judge. Run 2: calls 6-8 are overloaded streams.
+	outage := &models.StatusError{Code: 502, Body: "error code: 502"}
+	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: outage, 2: outage, 3: outage, 6: overloaded, 7: overloaded, 8: overloaded}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client {
+		return completeFunc(func(ctx context.Context, req models.Request) (models.Response, error) {
+			events = append(events, req.Model)
+			return client.Complete(ctx, req)
+		})
+	}
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunPass || len(r.Calls) != 3 || len(r.Calls[0].Retries) != ProviderRetries || r.Calls[1].Model == r.Calls[0].Model {
+		t.Fatalf("run 1: %+v", r)
+	}
+	own, fb := r.Calls[0].Model, r.Calls[1].Model
+	if r := res.Cases[0].Runs[1]; r.Status != RunPass || len(r.Calls) != 3 || r.Calls[1].Model != fb {
+		t.Errorf("run 2, overloaded streams then the fallback: %+v", r)
+	}
+	if want := []string{own, "pause", own, "pause", own, fb}; !slices.Equal(events[:6], want) {
+		t.Errorf("calls and pauses %v, want %v first", events[:6], want)
+	}
+	for _, req := range client.Requests {
+		if req.Model != "gpt-6.1-sol" && !req.Stream {
+			t.Errorf("a skill call to %s does not stream", req.Model)
+		}
+	}
+}
+
+// A run cancelled while a retry backs off still logs the call and the attempt
+// it already paid for, so the results' calls add up to their cost.
+func TestTier2LogsACallCancelledInItsBackoff(t *testing.T) {
+	old := pause
+	cancelled := false
+	pause = func(context.Context, time.Duration) error {
+		if cancelled {
+			return nil
+		}
+		cancelled = true
+		return context.Canceled
+	}
+	t.Cleanup(func() { pause = old })
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: &models.StatusError{Code: 503, Body: "unavailable"}}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || len(r.Calls) != 1 || len(r.Calls[0].Retries) != 1 || !strings.Contains(r.Calls[0].Retries[0].Fault, "503") ||
+		!strings.Contains(r.Calls[0].Error, "context canceled") {
+		t.Fatalf("run 1, cancelled in its backoff: %+v", r)
+	}
+}
+
+// A failed stream whose cost trips the budget breaker comes back as the
+// stream's error joined to ErrBudget; it is not retried into the breaker.
+func TestTier2DoesNotRetryATrippedBreaker(t *testing.T) {
+	waits := noPause(t)
+	c := copyCase(t, "stub/csv-export")
+	tripped := errors.Join(&models.StreamError{Type: "overloaded_error", Message: "Overloaded"}, models.ErrBudget)
+	client := &resetting{Fake: &models.Fake{}, fail: map[int]error{1: tripped, 2: tripped}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Config.K = 1
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || !strings.Contains(r.Error, "budget") || len(r.Calls) == 0 || len(r.Calls[0].Retries) != 0 || len(*waits) != 0 {
+		t.Fatalf("a tripped breaker was retried: %+v, pauses %v", r, *waits)
+	}
+}
+
+type completeFunc func(context.Context, models.Request) (models.Response, error)
+
+func (f completeFunc) Complete(ctx context.Context, req models.Request) (models.Response, error) {
+	return f(ctx, req)
+}
+
+// TestTier2RetriesDroppedConnection: a reset is retried and recorded on the
+// call, so the run is scored, not lost (WP5.8); a third reset in one run
+// (past ProviderRetries) fails it, so a broken endpoint still cannot pass silently.
+func TestTier2RetriesDroppedConnection(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Call 1 (run 1's skill) drops once; calls 5, 6, and 7 (run 2's judge, then its two retries) all drop.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6, 7}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), "connection reset") || faults(r.Calls[1]) != "" {
 		t.Errorf("run 1, one reset: %+v", r)
 	}
 	if r := runs[1]; r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
-		t.Errorf("run 2, two resets in a row: %+v", r)
+		t.Errorf("run 2, three resets in a row: %+v", r)
 	}
 	if res.Cases[0].Errors != 1 {
 		t.Errorf("%d errors, want 1 (run 2)", res.Cases[0].Errors)
@@ -638,6 +931,9 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !first.Stream || !revise.Stream {
+		t.Error("the brief skill call does not stream; a long draft would time out at the gateway (524)")
+	}
 	if !strings.Contains(first.System, "## references/ste-words.md") || !strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
 		t.Error("the skill prompt lacks the word list or the wrapped grounding")
 	}
@@ -690,17 +986,96 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 		!strings.Contains(runs[4].Floor, `carries the enterprise artefact "Retrospective memo"`) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
+	// A run records what was judged or refused, and what its first draft was asked to fix.
+	if !strings.Contains(runs[0].RevisedFor, "uncited claim") || runs[1].RevisedFor != "" || strings.Contains(runs[0].Answer, "already stores the kind") ||
+		!strings.HasPrefix(runs[0].Answer, "# Retro note") || !strings.HasPrefix(runs[4].Answer, "# Retrospective memo") {
+		t.Errorf("recorded: %q / %q / %.40q / %.40q", runs[0].RevisedFor, runs[1].RevisedFor, runs[0].Answer, runs[4].Answer)
+	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
-	if !strings.Contains(first.System, "## Voice: Athena, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
+	if !strings.Contains(first.System, "## Voice: Drona, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
 		!strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
 		t.Error("the skill prompt lacks the persona block, the stage, or the wrapped grounding")
 	}
 	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, "uncited claim") {
 		t.Errorf("revision request: %+v", revise.Messages)
 	}
+	if !first.Stream || !revise.Stream {
+		t.Error("the persona skill call does not stream; a long note would time out at the gateway (524)")
+	}
 	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
-		!strings.Contains(judged.Messages[0].Content, "Speak and work as Athena") {
+		!strings.Contains(judged.Messages[0].Content, "Speak and work as Drona") {
 		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
+	}
+}
+
+// Story #478: a counsel that says LGTM is sent back once with the finding, and the judge is told the counsel checks
+// passed.
+func TestTier2CounselRevisesOnClaimedApproval(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "counsel/question-startup" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "counsel", "question-startup", "output", "counsel.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	lgtm := strings.Replace(string(good), "## Recommendation\n\n", "## Recommendation\n\nLGTM. ", 1)
+	judge := models.Response{Text: `{"score": 5, "reason": "grounded"}`}
+	replies := []models.Response{{Text: lgtm}, {Text: string(good)}, judge}
+	for range 4 {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	fake := &models.Fake{Replies: replies}
+	res, err := harness(t, fake, "gpt-6.1-sol").Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := res.Cases[0].Runs[0]; !r.Revised || r.Status != RunPass || !strings.Contains(r.RevisedFor, "claims a review, an approval, or a ruling") {
+		t.Fatalf("run 1: %+v", r)
+	}
+	if j := fake.Requests[2].Messages[0].Content; !strings.Contains(j, "claims no review, approval, or LGTM") || !strings.Contains(j, "Speak and work as Atri") {
+		t.Errorf("judge request: %.400s", j)
+	}
+}
+
+// A persona run whose revision call fails (three resets, past the run's
+// retries) errors but keeps the first draft and what the checks found in it,
+// so the results still show what was produced and what it cost.
+func TestTier2PersonaErroredRevisionKeepsTheDraft(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(all, func(c Case) bool { return c.ID == "retro/em-startup" })
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "retro", "em-startup", "output", "retro.md"))
+	if err != nil || i < 0 {
+		t.Fatalf("case: %v", err)
+	}
+	c := all[i]
+	uncited := string(good) + "\nThe ledger package already stores the kind elsewhere, so the migration was small.\n"
+	client := &resetting{Fake: &models.Fake{Replies: []models.Response{{Text: uncited, CostUSD: 0.2}}}, drops: []int{2, 3, 4}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Config.K = 1
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
+		t.Fatalf("not an errored run: %+v", r)
+	}
+	if !r.Revised || !strings.Contains(r.RevisedFor, "uncited claim") || !strings.Contains(r.Answer, "already stores the kind") {
+		t.Errorf("the errored run lost its first draft: revised for %q, answer %.60q", r.RevisedFor, r.Answer)
+	}
+	if len(r.Calls) != 2 || r.Calls[0].CostUSD != 0.2 || len(r.Calls[1].Retries) != ProviderRetries {
+		t.Errorf("calls %+v: want the draft (0.2 USD) and the revision with its retries", r.Calls)
 	}
 }
 
@@ -739,13 +1114,13 @@ func TestTier2PackRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
-	if !strings.Contains(first.System, "Speak and work as Daedalus, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
+	if !strings.Contains(first.System, "Speak and work as Vishwa, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
 		t.Errorf("skill prompt: %.300s", first.System)
 	}
 	if !strings.Contains(revise.Messages[2].Content, `missing part "## Pre-mortem"`) {
 		t.Errorf("revision request: %s", revise.Messages[2].Content)
 	}
-	if !strings.Contains(judged.Messages[0].Content, "Daedalus, the Code Architect twin, at the scaleup stage") {
+	if !strings.Contains(judged.Messages[0].Content, "Vishwa, the Code Architect twin, at the scaleup stage") {
 		t.Errorf("judge request: %.300s", judged.Messages[0].Content)
 	}
 }
@@ -816,6 +1191,9 @@ func TestTier2PlanningDrafts(t *testing.T) {
 		if !strings.Contains(fake.Requests[0].System, "Reply with the draft you produce as JSON: {"+map[string]string{"slice": "feature", "plan": "story"}[c.Tier2.Draft]) {
 			t.Errorf("%s: the skill was not asked for its draft", tc.id)
 		}
+		if !fake.Requests[0].Stream {
+			t.Errorf("%s: the skill call does not stream; a long draft would time out at the gateway (524)", tc.id)
+		}
 	}
 }
 
@@ -852,9 +1230,10 @@ func TestTier1UnmappedCriterionClaim(t *testing.T) {
 	}
 }
 
-// Tier-2 groups (D-7.3d): the brief cases form their own group with a 12 USD
-// cap and every other case falls to the catch-all group with 6, so one
-// group cannot use up another's cap; an unknown group is refused.
+// Tier-2 groups (D-7.3d): the brief cases form their own group with its own
+// cap and every other case falls to the catch-all group, so one group cannot
+// use up another's cap; an unknown group is refused. Each cap is about twice
+// the group's latest full run at list price (D-3.4q).
 func TestGroups(t *testing.T) {
 	cfg, err := LoadConfig(root)
 	if err != nil {
@@ -865,29 +1244,34 @@ func TestGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, brief, err := cfg.ForGroup("brief", all)
-	if err != nil || b.MaxUSD != 6 {
+	if err != nil || b.MaxUSD != 3 {
 		t.Fatalf("brief group: %v, cap %v", err, b.MaxUSD)
 	}
 	p, plain, err := cfg.ForGroup("brief-plain", all)
-	if err != nil || p.MaxUSD != 6 {
+	if err != nil || p.MaxUSD != 4 {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
 	pg, personas, err := cfg.ForGroup("personas", all)
-	if err != nil || pg.MaxUSD != 20 || len(personas) != 4 {
-		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
+	if err != nil || pg.MaxUSD != 8 || len(personas) != 4 || cfg.Gates("personas") {
+		t.Fatalf("personas group: %v, cap %v, %d cases, gates %v", err, pg.MaxUSD, len(personas), cfg.Gates("personas"))
+	}
+	// D-5.1y: the retro cases gate in their own group, run on dispatch and on pushes (evals.yml skips pushes to dev),
+	// never nightly.
+	rg, retros, err := cfg.ForGroup("retro", all)
+	if g, _ := cfg.Group("retro"); err != nil || rg.MaxUSD != 4 || len(retros) != 3 || !cfg.Gates("retro") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+		t.Fatalf("retro group: %v, cap %v, %d cases, gates %v, events %v", err, rg.MaxUSD, len(retros), cfg.Gates("retro"), g.Events)
 	}
 	rv, review, err := cfg.ForGroup("review", all)
-	if err != nil || rv.MaxUSD != 20 || rv.K != 2 {
+	if err != nil || rv.MaxUSD != 5 || rv.K != 2 {
 		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
 	}
-	// D-5.3b.g: the grill conversations have their own capped, advisory group; skills is back to 6 USD without them.
-	// D-5.8c: six conversation cases, 40 USD.
+	// D-5.3b.g: the grill conversations have their own capped, advisory group.
 	cg, convs, err := cfg.ForGroup("conversations", all)
 	var convIDs []string
 	for _, c := range convs {
 		convIDs = append(convIDs, c.ID)
 	}
-	if err != nil || cg.MaxUSD != 60 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
+	if err != nil || cg.MaxUSD != 37 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
 	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
@@ -896,9 +1280,73 @@ func TestGroups(t *testing.T) {
 			t.Errorf("%s group events: %v", name, g.Events)
 		}
 	}
+	// D-7.5e: the tell cases are their own gating group, run on dispatch and on pushes (evals.yml skips pushes to dev),
+	// never nightly.
+	tg, tells, err := cfg.ForGroup("tell", all)
+	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 3 || len(tells) != 3 || !cfg.Gates("tell") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
+	}
+	// D-3.4f: the host-skill session cases have their own group; ready/story-ready, a tier-1 case with no tier 2, stays
+	// where it was. D-3.4x: it gates, like tell, on dispatch and on pushes (evals.yml skips pushes to dev), never nightly.
+	hg, hosts, err := cfg.ForGroup("host-skills", all)
+	var hostIDs []string
+	for _, c := range hosts {
+		hostIDs = append(hostIDs, c.ID)
+	}
+	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 13 || !cfg.Gates("host-skills") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") ||
+		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
+		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
+	}
+	// The UX skills: two cases per skill, advisory, on dispatch only.
+	ug, ux, err := cfg.ForGroup("ux", all)
+	perSkill := map[string]int{}
+	for _, c := range ux {
+		perSkill[c.Skill]++
+		if c.UX == nil {
+			t.Errorf("%s in the ux group is not a UX case", c.ID)
+		}
+	}
+	uxg, _ := cfg.Group("ux")
+	if err != nil || ug.MaxUSD != 45 || ug.MaxTokens.Skill != 64000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
+		t.Fatalf("ux group: %v, cap %v, gates %v, cases per skill %v, events %v", err, ug.MaxUSD, cfg.Gates("ux"), perSkill, uxg.Events)
+	}
+	for skill, n := range perSkill {
+		if n < 2 {
+			t.Errorf("ux group: %s has %d case(s), want at least 2", skill, n)
+		}
+	}
+	// Decision #283: the Data & AI Architect's chart and measure cases, advisory, on dispatch only.
+	dg, dataAI, err := cfg.ForGroup("data-ai", all)
+	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 8 || dg.MaxTokens.Skill != 32000 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
+	}
+	// Decision #324: the Production Engineer's cases, two per skill, advisory, on dispatch only.
+	pg, prod, err := cfg.ForGroup("production", all)
+	perProd := map[string]int{}
+	for _, c := range prod {
+		perProd[c.Skill]++
+	}
+	if g, _ := cfg.Group("production"); err != nil || pg.MaxUSD != 15 || len(perProd) != 4 || cfg.Gates("production") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("production group: %v, cap %v, cases per skill %v, gates %v", err, pg.MaxUSD, perProd, cfg.Gates("production"))
+	}
+	for skill, n := range perProd {
+		if n < 2 {
+			t.Errorf("production group: %s has %d case(s), want at least 2", skill, n)
+		}
+	}
+	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped at one case of five sectioned runs (stage 2, D-3.4q, D-5.9l).
+	sg, surveys, err := cfg.ForGroup("survey", all)
+	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 40 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
+	}
+	// Story #478: Atri's counsel cases, advisory until two consecutive full runs meet the bar, on dispatch only.
+	cg, counsels, err := cfg.ForGroup("counsel", all)
+	if g, _ := cfg.Group("counsel"); err != nil || cg.MaxUSD != 3 || len(counsels) != 2 || cfg.Gates("counsel") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("counsel group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(counsels), cfg.Gates("counsel"))
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(other), len(all))
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(counsels)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(counsels), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {
@@ -1075,11 +1523,12 @@ func TestLoadConfigRefuses(t *testing.T) {
 func TestLoadCaseRefuses(t *testing.T) {
 	const base = "skill = \"stub\"\ninput = \"input.txt\"\n"
 	for name, tc := range map[string]struct{ toml, want string }{
-		"unknown key":   {base + "inputs = \"x\"\n", "case.toml: "},
-		"bad pattern":   {base + "scope = [{ pattern = '(', why = \"x\" }]\n", "scope rule 1: "},
-		"no why":        {base + "scope = [{ pattern = 'csv' }]\n", "scope rule 1: why is required"},
-		"no input":      {"skill = \"stub\"\n", "skill and input are required"},
-		"partial brief": {base + "[brief]\nregister = \"ste\"\n", "[brief] needs register, purpose, and draft"},
+		"unknown key":       {base + "inputs = \"x\"\n", "case.toml: "},
+		"bad pattern":       {base + "scope = [{ pattern = '(', why = \"x\" }]\n", "scope rule 1: "},
+		"no why":            {base + "scope = [{ pattern = 'csv' }]\n", "scope rule 1: why is required"},
+		"no input":          {"skill = \"stub\"\n", "skill and input are required"},
+		"partial brief":     {base + "[brief]\nregister = \"ste\"\n", "[brief] needs register, purpose, and draft"},
+		"unknown tell kind": {base + "tell = { kind = \"tweet\", request = \"x\", draft = \"d.md\" }\n", "[tell] needs a kind (docs, guide"},
 	} {
 		dir := filepath.Join(t.TempDir(), "evals", "cases", "stub", "broken")
 		_ = os.MkdirAll(dir, 0o755)
@@ -1235,7 +1684,7 @@ func TestGroupGatePolicy(t *testing.T) {
 	}
 }
 
-// WP3.4's pass^k bar applies to the suite (D-3.4e): run 38235020071's skills
+// WP3.4's pass^k bar applies to the suite (D-3.4f): run 38235020071's skills
 // group, one case at pass^5 0 among five, passes at suite pass^5 0.80 with the
 // case reported; two such cases fail the suite, and a case mean under 3.5 or a
 // case falling below its baseline pass^k still fails on its own.
@@ -1461,6 +1910,11 @@ func TestTier2GrillConversation(t *testing.T) {
 	if run.Score != 5 || len(fake.Requests) != 5 || run.Transcript == nil || len(run.Transcript.Exchanges) != 4 || !strings.Contains(run.Transcript.Criteria, "at most 3 screens") {
 		t.Fatalf("run: %+v, %d model calls", run, len(fake.Requests))
 	}
+	for i, r := range fake.Requests[:4] {
+		if !r.Stream {
+			t.Errorf("round %d's skill call does not stream; a long turn would time out at the gateway (524)", i+1)
+		}
+	}
 	first := fake.Requests[0].Messages[0].Content
 	if !strings.Contains(first, `<untrusted source="eval-input">`) || !strings.Contains(first, `<untrusted source="repo">`) || !strings.Contains(first, `"id": "gap:error:/order"`) {
 		t.Fatalf("the skill did not get the request and the assessment as untrusted data:\n%s", first)
@@ -1592,5 +2046,125 @@ func TestGrillScopeAllowsNegation(t *testing.T) {
 				t.Errorf("%s %q: %v", id, crit, bad)
 			}
 		}
+	}
+}
+
+// D-7.5b tell cases, tier 1: planted drafts on the recorded cases fail the
+// floors the copy's hard rules map to: a change from an unproven Feature
+// described, a superlative or a word the case's brand avoids, and the launch
+// request's planted time saving and hint at Team workspaces.
+func TestTier1TellRules(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Case{}
+	for _, c := range all {
+		byID[c.ID] = c
+	}
+	for _, tc := range []struct{ id, draft, want string }{
+		{"tell/release-notes", "# v1.5.0\n\nSaved filters (#15). Bulk reassignment moves the claims you select.\n", `names #9 "Bulk reassignment"`},
+		{"tell/guide-export", "# Export\n\nExport filtered claims (#7) is just one step.\n", `"just" is on the brand's avoid list`},
+		{"tell/guide-export", "# Export\n\nThe fastest export (#7).\n", `"fastest" is a superlative`},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15) save your team hours every week.\n", "scope: adds a time saving no measure counts"},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15). More for teams is coming soon.\n", "scope: adds a hint at a Feature without authoritative packs"},
+		{"tell/launch-saved-filters", "# Spring\n\nReview claims together.\n", "launch copy links no proven Feature"},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15) cuts review time.\n", "scope: adds a time saving no measure counts"},
+		// D-7.5d: the Feature's own name and a time word near "save" are not a saving.
+		{"tell/launch-saved-filters", "# Saved filters\n\nNext time, open it from Saved filters (#15). Save it once and reopen it any time.\n", ""},
+	} {
+		c, ok := byID[tc.id]
+		if !ok {
+			t.Fatalf("no case %s", tc.id)
+		}
+		g, b, u, err := tellSetup(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := checkTell(c, g, b, u, tc.draft); (tc.want == "") != (len(got) == 0) || !strings.Contains(strings.Join(got, "\n"), tc.want) {
+			t.Errorf("%s: %q, want %q", tc.id, got, tc.want)
+		}
+	}
+}
+
+// D-7.5b: a tell case carries its own brand, so a missing design/brand.yaml
+// fails tier 1 instead of falling back to the default voice; so do a missing
+// grounding or recorded draft.
+func TestTier1TellCaseFiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "evals", "cases", "tell", "c")
+	_ = os.MkdirAll(filepath.Join(dir, "design"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "case.toml"), []byte("skill = \"tell\"\ninput = \"g.json\"\ntell = { kind = \"docs\", request = \"x\", draft = \"d.md\" }\n"), 0o644)
+	c, err := LoadCase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "grounding g.json") {
+		t.Errorf("no grounding: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "g.json"), []byte(`{"repo": "o/r"}`), 0o644)
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "a tell case needs its own design/brand.yaml") {
+		t.Errorf("no brand: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "design", "brand.yaml"), []byte("version: 1\nvoice:\n  tone: [plain]\n"), 0o644)
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "d.md") {
+		t.Errorf("no draft: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "d.md"), []byte("# Docs\n"), 0o644)
+	if _, _, u, _ := tellSetup(c); len(tier1Tell(c)) != 0 || u.Campaign != "docs" || u.Medium != "docs" || u.Source != "r" {
+		t.Errorf("complete case: %q, utm %+v", tier1Tell(c), u)
+	}
+}
+
+// D-7.5b: a tell case sends the brief, the brand, and the grounding as
+// untrusted data; copy that `aayu tell --from` refuses is revised once with
+// the findings and judged only when it passes; copy refused twice scores 1
+// without the judge.
+func TestTier2TellRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "tell/release-notes" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "tell", "release-notes", "output", "draft.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	bad := "# v1.5.0\n\nThe most powerful release yet: Saved filters (#15) and Bulk reassignment (#9).\n"
+	judge := models.Response{Text: `{"score": 5, "reason": "traces to the packs"}`}
+	replies := []models.Response{{Text: bad}, {Text: "```markdown\n" + string(good) + "```"}, judge}
+	for i := 0; i < 3; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	replies = append(replies, models.Response{Text: bad}, models.Response{Text: bad}, judge)
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, "is not a Feature with authoritative packs") ||
+		!strings.Contains(runs[0].RevisedFor, "superlative") || !strings.HasPrefix(runs[0].Answer, "# Benefits QA v1.5.0") || !strings.Contains(runs[4].Answer, "most powerful") {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !first.Stream || !revise.Stream {
+		t.Error("the tell skill call does not stream; a long draft would time out at the gateway (524)")
+	}
+	for _, want := range []string{`<untrusted source="aayu tell release">`, "#15 Saved filters", `<untrusted source="design/brand.yaml">`, "- marketing adjectives in release notes", `<untrusted source="grounding">`, "The human asks: Write the release notes for v1.5.0"} {
+		if !strings.Contains(first.Messages[0].Content, want) {
+			t.Errorf("the skill prompt lacks %q", want)
+		}
+	}
+	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, `"most powerful" is a superlative`) || !strings.Contains(revise.Messages[2].Content, `names #9 "Bulk reassignment"`) {
+		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.System, "Rubric: tell, release notes") || !strings.Contains(judged.Messages[0].Content, "no superlative") {
+		t.Errorf("judge request: %s %.200s", judged.Model, judged.Messages[0].Content)
 	}
 }

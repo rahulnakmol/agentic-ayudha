@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery window</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ay-color-background); color: var(--ay-color-text-default); font-family: var(--ay-font-family-sans); font-size: var(--ay-font-size-large); line-height: 1.5; }
+  main { max-width: 560px; margin: var(--ay-space-page) auto; padding: 0 var(--ay-space-gap); }
+  h1 { font-size: var(--ay-font-size-header-2); font-weight: var(--ay-font-weight-semibold); margin: 0 0 var(--ay-space-gap); }
+  .card { background: var(--ay-color-surface); border: 1px solid var(--ay-color-border); border-radius: var(--ay-radius-container); padding: var(--ay-space-section); }
+  .lead { color: var(--ay-color-text-label); margin: 0 0 var(--ay-space-section); }
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--ay-size-control-height); padding: 0 var(--ay-space-control-inline); border-radius: var(--ay-radius-control); font: inherit; font-weight: var(--ay-font-weight-semibold); text-decoration: none; cursor: pointer; }
+  .primary { border: 0; background: var(--ay-color-brand-default); color: var(--ay-color-brand-contrast); }
+  .secondary { border: 1px solid var(--ay-color-field-border); background: var(--ay-color-surface); color: var(--ay-color-text-default); }
+  fieldset { border: 0; margin: 0 0 var(--ay-space-section); padding: 0; }
+  legend { font-weight: var(--ay-font-weight-semibold); margin-bottom: var(--ay-space-gap); }
+  .window { display: flex; align-items: center; gap: var(--ay-space-gap); min-height: var(--ay-size-row-height); border-top: 1px solid var(--ay-color-border); }
+  .window input { appearance: none; flex: none; margin: 0; width: var(--ay-size-control-height); height: var(--ay-size-control-height); border-radius: 50%; border: 2px solid var(--ay-color-field-border); background: var(--ay-color-field-background); }
+  .window input:checked { border-color: var(--ay-color-brand-default); background: var(--ay-color-brand-default); box-shadow: inset 0 0 0 12px var(--ay-color-field-background); }
+  .window input:disabled { border-color: var(--ay-color-border); background: var(--ay-color-neutral-background); }
+  .window .time { flex: 1; font-weight: var(--ay-font-weight-semibold); }
+  .window .availability { font-size: var(--ay-font-size-body); color: var(--ay-color-text-label); }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--ay-color-focus); outline-offset: 2px; }
+  @media (max-width: 480px) { .button { width: 100%; } }
+  .days { display: flex; gap: var(--ay-space-gap); overflow-x: auto; margin-bottom: var(--ay-space-section); }
+  .days button { min-height: var(--ay-size-control-height); padding: 0 var(--ay-space-control-inline); border: 1px solid var(--ay-color-border); border-radius: var(--ay-radius-control); background: var(--ay-color-surface); color: var(--ay-color-text-default); font: inherit; white-space: nowrap; }
+  .days button[aria-selected="true"] { border-color: var(--ay-color-brand-default); background: var(--ay-color-list-selected); font-weight: var(--ay-font-weight-semibold); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Delivery window</h1>
+  <p class="lead">Choose when we deliver your next order.</p>
+  <form class="card">
+    <div role="tablist" aria-label="Delivery day" class="days">
+      <button role="tab" aria-selected="true" type="button">Tomorrow, Tue 21 Oct</button>
+      <button role="tab" aria-selected="false" type="button" tabindex="-1">Wed 22 Oct</button>
+      <button role="tab" aria-selected="false" type="button" tabindex="-1">Thu 23 Oct</button>
+    </div>
+    <fieldset>
+      <legend>Windows on Tue 21 Oct</legend>
+      <label class="window"><input type="radio" name="window" value="tue-08"><span class="time">08:00–10:00</span><span class="availability">Available</span></label>
+      <label class="window"><input type="radio" name="window" value="tue-18" checked><span class="time">18:00–20:00</span><span class="availability">Available</span></label>
+      <label class="window"><input type="radio" name="window" value="tue-20" disabled><span class="time">20:00–22:00</span><span class="availability">Full, cannot be chosen</span></label>
+    </fieldset>
+    <button class="button primary" type="submit">Save delivery window</button>
+  </form>
+</main>
+</body>
+</html>

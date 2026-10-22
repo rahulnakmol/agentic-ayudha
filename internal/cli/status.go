@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -24,6 +26,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/status"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("status", runStatus) }
@@ -114,12 +117,21 @@ func (e *Env) costs(repo string) map[int]float64 {
 }
 
 type statusReport struct {
-	Repo   string           `json:"repo"`
-	Roots  []*status.Rollup `json:"roots"`
-	Closed []int            `json:"closed,omitempty"`
-	Digest string           `json:"digest,omitempty"`
-	Sent   string           `json:"digest_status,omitempty"`
-	GitHub github.Stats     `json:"github"`
+	Repo  string           `json:"repo"`
+	Roots []*status.Rollup `json:"roots"`
+	// Provisional lists the open Decisions whose recommendation applied
+	// provisionally (V8, Story #432), so a person can ratify or reverse them.
+	Provisional []provisionalRow `json:"provisional_decisions"`
+	Closed      []int            `json:"closed,omitempty"`
+	Digest      string           `json:"digest,omitempty"`
+	Sent        string           `json:"digest_status,omitempty"`
+	GitHub      github.Stats     `json:"github"`
+}
+
+type provisionalRow struct {
+	Number   int    `json:"number"`
+	Title    string `json:"title"`
+	RatifyBy string `json:"ratify_by,omitempty"`
 }
 
 type fleetRow struct {
@@ -253,6 +265,21 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 		rep.Roots = append(rep.Roots, r)
 	}
 	pr.Done(ui.StatusPass, "")
+	owner, name, _ := github.SplitRepo(repo)
+	prov, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
+		return c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{workitems.LabelProvisional}, ListOptions: o})
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	rep.Provisional = []provisionalRow{}
+	for _, is := range prov {
+		row := provisionalRow{Number: is.GetNumber(), Title: is.GetTitle()}
+		if t, ok := decide.RatifyBy(is.GetBody()); ok {
+			row.RatifyBy = t.UTC().Format(time.RFC3339)
+		}
+		rep.Provisional = append(rep.Provisional, row)
+	}
 	if in.Bool("apply") {
 		if rep.Closed, err = applyStatus(ctx, e, repo, rep.Roots); err != nil {
 			return err
@@ -274,6 +301,7 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintf(w, "%s: no open Goals (label type:goal); pass a Goal, Initiative, or Feature\n", repo)
 		} else if look := e.Look(); look.Human() {
 			fmt.Fprint(w, look.Table(statusRows(rep.Roots)))
+			fmt.Fprintln(w, look.Style(ui.Muted, status.SpendNote))
 			fmt.Fprintln(w, look.Style(ui.Muted, "Health, risk, decisions, and streak per item: aayu status --json"))
 		} else {
 			fmt.Fprint(w, status.Table(rep.Roots))
@@ -283,6 +311,9 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 		}
 		for _, n := range rep.Closed {
 			fmt.Fprintf(w, "closed #%d (parent-close rule)\n", n)
+		}
+		for _, d := range rep.Provisional {
+			fmt.Fprintf(w, "provisional Decision #%d %s: ratify or revert by %s with `aayu inbox` or `aayu decide %d --accept <option>`\n", d.Number, d.Title, or(d.RatifyBy, "(no deadline recorded)"), d.Number)
 		}
 		if rep.Sent != "" {
 			fmt.Fprintf(w, "digest: %s\n", rep.Sent)
@@ -401,7 +432,7 @@ func statusRows(roots []*status.Rollup) ([]string, [][]string) {
 	row = func(r *status.Rollup, depth int) {
 		rows = append(rows, []string{fmt.Sprintf("%s#%d %s %s", strings.Repeat("  ", depth), r.Number, r.Type, r.Title),
 			fmt.Sprintf("%d/%d", r.Done(), r.Items), fmt.Sprint(r.ByStatus["ready"]), fmt.Sprint(r.ByStatus["in-progress"]),
-			fmt.Sprint(len(r.Blocked)), r.ProofCoverage, fmt.Sprintf("$%.2f", r.CostUSD)})
+			fmt.Sprint(len(r.Blocked)), r.ProofCoverage, fmt.Sprintf("%.2f USD", r.CostUSD)})
 		for _, c := range r.Children {
 			row(c, depth+1)
 		}
@@ -409,5 +440,5 @@ func statusRows(roots []*status.Rollup) ([]string, [][]string) {
 	for _, r := range roots {
 		row(r, 0)
 	}
-	return []string{"Item", "Done", "Ready", "In progress", "Blocked", "Proof", "Cost"}, rows
+	return []string{"Item", "Done", "Ready", "In progress", "Blocked", "Proof", "Metered spend"}, rows
 }

@@ -1,0 +1,48 @@
+# survey (D-5.9i, D-5.9j): Maruku, the obsolete Ruby Markdown library (github.com/bhollis/maruku at 4d88d0e, MIT;
+# repos/maruku holds lib/, bin/, data/entities.xml, spec/*.rb, 20 of the 162 spec/block_docs, the readme, licence,
+# gemspec, Gemfile, and Rakefile). The person's sites render pages with it and want to move to a maintained library
+# without breaking existing pages. The host has run `aayu survey`, every `--module`, and the 20 block docs under
+# `--golden --probe` with a frozen-string-literal build as --check-bin (probes/), and read the files below; no person
+# is in the session, so every question stays open, every interface's level stays undecided (the request says pages
+# must keep working, not how exactly), and every do-not-carry entry stays proposed. Floors: `aayu survey --draft`
+# (citations resolve, probe: facts included; bases; trap rules; do-not-carry and contract shape; a level only the
+# request or an answer decides), no answered question, and the scope rules. output/survey.json is the pilot's draft
+# (private research note survey-pilots-2026-10.md), amended for the new floors: every library file's entry points cited
+# from a capability, Q3 and Q4 merged into one question (at most five open), and G1's runner.
+skill = "survey"
+description = "Survey a legacy Ruby library: traps with runtime evidence, a do-not-carry list, and a compatibility contract and suite for a move to a maintained library."
+input = "request.txt"
+repo = "../repos/maruku"
+artifacts = ["output/survey.json"]
+
+[survey]
+kind = "draft"
+draft = "output/survey.json"
+probes = ["probes/frozen-literals.json"]
+read = [
+  "README.md", "maruku.gemspec", "Gemfile", "bin/maruku", "lib/maruku.rb", "lib/maruku/defaults.rb",
+  "lib/maruku/maruku.rb", "lib/maruku/html.rb:1-60", "lib/maruku/output/to_html.rb:40-110",
+  "lib/maruku/output/to_html.rb:215-270", "lib/maruku/input/parse_doc.rb", "lib/maruku/input/linesource.rb",
+  "lib/maruku/ext/div.rb:1-30", "lib/maruku/element.rb:120-138", "spec/block_spec.rb", "spec/block_docs/tables.md",
+]
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "traps.md", "compatibility.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\bdrop-in\b'
+why = "a maintained library called a drop-in replacement, which nothing the host ran shows"
+allow = '(?i)(\b(no|not|never|isn.t|is not|unless|whether|until)\b)[^.\n"]{0,60}'
+match = ['The library is a drop-in replacement.']
+negated = ['The library is not a drop-in replacement.']
+near_miss = ['Drop in the new parser behind the same function.']

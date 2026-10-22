@@ -1,0 +1,8 @@
+# Story #23: the Completion Goal criteria and the behaviour checks that prove them.
+[[criterion]]
+id = 1
+checks = ["mark-done.done"]
+
+[[criterion]]
+id = 2
+checks = ["mark-done.missing"]

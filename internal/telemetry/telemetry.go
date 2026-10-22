@@ -48,14 +48,14 @@ type Telemetry struct {
 func Start(o Options) *Telemetry {
 	var exporters []sdktrace.SpanExporter
 	if !o.Disabled && o.Path != "" {
-		exporters = append(exporters, &fileExporter{path: o.Path, version: o.Version})
+		exporters = append(exporters, NewFileExporter(o.Path, aayudhaResource(o.Version)...))
 	}
 	if !o.Disabled && o.OTLPEndpoint != "" {
 		hc := o.HTTP
 		if hc == nil {
 			hc = &http.Client{Timeout: 10 * time.Second}
 		}
-		exporters = append(exporters, &otlpExporter{url: strings.TrimSuffix(o.OTLPEndpoint, "/") + "/v1/traces", http: hc, version: o.Version})
+		exporters = append(exporters, &otlpExporter{url: strings.TrimSuffix(o.OTLPEndpoint, "/") + "/v1/traces", http: hc, resource: aayudhaResource(o.Version)})
 	}
 	if len(exporters) == 0 {
 		return &Telemetry{tracer: noop.NewTracerProvider().Tracer("aayudha")}
@@ -90,14 +90,26 @@ func End(span trace.Span, exitCode int, err error) {
 	span.End()
 }
 
+func aayudhaResource(version string) []attribute.KeyValue {
+	return []attribute.KeyValue{attribute.String("service.name", "aayudha"), attribute.String("service.version", version)}
+}
+
+// NewFileExporter writes spans as OTLP JSON, one ExportTraceServiceRequest per
+// line, the format of the OpenTelemetry Collector's file exporter, with the
+// given resource attributes (service.name, service.version, …). A product can
+// use it to keep a sanitised trace export that `aayu investigate` reads.
+func NewFileExporter(path string, resource ...attribute.KeyValue) sdktrace.SpanExporter {
+	return &fileExporter{path: path, resource: resource}
+}
+
 type fileExporter struct {
-	mu      sync.Mutex
-	path    string
-	version string
+	mu       sync.Mutex
+	path     string
+	resource []attribute.KeyValue
 }
 
 func (f *fileExporter) ExportSpans(_ context.Context, spans []sdktrace.ReadOnlySpan) error {
-	line, err := json.Marshal(request(spans, f.version))
+	line, err := json.Marshal(request(spans, f.resource))
 	if err != nil {
 		return err
 	}
@@ -120,13 +132,13 @@ func (f *fileExporter) ExportSpans(_ context.Context, spans []sdktrace.ReadOnlyS
 func (*fileExporter) Shutdown(context.Context) error { return nil }
 
 type otlpExporter struct {
-	url     string
-	http    *http.Client
-	version string
+	url      string
+	http     *http.Client
+	resource []attribute.KeyValue
 }
 
 func (o *otlpExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
-	body, err := json.Marshal(request(spans, o.version))
+	body, err := json.Marshal(request(spans, o.resource))
 	if err != nil {
 		return err
 	}
@@ -173,7 +185,7 @@ func attrs(as []attribute.KeyValue) []kv {
 	return out
 }
 
-func request(spans []sdktrace.ReadOnlySpan, version string) map[string]any {
+func request(spans []sdktrace.ReadOnlySpan, resource []attribute.KeyValue) map[string]any {
 	out := make([]map[string]any, 0, len(spans))
 	for _, s := range spans {
 		sc := s.SpanContext()
@@ -190,14 +202,29 @@ func request(spans []sdktrace.ReadOnlySpan, version string) map[string]any {
 		if p := s.Parent(); p.IsValid() {
 			m["parentSpanId"] = p.SpanID().String()
 		}
+		if evs := s.Events(); len(evs) > 0 {
+			es := make([]map[string]any, 0, len(evs))
+			for _, ev := range evs {
+				es = append(es, map[string]any{"name": ev.Name, "timeUnixNano": strconv.FormatInt(ev.Time.UnixNano(), 10), "attributes": attrs(ev.Attributes)})
+			}
+			m["events"] = es
+		}
 		out = append(out, m)
 	}
 	return map[string]any{"resourceSpans": []any{map[string]any{
-		"resource": map[string]any{"attributes": attrs([]attribute.KeyValue{
-			attribute.String("service.name", "aayudha"), attribute.String("service.version", version),
-		})},
-		"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": "aayudha"}, "spans": out}},
+		"resource":   map[string]any{"attributes": attrs(resource)},
+		"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": scopeName(resource)}, "spans": out}},
 	}}}
+}
+
+// scopeName is the service name, the instrumentation scope of its own spans.
+func scopeName(resource []attribute.KeyValue) string {
+	for _, a := range resource {
+		if a.Key == "service.name" {
+			return a.Value.AsString()
+		}
+	}
+	return "aayudha"
 }
 
 func statusCode(c codes.Code) int {

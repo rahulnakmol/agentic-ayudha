@@ -95,19 +95,27 @@ func call(t *testing.T, cs *sdk.ClientSession, name string, args map[string]any)
 }
 
 // The never-exposed verbs: human-only or admin (registry Exposure never).
-var neverExposed = []string{"ship", "release", "respond", "init", "install"}
+var neverExposed = []string{"ship", "respond", "init", "install"}
 
 func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
 	names, tools := toolNames(t, cs)
 	// Read and authoring verbs only (the SDK lists tools by name).
-	want := []string{"brief", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
+	want := []string{"brain", "brief", "chart", "counsel", "decide", "doctor", "grill", "investigate", "plan", "proof", "ready", "research", "runbook", "slice", "slo", "status", "survey"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}
 	// decide is exposed as decide --pack (WP5.1b): read-only, and never with the human-only --accept.
 	if p := props(t, tools["decide"]); p["pack"] != nil || p["accept"] != nil || p["seat"] == nil {
 		t.Errorf("decide tool properties %v: want --pack pinned, no --accept", p)
+	}
+	// chart is exposed read-only (Decision #283): it grounds and checks a note, and never posts it.
+	if p := props(t, tools["chart"]); p["create"] != nil || p["kind"] == nil || p["draft"] == nil {
+		t.Errorf("chart tool properties %v: want --create pinned off, --kind and --draft exposed", p)
+	}
+	// investigate is exposed read-only (Decision #324): it queries an export and checks a note, and never posts it.
+	if p := props(t, tools["investigate"]); p["create"] != nil || p["telemetry"] == nil || p["query"] == nil {
+		t.Errorf("investigate tool properties %v: want --create pinned off, --telemetry and --query exposed", p)
 	}
 	// ready is exposed as ready --check: the caller cannot choose to write.
 	if _, ok := props(t, tools["ready"])["check"]; ok {
@@ -165,7 +173,7 @@ func TestMCPWritesAndDryRun(t *testing.T) {
 	repo := gitInit(t, "dev", nil)
 	cs := serveMCP(t, repo, "--set", "mcp.expose_writes=true")
 	names, tools := toolNames(t, cs)
-	for _, w := range []string{"triage", "build", "verify", "inspect", "tell", "evolve"} {
+	for _, w := range []string{"triage", "build", "verify", "inspect", "tell", "evolve", "release"} {
 		if !slices.Contains(names, w) {
 			t.Errorf("write verb %s missing with expose_writes", w)
 		}

@@ -20,7 +20,7 @@ layers, lowest precedence first:
 | `default` | `internal/config/defaults.toml`, embedded in the binary |
 | `user` | `~/.config/aayudha/config.toml` (or under `XDG_CONFIG_HOME`) |
 | `repo` | `.aayudha/config.toml`, committed |
-| `local` | `.aayudha/config.local.toml`, ignored by Git |
+| `local` | `.aayudha/config.local.toml`, ignored by Git; skipped in CI |
 | `env` | `AAYU_<SECTION>__<KEY>` variables, with a double underscore between levels |
 | `flag` | `--set key=value` |
 
@@ -29,17 +29,36 @@ an unknown key is an error that names the file, variable, or flag it came from, 
 schema `version`; an older file is migrated in memory with a notice, and a newer one is refused. `[fleet]` is accepted
 only in the user layer.
 
+In CI (`--ci`, or `GITHUB_ACTIONS=true`), the `local` layer never applies: config loading skips
+`.aayudha/config.local.toml` and `.aayudha/config.local.json` and warns, naming each file it skipped. Git ignores both
+files, but `git add -f` still commits either one, so a pull request could otherwise commit a local file that changes
+policy in every workflow, for example clearing an environment's `production` flag. `aayu upgrade` and `aayu doctor`
+skip the local file in CI too. Outside CI the local file applies as before.
+
 `aayu config show --origin` prints every merged key with the layer and source that set it, for example
 `autonomy.streak = 20  # default: defaults.toml (embedded)`. `aayu config validate` loads and checks without printing.
 
 ### What protects the policy keys
 
 The keys that decide what agents may do, such as floors, `[autonomy]`, and `[models]`, are protected by protecting the
-files that hold them. `internal/config/defaults.toml` and `.aayudha/config.toml` are both in `.github/CODEOWNERS`, so a
-change needs a human CODEOWNER's approval (see [trust model and identities](how-trust.md)). `CONSTRAINTS.md` is
+files that hold them. `internal/config/defaults.toml` and `.aayudha/config.toml` are in `.github/CODEOWNERS`, and so
+are `.aayudha/config.json` and `.aayudha/config.local.{toml,json}`, which a pull request could otherwise add
+unreviewed. A change to any of them needs a human CODEOWNER's approval (see [trust model and identities](how-trust.md)). `CONSTRAINTS.md` is
 generated from `defaults.toml`, and the `generate-drift` check fails when the two disagree, so a default cannot be
 loosened quietly. The `local`, `env`, and `flag` layers can still change these keys on one machine; that changes what
-an agent on that machine does, but not what the protected files or CI's gate workflows say.
+an agent on that machine does, but not what the protected files or CI's gate workflows say, because CI skips the
+`local` layer.
+
+One key is stricter. `[decisions] solo_provisional_after_hours` (default 24) is read only from
+`.aayudha/config.toml` and the embedded defaults: a value in `.aayudha/config.json` (the `repo` layer, but not
+an accepted source for this key), or in the user, `local`, `env`, or `flag` layer, fails the load, naming the file, and so does a value
+under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
+then applies provisionally after the shorter of it and `provisional_after_hours` (rule V8); `provisional_after_hours = 0`
+still turns provisional application off. No mode ever applies a waiver of any kind (by label, a `waives #N` link, or a
+title or question that says waive), a seat change, or a step the trust model keeps human-only (approving a PR,
+publishing, `aayu init`, a protected path, a floor, or a ratchet) (`decide.Decision.Excluded`). `aayu status` and
+`aayu inbox` list the provisional Decisions with their ratify-or-revert deadline, so a person can reverse one with
+`aayu decide <n> --accept <option>`.
 
 From `internal/config/defaults.toml`:
 
@@ -71,7 +90,8 @@ and `_`), so a pasted key fails validation with a message that ends "never the k
    encrypted to an identity in `~/.config/aayudha/age-identity.txt`. Both are written with mode 0600.
 
 `aayu auth set-secret <name>` reads the value from standard input, never from arguments, and stores it in the first
-writable backend. It is refused when `AAYU_AGENT=1`. `aayu auth list-secrets` reports which backend each name resolves
+writable backend. In a shell with a host's agent marker it runs only after a device-flow approval (the presence
+check in [how-trust.md](how-trust.md)); it needs no terminal, so a person can pipe the value in. `aayu auth list-secrets` reports which backend each name resolves
 to, never the value. `[integrations.<name>] scope` marks a key `read` or write-capable, and a read-only verb refuses a
 write-capable key (`secrets.CheckScope`).
 

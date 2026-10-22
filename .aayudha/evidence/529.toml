@@ -1,0 +1,19 @@
+[[criterion]]
+id = 1
+tests = ["./internal/production:TestSLOs"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/production:TestMeasureSentry"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/production:TestMeasureSentry"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/cli:TestSLOCrashFree", "./internal/integrations/providers:TestSentryOpens"]
+
+[[criterion]]
+id = 5
+tests = ["./internal/cli:TestReleaseProductionGate"]

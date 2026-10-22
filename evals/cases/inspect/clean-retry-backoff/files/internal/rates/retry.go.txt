@@ -9,30 +9,37 @@ import (
 // maxWait caps the wait between two tries.
 const maxWait = 30 * time.Second
 
-// Retry calls f up to attempts times, waiting base, then twice as long each
-// time (at most maxWait), and stops early when ctx is done. It returns nil on
-// the first success, ctx's error when cancelled, else f's last error.
+// Retry calls f up to attempts times. It waits base before the second call and
+// twice as long before each later one, never more than maxWait. A call that
+// succeeds ends Retry with nil, even if ctx ended during it. Once ctx is done,
+// Retry makes no further call and returns ctx's error. Otherwise, when every
+// call fails, it returns f's last error. It refuses attempts < 1 and base <= 0.
 func Retry(ctx context.Context, attempts int, base time.Duration, f func(context.Context) error) error {
-	if attempts < 1 {
-		return errors.New("rates: attempts must be at least 1")
+	if attempts < 1 || base <= 0 {
+		return errors.New("rates: attempts and base must be positive")
 	}
 	var err error
-	wait := base
+	wait := min(base, maxWait)
 	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			t := time.NewTimer(wait)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return ctx.Err()
+			case <-t.C:
+			}
+			wait = min(wait*2, maxWait)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err = f(ctx); err == nil {
 			return nil
 		}
-		if i == attempts-1 {
-			break
-		}
-		t := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return ctx.Err()
-		case <-t.C:
-		}
-		wait = min(wait*2, maxWait)
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	return err
 }

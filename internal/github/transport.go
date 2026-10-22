@@ -2,9 +2,11 @@ package github
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,8 +26,15 @@ type transport struct {
 	cache *cache
 	next  http.RoundTripper
 
-	writeMu   sync.Mutex
-	lastWrite time.Time
+	own WriteGate // the client's own, when Options.Writes shares none
+}
+
+// WriteGate serializes writes and keeps GitHub's gap between them. Clients
+// that share one (Options.Writes) never overlap their writes, though each
+// was built on its own: the inbox's background writes do.
+type WriteGate struct {
+	mu   sync.Mutex
+	last time.Time
 }
 
 func mutating(m string) bool { return m != http.MethodGet && m != http.MethodHead }
@@ -69,16 +78,20 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if write {
 		// Serialize writes with a gap between them: GitHub's guidance for avoiding
 		// secondary rate limits on bulk writes.
-		t.writeMu.Lock()
-		defer t.writeMu.Unlock()
-		if o.WriteGap > 0 && !t.lastWrite.IsZero() {
-			if d := t.lastWrite.Add(o.WriteGap).Sub(o.Now()); d > 0 {
+		g := o.Writes
+		if g == nil {
+			g = &t.own
+		}
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if o.WriteGap > 0 && !g.last.IsZero() {
+			if d := g.last.Add(o.WriteGap).Sub(o.Now()); d > 0 {
 				if err := o.Sleep(req.Context(), d); err != nil {
 					return nil, err
 				}
 			}
 		}
-		defer func() { t.lastWrite = o.Now() }()
+		defer func() { g.last = o.Now() }()
 	}
 
 	var cached *entry
@@ -99,10 +112,15 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if cached != nil {
 			r.Header.Set("If-None-Match", cached.etag)
 		}
-		resp, err := t.next.RoundTrip(r)
+		// Each attempt is bounded, its body included: a reply GitHub never
+		// sends must not hold a verb (or the inbox) for ever (Bug #822).
+		actx, cancel := context.WithTimeoutCause(r.Context(), o.Timeout, errAttemptTimeout)
+		resp, err := t.next.RoundTrip(r.WithContext(actx))
 		if err != nil {
-			return nil, err
+			cancel()
+			return nil, timedOut(actx, o.Timeout, err)
 		}
+		resp.Body = &attemptBody{ReadCloser: resp.Body, ctx: actx, cancel: cancel, timeout: o.Timeout}
 		if resp.StatusCode == http.StatusNotModified && cached != nil {
 			_ = resp.Body.Close()
 			t.c.mu.Lock()
@@ -175,6 +193,41 @@ func isQuery(req *http.Request) bool {
 		return false
 	}
 	return !strings.HasPrefix(strings.TrimSpace(body.Query), "mutation")
+}
+
+// errAttemptTimeout is the cause of an attempt's own timeout, so a deadline
+// or cancellation of the caller's context is never mistaken for it.
+var errAttemptTimeout = errors.New("attempt timeout")
+
+// timedOut names an attempt that ran past its timeout as ErrTimeout; any
+// other error, the caller's own cancellation included, is returned as it is.
+func timedOut(ctx context.Context, timeout time.Duration, err error) error {
+	if err != nil && errors.Is(context.Cause(ctx), errAttemptTimeout) {
+		return fmt.Errorf("%w (%s): %w", ErrTimeout, timeout, err)
+	}
+	return err
+}
+
+// attemptBody is a reply's body under its attempt's timeout: closing it
+// releases the timer, and a read cut off by the timeout is ErrTimeout.
+type attemptBody struct {
+	io.ReadCloser
+	ctx     context.Context
+	cancel  context.CancelFunc
+	timeout time.Duration
+}
+
+func (b *attemptBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		err = timedOut(b.ctx, b.timeout, err)
+	}
+	return n, err
+}
+
+func (b *attemptBody) Close() error {
+	defer b.cancel()
+	return b.ReadCloser.Close()
 }
 
 func clone(req *http.Request) (*http.Request, error) {

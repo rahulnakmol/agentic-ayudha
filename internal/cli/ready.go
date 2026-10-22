@@ -114,6 +114,9 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		for _, p := range res.Problems {
 			fmt.Fprintf(w, "  - %s\n", p)
 		}
+		for _, p := range res.Warnings {
+			fmt.Fprintf(w, "  - warning: %s\n", p)
+		}
 		if res.Pass && !in.Bool("check") {
 			if res.DryRun {
 				fmt.Fprintln(w, "  --dry-run: snapshot, ledger write, and status:ready planned, not written")

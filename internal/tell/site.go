@@ -73,11 +73,16 @@ var sitePages = []SitePage{
 	{Out: "guide-build.html", Summary: "Building a Ready story yourself or handing it to another agent's cloud, and preparing its environment.", Nav: "Hand work to an agent", Group: "Guides", Source: "docs/guide/guide-build.md"},
 	{Out: "guide-prove-behaviour.html", Summary: "Proving a behaviour change with a feature map and behaviour checks that drive your product like a person.", Nav: "Prove a behaviour change", Group: "Guides", Source: "docs/guide/guide-prove-behaviour.md"},
 	{Out: "guide-loops.html", Summary: "Setting up scheduled and event loops on each agent, and which host can start on which GitHub event.", Nav: "Loops", Group: "Guides", Source: "docs/guide/guide-loops.md"},
+	{Out: "guide-solo-founder.html", Summary: "Working alone: what you still do by hand, the solo-mode bypass, the inbox, provisional Decisions, and earned autonomy.", Nav: "Run it alone", Group: "Guides", Source: "docs/guide/guide-solo-founder.md"},
+	{Out: "growth.html", Summary: "An illustrative path from a two-founder MVP to a widely used product: team stages, product streams, and what the agent twins carry at each stage.", Nav: "From MVP to scale", Group: "Guides", Source: "docs/guide/growth.md"},
+	{Out: "guide-integrations.html", Summary: "When and how to connect PostHog and Sentry read-only: setup, config, key scopes, what each verb reads, and what aayu never does.", Nav: "PostHog and Sentry", Group: "Guides", Source: "docs/guide/guide-integrations.md"},
 	{Out: "guide-learn.html", Summary: "Measuring whether a release moved the Goal, running retro, and evolving skills with ratchets.", Nav: "Did it work?", Group: "Guides", Source: "docs/guide/guide-learn.md"},
 	{Out: "troubleshooting.html", Summary: "Symptoms, exit codes, and fixes for install, tour, Ready, the merge gate, ship, hand-offs, and loops.", Nav: "Troubleshooting", Group: "Guides", Source: "docs/guide/troubleshooting.md"},
+	{Out: "skills/index.html", Summary: "Every verb on its own page: what it is for, the prompt and command, what you get back, its seat and twin, its gates, and what only a person does.", Nav: "Every skill", Group: "Skills", Source: "docs/guide/skills/README.md"},
 	{Out: "hosts.html", Nav: "Your agent", Group: "Your agent", Source: "docs/guide/hosts/README.md"},
 	{Out: "hosts-claude-code.html", Nav: "Claude Code", Group: "Your agent", Source: "docs/guide/hosts/claude-code.md"},
 	{Out: "hosts-codex.html", Nav: "OpenAI Codex", Group: "Your agent", Source: "docs/guide/hosts/codex.md"},
+	{Out: "hosts-copilot.html", Nav: "GitHub Copilot", Group: "Your agent", Source: "docs/guide/hosts/copilot.md"},
 	{Out: "hosts-amp.html", Nav: "Amp", Group: "Your agent", Source: "docs/guide/hosts/amp.md"},
 	{Out: "hosts-cursor.html", Nav: "Cursor", Group: "Your agent", Source: "docs/guide/hosts/cursor.md"},
 	{Out: "make-it-yours.html", Summary: "Changing aayu's colours, symbols, and voice in your terminal and docs.", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},
@@ -88,6 +93,7 @@ var sitePages = []SitePage{
 	{Out: "how-ledger.html", Nav: "The ledger branch", Group: "How it works", Source: "docs/guide/how-ledger.md"},
 	{Out: "how-proof-packs.html", Nav: "Proof packs", Group: "How it works", Source: "docs/guide/how-proof-packs.md"},
 	{Out: "how-merge-gate.html", Nav: "The merge gate", Group: "How it works", Source: "docs/guide/how-merge-gate.md"},
+	{Out: "how-review.html", Nav: "Code review in the gate", Group: "How it works", Source: "docs/guide/how-review.md"},
 	{Out: "how-floors.html", Nav: "Floors in detail", Group: "How it works", Source: "docs/guide/how-floors.md"},
 	{Out: "how-verify-maps.html", Nav: "Feature maps and behaviour checks", Group: "How it works", Source: "docs/guide/how-verify-maps.md"},
 	{Out: "how-models.html", Nav: "Model gateway and lanes", Group: "How it works", Source: "docs/guide/how-models.md"},
@@ -97,6 +103,8 @@ var sitePages = []SitePage{
 	{Out: "how-releases.html", Nav: "Releases and supply chain", Group: "How it works", Source: "docs/guide/how-releases.md"},
 	{Out: "how-security.html", Nav: "Security and threat model", Group: "How it works", Source: "docs/guide/how-security.md"},
 	{Out: "how-extending.html", Nav: "Extending aayudha", Group: "How it works", Source: "docs/guide/how-extending.md"},
+	{Out: "concepts-loop.html", Summary: "The seven steps every change takes, who does what at each, where the gates and floors sit, and how the loops run.", Nav: "The delivery loop", Group: "Concepts", Source: "docs/guide/concepts-loop.md"},
+	{Out: "concepts-team.html", Summary: "The fourteen seats and their twins, who answers for what, who owns which layer, which model does the work, and how a seat goes from solo to paired.", Nav: "Your agentic team", Group: "Concepts", Source: "docs/guide/concepts-team.md"},
 	{Out: "concepts-seats.html", Nav: "Seats and pairing", Group: "Concepts", Source: "docs/guide/concepts-seats.md"},
 	{Out: "concepts-layers.html", Nav: "The nine layers", Group: "Concepts", Source: "docs/guide/concepts-layers.md"},
 	{Out: "concepts-proof.html", Nav: "Proof packs", Group: "Concepts", Source: "docs/guide/concepts-proof.md"},
@@ -129,8 +137,18 @@ var openGroups = map[string]bool{"Start here": true, "Guides": true, "The story"
 // checkout has no guide.
 func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, error) {
 	var pages []SitePage
-	home := false
+	home, skills := false, false
 	for _, p := range sitePages {
+		if p.Out == "skills/index.html" {
+			guide, err := guideSkillPages(root)
+			if err != nil {
+				return nil, err
+			}
+			if guide != nil {
+				pages, skills = append(pages, guide...), true
+			}
+			continue
+		}
 		if p.Out == "verbs.html" {
 			p.Source, p.Markdown = "verbs.md", verbsMarkdown(assets)
 			pages = append(pages, p)
@@ -152,6 +170,9 @@ func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, e
 		}
 		pages = append(pages, p)
 	}
+	if skills {
+		return pages, nil
+	}
 	for _, c := range verbs.Verbs {
 		b, err := fs.ReadFile(assets, "skills/"+c.Name+"/SKILL.md")
 		if errors.Is(err, fs.ErrNotExist) {
@@ -161,6 +182,43 @@ func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, e
 		}
 		pages = append(pages, SitePage{Out: "skills/" + c.Name + ".html", Nav: c.Name, Group: "Skills",
 			Source: "skills/" + c.Name + "/SKILL.md", Origin: "skills/" + c.Name + "/SKILL.md", Markdown: stripFrontmatter(string(b))})
+	}
+	return pages, nil
+}
+
+// guideSkillPages are the guide's skill pages (docs/guide/skills): its index,
+// then one page per verb in journey-stage order, each at skills/<verb>.html.
+// It returns nil when the checkout has no index, so the site falls back to the
+// embedded skills.
+func guideSkillPages(root string) ([]SitePage, error) {
+	const dir = "docs/guide/skills/"
+	var pages []SitePage
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir+"README.md")))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	for _, p := range sitePages {
+		if p.Out == "skills/index.html" {
+			p.Origin, p.Markdown = p.Source, string(b)
+			pages = append(pages, p)
+		}
+	}
+	for _, st := range verbs.Stages {
+		for _, c := range verbs.Verbs {
+			if c.Stage != st.ID {
+				continue
+			}
+			src := dir + c.Name + ".md"
+			b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(src)))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return nil, err
+			}
+			pages = append(pages, SitePage{Out: "skills/" + c.Name + ".html", Nav: c.Name, Group: "Skills", Source: src, Origin: src, Markdown: string(b)})
+		}
 	}
 	return pages, nil
 }

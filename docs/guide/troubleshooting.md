@@ -62,6 +62,24 @@ commit, or replied in a way aayu cannot read. Run `aayu inspect <pr>` yourself, 
 people who connected them. Check `aayu doctor`'s `reviewer-apps` row: the app must be installed and listed in
 `[inspect] apps`.
 
+**Under `reviewer = "ci"`, `aayudha/inspect` fails and names a missing setting.** The `code-review` environment
+lacks the endpoint, the model, or the secret `AAYU_REVIEW_MODEL_KEY`. Add it in **Settings → Environments →
+code-review**, then push again or rerun the job. A URL with a key or a query in it is refused; use the base URL only
+([when something is missing](how-review.md#when-something-is-missing)).
+
+**The inspect comment says "fallback: rung B … failed".** The review call reached the endpoint and failed, for example
+with a wrong key or an overloaded endpoint. The note gives the reason, and an installed app or a person reviews
+instead. Fix the key or the model in the `code-review` environment; the next push tries the model again. To clear
+this head now:
+
+- If the note names Codex, Claude, or Cursor, run `aayu inspect <pr>` in your own terminal. The gate does not ask
+  those apps from CI, so the head stays at `no-reply` until you do.
+- If the app has not replied 30 minutes after the request, rerun the merge gate or run `aayu inspect <pr>` again.
+  The wait is checked only when inspect runs; then the next app, or a person, reviews. This applies to CodeRabbit and
+  Greptile too.
+- If the note says a person reviews, the `[autonomy] approver` reviews the pull request, then runs
+  `aayu inspect <pr> --approve --reason "<what you checked>"`, or approves its card in `aayu inbox`.
+
 **`reviewer-apps` says it is "falling back to a human review".** No listed app comes from a different vendor than
 the builder. Install one (Claude, Codex, or Cursor) and add it to `[inspect] apps`, or let a person review.
 
@@ -70,6 +88,12 @@ story again from the latest code ([a pull request is ready](guide-review.md#when
 
 **A floor fails with "tool not installed".** The merge gate installs every tool; on your own machine a floor whose tool
 is missing blocks, it never passes. `aayu doctor`'s `optional-tools` row lists what to install for local checks.
+
+**The pack says `skipped: dast: no runnable target`.** Your product is a web app or an API (`[verify] platforms`), but
+verify has nothing to scan, and from 2026-11-14 that blocks `ship`. Give verify a command that starts the app (`[verify] seed`) and
+its URL (`[verify.environments.local] url`, for example `http://127.0.0.1:8080`), or ask a person to waive it with
+`aayu decide <story> --waiver dast`. With no Docker or Podman on your machine, verify leaves the scan to CI and does
+not block locally; `aayu doctor`'s `dast` row shows the target, the scan mode, and the runtime it found.
 
 **The proof comment flags "checks this PR weakens".** The pull request removes or loosens a check. That is allowed but
 never silent: a person decides whether it is right.
@@ -115,6 +139,27 @@ runs it) and is still recorded in a tool. Delete it in the tool, then forget it 
 
 **A loop run stops with exit 4 or 6.** The repository is halted, or a budget paused the agents. A person reads why,
 then runs `aayu resume`.
+
+## Integrations
+
+**`aayu doctor` says `the posthog key is write-capable` or `the sentry key is write-capable`.** The key has a scope
+that does not end in `:read`. Create a new key with only the scopes in
+[bring in analytics and errors](guide-integrations.md), then store it with `aayu auth set-secret posthog` or
+`aayu auth set-secret sentry` in your own terminal.
+
+**`[integrations.posthog] project is not set`, or a Sentry `org` or `project` error.** Add the field by hand to
+`.aayudha/config.toml`. PostHog and Sentry want the numeric project ID; Sentry also wants the organization slug.
+
+**`secret "posthog" has no value`, or the same for `sentry`.** The key was never stored on this machine. Run
+`aayu auth set-secret posthog` or `aayu auth set-secret sentry` in your own terminal.
+
+**A 403 from Sentry's sessions or events.** The token lacks `org:read`. Create a token with `org:read`, `event:read`,
+and `project:read`, and store it again.
+
+**A 401, or no data, from a key that works in the provider's own UI.** Your account is in another region or is
+self-hosted. Set `url` in the section, for example `url = "https://eu.posthog.com"`. A self-hosted `url` goes in
+your user config (`~/.config/aayudha/config.toml`), an `AAYU_INTEGRATIONS__<NAME>__URL` variable, or `--set`: the
+repository's config may name only the provider's cloud hosts, so `aayu` refuses any other there.
 
 ## Everything else
 

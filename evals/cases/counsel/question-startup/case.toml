@@ -1,0 +1,19 @@
+# Persona case (Story #478): Atri, the Founder's Sage, counsels on a free question at the startup stage: should the
+# post-visit survey be split into sections? Saving partial answers waits on open Decision #325. output/counsel.md is a
+# recorded counsel (tier 1); planted/counsel.md plants an uncited claim about the code, which tier 1 must refuse.
+# Tier 2 has the counsel skill answer again and the judge score it.
+skill = "counsel"
+description = "Atri counsels on a free question at the startup stage: split the post-visit survey into sections?"
+input = "../question-grounding.md"
+artifacts = ["output/counsel.md", "planted/counsel.md"]
+
+[persona]
+seat = "founder"
+stage = "startup"
+practice = "three-perspectives"
+draft = "output/counsel.md"
+planted = "planted/counsel.md"
+task = "The founder runs `aayu counsel \"should we split the survey into sections?\"` and asks for your counsel. Answer as Atri, the Founder's Sage, with the counsel skill's parts in order, using the three-perspectives practice at this team stage."
+
+[tier2]
+rubric = "../rubric.md"

@@ -1,0 +1,6 @@
+# Which tests prove story #400's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a PR that lowers min_mean, min_pass_k, pass_score, sets a group advisory, or deletes a rubric line fails without a named accepted waiver, and passes with one
+tests = ["internal/evals:TestEvalBarRatchet"]

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -31,6 +32,39 @@ func CodexHome(home string, getenv func(string) string) string {
 	return filepath.Join(home, ".codex")
 }
 
+// RepoHooksRun reports whether the host runs the repository's own aayudha
+// hooks: RepoHooks, and for Codex a project it trusts, since Codex ignores an
+// untrusted project's .codex/ (so the plugin's hooks are the only guard there).
+func RepoHooksRun(root string, host verbs.HostID, codexHome string) bool {
+	if !RepoHooks(root, host) {
+		return false
+	}
+	if host == verbs.HostCodex {
+		return CodexTrusted(root, codexHome)
+	}
+	return true
+}
+
+// CursorEvent reports whether Cursor sent the hook event: Cursor puts
+// cursor_version in the input of every hook it runs, its own and those it
+// imports from Claude Code's settings and plugins (cursor.com/docs/hooks);
+// Claude Code never sends it.
+func CursorEvent(event []byte) bool {
+	var e struct {
+		Version *string `json:"cursor_version"`
+	}
+	return json.Unmarshal(event, &e) == nil && e.Version != nil
+}
+
+// CursorRunsAnother reports whether, for a Claude Code hook that Cursor runs
+// through Third-Party Imports, Cursor also runs another aayudha hook for the
+// same event: its own (the repository's .cursor/hooks.json, or the plugin in
+// Cursor's local plugin folder) or, for a plugin hook, the repository's Claude
+// Code hooks, which Cursor imports too (D-3.2b.j).
+func CursorRunsAnother(root, home string, plugin bool) bool {
+	return RepoHooks(root, verbs.HostCursor) || PluginEnabled(verbs.HostCursor, root, home, "") || plugin && RepoHooks(root, verbs.HostClaude)
+}
+
 // RepoHooks reports whether `aayu install` registered the repository's own
 // hooks for host (the commands HookCommand writes, in the host's project hook
 // file).
@@ -43,31 +77,94 @@ func RepoHooks(root string, host verbs.HostID) bool {
 	return err == nil && bytes.Contains(b, []byte(" hook pre-tool --host "+string(host)+`"`))
 }
 
-// PluginEnabled reports whether the aayudha marketplace plugin is enabled for
-// host: Claude Code's enabledPlugins in the user's or the project's settings,
-// or a [plugins."aayudha@…"] table in Codex's config.toml. Other hosts: false.
+// PluginEnabled reports whether the aayudha plugin is active for host in the
+// repository at root, on this machine. Claude Code: an enabledPlugins entry
+// for aayudha@…, where the project's settings.local.json overrides its
+// settings.json, which overrides the user's (code.claude.com/docs/en/settings).
+// Codex: a [plugins."aayudha@…"] table in the user's config.toml, which a
+// trusted project's .codex/config.toml overrides. Cursor: the aayudha plugin
+// in its local plugin folder (~/.cursor/plugins/local); Cursor keeps
+// marketplace installs with the account, where aayu cannot see them, and has
+// no per-repository off switch. Amp has no aayudha plugin but the one install
+// writes: false.
 func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 	ours := func(k string) bool { return strings.HasPrefix(k, ServerName+"@") }
+	effective := map[string]bool{} // plugin ID -> on, from the highest layer that sets it
 	switch host {
 	case verbs.HostClaude:
-		for _, f := range []string{filepath.Join(home, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.local.json")} {
+		files := []string{filepath.Join(root, ".claude", "settings.local.json"), filepath.Join(root, ".claude", "settings.json")}
+		if home != "" {
+			files = append(files, filepath.Join(home, ".claude", "settings.json"))
+		}
+		for _, f := range files {
 			var s struct {
 				Enabled map[string]bool `json:"enabledPlugins"`
 			}
 			if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &s) == nil {
 				for k, on := range s.Enabled {
-					if on && ours(k) {
-						return true
+					if _, set := effective[k]; ours(k) && !set {
+						effective[k] = on
 					}
 				}
 			}
 		}
-	case verbs.HostCodex:
-		cfg, _ := readCodexConfig(codexHome)
-		for k, p := range cfg.Plugins {
-			if ours(k) && (p.Enabled == nil || *p.Enabled) {
+	case verbs.HostCursor:
+		if home == "" {
+			return false
+		}
+		manifests, _ := filepath.Glob(filepath.Join(home, ".cursor", "plugins", "local", "*", ".cursor-plugin", "plugin.json"))
+		for _, f := range manifests {
+			var m struct {
+				Name string `json:"name"`
+			}
+			if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &m) == nil && m.Name == ServerName {
 				return true
 			}
+		}
+	case verbs.HostCodex:
+		user, _ := readCodexConfig(codexHome)
+		var layers []codexConfig
+		if root != "" && codexTrusts(user, root) {
+			var project codexConfig
+			if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(CodexConfig))); err == nil && toml.Unmarshal(b, &project) == nil {
+				layers = append(layers, project)
+			}
+		}
+		for _, c := range append(layers, user) {
+			for k, p := range c.Plugins {
+				if _, set := effective[k]; ours(k) && !set {
+					effective[k] = p.Enabled == nil || *p.Enabled
+				}
+			}
+		}
+	}
+	for _, on := range effective {
+		if on {
+			return true
+		}
+	}
+	return false
+}
+
+// CodexTrustStep is the person's step when Codex does not trust the project
+// at root yet (doctor's codex-hooks and mcp rows say it the same way).
+func CodexTrustStep(root, codexHome string) string {
+	return "Codex does not trust this project, so it loads nothing from .codex/ (hooks or MCP): trust it when Codex asks, or set [projects." + fmt.Sprintf("%q", root) + "] trust_level = \"trusted\" in " + filepath.Join(codexHome, "config.toml")
+}
+
+// CodexTrusted reports whether Codex trusts the project at root, so it reads
+// the project's .codex/ files; an unreadable config counts as untrusted.
+func CodexTrusted(root, codexHome string) bool {
+	c, _ := readCodexConfig(codexHome)
+	return codexTrusts(c, root)
+}
+
+// codexTrusts reports whether Codex trusts the project at root, so it reads
+// the project's .codex/ files.
+func codexTrusts(c codexConfig, root string) bool {
+	for _, r := range []string{root, resolved(root)} {
+		if c.Projects[r].TrustLevel == "trusted" {
+			return true
 		}
 	}
 	return false
@@ -90,6 +187,9 @@ type codexConfig struct {
 
 func readCodexConfig(codexHome string) (codexConfig, error) {
 	var c codexConfig
+	if codexHome == "" || codexHome == ".codex" { // no home: nothing to read
+		return c, nil
+	}
 	b, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
@@ -120,12 +220,8 @@ func CodexHookTrust(root, codexHome string) (found int, problems []string, err e
 	if root != "" && RepoHooks(root, verbs.HostCodex) {
 		file := filepath.Join(root, filepath.FromSlash(CodexHooks))
 		sources = append(sources, source{CodexHooks, file, file})
-		trusted := false
-		for _, r := range []string{root, resolved(root)} {
-			trusted = trusted || cfg.Projects[r].TrustLevel == "trusted"
-		}
-		if !trusted {
-			problems = append(problems, "Codex does not trust this project, so it loads nothing from .codex/ (hooks or MCP): trust it when Codex asks, or set [projects."+fmt.Sprintf("%q", root)+"] trust_level = \"trusted\" in "+filepath.Join(codexHome, "config.toml"))
+		if !codexTrusts(cfg, root) {
+			problems = append(problems, CodexTrustStep(root, codexHome))
 		}
 	}
 	ids := make([]string, 0, len(cfg.Plugins))
@@ -271,4 +367,60 @@ func modTime(p string) int64 {
 		return fi.ModTime().UnixNano()
 	}
 	return 0
+}
+
+// pluginReads are the project skill directories in which a host with the
+// aayudha plugin active also finds aayudha's copies: Cursor reads Claude
+// Code's as well. Amp keeps the first skill of each name
+// (ampcode.com/docs/customize/skills), so it never lists one twice.
+var pluginReads = map[verbs.HostID][]string{
+	verbs.HostClaude: {ClaudeSkills},
+	verbs.HostCodex:  {AgentsSkills},
+	verbs.HostCursor: {AgentsSkills, ClaudeSkills},
+}
+
+// SkillDoubles reports each host that lists aayudha's skills twice in the
+// repository at root on this machine (D-3.2b.g, D-3.2b.h), one line each with
+// the fix: a host whose aayudha plugin is still active beside the
+// repository's copies.
+func SkillDoubles(root, home, codexHome string, lock Lock) []string {
+	copies := func(d string) bool {
+		for n := range lock.Skills {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
+				return true
+			}
+		}
+		return false
+	}
+	var out []string
+	for _, h := range AllHosts() {
+		hh, _ := verbs.FindHost(h)
+		if !PluginEnabled(h, root, home, codexHome) || !slices.ContainsFunc(pluginReads[h], copies) {
+			continue
+		}
+		fix := map[verbs.HostID]string{
+			verbs.HostClaude: "aayu install --host claude --apply turns the plugin off for this repository in " + ClaudeSettings + "; an enabledPlugins entry in .claude/settings.local.json overrides that",
+			verbs.HostCodex:  "trust this project in Codex, so it reads " + CodexConfig + ", where aayu install --host codex --apply turns the plugin off",
+			verbs.HostCursor: "a repository cannot turn a Cursor plugin off: disable the aayudha plugin for this workspace in Cursor",
+		}[h]
+		out = append(out, fmt.Sprintf("%s: the aayudha plugin and the repository's copies both give it the aayudha skills, so it lists each twice; %s", hh.Name, fix))
+	}
+	return out
+}
+
+// CursorReadsBoth reports whether Cursor, installed here, finds aayudha's
+// copies in both .agents/skills and .claude/skills: with Third-Party Imports
+// on (its default) it lists each skill twice. install keeps both only when
+// Claude Code and Codex are installed too, since each reads only its own
+// (D-3.2b.g); nothing a repository commits can stop Cursor reading both.
+func CursorReadsBoth(root string, lock Lock) bool {
+	copies := func(d string) bool {
+		for n := range lock.Skills {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
+				return true
+			}
+		}
+		return false
+	}
+	return slices.Contains(lock.Hosts, string(verbs.HostCursor)) && copies(AgentsSkills) && copies(ClaudeSkills)
 }

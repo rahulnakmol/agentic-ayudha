@@ -159,6 +159,23 @@ func TestNoopDryRunAndErrors(t *testing.T) {
 			t.Errorf("path %q accepted", bad)
 		}
 	}
+	// A symlink a person committed to the branch carries no write outside the worktree.
+	outside := t.TempDir()
+	seed := clone(t, bare)
+	run(t, seed, "fetch", "--quiet", "origin", "ledger")
+	run(t, seed, "checkout", "--quiet", "-b", "l", "FETCH_HEAD")
+	if err := os.Symlink(outside, filepath.Join(seed, "Releases")); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "Releases")
+	run(t, seed, "commit", "--quiet", "-m", "symlink")
+	run(t, seed, "push", "--quiet", "origin", "l:ledger")
+	if _, err := w.Write(ctx, Commit{Message: "s", Files: map[string][]byte{"Releases/v1.md": []byte("x\n")}}); err == nil {
+		t.Error("a write through a symlinked directory succeeded")
+	}
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Errorf("a write followed a committed symlink out of the worktree: %v", ents)
+	}
 	empty := clone(t, bare)
 	run(t, empty, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
 	run(t, filepath.Dir(bare), "init", "--quiet", "--bare", filepath.Join(filepath.Dir(bare), "noledger.git"))
@@ -168,6 +185,79 @@ func TestNoopDryRunAndErrors(t *testing.T) {
 	}
 	if p := ContentPath("blobs", ".png", []byte("x")); p != "blobs/2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881.png" {
 		t.Errorf("ContentPath = %s", p)
+	}
+}
+
+// Create makes a new orphan branch with a root commit; Write then lands on it,
+// and a second Create returns ErrExists and writes nothing.
+func TestCreate(t *testing.T) {
+	bare := origin(t)
+	dir := clone(t, bare)
+	ctx := context.Background()
+	w := &Writer{Dir: dir, Branch: "brain", Tag: "identity:bot", Sleep: noSleep}
+	files := map[string][]byte{
+		"Home.md":                []byte("# Home\n"),
+		"Decisions/Decisions.md": []byte("# Decisions\n"),
+		".obsidian/graph.json":   []byte("{}\n"),
+	}
+	if _, err := w.Create(ctx, Commit{Files: map[string][]byte{"../x": nil}}); err == nil {
+		t.Error("Create accepted ../x")
+	}
+	log, _ := actions.Open(filepath.Join(t.TempDir(), "a.jsonl"), actions.Options{DryRun: true})
+	dry := *w
+	dry.Log = log
+	if sha, err := dry.Create(ctx, Commit{Message: "brain: create", Files: files}); err != nil || sha != "" {
+		t.Fatalf("dry-run Create: %q, %v", sha, err)
+	}
+	if out := run(t, dir, "ls-remote", "--heads", "origin", "brain"); out != "" {
+		t.Fatalf("dry-run Create pushed: %s", out)
+	}
+
+	root, err := w.Create(ctx, Commit{Message: "brain: create", Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := clone(t, bare)
+	run(t, check, "fetch", "--quiet", "origin", "brain")
+	if tip := run(t, check, "rev-parse", "FETCH_HEAD"); tip != root {
+		t.Fatalf("brain tip %s, Create returned %s", tip, root)
+	}
+	if p := strings.Fields(run(t, check, "rev-list", "--parents", "-n1", root)); len(p) != 1 {
+		t.Errorf("root commit has parents: %v", p)
+	}
+	if got := run(t, check, "ls-tree", "-r", "--name-only", root); got != ".obsidian/graph.json\nDecisions/Decisions.md\nHome.md" {
+		t.Errorf("tree:\n%s", got)
+	}
+	if got := run(t, check, "show", root+":Decisions/Decisions.md"); got != "# Decisions" {
+		t.Errorf("Decisions/Decisions.md = %q", got)
+	}
+	if !strings.Contains(run(t, check, "log", "-1", "--format=%B", root), "Aayudha-Identity: identity:bot") {
+		t.Error("Create commit has no Aayudha-Identity trailer")
+	}
+
+	next, err := w.Write(ctx, Commit{Message: "brain: note", Files: map[string][]byte{"Notes/a.md": []byte("a\n")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run(t, check, "fetch", "--quiet", "origin", "brain")
+	if parent := run(t, check, "rev-list", "--parents", "-n1", next); parent != next+" "+root {
+		t.Errorf("Write after Create: parents %q, want %s on top of %s", parent, next, root)
+	}
+
+	if _, err := w.Write(ctx, Commit{Message: "brain: stale", Files: map[string][]byte{"Notes/a.md": []byte("stale\n")}, Base: root}); !errors.Is(err, ErrMoved) {
+		t.Fatalf("a Write based on an old tip: %v, want ErrMoved", err)
+	}
+
+	tip, err := w.Create(ctx, Commit{Message: "brain: create again", Files: map[string][]byte{"Other.md": []byte("x\n")}})
+	if !errors.Is(err, ErrExists) || tip != next {
+		t.Fatalf("second Create: %q, %v; want %s and ErrExists", tip, err, next)
+	}
+	run(t, check, "fetch", "--quiet", "origin", "brain")
+	if got := run(t, check, "rev-parse", "FETCH_HEAD"); got != next {
+		t.Errorf("second Create moved brain to %s", got)
+	}
+	if out := run(t, dir, "for-each-ref", "refs/aayudha/"); out != "" {
+		t.Errorf("leftover refs: %s", out)
 	}
 }
 

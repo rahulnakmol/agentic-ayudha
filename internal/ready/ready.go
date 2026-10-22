@@ -40,9 +40,14 @@ type Result struct {
 	Type               string                `json:"type"`
 	Pass               bool                  `json:"pass"`
 	Problems           []workitems.Problem   `json:"problems"`
+	Warnings           []workitems.Problem   `json:"warnings,omitempty"` // what passes Ready but should be rewritten
 	BodyHash           string                `json:"body_hash"`
 	CompletionGoalHash string                `json:"completion_goal_hash,omitempty"`
 	Criteria           []workitems.Criterion `json:"criteria,omitempty"`
+	Measure            string                `json:"measure,omitempty"` // with Threshold, Scenario, Environment: the rest of the Completion Goal, for a readback
+	Threshold          string                `json:"threshold,omitempty"`
+	Scenario           string                `json:"scenario,omitempty"`
+	Environment        string                `json:"environment,omitempty"`
 	TechnicalOwner     string                `json:"technical_owner,omitempty"`
 	Identity           string                `json:"identity,omitempty"`
 	Tag                string                `json:"tag,omitempty"`
@@ -107,11 +112,17 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 			it.LinkTypes[l.Number], _ = workitems.TypeOf(target.GetType().GetName(), github.IssueLabels(target))
 		}
 		ps = append(ps, workitems.Validate(it, workitems.StageReady)...)
+		if os, _ := workitems.ParseOptions(it.Fields["options"]); workitems.Lettered(os) {
+			res.Warnings = append(res.Warnings, workitems.Problem{Field: "options", Message: "lettered or named, not numbered, so they read as 1 (A), 2 (B), … in order: " +
+				"rewrite each as a top-level line \"N. **Name.** what it does\""})
+		}
 		if r.Concrete != nil {
 			ps = append(ps, r.Concrete(it)...)
 		}
 		res.CompletionGoalHash = workitems.CompletionGoalHash(it)
 		res.Criteria, _ = workitems.ParseCriteria(it.Fields[workitems.FieldCriteria])
+		res.Measure, res.Threshold = it.Fields[workitems.FieldMeasure], it.Fields[workitems.FieldThreshold]
+		res.Scenario, res.Environment = it.Fields[workitems.FieldScenario], it.Fields[workitems.FieldEnvironment]
 		res.TechnicalOwner = it.Fields[workitems.FieldOwner]
 		if res.TechnicalOwner == "" {
 			res.TechnicalOwner = r.TechnicalOwner
@@ -140,7 +151,7 @@ func Snapshot(res Result) string {
 	b.WriteString(SnapshotMarker + "\n### Ready snapshot\n\n| | |\n|---|---|\n")
 	fmt.Fprintf(&b, "| Schema | work items v%d, %s |\n", workitems.SchemaVersion, res.Type)
 	fmt.Fprintf(&b, "| Body hash | `%s` |\n", res.BodyHash)
-	cg := "n/a (no Completion Goal on this type)"
+	cg := "n/a (this type has no Completion Goal)"
 	if res.CompletionGoalHash != "" {
 		cg = "`" + res.CompletionGoalHash + "`"
 	}
@@ -158,7 +169,7 @@ func Snapshot(res Result) string {
 			fmt.Fprintf(&b, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
 		}
 	}
-	b.WriteString("\nEditing the body after Ready removes `status:ready` (Ready guard); run `aayu ready` again to re-snapshot.\n")
+	b.WriteString("\nAn edit to the body after Ready removes `status:ready` (the Ready guard). Run `aayu ready` again to make a new snapshot.\n")
 	return b.String()
 }
 

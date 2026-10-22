@@ -1,0 +1,11 @@
+# tell (D-7.5b): a how-to guide for the shipped story #12 of the proven Feature #7 (Export filtered claims). Every step
+# names only the controls its pack's criteria name (the Columns picker, Export CSV in the list toolbar), and the guide
+# states what to expect and what is outside the Feature's scope.
+skill = "tell"
+description = "A how-to guide: export the claims you have filtered to a CSV file, from the pack of story #12."
+input = "../grounding.json"
+artifacts = ["output/draft.md"]
+tell = { kind = "guide", campaign = "export-guide", request = "Write a how-to guide for reviewers, for docs/export.md: export the claims you have filtered to a CSV file.", draft = "output/draft.md" }
+
+[tier2]
+rubric = "rubric.md"

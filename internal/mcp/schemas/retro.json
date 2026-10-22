@@ -4,8 +4,35 @@
   "additionalProperties": false,
   "description": "Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.",
   "properties": {
+    "classify": {
+      "description": "Feedback issue to classify by the highest layer that can fix its correction for good (needs --layer and --reason); writes no report.",
+      "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
+      "type": "string",
+      "x-aayu-type": "issue"
+    },
+    "criterion": {
+      "description": "With --classify and a layer other than prose: the Completion Goal criterion of the Story filed for it, `[evidence] state: …; expected: …`, whose proof is the new type, invariant, lint rule, test, or review surface.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "layer": {
+      "description": "With --classify: codebase (a type, invariant, or boundary), check (a lint rule, test, or CI check), prose (skill or AGENTS.md guidance), or review (what is surfaced for human review).",
+      "enum": [
+        "codebase",
+        "check",
+        "prose",
+        "review"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
     "ledger": {
       "description": "Ledger commit to read; default the ledger tip.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "not-catchable": {
+      "description": "With --classify: why no type, invariant, lint rule, or test can catch it; required for prose and review, and lets evolve rewrite a skill for a codebase or check correction.",
       "type": "string",
       "x-aayu-type": "string"
     },
@@ -13,6 +40,11 @@
       "description": "Also write the report to this file.",
       "type": "string",
       "x-aayu-type": "path"
+    },
+    "reason": {
+      "description": "With --classify: why this is the highest layer that can fix the correction for good.",
+      "type": "string",
+      "x-aayu-type": "string"
     },
     "replay": {
       "description": "Regenerate a report from the GitHub inputs snapshot at this ledger path (retro/<date>/…inputs.json); files nothing.",

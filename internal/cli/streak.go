@@ -26,6 +26,7 @@ type streakReport struct {
 	Scanned      int                    `json:"merged_prs_scanned"`
 	Layers       []autonomy.LayerStreak `json:"layers"`
 	Corrections  []autonomy.Correction  `json:"corrections"`
+	Rungs        map[string]int         `json:"review_rungs"`       // agent merges scanned, by their review's rung ("" none recorded)
 	Recorded     int                    `json:"recorded,omitempty"` // corrections new to the ledger file
 	LedgerCommit string                 `json:"ledger_commit,omitempty"`
 	GitHub       github.Stats           `json:"github"`
@@ -65,6 +66,12 @@ func runStreak(ctx context.Context, e *Env, apply bool) error {
 		rep.Corrections = []autonomy.Correction{}
 	}
 	rep.Layers = rules.Streaks(prs, rep.Corrections, a.Streak, a.Never)
+	rep.Rungs = map[string]int{}
+	for _, p := range prs {
+		if rules.Agent(p) {
+			rep.Rungs[p.Rung]++
+		}
+	}
 	if apply {
 		if err := recordCorrections(ctx, e, c, repo, &rep); err != nil {
 			return err
@@ -73,15 +80,17 @@ func runStreak(ctx context.Context, e *Env, apply bool) error {
 	rep.GitHub = c.Stats()
 	return e.Emit(rep, func(w io.Writer) error {
 		fmt.Fprintf(w, "Autonomy streaks for %s (threshold %d; %d merged PRs scanned)\n\n", repo, rep.Threshold, rep.Scanned)
-		fmt.Fprintln(w, "| Layer | Streak | Agent merges | Never-layer | Autonomous | Last correction |")
-		fmt.Fprintln(w, "|---|---|---|---|---|---|")
+		fmt.Fprintln(w, "| Layer | Streak | Agent merges | Not counted (review not different-family) | Never-layer | Autonomous | Last correction |")
+		fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
 		for _, s := range rep.Layers {
 			last := "—"
 			if s.LastBreak != 0 {
 				last = fmt.Sprintf("#%d", s.LastBreak)
 			}
-			fmt.Fprintf(w, "| %s | %d | %d | %t | %t | %s |\n", s.Layer, s.Streak, s.Merges, s.Never, s.Autonomous, last)
+			fmt.Fprintf(w, "| %s | %d | %d | %d | %t | %t | %s |\n", s.Layer, s.Streak, s.Merges, s.Skipped, s.Never, s.Autonomous, last)
 		}
+		fmt.Fprintf(w, "\nAgent merges by review rung (Decision #469; only A, B, and a person's count): A %d; B %d; a person's %d; same-family C %d; none recorded %d\n",
+			rep.Rungs["A"], rep.Rungs["B"], rep.Rungs["human"], rep.Rungs["C"], rep.Rungs[""])
 		fmt.Fprintf(w, "\n%d correction(s) in the scanned history", len(rep.Corrections))
 		if apply {
 			fmt.Fprintf(w, "; %d new on ledger %s", rep.Recorded, CorrectionsPath)

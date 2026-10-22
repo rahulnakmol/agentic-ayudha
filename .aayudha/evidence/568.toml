@@ -1,0 +1,38 @@
+# Which tests prove story #568's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # three rounds and a new head outside CI: no request, step-back, exit 4, the reopen command named
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 2 # the same in the merge gate with a reply: step-back, the reply not judged, still three rounds
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 3 # a bot's reopen does nothing; a person's posts the request and judges round 4
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 4 # the round-2 request names H1, asks for git diff H1..H2 plus any P0, lists the round-1 finding
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 5 # a reworded repeat is dropped as repeat and counted; a P0 security finding is kept
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 6 # a class with instances in two files: the comment shows every instance and asks for all
+tests = ["internal/cli:TestInspectConverges"]
+
+[[criterion]]
+id = 7 # a P1 on an unchanged line, from a reply and from Codex's own review: pre-existing, merge
+tests = ["internal/cli:TestInspectPreExisting"]
+
+[[criterion]]
+id = 8 # outside CI twice: one Bug with the blamed commits, priority:P1, a page for the P0, no second Bug
+tests = ["internal/cli:TestInspectPreExisting"]
+
+[[criterion]]
+id = 9 # a review that passed on round 2: rounds 2 in the state, rounds-to-pass in aayu audit
+tests = ["internal/cli:TestInspectConverges", "internal/audit:TestAuditReviewRungs"]

@@ -15,6 +15,8 @@ channel = "file"
 # target; a story without screenshot or recording criteria never runs them. Budgets are the example's own.
 [verify]
 seed = ["examples/benefits-qa/deploy/serve.sh"]
+# aayudha is a CLI; benefits-qa is a web app with an API, so the dast floor scans it (Decision #485).
+platforms = ["cli", "web", "api"]
 # The feature maps' maintain pass (D-4.5b.8): a headless Amp run on the founder's side (`amp -x`, loops/README.md)
 # follows the brief; Amp has no @-mention.
 maintainer = "amp"
@@ -34,8 +36,67 @@ acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
 
-# The merge gate's reviewer: the ChatGPT Codex Connector is installed on this account and answered `@codex review`
-# live (founder decision 2026-10-15: no AI key in the merge gate). Cursor is installed too, but its family is the
-# model its user picks, so it reviews only once [inspect.app_families] names one.
+# Read-only GitHub counts for Initiative metrics (@rahulnakmol, 2026-10-21): the baseline of "aayu core: the
+# human-dependency engine", PRs merged into dev over 28 days. The key is a fine-grained token with public-repository
+# read access and no permissions (aayu-read-agentic-ayudha); aayu cannot verify a fine-grained token's scope, so it
+# trusts scope = "read" (docs/guide/guide-integrations.md).
+[integrations.github]
+secret = "github" # set the value with: aayu auth set-secret github
+scope = "read"
+project = "rahulnakmol/agentic-ayudha"
+
+# CodeRabbit (rung A whatever the builder's family) stays installed as the fallback app (founder, 2026-10-18, after Codex
+# reached its usage limits on #617). The CI review below supersedes "no AI key in the merge gate" (2026-10-15): the
+# inspect job holds the code-review environment's key, which only the base branches reach.
 [inspect]
-apps = ["codex"]
+# The CI review (founder, 2026-10-18: "Let's dog food this"): the merge gate calls the model the code-review environment
+# names (AAYU_REVIEW_MODEL_URL, AAYU_REVIEW_MODEL, secret AAYU_REVIEW_MODEL_KEY; docs/guide/how-review.md).
+reviewer = "ci"
+apps = ["coderabbit"]      # installed; reviews only when the CI review cannot
+paid_reviewer = "grok-4.7" # when the environment names no model
+paid_effort = "high"
+
+# The paid CI review's cap on one PR, across all its rounds (@rahulnakmol, 2026-10-19: "max budget for inspect is
+# 15USD per run"); the default is 5.0. #676 spent 5.07 of 5.00 and lost rung B.
+[budget]
+per_pr_inspect_max = 15.0
+
+# Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rungs A, B, and C count, as the default now
+# says (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"] this should be default"). The narrow set always needs a person per PR, because a
+# change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
+# A workflow that holds a credential (a secret, the token, an environment, a write permission) is in it too, by rule.
+[autonomy]
+# The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
+# account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
+# unpaired seat. Its review is still a comment, which an agent with this account's token could write (#634's P2).
+approver = "rahulnakmol"
+proof = true
+proof_rungs = ["A", "B", "C"]
+always_person = [
+  ".github/CODEOWNERS",
+  "internal/cli/ship.go",
+  "internal/cli/shippass.go",
+  "internal/cli/shipproof.go",
+  "internal/cli/presence.go",
+  "internal/identity/",
+  "internal/autonomy/",
+  "internal/config/",
+  ".github/workflows/aayudha-merge-gate.yml",
+  ".github/workflows/protected-paths*.yml",
+  ".github/workflows/release.yml",
+  ".github/workflows/aayudha-approve.yml",
+  ".github/workflows/aayudha-token.yml",
+  ".goreleaser.yaml",
+  "install.sh",
+  # go.mod and go.sum pin the modules the code above builds with: config.Load parses with
+  # github.com/knadh/koanf/v2 (go.mod, internal/config/load.go). So a dependency change needs a
+  # person too (@rahulnakmol, 2026-10-18; TestShipOnProof covers it).
+  "go.mod",
+  "go.sum",
+  ".aayudha/config.json",
+  ".aayudha/config.local.toml",
+  ".aayudha/config.local.json",
+  # The build-ready loop's definition is a person's standing ask to build Ready work (aayu build --next).
+  "loops/build-ready.toml",
+]
+always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]

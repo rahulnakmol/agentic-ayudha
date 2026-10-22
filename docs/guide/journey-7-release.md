@@ -35,8 +35,10 @@ that snapshot is also a release of aayudha itself: the very one [your first hour
 
 ## What you do, and what the agent does
 
-**You** start the release. `release` runs only for a person, on a terminal, with a confirmation. Agents and CI are
-refused. Try `--dry-run` first: it shows what would ship and which stories would be stamped, and writes nothing.
+**You** decide when to release. Your agent may run `release` for you; at your own terminal it asks you to confirm.
+CI is refused. To go to `main`, you say so on the Release issue yourself: comment `Stable release: v0.1.0` as the
+first line. The agent cannot write that comment. Try `--dry-run` first: it shows what would ship and which stories
+would be stamped, and writes nothing.
 
 **`release`** does the careful part: checks the list, builds the candidate, runs the gate, moves the branch, tags it,
 stamps the stories, writes the notes, and schedules the measurement.
@@ -51,7 +53,7 @@ Measure-later only works if "later" is on the calendar. `release` puts it there 
 
 | Verb | What it does |
 |---|---|
-| [`release`](../../skills/release/SKILL.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
+| [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 
 <!-- END GENERATED: stage-verbs -->
 

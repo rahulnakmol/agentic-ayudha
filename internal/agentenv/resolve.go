@@ -57,6 +57,8 @@ func Resolve(ctx context.Context, s *Spec, get Fetch) error {
 			err = resolveUV(ctx, t, get)
 		case "rust":
 			err = resolveRustup(ctx, t, get)
+		case "aayu":
+			err = resolveAayu(ctx, t, get)
 		case "pnpm", "yarn":
 			needsCorepack = true
 		}
@@ -75,6 +77,34 @@ func Resolve(ctx context.Context, s *Spec, get Fetch) error {
 		}
 		s.Tools = append(s.Tools, Tool{Name: "corepack", Want: ">=" + v.Version, Version: v.Version, Via: "npm",
 			Evidence: "pnpm and yarn come through corepack; a current corepack has the registry's current signing keys"})
+	}
+	return nil
+}
+
+// aayuReleases is where aayu's signed release assets live (install.sh).
+const aayuReleases = "https://github.com/rahulnakmol/agentic-ayudha/releases/download/v"
+
+// resolveAayu pins the release's linux archives to their lines in its
+// checksums.txt, the file install.sh checks the archive against.
+func resolveAayu(ctx context.Context, t *Tool, get Fetch) error {
+	if t.Via != "release" || len(t.SHA256) == 2 {
+		return nil
+	}
+	b, err := get(ctx, aayuReleases+t.Version+"/checksums.txt")
+	if err != nil {
+		return err
+	}
+	t.SHA256 = map[string]string{}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		for _, a := range []string{"amd64", "arm64"} {
+			if len(f) == 2 && f[1] == "aayudha_"+t.Version+"_linux_"+a+".tar.gz" {
+				t.SHA256[a] = f[0]
+			}
+		}
+	}
+	if len(t.SHA256) != 2 {
+		return fmt.Errorf("checksums.txt of v%s lists no linux amd64 and arm64 archives", t.Version)
 	}
 	return nil
 }

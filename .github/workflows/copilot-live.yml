@@ -1,0 +1,89 @@
+name: copilot-live
+
+# Live check of the GitHub Copilot host (docs/guide/hosts/copilot.md). A real Copilot CLI, in a folder it trusts,
+# loads what `aayu install --host copilot` writes: the model calls the aayudha MCP server's doctor tool, and the
+# pre-tool hook denies `aayu ship`, a step that belongs to a person (internal/hosts TestCopilotLive). VS Code is not
+# covered: it has no headless run. The cloud agent and Copilot code review are documented only.
+#
+# Budget: one premium request per run (one `copilot -p` call at the Efficiency tier); the test fails a run that
+# costs more than 2. COPILOT_GITHUB_TOKEN lives only in the live-tests environment (branches dev and promote/*),
+# so this never runs on a pull request or a fork, and the test passes it to the copilot process alone. Skips
+# cleanly (green) while the secret is not set.
+#
+# Non-gating: a check of aayudha's own host code that calls a model. It is never a required check, never part of a
+# promotion gate (ci.yml rolling or stable), and never installed into a product repository; workflows_test.go holds
+# the rules a file can show.
+on:
+  push:
+    branches: [dev]
+    # What the live run exercises: the Copilot install, the hook entry point (internal/cli/install.go), and the MCP
+    # server's doctor tool. Not every Go file, since each run costs a premium request.
+    paths:
+      - "internal/hosts/copilot*.go"
+      - "internal/hosts/install.go"
+      - "internal/hosts/hook.go"
+      - "internal/cli/install.go"
+      - "internal/cli/mcp.go"
+      - "internal/mcp/server.go"
+      - "cmd/aayudha/main.go"
+      - ".github/workflows/copilot-live.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-live
+  cancel-in-progress: false
+
+env:
+  COPILOT_VERSION: "1.0.98"
+  # SHA-256 of https://registry.npmjs.org/@github/copilot-linux-x64/-/copilot-linux-x64-1.0.98.tgz
+  COPILOT_SHA256: d9aa4de59e8842d9b660768d73fed0c068400ca63ebad7b57c077c5fcb462fcc
+
+jobs:
+  live:
+    name: copilot-live
+    runs-on: ubuntu-latest
+    environment: live-tests
+    timeout-minutes: 15
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install Copilot CLI (pinned version and SHA-256)
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/copilot"
+          mkdir -p "$dir/bin"
+          tgz="$dir/copilot.tgz"
+          curl -fsSL -o "$tgz" "https://registry.npmjs.org/@github/copilot-linux-x64/-/copilot-linux-x64-${COPILOT_VERSION}.tgz"
+          echo "${COPILOT_SHA256}  $tgz" | sha256sum -c -
+          tar -xzf "$tgz" -C "$dir"
+          install -m 0755 "$dir/package/copilot" "$dir/bin/copilot"
+          echo "$dir/bin" >> "$GITHUB_PATH"
+      - name: Live Copilot run (skips while the secret is absent)
+        env:
+          AAYU_COPILOT_LIVE: "1"
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_AUTO_UPDATE: "false"
+          # No session bus: nothing this job runs may start a dbus-daemon (the keychain probe once did).
+          DBUS_SESSION_BUS_ADDRESS: "disabled:"
+        run: |
+          set -euo pipefail
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "::notice::COPILOT_GITHUB_TOKEN is not set in the live-tests environment; skipping the live Copilot run."
+            exit 0
+          fi
+          copilot --version
+          go test -count=1 -run '^TestCopilotLive$' -v ./internal/hosts

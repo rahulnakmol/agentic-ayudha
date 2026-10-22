@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	gh "github.com/google/go-github/v90/github"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 )
 
 // The floor only tightens: a drop below the floor less the margin fails, a
@@ -67,16 +69,36 @@ func TestTotal(t *testing.T) {
 	}
 }
 
-// Only a floor-waiver Decision for coverage that a person accepted waives.
+// Only a floor-waiver Decision for coverage that a person accepted waives,
+// and, once an authority login is configured, only that person (Bug #599).
 func TestAcceptedWaiver(t *testing.T) {
+	dayOne := &config.Config{}
+	authority := &config.Config{Autonomy: config.Autonomy{Approver: "founder"}}
 	ok := func() *gh.Issue {
 		return &gh.Issue{Number: gh.Ptr(9), Title: gh.Ptr("Waive the coverage floor on #5"), State: gh.Ptr("closed"), StateReason: gh.Ptr("completed"),
 			Labels:   []*gh.Label{{Name: "type:decision"}, {Name: "decision:waiver"}},
 			Body:     gh.Ptr("### Question\n\nShould #5 ship?\n\n### Decision\n\nwaive, accepted by @founder on 2026-10-16.\n"),
 			ClosedBy: &gh.User{Login: gh.Ptr("founder"), Type: gh.Ptr("User")}}
 	}
-	if err := AcceptedWaiver(ok(), "coverage", nil); err != nil {
-		t.Fatalf("accepted waiver refused: %v", err)
+	for name, c := range map[string]*config.Config{"day one": dayOne, "authority": authority} {
+		if err := AcceptedWaiver(ok(), "coverage", c, "story"); err != nil {
+			t.Fatalf("%s: accepted waiver refused: %v", name, err)
+		}
+	}
+	// Another person with write access closed it, or the founder closed one
+	// naming someone else: no waiver once the founder is the authority, as
+	// before on the day-one path.
+	other := ok()
+	other.ClosedBy = &gh.User{Login: gh.Ptr("mallory"), Type: gh.Ptr("User")}
+	misnamed := ok()
+	misnamed.Body = gh.Ptr("### Decision\n\nwaive, accepted by @mallory on 2026-10-16.\n")
+	for _, is := range []*gh.Issue{other, misnamed} {
+		if err := AcceptedWaiver(is, "coverage", authority, "story"); err == nil || !strings.Contains(err.Error(), "floor-waiver authority @founder") {
+			t.Errorf("%s accepted over the authority: %v", is.GetBody(), err)
+		}
+		if err := AcceptedWaiver(is, "coverage", dayOne, "story"); err != nil {
+			t.Errorf("day one refused %s: %v", is.GetBody(), err)
+		}
 	}
 	for name, edit := range map[string]func(*gh.Issue){
 		"not a waiver":    func(is *gh.Issue) { is.Labels = is.Labels[:1] },
@@ -87,7 +109,7 @@ func TestAcceptedWaiver(t *testing.T) {
 	} {
 		is := ok()
 		edit(is)
-		if AcceptedWaiver(is, "coverage", nil) == nil {
+		if AcceptedWaiver(is, "coverage", dayOne, "story") == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}

@@ -269,13 +269,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      - name: Secrets (gitleaks, full history)
+      # Every commit reachable from the commit under test (a PR's merge commit, or the pushed head), not every fetched
+      # ref: with --log-opts unset gitleaks scans `git log --all`, so a leak on another, unmerged branch failed every PR.
+      - name: Secrets (gitleaks, full history of the commit under test)
         run: |
           set -euo pipefail
           curl -fsSLo "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner
+          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner --log-opts=HEAD
       - name: SAST (semgrep)
         run: |
           set -euo pipefail
@@ -375,6 +377,12 @@ jobs:
       - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           syft-version: v1.54.1
+      # v* tags sit on main's Release merge commits, which dev and rolling never contain, so goreleaser would
+      # otherwise name the snapshot from v0.0.0 on dev and fail on the rolling-<date> tag of a rolling commit.
+      # Only tags release.yml accepts count (annotated, on main, vMAJOR.MINOR.PATCH[-PRE]); versionsort.suffix=- ranks
+      # a release above its prereleases (v1.0.0 over v1.0.0-rc.1).
+      - name: Name the snapshot after the newest v* release
+        run: echo "GORELEASER_CURRENT_TAG=$(git -c versionsort.suffix=- for-each-ref --merged origin/main --sort=-v:refname --format='%(objecttype) %(refname:short)' 'refs/tags/v[0-9]*' | awk '$1 == "tag" {print $2}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' | head -n1)" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.18.3
@@ -572,7 +580,11 @@ jobs:
         env:
           AAYU_LIVE: "1"
           AAYU_GITHUB_TOKEN: ${{ secrets.AAYU_GITHUB_TOKEN }}
-        run: go test -race -count=1 -tags integration ./...
+          # Survey filing runs on rahulnakmol/aayu-survey-scratch with a token limited to it (D-5.9n); unset, it skips.
+          AAYU_SURVEY_SCRATCH_TOKEN: ${{ secrets.AAYU_SURVEY_SCRATCH_TOKEN }}
+        # The live tests in internal/cli run to completion against real workflows (TestReleaseLive waits for the
+        # scratch gate and release runs), which with -race takes internal/cli past go test's 10-minute default.
+        run: go test -race -count=1 -timeout 30m -tags integration ./...
 
   smoke:
     name: smoke (${{ matrix.os }})
@@ -600,9 +612,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: false
       - name: Unit tests on this OS
-        # internal/cli takes about 15 minutes on Windows, where git starts about ten times slower than on Linux
-        # (TestReleaseFailsClosed alone is 5.5 minutes): past go test's 10-minute default (Appendix B, D-0.4g).
-        run: go test -count=1 -timeout 30m ./...
+        # internal/cli takes over 30 minutes on Windows (24 on 2026-10-18), where git starts about ten times slower
+        # than on Linux (TestReleaseFailsClosed alone is 5.5 minutes): past go test's 10-minute default (Appendix B,
+        # D-0.4g).
+        run: go test -count=1 -timeout 60m ./...
       - name: Binary smoke test
         run: |
           set -euo pipefail

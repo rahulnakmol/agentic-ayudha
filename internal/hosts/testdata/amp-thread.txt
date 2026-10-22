@@ -1,0 +1,12 @@
+---
+title: v0.3.0: PR descriptions a person can read, and readable model + effort lines
+threadId: T-01a14ffc-40d7-77f3-af07-12103e2b5846
+created: 2026-10-18T17:08:14.345Z
+agentMode: medium
+---
+
+# v0.3.0: PR descriptions a person can read, and readable model + effort lines
+
+## User
+
+agentMode: max

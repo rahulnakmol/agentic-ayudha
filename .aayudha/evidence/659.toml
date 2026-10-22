@@ -1,0 +1,15 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestBuildSessionReviewLoop"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestBuildSessionReviewLoop"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestBuildSessionReviewLoop"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/cli:TestBuildSessionReviewRefusesSameFamily"]

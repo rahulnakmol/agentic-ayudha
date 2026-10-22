@@ -6,11 +6,31 @@ aayudha works inside the agent you already use. Pick yours:
 |---|---|
 | [Claude Code](claude-code.md) | A plugin from this repository's marketplace, or `aayu install --host claude` |
 | [OpenAI Codex](codex.md) | The same plugin, or `aayu install --host codex` |
+| [GitHub Copilot](copilot.md) | `aayu install --host copilot`: skills, hooks, and the MCP server for Copilot CLI and VS Code |
 | [Amp](amp.md) | `aayu install --host amp`: skills, a project plugin, and the MCP server |
 | [Cursor](cursor.md) | `aayu install --host cursor`: skills, rules, MCP, and hooks |
 
 Every host gets the same rules: hooks call only `aayu hook <name>`, steps that belong to a person are never offered
 to an agent, and write verbs reach the MCP server only when you set `[mcp] expose_writes = true`.
+
+## The config your agent runs
+
+Your agent runs some files straight from the checkout: hooks and MCP servers in `.mcp.json`, `.claude/`,
+`.cursor/`, `.codex/`, `.github/hooks/`, and the Amp plugin in `.amp/plugins/`. They stay in the repository,
+because that is where each agent looks for them, so aayudha guards them two ways:
+
+- `aayu init --gates` adds an `aayudha:host-config` block to `.github/CODEOWNERS`. A pull request that changes
+  any of those files then needs a code owner's review before it merges.
+- `aayu doctor` fails, and exits nonzero, when an installed hook or MCP entry differs from what `aayu install`
+  would write. Its `host-config` row names the file, and `aayu install --host <host> --apply` puts it back. An
+  aayudha hook with something added to its command still counts as aayudha's, so the repair removes it. A new hook
+  under a command of its own looks like your team's hook, so doctor leaves it alone and the code owner's review
+  has to catch it.
+
+One risk remains. Review happens when a change merges, not when you check it out. If you check out someone
+else's branch in a folder your agent trusts, the agent runs that branch's hooks and MCP servers, with your
+environment and your tokens, before anyone has reviewed them. Before you start your agent on a branch you did not
+write, run `aayu doctor` or read the branch's changes to those files.
 
 ## The cloud environment each agent works in
 

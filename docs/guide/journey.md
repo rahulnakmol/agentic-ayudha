@@ -14,10 +14,10 @@ on a guess. And an answer about another person's claim would be a breach. Whatev
 and private, and you need to know it is, not hope.
 
 You are not alone, but you are the only person: the founder, and the whole human side of the team. aayudha gives
-you twelve agent seats, a small delivery team, each with a name: Metis, the product strategist, who interviews you;
-Daedalus, the architect, who plans; Talos, the engineer, who builds; Athena, the engineering manager, who has every
-change reviewed by a model from another vendor; Themis, the quality architect, whose checks no model can talk its way
-past; and seven more ([seats](concepts-seats.md)). They do the work. You make the calls only a person can make.
+you fourteen agent seats, a small delivery team, each with a name: Arjun, the product strategist, who interviews you;
+Vishwa, the architect, who plans; Nakul, the engineer, who builds; Drona, the engineering manager, who has every
+change reviewed by a model from another vendor; Yama, the quality architect, whose checks no model can talk its way
+past; and nine more ([seats](concepts-seats.md)). They do the work. You make the calls only a person can make.
 
 > **In the story:** you stand in for the one person who ran this, in this repository, on Monday 12 October 2026.
 > Everything that happens to you happened. The issues, pull requests, reviews, checks, and numbers are real, linked
@@ -65,7 +65,8 @@ site links work only when every story under it shipped with proof, and those thr
 Then an [epilogue](built-with-itself.md): how aayudha was built the same way, with its own gates saying no to it.
 
 > **Tip:** every chapter ends with an "Under the hood" box for engineers who want the mechanics, and a "What's next"
-> that leads into the next chapter. You can also read the [How it works](how-it-works.md) track on its own.
+> that leads into the next chapter. You can also read the [How it works](how-it-works.md) track on its own, or see
+> the whole loop on one page first: [the delivery loop](concepts-loop.md).
 
 ## What's next
 

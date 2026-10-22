@@ -46,7 +46,15 @@ type Run struct {
 	CI      bool // running in CI (the screen-reader floor runs there only on its label or nightly)
 	Nightly bool // a scheduled run
 
+	// NoSeed: never run [verify] seed. `verify --security` sets it: its job holds
+	// the token that writes Bugs as github-actions[bot], and the seed is
+	// repository code that could read that token (Codex security review of #509).
+	NoSeed bool
+
 	seeded bool // [verify] seed ran in this run
+	// upBeforeSeed: the target URL already answered before [verify] seed ran,
+	// so verify did not start the app there (G1: passive scan only).
+	upBeforeSeed bool
 
 	// Footprint is the set of layers the changed paths fall in.
 	Footprint []string
@@ -58,6 +66,9 @@ type Evidence struct {
 	Kind     string
 	Data     []byte
 	Criteria []int
+	// OCRScanned marks a screenshot whose pixels the redaction pass read
+	// (tesseract) and found free of personal data; only those leave the run.
+	OCRScanned bool
 }
 
 // Result is a floor's outcome.
@@ -65,6 +76,7 @@ type Result struct {
 	Check     proof.Check
 	More      []proof.Check // further checks one tool run produces (e.g. the a11y sub-floors)
 	Artifacts []Evidence
+	Findings  []Finding // what a failing security floor found (sast, secrets, deps)
 }
 
 // Floor is one deterministic floor.
@@ -80,7 +92,8 @@ type Floor interface {
 type Report struct {
 	Checks    []proof.Check
 	Artifacts []Evidence
-	Hold      bool // every floor passed, was waived, or was skipped without blocking
+	Findings  []Finding // the findings of the floors that failed
+	Hold      bool      // every floor passed, was waived, or was skipped without blocking
 }
 
 // Execute runs every floor in order. A floor whose tool is missing or errors
@@ -107,6 +120,9 @@ func Execute(ctx context.Context, r *Run, floors []Floor) Report {
 		rep.Checks = append(rep.Checks, res.Check)
 		rep.Checks = append(rep.Checks, res.More...)
 		rep.Artifacts = append(rep.Artifacts, res.Artifacts...)
+		if res.Check.Result == proof.Fail {
+			rep.Findings = append(rep.Findings, res.Findings...)
+		}
 	}
 	p := proof.Pack{Checks: rep.Checks}
 	rep.Hold = p.FloorsHold()

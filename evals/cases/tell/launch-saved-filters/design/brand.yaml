@@ -1,0 +1,17 @@
+# Brand written by `aayu grill brand` (WP5.3); the tell eval reads its voice.
+version: 1
+name: Benefits QA
+voice:
+  tone:
+    - confident
+    - warm
+    - concrete
+  avoid:
+    - revolutionary
+    - game-changing
+    - seamless
+    - effortless
+    - supercharge
+    - unlock
+    - exclamation marks
+    - time saved that no measure counts

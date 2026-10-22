@@ -10,11 +10,13 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // Status of a check.
@@ -40,6 +42,7 @@ type Result struct {
 // Probe is everything checks may observe. Tests supply fakes.
 type Probe struct {
 	Root     string // repository root; "" outside a repository
+	CI       bool   // --ci or GITHUB_ACTIONS=true: the local config layer is not read
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
 	Exec     func(ctx context.Context, dir, name string, args ...string) (string, error)
@@ -49,16 +52,36 @@ type Probe struct {
 	ConfigErr error
 	Secrets   *secrets.Store
 	Human     func(ctx context.Context) (identity.Token, error)
-	WhoAmI    func(ctx context.Context, t identity.Token) (identity.User, error)
-	API       func(ctx context.Context, path string, out any) error // GitHub REST GET; nil without a token
-	Repo      string                                                // owner/name; "" when unknown
-	Version   string
-	Latest    func(ctx context.Context) (string, error)
-	Host      string // --host
+	// CursorMCPHuman resolves the human token as the aayudha MCP server does
+	// when Cursor starts it, with only Cursor's variables (D-3.2b.p).
+	CursorMCPHuman func(ctx context.Context) (identity.Token, error)
+	WhoAmI         func(ctx context.Context, t identity.Token) (identity.User, error)
+	API            func(ctx context.Context, path string, out any) error // GitHub REST GET; nil without a token
+	Repo           string                                                // owner/name; "" when unknown
+	Version        string
+	Latest         func(ctx context.Context) (string, error)
+	Host           string // --host
+	Verbose        bool   // --verbose: rows add what they would leave out, such as an agent CLI's warnings
+	// HostConfig plans aayu install for the hosts in lock.toml and returns the
+	// executable host config files (hosts.ExecutableConfig) whose content
+	// differs from what it would write; nil outside an installed repository.
+	HostConfig func(ctx context.Context) ([]string, error)
+	// CopilotModels lists the model IDs the account Copilot signs in with may
+	// pick, by family (hosts.CopilotFamilies); nil when aayu cannot ask: no
+	// token it can read, or Copilot signs in to a host other than github.com.
+	CopilotModels func(ctx context.Context) (map[verbs.Family][]string, error)
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)
-	TracePath   string
+	// Capabilities tries each capability of a configured integration with a
+	// cheap read (providers.Capabilities); nil when unavailable.
+	Capabilities func(ctx context.Context, name string) ([]integrations.Check, error)
+	TracePath    string
+	// Reachable lists the GitHub credentials this process can reach, by
+	// source and account (Decision #488); nil skips the approvals row's check.
+	Reachable func(ctx context.Context) []identity.Reach
+	Agent     string           // the agent marker this process runs under, or ""
+	Now       func() time.Time // nil: time.Now
 }
 
 // Check is one named check.
@@ -75,13 +98,17 @@ var Checks = []Check{
 	{"gh", checkGH},
 	{"token", checkToken},
 	{"bot-identity", checkBot},
+	{"approvals", checkApprovals},
 	{"config", checkConfig},
 	{"schema", checkSchema},
 	{"host", checkHost},
 	{"secrets", checkSecrets},
 	{"skills-copies", checkSkillCopies},
 	{"mcp", checkMCP},
+	{"provider-mcp", checkProviderMCP},
 	{"codex-hooks", checkCodexHooks},
+	{"copilot", checkCopilot},
+	{"host-config", checkHostConfig},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
 	{"ledger-rulesets", checkLedgerRulesets},
@@ -93,9 +120,13 @@ var Checks = []Check{
 	{"agent-env", checkAgentEnv},
 	{"agents", checkAgents},
 	{"reviewer-apps", checkReviewerApps},
+	{"review-rung", checkReviewRung},
 	{"retired-workflows", checkRetiredWorkflows},
+	{"security-workflow", checkSecurityWorkflow},
+	{"dast", checkDAST},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
+	{"feedback-layers", checkFeedbackLayers},
 	{"coexistence", checkCoexistence},
 	{"telemetry", checkTelemetry},
 }

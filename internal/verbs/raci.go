@@ -23,14 +23,17 @@ type Roles struct {
 var RACI = map[string]Roles{
 	"grill":      {Consulted: []SeatID{CodeArchitect, UXResearcher}, Informed: []SeatID{EngineeringManager}},
 	"slice":      {Consulted: []SeatID{CodeArchitect, EngineeringManager}, Informed: []SeatID{AINativeEngineer}},
-	"plan":       {Consulted: []SeatID{EngineeringManager, QualityArchitect}, Informed: []SeatID{AINativeEngineer}},
+	"scope":      {Consulted: []SeatID{EngineeringManager, Founder}, Informed: []SeatID{DevOps, Marketer}},
+	"plan":       {Consulted: []SeatID{EngineeringManager, QualityArchitect, DataAIArchitect, ProductionEngineer}, Informed: []SeatID{AINativeEngineer}},
 	"decide":     {Consulted: []SeatID{ProductStrategist, CodeArchitect}, Informed: []SeatID{EngineeringManager, Auditor}},
+	"counsel":    {Consulted: []SeatID{ProductStrategist, CodeArchitect, EngineeringManager}, Informed: []SeatID{Auditor}},
 	"triage":     {Informed: []SeatID{EngineeringManager}},
-	"build":      {Consulted: []SeatID{CodeArchitect}, Informed: []SeatID{EngineeringManager}},
+	"brain":      {Consulted: []SeatID{Founder, RevenueArchitect}, Informed: []SeatID{Marketer}},
+	"build":      {Consulted: []SeatID{CodeArchitect, ProductionEngineer}, Informed: []SeatID{EngineeringManager}},
 	"verify":     {Informed: []SeatID{EngineeringManager}},
 	"inspect":    {Consulted: []SeatID{QualityArchitect, CodeArchitect}, Informed: []SeatID{AINativeEngineer}},
 	"ship":       {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{ProductStrategist, Marketer}},
-	"release":    {Consulted: []SeatID{QualityArchitect, EngineeringManager}, Informed: []SeatID{Marketer, Founder}},
+	"release":    {Consulted: []SeatID{QualityArchitect, EngineeringManager, ProductionEngineer}, Informed: []SeatID{Marketer, Founder}},
 	"proof":      {Consulted: []SeatID{AINativeEngineer}, Informed: []SeatID{Auditor}},
 	"ready":      {Consulted: []SeatID{CodeArchitect, QualityArchitect}, Informed: []SeatID{EngineeringManager}},
 	"research":   {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Marketer}},
@@ -40,19 +43,25 @@ var RACI = map[string]Roles{
 	"review":     {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
 	"polish":     {Informed: []SeatID{EngineeringManager}},
 	"baseline":   {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
-	"experiment": {Consulted: []SeatID{ProductStrategist, UXResearcher}, Informed: []SeatID{Founder}},
+	"experiment": {Consulted: []SeatID{ProductStrategist, UXResearcher, DataAIArchitect}, Informed: []SeatID{Founder}},
 	"readout":    {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Founder, Marketer}},
-	"respond":    {Consulted: []SeatID{DevOps}, Informed: []SeatID{EngineeringManager, Founder}},
+	"respond":    {Consulted: []SeatID{AINativeEngineer, DevOps}, Informed: []SeatID{EngineeringManager, Founder}},
 	"status":     {Informed: []SeatID{Founder}},
 	"audit":      {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{Founder}},
 	"retro":      {Consulted: []SeatID{Auditor, AINativeEngineer}, Informed: []SeatID{Founder}},
 	"measure":    {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Founder}},
-	"evolve":     {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
+	"evolve":     {Consulted: []SeatID{QualityArchitect, DataAIArchitect}, Informed: []SeatID{EngineeringManager}},
 	"brief":      {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Marketer}},
 	"tell":       {Consulted: []SeatID{Mentalist, ProductStrategist}, Informed: []SeatID{Founder}},
 	"init":       {Consulted: []SeatID{DevOps}, Informed: []SeatID{EngineeringManager}},
 	"install":    {Informed: []SeatID{EngineeringManager}},
 	"doctor":     {Informed: []SeatID{EngineeringManager}},
+	"chart":      {Consulted: []SeatID{CodeArchitect, RevenueArchitect}, Informed: []SeatID{AINativeEngineer, QualityArchitect}},
+	"survey":     {Consulted: []SeatID{ProductStrategist, QualityArchitect}, Informed: []SeatID{EngineeringManager}},
+	// The Production Engineer's verbs (Decision #324): the builder is Consulted where its code is implicated.
+	"investigate": {Consulted: []SeatID{AINativeEngineer}, Informed: []SeatID{EngineeringManager}},
+	"slo":         {Consulted: []SeatID{ProductStrategist, QualityArchitect}, Informed: []SeatID{EngineeringManager, DevOps}},
+	"runbook":     {Consulted: []SeatID{AINativeEngineer, DevOps}, Informed: []SeatID{EngineeringManager}},
 }
 
 // PolicyOwner is the seat that owns a command's thresholds or policy.
@@ -74,7 +83,7 @@ func LintRACI() error {
 	known := func(id SeatID) bool { _, ok := FindSeat(id); return ok }
 	for _, c := range append(slices.Clone(Verbs), Plumbing...) {
 		if !known(c.Seat) {
-			bad("%s: Accountable seat %q is not one of the twelve seats", c.Name, c.Seat)
+			bad("%s: Accountable seat %q is not one of the fourteen seats", c.Name, c.Seat)
 		}
 		if c.Owns != "" && !known(c.Owns) {
 			bad("%s: threshold owner %q is not a seat", c.Name, c.Owns)

@@ -236,6 +236,10 @@ trap 'rm -rf "$tmp"' EXIT
 	steps("Dependencies", s.Deps)
 	steps("Browsers", s.Browsers)
 	steps("Step", s.Steps)
+	if t := s.Tool("aayu"); t != nil {
+		writeAayu(&b, *t)
+	}
+	b.WriteString(setupHook(s))
 	b.WriteString("step \"Setup complete (environment " + fp + ")\"\n")
 	return b.String()
 }
@@ -307,6 +311,39 @@ if [ -n "${GOROOT:-}" ] && [ "$GOROOT" != /usr/local/go ]; then persist GOROOT=/
 go version
 
 `, t.Version, t.Evidence, archCase(t, nil, "    "))
+}
+
+// writeAayu puts aayu, and its alias, in ~/.local/bin (install.sh's default)
+// for every later shell: loops and hooks call it (Bug #819). A warm run
+// builds or downloads nothing when the binary already matches.
+func writeAayu(b *strings.Builder, t Tool) {
+	if t.Via == "source" {
+		fmt.Fprintf(b, `step "aayu from this checkout" # %s
+AAYU_DIR="$HOME/.local/bin"
+mkdir -p "$AAYU_DIR"
+# A binary built from this commit, with no local changes, is current.
+if [ "$(go version -m "$AAYU_DIR/aayudha" 2> /dev/null | awk '$2 ~ /^vcs\.(revision|modified)=/ {print $2}' | xargs)" != "vcs.revision=$(git rev-parse HEAD) vcs.modified=false" ]; then
+  CGO_ENABLED=0 go build -trimpath -o "$AAYU_DIR/aayudha" ./cmd/aayudha
+fi
+`, t.Evidence)
+	} else {
+		fmt.Fprintf(b, `AAYU_VERSION=%s # %s
+step "aayu $AAYU_VERSION"
+AAYU_DIR="$HOME/.local/bin"
+if [ "$("$AAYU_DIR/aayudha" version 2> /dev/null)" != "aayu $AAYU_VERSION" ]; then
+  %sfetch "%s$AAYU_VERSION/aayudha_${AAYU_VERSION}_linux_$ARCH.tar.gz" "$sum" "$tmp/aayu.tar.gz"
+  tar -C "$tmp" -xzf "$tmp/aayu.tar.gz" aayudha
+  mkdir -p "$AAYU_DIR" && install -m 0755 "$tmp/aayudha" "$AAYU_DIR/aayudha"
+fi
+`, t.Version, t.Evidence, archCase(t, nil, "  "), aayuReleases)
+		if t.Path != "" {
+			fmt.Fprintf(b, `# The committed Amp plugin calls aayu by this path, and only when it reports $AAYU_VERSION.
+plugin_aayu=%s
+[ "$("$plugin_aayu" version 2> /dev/null)" = "aayu $AAYU_VERSION" ] || { as_root mkdir -p "$(dirname "$plugin_aayu")" && as_root ln -sf "$AAYU_DIR/aayudha" "$plugin_aayu"; }
+`, shellQuote(t.Path))
+		}
+	}
+	b.WriteString("ln -sf aayudha \"$AAYU_DIR/aayu\"\npath_first \"$AAYU_DIR\"\naayu version\n\n")
 }
 
 // shellQuote quotes s as one literal shell word, so a step's label never
@@ -487,8 +524,15 @@ func checkScript(s Spec, fp string) string {
 			fmt.Fprintf(&b, "expect uv \"$(uv --version | awk '{print $2}')\" %s\n", t.Version)
 		case "rust":
 			b.WriteString("rustc --version\n")
+		case "aayu":
+			if t.Via == "release" {
+				fmt.Fprintf(&b, "expect aayu \"$(aayu version)\" \"aayu %s\"\n", t.Version)
+			} else {
+				b.WriteString("aayu version\n")
+			}
 		}
 	}
+	b.WriteString(gateScript(s))
 	if len(s.Services) > 0 {
 		b.WriteString(StartCommand + "\n")
 	}

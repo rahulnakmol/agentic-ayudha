@@ -26,14 +26,14 @@ type PackSection struct {
 // PackSections are the parts of a decision pack, in order; the last one ends
 // the pack.
 var PackSections = []PackSection{
-	{"Question", "The question in one sentence, and whether it is the right question."},
-	{"Facts", "The grounded facts first: code, LAYERS.md, packs, metrics, open issues, each cited."},
-	{"Options", "Two or three options as top-level list items or ### headings, each with its trade-offs."},
-	{"Recommendation", "The recommended option, why, and its door: one-way (irreversible) or two-way (reversible)."},
-	{"Cost of waiting", "What waiting a day or a week costs, cited where it can be."},
-	{"Pre-mortem", "The Mentalist twin's pressure test: assume the recommendation failed; the likeliest reasons and the check that warns early."},
-	{"Questions that would change the answer", "The few questions whose answers would flip the recommendation."},
-	{"Your decision", "The one thing the human decides, answerable in a word or a line."},
+	{"Question", "Write the question in one sentence. Say if it is the right question."},
+	{"Facts", "Put the grounded facts first: code, LAYERS.md, packs, metrics, and open issues. Cite each one."},
+	{"Options", "Give two or three numbered top-level options, each `N. **Name.** what it does`, with its trade-offs. A Decision offers at least two. The person picks one by its number."},
+	{"Recommendation", "Start with the recommended option (`Option N, because …`), then say why. Name its door: one-way (irreversible) or two-way (reversible)."},
+	{"Cost of waiting", "Say what a wait of a day or a week costs. Cite it where you can."},
+	{"Pre-mortem", "The Mentalist twin tests the recommendation: assume that it failed. Give the likeliest reasons and the check that warns early."},
+	{"Questions that would change the answer", "List the few questions whose answers would change the recommendation."},
+	{"Your decision", "Name the one thing the human decides. A word or a line must answer it."},
 }
 
 // route maps topic words to the seat that owns the topic. The first rule with
@@ -44,9 +44,13 @@ var route = []struct {
 	re   *regexp.Regexp
 }{
 	{verbs.Auditor, regexp.MustCompile(`(?i)\b(audit|control|compliance|bypass|evidence trail|unlogged)\b`)},
+	// Data and AI design (Decision #283): before the Revenue Architect's metrics and the DevOps "pipeline", so "data
+	// pipeline" and "analytics dashboard" reach the data seat while "conversion metric" and "CI pipeline" do not.
+	{verbs.DataAIArchitect, regexp.MustCompile(`(?i)\b(data (pipelines?|warehouse|lake|lakehouse|platform|quality|contracts?|products?|lineage|retention)|warehouse|lakehouse|analytics|dashboards?|semantic layer|lineage|etl|elt|cdc|rag|retrieval|embeddings?|vector (index|store|database|db)|knowledge graphs?|graphrag|machine learning|ml|llm|eval sets?|hallucinat\w*|grounded answers?)\b`)},
 	{verbs.RevenueArchitect, regexp.MustCompile(`(?i)\b(metrics?|conversion|revenue|pricing|price|experiments?|growth|retention|activation|north star|churn|readout)\b`)},
 	{verbs.QualityArchitect, regexp.MustCompile(`(?i)\b(tests?|testing|flak\w*|coverage|floors?|quality|defects?|regression|waive\w*|proof packs?)\b`)},
-	{verbs.AINativeEngineer, regexp.MustCompile(`(?i)\b(incident|outage|slo|error budget|latency|on-?call|rollback|production)\b`)},
+	// Running production (Decision #324): incidents, SLOs, runbooks, and rollback belong to the Production Engineer.
+	{verbs.ProductionEngineer, regexp.MustCompile(`(?i)\b(incidents?|outages?|slos?|error budgets?|latency|on-?call|rollbacks?|production|postmortems?|runbooks?|telemetry|alerts?)\b`)},
 	{verbs.DevOps, regexp.MustCompile(`(?i)\b(ci|pipeline|release|install|deploy\w*|workflow|runner|promotion|devex)\b`)},
 	{verbs.UXResearcher, regexp.MustCompile(`(?i)\b(ux|ui|screen|wireframe|mockup|prototype|accessibility|a11y|design system|usability)\b`)},
 	{verbs.CodeArchitect, regexp.MustCompile(`(?i)\b(design|architecture|contracts?|api|schema|interface|boundar(y|ies)|data model|struct|field|index|migration|layers?|refactor)\b`)},
@@ -60,7 +64,7 @@ var route = []struct {
 // typeSeat is the owning seat for an issue type when no topic word matches.
 var typeSeat = map[string]verbs.SeatID{
 	"goal": verbs.Founder, "initiative": verbs.Founder, "experiment": verbs.RevenueArchitect,
-	"incident": verbs.AINativeEngineer, "bug": verbs.AINativeEngineer, "feedback": verbs.ProductStrategist,
+	"incident": verbs.ProductionEngineer, "bug": verbs.AINativeEngineer, "feedback": verbs.ProductStrategist,
 	"release": verbs.DevOps,
 }
 
@@ -157,7 +161,11 @@ func CheckPackWith(md string, known func(cite string) bool) []string {
 		}
 	}
 	if n := seats.Words(md); n > PackMaxWords {
-		out = append(out, fmt.Sprintf("%d words: a pack a busy human decides from in five minutes is at most %d; cite detail instead of pasting it", n, PackMaxWords))
+		// The target sits a fifth under the limit: revisions in run 39027321306 cut about 50 words less than they were
+		// told, so a target a tenth under left them just over it.
+		aim := PackMaxWords * 4 / 5
+		out = append(out, fmt.Sprintf("%d words: a pack a busy human decides from in five minutes is at most %d; cut at least %d words, to about %d, "+
+			"by dropping the weakest fact, trade-off, or question and citing detail instead of pasting it", n, PackMaxWords, n-aim, aim))
 	}
 	return append(out, seats.CheckGroundingWith(md, known)...)
 }

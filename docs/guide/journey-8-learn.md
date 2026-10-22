@@ -46,7 +46,10 @@ reject. This Monday would give it plenty: 17 reviews against a plan of 10, and f
 It also reports the flow without filing anything: hours from Ready to ship split by stage, how long a green pull
 request waited for a person, how often a person stepped in, how much of inspect's advice was acted on, how many
 shipped stories came back as Bugs, and the mix of changes.
-`evolve` turns an accepted lesson into a lasting fix for the agents themselves: a failing test for the skill first,
+Each lesson is first sorted by where it is fixed for good: in the code, in a check, in a skill's words, or in what
+a person is shown for review. Code and check fixes become Stories, because a mistake the code cannot express or a test
+always catches never needs to be warned against. `evolve` turns an accepted lesson about a skill's words into a
+lasting fix for the agents themselves: a failing test for the skill first,
 then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on the benefits app
 that day; the [epilogue](built-with-itself.md) shows the same loop at work on aayudha itself.
 
@@ -71,11 +74,11 @@ A result you can reproduce is worth more than a bigger one you cannot. Say what 
 
 | Verb | What it does |
 |---|---|
-| [`experiment`](../../skills/experiment/SKILL.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
-| [`readout`](../../skills/readout/SKILL.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
-| [`retro`](../../skills/retro/SKILL.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
-| [`measure`](../../skills/measure/SKILL.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
-| [`evolve`](../../skills/evolve/SKILL.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
+| [`experiment`](skills/experiment.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
+| [`readout`](skills/readout.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
+| [`retro`](skills/retro.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
+| [`measure`](skills/measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
+| [`evolve`](skills/evolve.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
 
 <!-- END GENERATED: stage-verbs -->
 

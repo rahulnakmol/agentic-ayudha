@@ -1,0 +1,1 @@
+Parsedown is a legacy PHP Markdown library our applications depend on; it has a readme and no other product documentation. Tell me what it does, who relies on it, and how we would move it to modern PHP (8.2 or later, strict types, typed signatures) without changing a byte of its output.

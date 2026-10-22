@@ -1,0 +1,17 @@
+# Thread Usage
+
+## Model Routing
+
+| Purpose | Requests | Model ID |
+| --- | ---: | --- |
+| Agent | 12 | anthropic/claude-sonnet-5-5 |
+| Thread Title | 1 | openai/gpt-6-astra |
+| Agent | 8 | openai/gpt-6.1-sol |
+| View Media | 2 | google/gemini-3.8-flash |
+| Agent | 3 | anthropic/claude-sonnet-5-5 |
+
+## Orb System Metrics
+
+| Model ID | Purpose |
+| --- | --- |
+| xai/grok-4.7 | Agent |

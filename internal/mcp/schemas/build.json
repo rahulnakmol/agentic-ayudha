@@ -4,6 +4,16 @@
   "additionalProperties": false,
   "description": "Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.",
   "properties": {
+    "asked": {
+      "description": "The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "decline": {
+      "description": "Decline open items of the last session review, one \"<id>: <why>\" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "delegate": {
       "description": "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).",
       "enum": [
@@ -17,7 +27,7 @@
       "x-aayu-type": "enum"
     },
     "issue": {
-      "description": "Ready story or bug to build.",
+      "description": "Ready story or bug to build; required unless --next.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
@@ -27,15 +37,27 @@
       "type": "boolean",
       "x-aayu-type": "bool"
     },
+    "next": {
+      "description": "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.",
+      "enum": [
+        "ship",
+        "pick"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
     "resume": {
       "description": "Resume from the last Aayudha-Checkpoint trailer.",
       "type": "boolean",
       "x-aayu-type": "bool"
+    },
+    "stop": {
+      "description": "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires.",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
-  "required": [
-    "issue"
-  ],
+  "required": [],
   "title": "build",
   "type": "object",
   "x-aayu-exposure": "write",

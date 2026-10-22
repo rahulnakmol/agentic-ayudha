@@ -1,0 +1,14 @@
+# Which tests prove Bug #807's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # rung B's reply has a 1299-character summary on both attempts: its disposition and finding are kept, the summary cut to 1200
+tests = ["internal/inspect:TestInspectCutsLongSummary"]
+
+[[criterion]]
+id = 2 # a finding's title of 201 characters: the reply is still rejected, naming $.findings[0].title
+tests = ["internal/inspect:TestInspectCutsLongSummary"]
+
+[[criterion]]
+id = 3 # the gate (inspect --ci) with a paid reviewer whose summary is 1300 characters: rung B, merge, one model call, no person
+tests = ["internal/cli:TestInspectPaidReviewer"]

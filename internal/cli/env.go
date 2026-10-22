@@ -17,6 +17,8 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -54,19 +56,30 @@ type Options struct {
 	GitHubAPI   string                                             // default https://api.github.com
 	NotifySink  notify.Sink                                        // replaces the [notify] channel (tests)
 	ModelClient func(route models.Route, key string) models.Client // replaces the model provider (tests)
+	// LedgerAttempt runs as each ledger write reads the branch tip, before it compares and writes (tests:
+	// a push from another writer at that moment).
+	LedgerAttempt func(attempt int, tip string)
 	// AppManifestCode replaces the browser step of init --identity (tests).
 	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
-	GitHubGap       time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
-	GHToken         func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
-	Secrets         *secrets.Store                                                              // nil uses keychain, env, then the age file
-	LookPath        func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
-	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
-	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
-	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
-	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
+	GitHubGap       time.Duration                                          // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
+	GHToken         func(ctx context.Context) (string, error)              // `gh auth token`; nil runs gh
+	GitCredential   func(ctx context.Context, repo string) (string, error) // the git credential helper's token for github.com (approvals, doctor); nil runs git credential fill
+	GHAccounts      func(ctx context.Context) (map[string]string, error)   // every account gh stores for github.com, active or not, login to token (approvals, doctor); nil runs gh
+	Secrets         *secrets.Store                                         // nil uses keychain, env, then the age file
+	LookPath        func(string) (string, error)                           // nil uses exec.LookPath (doctor)
+	// UserHome is the account's home directory from the system's user
+	// database, never $HOME or XDG_CONFIG_HOME, which the run's environment
+	// sets (#667); nil uses os/user.
+	UserHome func() (string, error)
+	Exec     func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
+	Assets   fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
+	HaltPoll time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
+	TUI      func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
 	// IsTerminal reports whether a stream (e.In, e.Out, or e.Err) is a person's
 	// terminal (WP1.1b); nil checks the file descriptor. Tests force a level with it.
 	IsTerminal func(stream any) bool
+	// MCP marks a verb the MCP server runs for a host's agent (WP3.3).
+	MCP bool
 	// UIStatic renders spinners and celebrations as their final frame only, so
 	// rich output is byte-stable (golden tests, recordings).
 	UIStatic bool
@@ -81,7 +94,10 @@ type Options struct {
 	EnsureEnv func(ctx context.Context, root, host string) (agentenv.HostStatus, error)
 	// DelegateExec runs a delegation receiver's CLI (build --delegate, tests); nil runs the command.
 	DelegateExec delegate.Exec
-	RunPoll      time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	// Sleep waits during a build's usage-limit pause (tests); nil waits on a timer.
+	Sleep      func(ctx context.Context, d time.Duration) error
+	RunPoll    time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	DevicePoll time.Duration // how often the presence check polls GitHub's device flow (tests); 0 uses GitHub's interval
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.
@@ -115,6 +131,16 @@ type Env struct {
 	Options
 	config  *config.Loaded // loaded on first use by Config
 	actions *actions.Log   // opened on first use by Actions
+
+	approval *Approval // a person's device-flow approval for this command (presence.go)
+	// writes, when set, is the write gate every GitHub client of this run
+	// shares, so writes running at once (the inbox's) keep one gap.
+	writes *github.WriteGate
+	// showCode, when set, shows the pending device code to the person in
+	// place of the plain text on stderr (the inbox's login screen); the
+	// approval is the same either way (presence.go).
+	showCode func(ctx context.Context, code deviceCodeReply, expires time.Time) error
+	args     []string // the command line after the binary's name, for the person approving it (presence.go)
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 
@@ -153,9 +179,19 @@ func newEnv(io IO, opts Options) (*Env, error) {
 	return &Env{IO: io, Options: opts}, nil
 }
 
-// Agent reports whether the process runs as an agent lane (AAYU_AGENT=1).
-// Agents may not confirm on a human's behalf or replace the binary.
-func (e *Env) Agent() bool { return e.Getenv("AAYU_AGENT") == "1" }
+// Agent reports whether the process runs as an agent lane: AAYU_AGENT=1 (the
+// MCP server and the loops set it) or a marker a host sets in every command
+// its agent runs (hosts.AgentMarkers, Bug #170). Agents may not confirm on a
+// human's behalf or replace the binary.
+func (e *Env) Agent() bool { return e.agentSignal() != "" }
+
+// agentSignal names what marks the process as an agent lane, or "".
+func (e *Env) agentSignal() string {
+	if e.Getenv("AAYU_AGENT") == "1" {
+		return "AAYU_AGENT=1"
+	}
+	return hosts.AgentMarker(e.Getenv)
+}
 
 // Emit writes a command result: v as indented JSON with --json, otherwise text.
 func (e *Env) Emit(v any, text func(w io.Writer) error) error {
