@@ -84,7 +84,10 @@
     "layers": [
       "L04",
       "L07"
-    ]
+    ],
+    "approved_by": "rahulnakmol",
+    "approved_at": "2026-10-25T17:25:45Z",
+    "as": "approver"
   },
   "planned_at": "2026-10-25T17:07:04Z",
   "planned_by": "human-fallback"
