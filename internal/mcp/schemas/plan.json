@@ -11,7 +11,7 @@
       "x-aayu-type": "bool"
     },
     "create": {
-      "description": "Write the validated plan to the ledger (specs/<story>/plan.json) and the story; without it plan only validates.",
+      "description": "Write the validated plan to the ledger (specs/<story>/plan.json) and the story, or a Feature's design (specs/<feature>/design.json); without it plan only validates.",
       "type": "boolean",
       "x-aayu-read-only-values": [
         "false"
@@ -19,7 +19,7 @@
       "x-aayu-type": "bool"
     },
     "draft": {
-      "description": "JSON file with the plan the host's model wrote (evals/schemas/plan.json); without it plan reports the footprint and criteria to plan.",
+      "description": "JSON file with the plan the host's model wrote (evals/schemas/plan.json), or a Feature's technical design (contracts, layers, story order, rollback); without it plan reports what to plan.",
       "type": "string",
       "x-aayu-type": "path"
     },
@@ -30,7 +30,7 @@
       "x-aayu-type": "bool"
     },
     "story": {
-      "description": "Story or bug to plan.",
+      "description": "Story or bug to plan, or a Feature to write its technical design for.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"

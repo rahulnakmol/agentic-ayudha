@@ -15,17 +15,17 @@ aayu:
       type: issue
       required: true
       positional: true
-      description: "Story or bug to plan."
+      description: "Story or bug to plan, or a Feature to write its technical design for."
     - name: draft
       type: path
       required: false
       positional: false
-      description: "JSON file with the plan the host's model wrote (evals/schemas/plan.json); without it plan reports the footprint and criteria to plan."
+      description: "JSON file with the plan the host's model wrote (evals/schemas/plan.json), or a Feature's technical design (contracts, layers, story order, rollback); without it plan reports what to plan."
     - name: create
       type: bool
       required: false
       positional: false
-      description: "Write the validated plan to the ledger (specs/<story>/plan.json) and the story; without it plan only validates."
+      description: "Write the validated plan to the ledger (specs/<story>/plan.json) and the story, or a Feature's design (specs/<feature>/design.json); without it plan only validates."
     - name: approve
       type: bool
       required: false
@@ -38,6 +38,7 @@ aayu:
       description: "Solo mode only (one human, no bot App): record that a never-layer plan proceeds with no plan-time review, after your story comment starting \"Solo-mode bypass:\"; a bypass, never an approval."
   outputs:
     - "plan"
+    - "technical-design"
     - "footprint"
     - "em-review"
   gates:
@@ -132,3 +133,24 @@ You (the host's model) plan; the binary checks the plan and records it on the le
    `specs/<story>/plan.json` on the ledger).
 5. A footprint that touches an `[autonomy] never` layer needs the Engineering Manager's plan-time review before
    `ship`: tell the human; only they record it.
+
+## A Feature: write its technical design
+
+`aayu plan <feature>` takes a Feature. A person approves one technical design, and every story plan under the
+Feature stays inside it.
+
+1. See what to design: `aayu plan <feature>` prints the Feature's footprint (from its Expected paths through the
+   `LAYERS.md` globs) and its stories.
+2. Write the design as JSON. Use only these fields:
+   `{"feature": N, "contracts": [...], "layers": [...], "story_order": [...], "rollback": "...", "open_questions": [...]}`.
+   - `contracts`: the interfaces, schemas, or APIs the Feature adds or changes, as in a checkpoint's `contracts`;
+   - `layers`: the layers the Feature touches, each in its footprint;
+   - `story_order`: every story of the Feature, by issue number, in build order;
+   - `rollback`: how to undo the Feature. It is required when `layers` has `L07`.
+3. Check it (read-only): `aayu plan <feature> --draft design.json`. Fix every problem, then record it:
+   `aayu plan <feature> --draft design.json --create` writes `specs/<feature>/design.json` on the ledger.
+4. The output ends with the next step: the request for a person's approval of the design. Only a person
+   approves it.
+
+After that, a story plan under the Feature that has a checkpoint in a layer outside the design does not pass.
+Change the design first, or plan the story inside it.

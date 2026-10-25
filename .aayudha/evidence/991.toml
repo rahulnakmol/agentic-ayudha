@@ -1,0 +1,30 @@
+# Which tests prove story #991's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # plan <feature>: the footprint, the stories, and the next step; nothing written
+tests = ["internal/cli:TestPlanFeatureDesign"]
+
+[[criterion]]
+id = 2 # a design layer outside the Feature's footprint is refused
+tests = ["internal/cli:TestPlanFeatureDesign", "internal/planning:TestCheckDesign"]
+
+[[criterion]]
+id = 3 # a story of the Feature left out of the story order is refused
+tests = ["internal/cli:TestPlanFeatureDesign", "internal/planning:TestCheckDesign"]
+
+[[criterion]]
+id = 4 # a design that touches L07 with an empty rollback is refused
+tests = ["internal/cli:TestPlanFeatureDesign", "internal/planning:TestCheckDesign"]
+
+[[criterion]]
+id = 5 # --create writes specs/<feature>/design.json in one ledger commit, and the next step
+tests = ["internal/cli:TestPlanFeatureDesign"]
+
+[[criterion]]
+id = 6 # a story plan checkpoint outside the Feature's design is refused
+tests = ["internal/cli:TestPlanFeatureDesign", "internal/planning:TestCheckDesign"]
+
+[[criterion]]
+id = 7 # a story plan under a Feature with no design passes as before
+tests = ["internal/cli:TestPlanFeatureDesign"]

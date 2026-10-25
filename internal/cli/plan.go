@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
@@ -53,6 +56,7 @@ type PlanResult struct {
 	Ledger   string        `json:"ledger,omitempty"`
 	DryRun   bool          `json:"dry_run,omitempty"`
 	Next     string        `json:"next,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
 }
 
 // PlanFeature is one mapped feature a plan can ground its checkpoints in.
@@ -137,6 +141,9 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
+	if chk.Type == "feature" {
+		return e.planFeature(ctx, c, bot, repo, is, chk.BodyHash, in)
+	}
 	if !chk.Pass || (chk.Type != "story" && chk.Type != "bug") {
 		return Errorf(ExitBlocked, "plan #%d: a plan is for a story or bug that passes Ready; this %s has %d Ready problem(s) (`aayu ready %d --check`)", n, chk.Type, len(chk.Problems), n)
 	}
@@ -172,6 +179,19 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 			names = append(names, o.Name)
 		}
 		if ps := planning.CheckRollout(d, names); len(ps) > 0 {
+			res.Problems, res.Pass = append(res.Problems, ps...), false
+		}
+	}
+	// A plan that is only checked may be checked where the ledger cannot be
+	// read; a plan that is written is checked against the design, or refused.
+	design, err := e.featureDesign(ctx, c, bot, repo, n)
+	switch {
+	case err != nil && in.Bool("create"):
+		return Wrap(ExitExternal, err)
+	case err != nil:
+		res.Warnings = append(res.Warnings, fmt.Sprintf("the technical design of the story's Feature was not read from the ledger (%v); --create reads it and refuses when it cannot", err))
+	case design != nil:
+		if ps := planning.CheckInDesign(*design, d.Checkpoints); len(ps) > 0 {
 			res.Problems, res.Pass = append(res.Problems, ps...), false
 		}
 	}
@@ -226,6 +246,9 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		for _, p := range res.Problems {
 			fmt.Fprintf(w, "  problem: %s\n", p)
 		}
+		for _, x := range res.Warnings {
+			fmt.Fprintf(w, "  warning: %s\n", x)
+		}
 		if res.Review.Required {
 			fmt.Fprintf(w, "  EM plan-time review required (never layers %s): a human runs `aayu plan %d --approve`\n", strings.Join(res.Review.Layers, ", "), n)
 		}
@@ -245,6 +268,143 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "the plan of #%d has %d problem(s); revise the draft", n, len(res.Problems))
 	}
 	return nil
+}
+
+// TechDesignResult is what plan reports for a Feature: the check of its
+// technical design draft.
+type TechDesignResult struct {
+	planning.DesignReport
+	ExpectedPaths []string `json:"expected_paths"`
+	Ledger        string   `json:"ledger,omitempty"`
+	DryRun        bool     `json:"dry_run,omitempty"`
+	Next          string   `json:"next,omitempty"`
+}
+
+// planFeature (Feature #874, S5): the host's model writes the Feature's
+// technical design (skills/plan); the binary checks it against the Feature's
+// footprint (from its expected paths) and its stories, and --create writes
+// specs/<feature>/design.json to the ledger. A Feature never gets a story
+// plan record.
+func (e *Env) planFeature(ctx context.Context, c *github.Client, bot identity.Bot, repo string, is *gh.Issue, bodyHash string, in Values) error {
+	n := is.GetNumber()
+	it, _ := workitems.Parse(n, is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
+	paths := planning.Paths(it.Fields["expected_paths"])
+	footprint := planning.GlobFootprint(autonomy.ReadLayers(config.RepoRoot(e.Dir)), paths)
+	owner, name, _ := github.SplitRepo(repo)
+	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
+		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(n), &o)
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	stories, titles := []int{}, map[int]string{}
+	for _, s := range subs {
+		si := (*gh.Issue)(s)
+		labels := github.IssueLabels(si)
+		if typ, _ := workitems.TypeOf(si.GetType().GetName(), labels); typ != "story" || slices.Contains(labels, "status:cancelled") {
+			continue
+		}
+		stories, titles[si.GetNumber()] = append(stories, si.GetNumber()), si.GetTitle()
+	}
+	res := TechDesignResult{ExpectedPaths: paths}
+	if !in.Has("draft") {
+		res.DesignReport = planning.DesignReport{Feature: n, Footprint: footprint, Stories: stories, Problems: []string{}}
+		res.Next = fmt.Sprintf("draft the technical design (skills/plan), then aayu plan %d --draft <file>", n)
+		return e.Emit(res, func(w io.Writer) error {
+			fmt.Fprintf(w, "#%d %s: footprint %s from expected paths %s; %d stories\n", n, is.GetTitle(), listOrNone(footprint), listOrNone(paths), len(stories))
+			for _, s := range stories {
+				fmt.Fprintf(w, "  story #%d %s\n", s, titles[s])
+			}
+			fmt.Fprintf(w, "  next: %s\n", res.Next)
+			return nil
+		})
+	}
+	var d planning.DesignDraft
+	if err := readDraft(in.String("draft"), &d); err != nil {
+		return err
+	}
+	res.DesignReport = planning.CheckDesign(n, footprint, stories, d)
+	if res.Pass && in.Bool("create") {
+		res.DryRun = c.DryRun()
+		if !res.DryRun {
+			rec := planning.Design{Feature: n, BodyHash: bodyHash, Footprint: footprint, Contracts: d.Contracts, Layers: d.Layers, StoryOrder: d.StoryOrder, Rollback: d.Rollback,
+				PlannedAt: e.Now().UTC().Format(time.RFC3339), PlannedBy: c.Identity()}
+			w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+			if err != nil {
+				return err
+			}
+			b, _ := json.MarshalIndent(rec, "", "  ")
+			if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: technical design of #%d", n), Files: map[string][]byte{planning.DesignLedgerPath(n): append(b, '\n')}}); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			res.Ledger = planning.DesignLedgerPath(n)
+			res.Next = fmt.Sprintf("aayu ready %d --part tech --request", n)
+		}
+	}
+	if err := e.Emit(res, func(w io.Writer) error {
+		verdict := "passes"
+		if !res.Pass {
+			verdict = "does not pass yet"
+		}
+		fmt.Fprintf(w, "technical design of #%d: layers %s, story order %d of %d stories, %s\n", n, listOrNone(d.Layers), len(d.StoryOrder), len(stories), verdict)
+		for _, p := range res.Problems {
+			fmt.Fprintf(w, "  problem: %s\n", p)
+		}
+		switch {
+		case res.Ledger != "":
+			fmt.Fprintf(w, "  wrote %s on the ledger\n  next: %s\n", res.Ledger, res.Next)
+		case res.DryRun:
+			fmt.Fprintln(w, "  --dry-run: the design is planned, not written")
+		case res.Pass && !in.Bool("create"):
+			fmt.Fprintln(w, "  run again with --create to write it to the ledger")
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !res.Pass {
+		return Errorf(ExitBlocked, "the technical design of #%d has %d problem(s); revise the draft", n, len(res.Problems))
+	}
+	return nil
+}
+
+// featureDesign reads, from the ledger, the technical design of the Feature
+// that story n is under: nil when it has no parent, or the parent has no
+// design (only a Feature has one), or there is no ledger.
+func (e *Env) featureDesign(ctx context.Context, c *github.Client, bot identity.Bot, repo string, n int) (*planning.Design, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n))
+	if err != nil {
+		return nil, ignoreMissing(err)
+	}
+	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+	if err != nil {
+		return nil, err
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return nil, ignoreMissing(err)
+	}
+	defer t.Close()
+	path := planning.DesignLedgerPath(parent.GetNumber())
+	b, err := t.File(ctx, path)
+	if err != nil {
+		return nil, ignoreMissing(err)
+	}
+	var d planning.Design
+	if err := json.Unmarshal(b, &d); err != nil {
+		return nil, fmt.Errorf("%s on the ledger: %w", path, err)
+	}
+	return &d, nil
+}
+
+// ignoreMissing is nil for a missing parent issue, ledger, or ledger file,
+// else err.
+func ignoreMissing(err error) error {
+	if github.NotFound(err) || errors.Is(err, ledger.ErrNoLedger) || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // approvePlan records the Engineering Manager's plan-time review: a human
