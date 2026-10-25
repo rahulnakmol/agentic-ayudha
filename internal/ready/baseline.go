@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
-	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Feature baselines (Feature #874, core design S5): an agent drafts a part of
@@ -30,10 +29,12 @@ var partOwner = map[string]verbs.SeatID{
 	"tech": verbs.CodeArchitect, "ux": verbs.UXResearcher,
 }
 
-// Pin is one thing a baseline freezes: a reference and its hash.
+// Pin is one thing a baseline freezes: a reference and its hash. A spec pin
+// of a story also carries the story's pinned fields; its hash is theirs.
 type Pin struct {
-	Ref  string `json:"ref"`
-	Hash string `json:"hash"`
+	Ref   string    `json:"ref"`
+	Hash  string    `json:"hash"`
+	Story *StoryPin `json:"story,omitempty"`
 }
 
 // Baseline is a part of a Feature as an agent drafted it and, once
@@ -60,6 +61,11 @@ type Baseline struct {
 func (b Baseline) Check(f int, part string, v int) error {
 	if b.Schema != BaselineSchema || b.Feature != f || b.Part != part || b.Version != v || len(b.Pins) == 0 || b.Hash != PinsHash(b.Pins) {
 		return fmt.Errorf("not %s v%d of #%d with the hash of its pins", part, v, f)
+	}
+	for _, p := range b.Pins {
+		if p.Story != nil && p.Hash != p.Story.hash() {
+			return fmt.Errorf("pin %s of %s v%d of #%d is not the hash of its story fields", p.Ref, part, v, f)
+		}
 	}
 	return nil
 }
@@ -88,15 +94,6 @@ func PinsHash(pins []Pin) string {
 	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:])
-}
-
-// Pins is what part pins on Feature f now, or false while that part has no
-// pins (the spec, technical design, and UX pins are n/a until #992).
-func Pins(f int, part, body string) ([]Pin, bool) {
-	if part != "intent" {
-		return nil, false
-	}
-	return []Pin{{Ref: fmt.Sprintf("#%d body", f), Hash: workitems.BodyHash(body)}}, true
 }
 
 var baselineFile = regexp.MustCompile(`/([a-z]+)-v([0-9]+)(\.draft)?\.json$`)

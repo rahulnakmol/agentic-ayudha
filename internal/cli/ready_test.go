@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/chart"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -366,7 +367,7 @@ func TestReadyFeatureBaseline(t *testing.T) {
 		t.Fatalf("--part spec with no draft: exit %d, writes %v: %s%s", code, g.Writes(), out, errOut)
 	}
 
-	// Usage, a part with no pins yet, a Story, a missing issue, no token, and --ci: each refused, nothing written.
+	// Usage, UX for a Feature with no UI layer, a Story, a missing issue, no token, and --ci: each refused, nothing written.
 	g.AddIssue("A story", fixtureBody(t, "story", nil), "type:story") // #2
 	for _, c := range []struct {
 		env  map[string]string
@@ -376,7 +377,7 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	}{
 		{agent, []string{"--request"}, ExitUsage, "--request goes with --part"},
 		{agent, []string{"--part", "intent", "--check"}, ExitUsage, "neither --check nor --guard"},
-		{agent, []string{"--part", "ux", "--request"}, ExitUsage, "the UX pins are n/a"},
+		{agent, []string{"--part", "ux", "--request"}, ExitBlocked, "UX design: not needed (no UI layer in the footprint)"},
 		{person, []string{"--part", "intent", "--ci"}, ExitBlocked, "needs GitHub's device-flow presence check"},
 		{map[string]string{"XDG_STATE_HOME": state}, []string{"--part", "intent", "--request"}, ExitBlocked, ""},
 		{map[string]string{"XDG_STATE_HOME": state}, []string{"--part", "intent"}, ExitBlocked, ""},
@@ -480,5 +481,220 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	if code != ExitExternal || !strings.Contains(errOut, "not intent v3 of #1 with the hash of its pins") || started() != 0 ||
 		slices.Contains(files(), "specs/1/baselines/intent-v3.json") {
 		t.Fatalf("a forged draft: exit %d, device codes %d, files %v: %s%s", code, started(), files(), out, errOut)
+	}
+}
+
+// Story #992: each part pins only what it owns. The spec pins each child
+// story's title, Completion Goal, effort, layers, and dependencies, and the
+// set of stories; the technical design pins design.json and the chart notes;
+// the UX design pins the stage manifests on the ledger and the head of an
+// early-build story's open PR.
+func TestReadyFeaturePartPins(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	paths := func(ps ...string) func(map[string]string) {
+		return func(f map[string]string) { f["expected_paths"] = "- `" + strings.Join(ps, "`\n- `") + "`" }
+	}
+	ui := g.AddIssue("A Feature with a UI", fixtureBody(t, "feature", paths("packages/design-system/**", "internal/models/**", "internal/cli/ready.go")), "type:feature") // #1: L01, L02, L05
+	noUI := g.AddIssue("A Feature with no UI", fixtureBody(t, "feature", paths("internal/cli/ready.go")), "type:feature")                                                 // #2: L02
+	story := func(title string, links string, labels ...string) *fake.Issue {
+		s := g.AddIssue(title, fixtureBody(t, "story", func(f map[string]string) {
+			f[workitems.FieldLinks], f[workitems.FieldAssumptions] = links, "- The list API exists."
+			f[workitems.FieldCriteria] = strings.Replace(f[workitems.FieldCriteria], "cart is empty", title+" is empty", 1) // each story its own goal
+		}), append([]string{"type:story"}, labels...)...)
+		s.Parent, ui.Subs = ui.Number, append(ui.Subs, s.Number)
+		return s
+	}
+	// Five stories, listed out of number order; labels and links out of order too.
+	s3 := story("Story three", "depends-on #6\ndepends-on #4", "effort:M", "layer:L07", "layer:L02")
+	s4 := story("Story four", "", "effort:XS", "layer:L05")
+	_ = story("Story cancelled", "", "effort:S", "layer:L02", "status:cancelled") // #5: not in the spec
+	s6 := story("Story six", "", "effort:L", "layer:L01", "early-build")
+	s7 := story("Story seven", "depends-on #3", "effort:S", "layer:L02")
+	s8 := story("Story eight", "", "effort:S", "layer:L01")
+	ui.Subs = []int{s7.Number, s3.Number, 5, s6.Number, s4.Number, s8.Number}
+	dir, bare := ledgerCheckout(t)
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": filepath.Join(dir, "state")}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	readyRun := func(n int, args ...string) (int, string) {
+		t.Helper()
+		code, out, errOut := run(t, agent, opts, append([]string{"ready", fmt.Sprint(n), "--repo", "o/r", "--part"}, args...)...)
+		return code, out + errOut
+	}
+	record := func(path string) ready.Baseline {
+		t.Helper()
+		var b ready.Baseline
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+path)), &b); err != nil {
+			t.Fatalf("ledger %s: %v", path, err)
+		}
+		return b
+	}
+	commits := func() string { return git(t, bare, "rev-list", "--count", "ledger") }
+	sha := func(s string) string { sum := sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }
+	putLedger := func(files map[string]string) { // a ledger write outside this verb (plan, the design verbs)
+		t.Helper()
+		hand := filepath.Join(t.TempDir(), "hand")
+		git(t, filepath.Dir(hand), "clone", "--quiet", "--branch", "ledger", bare, hand)
+		for p, b := range files {
+			_ = os.MkdirAll(filepath.Dir(filepath.Join(hand, p)), 0o755)
+			if err := os.WriteFile(filepath.Join(hand, p), []byte(b), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		git(t, hand, "add", ".")
+		git(t, hand, "commit", "--quiet", "-m", "seed")
+		git(t, hand, "push", "--quiet", "origin", "ledger")
+	}
+
+	// 2. A dry run before and after an edit to only one story's Assumptions: the pin lists are equal byte for byte.
+	dryPins := func() string {
+		t.Helper()
+		code, out, errOut := run(t, agent, opts, "ready", "1", "--repo", "o/r", "--part", "spec", "--request", "--dry-run", "--json")
+		var rep struct {
+			Baseline struct{ Pins json.RawMessage }
+		}
+		if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || len(rep.Baseline.Pins) == 0 {
+			t.Fatalf("spec --request --dry-run --json: exit %d, %v: %s%s", code, err, out, errOut)
+		}
+		return string(rep.Baseline.Pins)
+	}
+	before := dryPins()
+	body := s3.Body
+	g.Mu.Lock()
+	s3.Body = strings.Replace(body, "- The list API exists.", "- The list API exists, and it pages by 50.", 1)
+	g.Mu.Unlock()
+	if after := dryPins(); after != before || s3.Body == body {
+		t.Fatalf("an Assumptions edit changed the spec pins:\n%s\n%s", before, after)
+	}
+	// A control: a Completion Goal edit to the same story does change them.
+	g.Mu.Lock()
+	s3.Body = strings.Replace(body, "422 with code cart.empty", "422 with code cart.none", 1)
+	g.Mu.Unlock()
+	if dryPins() == before {
+		t.Fatal("a Completion Goal edit left the spec pins unchanged")
+	}
+	g.Mu.Lock()
+	s3.Body = body
+	g.Mu.Unlock()
+	if strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "specs/") {
+		t.Fatal("a --dry-run wrote to the ledger")
+	}
+
+	// 1. The draft has one pin per story (in number order), with its fields, and one for the set of story numbers.
+	if code, out := readyRun(1, "spec", "--request"); code != 0 || !strings.Contains(out, "Spec v1 of #1 waits for a person") {
+		t.Fatalf("spec --request: exit %d: %s", code, out)
+	}
+	d := record("specs/1/baselines/spec-v1.draft.json")
+	goal := func(s *fake.Issue) string {
+		it, _ := workitems.Parse(s.Number, s.Title, s.Body, "", []string{"type:story"})
+		return workitems.CompletionGoalHash(it)
+	}
+	want := []struct {
+		s      *fake.Issue
+		fields string
+	}{
+		{s3, `{"number":3,"title":"Story three","completion_goal_hash":"` + goal(s3) + `","effort":"M","layers":["L02","L07"],"depends_on":[4,6]}`},
+		{s4, `{"number":4,"title":"Story four","completion_goal_hash":"` + goal(s4) + `","effort":"XS","layers":["L05"],"depends_on":[]}`},
+		{s6, `{"number":6,"title":"Story six","completion_goal_hash":"` + goal(s6) + `","effort":"L","layers":["L01"],"depends_on":[]}`},
+		{s7, `{"number":7,"title":"Story seven","completion_goal_hash":"` + goal(s7) + `","effort":"S","layers":["L02"],"depends_on":[3]}`},
+		{s8, `{"number":8,"title":"Story eight","completion_goal_hash":"` + goal(s8) + `","effort":"S","layers":["L01"],"depends_on":[]}`},
+	}
+	if len(d.Pins) != len(want)+1 || d.Owner != "product-strategist" {
+		t.Fatalf("spec draft: %d pins, want %d: %+v", len(d.Pins), len(want)+1, d)
+	}
+	for i, w := range want {
+		p := d.Pins[i]
+		got, _ := json.Marshal(p.Story)
+		if p.Ref != fmt.Sprintf("#%d", w.s.Number) || string(got) != w.fields || p.Hash != sha(w.fields) || goal(w.s) == "" || goal(w.s) == workitems.BodyHash(w.s.Body) {
+			t.Errorf("spec pin %d: %s %s %s\nwant fields %s", i, p.Ref, p.Hash, got, w.fields)
+		}
+	}
+	if set := d.Pins[len(want)]; set != (ready.Pin{Ref: "#1 stories", Hash: sha("[3,4,6,7,8]")}) {
+		t.Errorf("story set pin: %+v", set)
+	}
+	// The draft read back passes its own check, so a second request finds it and writes nothing.
+	n := commits()
+	if code, out := readyRun(1, "spec", "--request"); code != 0 || commits() != n {
+		t.Fatalf("spec --request again: exit %d, commits %s → %s: %s", code, n, commits(), out)
+	}
+	// A story's fields edited on the ledger by hand, its hash kept: the draft is refused, never drafted after.
+	forged := d
+	forged.Pins = slices.Clone(d.Pins)
+	f := *forged.Pins[0].Story
+	f.Effort, forged.Pins[0].Story = "XS", &f
+	b, _ := json.Marshal(forged)
+	putLedger(map[string]string{"specs/1/baselines/spec-v1.draft.json": string(b)})
+	if code, out := readyRun(1, "spec", "--request"); code != ExitExternal || !strings.Contains(out, "pin #3 of spec v1 of #1 is not the hash of its story fields") {
+		t.Fatalf("spec --request on a forged draft: exit %d: %s", code, out)
+	}
+	b, _ = json.Marshal(d)
+	putLedger(map[string]string{"specs/1/baselines/spec-v1.draft.json": string(b)})
+	n = commits()
+
+	// 3. No design.json on the ledger: the technical design is refused, and nothing is written.
+	if code, out := readyRun(1, "tech", "--request"); code != ExitBlocked ||
+		!strings.Contains(out, "The technical design of #1 has no design.json yet. Vishwa writes it first: aayu plan 1 --draft <file> --create") || commits() != n {
+		t.Fatalf("tech --request with no design: exit %d: %s", code, out)
+	}
+
+	// 4. design.json by the SHA-256 of its ledger bytes, and the chart note by the SHA-256 of its comment body.
+	designJSON := `{"feature": 1, "layers": ["L01", "L02", "L05"]}` + "\n"
+	putLedger(map[string]string{"specs/1/design.json": designJSON})
+	note := chart.Comment(chart.KindData, "## Sources\n\nThe eval set.")
+	g.Mu.Lock()
+	ui.Comments = append(ui.Comments, &fake.Comment{ID: 901, Body: "Looks good."}, &fake.Comment{ID: 902, Body: note})
+	g.Mu.Unlock()
+	if code, out := readyRun(1, "tech", "--request"); code != 0 || !strings.Contains(out, "Tech v1 of #1 waits for a person") {
+		t.Fatalf("tech --request: exit %d: %s", code, out)
+	}
+	if tp := record("specs/1/baselines/tech-v1.draft.json"); tp.Owner != "code-architect" ||
+		!slices.Equal(tp.Pins, []ready.Pin{{Ref: "specs/1/design.json", Hash: sha(designJSON)}, {Ref: "#1 chart kind=data", Hash: sha(note)}}) {
+		t.Fatalf("tech draft pins: %+v", tp.Pins)
+	}
+
+	// 5. A Feature with no UI layer in its footprint needs no UX baseline.
+	n = commits()
+	if code, out := readyRun(noUI.Number, "ux", "--request"); code != ExitBlocked || !strings.Contains(out, "UX design: not needed (no UI layer in the footprint)") || commits() != n {
+		t.Fatalf("ux --request with no UI layer: exit %d: %s", code, out)
+	}
+	// A UI Feature with no stage manifest yet: nothing to pin, and nothing written.
+	if code, out := readyRun(1, "ux", "--request"); code != ExitBlocked || !strings.Contains(out, "The UX design of #1 has no stage manifest on the ledger yet") || commits() != n {
+		t.Fatalf("ux --request with no manifest: exit %d: %s", code, out)
+	}
+
+	// 6. Both manifests by the SHA-256 of their ledger bytes (not the working tree's), and the early-build PR by its head SHA.
+	mockup, prototype := `{"stage": "mockup"}`+"\n", `{"stage": "prototype"}`+"\n"
+	putLedger(map[string]string{"design/1/mockup/manifest.json": mockup, "design/1/prototype/manifest.json": prototype})
+	_ = os.MkdirAll(filepath.Join(dir, "design", "1", "mockup"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "design", "1", "mockup", "manifest.json"), []byte(`{"stage": "edited in the working tree"}`), 0o644)
+	head := strings.Repeat("c", 40)
+	early := g.AddPR("Prototype the list", "Refs #6", "amp", "feat/list", head, "dev")
+	g.AddPR("Build story eight", "Refs #8", "amp", "feat/eight", strings.Repeat("d", 40), "dev") // not an early build: not pinned
+	if code, out := readyRun(1, "ux", "--request"); code != 0 || !strings.Contains(out, "UX v1 of #1 waits for a person") {
+		t.Fatalf("ux --request: exit %d: %s", code, out)
+	}
+	wantUX := []ready.Pin{
+		{Ref: "design/1/mockup/manifest.json", Hash: sha(mockup)},
+		{Ref: "design/1/prototype/manifest.json", Hash: sha(prototype)},
+		{Ref: fmt.Sprintf("#6 PR #%d", early.Number), Hash: head},
+	}
+	if up := record("specs/1/baselines/ux-v1.draft.json"); up.Owner != "ux-researcher-evolutionist" || !slices.Equal(up.Pins, wantUX) {
+		t.Fatalf("ux draft pins: %+v\nwant %+v", up.Pins, wantUX)
+	}
+
+	// A Feature with no stories has no spec to pin; a GitHub read that fails drafts nothing.
+	n = commits()
+	if code, out := readyRun(noUI.Number, "spec", "--request"); code != ExitBlocked || !strings.Contains(out, "#2 has no stories yet. Arjun slices it first: aayu slice 2") {
+		t.Fatalf("spec --request with no stories: exit %d: %s", code, out)
+	}
+	for part, fail := range map[string]string{"spec": "GET /repos/o/r/issues/1/sub_issues", "tech": "GET /repos/o/r/issues/1/comments", "ux": "GET /repos/o/r/pulls"} {
+		g.Mu.Lock()
+		g.Fail = fail
+		g.Mu.Unlock()
+		if code, out := readyRun(1, part, "--request"); code != ExitExternal {
+			t.Errorf("%s --request when %s fails: exit %d: %s", part, fail, code, out)
+		}
+	}
+	if commits() != n {
+		t.Fatalf("a refused request wrote: commits %s → %s", n, commits())
 	}
 }

@@ -289,21 +289,13 @@ func (e *Env) planFeature(ctx context.Context, c *github.Client, bot identity.Bo
 	n := is.GetNumber()
 	it, _ := workitems.Parse(n, is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
 	paths := planning.Paths(it.Fields["expected_paths"])
-	footprint := planning.GlobFootprint(autonomy.ReadLayers(config.RepoRoot(e.Dir)), paths)
-	owner, name, _ := github.SplitRepo(repo)
-	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
-		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(n), &o)
-	})
+	footprint := e.footprint(it)
+	subs, err := featureStories(ctx, c, repo, n)
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return err
 	}
 	stories, titles := []int{}, map[int]string{}
-	for _, s := range subs {
-		si := (*gh.Issue)(s)
-		labels := github.IssueLabels(si)
-		if typ, _ := workitems.TypeOf(si.GetType().GetName(), labels); typ != "story" || slices.Contains(labels, "status:cancelled") {
-			continue
-		}
+	for _, si := range subs {
 		stories, titles[si.GetNumber()] = append(stories, si.GetNumber()), si.GetTitle()
 	}
 	res := TechDesignResult{ExpectedPaths: paths}
@@ -366,6 +358,32 @@ func (e *Env) planFeature(ctx context.Context, c *github.Client, bot identity.Bo
 		return Errorf(ExitBlocked, "the technical design of #%d has %d problem(s); revise the draft", n, len(res.Problems))
 	}
 	return nil
+}
+
+// footprint is the layers a Feature's expected paths fall in.
+func (e *Env) footprint(feature workitems.Item) []string {
+	return planning.GlobFootprint(autonomy.ReadLayers(config.RepoRoot(e.Dir)), planning.Paths(feature.Fields["expected_paths"]))
+}
+
+// featureStories lists Feature n's child stories (SubIssue.ListByIssue),
+// leaving out a cancelled one.
+func featureStories(ctx context.Context, c *github.Client, repo string, n int) ([]*gh.Issue, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
+		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(n), &o)
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	var out []*gh.Issue
+	for _, s := range subs {
+		si := (*gh.Issue)(s)
+		labels := github.IssueLabels(si)
+		if typ, _ := workitems.TypeOf(si.GetType().GetName(), labels); typ == "story" && !slices.Contains(labels, "status:cancelled") {
+			out = append(out, si)
+		}
+	}
+	return out, nil
 }
 
 // featureDesign reads, from the ledger, the technical design of the Feature
