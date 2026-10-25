@@ -361,11 +361,16 @@ func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.
 			return err
 		}
 		segments++
-		for line := range strings.SplitSeq(string(b), "\n") {
-			var r actions.Record
-			if json.Unmarshal([]byte(line), &r) == nil {
-				records = append(records, r)
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
 			}
+			var r actions.Record
+			if err := json.Unmarshal([]byte(line), &r); err != nil {
+				// A dropped record would hide a person's minutes and understate the measure.
+				return Wrap(ExitBlocked, fmt.Errorf("measure: ledger %s: %s line %d: %w", tree.Tip, p, i+1, err))
+			}
+			records = append(records, r)
 		}
 	}
 	owner, name, err := github.SplitRepo(repo)

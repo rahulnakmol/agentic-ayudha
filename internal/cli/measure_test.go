@@ -317,4 +317,16 @@ func TestMeasureFounderMinutesPerPR(t *testing.T) {
 	if after != body || len(g.Writes()) != writes {
 		t.Errorf("empty window wrote to GitHub: %v", g.Writes()[writes:])
 	}
+
+	// A segment line that does not decode would drop a person's minutes from
+	// the count, so measure stops and names it instead of measuring less.
+	gitAt(t, seed, date, "checkout", "--quiet", "ledger")
+	writeFiles(t, seed, map[string]string{"actions/2026-10-13/cli-d.jsonl": line(1, "2026-10-13T09:00:00Z", "human") + "\n{\"seq\":2,\"time\":\n"})
+	gitAt(t, seed, date, "add", ".")
+	gitAt(t, seed, date, "commit", "--quiet", "-m", "actions: a truncated segment")
+	gitAt(t, seed, date, "push", "--quiet", "origin", "ledger")
+	code, _, errOut = run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--from", "2026-10-01", "--to", "2026-10-29")
+	if code == 0 || !strings.Contains(errOut, "actions/2026-10-13/cli-d.jsonl line 2") || len(g.Writes()) != writes {
+		t.Errorf("truncated segment: exit %d: %s", code, errOut)
+	}
 }
