@@ -14,6 +14,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
@@ -144,7 +145,7 @@ func runMeasure(ctx context.Context, e *Env, in Values) error {
 	}
 
 	if rep.Issue != 0 {
-		if err := measureIssue(ctx, e, &rep, stages, nsValue, in.String("metric")); err != nil {
+		if err := measureIssue(ctx, e, &rep, stages, l.Config.Outcomes, nsValue, in.String("metric")); err != nil {
 			return err
 		}
 	} else if len(rep.Sources) == 0 {
@@ -227,7 +228,7 @@ func measureErr(err error) error {
 }
 
 // measureIssue measures a Goal or Initiative and writes its Result.
-func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measure.Stages, nsValue int64, metric string) error {
+func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measure.Stages, outcomes config.Outcomes, nsValue int64, metric string) error {
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err
@@ -284,7 +285,7 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 			m.Sources = append(m.Sources, src)
 		}
 	case "aayu":
-		if err := founderMinutes(ctx, e, c, bot, repo, &m); err != nil {
+		if err := founderMinutes(ctx, e, c, bot, repo, outcomes, &m); err != nil {
 			return err
 		}
 	default:
@@ -329,13 +330,9 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 // founderMinutes measures aayu:founder_minutes_per_pr (Story #989) from the
 // actions segments on the ledger and the pull requests merged into dev in
 // the window.
-func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.Bot, repo string, m *measure.Measured) error {
+func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.Bot, repo string, o config.Outcomes, m *measure.Measured) error {
 	if m.Spec.Metric != measure.FounderMetric || m.Spec.Filter != "" {
 		return Errorf(ExitUsage, "measure: metric %q: aayu measures only aayu:%s", m.Spec, measure.FounderMetric)
-	}
-	l, err := e.Config()
-	if err != nil {
-		return err
 	}
 	w, err := e.Ledger(ctx, bot.Token, botIdent(bot), bot.Tag)
 	if err != nil {
@@ -373,10 +370,7 @@ func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.
 			records = append(records, r)
 		}
 	}
-	owner, name, err := github.SplitRepo(repo)
-	if err != nil {
-		return err
-	}
+	owner, name, _ := strings.Cut(repo, "/") // issueItem already read the Goal from this owner/name
 	dev := e.devBranch()
 	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
 		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", Base: dev, ListOptions: o})
@@ -390,7 +384,7 @@ func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.
 			merged++
 		}
 	}
-	if m.Value, m.Detail, err = measure.Founder(records, merged, m.Window, l.Config.Outcomes, dev); err != nil {
+	if m.Value, m.Detail, err = measure.Founder(records, merged, m.Window, o, dev); err != nil {
 		return measureErr(err)
 	}
 	m.Query = fmt.Sprintf("ledger %s: %d actions segments under actions/, records with identity human; GET /repos/%s/pulls?state=closed&base=%s, merged_at in the window",

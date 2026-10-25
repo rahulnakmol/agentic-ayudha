@@ -226,8 +226,9 @@ func TestMeasureLiveMatchesExports(t *testing.T) {
 // human-fallback actions between them, and a human action on 09-30, outside
 // the window. Twelve PRs merged into dev inside the window; one merged into
 // main, one into dev on 10-29 (the window is half-open), and one closed
-// unmerged do not count. 13 / 12 = 1.1 against the target <= 1: not met. A
-// window with no merged PR writes no Result.
+// unmerged do not count. 13 / 12 = 1.1 against the target <= 1: not met.
+// No ledger, another aayu: metric, an unreadable PR list, a window with no
+// merged PR, and a segment line that does not decode each write no Result.
 func TestMeasureFounderMinutesPerPR(t *testing.T) {
 	root := t.TempDir()
 	bare := filepath.Join(root, "origin.git")
@@ -238,20 +239,7 @@ func TestMeasureFounderMinutesPerPR(t *testing.T) {
 	line := func(seq int, at, identity string) string {
 		return fmt.Sprintf(`{"seq":%d,"time":%q,"run":"r","kind":"github.issue.labels.add","target":"o/r#1","identity":%q,"status":"done","tokens_in":0,"tokens_out":0,"cost_usd":0,"wall_time_ms":1,"attempts":1,"prev":""}`, seq, at, identity)
 	}
-	gitAt(t, seed, date, "checkout", "--quiet", "--orphan", "ledger")
-	writeFiles(t, seed, map[string]string{
-		"README.md":                      "ledger\n",
-		"actions/2026-09-30/cli-a.jsonl": line(1, "2026-09-30T23:59:00Z", "human") + "\n",
-		"actions/2026-10-12/cli-b.jsonl": strings.Join([]string{line(1, "2026-10-12T09:00:00Z", "human"), line(2, "2026-10-12T09:04:00Z", "human"),
-			line(3, "2026-10-12T09:20:00Z", "bot"), line(4, "2026-10-12T10:00:00Z", "human-fallback")}, "\n") + "\n",
-		"actions/2026-10-12/amp-c.jsonl": strings.Join([]string{line(1, "2026-10-12T09:09:00Z", "human"), line(2, "2026-10-12T11:30:00Z", "human"),
-			line(3, "2026-10-12T14:00:00Z", "bot")}, "\n") + "\n",
-	})
-	gitAt(t, seed, date, "add", ".")
-	gitAt(t, seed, date, "commit", "--quiet", "-m", "actions: segments")
-	gitAt(t, seed, date, "push", "--quiet", "origin", "ledger")
 	gitAt(t, seed, date, "checkout", "--quiet", "--orphan", "dev")
-	gitAt(t, seed, date, "rm", "-rf", "--quiet", ".")
 	gitAt(t, seed, date, "commit", "--quiet", "--allow-empty", "-m", "dev")
 	gitAt(t, seed, date, "push", "--quiet", "origin", "dev")
 	dir := filepath.Join(root, "work")
@@ -275,6 +263,37 @@ func TestMeasureFounderMinutesPerPR(t *testing.T) {
 	g.Static = map[string]any{"/repos/o/r/pulls": jsonOf(t, "["+strings.Join(prs, ",")+"]")}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(root, "state"), "PATH": os.Getenv("PATH")}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Now: func() time.Time { return time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC) }}
+	refused := func(name string, want int, msg string, args ...string) {
+		t.Helper()
+		writes := len(g.Writes())
+		code, _, errOut := run(t, env, opts, append([]string{"measure", "1", "--repo", "o/r", "--json"}, args...)...)
+		if code != want || !strings.Contains(errOut, msg) || len(g.Writes()) != writes {
+			t.Errorf("%s: exit %d (want %d), GitHub writes %v: %s", name, code, want, g.Writes()[writes:], errOut)
+		}
+	}
+
+	// Before any actions segment reaches the ledger there is nothing to measure,
+	// and aayu measures no other aayu: metric.
+	refused("no ledger", ExitBlocked, "ledger")
+	refused("another aayu metric", ExitUsage, "aayu measures only aayu:founder_minutes_per_pr", "--metric", "aayu:founder_hours")
+
+	gitAt(t, seed, date, "checkout", "--quiet", "--orphan", "ledger")
+	writeFiles(t, seed, map[string]string{
+		"README.md":                      "ledger\n",
+		"actions/README.md":              "not a segment\n",
+		"actions/2026-09-30/cli-a.jsonl": line(1, "2026-09-30T23:59:00Z", "human") + "\n",
+		"actions/2026-10-12/cli-b.jsonl": strings.Join([]string{line(1, "2026-10-12T09:00:00Z", "human"), line(2, "2026-10-12T09:04:00Z", "human"),
+			line(3, "2026-10-12T09:20:00Z", "bot"), line(4, "2026-10-12T10:00:00Z", "human-fallback")}, "\n") + "\n",
+		"actions/2026-10-12/amp-c.jsonl": strings.Join([]string{line(1, "2026-10-12T09:09:00Z", "human"), line(2, "2026-10-12T11:30:00Z", "human"),
+			line(3, "2026-10-12T14:00:00Z", "bot")}, "\n") + "\n",
+	})
+	gitAt(t, seed, date, "add", ".")
+	gitAt(t, seed, date, "commit", "--quiet", "-m", "actions: segments")
+	gitAt(t, seed, date, "push", "--quiet", "origin", "ledger")
+
+	// A failed read of the merged pull requests writes no Result either.
+	g.Fail = "GET /repos/o/r/pulls"
+	refused("pull requests unreadable", ExitExternal, "injected failure")
 
 	code, out, errOut := run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--metric", "aayu:founder_minutes_per_pr", "--from", "2026-10-01", "--to", "2026-10-29")
 	if code != 0 {
@@ -306,16 +325,12 @@ func TestMeasureFounderMinutesPerPR(t *testing.T) {
 		t.Errorf("labels %v, want status:measured", g.LabelNames(1))
 	}
 
-	writes := len(g.Writes())
-	code, _, errOut = run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--from", "2026-11-01", "--to", "2026-11-08")
-	if code != ExitBlocked || !strings.Contains(errOut, "no merged pull request in the window; founder minutes per merged PR is undefined") {
-		t.Errorf("empty window: exit %d: %s", code, errOut)
-	}
+	refused("empty window", ExitBlocked, "no merged pull request in the window; founder minutes per merged PR is undefined", "--from", "2026-11-01", "--to", "2026-11-08")
 	g.Mu.Lock()
 	after := g.Issues[1].Body
 	g.Mu.Unlock()
-	if after != body || len(g.Writes()) != writes {
-		t.Errorf("empty window wrote to GitHub: %v", g.Writes()[writes:])
+	if after != body {
+		t.Errorf("empty window changed the Goal:\n%s", after)
 	}
 
 	// A segment line that does not decode would drop a person's minutes from
@@ -325,8 +340,5 @@ func TestMeasureFounderMinutesPerPR(t *testing.T) {
 	gitAt(t, seed, date, "add", ".")
 	gitAt(t, seed, date, "commit", "--quiet", "-m", "actions: a truncated segment")
 	gitAt(t, seed, date, "push", "--quiet", "origin", "ledger")
-	code, _, errOut = run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--from", "2026-10-01", "--to", "2026-10-29")
-	if code == 0 || !strings.Contains(errOut, "actions/2026-10-13/cli-d.jsonl line 2") || len(g.Writes()) != writes {
-		t.Errorf("truncated segment: exit %d: %s", code, errOut)
-	}
+	refused("truncated segment", ExitBlocked, "actions/2026-10-13/cli-d.jsonl line 2", "--from", "2026-10-01", "--to", "2026-10-29")
 }
