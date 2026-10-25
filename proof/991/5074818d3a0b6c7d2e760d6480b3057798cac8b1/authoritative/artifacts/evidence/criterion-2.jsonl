@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPlanFeatureDesign"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPlanFeatureDesign","Output":"=== RUN   TestPlanFeatureDesign\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPlanFeatureDesign","Output":"--- PASS: TestPlanFeatureDesign (0.26s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPlanFeatureDesign"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckDesign"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckDesign","Output":"=== RUN   TestCheckDesign\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckDesign","Output":"--- PASS: TestCheckDesign (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckDesign"}

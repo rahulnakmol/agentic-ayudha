@@ -1,0 +1,25 @@
+{
+  "covered": 148,
+  "executable": 161,
+  "percent": 91.92546583850931,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/plan.go": [
+      298,
+      299,
+      334,
+      335,
+      338,
+      339,
+      362,
+      363,
+      364,
+      382,
+      383,
+      396,
+      397
+    ]
+  },
+  "format": "go coverprofile"
+}
