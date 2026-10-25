@@ -1,0 +1,21 @@
+# Which tests prove Story #994's Completion Goal.
+
+[[criterion]]
+id = 1 # a person approves the early build of a flagged child story: the effect with its $60.00 budget shows before the device code; one ledger commit writes approved-early-<story>.json
+tests = ["internal/cli:TestReadyEarlyBuild"]
+
+[[criterion]]
+id = 2 # a story with no early-build label, and one that is not a child of the Feature: exit 4 naming the condition, before the code; nothing written
+tests = ["internal/cli:TestReadyEarlyBuild"]
+
+[[criterion]]
+id = 3 # [baselines] early_build_budget 2: the effect says $120.00 (2 × cost_usd) and the record has budget_usd 120
+tests = ["internal/cli:TestReadyEarlyBuild"]
+
+[[criterion]]
+id = 4 # a PR of an early-build story, otherwise at merge: inspect gives hold with the E1 reason (exit 4); ship exits 4 with the same reason and merges nothing
+tests = ["internal/cli:TestInspectMergeBudgetDraft", "internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 5 # AAYU_AGENT=1: exit 4 with the agent-lane refusal, before the issue is read; nothing written
+tests = ["internal/cli:TestReadyEarlyBuild"]

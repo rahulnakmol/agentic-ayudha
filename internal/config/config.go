@@ -51,7 +51,7 @@ type Config struct {
 	Build         Build                  `koanf:"build" jsonschema_description:"The build-ready loop (aayu build --next): how many items it has in progress at once."`
 	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
 	Approvals     Approvals              `koanf:"approvals" jsonschema_description:"Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."`
-	Baselines     Baselines              `koanf:"baselines" jsonschema_description:"A Feature's baselines (aayu ready <feature> --part <part>): what a new version must say, and when it warns."`
+	Baselines     Baselines              `koanf:"baselines" jsonschema_description:"A Feature's baselines (aayu ready <feature> --part <part>): what a new version must say, and when it warns; and the budget of its early build (aayu ready <feature> --early-build <story>)."`
 	Critique      Critique               `koanf:"critique" jsonschema_description:"The seats' reviews of a Feature's baselines, which Approve to build (aayu ready <feature>) waits for."`
 }
 
@@ -62,8 +62,9 @@ type Critique struct {
 
 // Baselines is [baselines] (Feature #874).
 type Baselines struct {
-	WhyMinWords int `koanf:"why_min_words" jsonschema:"minimum=1" jsonschema_description:"Words each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version."`
-	VersionWarn int `koanf:"version_warn" jsonschema:"minimum=0" jsonschema_description:"A draft of this version of a part, or a later one, warns that each review finds new gaps; 0 never warns."`
+	WhyMinWords      int `koanf:"why_min_words" jsonschema:"minimum=1" jsonschema_description:"Words each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version."`
+	VersionWarn      int `koanf:"version_warn" jsonschema:"minimum=0" jsonschema_description:"A draft of this version of a part, or a later one, warns that each review finds new gaps; 0 never warns."`
+	EarlyBuildBudget int `koanf:"early_build_budget" jsonschema:"minimum=1" jsonschema_description:"The budget of one early build a person approves before Approve to build, in multiples of [autonomy.budget] cost_usd."`
 }
 
 // Hosts is [hosts] (Decision #469).

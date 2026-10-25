@@ -943,6 +943,12 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Hook = nil
 	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "status:blocked" })
+	// Story #994: everything else would merge it on proof, but #2 is an early build.
+	g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: "early-build"})
+	g.Mu.Unlock()
+	refused("ship #" + strconv.Itoa(prN) + ": #2 is an early build: its PR never merges into dev (E1)")
+	g.Mu.Lock()
+	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "early-build" })
 	g.Mu.Unlock()
 
 	// The audit's label goes on before the merge: when it cannot, nothing

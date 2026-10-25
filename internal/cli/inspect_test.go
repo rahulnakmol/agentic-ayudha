@@ -261,6 +261,31 @@ func TestInspectMergeBudgetDraft(t *testing.T) {
 	if code, res, errOut := inspectRun(t, env, opts, model, prN); code != 0 || res.Disposition != inspect.Merge {
 		t.Fatalf("clean: %d %+v %s", code, res, errOut)
 	}
+	// Story #994: the story is an early build, so the same review is held (exit 4)
+	// and the comment says why; without the label it is at merge again.
+	early := func(on bool) {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "early-build" })
+		if on {
+			g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: "early-build"})
+		}
+	}
+	early(true)
+	hold := "#2 is an early build: its PR never merges into dev (E1)"
+	if code, res, errOut := inspectRun(t, env, opts, model, prN); code != ExitBlocked || res.Disposition != inspect.Hold || res.Overridden != "merge held: "+hold || len(model.Requests) != 1 {
+		t.Fatalf("early build: %d %+v %s", code, res, errOut)
+	}
+	g.Mu.Lock()
+	held := g.Issues[prN].Comments[0].Body
+	g.Mu.Unlock()
+	if !strings.Contains(held, "### inspect: hold") || !strings.Contains(held, hold) {
+		t.Fatalf("early build comment:\n%s", held)
+	}
+	early(false)
+	if code, res, errOut := inspectRun(t, env, opts, model, prN); code != 0 || res.Disposition != inspect.Merge || res.Overridden != "" {
+		t.Fatalf("label removed: %d %+v %s", code, res, errOut)
+	}
 	// Budget spent on this PR: exit 6, no call.
 	g.Mu.Lock()
 	g.Pulls[prN].Head.SHA = strings.Repeat("f", 40)

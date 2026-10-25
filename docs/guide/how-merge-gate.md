@@ -249,6 +249,9 @@ State drives three limits:
   back to the receiver for two cycles, then pages a human and exits 4. It shares the cap with failed required checks it
   sends back to the builder: when a required check fails on a delegated pull request's head, the sync sends its log tail, redacted and quoted as data, to the
   builder once per head (`protected-paths` and inspect are not sent). The merge gate still decides.
+- **Early build.** A PR whose story has the `early-build` label never merges into `dev` (core design E1). Inspect
+  turns `merge` into `hold`, says "#n is an early build: its PR never merges into dev (E1)", and exits 4. `aayu ship`
+  refuses it with the same reason. A person approves an early build with `aayu ready <feature> --early-build <story>`.
 - **Round cap.** A round is one judged review of a distinct head. After three rounds since the last reopen, the next
   head gets no review request and no judged reply: the disposition is `step-back`, inspect exits 4, and the builder
   reconsiders the approach. A comment whose first line is `/aayu review again`, from a person with write or admin

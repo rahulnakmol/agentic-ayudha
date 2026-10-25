@@ -51,10 +51,16 @@ aayu:
       required: false
       positional: false
       description: "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them."
+    - name: early-build
+      type: issue
+      required: false
+      positional: false
+      description: "A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev."
   outputs:
     - "status:ready"
     - "ready-snapshot"
     - "feature-baseline"
+    - "early-build-approval"
   gates:
     - "validator"
   identity: bot
@@ -222,3 +228,16 @@ The record is `specs/<f>/approved.json` on the ledger: the version, who approved
 its actions record, the baselines, the stories, the budget, and the dismissals. A new approval writes the next
 version; the ledger's history keeps the earlier ones. Then aayu posts the Feature's Ready snapshot as Arjun and labels
 it `status:ready`. The next step is to make its stories Ready.
+
+## An early build: a person approves one story before Approve to build
+
+A Feature's story with the `early-build` label can run before the Feature's Approve to build, so a design runs while
+nothing else spends build tokens. Its budget is `[baselines] early_build_budget` × `[autonomy.budget] cost_usd`.
+
+1. Never run `aayu ready <f> --early-build <story>`. It is a person's decision: aayu refuses it for an agent lane. Tell
+   the person the command. They run it in their own terminal and see the story and its budget before GitHub's device
+   code.
+2. aayu refuses a story that has no `early-build` label or is not a child of the Feature, before the code. After the
+   code, aayu writes `specs/<f>/approved-early-<story>.json` to the ledger: the story, its body hash, the budget, and
+   who approved it. The record covers that story only.
+3. An early build's PR never merges into dev: inspect gives `hold`, and `aayu ship` refuses it.

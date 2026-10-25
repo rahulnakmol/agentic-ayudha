@@ -1082,11 +1082,16 @@
           "type": "integer",
           "minimum": 0,
           "description": "A draft of this version of a part, or a later one, warns that each review finds new gaps; 0 never warns."
+        },
+        "early_build_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The budget of one early build a person approves before Approve to build, in multiples of [autonomy.budget] cost_usd."
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "A Feature's baselines (aayu ready \u003cfeature\u003e --part \u003cpart\u003e): what a new version must say, and when it warns."
+      "description": "A Feature's baselines (aayu ready \u003cfeature\u003e --part \u003cpart\u003e): what a new version must say, and when it warns; and the budget of its early build (aayu ready \u003cfeature\u003e --early-build \u003cstory\u003e)."
     },
     "critique": {
       "properties": {

@@ -333,9 +333,15 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	var deleg delegate.State
 	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)
 	var sessionUSD float64             // the build session's review spend, from the same record
+	early := 0                         // the story, when it is an early build: its PR is held (E1)
 	if ins.Story > 0 {
 		if is, _, err := c.REST.Issues.Get(ctx, owner, name, ins.Story); err == nil {
 			ins.StoryTitle, ins.StoryBody = is.GetTitle(), is.GetBody()
+			if contains(github.IssueLabels(is), ready.EarlyBuildLabel) {
+				early = ins.Story
+			}
+		} else if !github.NotFound(err) { // an unread label could let an early build merge
+			return Wrap(ExitExternal, err)
 		}
 		tok, err := e.Resolver().Human(ctx)
 		if err != nil {
@@ -455,10 +461,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "This PR changes only documentation. A documentation PR merges without a review."}
 		e.prBodyFloor(&res, pr, nil)
+		earlyBuildHold(&res, pr, early, nil)
 		if err := e.emitInspect(res, []string{builder.Note()}); err != nil {
 			return err
 		}
-		if res.Disposition == inspect.Fix {
+		if res.Disposition == inspect.Fix || res.Disposition == inspect.Hold {
 			return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 		}
 		return nil
@@ -517,6 +524,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				res.Notes = append(res.Notes, note)
 			}
 		}
+		earlyBuildHold(&res, pr, early, nil)
 		if err := e.emitInspect(res, nil); err != nil {
 			return err
 		}
@@ -549,7 +557,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// then a human; when the CI review (rung B) cannot, the apps do, then a human.
 	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
-		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
+		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config, early: early,
 			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerCI, fallback: fallback}
 		err := e.inspectThroughApp(ctx, a)
 		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
@@ -627,6 +635,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// declared now, and a changed label rewrites the record ship reads, as
 	// does a change in what the PR description check blocks.
 	relabel := e.prBodyFloor(&res, pr, prev.Result)
+	relabel = earlyBuildHold(&res, pr, early, prev.Result) || relabel
 	if st.Result != nil {
 		relabel = relabel || st.Result.Review != res.Review
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
@@ -659,7 +668,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: %s", fallback)
 		fb := prev
 		fb.SpentUSD, fb.PaidFailed, fb.PaidFailedWhy, fb.PaidFailedModel = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA(), why, paid.Model
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed, paidTried: true, fallback: fallback})
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, early: early, record: fb.PaidFailed != prev.PaidFailed, paidTried: true, fallback: fallback})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:
@@ -719,7 +728,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}); err != nil {
 		return err
 	}
-	if res.Disposition == inspect.Fix || res.Disposition == inspect.Rebuild || res.Disposition == inspect.StepBack {
+	if res.Disposition == inspect.Fix || res.Disposition == inspect.Rebuild || res.Disposition == inspect.StepBack || res.Disposition == inspect.Hold {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil

@@ -84,9 +84,12 @@ in_flight = 1
 
 # A Feature's baselines (`aayu ready <f> --part <p> --request`): each change in a new version says what changed, why it
 # matters, and the need behind it, each in at least why_min_words words; a draft of version_warn or later warns.
+# early_build_budget is the budget of one early build a person approves before the Feature's Approve to build
+# (`aayu ready <f> --early-build <story>`), in multiples of [autonomy.budget] cost_usd.
 [baselines]
 why_min_words = 5
 version_warn = 4
+early_build_budget = 1
 
 # Approve to build (`aayu ready <feature>`) opens when every seat's review of the Feature's baselines is in, or
 # review_wait_hours after the reviews were asked for.
