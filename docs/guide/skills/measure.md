@@ -52,7 +52,7 @@ aayu measure [<issue>]
 | Input | Required | What it does |
 |---|---|---|
 | `<issue>` | no | Goal or Initiative to measure; without it, only the cohorts and North Star are reported. |
-| `--metric` | no | acquisition, activation, retention, referral, revenue, north_star, or \<source>:\<metric> [filter]; default the issue's Metric. |
+| `--metric` | no | acquisition, activation, retention, referral, revenue, north_star, aayu:founder_minutes_per_pr (from the actions log on the ledger), or \<source>:\<metric> [filter]; default the issue's Metric. |
 | `--from` | no | Window start (YYYY-MM-DD, UTC); default 28 days before --to. |
 | `--to` | no | Window end, exclusive (YYYY-MM-DD, UTC); default today. |
 | `--billing` | no | Billing export (CSV). |

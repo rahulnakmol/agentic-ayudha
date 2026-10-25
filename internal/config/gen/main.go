@@ -108,6 +108,16 @@ var sections = []section{
 		note: "`aayu scope` stores each accepted baseline and its drift on the `ledger` branch under `releases/<version>/`. Accepting a baseline, and any change over budget, is a person's call.",
 	},
 	{
+		heading: "Outcomes",
+		roots:   []string{"outcomes"},
+		rows: []row{
+			{"outcomes.session_gap_minutes", "A gap of more than this many minutes between two human-identity actions in the actions log on the `ledger` branch starts a new founder session.", "0.4 (Story #989)"},
+			{"outcomes.action_minutes", "Minutes each founder session adds for its last action, on top of its span from its first action to its last.", "0.4 (Story #989)"},
+		},
+		note: "`aayu measure` reads `aayu:founder_minutes_per_pr` as the sum of the founder sessions in the window divided by the pull requests merged into the integration branch in it (Decision #981). " +
+			"It is a proxy: it counts time in aayu's recorded human actions, not time spent elsewhere. Bot and human-fallback records never count; a window with no merged pull request has no value.",
+	},
+	{
 		heading: "Design review",
 		roots:   []string{"review"},
 		rows: []row{

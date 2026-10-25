@@ -1041,7 +1041,7 @@ var Verbs = []Command{
 		Seat:    DataAIArchitect, Owns: RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
-			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."),
+			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, aayu:founder_minutes_per_pr (from the actions log on the ledger), or <source>:<metric> [filter]; default the issue's Metric."),
 			flag("from", TypeString, "Window start (YYYY-MM-DD, UTC); default 28 days before --to."),
 			flag("to", TypeString, "Window end, exclusive (YYYY-MM-DD, UTC); default today."),
 			flag("billing", TypePath, "Billing export (CSV)."),

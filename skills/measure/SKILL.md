@@ -20,7 +20,7 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."
+      description: "acquisition, activation, retention, referral, revenue, north_star, aayu:founder_minutes_per_pr (from the actions log on the ledger), or <source>:<metric> [filter]; default the issue's Metric."
     - name: from
       type: string
       required: false

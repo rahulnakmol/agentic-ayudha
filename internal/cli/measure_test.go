@@ -2,7 +2,9 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -214,5 +216,105 @@ func TestMeasureLiveMatchesExports(t *testing.T) {
 	}
 	if ex := clouds.Exchanges(); !slices.Equal(ex, []string{"entra client_secret https://management.azure.com/.default", "entra client_secret https://api.loganalytics.io/.default", "google jwt-bearer " + fixture.GCPServiceAccount}) {
 		t.Errorf("token exchanges %q", ex)
+	}
+}
+
+// Story #989, criteria 2 and 3, end to end: a Goal measured on
+// aayu:founder_minutes_per_pr reads the actions segments on the ledger and
+// the pull requests merged into dev. The segments hold human actions at
+// 09:00, 09:04, 09:09 and 11:30 on 10-12 (13 founder minutes), bot and
+// human-fallback actions between them, and a human action on 09-30, outside
+// the window. Twelve PRs merged into dev inside the window; one merged into
+// main, one into dev on 10-29 (the window is half-open), and one closed
+// unmerged do not count. 13 / 12 = 1.1 against the target <= 1: not met. A
+// window with no merged PR writes no Result.
+func TestMeasureFounderMinutesPerPR(t *testing.T) {
+	root := t.TempDir()
+	bare := filepath.Join(root, "origin.git")
+	git(t, root, "init", "--quiet", "--bare", bare)
+	seed := filepath.Join(root, "seed")
+	git(t, root, "clone", "--quiet", bare, seed)
+	const date = "2026-10-29T00:00:00Z"
+	line := func(seq int, at, identity string) string {
+		return fmt.Sprintf(`{"seq":%d,"time":%q,"run":"r","kind":"github.issue.labels.add","target":"o/r#1","identity":%q,"status":"done","tokens_in":0,"tokens_out":0,"cost_usd":0,"wall_time_ms":1,"attempts":1,"prev":""}`, seq, at, identity)
+	}
+	gitAt(t, seed, date, "checkout", "--quiet", "--orphan", "ledger")
+	writeFiles(t, seed, map[string]string{
+		"README.md":                      "ledger\n",
+		"actions/2026-09-30/cli-a.jsonl": line(1, "2026-09-30T23:59:00Z", "human") + "\n",
+		"actions/2026-10-12/cli-b.jsonl": strings.Join([]string{line(1, "2026-10-12T09:00:00Z", "human"), line(2, "2026-10-12T09:04:00Z", "human"),
+			line(3, "2026-10-12T09:20:00Z", "bot"), line(4, "2026-10-12T10:00:00Z", "human-fallback")}, "\n") + "\n",
+		"actions/2026-10-12/amp-c.jsonl": strings.Join([]string{line(1, "2026-10-12T09:09:00Z", "human"), line(2, "2026-10-12T11:30:00Z", "human"),
+			line(3, "2026-10-12T14:00:00Z", "bot")}, "\n") + "\n",
+	})
+	gitAt(t, seed, date, "add", ".")
+	gitAt(t, seed, date, "commit", "--quiet", "-m", "actions: segments")
+	gitAt(t, seed, date, "push", "--quiet", "origin", "ledger")
+	gitAt(t, seed, date, "checkout", "--quiet", "--orphan", "dev")
+	gitAt(t, seed, date, "rm", "-rf", "--quiet", ".")
+	gitAt(t, seed, date, "commit", "--quiet", "--allow-empty", "-m", "dev")
+	gitAt(t, seed, date, "push", "--quiet", "origin", "dev")
+	dir := filepath.Join(root, "work")
+	git(t, root, "clone", "--quiet", "--branch", "dev", bare, dir)
+
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("Less founder time per useful change", "### Summary\n\nThe founder spends less time per merged PR.\n\n### Metric\n\naayu:founder_minutes_per_pr\n\n"+
+		"### Baseline\n\n1.5 founder minutes per merged PR (2026-09)\n\n### Target\n\n≤ 1.0", "type:goal", "status:in-progress")
+	pr := func(n int, base, merged string) string {
+		m := "null"
+		if merged != "" {
+			m = fmt.Sprintf("%q", merged)
+		}
+		return fmt.Sprintf(`{"number":%d,"state":"closed","base":{"ref":%q},"merged_at":%s}`, n, base, m)
+	}
+	var prs []string
+	for n := 10; n < 22; n++ {
+		prs = append(prs, pr(n, "dev", fmt.Sprintf("2026-10-%02dT12:00:00Z", n)))
+	}
+	prs = append(prs, pr(30, "main", "2026-10-12T12:00:00Z"), pr(31, "dev", "2026-10-29T00:00:00Z"), pr(32, "dev", ""))
+	g.Static = map[string]any{"/repos/o/r/pulls": jsonOf(t, "["+strings.Join(prs, ",")+"]")}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(root, "state"), "PATH": os.Getenv("PATH")}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Now: func() time.Time { return time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC) }}
+
+	code, out, errOut := run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--metric", "aayu:founder_minutes_per_pr", "--from", "2026-10-01", "--to", "2026-10-29")
+	if code != 0 {
+		t.Fatalf("measure: exit %d: %s", code, errOut)
+	}
+	var got measureOut
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if m := got.Measured; m == nil || m.Value != 1.1 || m.Met || m.Target != (measure.Target{Op: "<=", Value: 1}) {
+		t.Fatalf("measured: %+v", got.Measured)
+	}
+	g.Mu.Lock()
+	body := g.Issues[1].Body
+	g.Mu.Unlock()
+	for _, want := range []string{
+		"Target not met: aayu:founder_minutes_per_pr = 1.1 against the target <= 1 (baseline 1.5",
+		"13 founder minutes in 2 sessions of 4 human-identity actions in the actions log",
+		"over 12 pull requests merged into dev",
+		"[outcomes] session_gap_minutes = 10", "[outcomes] action_minutes = 2",
+		"Window: 2026-10-01T00:00:00Z to 2026-10-29T00:00:00Z",
+		"3 actions segments",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Result lacks %q:\n%s", want, body)
+		}
+	}
+	if !slices.Contains(g.LabelNames(1), "status:measured") {
+		t.Errorf("labels %v, want status:measured", g.LabelNames(1))
+	}
+
+	writes := len(g.Writes())
+	code, _, errOut = run(t, env, opts, "measure", "1", "--repo", "o/r", "--json", "--from", "2026-11-01", "--to", "2026-11-08")
+	if code != ExitBlocked || !strings.Contains(errOut, "no merged pull request in the window; founder minutes per merged PR is undefined") {
+		t.Errorf("empty window: exit %d: %s", code, errOut)
+	}
+	g.Mu.Lock()
+	after := g.Issues[1].Body
+	g.Mu.Unlock()
+	if after != body || len(g.Writes()) != writes {
+		t.Errorf("empty window wrote to GitHub: %v", g.Writes()[writes:])
 	}
 }

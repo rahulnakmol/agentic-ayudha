@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/exports"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
@@ -227,7 +232,7 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 	if err != nil {
 		return err
 	}
-	c, _, err := e.BotGitHub(ctx, "")
+	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
 		return err
 	}
@@ -258,7 +263,8 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 		return Wrap(ExitBlocked, fmt.Errorf("measure: #%d: %w", n, err))
 	}
 	m := measure.Measured{Spec: spec, Baseline: baseline, Target: target, Window: rep.Window}
-	if spec.Source == "" {
+	switch spec.Source {
+	case "":
 		if rep.Snapshot == nil {
 			return Errorf(ExitUsage, "measure: %s is read from exports; pass --billing, --appinsights, --aws, --gcp, or --live", spec.Metric)
 		}
@@ -277,7 +283,11 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 			}
 			m.Sources = append(m.Sources, src)
 		}
-	} else {
+	case "aayu":
+		if err := founderMinutes(ctx, e, c, bot, repo, &m); err != nil {
+			return err
+		}
+	default:
 		b, err := providers.Baseline(ctx, e.integrationDeps(repo), spec.Source, integrations.Query{Metric: spec.Metric, Filter: spec.Filter,
 			Window: integrations.Window{From: rep.Window.From, To: rep.Window.To}})
 		if err != nil {
@@ -314,4 +324,71 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 	}
 	rep.Closed, err = parentClose(ctx, c, repo, []*status.Rollup{r}, nil)
 	return err
+}
+
+// founderMinutes measures aayu:founder_minutes_per_pr (Story #989) from the
+// actions segments on the ledger and the pull requests merged into dev in
+// the window.
+func founderMinutes(ctx context.Context, e *Env, c *github.Client, bot identity.Bot, repo string, m *measure.Measured) error {
+	if m.Spec.Metric != measure.FounderMetric || m.Spec.Filter != "" {
+		return Errorf(ExitUsage, "measure: metric %q: aayu measures only aayu:%s", m.Spec, measure.FounderMetric)
+	}
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	w, err := e.Ledger(ctx, bot.Token, botIdent(bot), bot.Tag)
+	if err != nil {
+		return err
+	}
+	tree, err := w.Read(ctx)
+	if err != nil {
+		return err
+	}
+	defer tree.Close()
+	paths, err := tree.List(ctx, "actions")
+	if err != nil {
+		return err
+	}
+	var records []actions.Record
+	segments := 0
+	for _, p := range paths {
+		if !strings.HasSuffix(p, ".jsonl") {
+			continue
+		}
+		b, err := tree.File(ctx, p)
+		if err != nil {
+			return err
+		}
+		segments++
+		for line := range strings.SplitSeq(string(b), "\n") {
+			var r actions.Record
+			if json.Unmarshal([]byte(line), &r) == nil {
+				records = append(records, r)
+			}
+		}
+	}
+	owner, name, err := github.SplitRepo(repo)
+	if err != nil {
+		return err
+	}
+	dev := e.devBranch()
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", Base: dev, ListOptions: o})
+	})
+	if err != nil {
+		return err
+	}
+	merged := 0
+	for _, p := range prs {
+		if at := p.GetMergedAt().Time; p.MergedAt != nil && p.GetBase().GetRef() == dev && !at.Before(m.Window.From) && at.Before(m.Window.To) {
+			merged++
+		}
+	}
+	if m.Value, m.Detail, err = measure.Founder(records, merged, m.Window, l.Config.Outcomes, dev); err != nil {
+		return measureErr(err)
+	}
+	m.Query = fmt.Sprintf("ledger %s: %d actions segments under actions/, records with identity human; GET /repos/%s/pulls?state=closed&base=%s, merged_at in the window",
+		tree.Tip, segments, repo, dev)
+	return nil
 }

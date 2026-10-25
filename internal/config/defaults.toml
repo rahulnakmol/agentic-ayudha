@@ -100,6 +100,11 @@ retention_days = 90
 budget_percent = 20.0
 effort_points = [1, 2, 3, 5, 8] # XS, S, M, L, XL
 
+# Founder minutes per merged PR (aayu:founder_minutes_per_pr, Story #989): sessions of human actions in the actions log.
+[outcomes]
+session_gap_minutes = 10 # a longer gap between two human actions starts a new session
+action_minutes = 2       # each session adds this for its last action
+
 # Design review tolerances and baseline paths (WP6.5, WP6.6).
 [review]
 figma_diff_max = 2.0 # percent of pixels after the anti-aliasing mask
