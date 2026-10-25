@@ -246,8 +246,9 @@ func Comment(b Baseline, line string) string {
 
 // cellText leaves agent text no active markup in a table cell: no cell end,
 // HTML, mention, link, image, code span, or autolink (a zero-width space
-// breaks "://" and "www.").
-var cellText = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "|", `\|`, "@", "&#64;", "\r", " ", "\n", " ",
+// breaks "://" and "www."). A backslash is escaped too, so the text cannot
+// cancel the escape of a pipe or a backtick after it.
+var cellText = strings.NewReplacer(`\`, `\\`, "&", "&amp;", "<", "&lt;", ">", "&gt;", "|", `\|`, "@", "&#64;", "\r", " ", "\n", " ",
 	"[", `\[`, "]", `\]`, "`", "\\`", "://", ":&#8203;//", "www.", "www&#8203;.")
 
 func cell(s string) string { return cellText.Replace(s) }
