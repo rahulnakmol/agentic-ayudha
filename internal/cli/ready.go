@@ -246,18 +246,18 @@ func (r *partRun) feature(ctx context.Context) (workitems.Item, []ready.Pin, err
 }
 
 // records reads the part's newest approved baseline and the draft that
-// waits after it, each nil when there is none.
-func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, err error) {
+// waits after it, each nil when there is none, and the ledger tip they are at.
+func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, tip string, err error) {
 	t, err := r.w.Read(ctx)
 	if errors.Is(err, ledger.ErrNoLedger) {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	} else if err != nil {
-		return nil, nil, Wrap(ExitExternal, err)
+		return nil, nil, "", Wrap(ExitExternal, err)
 	}
 	defer t.Close()
 	paths, err := t.List(ctx, ready.BaselineDir(r.n))
 	if err != nil {
-		return nil, nil, Wrap(ExitExternal, err)
+		return nil, nil, "", Wrap(ExitExternal, err)
 	}
 	get := func(v int, isDraft bool) (*ready.Baseline, error) {
 		p := ready.BaselinePath(r.n, r.part, v, isDraft)
@@ -282,9 +282,9 @@ func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, err
 		draft, err = get(drafted, true)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return base, draft, nil
+	return base, draft, t.Tip, nil
 }
 
 // request drafts the part's next version and says on the Feature that it
@@ -294,7 +294,7 @@ func (r *partRun) request(ctx context.Context, who string) error {
 	if err != nil {
 		return err
 	}
-	base, draft, err := r.records(ctx)
+	base, draft, _, err := r.records(ctx)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func (r *partRun) request(ctx context.Context, who string) error {
 		rep.Baseline = &ready.Baseline{Schema: ready.BaselineSchema, Feature: r.n, Part: r.part, Version: v, Owner: ready.Owner(r.part),
 			Pins: pins, Hash: hash, Summary: it.Fields[workitems.FieldSummary], SourceSession: r.e.session(),
 			DraftedBy: who, DraftedAt: r.e.Now().UTC().Format(time.RFC3339)}
-		rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d draft of #%d", ready.Label(r.part), v, r.n), rep.LedgerPath, rep.Baseline)
+		rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d draft of #%d", ready.Label(r.part), v, r.n), rep.LedgerPath, "", rep.Baseline)
 	}
 	if err == nil {
 		err = r.comment(ctx, ready.Waits(*rep.Baseline))
@@ -333,7 +333,7 @@ func (r *partRun) request(ctx context.Context, who string) error {
 // GitHub's device flow. The draft and the pins are read again after the code,
 // so only the hash the person saw is baselined.
 func (r *partRun) approve(ctx context.Context) error {
-	_, draft, err := r.records(ctx)
+	_, draft, _, err := r.records(ctx)
 	if err != nil {
 		return err
 	}
@@ -350,7 +350,7 @@ func (r *partRun) approve(ctx context.Context) error {
 		return err
 	}
 	// The draft or the Feature can change while the code waits: read both again.
-	_, now, err := r.records(ctx)
+	_, now, tip, err := r.records(ctx)
 	if err != nil {
 		return err
 	}
@@ -360,11 +360,11 @@ func (r *partRun) approve(ctx context.Context) error {
 	if err := r.holds(ctx, draft.Hash); err != nil {
 		return err
 	}
-	b := *now
+	b := *draft // what the person saw: the hash covers only the pins
 	b.ApprovedBy, b.ApprovedAt, b.Presence = a.Login, r.e.Now().UTC().Format(time.RFC3339), a.Via
 	rep := ReadyPartReport{Repo: r.repo, Feature: r.n, Part: r.part, State: "baselined", Baseline: &b,
 		LedgerPath: ready.BaselinePath(r.n, r.part, b.Version, false), DryRun: r.c.DryRun()}
-	rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d baseline of #%d, approved by @%s", ready.Label(r.part), b.Version, r.n, a.Login), rep.LedgerPath, &b)
+	rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d baseline of #%d, approved by @%s", ready.Label(r.part), b.Version, r.n, a.Login), rep.LedgerPath, tip, &b)
 	if err == nil {
 		err = r.comment(ctx, ready.Baselined(b))
 	}
@@ -391,13 +391,17 @@ func (r *partRun) changed(was, now string) error {
 		fmt.Sprintf("aayu ready %d --part %s --request", r.n, r.part))
 }
 
-// write puts one baseline record on the ledger in one commit.
-func (r *partRun) write(ctx context.Context, msg, path string, b *ready.Baseline) (string, error) {
+// write puts one baseline record on the ledger in one commit, on the tip
+// base when it is set, so nothing written after that read is hidden.
+func (r *partRun) write(ctx context.Context, msg, path, base string, b *ready.Baseline) (string, error) {
 	if r.c.DryRun() {
 		return "", nil
 	}
 	data, _ := json.MarshalIndent(b, "", "  ")
-	sha, err := r.w.Write(ctx, ledger.Commit{Message: msg, Files: map[string][]byte{path: append(data, '\n')}})
+	sha, err := r.w.Write(ctx, ledger.Commit{Message: msg, Files: map[string][]byte{path: append(data, '\n')}, Base: base})
+	if errors.Is(err, ledger.ErrMoved) {
+		return "", Errorf(ExitBlocked, "The ledger changed while aayu wrote %s v%d of #%d. Nothing was baselined. Run it again.", ready.Label(b.Part), b.Version, b.Feature)
+	}
 	return sha, Wrap(ExitExternal, err)
 }
 

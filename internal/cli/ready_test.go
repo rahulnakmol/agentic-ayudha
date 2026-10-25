@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -416,7 +417,7 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	handDraft := func(b ready.Baseline) { // a ledger write outside aayu
 		data, _ := json.Marshal(b)
 		git(t, hand, "pull", "--quiet", "origin", "ledger")
-		if err := os.WriteFile(filepath.Join(hand, "specs/1/baselines/intent-v2.draft.json"), data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(hand, fmt.Sprintf("specs/1/baselines/intent-v%d.draft.json", b.Version)), data, 0o644); err != nil {
 			t.Error(err)
 		}
 		git(t, hand, "commit", "--quiet", "-am", "a draft written by hand")
@@ -430,22 +431,54 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	if code, out, errOut := readyRun(person, "--part", "intent"); code != ExitBlocked || !strings.Contains(errOut, "denied") {
 		t.Fatalf("denied: exit %d: %s%s", code, out, errOut)
 	}
+	// The draft's summary is rewritten while the code waits, its pins unchanged: the record is the draft the person saw.
+	rewritten := v2
+	rewritten.Summary, rewritten.DraftedBy = "Something else.", "someone-else"
+	device(func(int) { handDraft(rewritten) })
+	if code, out, errOut := readyRun(person, "--part", "intent"); code != 0 {
+		t.Fatalf("summary rewritten during the code: exit %d: %s%s", code, out, errOut)
+	}
+	if b := record("specs/1/baselines/intent-v2.json"); b.Summary != v2.Summary || b.DraftedBy != v2.DraftedBy || b.ApprovedBy != "founder" {
+		t.Fatalf("baseline after a rewrite during the code: %+v", b)
+	}
+
+	// An edit after v2, and its v3 draft.
+	g.Mu.Lock()
+	feature.Body = body + "\nA third question.\n"
+	g.Mu.Unlock()
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Intent v3 of #1 waits for a person") {
+		t.Fatalf("request after v2: exit %d: %s%s", code, out, errOut)
+	}
+	v3 := record("specs/1/baselines/intent-v3.draft.json")
+	// Another ledger write lands between the last read and the approval: nothing is baselined.
+	race, pushed := opts, false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			handDraft(v3) // the same record, a new commit
+		}
+	}
+	device(nil)
+	if code, out, errOut := run(t, person, race, "ready", "1", "--repo", "o/r", "--part", "intent"); code != ExitBlocked ||
+		!strings.Contains(errOut, "The ledger changed while aayu wrote intent v3 of #1. Nothing was baselined.") || slices.Contains(files(), "specs/1/baselines/intent-v3.json") {
+		t.Fatalf("a ledger write during the approval: exit %d, files %v: %s%s", code, files(), out, errOut)
+	}
 	// The draft is drafted again while the code waits: nothing is baselined.
-	other := v2
+	other := v3
 	other.Pins = []ready.Pin{{Ref: "#1 body", Hash: strings.Repeat("1", 64)}}
 	other.Hash = ready.PinsHash(other.Pins)
 	device(func(int) { handDraft(other) })
-	if code, out, errOut := readyRun(person, "--part", "intent"); code != ExitBlocked || !strings.Contains(errOut, "Intent v2 of #1 was approved or drafted again while the code waited. Nothing was baselined.") {
+	if code, out, errOut := readyRun(person, "--part", "intent"); code != ExitBlocked || !strings.Contains(errOut, "Intent v3 of #1 was approved or drafted again while the code waited. Nothing was baselined.") {
 		t.Fatalf("re-drafted during the code: exit %d: %s%s", code, out, errOut)
 	}
 	// A draft whose hash matches the body but not its own pins is never approved.
-	forged := v2
+	forged := v3
 	forged.Pins = []ready.Pin{{Ref: "#1 body", Hash: strings.Repeat("0", 64)}}
 	handDraft(forged)
 	device(nil)
 	code, out, errOut = readyRun(person, "--part", "intent")
-	if code != ExitExternal || !strings.Contains(errOut, "not intent v2 of #1 with the hash of its pins") || started() != 0 ||
-		slices.Contains(files(), "specs/1/baselines/intent-v2.json") {
+	if code != ExitExternal || !strings.Contains(errOut, "not intent v3 of #1 with the hash of its pins") || started() != 0 ||
+		slices.Contains(files(), "specs/1/baselines/intent-v3.json") {
 		t.Fatalf("a forged draft: exit %d, device codes %d, files %v: %s%s", code, started(), files(), out, errOut)
 	}
 }
