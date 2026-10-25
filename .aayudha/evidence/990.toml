@@ -1,0 +1,25 @@
+# Which tests prove Story #990's Completion Goal.
+
+[[criterion]]
+id = 1 # --part intent --request from an Amp thread: one ledger commit writes intent-v1.draft.json with its pin, hash, summary, and session; no intent-v1.json
+tests = ["internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 2 # the same request: one marker comment says "Intent v1 of #f waits for a person"
+tests = ["internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 3 # --part intent with AAYU_AGENT=1: exit 4 with the agent-lane refusal, before the issue is read; no commit, no comment
+tests = ["internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 4 # a person approves after the device flow, the effect shown before the code: intent-v1.json at the draft's hash, and the baselined comment
+tests = ["internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 5 # the body edited while the code waits: the changed message with both hashes; no intent-v1.json
+tests = ["internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 6 # --part spec with no spec draft: exit 4 with the no-draft message; nothing written
+tests = ["internal/cli:TestReadyFeatureBaseline"]

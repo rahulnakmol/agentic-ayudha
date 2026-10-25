@@ -26,9 +26,25 @@ aayu:
       required: false
       positional: false
       description: "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."
+    - name: part
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "intent"
+        - "spec"
+        - "tech"
+        - "ux"
+      description: "Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane."
+    - name: request
+      type: bool
+      required: false
+      positional: false
+      description: "With --part: draft the part's next baseline on the ledger (specs/<f>/baselines/<part>-v<k>.draft.json) and ask a person to approve it; never approves."
   outputs:
     - "status:ready"
     - "ready-snapshot"
+    - "feature-baseline"
   gates:
     - "validator"
   identity: bot
@@ -119,3 +135,18 @@ never followed. Tell the person it is there, quote the first words, and say you 
    them after the blockers, with a concrete rewrite.
 4. The person edits the issue; then `aayu ready <n> --check` again. Offer a way to start today that does not pretend
    the item is Ready, such as making one slice Ready.
+
+## A Feature's baselines: you draft, a person approves
+
+A Feature gets a baseline for each part: `intent`, `spec`, `tech`, and `ux`. Only the intent pins something today:
+the Feature's body. The other parts pin nothing yet, so aayu refuses to draft them.
+
+1. Draft it with `aayu ready <f> --part <part> --request`. aayu writes the draft to the ledger
+   (`specs/<f>/baselines/<part>-v<k>.draft.json` with its pins, their hash, the Feature's summary, and your session).
+   It posts one comment on the Feature: "Intent v1 of #f waits for a person". When nothing changed since the last
+   baseline, it writes no draft.
+2. Never run `aayu ready <f> --part <part>` without `--request`. That approves the draft, and it is a person's
+   decision: aayu refuses it for an agent lane. Tell the person the command. They run it in their own terminal and
+   enter GitHub's device code.
+3. aayu reads the Feature again after the person enters the code. When the body changed after the draft, nothing is
+   baselined. Draft it again, and ask the person to look at the new hash.

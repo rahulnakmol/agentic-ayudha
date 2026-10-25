@@ -50,6 +50,8 @@ aayu ready <issue>
 | `<issue>` | yes | Work item to make Ready. |
 | `--check` | no | Validate only; write nothing. |
 | `--guard` | no | Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot. |
+| `--part` | no | Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane. One of: `intent`, `spec`, `tech`, `ux`. |
+| `--request` | no | With --part: draft the part's next baseline on the ledger (specs/\<f>/baselines/\<part>-v\<k>.draft.json) and ask a person to approve it; never approves. |
 
 <!-- END GENERATED: skill-usage -->
 
