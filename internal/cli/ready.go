@@ -261,26 +261,28 @@ func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, err
 	}
 	get := func(v int, isDraft bool) (*ready.Baseline, error) {
 		p := ready.BaselinePath(r.n, r.part, v, isDraft)
-		b, err := t.File(ctx, p)
-		if err != nil {
-			return nil, Wrap(ExitExternal, err)
-		}
 		var rec ready.Baseline
-		if err := json.Unmarshal(b, &rec); err != nil {
-			return nil, Errorf(ExitExternal, "ledger %s: %v", p, err)
+		b, err := t.File(ctx, p)
+		if err == nil {
+			err = json.Unmarshal(b, &rec)
+		}
+		if err == nil {
+			err = rec.Check(r.n, r.part, v) // never approve, or draft after, a record aayu did not write
+		}
+		if err != nil {
+			return nil, Errorf(ExitExternal, "ledger %s: %v; nothing was written", p, err)
 		}
 		return &rec, nil
 	}
 	approved, drafted := ready.Versions(paths, r.part)
 	if approved > 0 {
-		if base, err = get(approved, false); err != nil {
-			return nil, nil, err
-		}
+		base, err = get(approved, false)
 	}
-	if drafted > approved {
-		if draft, err = get(drafted, true); err != nil {
-			return nil, nil, err
-		}
+	if err == nil && drafted > approved {
+		draft, err = get(drafted, true)
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 	return base, draft, nil
 }
@@ -316,11 +318,12 @@ func (r *partRun) request(ctx context.Context, who string) error {
 		rep.Baseline = &ready.Baseline{Schema: ready.BaselineSchema, Feature: r.n, Part: r.part, Version: v, Owner: ready.Owner(r.part),
 			Pins: pins, Hash: hash, Summary: it.Fields[workitems.FieldSummary], SourceSession: r.e.session(),
 			DraftedBy: who, DraftedAt: r.e.Now().UTC().Format(time.RFC3339)}
-		if rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d draft of #%d", ready.Label(r.part), v, r.n), rep.LedgerPath, rep.Baseline); err != nil {
-			return err
-		}
+		rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d draft of #%d", ready.Label(r.part), v, r.n), rep.LedgerPath, rep.Baseline)
 	}
-	if err := r.comment(ctx, ready.Waits(*rep.Baseline)); err != nil {
+	if err == nil {
+		err = r.comment(ctx, ready.Waits(*rep.Baseline))
+	}
+	if err != nil {
 		return err
 	}
 	return r.emit(rep, ready.Waits(*rep.Baseline))
@@ -351,12 +354,8 @@ func (r *partRun) approve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if now == nil || now.Version != draft.Version {
-		return Errorf(ExitBlocked, "%s v%d of #%d no longer waits for a person: it was approved or replaced while the code waited. Nothing was baselined.",
-			ready.Title(r.part), draft.Version, r.n)
-	}
-	if now.Hash != draft.Hash {
-		return r.changed(draft.Hash, now.Hash)
+	if now == nil || now.Version != draft.Version || now.Hash != draft.Hash {
+		return Errorf(ExitBlocked, "%s v%d of #%d was approved or drafted again while the code waited. Nothing was baselined.", ready.Title(r.part), draft.Version, r.n)
 	}
 	if err := r.holds(ctx, draft.Hash); err != nil {
 		return err
@@ -365,10 +364,11 @@ func (r *partRun) approve(ctx context.Context) error {
 	b.ApprovedBy, b.ApprovedAt, b.Presence = a.Login, r.e.Now().UTC().Format(time.RFC3339), a.Via
 	rep := ReadyPartReport{Repo: r.repo, Feature: r.n, Part: r.part, State: "baselined", Baseline: &b,
 		LedgerPath: ready.BaselinePath(r.n, r.part, b.Version, false), DryRun: r.c.DryRun()}
-	if rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d baseline of #%d, approved by @%s", ready.Label(r.part), b.Version, r.n, a.Login), rep.LedgerPath, &b); err != nil {
-		return err
+	rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d baseline of #%d, approved by @%s", ready.Label(r.part), b.Version, r.n, a.Login), rep.LedgerPath, &b)
+	if err == nil {
+		err = r.comment(ctx, ready.Baselined(b))
 	}
-	if err := r.comment(ctx, ready.Baselined(b)); err != nil {
+	if err != nil {
 		return err
 	}
 	return r.emit(rep, ready.Baselined(b))
@@ -398,20 +398,15 @@ func (r *partRun) write(ctx context.Context, msg, path string, b *ready.Baseline
 	}
 	data, _ := json.MarshalIndent(b, "", "  ")
 	sha, err := r.w.Write(ctx, ledger.Commit{Message: msg, Files: map[string][]byte{path: append(data, '\n')}})
-	if err != nil {
-		return "", Wrap(ExitExternal, err)
-	}
-	return sha, nil
+	return sha, Wrap(ExitExternal, err)
 }
 
 // comment keeps the part's one marker comment on the Feature.
 func (r *partRun) comment(ctx context.Context, line string) error {
 	marker := ready.BaselineMarker(r.part)
-	if _, err := r.c.UpsertComment(ctx, r.repo, r.n, marker, marker+"\n"+line+"\n", actions.Action{Kind: "github.comment.baseline",
-		Payload: map[string]any{"part": r.part}}); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	return nil
+	_, err := r.c.UpsertComment(ctx, r.repo, r.n, marker, marker+"\n"+line+"\n", actions.Action{Kind: "github.comment.baseline",
+		Payload: map[string]any{"part": r.part}})
+	return Wrap(ExitExternal, err)
 }
 
 func (r *partRun) emit(rep ReadyPartReport, line string) error {

@@ -55,6 +55,15 @@ type Baseline struct {
 	Presence      string `json:"presence,omitempty"` // how the person was proven present: device-flow
 }
 
+// Check reports whether b is version v of part of Feature f as aayu writes
+// it: its schema, its place, and a hash that is the hash of its pins.
+func (b Baseline) Check(f int, part string, v int) error {
+	if b.Schema != BaselineSchema || b.Feature != f || b.Part != part || b.Version != v || len(b.Pins) == 0 || b.Hash != PinsHash(b.Pins) {
+		return fmt.Errorf("not %s v%d of #%d with the hash of its pins", part, v, f)
+	}
+	return nil
+}
+
 // Owner is the seat that owns part.
 func Owner(part string) string { return string(partOwner[part]) }
 
