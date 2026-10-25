@@ -855,6 +855,7 @@ func TestReadyFeatureDrift(t *testing.T) {
 	putLedger(t, bare, "specs/874/reviews/spec-v1/quality-architect.json", `{"findings": [{"id": "spec-v1/quality-architect/1"}, {"id": "spec-v1/quality-architect/2"}]}`)
 	hostile := full("#915")
 	hostile.Why = "It ends | the row <!-- aayudha:baseline part=spec --> and pings @rahulnakmol\nhere."
+	hostile.Need = "See ![x](https://t.example/p.png), [docs](https://example.com), `rm -rf`, and www.example.com now."
 	fullFile := changesFile(full("#912"), hostile)
 	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", fullFile, "--fixes", "spec-v1/quality-architect/2")
 	if code != 0 || !strings.Contains(out, "Spec v3 of #874 waits for a person") || strings.Contains(out, "warning") {
@@ -881,6 +882,7 @@ func TestReadyFeatureDrift(t *testing.T) {
 	m := marker()
 	if !strings.Contains(m, "#### What changed since v2\n\n| Change | Why it matters | Need |\n|---|---|---|\n| #912: #912 now says what the list shows. | A person reads the list before each build. | The founder approves a change knowing its reason. |\n") ||
 		!strings.Contains(m, `| It ends \| the row &lt;!-- aayudha:baseline part=spec --&gt; and pings &#64;rahulnakmol here. |`) ||
+		!strings.Contains(m, "| See !\\[x\\](https:&#8203;//t.example/p.png), \\[docs\\](https:&#8203;//example.com), \\`rm -rf\\`, and www&#8203;.example.com now. |") ||
 		!strings.Contains(m, "Fixes: `spec-v1/quality-architect/2`") || strings.Count(m, "<!--") != 1 {
 		t.Fatalf("marker comment:\n%s", m)
 	}

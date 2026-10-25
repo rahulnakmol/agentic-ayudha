@@ -244,6 +244,10 @@ func Comment(b Baseline, line string) string {
 	return s.String()
 }
 
-var cellText = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "|", `\|`, "@", "&#64;", "\r", " ", "\n", " ")
+// cellText leaves agent text no active markup in a table cell: no cell end,
+// HTML, mention, link, image, code span, or autolink (a zero-width space
+// breaks "://" and "www.").
+var cellText = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "|", `\|`, "@", "&#64;", "\r", " ", "\n", " ",
+	"[", `\[`, "]", `\]`, "`", "\\`", "://", ":&#8203;//", "www.", "www&#8203;.")
 
 func cell(s string) string { return cellText.Replace(s) }
