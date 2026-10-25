@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyFeaturePartPins"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyFeaturePartPins","Output":"=== RUN   TestReadyFeaturePartPins\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyFeaturePartPins","Output":"--- PASS: TestReadyFeaturePartPins (0.74s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyFeaturePartPins"}
