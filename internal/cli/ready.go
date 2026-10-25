@@ -6,15 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/chart"
+	"github.com/rahulnakmol/agentic-ayudha/internal/design"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -238,11 +244,105 @@ func (r *partRun) feature(ctx context.Context) (workitems.Item, []ready.Pin, err
 	if it.Type != "feature" {
 		return it, nil, Errorf(ExitUsage, "ready --part baselines a Feature; #%d is a %s", r.n, or(it.Type, "issue"))
 	}
-	pins, ok := ready.Pins(r.n, r.part, is.GetBody())
-	if !ok {
-		return it, nil, Errorf(ExitUsage, "ready --part %s: the %s pins are n/a until #992", r.part, ready.Label(r.part))
+	pins, err := r.pins(ctx, it, is.GetBody())
+	return it, pins, err
+}
+
+// pins is what the part pins on the Feature now (Story #992): only what the
+// part owns, so an edit elsewhere is not drift.
+func (r *partRun) pins(ctx context.Context, it workitems.Item, body string) ([]ready.Pin, error) {
+	if r.part == "intent" {
+		return ready.IntentPins(r.n, body), nil
 	}
-	return it, pins, nil
+	if r.part == "ux" && !slices.Contains(r.e.footprint(it), string(verbs.L01)) {
+		return nil, Errorf(ExitBlocked, "UX design: not needed (no UI layer in the footprint)")
+	}
+	owner, name, _ := github.SplitRepo(r.repo)
+	if r.part == "tech" {
+		path := planning.DesignLedgerPath(r.n)
+		files, err := r.ledgerFiles(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		if files[path] == nil {
+			return nil, Errorf(ExitBlocked, "The technical design of #%d has no design.json yet. Vishwa writes it first: aayu plan %d --draft <file> --create", r.n, r.n)
+		}
+		comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+			return r.c.REST.Issues.ListComments(ctx, owner, name, r.n, &gh.IssueListCommentsOptions{ListOptions: o})
+		})
+		pins := []ready.Pin{ready.FilePin(path, files[path])}
+		for _, cm := range comments {
+			for _, kind := range chart.Kinds {
+				if strings.HasPrefix(cm.GetBody(), chart.Marker(kind)) {
+					pins = append(pins, ready.ChartPin(r.n, kind, cm.GetBody()))
+				}
+			}
+		}
+		return pins, Wrap(ExitExternal, err)
+	}
+	subs, err := featureStories(ctx, r.c, r.repo, r.n)
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(subs, func(a, b *gh.Issue) int { return a.GetNumber() - b.GetNumber() })
+	if r.part == "spec" {
+		if len(subs) == 0 {
+			return nil, Errorf(ExitBlocked, "#%d has no stories yet. Arjun slices it first: aayu slice %d", r.n, r.n)
+		}
+		var stories []workitems.Item
+		for _, si := range subs {
+			s, _ := workitems.Parse(si.GetNumber(), si.GetTitle(), si.GetBody(), si.GetType().GetName(), github.IssueLabels(si))
+			stories = append(stories, s)
+		}
+		return ready.SpecPins(r.n, stories), nil
+	}
+	var paths []string
+	for _, stage := range design.Stages {
+		paths = append(paths, design.ManifestPath(r.n, stage))
+	}
+	files, err := r.ledgerFiles(ctx, paths...)
+	if err != nil {
+		return nil, err
+	}
+	var pins []ready.Pin
+	for _, p := range paths {
+		if files[p] != nil {
+			pins = append(pins, ready.FilePin(p, files[p]))
+		}
+	}
+	if len(pins) == 0 {
+		return nil, Errorf(ExitBlocked, "The UX design of #%d has no stage manifest on the ledger yet. Hanu writes it first: aayu research %d --from <dir>", r.n, r.n)
+	}
+	prs, err := openStoryPRs(ctx, r.c, owner, name)
+	for _, si := range subs {
+		if slices.Contains(github.IssueLabels(si), "early-build") {
+			for _, pr := range prs[si.GetNumber()] {
+				pins = append(pins, ready.EarlyBuildPin(si.GetNumber(), pr.GetNumber(), pr.GetHead().GetSHA()))
+			}
+		}
+	}
+	return pins, Wrap(ExitExternal, err)
+}
+
+// ledgerFiles reads paths from the ledger as it is now; a missing ledger or
+// file is left out.
+func (r *partRun) ledgerFiles(ctx context.Context, paths ...string) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	t, err := r.w.Read(ctx)
+	if err != nil {
+		return out, Wrap(ExitExternal, ignoreMissing(err))
+	}
+	defer t.Close()
+	for _, p := range paths {
+		b, err := t.File(ctx, p)
+		if err = ignoreMissing(err); err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+		if b != nil {
+			out[p] = b
+		}
+	}
+	return out, nil
 }
 
 // records reads the part's newest approved baseline and the draft that

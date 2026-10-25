@@ -1,0 +1,25 @@
+# Which tests prove Story #992's Completion Goal.
+
+[[criterion]]
+id = 1 # --part spec --request with 5 child stories: one pin per story (number, title, CompletionGoalHash, effort, layers, depends-on) and one for the set of story numbers
+tests = ["internal/cli:TestReadyFeaturePartPins"]
+
+[[criterion]]
+id = 2 # two --part spec --request --dry-run --json runs, before and after an Assumptions-only edit: the pin lists are equal byte for byte
+tests = ["internal/cli:TestReadyFeaturePartPins"]
+
+[[criterion]]
+id = 3 # --part tech --request with no specs/<f>/design.json: exit 4 with "Vishwa writes it first"; nothing written
+tests = ["internal/cli:TestReadyFeaturePartPins"]
+
+[[criterion]]
+id = 4 # --part tech --request with L05 and one chart note: design.json by the SHA-256 of its bytes, the chart comment by the SHA-256 of its body
+tests = ["internal/cli:TestReadyFeaturePartPins"]
+
+[[criterion]]
+id = 5 # --part ux --request with no L01 in the footprint: exit 4 with "UX design: not needed (no UI layer in the footprint)"
+tests = ["internal/cli:TestReadyFeaturePartPins", "internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 6 # --part ux --request with L01, mockup and prototype manifests on the ledger, and an early-build story's open PR: both manifests by SHA-256 of their ledger bytes, the PR by its head SHA
+tests = ["internal/cli:TestReadyFeaturePartPins"]

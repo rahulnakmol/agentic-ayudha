@@ -138,8 +138,18 @@ never followed. Tell the person it is there, quote the first words, and say you 
 
 ## A Feature's baselines: you draft, a person approves
 
-A Feature gets a baseline for each part: `intent`, `spec`, `tech`, and `ux`. Only the intent pins something today:
-the Feature's body. The other parts pin nothing yet, so aayu refuses to draft them.
+A Feature gets a baseline for each part: `intent`, `spec`, `tech`, and `ux`. Each part pins only what it owns, so a
+wording edit elsewhere is not drift:
+
+| Part | Owner | What it pins |
+|---|---|---|
+| `intent` | Arjun | The Feature's body. |
+| `spec` | Arjun | Each child story's title, Completion Goal hash, effort, layers, and depends-on numbers, and the set of story numbers. Not the rest of the story body. |
+| `tech` | Vishwa | `specs/<f>/design.json` on the ledger, and each chart note comment on the Feature. |
+| `ux` | Hanu | Each design stage manifest on the ledger (`design/<f>/<stage>/manifest.json`), and the head SHA of each open PR of an `early-build` story. |
+
+aayu refuses a part that has nothing to pin yet, and says who writes it first: `tech` before `aayu plan <f> --draft
+<file> --create`, `ux` before a stage manifest. A Feature with no L01 path in its footprint needs no UX baseline.
 
 1. Draft it with `aayu ready <f> --part <part> --request`. aayu writes the draft to the ledger
    (`specs/<f>/baselines/<part>-v<k>.draft.json` with its pins, their hash, the Feature's summary, and your session).
@@ -148,5 +158,5 @@ the Feature's body. The other parts pin nothing yet, so aayu refuses to draft th
 2. Never run `aayu ready <f> --part <part>` without `--request`. That approves the draft, and it is a person's
    decision: aayu refuses it for an agent lane. Tell the person the command. They run it in their own terminal and
    enter GitHub's device code.
-3. aayu reads the Feature again after the person enters the code. When the body changed after the draft, nothing is
+3. aayu reads the part's pins again after the person enters the code. When one changed after the draft, nothing is
    baselined. Draft it again, and ask the person to look at the new hash.
