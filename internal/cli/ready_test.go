@@ -776,6 +776,13 @@ func TestReadyFeatureDrift(t *testing.T) {
 		return ""
 	}
 
+	// The first version has nothing to change from: a changes file for it is refused, and so is --changes without --request.
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(ready.Change{Ref: "#912"})); code != ExitUsage || !strings.Contains(out, "spec v1 of #874 is the first version and has no changes") {
+		t.Fatalf("changes for v1: exit %d: %s", code, out)
+	}
+	if code, out := readyRun(person, "--part", "spec", "--changes", "changes.json"); code != ExitUsage || !strings.Contains(out, "--changes and --fixes go with --request") {
+		t.Fatalf("--changes without --request: exit %d: %s", code, out)
+	}
 	// 6. The first request of a part writes v1 with no changes field.
 	for _, part := range []string{"intent", "spec"} {
 		if code, out := readyRun(agent, "--part", part, "--request"); code != 0 {
@@ -879,10 +886,14 @@ func TestReadyFeatureDrift(t *testing.T) {
 	}
 	// 8. A finding of another part, and a finding the review does not hold: exit 2, the ID named, no draft written.
 	n = commits()
-	for _, id := range []string{"tech-v1/devops-devex-tinkerer/1", "spec-v1/quality-architect/9"} {
+	for _, id := range []string{"tech-v1/devops-devex-tinkerer/1", "spec-v1/quality-architect/9", "spec-v1/no such seat/1"} {
 		if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", fullFile, "--fixes", id); code != ExitUsage || !strings.Contains(out, "--fixes "+id) || commits() != n {
 			t.Errorf("--fixes %s: exit %d, commits %s → %s: %s", id, code, n, commits(), out)
 		}
+	}
+	// One change given twice is refused.
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#912"), full("#915"), full("#912"))); code != ExitUsage || !strings.Contains(out, "names #912 twice") {
+		t.Fatalf("#912 twice: exit %d: %s", code, out)
 	}
 	// A reason edited after the draft is another draft, with another hash.
 	edited := hostile
@@ -915,6 +926,13 @@ func TestReadyFeatureDrift(t *testing.T) {
 	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#915")))
 	if code != 0 || !strings.Contains(out, "warning: The spec of #874 reaches v4 ([baselines] version_warn). Check why each review finds new gaps.") {
 		t.Fatalf("spec v4 --request: exit %d: %s", code, out)
+	}
+
+	// A story removed from the Feature: its own entry says it, and the set of stories is not a second entry.
+	approveByHand("spec", 4)
+	edit(func() { feature.Subs = slices.DeleteFunc(feature.Subs, func(n int) bool { return n == 913 }) })
+	if _, out := readyRun(person, "--check"); !strings.Contains(out, "  spec v4 · drift: #913 removed\n") {
+		t.Fatalf("--check after #913 was removed: %s", out)
 	}
 
 	// 9. With no [baselines] in the checkout's config, the base layer's defaults, and baselines is a person's section.
