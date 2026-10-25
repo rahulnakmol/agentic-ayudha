@@ -1,0 +1,81 @@
+{
+  "story": 994,
+  "body_hash": "85039086c1d4e421f8c124a9a55ce994a477f198d00bfd54b0c0d47ffd8e13f9",
+  "footprint": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Never layer L07 (operational config): [baselines] early_build_budget = 1 in the embedded defaults, the multiple of [autonomy.budget] cost_usd that one early build may spend. Config.Validate refuses a value below 1, so a person never sees a $0.00 budget. internal/config/gen renders it in the Budgets section; schema.json is regenerated. No existing key, default, load rule, or protected-key rule changes. CONSTRAINTS.md gains the generated baselines.early_build_budget row; no floor, threshold, or existing row changes",
+      "contracts": [
+        "config.Baselines{EarlyBuildBudget int}, koanf key baselines.early_build_budget, minimum 1 in the schema and in Config.Validate",
+        "internal/config/gen: Budgets section roots gain baselines, with one row for baselines.early_build_budget"
+      ],
+      "tests": [
+        "internal/cli:TestReadyEarlyBuild",
+        "internal/config:TestRejects"
+      ],
+      "rollback": "revert the PR; the [baselines] section and its CONSTRAINTS.md row go, and only ready --early-build reads it",
+      "criteria": [
+        1,
+        3
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "CLI: aayu ready \u003cfeature\u003e --early-build \u003cstory\u003e is a person's decision. It is refused for an agent lane or --ci before anything is read. It checks that the story is a Story, has the early-build label, and is a child of the Feature, and refuses each failure before the device code. It shows the effect with the budget before the code, reads the story again after the code, and writes one ledger commit specs/\u003cf\u003e/approved-early-\u003cstory\u003e.json with the story, its body hash, budget_usd, approved_by, presence, and at. An early build's PR never merges into dev (core design E1): inspect turns merge, or a docs-only skip, into the new disposition hold with the reason '#n is an early build: its PR never merges into dev (E1)' and exits 4; ship refuses the PR with the same reason before it reads the gate's pack; a delegate sync sends a held PR no fix prompt",
+      "contracts": [
+        "ready.EarlyBuild{Schema, Feature, Story, BodyHash, BudgetUSD, ApprovedBy, Presence, At}; ready.EarlyBuildPath(f, story) = specs/\u003cf\u003e/approved-early-\u003cstory\u003e.json",
+        "ready.EarlyBuildEffect(f, story, times, cost) = 'Approve the early build #s of #f. Budget up to $X (n × [autonomy.budget] cost_usd).'",
+        "Env.personOnly(what) is the agent-lane refusal shared by ready --part and ready --early-build",
+        "inspect.Hold = \"hold\"; earlyBuildHold(res, pr, early, prev) runs after prBodyFloor on every path that emits a result and keeps the review's own disposition in Reviewed",
+        "ready.EarlyBuildLabel = \"early-build\"; ready.EarlyBuildHold(story) is the one reason inspect and ship give",
+        "runShip reads the story's labels after resolving Refs #n and returns ExitBlocked for an early build; a 404 story is left to the later Ready snapshot check"
+      ],
+      "tests": [
+        "internal/cli:TestReadyEarlyBuild",
+        "internal/cli:TestReadyFeatureBaseline",
+        "internal/cli:TestInspectMergeBudgetDraft",
+        "internal/cli:TestShipOnProof",
+        "internal/cli:TestDelegateCycleCapPages"
+      ],
+      "instrumentation": [
+        "the ledger commit names the story, the Feature, and the approver; presenceCheck logs the device-flow approval"
+      ],
+      "rollback": "revert the PR; --early-build is an unknown flag again, and records already written stay on the ledger with nothing reading them; inspect and ship no longer read the early-build label",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Verbs and skills: the registry's ready verb gains the --early-build flag (TypeIssue) and the early-build-approval output; go generate updates skills/ready/SKILL.md frontmatter, internal/mcp/schemas/ready.json, and docs/guide/skills/ready.md. The ready and ship skills say an agent never runs --early-build and that hold is not ready to ship. No verb or seat is added or removed",
+      "contracts": [
+        "internal/verbs/registry.go: ready flag early-build, output early-build-approval"
+      ],
+      "tests": [
+        "internal/cli:TestReadyEarlyBuild"
+      ],
+      "rollback": "revert the PR; go generate restores the old frontmatter, schema, and usage table",
+      "criteria": [
+        1,
+        5
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-25T18:49:32Z",
+  "planned_by": "human-fallback"
+}
