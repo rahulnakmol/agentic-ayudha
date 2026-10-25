@@ -182,17 +182,20 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 			res.Problems, res.Pass = append(res.Problems, ps...), false
 		}
 	}
-	// A plan that is only checked may be checked where the ledger cannot be
-	// read; a plan that is written is checked against the design, or refused.
-	design, err := e.featureDesign(ctx, c, bot, repo, n)
-	switch {
-	case err != nil && in.Bool("create"):
-		return Wrap(ExitExternal, err)
-	case err != nil:
-		res.Warnings = append(res.Warnings, fmt.Sprintf("the technical design of the story's Feature was not read from the ledger (%v); --create reads it and refuses when it cannot", err))
-	case design != nil:
-		if ps := planning.CheckInDesign(*design, d.Checkpoints); len(ps) > 0 {
-			res.Problems, res.Pass = append(res.Problems, ps...), false
+	// A story plan stays inside its Feature's design; a bug fix may need
+	// another layer. A plan that is only checked may be checked where the
+	// ledger cannot be read; a plan that is written is checked, or refused.
+	if chk.Type == "story" {
+		design, err := e.featureDesign(ctx, c, bot, repo, n)
+		switch {
+		case err != nil && in.Bool("create"):
+			return Wrap(ExitExternal, err)
+		case err != nil:
+			res.Warnings = append(res.Warnings, fmt.Sprintf("the technical design of the story's Feature was not read from the ledger (%v); --create reads it and refuses when it cannot", err))
+		case design != nil:
+			if ps := planning.CheckInDesign(*design, d.Checkpoints); len(ps) > 0 {
+				res.Problems, res.Pass = append(res.Problems, ps...), false
+			}
 		}
 	}
 	for i, cp := range d.Checkpoints {

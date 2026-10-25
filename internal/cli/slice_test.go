@@ -520,6 +520,10 @@ func TestPlanFeatureDesign(t *testing.T) {
 	elsewhere := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #9
 	elsewhere.Parent, noDesign.Subs = noDesign.Number, []int{elsewhere.Number}
 	lone := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #10: under no Feature
+	bug := g.AddIssue("Plan loses a layer", fixtureBody(t, "bug", func(f map[string]string) {
+		f[workitems.FieldCriteria] = "1. [api-trace] state: a plan; expected: the layer\n2. [api-trace] state: a design; expected: the layer"
+	}), "type:bug", "status:ready", "effort:XS", "layer:L02", "layer:L06") // #11: a bug under the Feature
+	bug.Parent, feature.Subs = feature.Number, append(feature.Subs, bug.Number)
 	dir, bare := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
@@ -644,5 +648,9 @@ func TestPlanFeatureDesign(t *testing.T) {
 	}
 	if code, out := plan(lone.Number, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
 		t.Fatalf("a story plan under no Feature: %d %s", code, out)
+	}
+	// The design bounds story plans only: a bug fix under the Feature may need another layer.
+	if code, out := plan(bug.Number, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
+		t.Fatalf("a bug plan under a Feature with a design: %d %s", code, out)
 	}
 }
