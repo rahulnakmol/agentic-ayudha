@@ -109,3 +109,53 @@ func TestCheckPlan(t *testing.T) {
 		}
 	}
 }
+
+// A Feature's technical design (Feature #874, story #991): its layers stay in
+// the Feature's footprint, its story order names each story once and nothing
+// else, and touching L07 needs a rollback; a story plan's checkpoints stay in
+// the design's layers.
+func TestCheckDesign(t *testing.T) {
+	footprint, stories := []string{"L02", "L03", "L07"}, []int{12, 13, 14}
+	good := func() planning.DesignDraft {
+		return planning.DesignDraft{Feature: 10, Layers: []string{"L02", "L07"}, StoryOrder: []int{14, 12, 13}, Rollback: "revert"}
+	}
+	if r := planning.CheckDesign(10, footprint, stories, good()); !r.Pass || len(r.Problems) != 0 {
+		t.Fatalf("a good design: %+v", r)
+	}
+	for name, tc := range map[string]struct {
+		edit func(*planning.DesignDraft)
+		want string // "" when the design passes
+	}{
+		"other feature":   {func(d *planning.DesignDraft) { d.Feature = 11 }, "the design is for #11, not #10"},
+		"no layers":       {func(d *planning.DesignDraft) { d.Layers = nil }, "the design names no layers"},
+		"layer outside":   {func(d *planning.DesignDraft) { d.Layers = append(d.Layers, "L05") }, "layer L05 is not in the footprint of #10 (L02, L03, L07)"},
+		"story missing":   {func(d *planning.DesignDraft) { d.StoryOrder = []int{14, 12} }, "story order: #13 is a story of #10 but is not in the order"},
+		"not a story":     {func(d *planning.DesignDraft) { d.StoryOrder = append(d.StoryOrder, 99) }, "story order: #99 is not a story of #10"},
+		"twice":           {func(d *planning.DesignDraft) { d.StoryOrder = append(d.StoryOrder, 12) }, "story order: #12 is in the order twice"},
+		"L07 no rollback": {func(d *planning.DesignDraft) { d.Rollback = " " }, "a design that touches L07 names its rollback"},
+		"no L07":          {func(d *planning.DesignDraft) { d.Layers, d.Rollback = []string{"L03"}, "" }, ""},
+		"unnumbered":      {func(d *planning.DesignDraft) { d.Feature = 0 }, ""},
+	} {
+		d := good()
+		tc.edit(&d)
+		r := planning.CheckDesign(10, footprint, stories, d)
+		if got := strings.Join(r.Problems, "\n"); r.Pass != (tc.want == "") || got != tc.want {
+			t.Errorf("%s: pass %v, problems %q, want %q", name, r.Pass, got, tc.want)
+		}
+	}
+	if r := planning.CheckDesign(10, nil, nil, planning.DesignDraft{Layers: []string{"L02"}}); strings.Join(r.Problems, "\n") != "layer L02 is not in the footprint of #10 (none)" {
+		t.Errorf("a Feature with no footprint: %q", r.Problems)
+	}
+
+	design := planning.Design{Feature: 10, Layers: []string{"L02", "L07"}}
+	cps := []planning.Checkpoint{{Layer: "L02"}, {Layer: "L06"}, {Layer: "L07"}}
+	if got := planning.CheckInDesign(design, cps); strings.Join(got, "\n") != "checkpoint 2 (L06) is outside the technical design of #10 (L02, L07)" {
+		t.Errorf("a story plan outside the design: %q", got)
+	}
+	if got := planning.CheckInDesign(design, cps[:1]); len(got) != 0 {
+		t.Errorf("a story plan inside the design: %q", got)
+	}
+	if planning.DesignLedgerPath(874) != "specs/874/design.json" {
+		t.Errorf("design path %s", planning.DesignLedgerPath(874))
+	}
+}

@@ -187,7 +187,7 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 	design, err := e.featureDesign(ctx, c, bot, repo, n)
 	switch {
 	case err != nil && in.Bool("create"):
-		return err
+		return Wrap(ExitExternal, err)
 	case err != nil:
 		res.Warnings = append(res.Warnings, fmt.Sprintf("the technical design of the story's Feature was not read from the ledger (%v); --create reads it and refuses when it cannot", err))
 	case design != nil:
@@ -290,9 +290,6 @@ func (e *Env) planFeature(ctx context.Context, c *github.Client, bot identity.Bo
 	it, _ := workitems.Parse(n, is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
 	paths := planning.Paths(it.Fields["expected_paths"])
 	footprint := planning.GlobFootprint(autonomy.ReadLayers(config.RepoRoot(e.Dir)), paths)
-	if footprint == nil {
-		footprint = []string{}
-	}
 	owner, name, _ := github.SplitRepo(repo)
 	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
 		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(n), &o)
@@ -372,47 +369,42 @@ func (e *Env) planFeature(ctx context.Context, c *github.Client, bot identity.Bo
 }
 
 // featureDesign reads, from the ledger, the technical design of the Feature
-// that story n is under: nil when it has no Feature parent, the Feature has no
-// design, or there is no checkout or ledger to read it from.
+// that story n is under: nil when it has no parent, or the parent has no
+// design (only a Feature has one), or there is no ledger.
 func (e *Env) featureDesign(ctx context.Context, c *github.Client, bot identity.Bot, repo string, n int) (*planning.Design, error) {
-	if config.RepoRoot(e.Dir) == "" {
-		return nil, nil
-	}
 	owner, name, _ := github.SplitRepo(repo)
 	parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n))
-	if github.NotFound(err) {
-		return nil, nil
-	}
 	if err != nil {
-		return nil, Wrap(ExitExternal, err)
-	}
-	if pt, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent)); pt != "feature" {
-		return nil, nil
+		return nil, ignoreMissing(err)
 	}
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 	if err != nil {
 		return nil, err
 	}
 	t, err := w.Read(ctx)
-	if errors.Is(err, ledger.ErrNoLedger) {
-		return nil, nil
-	}
 	if err != nil {
-		return nil, Wrap(ExitExternal, err)
+		return nil, ignoreMissing(err)
 	}
 	defer t.Close()
-	b, err := t.File(ctx, planning.DesignLedgerPath(parent.GetNumber()))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	path := planning.DesignLedgerPath(parent.GetNumber())
+	b, err := t.File(ctx, path)
 	if err != nil {
-		return nil, Wrap(ExitExternal, err)
+		return nil, ignoreMissing(err)
 	}
 	var d planning.Design
 	if err := json.Unmarshal(b, &d); err != nil {
-		return nil, Errorf(ExitExternal, "%s on the ledger: %v", planning.DesignLedgerPath(parent.GetNumber()), err)
+		return nil, fmt.Errorf("%s on the ledger: %w", path, err)
 	}
 	return &d, nil
+}
+
+// ignoreMissing is nil for a missing parent issue, ledger, or ledger file,
+// else err.
+func ignoreMissing(err error) error {
+	if github.NotFound(err) || errors.Is(err, ledger.ErrNoLedger) || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // approvePlan records the Engineering Manager's plan-time review: a human

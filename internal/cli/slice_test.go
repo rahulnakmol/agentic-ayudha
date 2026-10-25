@@ -513,9 +513,13 @@ func TestPlanFeatureDesign(t *testing.T) {
 		s.Parent = feature.Number
 		feature.Subs = append(feature.Subs, s.Number)
 	}
-	noDesign := g.AddIssue("Another Feature", featureBody, "type:feature", "status:ready")                         // #7
-	elsewhere := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #8
+	split := g.AddIssue("Split XL story", "", "type:story", "status:cancelled") // closed as split: not in the order
+	split.State, split.Parent = "closed", feature.Number
+	feature.Subs = append(feature.Subs, split.Number)
+	noDesign := g.AddIssue("Another Feature", featureBody, "type:feature", "status:ready")                         // #8
+	elsewhere := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #9
 	elsewhere.Parent, noDesign.Subs = noDesign.Number, []int{elsewhere.Number}
+	lone := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #10: under no Feature
 	dir, bare := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
@@ -561,7 +565,6 @@ func TestPlanFeatureDesign(t *testing.T) {
 	}{
 		"layer outside": {func(d *planning.DesignDraft) { d.Layers = []string{"L02", "L03", "L05"} }, "layer L05 is not in the footprint of #1 (L02, L03, L07)"},
 		"story missing": {func(d *planning.DesignDraft) { d.StoryOrder = []int{3, 2, 4, 6} }, "story order: #5 is a story of #1 but is not in the order"},
-		"not a story":   {func(d *planning.DesignDraft) { d.StoryOrder = append(d.StoryOrder, 8) }, "story order: #8 is not a story of #1"},
 		"no rollback":   {func(d *planning.DesignDraft) { d.Rollback = " " }, "a design that touches L07 names its rollback"},
 	} {
 		if code, out := plan(1, "--draft", design(tc.edit), "--create"); code != ExitBlocked || !strings.Contains(out, tc.want) {
@@ -571,6 +574,11 @@ func TestPlanFeatureDesign(t *testing.T) {
 	if code, out := plan(1, "--draft", design(func(d *planning.DesignDraft) { d.Layers, d.Rollback = []string{"L02", "L03"}, "" })); code != 0 || !strings.Contains(out, "run again with --create") {
 		t.Fatalf("a design without L07 needs no rollback: %d %s", code, out)
 	}
+	unknown := filepath.Join(t.TempDir(), "design.json")
+	_ = os.WriteFile(unknown, []byte(`{"feature": 1, "layers": ["L02"], "story_order": [2, 3, 4, 5, 6], "notes": "x"}`), 0o644)
+	if code, out := plan(1, "--draft", unknown); code != ExitUsage || !strings.Contains(out, `unknown field "notes"`) {
+		t.Fatalf("a design draft is decoded strictly: %d %s", code, out)
+	}
 	if len(g.Writes()) != 0 || strings.Contains(ledgerFiles(), "specs/") {
 		t.Fatalf("a design that did not pass, or without --create, wrote: %v\n%s", g.Writes(), ledgerFiles())
 	}
@@ -578,13 +586,17 @@ func TestPlanFeatureDesign(t *testing.T) {
 	// Story plans before the design exists: inside the footprint, they pass as today.
 	twoLayers := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) {
 		cp := d.Checkpoints[0]
-		cp.Rollback, d.Story = "", 0 // the same draft plans #2 and #8
+		cp.Rollback, d.Story = "", 0 // the same draft plans #2 and #9
 		d.Checkpoints = []planning.Checkpoint{cp, cp}
 		d.Checkpoints[0].Layer, d.Checkpoints[0].Criteria = "L02", []int{1}
 		d.Checkpoints[1].Layer, d.Checkpoints[1].Criteria = "L06", []int{2}
 	})
 	if code, out := plan(2, "--draft", twoLayers); code != 0 {
 		t.Fatalf("a story plan before its Feature has a design: %d %s", code, out)
+	}
+
+	if code, out := plan(1, "--draft", design(func(*planning.DesignDraft) {}), "--create", "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: the design is planned, not written") || strings.Contains(ledgerFiles(), "specs/") {
+		t.Fatalf("plan --create --dry-run of a Feature: %d %s", code, out)
 	}
 
 	// Criterion 5: --create writes the design in one ledger commit, and never a story plan.
@@ -615,8 +627,22 @@ func TestPlanFeatureDesign(t *testing.T) {
 	if code, out := plan(3, "--draft", oneLayer); code != 0 || strings.Contains(out, "technical design") {
 		t.Fatalf("a story plan inside the design: %d %s", code, out)
 	}
+	// Where the ledger cannot be read, a plan that is only checked passes with a
+	// warning; a plan that would be written is refused.
+	git(t, dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
+	if code, out, errOut := run(t, env, opts, "plan", "2", "--repo", "o/r", "--draft", twoLayers); code != 0 || !strings.Contains(out, "warning: the technical design of the story's Feature was not read from the ledger") {
+		t.Fatalf("a checked plan where the ledger cannot be read: %d %s %s", code, out, errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "plan", "2", "--repo", "o/r", "--draft", twoLayers, "--create"); code != ExitExternal || strings.Contains(out, "wrote") {
+		t.Fatalf("a written plan where the ledger cannot be read: %d %s %s", code, out, errOut)
+	}
+	git(t, dir, "remote", "set-url", "origin", bare)
+
 	// Criterion 7: a story whose Feature has no design passes as today.
-	if code, out := plan(8, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
+	if code, out := plan(9, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
 		t.Fatalf("a story plan under a Feature with no design: %d %s", code, out)
+	}
+	if code, out := plan(lone.Number, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
+		t.Fatalf("a story plan under no Feature: %d %s", code, out)
 	}
 }
