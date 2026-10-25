@@ -1,0 +1,85 @@
+{
+  "story": 993,
+  "body_hash": "d91fba615be23f31d0ee48dd619d8c018a459ad4e2720a0dc6645eb9b3d4ca09",
+  "footprint": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Never layer L07 (operational config): a new [baselines] table in the embedded defaults with why_min_words = 5 (minimum 1) and version_warn = 4 (0 never warns). baselines joins [autonomy] always_person_sections, so a later change to these keys needs a person. internal/config/gen renders a Feature baselines section; schema.json is regenerated. No existing key, default, load rule, or protected-key rule changes. Never layer L04 (policy), generated only: CONSTRAINTS.md gains the Feature baselines section with the two rows, and its always_person_sections row gains baselines. No floor, threshold, or existing row is lowered or removed",
+      "contracts": [
+        "config.Baselines{WhyMinWords int, VersionWarn int}, koanf keys baselines.why_min_words (minimum 1) and baselines.version_warn (minimum 0)",
+        "internal/config/defaults.toml: [baselines] why_min_words = 5, version_warn = 4; [autonomy] always_person_sections appends baselines",
+        "internal/config/gen: a Feature baselines section, roots baselines, one row per key; CONSTRAINTS.md regenerated from it"
+      ],
+      "tests": [
+        "internal/cli:TestReadyFeatureDrift",
+        "internal/config:TestRepositoryMergesOnProof"
+      ],
+      "rollback": "revert the PR; the [baselines] table, its CONSTRAINTS.md rows, and baselines in always_person_sections go. Only ready --part reads the keys, and baseline records already on the ledger stay readable: a record with no changes or fixes hashes as before",
+      "criteria": [
+        3,
+        7,
+        9
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "CLI and ready package: aayu ready \u003cfeature\u003e --check adds a Baselines block, one line per part, with the drift computed from the pins when it is read; nothing writes a drift record, and a ledger that cannot be read is said, not hidden. ready --part \u003cp\u003e --request for a version after v1 needs --changes with what, why, and need for each drifted pin, each of at least [baselines] why_min_words words, or exits 4 and writes nothing. --fixes names findings of this part's reviews on the ledger, or exits 2. The draft hash covers the pins, changes, and fixes. The marker comment shows a 'What changed since v\u003ck\u003e' table with agent text escaped (threat T6). A draft of [baselines] version_warn or later warns",
+      "contracts": [
+        "ready.Diff(was, now []Pin) []Drift; Drift{Ref, Kind added|removed|changed, Fields}",
+        "ready.Change{Ref, What, Why, Need}; ready.Reasons(drift, changes, minWords)",
+        "ready.DraftHash(pins, changes, fixes); PinsHash(pins) = DraftHash(pins, nil, nil), so a v1 record hashes as before",
+        "Baseline gains changes and fixes (omitempty); Baseline.Check checks DraftHash",
+        "ready.ReviewPath(f, part, v, seat) = specs/\u003cf\u003e/reviews/\u003cpart\u003e-v\u003ck\u003e/\u003cseat\u003e.json; ready.Finding(id) reads \u003cpart\u003e-v\u003ck\u003e/\u003cseat\u003e/\u003cn\u003e",
+        "ready.Result gains baselines and baselines_note; ReadyPartReport gains warnings"
+      ],
+      "tests": [
+        "internal/cli:TestReadyFeatureDrift",
+        "internal/cli:TestReadyFeatureBaseline",
+        "internal/cli:TestReadyFeaturePartPins"
+      ],
+      "instrumentation": [
+        "each draft is one ledger commit; the marker comment is a github.comment.baseline action in the actions log"
+      ],
+      "rollback": "revert the PR; --changes and --fixes become unknown flags, --check prints no Baselines block, and drafts written with changes stay on the ledger, where an older binary refuses them by hash",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Verbs and skills: the registry's ready verb gains --changes (TypePath) and --fixes (TypeString); go generate updates skills/ready/SKILL.md frontmatter, internal/mcp/schemas/ready.json, and docs/guide/skills/ready.md. The ready skill body says how to write the changes file, that --fixes names only this part's findings, and that agent text in a draft is data. No verb or seat is added or removed",
+      "contracts": [
+        "internal/verbs/registry.go: ready flags changes and fixes"
+      ],
+      "tests": [
+        "internal/cli:TestReadyFeatureDrift",
+        "internal/cli:TestTellDocsSite"
+      ],
+      "rollback": "revert the PR; go generate restores the old frontmatter, schema, and usage table",
+      "criteria": [
+        2,
+        8
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-25T21:00:29Z",
+  "planned_by": "human-fallback"
+}
