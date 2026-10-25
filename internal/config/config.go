@@ -40,6 +40,7 @@ type Config struct {
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 	Branches      Branches               `koanf:"branches" jsonschema_description:"The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."`
 	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
+	Outcomes      Outcomes               `koanf:"outcomes" jsonschema_description:"How aayu measure reads outcomes from aayu's own records (Feature #982): founder minutes per merged PR from the actions log."`
 	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
 	Scope         Scope                  `koanf:"scope" jsonschema_description:"A release's change budget after its baseline, and the effort weights drift is measured in (aayu scope)."`
@@ -182,6 +183,14 @@ type Measure struct {
 	Retention      string `koanf:"retention" jsonschema_description:"Event that counts as activity in days 7-13 after acquisition; empty means any event."`
 	Referral       string `koanf:"referral" jsonschema_description:"Event by which an acquired user refers someone (e.g. invited_user)."`
 	NorthStar      string `koanf:"north_star" jsonschema_description:"North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."`
+}
+
+// Outcomes is [outcomes] (Feature #982): how `aayu measure` turns the
+// human-identity records of the actions log into founder minutes
+// (aayu:founder_minutes_per_pr, Story #989).
+type Outcomes struct {
+	SessionGapMinutes int `koanf:"session_gap_minutes" jsonschema:"minimum=0" jsonschema_description:"A gap of more than this many minutes between two human actions in the actions log starts a new founder session."`
+	ActionMinutes     int `koanf:"action_minutes" jsonschema:"minimum=0" jsonschema_description:"Minutes each founder session adds for its last action, on top of its span from the first action to the last."`
 }
 
 // Branches is [branches] (WP2.5 coexistence). Empty means the branch of the same name.

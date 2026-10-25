@@ -753,6 +753,23 @@
       "type": "object",
       "description": "The events measure (WP7.2) reads as AARRR stages and the North Star."
     },
+    "outcomes": {
+      "properties": {
+        "session_gap_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A gap of more than this many minutes between two human actions in the actions log starts a new founder session."
+        },
+        "action_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minutes each founder session adds for its last action, on top of its span from the first action to the last."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How aayu measure reads outcomes from aayu's own records (Feature #982): founder minutes per merged PR from the actions log."
+    },
     "design": {
       "properties": {
         "tokens": {

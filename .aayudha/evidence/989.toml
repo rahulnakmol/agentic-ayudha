@@ -1,0 +1,18 @@
+# Which tests prove Story #989's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # human actions at 09:00, 09:04, 09:09 and 11:30, 12 merged PRs, default keys: 2 sessions, 13 minutes, 1.1 per PR
+tests = ["internal/measure:TestFounderMinutesPerPR", "internal/measure:TestFounderSessionGapBoundary", "internal/cli:TestMeasureFounderMinutesPerPR"]
+
+[[criterion]]
+id = 2 # aayu measure <goal> --metric aayu:founder_minutes_per_pr: the Result names population, window, both keys, and value
+tests = ["internal/cli:TestMeasureFounderMinutesPerPR"]
+
+[[criterion]]
+id = 3 # a window with no merged PR: "undefined", and no Result written
+tests = ["internal/measure:TestFounderNoMergedPR", "internal/cli:TestMeasureFounderMinutesPerPR"]
+
+[[criterion]]
+id = 4 # bot and human-fallback records in the same log: only human-identity records count
+tests = ["internal/measure:TestFounderMinutesPerPR", "internal/cli:TestMeasureFounderMinutesPerPR"]

@@ -16,8 +16,9 @@ import (
 var ErrSpec = errors.New("unreadable measure spec")
 
 // Spec is what a Goal or Initiative is measured on: a snapshot metric
-// (Metrics) or a provider baseline, "<source>:<metric> [filter]" (posthog,
-// sentry, github, growthbook; WP5.2).
+// (Metrics), aayu:founder_minutes_per_pr from the actions log (Story #989),
+// or a provider baseline, "<source>:<metric> [filter]" (posthog, sentry,
+// github, growthbook; WP5.2).
 type Spec struct {
 	Metric string `json:"metric"`
 	Source string `json:"source,omitempty"` // empty for snapshot metrics
