@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -8,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -201,5 +204,164 @@ func TestReadyHumanFallbackAndGuard(t *testing.T) {
 	g.Mu.Unlock()
 	if code, out := guard("3"); code != 0 || slices.Contains(g.LabelNames(3), "status:ready") || !strings.Contains(out, "effort:XL blocks Ready") {
 		t.Fatalf("guard on an XL issue: %d %s", code, out)
+	}
+}
+
+// Story #990: an agent drafts a Feature's intent baseline from its thread;
+// only a person approves it, through GitHub's device flow, at the hash the
+// draft pinned. An edit while the code waits baselines nothing.
+func TestReadyFeatureBaseline(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Viewer = "founder"
+	feature := g.AddIssue("Feature baselines", fixtureBody(t, "feature", nil), "type:feature") // #1
+	dir, bare := ledgerCheckout(t)
+	state := filepath.Join(dir, "state")
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state} // a terminal with no agent marker
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
+	readyRun := func(env map[string]string, args ...string) (int, string, string) {
+		t.Helper()
+		code, out, errOut := run(t, env, opts, append([]string{"ready", "1", "--repo", "o/r"}, args...)...)
+		return code, out, errOut
+	}
+	commits := func() []string { // ledger commits that wrote a baseline of #1
+		t.Helper()
+		if out := git(t, bare, "log", "--format=%H", "ledger", "--", "specs/1/baselines"); out != "" {
+			return strings.Split(out, "\n")
+		}
+		return nil
+	}
+	files := func() []string {
+		t.Helper()
+		return strings.Fields(git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "--", "specs/1/baselines"))
+	}
+	record := func(path string) ready.Baseline {
+		t.Helper()
+		var b ready.Baseline
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+path)), &b); err != nil {
+			t.Fatalf("ledger %s: %v", path, err)
+		}
+		return b
+	}
+	markers := func() []string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		var out []string
+		for _, c := range feature.Comments {
+			if strings.Contains(c.Body, "<!-- aayudha:baseline part=intent -->") {
+				out = append(out, c.Body)
+			}
+		}
+		return out
+	}
+	device := func(onPoll func(int)) {
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: onPoll}
+		g.Mu.Unlock()
+	}
+	started := func() int {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Device == nil {
+			return 0
+		}
+		return g.Device.Started
+	}
+	// The pins' hash, computed here from its definition: one "<ref> <hash>" line per pin.
+	pinsHash := func(body string) string {
+		sum := sha256.Sum256([]byte("#1 body " + workitems.BodyHash(body) + "\n"))
+		return hex.EncodeToString(sum[:])
+	}
+	body := feature.Body
+	want := pinsHash(body)
+
+	// 1, 2. The agent's request writes the draft and the marker comment, and never asks for a code.
+	device(nil)
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request"); code != 0 || started() != 0 {
+		t.Fatalf("--part intent --request: exit %d, device codes %d: %s%s", code, started(), out, errOut)
+	}
+	if c, f := commits(), files(); len(c) != 1 || !slices.Equal(f, []string{"specs/1/baselines/intent-v1.draft.json"}) {
+		t.Fatalf("after the request: %d commits, files %v", len(c), f)
+	}
+	d := record("specs/1/baselines/intent-v1.draft.json")
+	if d.Part != "intent" || d.Version != 1 || d.Owner != "product-strategist" || d.Hash != want ||
+		len(d.Pins) != 1 || d.Pins[0] != (ready.Pin{Ref: "#1 body", Hash: workitems.BodyHash(body)}) ||
+		d.Summary != "A five-question eligibility check." || d.SourceSession != "T-agent-thread" || d.ApprovedBy != "" {
+		t.Fatalf("draft: %+v", d)
+	}
+	if m := markers(); len(m) != 1 || !strings.Contains(m[0], "Intent v1 of #1 waits for a person: `aayu ready 1 --part intent`") {
+		t.Fatalf("marker comment after the request: %q", m)
+	}
+
+	// 3. An agent lane is refused before any read or write.
+	g.Reset()
+	code, out, errOut := readyRun(agent, "--part", "intent")
+	g.Mu.Lock()
+	reqs := 0 // the halt check reads a variable first; the issue is never read
+	for _, r := range g.Requests {
+		if strings.Contains(r.Path, "/issues") {
+			reqs++
+		}
+	}
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(out+errOut, "ready --part is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") || reqs != 0 || started() != 0 {
+		t.Fatalf("agent --part intent: exit %d, %d issue requests, device codes %d: %s%s", code, reqs, started(), out, errOut)
+	}
+	if len(commits()) != 1 || len(markers()) != 1 {
+		t.Fatalf("the agent's refusal wrote: %d commits, %d marker comments", len(commits()), len(markers()))
+	}
+	// --request as a person drafts again (unchanged), and never asks for a code either.
+	if code, out, errOut := readyRun(person, "--part", "intent", "--request"); code != 0 || started() != 0 || len(commits()) != 1 {
+		t.Fatalf("person --request: exit %d, device codes %d, %d commits: %s%s", code, started(), len(commits()), out, errOut)
+	}
+
+	// 5. The body is edited while the code waits: nothing is baselined.
+	edited := body + "\nOne more question.\n"
+	device(func(int) { feature.Body = edited })
+	code, out, errOut = readyRun(person, "--part", "intent")
+	changed := "The intent of #1 changed after the draft (hash " + want[:12] + " → " + pinsHash(edited)[:12] + "). Nothing was baselined. Draft it again."
+	if code != ExitBlocked || !strings.Contains(out+errOut, changed) || started() != 1 {
+		t.Fatalf("edited during the code: exit %d, device codes %d: %s%s", code, started(), out, errOut)
+	}
+	if len(commits()) != 1 || slices.Contains(files(), "specs/1/baselines/intent-v1.json") {
+		t.Fatalf("edited during the code wrote: files %v", files())
+	}
+	// Still edited: refused before a code is asked for.
+	device(nil)
+	if code, out, errOut := readyRun(person, "--part", "intent"); code != ExitBlocked || !strings.Contains(out+errOut, changed) || started() != 0 {
+		t.Fatalf("edited before the code: exit %d, device codes %d: %s%s", code, started(), out, errOut)
+	}
+
+	// 4. The body as drafted again: a person approves at the draft's hash, the effect shown before the code.
+	g.Mu.Lock()
+	feature.Body = body
+	g.Mu.Unlock()
+	code, out, errOut = readyRun(person, "--part", "intent")
+	effect, enter := strings.Index(errOut, "Approving: "), strings.Index(errOut, "/login/device")
+	if code != 0 || started() != 1 || effect < 0 || enter < effect || !strings.Contains(errOut[effect:enter], want[:12]) {
+		t.Fatalf("person --part intent: exit %d, device codes %d: %s%s", code, started(), out, errOut)
+	}
+	if c, f := commits(), files(); len(c) != 2 || !slices.Contains(f, "specs/1/baselines/intent-v1.json") {
+		t.Fatalf("after the approval: %d commits, files %v", len(c), f)
+	}
+	b := record("specs/1/baselines/intent-v1.json")
+	if b.Hash != d.Hash || b.ApprovedBy != "founder" || b.ApprovedAt == "" || b.Presence != "device-flow" || b.Part != "intent" || b.Version != 1 {
+		t.Fatalf("baseline: %+v", b)
+	}
+	if m := markers(); len(m) != 1 || !strings.Contains(m[0], "Intent v1 of #1 baselined by @founder · hash "+want[:12]) || strings.Contains(m[0], "waits for a person") {
+		t.Fatalf("marker comment after the approval: %q", m)
+	}
+	// Nothing changed since v1: no new draft.
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Nothing changed since intent v1 of #1. No draft written.") || len(commits()) != 2 {
+		t.Fatalf("request after v1: exit %d, %d commits: %s%s", code, len(commits()), out, errOut)
+	}
+
+	// 6. No spec draft waits: nothing to approve, nothing written.
+	g.Reset()
+	device(nil)
+	code, out, errOut = readyRun(person, "--part", "spec")
+	if code != ExitBlocked || !strings.Contains(out+errOut, "No spec draft of #1 waits for a person. An agent drafts it: aayu ready 1 --part spec --request") ||
+		len(g.Writes()) != 0 || len(commits()) != 2 || started() != 0 {
+		t.Fatalf("--part spec with no draft: exit %d, writes %v: %s%s", code, g.Writes(), out, errOut)
 	}
 }
