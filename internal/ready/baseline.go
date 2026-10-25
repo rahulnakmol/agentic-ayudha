@@ -1,8 +1,6 @@
 package ready
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -40,26 +38,28 @@ type Pin struct {
 // Baseline is a part of a Feature as an agent drafted it and, once
 // ApprovedBy is set, as a person approved it.
 type Baseline struct {
-	Schema        string `json:"schema"`
-	Feature       int    `json:"feature"`
-	Part          string `json:"part"`
-	Version       int    `json:"version"` // k, from 1
-	Owner         string `json:"owner"`   // the seat that owns the part
-	Pins          []Pin  `json:"pins"`
-	Hash          string `json:"hash"` // PinsHash(Pins): what the person approves
-	Summary       string `json:"summary"`
-	SourceSession string `json:"source_session,omitempty"` // the host session that drafted it
-	DraftedBy     string `json:"drafted_by"`
-	DraftedAt     string `json:"drafted_at"`
-	ApprovedBy    string `json:"approved_by,omitempty"`
-	ApprovedAt    string `json:"approved_at,omitempty"`
-	Presence      string `json:"presence,omitempty"` // how the person was proven present: device-flow
+	Schema        string   `json:"schema"`
+	Feature       int      `json:"feature"`
+	Part          string   `json:"part"`
+	Version       int      `json:"version"` // k, from 1
+	Owner         string   `json:"owner"`   // the seat that owns the part
+	Pins          []Pin    `json:"pins"`
+	Changes       []Change `json:"changes,omitempty"` // since the version before: what, why, and need for each drift (Story #993)
+	Fixes         []string `json:"fixes,omitempty"`   // IDs of this part's review findings the version fixes
+	Hash          string   `json:"hash"`              // DraftHash(Pins, Changes, Fixes): what the person approves
+	Summary       string   `json:"summary"`
+	SourceSession string   `json:"source_session,omitempty"` // the host session that drafted it
+	DraftedBy     string   `json:"drafted_by"`
+	DraftedAt     string   `json:"drafted_at"`
+	ApprovedBy    string   `json:"approved_by,omitempty"`
+	ApprovedAt    string   `json:"approved_at,omitempty"`
+	Presence      string   `json:"presence,omitempty"` // how the person was proven present: device-flow
 }
 
 // Check reports whether b is version v of part of Feature f as aayu writes
-// it: its schema, its place, and a hash that is the hash of its pins.
+// it: its schema, its place, and a hash that is the hash of its pins, changes, and fixes.
 func (b Baseline) Check(f int, part string, v int) error {
-	if b.Schema != BaselineSchema || b.Feature != f || b.Part != part || b.Version != v || len(b.Pins) == 0 || b.Hash != PinsHash(b.Pins) {
+	if b.Schema != BaselineSchema || b.Feature != f || b.Part != part || b.Version != v || len(b.Pins) == 0 || b.Hash != DraftHash(b.Pins, b.Changes, b.Fixes) {
 		return fmt.Errorf("not %s v%d of #%d with the hash of its pins", part, v, f)
 	}
 	for _, p := range b.Pins {
@@ -86,15 +86,9 @@ func BaselinePath(f int, part string, v int, draft bool) string {
 // BaselineDir holds every baseline record of Feature f.
 func BaselineDir(f int) string { return fmt.Sprintf("specs/%d/baselines", f) }
 
-// PinsHash is the hash of a baseline: SHA-256 of one "<ref> <hash>" line per pin.
-func PinsHash(pins []Pin) string {
-	var b strings.Builder
-	for _, p := range pins {
-		fmt.Fprintf(&b, "%s %s\n", p.Ref, p.Hash)
-	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])
-}
+// PinsHash is the hash of the pins alone: SHA-256 of one "<ref> <hash>" line
+// per pin. Drift is a difference in it.
+func PinsHash(pins []Pin) string { return DraftHash(pins, nil, nil) }
 
 var baselineFile = regexp.MustCompile(`/([a-z]+)-v([0-9]+)(\.draft)?\.json$`)
 

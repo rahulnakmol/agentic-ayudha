@@ -51,7 +51,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 | `autonomy.proof_rungs` | `["A", "B", "C"]` | Review rungs at the head that let `ship` merge on proof. | WP5.7 |
 | `autonomy.always_person` | `[".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"]` | The narrow set: paths whose change always needs a person per PR (a trailing `/` covers a directory; otherwise a glob). A workflow that holds a credential (a secret, the workflow token, an environment, or a write permission, or a job left to the default permissions) is in it by rule. | WP5.7 |
 | `autonomy.always_person_config` | `[".aayudha/config.toml"]` | Config files whose `always_person_sections` need a person per PR when they change. | WP5.7 |
-| `autonomy.always_person_sections` | `["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build"]` | Config tables, by their first key and whatever their case, that decide who may approve or bypass, how a PR is verified, reviewed, and proven, or where a credential is sent. | WP5.7 |
+| `autonomy.always_person_sections` | `["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "baselines"]` | Config tables, by their first key and whatever their case, that decide who may approve or bypass, how a PR is verified, reviewed, and proven, or where a credential is sent. | WP5.7 |
 | `autonomy.budget.wall_hours` | `8` | Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged. | proposed (WP0.5) |
 | `autonomy.budget.cost_usd` | `60.0` | Metered model spend, in USD, one `build` may use before it is blocked. It applies only when aayu's own model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's key (anthropic, openai, google, xai) is configured, or a host reports pay-as-you-go spend in `AAYU_COST_USD`. A lower `budget.per_story_usd` is the limit build reports and enforces, since the breaker would stop the story there. With neither there is no cost limit, because subscription use reports no cost; build and status say so. | proposed (WP0.5) |
 | `autonomy.budget.attempts` | `3` | Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless. | proposed (WP0.5) |
@@ -76,6 +76,15 @@ When a budget trips, the breaker pauses agent lanes and pages through `[notify]`
 | `scope.effort_points` | `[1, 2, 3, 5, 8]` | Effort points of XS, S, M, L, and XL: the weight of each Story and Bug in a plan and in its drift. Initiatives and Features weigh nothing themselves; they count through their Stories and Bugs. | 0.3 |
 
 `aayu scope` stores each accepted baseline and its drift on the `ledger` branch under `releases/<version>/`. Accepting a baseline, and any change over budget, is a person's call.
+
+## Feature baselines
+
+| Key | Default | Meaning | Source |
+|---|---|---|---|
+| `baselines.why_min_words` | `5` | Words that each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version of a Feature part (`aayu ready <feature> --part <part> --request --changes <file>`). A change with one of the three missing or too short writes no draft. | 0.4 |
+| `baselines.version_warn` | `4` | A draft of this version of a Feature part, or a later one, warns that each review finds new gaps. 0 never warns. | 0.4 |
+
+`aayu ready <feature> --check` shows each part's drift from its pins when it is read; nothing writes a drift record. A new version's hash covers its changes and the review findings it fixes, so a reason edited after a person saw it baselines nothing.
 
 ## Outcomes
 

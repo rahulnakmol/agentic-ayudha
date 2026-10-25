@@ -53,7 +53,9 @@ type Result struct {
 	Tag                string                `json:"tag,omitempty"`
 	LedgerPath         string                `json:"ledger_path,omitempty"`
 	LedgerCommit       string                `json:"ledger_commit,omitempty"`
-	Stripped           string                `json:"stripped,omitempty"` // guard: why status:ready was removed
+	Stripped           string                `json:"stripped,omitempty"`       // guard: why status:ready was removed
+	Baselines          []PartState           `json:"baselines,omitempty"`      // a Feature's parts and their drift at read time (Story #993)
+	BaselinesNote      string                `json:"baselines_note,omitempty"` // why a Feature's baselines were not read
 	DryRun             bool                  `json:"dry_run,omitempty"`
 
 	body string

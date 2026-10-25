@@ -67,14 +67,19 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 	case in.Bool("check") && in.Bool("guard"):
 		return Errorf(ExitUsage, "ready: --check and --guard are exclusive")
 	case in.Bool("check"):
-		c, _, err := e.HumanGitHub(ctx)
+		c, tok, err := e.HumanGitHub(ctx)
 		if err != nil {
 			return err
 		}
 		r.GH = c
-		res, _, err = r.Check(ctx, n)
-		if err != nil {
+		var is *gh.Issue
+		if res, is, err = r.Check(ctx, n); err != nil {
 			return err
+		}
+		if res.Type == "feature" { // the Ready verdict stands; baselines that cannot be read are said, never hidden
+			if res.Baselines, err = e.baselineStates(ctx, c, tok, repo, is); err != nil {
+				res.Baselines, res.BaselinesNote = nil, err.Error()
+			}
 		}
 	case in.Bool("guard"):
 		// The guard runs in the aayudha-ready-guard workflow with that
@@ -131,6 +136,15 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		for _, p := range res.Warnings {
 			fmt.Fprintf(w, "  - warning: %s\n", p)
 		}
+		if res.Baselines != nil || res.BaselinesNote != "" {
+			fmt.Fprintln(w, "Baselines:")
+			for _, b := range res.Baselines {
+				fmt.Fprintf(w, "  %s\n", b)
+			}
+			if res.BaselinesNote != "" {
+				fmt.Fprintf(w, "  not read: %s\n", res.BaselinesNote)
+			}
+		}
 		if res.Pass && !in.Bool("check") {
 			if res.DryRun {
 				fmt.Fprintln(w, "  --dry-run: snapshot, ledger write, and status:ready planned, not written")
@@ -171,6 +185,7 @@ type ReadyPartReport struct {
 	LedgerPath   string          `json:"ledger_path,omitempty"`
 	LedgerCommit string          `json:"ledger_commit,omitempty"`
 	DryRun       bool            `json:"dry_run,omitempty"`
+	Warnings     []string        `json:"warnings,omitempty"`
 }
 
 // partRun is one run of ready --part on a Feature.
@@ -194,6 +209,8 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 		return Errorf(ExitUsage, "ready: --request goes with --part")
 	case in.Bool("check") || in.Bool("guard"):
 		return Errorf(ExitUsage, "ready: --part goes with neither --check nor --guard")
+	case !request && (in.Has("changes") || in.Has("fixes")):
+		return Errorf(ExitUsage, "ready: --changes and --fixes go with --request")
 	case !request && (e.Getenv("AAYU_AGENT") == "1" || e.CI):
 		return e.partRefusal()
 	}
@@ -220,7 +237,7 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 		return err
 	}
 	if request {
-		return r.request(ctx, who)
+		return r.request(ctx, who, in.String("changes"), in.String("fixes"))
 	}
 	return r.approve(ctx)
 }
@@ -388,8 +405,10 @@ func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, tip
 }
 
 // request drafts the part's next version and says on the Feature that it
-// waits for a person. It never approves anything.
-func (r *partRun) request(ctx context.Context, who string) error {
+// waits for a person. It never approves anything. A version after the first
+// needs what changed, why it matters, and the need behind it for each pin
+// that drifted (Story #993), and names as fixed only findings of its own part.
+func (r *partRun) request(ctx context.Context, who, changesFile, fixesList string) error {
 	it, pins, err := r.feature(ctx)
 	if err != nil {
 		return err
@@ -398,35 +417,149 @@ func (r *partRun) request(ctx context.Context, who string) error {
 	if err != nil {
 		return err
 	}
-	hash := ready.PinsHash(pins)
 	rep := ReadyPartReport{Repo: r.repo, Feature: r.n, Part: r.part, DryRun: r.c.DryRun()}
-	if base != nil && base.Hash == hash {
+	if base != nil && ready.PinsHash(base.Pins) == ready.PinsHash(pins) {
 		rep.State, rep.Baseline = "unchanged", base
 		return r.e.Emit(rep, func(w io.Writer) error {
 			_, err := fmt.Fprintf(w, "Nothing changed since %s v%d of #%d. No draft written.\n", ready.Label(r.part), base.Version, r.n)
 			return err
 		})
 	}
-	v := 1
+	v, drift := 1, []ready.Drift(nil) // the first version has nothing to change from
 	if base != nil {
-		v = base.Version + 1
+		v, drift = base.Version+1, ready.Diff(base.Pins, pins)
 	}
+	l, err := r.e.Config()
+	if err != nil {
+		return err
+	}
+	changes, err := r.changes(changesFile, drift, v, l.Config.Baselines.WhyMinWords)
+	if err != nil {
+		return err
+	}
+	fixes, err := r.fixes(ctx, fixesList)
+	if err != nil {
+		return err
+	}
+	hash := ready.DraftHash(pins, changes, fixes)
 	rep.State, rep.LedgerPath = "drafted", ready.BaselinePath(r.n, r.part, v, true)
+	if w := ready.VersionWarning(r.n, r.part, v, l.Config.Baselines.VersionWarn); w != "" {
+		rep.Warnings = []string{w}
+	}
 	if draft != nil && draft.Hash == hash { // drafted already: the same draft, never a second commit
 		rep.Baseline = draft
 	} else {
 		rep.Baseline = &ready.Baseline{Schema: ready.BaselineSchema, Feature: r.n, Part: r.part, Version: v, Owner: ready.Owner(r.part),
-			Pins: pins, Hash: hash, Summary: it.Fields[workitems.FieldSummary], SourceSession: r.e.session(),
+			Pins: pins, Changes: changes, Fixes: fixes, Hash: hash, Summary: it.Fields[workitems.FieldSummary], SourceSession: r.e.session(),
 			DraftedBy: who, DraftedAt: r.e.Now().UTC().Format(time.RFC3339)}
 		rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d draft of #%d", ready.Label(r.part), v, r.n), rep.LedgerPath, "", rep.Baseline)
 	}
 	if err == nil {
-		err = r.comment(ctx, ready.Waits(*rep.Baseline))
+		err = r.comment(ctx, *rep.Baseline, ready.Waits(*rep.Baseline))
 	}
 	if err != nil {
 		return err
 	}
 	return r.emit(rep, ready.Waits(*rep.Baseline))
+}
+
+// changes reads the --changes file and checks it against the drift: what,
+// why, and need for each drifted pin, and nothing for a pin that did not.
+func (r *partRun) changes(file string, drift []ready.Drift, v, minWords int) ([]ready.Change, error) {
+	var given []ready.Change
+	if file != "" {
+		if err := readDraft(file, &given); err != nil {
+			return nil, err
+		}
+	}
+	changes, missing, short, unknown := ready.Reasons(drift, given, minWords)
+	switch {
+	case len(unknown) > 0 && v == 1:
+		return nil, Errorf(ExitUsage, "%s names %s, but %s v1 of #%d is the first version and has no changes.", file, strings.Join(unknown, ", "), ready.Label(r.part), r.n)
+	case len(unknown) > 0:
+		return nil, Errorf(ExitUsage, "%s names %s: not a change of %s v%d of #%d since v%d. Give one entry per change.", file, strings.Join(unknown, ", "), ready.Label(r.part), v, r.n, v-1)
+	}
+	if len(missing)+len(short) > 0 {
+		msg := fmt.Sprintf("%s v%d of #%d needs what changed, why it matters, and the need behind it for each change.", ready.Label(r.part), v, r.n)
+		if len(missing) > 0 {
+			msg += " Missing: " + strings.Join(missing, "; ") + "."
+		}
+		if len(short) > 0 {
+			msg += " Too short: " + strings.Join(short, "; ") + "."
+		}
+		return nil, Errorf(ExitBlocked, "%s No draft written.", msg)
+	}
+	return changes, nil
+}
+
+// fixes checks each ID in the comma-separated list: a finding of this part,
+// in a seat's review on the ledger. The IDs are kept in the order given.
+func (r *partRun) fixes(ctx context.Context, list string) ([]string, error) {
+	var ids []string
+	for id := range strings.SplitSeq(list, ",") {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		part, v, seat, ok := ready.Finding(id)
+		switch {
+		case !ok:
+			return nil, Errorf(ExitUsage, "--fixes %s: not a finding ID (<part>-v<k>/<seat>/<n>)", id)
+		case part != r.part:
+			return nil, Errorf(ExitUsage, "--fixes %s: a finding of %s, not %s. A version names only findings of its own part as fixed.", id, ready.Label(part), ready.Label(r.part))
+		}
+		path := ready.ReviewPath(r.n, part, v, seat)
+		files, err := r.ledgerFiles(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		var rev ready.Review
+		if files[path] == nil || json.Unmarshal(files[path], &rev) != nil || !rev.Has(id) {
+			return nil, Errorf(ExitUsage, "--fixes %s: no such finding in %s on the ledger. No draft written.", id, path)
+		}
+	}
+	return ids, nil
+}
+
+// baselineStates reads where each part of a Feature stands: its newest
+// approved version and its drift from the pins now. It writes nothing.
+func (e *Env) baselineStates(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue) ([]ready.PartState, error) {
+	w, err := e.Ledger(ctx, tok, "human", "")
+	if err != nil {
+		return nil, err
+	}
+	it, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
+	out := []ready.PartState{}
+	for _, part := range ready.Parts {
+		r := &partRun{e: e, c: c, w: w, repo: repo, n: is.GetNumber(), part: part}
+		base, draft, _, err := r.records(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s := ready.PartState{Part: part, Drift: []ready.Drift{}}
+		if draft != nil {
+			s.Draft = draft.Version
+		}
+		switch {
+		case base != nil:
+			pins, err := r.pins(ctx, it, is.GetBody())
+			if CodeOf(err) == ExitBlocked { // the part has nothing to pin now: say why, and read the other parts
+				s.Version, s.Note = base.Version, err.Error()
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			s.Version, s.Drift = base.Version, ready.Diff(base.Pins, pins)
+		case part == "ux" && !slices.Contains(e.footprint(it), string(verbs.L01)):
+			s.Note = "not needed (no UI layer in the footprint)"
+		default:
+			s.Note = "no baseline yet"
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 // approve makes the waiting draft the part's baseline, as the person, after
@@ -440,7 +573,7 @@ func (r *partRun) approve(ctx context.Context) error {
 	if draft == nil {
 		return Errorf(ExitBlocked, "No %s draft of #%d waits for a person. An agent drafts it: aayu ready %d --part %s --request", ready.Label(r.part), r.n, r.n, r.part)
 	}
-	if err := r.holds(ctx, draft.Hash); err != nil {
+	if err := r.holds(ctx, ready.PinsHash(draft.Pins)); err != nil {
 		return err
 	}
 	effect := fmt.Sprintf("Baselines %s v%d of #%d at hash %s, as %s drafted it; a later edit shows as drift.",
@@ -457,16 +590,16 @@ func (r *partRun) approve(ctx context.Context) error {
 	if now == nil || now.Version != draft.Version || now.Hash != draft.Hash {
 		return Errorf(ExitBlocked, "%s v%d of #%d was approved or drafted again while the code waited. Nothing was baselined.", ready.Title(r.part), draft.Version, r.n)
 	}
-	if err := r.holds(ctx, draft.Hash); err != nil {
+	if err := r.holds(ctx, ready.PinsHash(draft.Pins)); err != nil {
 		return err
 	}
-	b := *draft // what the person saw: the hash covers only the pins
+	b := *draft // what the person saw: the hash covers the pins, changes, and fixes
 	b.ApprovedBy, b.ApprovedAt, b.Presence = a.Login, r.e.Now().UTC().Format(time.RFC3339), a.Via
 	rep := ReadyPartReport{Repo: r.repo, Feature: r.n, Part: r.part, State: "baselined", Baseline: &b,
 		LedgerPath: ready.BaselinePath(r.n, r.part, b.Version, false), DryRun: r.c.DryRun()}
 	rep.LedgerCommit, err = r.write(ctx, fmt.Sprintf("specs: %s v%d baseline of #%d, approved by @%s", ready.Label(r.part), b.Version, r.n, a.Login), rep.LedgerPath, tip, &b)
 	if err == nil {
-		err = r.comment(ctx, ready.Baselined(b))
+		err = r.comment(ctx, b, ready.Baselined(b))
 	}
 	if err != nil {
 		return err
@@ -474,7 +607,7 @@ func (r *partRun) approve(ctx context.Context) error {
 	return r.emit(rep, ready.Baselined(b))
 }
 
-// holds checks that the part pins hash on the Feature now.
+// holds checks that the part's pins on the Feature now have the pins hash.
 func (r *partRun) holds(ctx context.Context, hash string) error {
 	_, pins, err := r.feature(ctx)
 	if err != nil {
@@ -505,10 +638,11 @@ func (r *partRun) write(ctx context.Context, msg, path, base string, b *ready.Ba
 	return sha, Wrap(ExitExternal, err)
 }
 
-// comment keeps the part's one marker comment on the Feature.
-func (r *partRun) comment(ctx context.Context, line string) error {
+// comment keeps the part's one marker comment on the Feature: the line, and
+// the version's changes and fixes.
+func (r *partRun) comment(ctx context.Context, b ready.Baseline, line string) error {
 	marker := ready.BaselineMarker(r.part)
-	_, err := r.c.UpsertComment(ctx, r.repo, r.n, marker, marker+"\n"+line+"\n", actions.Action{Kind: "github.comment.baseline",
+	_, err := r.c.UpsertComment(ctx, r.repo, r.n, marker, ready.Comment(b, line), actions.Action{Kind: "github.comment.baseline",
 		Payload: map[string]any{"part": r.part}})
 	return Wrap(ExitExternal, err)
 }
@@ -516,6 +650,9 @@ func (r *partRun) comment(ctx context.Context, line string) error {
 func (r *partRun) emit(rep ReadyPartReport, line string) error {
 	return r.e.Emit(rep, func(w io.Writer) error {
 		fmt.Fprintln(w, strings.ReplaceAll(line, "`", ""))
+		for _, warn := range rep.Warnings {
+			fmt.Fprintf(w, "  warning: %s\n", warn)
+		}
 		switch {
 		case rep.DryRun:
 			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s and the comment planned, not written\n", rep.LedgerPath)

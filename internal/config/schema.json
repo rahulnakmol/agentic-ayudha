@@ -1070,6 +1070,23 @@
       "additionalProperties": false,
       "type": "object",
       "description": "Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."
+    },
+    "baselines": {
+      "properties": {
+        "why_min_words": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Words each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version."
+        },
+        "version_warn": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A draft of this version of a part, or a later one, warns that each review finds new gaps; 0 never warns."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "A Feature's baselines (aayu ready \u003cfeature\u003e --part \u003cpart\u003e): what a new version must say, and when it warns."
     }
   },
   "additionalProperties": false,

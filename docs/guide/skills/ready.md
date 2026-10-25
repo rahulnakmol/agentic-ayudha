@@ -52,6 +52,8 @@ aayu ready <issue>
 | `--guard` | no | Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot. |
 | `--part` | no | Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane. One of: `intent`, `spec`, `tech`, `ux`. |
 | `--request` | no | With --part: draft the part's next baseline on the ledger (specs/\<f>/baselines/\<part>-v\<k>.draft.json) and ask a person to approve it; never approves. |
+| `--changes` | no | With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change. |
+| `--fixes` | no | With --request: comma-separated IDs (\<part>-v\<k>/\<seat>/\<n>) of this part's review findings that the new version fixes; the draft's hash covers them. |
 
 <!-- END GENERATED: skill-usage -->
 

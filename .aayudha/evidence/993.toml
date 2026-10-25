@@ -1,0 +1,37 @@
+# Which tests prove Story #993's Completion Goal.
+
+[[criterion]]
+id = 1 # --check on a Feature with intent v1 and spec v2 approved, after #912's Completion Goal changed and #915 was added: a Baselines block with "intent v1 · no drift" and "spec v2 · drift: #912 Completion Goal changed · #915 added"; no write
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 2 # --part spec --request --changes with what, why, and need for #912 and nothing for #915: exit 4 naming "#915 (added): what, why, need"; nothing written
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 3 # a 2-word need for #912 with why_min_words 5: exit 4 naming "#912 need: 2 words, at least 5 ([baselines] why_min_words)"
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 4 # each change complete: spec-v3.draft.json holds changes with ref, what, why, and need, its hash covers them, and the marker comment has the "What changed since v2" table
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 5 # --part intent --request when the pins equal intent v1: "Nothing changed since intent v1 of #874. No draft written."
+tests = ["internal/cli:TestReadyFeatureDrift", "internal/cli:TestReadyFeatureBaseline"]
+
+[[criterion]]
+id = 6 # the first request of a part with no changes file: the v1 draft has no changes field
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 7 # a draft of spec v4 with version_warn 4: the warning "The spec of #874 reaches v4 ([baselines] version_warn). Check why each review finds new gaps."
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 8 # --fixes spec-v1/quality-architect/2 is in the draft and its hash; tech-v1/devops-devex-tinkerer/1 and spec-v1/quality-architect/9 each exit 2, name the ID, and write no draft
+tests = ["internal/cli:TestReadyFeatureDrift"]
+
+[[criterion]]
+id = 9 # config show with no [baselines] in the checkout: why_min_words = 5 and version_warn = 4 from the base layer, and baselines in [autonomy] always_person_sections
+tests = ["internal/cli:TestReadyFeatureDrift"]
