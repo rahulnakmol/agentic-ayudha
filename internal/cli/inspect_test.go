@@ -286,6 +286,16 @@ func TestInspectMergeBudgetDraft(t *testing.T) {
 	if code, res, errOut := inspectRun(t, env, opts, model, prN); code != 0 || res.Disposition != inspect.Merge || res.Overridden != "" {
 		t.Fatalf("label removed: %d %+v %s", code, res, errOut)
 	}
+	// The story's labels cannot be read: inspect fails rather than miss an early build.
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2", 0
+	g.Mu.Unlock()
+	if code, _, errOut := inspectRun(t, env, opts, model, prN); code != ExitExternal {
+		t.Fatalf("story unreadable: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
 	// Budget spent on this PR: exit 6, no call.
 	g.Mu.Lock()
 	g.Pulls[prN].Head.SHA = strings.Repeat("f", 40)

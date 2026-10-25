@@ -701,6 +701,12 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		report()
 		res.Next = fmt.Sprintf("PR #%d is merge-ready: `aayu ship %d`", d.state.PR, d.state.PR)
 		return nil, true, e.saveDelegation(ctx, d)
+	case r.Disposition == inspect.Hold:
+		// An early build's PR never merges into dev (E1): nothing to fix and nothing to ship.
+		d.event(now, dlgPROpen, fmt.Sprintf("inspect hold on %s: an early build", short(head)))
+		report()
+		res.Next = fmt.Sprintf("PR #%d is an early build: it never merges into dev (E1), and nothing goes to %s", d.state.PR, d.receiver)
+		return nil, true, e.saveDelegation(ctx, d)
 	case r.Disposition == inspect.Rebuild:
 		d.event(now, dlgCapped, "inspect asked for a rebuild: the story or plan needs rework")
 		page("inspect asked for a rebuild")

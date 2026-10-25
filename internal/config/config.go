@@ -486,6 +486,11 @@ func (c *Config) Validate() error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 
+	// An early build's budget is at least one build's: 0 would show a person $0.00 (Story #994).
+	if n := c.Baselines.EarlyBuildBudget; n < 1 {
+		bad("[baselines] early_build_budget = %d: want at least 1", n)
+	}
+
 	// Empty means advisory; a malformed date must not make the new floors advisory forever.
 	if d := c.Verify.NewFloorsBlockingFrom; d != "" {
 		if _, err := time.Parse(time.DateOnly, d); err != nil {

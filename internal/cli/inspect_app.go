@@ -587,14 +587,11 @@ func (e *Env) prBodyFloor(res *inspect.Result, pr *gh.PullRequest, prev *inspect
 // earlyBuildHold holds a PR whose story is an early build (core design E1;
 // early is that story, else 0): its PR never merges into dev, so merge, or a
 // docs-only skip, becomes hold whatever the review says. It runs after
-// prBodyFloor on every path that emits a result, and first gives a cached
-// result back the disposition its own hold replaced, so a removed label
-// lifts it. It reports whether the hold differs from prev's, so the comment
-// is written again. A draft is not held.
+// prBodyFloor, which gives a cached result back the review's own
+// disposition (Reviewed), so a removed label lifts the hold. It reports
+// whether the hold differs from prev's, so the comment is written again. A
+// draft is not held.
 func earlyBuildHold(res *inspect.Result, pr *gh.PullRequest, early int, prev *inspect.Result) bool {
-	if res.Disposition == inspect.Hold && res.Reviewed != "" {
-		res.Disposition, res.Reviewed, res.Overridden = res.Reviewed, "", ""
-	}
 	if early != 0 && !pr.GetDraft() && (res.Disposition == inspect.Merge || res.Disposition == inspect.Skipped) {
 		res.Overridden = fmt.Sprintf("%s held: %s", res.Disposition, ready.EarlyBuildHold(early))
 		res.Reviewed, res.Disposition = res.Disposition, inspect.Hold

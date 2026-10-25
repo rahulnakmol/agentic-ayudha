@@ -14,7 +14,7 @@ tests = ["internal/cli:TestReadyEarlyBuild"]
 
 [[criterion]]
 id = 4 # a PR of an early-build story, otherwise at merge: inspect gives hold with the E1 reason (exit 4); ship exits 4 with the same reason and merges nothing
-tests = ["internal/cli:TestInspectMergeBudgetDraft", "internal/cli:TestShipOnProof"]
+tests = ["internal/cli:TestInspectMergeBudgetDraft", "internal/cli:TestShipOnProof", "internal/cli:TestDelegateCycleCapPages"]
 
 [[criterion]]
 id = 5 # AAYU_AGENT=1: exit 4 with the agent-lane refusal, before the issue is read; nothing written

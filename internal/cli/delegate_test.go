@@ -278,6 +278,22 @@ func TestDelegateCycleCapPages(t *testing.T) {
 		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
 		t.Fatalf("step-back: %d %+v %s, pages %d", code, res, errOut, len(sink.Pages))
 	}
+
+	// Story #994: inspect holds an early build's PR on the head. Sync sends
+	// the receiver no fix prompt and records no follow-up.
+	head = strings.Repeat("d", 40)
+	hold := inspect.Result{PR: pr.Number, Head: head, Disposition: inspect.Hold, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}}
+	j, _ = json.Marshal(inspect.State{Result: &hold})
+	g.Mu.Lock()
+	g.Pulls[pr.Number].Head.SHA = head
+	gate.Body = inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"
+	g.Mu.Unlock()
+	n = len(cur.reqs)
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	if code != 0 || res.Delegation.FollowUp || !strings.Contains(res.Next, "is an early build: it never merges into dev (E1)") ||
+		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
+		t.Fatalf("hold: %d %+v %s", code, res, errOut)
+	}
 }
 
 // P3: a failed required check goes back to the receiver with its log tail,

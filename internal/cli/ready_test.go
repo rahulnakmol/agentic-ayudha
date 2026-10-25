@@ -1094,10 +1094,30 @@ func TestReadyEarlyBuild(t *testing.T) {
 		{person, opts, []string{"99", "--early-build", "2"}, ExitExternal, "404"},
 		{person, opts, []string{"1", "--early-build", "6"}, ExitBlocked, "#6 is not a child of #1: its parent is #3. Nothing was approved."},
 		{person, away, []string{"1", "--early-build", "2"}, ExitUsage, "ledger writes need a checkout"},
+		{person, opts, []string{"1", "--early-build", "2", "--set", "baselines.early_build_budget=0"}, ExitUsage, "[baselines] early_build_budget = 0: want at least 1"},
 	} {
 		if code, out, errOut := run(t, c.env, c.opts, append(append([]string{"ready"}, c.args...), "--repo", "o/r")...); code != c.code || !strings.Contains(errOut, c.want) {
 			t.Errorf("ready %v: exit %d, want %d and %q: %s%s", c.args, code, c.code, c.want, out, errOut)
 		}
+	}
+	if code, out, errOut := run(t, person, away, "ready", "1", "--early-build", "2"); code == 0 {
+		t.Errorf("--early-build with no repository to name: exit 0: %s%s", out, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/parent", 0
+	g.Mu.Unlock()
+	if code, out, errOut := early(person, "2"); code != ExitExternal {
+		t.Errorf("the parent cannot be read: exit %d: %s%s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+	// The label is removed while the code waits: nothing is approved.
+	device(func(int) {
+		g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "early-build" })
+	})
+	if code, out, errOut := early(person, "2"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no early-build label") {
+		t.Errorf("label removed during the code: exit %d: %s%s", code, out, errOut)
 	}
 	if commits() != 2 {
 		t.Fatalf("a refused run wrote: %d commits", commits())
