@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // evalDraft reads a recorded draft from evals/cases and writes it, changed by
@@ -490,5 +492,131 @@ func TestPlanApprove(t *testing.T) {
 	}
 	if code, out, errOut := run(t, human, opts, "plan", "2", "--approve", "--repo", "o/r", "--set", "autonomy.approver=founder"); code != 0 || !strings.Contains(out, "recorded by founder (as approver)") {
 		t.Fatalf("approve by the [autonomy] approver: %d %s %s", code, out, errOut)
+	}
+}
+
+// Feature #874 story #991: plan takes a Feature and writes its technical
+// design (contracts, layers inside the Feature's footprint, every story in
+// order, a rollback when it touches L07); a story plan under that Feature then
+// stays inside the design's layers, and one under a Feature with no design is
+// checked as before.
+func TestPlanFeatureDesign(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	featureBody := "### Summary\n\nPlan a Feature.\n\n### Expected paths\n\n- `internal/cli/plan.go`\n- `skills/plan/**`\n- `internal/ledger/**`\n"
+	feature := g.AddIssue("Feature baselines", featureBody, "type:feature", "status:ready") // #1: footprint L02, L03, L07
+	var fx struct{ Title, Body string }
+	b, _ := os.ReadFile(filepath.Join("..", "..", "evals", "cases", "plan", "config-migration", "github", "repos", "o", "r", "issues", "41.json"))
+	_ = json.Unmarshal(b, &fx)
+	outside := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #2
+	inside := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02")               // #3
+	for _, s := range []*fake.Issue{outside, inside, g.AddIssue("Story four", "", "type:story"), g.AddIssue("Story five", "", "type:story"), g.AddIssue("Story six", "", "type:story")} {
+		s.Parent = feature.Number
+		feature.Subs = append(feature.Subs, s.Number)
+	}
+	noDesign := g.AddIssue("Another Feature", featureBody, "type:feature", "status:ready")                         // #7
+	elsewhere := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L06") // #8
+	elsewhere.Parent, noDesign.Subs = noDesign.Number, []int{elsewhere.Number}
+	dir, bare := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	writeJSON := func(v any) string {
+		out, _ := json.Marshal(v)
+		p := filepath.Join(t.TempDir(), "draft.json")
+		if err := os.WriteFile(p, out, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	design := func(edit func(*planning.DesignDraft)) string {
+		d := planning.DesignDraft{Feature: 1, Contracts: []string{"specs/<f>/design.json: contracts, layers, story order, rollback"},
+			Layers: []string{"L02", "L03", "L07"}, StoryOrder: []int{3, 2, 4, 5, 6}, Rollback: "revert the ledger commit that wrote the design"}
+		edit(&d)
+		return writeJSON(d)
+	}
+	plan := func(n int, extra ...string) (int, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"plan", strconv.Itoa(n), "--repo", "o/r"}, extra...)...)
+		return code, out + errOut
+	}
+	ledgerFiles := func() string { return git(t, bare, "ls-tree", "-r", "--name-only", "ledger") }
+
+	// Criterion 1: the Feature's footprint, its stories, and the next step; nothing written.
+	code, out := plan(1)
+	if code != 0 || !strings.Contains(out, "footprint L02, L03, L07") || !strings.Contains(out, "5 stories") ||
+		!strings.HasSuffix(strings.TrimSpace(out), "next: draft the technical design (skills/plan), then aayu plan 1 --draft <file>") {
+		t.Fatalf("plan of a Feature without a draft: %d %s", code, out)
+	}
+	for n := 2; n <= 6; n++ {
+		if !strings.Contains(out, "#"+strconv.Itoa(n)+" ") {
+			t.Errorf("plan of a Feature does not list story #%d:\n%s", n, out)
+		}
+	}
+	if len(g.Writes()) != 0 || strings.Contains(ledgerFiles(), "specs/") {
+		t.Fatalf("plan of a Feature without a draft wrote: %v\n%s", g.Writes(), ledgerFiles())
+	}
+
+	// Criteria 2-4: the design's layers, story order, and rollback; nothing written.
+	for name, tc := range map[string]struct {
+		edit func(*planning.DesignDraft)
+		want string
+	}{
+		"layer outside": {func(d *planning.DesignDraft) { d.Layers = []string{"L02", "L03", "L05"} }, "layer L05 is not in the footprint of #1 (L02, L03, L07)"},
+		"story missing": {func(d *planning.DesignDraft) { d.StoryOrder = []int{3, 2, 4, 6} }, "story order: #5 is a story of #1 but is not in the order"},
+		"not a story":   {func(d *planning.DesignDraft) { d.StoryOrder = append(d.StoryOrder, 8) }, "story order: #8 is not a story of #1"},
+		"no rollback":   {func(d *planning.DesignDraft) { d.Rollback = " " }, "a design that touches L07 names its rollback"},
+	} {
+		if code, out := plan(1, "--draft", design(tc.edit), "--create"); code != ExitBlocked || !strings.Contains(out, tc.want) {
+			t.Errorf("%s: exit %d, want 4 with %q:\n%s", name, code, tc.want, out)
+		}
+	}
+	if code, out := plan(1, "--draft", design(func(d *planning.DesignDraft) { d.Layers, d.Rollback = []string{"L02", "L03"}, "" })); code != 0 || !strings.Contains(out, "run again with --create") {
+		t.Fatalf("a design without L07 needs no rollback: %d %s", code, out)
+	}
+	if len(g.Writes()) != 0 || strings.Contains(ledgerFiles(), "specs/") {
+		t.Fatalf("a design that did not pass, or without --create, wrote: %v\n%s", g.Writes(), ledgerFiles())
+	}
+
+	// Story plans before the design exists: inside the footprint, they pass as today.
+	twoLayers := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) {
+		cp := d.Checkpoints[0]
+		cp.Rollback, d.Story = "", 0 // the same draft plans #2 and #8
+		d.Checkpoints = []planning.Checkpoint{cp, cp}
+		d.Checkpoints[0].Layer, d.Checkpoints[0].Criteria = "L02", []int{1}
+		d.Checkpoints[1].Layer, d.Checkpoints[1].Criteria = "L06", []int{2}
+	})
+	if code, out := plan(2, "--draft", twoLayers); code != 0 {
+		t.Fatalf("a story plan before its Feature has a design: %d %s", code, out)
+	}
+
+	// Criterion 5: --create writes the design in one ledger commit, and never a story plan.
+	before := strings.TrimSpace(git(t, bare, "rev-list", "--count", "ledger"))
+	code, out = plan(1, "--draft", design(func(*planning.DesignDraft) {}), "--create")
+	if code != 0 || !strings.Contains(out, "wrote specs/1/design.json on the ledger") || !strings.HasSuffix(strings.TrimSpace(out), "next: aayu ready 1 --part tech --request") {
+		t.Fatalf("plan --create of a Feature: %d %s", code, out)
+	}
+	if n, _ := strconv.Atoi(before); strings.TrimSpace(git(t, bare, "rev-list", "--count", "ledger")) != strconv.Itoa(n+1) {
+		t.Fatalf("ledger commits: %s before; want one more", before)
+	}
+	if strings.Contains(ledgerFiles(), "specs/1/plan.json") {
+		t.Fatalf("a Feature got a story plan record:\n%s", ledgerFiles())
+	}
+	var rec planning.Design
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/1/design.json")), &rec); err != nil || rec.Feature != 1 ||
+		len(rec.Contracts) != 1 || strings.Join(rec.Layers, ",") != "L02,L03,L07" || fmt.Sprint(rec.StoryOrder) != "[3 2 4 5 6]" || rec.Rollback == "" ||
+		rec.BodyHash != workitems.BodyHash(featureBody) || rec.PlannedAt == "" || rec.PlannedBy == "" {
+		t.Fatalf("design record: %v %+v", err, rec)
+	}
+
+	// Criterion 6: a story plan stays inside its Feature's design, read from the ledger.
+	if code, out := plan(2, "--draft", twoLayers, "--create"); code != ExitBlocked || !strings.Contains(out, "checkpoint 2 (L06) is outside the technical design of #1 (L02, L03, L07)") ||
+		strings.Contains(ledgerFiles(), "specs/2/") {
+		t.Fatalf("a story plan outside the design: %d %s", code, out)
+	}
+	oneLayer := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) { d.Story, d.Checkpoints[0].Layer = 3, "L02" })
+	if code, out := plan(3, "--draft", oneLayer); code != 0 || strings.Contains(out, "technical design") {
+		t.Fatalf("a story plan inside the design: %d %s", code, out)
+	}
+	// Criterion 7: a story whose Feature has no design passes as today.
+	if code, out := plan(8, "--draft", twoLayers); code != 0 || strings.Contains(out, "technical design") {
+		t.Fatalf("a story plan under a Feature with no design: %d %s", code, out)
 	}
 }

@@ -48,9 +48,9 @@ aayu plan <story>
 
 | Input | Required | What it does |
 |---|---|---|
-| `<story>` | yes | Story or bug to plan. |
-| `--draft` | no | JSON file with the plan the host's model wrote (evals/schemas/plan.json); without it plan reports the footprint and criteria to plan. |
-| `--create` | no | Write the validated plan to the ledger (specs/\<story>/plan.json) and the story; without it plan only validates. |
+| `<story>` | yes | Story or bug to plan, or a Feature to write its technical design for. |
+| `--draft` | no | JSON file with the plan the host's model wrote (evals/schemas/plan.json), or a Feature's technical design (contracts, layers, story order, rollback); without it plan reports what to plan. |
+| `--create` | no | Write the validated plan to the ledger (specs/\<story>/plan.json) and the story, or a Feature's design (specs/\<feature>/design.json); without it plan only validates. |
 | `--approve` | no | Record the Engineering Manager's plan-time review of a plan that touches an [autonomy] never layer (human identity only). **Person only.** |
 | `--solo-bypass` | no | Solo mode only (one human, no bot App): record that a never-layer plan proceeds with no plan-time review, after your story comment starting "Solo-mode bypass:"; a bypass, never an approval. **Person only.** |
 
