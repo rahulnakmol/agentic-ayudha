@@ -51,7 +51,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 | `autonomy.proof_rungs` | `["A", "B", "C"]` | Review rungs at the head that let `ship` merge on proof. | WP5.7 |
 | `autonomy.always_person` | `[".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"]` | The narrow set: paths whose change always needs a person per PR (a trailing `/` covers a directory; otherwise a glob). A workflow that holds a credential (a secret, the workflow token, an environment, or a write permission, or a job left to the default permissions) is in it by rule. | WP5.7 |
 | `autonomy.always_person_config` | `[".aayudha/config.toml"]` | Config files whose `always_person_sections` need a person per PR when they change. | WP5.7 |
-| `autonomy.always_person_sections` | `["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "baselines", "critique"]` | Config tables, by their first key and whatever their case, that decide who may approve or bypass, how a PR is verified, reviewed, and proven, or where a credential is sent. | WP5.7 |
+| `autonomy.always_person_sections` | `["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "mission", "baselines", "critique"]` | Config tables, by their first key and whatever their case, that decide who may approve or bypass, how a PR is verified, reviewed, and proven, or where a credential is sent. | WP5.7 |
 | `autonomy.budget.wall_hours` | `8` | Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged. | proposed (WP0.5) |
 | `autonomy.budget.cost_usd` | `60.0` | Metered model spend, in USD, one `build` may use before it is blocked. It applies only when aayu's own model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's key (anthropic, openai, google, xai) is configured, or a host reports pay-as-you-go spend in `AAYU_COST_USD`. A lower `budget.per_story_usd` is the limit build reports and enforces, since the breaker would stop the story there. With neither there is no cost limit, because subscription use reports no cost; build and status say so. | proposed (WP0.5) |
 | `autonomy.budget.attempts` | `3` | Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless. | proposed (WP0.5) |
@@ -60,7 +60,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 
 | Key | Default | Meaning | Source |
 |---|---|---|---|
-| `build.in_flight` | `1` | Items the build-ready loop (`aayu build --next`) has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. | proposed (build loop) |
+| `build.agents` | `5` | Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it. | Feature #889 |
 | `budget.per_story_usd` | `60.0` | Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does. | proposed (WP0.5) |
 | `budget.per_day_usd` | `100.0` | Model spend per repository per day, in USD, before the breaker trips. | proposed (WP0.5) |
 | `budget.per_pr_inspect_max` | `5.0` | Model spend, in USD, for `inspect` on one PR across all its cycles. | proposed (WP0.5) |
@@ -94,6 +94,19 @@ When a budget trips, the breaker pauses agent lanes and pages through `[notify]`
 | `critique.review_wait_hours` | `24` | Hours after the seats' reviews of a Feature's baselines were asked for that Approve to build (`aayu ready <feature>`) opens with some of them not in. Before that it waits for every review. An open gap keeps it off at any time. | 0.4 |
 
 Approve to build is a person's decision, through GitHub's device flow every time. It is off while a needed part of the Feature is not approved or has drifted, the Feature has no Initiative parent, a review gap is open, or some reviews are not in and fewer than `critique.review_wait_hours` have passed since they were asked for. The record is `specs/<feature>/approved.json` on the `ledger` branch.
+
+## Missions
+
+| Key | Default | Meaning | Source |
+|---|---|---|---|
+| `mission.max_no_go` | `3` | Times a milestone's gate may fail before the mission stops and asks a person. | Feature #889 |
+| `mission.retry_max` | `2` | Retries of a failed mission step, such as a story's start, before it waits for a person. | Feature #889 |
+| `mission.retry_backoff_minutes` | `10` | Minutes before the first retry of a failed mission step. Each later retry waits twice as long as the one before. | Feature #889 |
+| `mission.check_minutes` | `5` | Minutes between a local Kanha's checks of its missions. | Feature #889 |
+| `mission.warn_hours` | `24` | Working hours of a mission's estimate past which Approve to build warns. It refuses nothing. | Feature #889 |
+| `mission.max_hours` | `48` | Working hours a mission may use. After them it starts no new story until a person extends it; running stories finish. | Feature #889 |
+
+A mission reads every limit from config, never from a prompt. How many stories it runs at once is `build.agents`.
 
 ## Outcomes
 

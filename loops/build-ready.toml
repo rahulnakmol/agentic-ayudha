@@ -1,5 +1,5 @@
 # Build what is Ready (v0.3.0). Every two hours of each working day, the AI Native Engineer twin first hands the loop's
-# own open pull requests to `aayu ship`, oldest first, then builds one more Ready Story or Bug if [build] in_flight
+# own open pull requests to `aayu ship`, oldest first, then builds one more Ready Story or Bug if [build] agents
 # allows. The binary picks and claims with no model (`aayu build --next`): the current release's accepted baseline in
 # its order, else priority, then age. ship decides each merge: on proof, or a "Ready to ship" card in a person's inbox.
 # No bot key: build and ship write under the bot when one is set up, else under the person's own token, tagged. The

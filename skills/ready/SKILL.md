@@ -61,6 +61,11 @@ aayu:
       required: false
       positional: false
       description: "With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, the last plan's milestones hold, or for a first plan one milestone MS1 holds them all. Written to missions/<f>/plan.json."
+    - name: agents
+      type: int
+      required: false
+      positional: false
+      description: "With Approve to build: how many of the Feature's stories its mission runs at once, written to specs/<f>/approved.json. With none, the last approval's value holds, or for a first approval [build] agents on the integration branch applies."
   outputs:
     - "status:ready"
     - "ready-snapshot"

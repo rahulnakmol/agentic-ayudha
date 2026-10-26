@@ -124,3 +124,34 @@ func TestNewerLocalConfigIgnoredInCI(t *testing.T) {
 		}
 	}
 }
+
+// Story #1000, criterion 5: Decision #918 replaced [build] in_flight with
+// [build] agents, with no fallback. A committed config that still sets
+// in_flight, or AAYU_BUILD__IN_FLIGHT, fails `aayu config validate` with
+// the replacement named, never a bare unknown-key error.
+func TestInFlightReplacedByAgents(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{".git/HEAD": "ref: refs/heads/dev\n", ".aayudha/config.toml": "version = 1\n[build]\nin_flight = 2\n"} {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const want = "[build] in_flight is replaced by [build] agents (Y1)"
+	code, out, errOut := run(t, nil, Options{Dir: dir}, "config", "validate")
+	if code != ExitUsage || !strings.Contains(errOut, filepath.Join(dir, ".aayudha", "config.toml")+": "+want) || strings.Contains(out, "config is valid") {
+		t.Fatalf("committed in_flight: exit %d: %s%s", code, out, errOut)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[build]\nagents = 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := run(t, map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}, Options{Dir: dir}, "config", "validate"); code != ExitUsage || !strings.Contains(errOut, "AAYU_BUILD__IN_FLIGHT: "+want) {
+		t.Fatalf("AAYU_BUILD__IN_FLIGHT: exit %d: %s%s", code, out, errOut)
+	}
+	if code, out, errOut := run(t, nil, Options{Dir: dir}, "config", "validate"); code != ExitOK || !strings.Contains(out, "config is valid") {
+		t.Fatalf("[build] agents: exit %d: %s%s", code, out, errOut)
+	}
+}

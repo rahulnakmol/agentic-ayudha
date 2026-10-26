@@ -46,7 +46,7 @@ aayu build [<issue>]
 | Input | Required | What it does |
 |---|---|---|
 | `<issue>` | no | Ready story or bug to build; required unless --next. |
-| `--next` | no | The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree. One of: `ship`, `pick`. |
+| `--next` | no | The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] agents, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree. One of: `ship`, `pick`. |
 | `--stop` | no | Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires. |
 | `--resume` | no | Resume from the last Aayudha-Checkpoint trailer. |
 | `--delegate` | no | Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one). One of: `codex`, `cursor`, `claude`, `amp`, `auto`. |

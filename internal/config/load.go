@@ -116,6 +116,11 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: %w", source, err))
 			return
 		}
+		// Decision #918 replaced the loop's cap with the one cap on parallel work, with no fallback.
+		if k.Exists("build.in_flight") {
+			errs = append(errs, fmt.Errorf("%s: [build] in_flight is replaced by [build] agents (Y1)", source))
+			return
+		}
 		if err := decode(k, &Config{}); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", source, err))
 			return

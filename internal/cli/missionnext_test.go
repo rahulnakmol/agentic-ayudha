@@ -15,6 +15,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -108,7 +109,7 @@ func (m *missionWorld) claims(f int) map[int]int {
 func TestMissionNextOrderAndAgents(t *testing.T) {
 	m := newMissionWorld(t)
 	m.startedMission(889, []int{22, 20, 21})
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 2 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 2\n")
 	m.status(22, "ready", "P2")
 	for _, n := range []int{20, 21} {
 		m.status(n, "ready", "")
@@ -177,7 +178,7 @@ func TestMissionNextOtherFeatureNeverListed(t *testing.T) {
 func TestMissionNextOneClaimTwoRuns(t *testing.T) {
 	m := newMissionWorld(t)
 	m.startedMission(889, []int{20, 21})
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 1 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 1\n")
 	m.status(20, "ready", "")
 	m.status(21, "ready", "")
 	if code, out, errOut := m.next(889); code != 0 || out != "start #20\nwaits #21: no free agent (1 of 1 busy after these starts)\n" {
@@ -214,7 +215,8 @@ func TestMissionNextOneClaimTwoRuns(t *testing.T) {
 	}
 	// With 2 agents and a budget of one story, the story another run won holds its cap: this run starts nothing.
 	putLedger(t, m.bare, MissionClaimsPath(889), "")
-	m.setPlan(889, func(p *MissionPlan) { p.Agents, p.Budget = 2, 60 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 2\n")
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 60 })
 	pushed = false
 	race.LedgerAttempt = func(int, string) {
 		if !pushed {
@@ -498,7 +500,7 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 func TestMissionNextJSONShape(t *testing.T) {
 	m := newMissionWorld(t)
 	m.startedMission(889, []int{20, 22, 24})
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 1 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 1\n")
 	m.status(20, "ready", "")
 	m.status(22, "ready", "P2")
 	m.status(24, "planned", "P2")
@@ -632,7 +634,7 @@ func TestMissionNextHoldsOnlyTheDependent(t *testing.T) {
 	m.issue(12, "Story 12", "story", 888, "")
 	m.links = map[int]string{11: "depends-on #10\ndepends-on #12"}
 	m.startedMission(889, []int{10, 11, 13})
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 2 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 2\n")
 	m.status(12, "merged", "")
 	m.closeIssue(12)
 	m.status(10, "in-progress", "")
@@ -660,5 +662,206 @@ func TestMissionNextUnparsedDependsOnIsOpen(t *testing.T) {
 	m.status(11, "ready", "")
 	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on other/repo#10, #12, ȺȺȺȺȺȺȺȺȺȺȺȺ depends-on are open\n" {
 		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// nextEnv runs aayu mission next f as the Kanha in Amp, with extra variables.
+func (m *missionWorld) nextEnv(f int, extra map[string]string, args ...string) (int, string, string) {
+	m.t.Helper()
+	env := map[string]string{}
+	for k, v := range m.agent {
+		env[k] = v
+	}
+	for k, v := range extra {
+		env[k] = v
+	}
+	return run(m.t, env, m.opts, append([]string{"mission", "next", fmt.Sprint(f), "--repo", "o/r"}, args...)...)
+}
+
+// readyAll makes each story Ready, in slice order.
+func (m *missionWorld) readyAll(ns ...int) {
+	for _, n := range ns {
+		m.status(n, "ready", "")
+	}
+}
+
+// starts counts the start lines of a list.
+func starts(out string) int { return strings.Count(out, "start #") }
+
+// Story #1000, criterion 1: with no [build] agents in any config, the list
+// for #889 starts at most 5 of its 6 Ready stories (Decision #918).
+func TestMissionNextAgentsDefault(t *testing.T) {
+	m := newMissionWorld(t)
+	stories := []int{20, 21, 22, 23, 24, 25}
+	m.startedMission(889, stories)
+	m.readyAll(stories...)
+	code, out, errOut := m.next(889)
+	if code != 0 || starts(out) != 5 || !strings.Contains(out, "waits #25: no free agent (5 of 5 busy after these starts)") {
+		t.Fatalf("no [build] agents anywhere: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); len(got) != 5 || got[25] != 0 {
+		t.Fatalf("claims: %v", got)
+	}
+}
+
+// Story #1000, criterion 2: dev's committed [build] agents caps the list; a
+// local value (AAYU_BUILD__AGENTS, --set) only lowers it, and the embedded
+// default (5) is no local value: dev's 7 holds over it.
+func TestAgentsDefaultAndLocalOnlyLowers(t *testing.T) {
+	stories := []int{20, 21, 22, 23, 24, 25, 26, 27, 28}
+	for _, tc := range []struct {
+		name, committed string
+		local           map[string]string
+		args            []string
+		want            int
+	}{
+		{"committed 5, local 10", "[build]\nagents = 5\n", map[string]string{"AAYU_BUILD__AGENTS": "10"}, nil, 5},
+		{"committed 3, --set 6", "[build]\nagents = 3\n", nil, []string{"--set", "build.agents=6"}, 3},
+		{"committed 5, local 2", "[build]\nagents = 5\n", map[string]string{"AAYU_BUILD__AGENTS": "2"}, nil, 2},
+		{"committed 7, no local", "[build]\nagents = 7\n", nil, nil, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMissionWorld(t)
+			m.startedMission(889, stories)
+			m.readyAll(stories...)
+			commitOnDev(m.g, ".aayudha/config.toml", tc.committed)
+			code, out, errOut := m.nextEnv(889, tc.local, tc.args...)
+			if busy := fmt.Sprintf("no free agent (%d of %d busy after these starts)", tc.want, tc.want); code != 0 || starts(out) != tc.want || !strings.Contains(out, busy) {
+				t.Fatalf("want %d starts: exit %d: %q%s", tc.want, code, out, errOut)
+			}
+		})
+	}
+}
+
+// Story #1000, criterion 3: Approve to build with --agents 3 writes agents 3
+// to specs/889/approved.json, and the list for #889 uses 3, while #874, with
+// no --agents, uses dev's [build] agents (2). A bare Approve to build keeps 3.
+func TestReadyAgentsFlagWritesApproval(t *testing.T) {
+	m := newMissionWorld(t)
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 2\n")
+	m.mu.Lock()
+	m.tool = "amp"
+	m.mu.Unlock()
+	for f, ns := range map[int][]int{889: {20, 21, 22, 23}, 874: {30, 31, 32, 33}} {
+		m.issue(f, fmt.Sprintf("Feature %d", f), "feature", 0, "")
+		for _, n := range ns {
+			m.issue(n, fmt.Sprintf("Item %d", n), "story", f, "")
+		}
+		m.feature(f, ns...)
+		var args []string
+		if f == 889 {
+			args = []string{"--agents", "3"}
+		}
+		code, out, errOut := m.approve(f, args...)
+		if code != 0 || f == 889 && !strings.Contains(errOut, "up to 3 stories at once (aayu ready 889 --agents 3 at Approve to build)") ||
+			f == 874 && !strings.Contains(errOut, "up to 2 stories at once ([build] agents on dev)") {
+			t.Fatalf("approve %d %v: exit %d: %s%s", f, args, code, out, errOut)
+		}
+		if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", f); code != 0 {
+			t.Fatalf("start %d: exit %d: %s%s", f, code, out, errOut)
+		}
+		m.readyAll(ns...)
+	}
+	approval := func() ready.Approval {
+		var a ready.Approval
+		if err := json.Unmarshal([]byte(git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889))), &a); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	if a := approval(); a.Agents != 3 || a.Version != 1 {
+		t.Fatalf("specs/889/approved.json: agents %d, version %d", a.Agents, a.Version)
+	}
+	if raw := git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(874)); strings.Contains(raw, `"agents"`) {
+		t.Fatalf("specs/874/approved.json names agents with no --agents:\n%s", raw)
+	}
+	if code, out, errOut := m.next(889); code != 0 || starts(out) != 3 || !strings.Contains(out, "waits #23: no free agent (3 of 3 busy after these starts)") {
+		t.Fatalf("next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if code, out, errOut := m.next(874); code != 0 || starts(out) != 2 || !strings.Contains(out, "no free agent (2 of 2 busy after these starts)") {
+		t.Fatalf("next 874: exit %d: %q%s", code, out, errOut)
+	}
+	// A bare Approve to build, which aayu names as the next command, keeps the Feature's agents: nothing to approve again.
+	if code, out, errOut := m.approve(889); code != 0 || m.codes() != 0 || approval().Agents != 3 || approval().Version != 1 {
+		t.Fatalf("bare approve 889: exit %d, %d device codes, approval %+v: %s%s", code, m.codes(), approval(), out, errOut)
+	}
+	// --agents names a Feature's value; a story has none, and 0 is no value.
+	if code, _, errOut := run(t, m.person, m.opts, "ready", "20", "--repo", "o/r", "--agents", "2"); code != ExitUsage || !strings.Contains(errOut, "#20 is not a Feature") {
+		t.Fatalf("--agents on a story: exit %d: %s", code, errOut)
+	}
+	if code, _, errOut := run(t, m.person, m.opts, "ready", "889", "--repo", "o/r", "--agents", "0"); code != ExitUsage {
+		t.Fatalf("--agents 0: exit %d: %s", code, errOut)
+	}
+}
+
+// Story #1000, criterion 4: a wake's prompt says "agents 10" and "budget
+// 2000". aayu never reads a prompt: mission next takes no limit, so the
+// prompt can reach it only as a flag, which is refused, or as a local value,
+// which only lowers. The list uses the approved budget, then dev's
+// [build] agents (5).
+func TestPromptNeverSetsALimit(t *testing.T) {
+	if spec, ok := verbs.Find("mission"); !ok || slices.ContainsFunc(spec.Inputs, func(in verbs.Input) bool { return in.Name != "action" && in.Name != "feature" }) {
+		t.Fatalf("mission takes an input other than its action and Feature: %+v", spec.Inputs)
+	}
+	m := newMissionWorld(t)
+	stories := []int{20, 21, 22, 23, 24, 25, 26}
+	m.startedMission(889, stories)
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 240 }) // 4 stories at the approval's 60 USD cap
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 5\n")
+	m.readyAll(stories...)
+	for _, flag := range [][]string{{"--agents", "10"}, {"--budget", "2000"}} {
+		if code, out, errOut := m.next(889, flag...); code != ExitUsage || out != "" {
+			t.Fatalf("mission next %v: exit %d: %q%s", flag, code, out, errOut)
+		}
+	}
+	if got := m.claims(889); len(got) != 0 {
+		t.Fatalf("a refused prompt flag claimed %v", got)
+	}
+	prompt := map[string]string{"AAYU_BUILD__AGENTS": "10", "AAYU_BUDGET__PER_STORY_USD": "1"}
+	code, out, errOut := m.nextEnv(889, prompt)
+	if code != 0 || starts(out) != 4 || !strings.Contains(out, "waits #24: would pass #889's approved budget (240 + 60 > 240 USD)") {
+		t.Fatalf("mission next under the approved budget: exit %d: %q%s", code, out, errOut)
+	}
+	// A person raises the mission's budget: the agents cap holds at dev's 5, not the prompt's 10.
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 600 })
+	code, out, errOut = m.nextEnv(889, prompt)
+	if code != 0 || starts(out) != 1 || !strings.Contains(out, "start #24\n") || !strings.Contains(out, "waits #25: no free agent (5 of 5 busy after these starts)") {
+		t.Fatalf("mission next under [build] agents: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); len(got) != 5 {
+		t.Fatalf("claims: %v", got)
+	}
+}
+
+// Story #1000: [build] agents is read from dev's tip on GitHub. When that read
+// fails, approve, start, show, and next exit 5 and write nothing; none falls
+// back to a local value or a constant.
+func TestMissionAgentsReadFailsClosed(t *testing.T) {
+	m := newMissionWorld(t)
+	m.startedMission(889, []int{20, 21})
+	m.status(20, "ready", "")
+	m.issue(874, "Feature 874", "feature", 0, "")
+	m.issue(30, "Item 30", "story", 874, "")
+	m.feature(874, 30)
+	if code, out, errOut := m.approve(874); code != 0 {
+		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
+	}
+	commits := m.commits()
+	failDev := func() { m.edit(func() { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/git/ref/heads/dev", 0 }) }
+	for name, cmd := range map[string]func() (int, string, string){
+		"next 889": func() (int, string, string) { return m.next(889) },
+		"show 889": func() (int, string, string) {
+			return run(t, m.agent, m.opts, "mission", "show", "889", "--repo", "o/r")
+		},
+		"approve 889": func() (int, string, string) { return m.approve(889) },
+		"start 874":   func() (int, string, string) { return m.mission(m.person, "rahulnakmol", "start", 874) },
+	} {
+		failDev()
+		if code, out, errOut := cmd(); code != ExitExternal || !strings.Contains(errOut, "heads/dev") {
+			t.Errorf("%s with dev's config unreadable: exit %d: %s%s", name, code, out, errOut)
+		}
+	}
+	if m.commits() != commits || len(m.claims(889)) != 0 {
+		t.Fatalf("a failed read wrote the ledger: %s -> %s commits, claims %v", commits, m.commits(), m.claims(889))
 	}
 }

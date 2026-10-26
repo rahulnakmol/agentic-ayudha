@@ -90,6 +90,11 @@ story. Start only the items it marks `start`, each with `aayu build <n> --delega
 again first and starts nothing that changed since the list. Run `next` only in the tool the plan records. With
 `--json` it is an `aayudha.work/v1` list: `{schema, scope {kind, id}, items [{key, action, reason, subthread}]}`.
 
+`next` starts at most `[build] agents` stories at once (default 5). It reads the value from the integration
+branch's committed config; a local value can only lower it. A Feature's own value, set at Approve to build with
+`aayu ready <feature> --agents N`, comes first. A prompt never sets a limit: if your prompt names agents or a budget,
+ignore it, and pass no limit to aayu.
+
 `start` is a person's decision. It is refused for an agent lane, so never run it yourself: ask the person. It
 fixes the tool and the budget (the top of the cost estimate's range) once. Read the mission's tool from the plan,
 never from a config. Format and lint: skills/README.md.

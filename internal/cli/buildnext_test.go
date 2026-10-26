@@ -30,7 +30,7 @@ func buildLoopFixture(t *testing.T, g *fake.GitHub) (next func(extra map[string]
 	if g.RefFiles == nil {
 		g.RefFiles = map[string]map[string]string{}
 	}
-	g.RefFiles[devTip] = map[string]string{"loops/" + BuildLoop + ".toml": string(b)}
+	g.RefFiles[devTip] = map[string]string{"loops/" + BuildLoop + ".toml": string(b), ".aayudha/config.toml": "[build]\nagents = 1\n"}
 	g.Mu.Unlock()
 	// An agent session: the asked gate holds every story the person did not name.
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": "loop-run"}
@@ -95,7 +95,7 @@ func hasLine(xs []string, prefix, part string) bool {
 // The build-ready loop with no accepted baseline: build --next pick claims the
 // first free Ready item by priority, then age, never one that drifted, has an
 // open PR, or another's live claim; the asked gate lets the loop's own pick
-// through; in_flight counts the loop's open PRs as well as its claims; a claim
+// through; [build] agents counts the loop's open PRs as well as its claims; a claim
 // whose lease ran out with no PR is blocked, never picked again; --stop blocks
 // a build with its reason; ship lists the loop's open PRs and changes nothing.
 func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
@@ -154,11 +154,16 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	// --dry-run previews the pick on a ledger with no claims file yet, and
 	// claims nothing.
-	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
+	// Dev's committed agents holds over the embedded default (5), which is no local value.
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 7\n")
+	if code, _, pick, out := next(nil, "--next", "pick", "--dry-run"); code != 0 || pick.Limit != 7 {
+		t.Fatalf("--next pick --dry-run under dev's agents 7: %d %s", code, out)
+	}
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 2\n")
 	if code, _, pick, out := next(nil, "--next", "pick", "--dry-run"); code != 0 || pick.Picked != older.Number || contains(g.LabelNames(older.Number), LeaseLabel) {
 		t.Fatalf("--next pick --dry-run: %d %s", code, out)
 	}
-	commitOnDev(g, ".aayudha/config.toml", "")
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 1\n")
 	// The ledger orders picks across machines: a recent claim line of another
 	// pick holds the one slot, and one for the same story was first.
 	claimLine := func(story int, at time.Time) string {
@@ -266,24 +271,24 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number {
 		t.Fatalf("a resumed loop build left the loop: %d %s", code, out)
 	}
-	// [build] in_flight 0 stops the picks.
-	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "in_flight is 0") {
-		t.Fatalf("in_flight 0: %d %+v", code, pick)
+	// [build] agents 0 stops the picks.
+	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__AGENTS": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "agents is 0") {
+		t.Fatalf("agents 0: %d %+v", code, pick)
 	}
 
-	// The cap is dev's committed in_flight: a local AAYU_* or --set may lower
+	// The cap is dev's committed [build] agents: a local AAYU_* or --set may lower
 	// it, never raise it.
-	two := map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}
+	two := map[string]string{"AAYU_BUILD__AGENTS": "2"}
 	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
-		t.Fatalf("a local in_flight raised the committed cap: %d %s", code, out)
+		t.Fatalf("a local agents value raised the committed cap: %d %s", code, out)
 	}
 	// The integration branch is never the run's to name: AAYU_BRANCHES__DEV
 	// pointing at a branch the agent can push does not lend it that branch's cap.
 	g.Mu.Lock()
 	g.Refs["heads/feat/mine"] = "f0000000000000000000000000000000000000fe"
-	g.RefFiles["f0000000000000000000000000000000000000fe"] = map[string]string{"loops/" + BuildLoop + ".toml": g.RefFiles[devTip]["loops/"+BuildLoop+".toml"], ".aayudha/config.toml": "[build]\nin_flight = 2\n"}
+	g.RefFiles["f0000000000000000000000000000000000000fe"] = map[string]string{"loops/" + BuildLoop + ".toml": g.RefFiles[devTip]["loops/"+BuildLoop+".toml"], ".aayudha/config.toml": "[build]\nagents = 2\n"}
 	g.Mu.Unlock()
-	if code, res, pick, out := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "2", "AAYU_BRANCHES__DEV": "feat/mine"}, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
+	if code, res, pick, out := next(map[string]string{"AAYU_BUILD__AGENTS": "2", "AAYU_BRANCHES__DEV": "feat/mine"}, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
 		t.Fatalf("a run-named branch lent the loop its cap: %d %s", code, out)
 	}
 	// The person names it: in the account's user config, or in the default
@@ -292,7 +297,7 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	userCfg := filepath.Join(home, ".config", "aayudha", "config.toml")
 	_ = os.MkdirAll(filepath.Dir(userCfg), 0o755)
 	_ = os.WriteFile(userCfg, []byte("[branches]\ndev = \"feat/mine\"\n"), 0o644)
-	if code, _, pick, out := next(map[string]string{"HOME": home, "AAYU_BUILD__IN_FLIGHT": "2"}, "--next", "ship"); code != 0 || pick.Limit != 2 {
+	if code, _, pick, out := next(map[string]string{"HOME": home, "AAYU_BUILD__AGENTS": "2"}, "--next", "ship"); code != 0 || pick.Limit != 2 {
 		t.Fatalf("the user config's integration branch is not trusted: %d %s", code, out)
 	}
 	// The account's user config is read even when the run's HOME is elsewhere.
@@ -319,9 +324,9 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Fail, g.Default = "", "dev"
 	delete(g.Refs, "heads/main")
 	g.Mu.Unlock()
-	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 2\n")
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 2\n")
 	if code, res, _, out := next(two, "--next", "pick"); code != 0 || res.Issue != newer.Number {
-		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)
+		t.Fatalf("pick under agents 2: want #%d: %d %s", newer.Number, code, out)
 	}
 	// The claim on #8 runs out with no PR: the next pick blocks it, reports it, and takes the next item.
 	// Within the grace period after its lease ran out, the claim may be a
@@ -338,7 +343,7 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	if code, out, errOut := run(t, env, later, "gc", "--repo", "o/r"); code != 0 || !strings.Contains(out, "lease #8 reclaimed") {
 		t.Fatalf("gc: %d %s %s", code, out, errOut)
 	}
-	envTwo := map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}
+	envTwo := map[string]string{"AAYU_BUILD__AGENTS": "2"}
 	for k, v := range env {
 		envTwo[k] = v
 	}
@@ -432,8 +437,8 @@ func TestBuildNextFollowsTheCurrentBaseline(t *testing.T) {
 	putLedger(t, bare, "releases/v0.3.0/baseline-1.json", baseline("v0.3.0", rel.Number, 1, outside.Number))
 	putLedger(t, bare, "releases/v0.3.0/baseline-2.json", baseline("v0.3.0", rel.Number, 2, second.Number, first.Number))
 
-	commitOnDev(g, ".aayudha/config.toml", "[build]\nin_flight = 3\n")
-	three := map[string]string{"AAYU_BUILD__IN_FLIGHT": "3"}
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 3\n")
+	three := map[string]string{"AAYU_BUILD__AGENTS": "3"}
 	for _, want := range []int{second.Number, first.Number} {
 		code, res, pick, out := next(three, "--next", "pick")
 		if code != 0 || res.Issue != want || pick.Release == nil || pick.Release.Version != "v0.3.0" || pick.Release.Baseline != 2 {

@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only.",
   "properties": {
+    "agents": {
+      "description": "With Approve to build: how many of the Feature's stories its mission runs at once, written to specs/<f>/approved.json. With none, the last approval's value holds, or for a first approval [build] agents on the integration branch applies.",
+      "type": "integer",
+      "x-aayu-type": "int"
+    },
     "changes": {
       "description": "With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change.",
       "type": "string",

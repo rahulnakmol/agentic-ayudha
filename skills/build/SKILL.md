@@ -23,7 +23,7 @@ aayu:
       enum:
         - "ship"
         - "pick"
-      description: "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree."
+      description: "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] agents, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree."
     - name: stop
       type: string
       required: false
@@ -198,9 +198,9 @@ of step 1. The binary picks; you never choose the story.
 1. `aayu build --next ship` lists the loop's open pull requests, oldest first, and changes nothing. Run
    `aayu ship <pr>` once on each and report what ship did. Never pass `--solo-bypass` or `--admin`, and never merge
    another way: a pull request that needs a person waits in `aayu inbox`.
-2. `aayu build --next pick` blocks the loop's stale claims, then claims at most one item under `[build] in_flight`:
+2. `aayu build --next pick` blocks the loop's stale claims, then claims at most one item under `[build] agents`:
    the current release's accepted baseline in its order, else priority, then age. When it claims nothing, stop.
-   The loop's definition, `[build] in_flight`, and your build's budget limits are read from the integration
+   The loop's definition, `[build] agents`, and your build's budget limits are read from the integration
    branch's tip on GitHub, as merged: your user config's `[branches] dev`, else the default branch's. A file in your
    checkout, `AAYU_*`, or `--set` never names that branch, adds the loop, or loosens a limit; a local value may
    only tighten one.

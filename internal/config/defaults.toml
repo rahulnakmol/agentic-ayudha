@@ -67,7 +67,7 @@ proof = false
 proof_rungs = ["A", "B", "C"]
 always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"]
 always_person_config = [".aayudha/config.toml"]
-always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "baselines", "critique"]
+always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "mission", "baselines", "critique"]
 
 # A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
 # direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
@@ -77,10 +77,24 @@ wall_hours = 8
 cost_usd = 60.0
 attempts = 3
 
-# The build-ready loop (loops/build-ready.toml, `aayu build --next`): how many items it has in progress at once, from
-# claim to merge. Its open pull requests count as well as its claims that have no pull request yet; 0 stops its picks.
+# How many stories each Kanha runs at once (Decision #918, the one cap on parallel work): a Feature's mission starts at
+# most agents story subthreads (`aayu mission next`), and the build-ready loop (loops/build-ready.toml,
+# `aayu build --next`) has at most agents items from claim to merge. 0 starts nothing. The committed value caps a local
+# one; a Feature's Approve to build may set its own (`aayu ready <feature> --agents N`).
 [build]
-in_flight = 1
+agents = 5
+
+# A Feature's mission limits, read from config and never from a prompt: a milestone's gate fails max_no_go times before
+# the mission stops; a failed step retries retry_max times, the first after retry_backoff_minutes, each later one after
+# twice the wait before it; a local Kanha checks every check_minutes; Approve to build warns past warn_hours of
+# estimated working hours, and a mission starts no new story after max_hours until a person extends it.
+[mission]
+max_no_go = 3
+retry_max = 2
+retry_backoff_minutes = 10
+check_minutes = 5
+warn_hours = 24
+max_hours = 48
 
 # A Feature's baselines (`aayu ready <f> --part <p> --request`): each change in a new version says what changed, why it
 # matters, and the need behind it, each in at least why_min_words words; a draft of version_warn or later warns.

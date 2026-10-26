@@ -38,7 +38,7 @@
       "x-aayu-type": "bool"
     },
     "next": {
-      "description": "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.",
+      "description": "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] agents, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.",
       "enum": [
         "ship",
         "pick"

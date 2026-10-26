@@ -56,6 +56,7 @@ aayu ready <issue>
 | `--fixes` | no | With --request: comma-separated IDs (\<part>-v\<k>/\<seat>/\<n>) of this part's review findings that the new version fixes; the draft's hash covers them. |
 | `--early-build` | no | A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev. |
 | `--milestones` | no | With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, the last plan's milestones hold, or for a first plan one milestone MS1 holds them all. Written to missions/\<f>/plan.json. |
+| `--agents` | no | With Approve to build: how many of the Feature's stories its mission runs at once, written to specs/\<f>/approved.json. With none, the last approval's value holds, or for a first approval [build] agents on the integration branch applies. |
 
 <!-- END GENERATED: skill-usage -->
 

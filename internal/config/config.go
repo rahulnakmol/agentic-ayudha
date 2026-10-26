@@ -48,7 +48,8 @@ type Config struct {
 	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
 	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
 	Delegate      Delegate               `koanf:"delegate" jsonschema_description:"How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."`
-	Build         Build                  `koanf:"build" jsonschema_description:"The build-ready loop (aayu build --next): how many items it has in progress at once."`
+	Build         Build                  `koanf:"build" jsonschema_description:"How many stories each Kanha runs at once: a Feature's mission and the build-ready loop (aayu build --next)."`
+	Mission       Mission                `koanf:"mission" jsonschema_description:"The limits of a Feature's mission: gate failures, retries, check interval, and working hours."`
 	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
 	Approvals     Approvals              `koanf:"approvals" jsonschema_description:"Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."`
 	Baselines     Baselines              `koanf:"baselines" jsonschema_description:"A Feature's baselines (aayu ready <feature> --part <part>): what a new version must say, and when it warns; and the budget of its early build (aayu ready <feature> --early-build <story>)."`
@@ -83,9 +84,20 @@ type Approvals struct {
 	DeviceFor []string `koanf:"device_for" jsonschema:"enum=one-way,enum=all" jsonschema_description:"Batches that always need the device code, even when comment approvals are on: one-way (any irreversible item: an irreversible Decision, a floor waiver) or all."`
 }
 
-// Build is [build]: the build-ready loop's limit.
+// Build is [build]: the one cap on parallel work (Decision #918).
 type Build struct {
-	InFlight int `koanf:"in_flight" jsonschema:"minimum=0" jsonschema_description:"Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__IN_FLIGHT or --set may only lower it."`
+	Agents int `koanf:"agents" jsonschema:"minimum=0" jsonschema_description:"Stories each Kanha runs at once: a Feature's mission starts at most this many story subthreads, and the build-ready loop has at most this many items from claim to merge. 0 starts nothing. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__AGENTS or --set may only lower it. A Feature's Approve to build may set its own (aayu ready <feature> --agents N)."`
+}
+
+// Mission is [mission]: the limits of a Feature's mission (Feature #889). A
+// mission reads them from config, never from a prompt.
+type Mission struct {
+	MaxNoGo             int `koanf:"max_no_go" jsonschema:"minimum=1" jsonschema_description:"Times a milestone's gate may fail before the mission stops and asks a person."`
+	RetryMax            int `koanf:"retry_max" jsonschema:"minimum=0" jsonschema_description:"Retries of a failed mission step before it waits for a person."`
+	RetryBackoffMinutes int `koanf:"retry_backoff_minutes" jsonschema:"minimum=1" jsonschema_description:"Minutes before the first retry of a failed mission step; each later retry waits twice as long as the one before."`
+	CheckMinutes        int `koanf:"check_minutes" jsonschema:"minimum=1" jsonschema_description:"Minutes between a local Kanha's checks of its missions."`
+	WarnHours           int `koanf:"warn_hours" jsonschema:"minimum=1" jsonschema_description:"Working hours of a mission's estimate past which Approve to build warns."`
+	MaxHours            int `koanf:"max_hours" jsonschema:"minimum=1" jsonschema_description:"Working hours a mission may use before it starts no new story until a person extends it; running stories finish."`
 }
 
 // Delegate is [delegate] (WP5.5b).

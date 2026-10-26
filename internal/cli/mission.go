@@ -37,9 +37,30 @@ const MissionPlanSchema = "aayudha.mission.plan/v1"
 // MissionPlanPath is where a Feature's mission plan lives on the ledger.
 func MissionPlanPath(f int) string { return fmt.Sprintf("missions/%d/plan.json", f) }
 
-// missionAgents is how many stories a mission runs at once: Decision #915
-// sets it to 5; #1000 makes it [build] agents.
-const missionAgents = 5
+// missionAgents is how many stories Feature f's mission runs at once, and its
+// source: the Feature's own value from Approve to build (`aayu ready <f>
+// --agents N`), else [build] agents committed on the integration branch at its
+// tip, which a local value may only lower (Decision #918). A prompt never sets
+// it: no command of the mission takes a limit.
+func (e *Env) missionAgents(ctx context.Context, c *github.Client, repo string, f, approved int) (int, string, error) {
+	if approved > 0 {
+		return approved, fmt.Sprintf("aayu ready %d --agents %d at Approve to build", f, approved), nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	pol, dev, err := e.loopPolicy(ctx, c, owner, name)
+	if err != nil {
+		return 0, "", err
+	}
+	l, err := e.Config()
+	if err != nil {
+		return 0, "", err
+	}
+	n := pol.Config.Build.Agents
+	if local := buildAgents(l, n); local < n {
+		return local, fmt.Sprintf("a local [build] agents, under %d on %s", n, dev), nil
+	}
+	return n, "[build] agents on " + dev, nil
+}
 
 // MissionPlan is missions/<f>/plan.json.
 type MissionPlan struct {
@@ -154,12 +175,16 @@ type CostEstimate struct {
 }
 
 // missionPlan is the mission plan Approve to build shows and writes for the
-// Feature, from its stories and Bugs as they are now and the milestones the
-// person named, with the lines the person approves, and the plan on the
-// ledger now (nil when there is none).
-func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, *MissionPlan, error) {
+// Feature, from its stories and Bugs as they are now, the milestones the
+// person named, and the approval's agents (0: [build] agents), with the lines
+// the person approves, and the plan on the ledger now (nil when there is none).
+func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan, []string, *MissionPlan, error) {
 	var p MissionPlan
 	old, _, _, err := readMission(ctx, a.w, a.n)
+	if err != nil {
+		return p, nil, nil, err
+	}
+	agents, agentsSource, err := a.e.missionAgents(ctx, a.c, a.r.Repo, a.n, approved)
 	if err != nil {
 		return p, nil, nil, err
 	}
@@ -222,7 +247,7 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, *M
 	}
 	runs := len(nums) + 2*len(ms)
 	p = MissionPlan{Schema: MissionPlanSchema, Feature: a.n, Release: release, Graph: p.Graph, Milestones: ms,
-		Agents: missionAgents, AgentsSource: "Decision #915 (5 at once)",
+		Agents: agents, AgentsSource: agentsSource,
 		Estimate: MissionEstimate{Runs: runs, Stories: len(nums), Milestones: len(ms),
 			Basis: fmt.Sprintf("runs ≥ %d %s + 2 × %d milestones = %d", len(nums), what, len(ms), runs)},
 		Missions: splitMissions(p.Graph, func(n int) bool { return done[n] }), Controls: []MissionControl{}}
@@ -239,7 +264,7 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, *M
 	effect := []string{
 		fmt.Sprintf("Mission plan: %s; every story and Bug is in one milestone; complete when %s", strings.Join(parts, " · "), p.CompleteWhen),
 		missionsLine(p.Missions),
-		fmt.Sprintf("Estimate: %s; up to %d stories at once", p.Estimate.Basis, p.Agents),
+		fmt.Sprintf("Estimate: %s; up to %d stories at once (%s)", p.Estimate.Basis, p.Agents, p.AgentsSource),
 	}
 	return p, effect, old, nil
 }
@@ -554,9 +579,13 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 			budget, card = est.HighUSD, "the top of the range"
 			basis = fmt.Sprintf("the top of %s's range %s–%s (estimate %s)", est.Source, ready.USD(est.LowUSD), ready.USD(est.HighUSD), ready.USD(est.USD))
 		}
+		agents, agentsSource, err := e.missionAgents(ctx, c, repo, f, appr.Agents)
+		if err != nil {
+			return err
+		}
 		effect = []string{
 			fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions)),
-			fmt.Sprintf("It runs in %s, the tool you set for this repository; up to %d stories at once", tool, plan.Agents),
+			fmt.Sprintf("It runs in %s, the tool you set for this repository; up to %d stories at once (%s)", tool, agents, agentsSource),
 			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
 			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis),
 		}
@@ -823,8 +852,16 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 			merged[d.Number] = dep.GetState() == "closed"
 		}
 	}
+	approved := 0
+	if appr != nil {
+		approved = appr.Agents
+	}
+	agents, agentsSource, err := e.missionAgents(ctx, c, repo, f, approved)
+	if err != nil {
+		return err
+	}
 	rep := MissionShowReport{Repo: repo, Feature: f, LedgerPath: MissionPlanPath(f), State: "not started: a person runs aayu mission start " + strconv.Itoa(f), Plan: plan,
-		Agents:   SourcedNumber{Value: float64(plan.Agents), Source: plan.AgentsSource},
+		Agents:   SourcedNumber{Value: float64(agents), Source: agentsSource},
 		Estimate: SourcedNumber{Value: float64(plan.Estimate.Runs), Source: plan.Estimate.Basis + ", at Approve to build"}}
 	switch {
 	case plan.Pause != nil:
@@ -882,7 +919,7 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 				fmt.Fprintf(w, "          #%d %s\n", s.Number, s.Waits)
 			}
 		}
-		fmt.Fprintf(w, "agents    %d (%s)\n", plan.Agents, rep.Agents.Source)
+		fmt.Fprintf(w, "agents    %d (%s)\n", int(rep.Agents.Value), rep.Agents.Source)
 		if b := rep.Budget; b != nil {
 			fmt.Fprintf(w, "budget    %s (%s)\n", ready.USD(b.Budget.Value), b.Budget.Source)
 			fmt.Fprintf(w, "used      %s (%s)\n", ready.USD(b.Used.Value), b.Used.Source)
