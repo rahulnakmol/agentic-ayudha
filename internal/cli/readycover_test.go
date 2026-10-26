@@ -278,6 +278,22 @@ func TestReadyStoryCoverage(t *testing.T) {
 	git(t, hand, "commit", "--quiet", "-m", "design.json removed")
 	git(t, hand, "push", "--quiet", "origin", "ledger")
 	refused(856, "#840 changed after Approve to build: technical design v2 cannot be pinned now.")
+	// A Story that becomes a Feature between ready's first read and the read Ready checks is refused: its Ready is a person's.
+	reads = 0
+	edit(func() {
+		g.Hook = func(method, path string) {
+			if method == "GET" && path == "/repos/o/r/issues/840" {
+				reads++
+				for i, l := range feature.Labels {
+					if strings.HasPrefix(l.Name, "type:") {
+						feature.Labels[i].Name = map[bool]string{true: "type:story", false: "type:feature"}[reads == 1]
+					}
+				}
+			}
+		}
+	})
+	refused(840, "#840 became a Feature while aayu read it.")
+	edit(func() { g.Hook = nil })
 	// A record aayu did not write covers nothing.
 	putLedger(t, bare, ready.ApprovalPath(840), `{"schema": "aayudha.feature.approved/v1", "feature": 841, "version": 9}`)
 	if code, out := readyRun(856); code != ExitExternal || !strings.Contains(out, "not an Approve to build record of #840") {

@@ -134,7 +134,11 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		// A Story is Ready only while its Feature's approval covers it (Story #996), judged on
 		// the item Apply checks, so a type that changes after the read above cannot skip it.
 		r.Covered = func(ctx context.Context, it workitems.Item, body string) (string, error) {
-			if it.Type != "story" {
+			switch it.Type {
+			case "feature": // retyped after the read above: its Ready is a person's Approve to build
+				return "", Errorf(ExitBlocked, "#%d became a Feature while aayu read it. A Feature's Ready is Approve to build, a person's decision; nothing was written.", n)
+			case "story":
+			default:
 				return "", nil
 			}
 			return e.storyCovered(ctx, r.GH, w, repo, it, body)
