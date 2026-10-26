@@ -103,11 +103,17 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			return err
 		})
 	default:
-		if err := e.botReady(ctx, r); err != nil {
+		// Read the type before any bot or ledger setup, so an agent lane on a
+		// Feature always gets the refusal, whatever else it lacks.
+		c, _, err := e.HumanGitHub(ctx)
+		if err != nil {
+			c, _, err = e.BotGitHub(ctx, "")
+		}
+		if err != nil {
 			return err
 		}
 		owner, name, _ := github.SplitRepo(repo)
-		is, _, err := r.GH.REST.Issues.Get(ctx, owner, name, n)
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
@@ -116,6 +122,9 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 				return err
 			}
 			return e.approveToBuild(ctx, r, n)
+		}
+		if err := e.botReady(ctx, r); err != nil {
+			return err
 		}
 		if res, err = r.Apply(ctx, n); err != nil {
 			return err

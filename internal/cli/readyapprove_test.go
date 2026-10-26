@@ -163,7 +163,7 @@ func TestReadyApproveToBuild(t *testing.T) {
 		want string
 	}{
 		{map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": state}, nil, ExitBlocked, "refused for an agent lane (AAYU_AGENT=1)"},
-		{map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token", "XDG_STATE_HOME": state}, []string{"--ci"}, ExitBlocked, "refused for an agent lane (--ci)"},
+		{person, []string{"--ci"}, ExitBlocked, "refused for an agent lane (--ci)"}, // with no bot token: the refusal comes first
 	} {
 		nothing(c.want, n, func() {
 			if code, out, errOut := readyRun(c.env, c.args...); code != c.code || !strings.Contains(errOut, c.want) {
@@ -178,6 +178,10 @@ func TestReadyApproveToBuild(t *testing.T) {
 	away.Dir = t.TempDir()
 	if code, _, _ := run(t, person, away, "ready", "840", "--repo", "o/r"); code == 0 || commits() != n {
 		t.Fatalf("ready 840 outside a checkout: exit %d", code)
+	}
+	// An agent lane outside a checkout is refused as an agent lane, before any ledger setup.
+	if code, out, errOut := run(t, agent, away, "ready", "840", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, refused) {
+		t.Fatalf("agent ready 840 outside a checkout: exit %d: %s%s", code, out, errOut)
 	}
 	// A story is still Ready from an agent lane: only a Feature's Ready is a person's.
 	if code, out, errOut := run(t, agent, opts, "ready", "851", "--repo", "o/r"); code != 0 || !slices.Contains(g.LabelNames(851), "status:ready") {
