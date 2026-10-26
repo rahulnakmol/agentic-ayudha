@@ -51,7 +51,7 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 	l, _ := e.Config() // loaded and checked by the presence check before this
 	root, tool := config.RepoRoot(e.Dir), plan.Tool
 	p := &ready.Parent{Scope: "feature", Key: strconv.Itoa(f), Host: tool, Mode: "cloud", StartedBy: login, StartedAt: e.Now().UTC().Format(time.RFC3339)}
-	brief := delegate.KanhaBrief(repo, f, tool)
+	brief := delegate.KanhaBrief(repo, f, tool, plan.Release != 0)
 	how := "new"
 	start := func(ctx context.Context) error {
 		if slices.Contains(localKanhaTools, tool) {
@@ -97,9 +97,26 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 		words = fmt.Sprintf("the Kanha of #%d is the thread that drafted its intent, %s: it has its brief", f, p.URL)
 	}
 	if err := e.writeParent(ctx, w, f, appr.Version, p); err != nil {
-		return nil, "", fmt.Errorf("it started (%s %s), and aayu did not record it: %w", tool, p.Session, err)
+		return nil, "", &kanhaUnrecorded{parent: p, err: err}
 	}
 	return p, words, nil
+}
+
+// kanhaUnrecorded is a Kanha that started and that aayu did not record as
+// the parent: a second Start would start a second Kanha.
+type kanhaUnrecorded struct {
+	parent *ready.Parent
+	err    error
+}
+
+func (k *kanhaUnrecorded) Error() string { return k.err.Error() }
+
+// unrecordedError says what to do with a Kanha that started unrecorded:
+// stop it, then start the mission's Kanha again.
+func unrecordedError(f int, k *kanhaUnrecorded) error {
+	where := orDefault(k.parent.URL, "session "+k.parent.Session+" on "+k.parent.Machine)
+	return WithNext(Errorf(ExitExternal, "The Kanha of #%d started on %s (%s), and aayu did not record it: %v. Do not start another while it runs.",
+		f, k.parent.Host, where, oneLineErr(k.err)), fmt.Sprintf("stop the Kanha at %s, then run aayu mission start %d", where, f))
 }
 
 // draftingThread is the Amp thread that drafted Feature f's approved intent
@@ -163,6 +180,18 @@ func storyMission(ctx context.Context, c *github.Client, w *ledger.Writer, repo 
 		return f, nil, nil, err
 	}
 	return f, plan, appr, nil
+}
+
+// tatkalHold refuses a hand-off of a Tatkal story that no person has
+// started: a person starts it on their own tool, and the Tatkal Kanha only
+// orders and tracks it (R9). It runs before the lease or any write.
+func tatkalHold(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int) error {
+	f, plan, _, err := storyMission(ctx, c, w, repo, n)
+	if err != nil || plan == nil || plan.Release == 0 || slices.ContainsFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }) {
+		return err
+	}
+	return WithNext(Errorf(ExitBlocked, "#%d is a story of Tatkal Feature #%d: a person starts it on their own tool, and the Kanha only orders and tracks it. Nothing was started.", n, f),
+		fmt.Sprintf("a person runs aayu mission start %d", n))
 }
 
 // storyTool is the tool story n runs on: the tool of the person who started

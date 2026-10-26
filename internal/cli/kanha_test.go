@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
@@ -383,6 +384,20 @@ func TestTatkalStoryRunsOnStartersTool(t *testing.T) {
 	}
 	m.readyStory(930)
 	m.readyStory(931)
+	// Before a person starts #930, the list marks it start (Story #998), and the Kanha's build of it starts nothing.
+	if !strings.Contains(m.briefs[len(m.briefs)-1], "#920 is a Tatkal Feature: a person starts each story on their own tool (`aayu mission start <n>`). Start nothing") {
+		t.Fatalf("the Tatkal Kanha brief:\n%s", m.briefs[len(m.briefs)-1])
+	}
+	if code, out, errOut := m.next(920); code != 0 || !strings.Contains(out, "start #930") {
+		t.Fatalf("mission next 920 before any start: exit %d: %q%s", code, out, errOut)
+	}
+	n, calls := m.commits(), len(m.callLog())
+	m.g.Reset()
+	code, out, errOut := run(t, m.agent, m.opts, "build", "930", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code != ExitBlocked || m.commits() != n || len(m.callLog()) != calls || len(m.g.Writes()) != 0 ||
+		!strings.Contains(errOut, "#930 is a story of Tatkal Feature #920: a person starts it on their own tool, and the Kanha only orders and tracks it. Nothing was started.") {
+		t.Fatalf("the Kanha's build of #930 before a person's start: exit %d, %d writes: %s%s", code, len(m.g.Writes()), out, errOut)
+	}
 	for _, s := range []struct {
 		n           int
 		login, tool string
@@ -411,14 +426,14 @@ func TestTatkalStoryRunsOnStartersTool(t *testing.T) {
 		t.Fatalf("mission next 920: exit %d: %q%s", code, out, errOut)
 	}
 	m.g.Viewer = "bob" // the lease is his start's
-	code, out, errOut := run(t, m.person, m.opts, "build", "930", "--delegate", "amp", "--repo", "o/r", "--json")
+	code, out, errOut = run(t, m.person, m.opts, "build", "930", "--delegate", "amp", "--repo", "o/r", "--json")
 	var res BuildResult
 	if code != 0 || json.Unmarshal([]byte(out), &res) != nil || res.Delegation.Receiver != "codex" || slices.ContainsFunc(m.callLog(), func(c string) bool { return strings.HasPrefix(c, "amp -ox") && strings.Contains(c, "#930") }) {
 		t.Fatalf("a sync of #930 with --delegate amp: exit %d: %s%s", code, out, errOut)
 	}
 	m.g.Viewer = "rahulnakmol"
 	// A second start of #930, and a person's start of a story of a Feature mission, start nothing.
-	n := m.commits()
+	n = m.commits()
 	if code, _, errOut := m.mission(m.person, "rahulnakmol", "start", 930); code != ExitBlocked || m.codes() != 0 || m.commits() != n ||
 		!strings.Contains(errOut, "@bob started #930 at "+plan.StoryStarts[0].StartedAt+" on codex. Its tool does not change.") {
 		t.Fatalf("a second start of #930: exit %d: %s", code, errOut)
@@ -541,6 +556,25 @@ func TestMissionStartFailsClosed(t *testing.T) {
 	m.edit(func() { m.g.Fail = "" })
 	if m.commits() != n {
 		t.Fatal("a failed start wrote the ledger")
+	}
+	// A Kanha that starts while the ledger keeps moving is not recorded: Start names it and says to stop it
+	// first, never to start another.
+	m.featureWith(874, 950)
+	if code, out, errOut := m.approve(874); code != 0 {
+		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
+	}
+	busy := m.opts
+	busy.LedgerAttempt = func(int, string) {
+		if strings.Contains(git(t, m.bare, "show", "ledger:"+MissionPlanPath(874)), `"started_by"`) {
+			putLedger(t, m.bare, fmt.Sprintf("specs/874/other-%d.json", time.Now().UnixNano()), "{}")
+		}
+	}
+	m.device("rahulnakmol")
+	url := "https://cursor.com/agents?id=" + cursorKanhaAgent
+	code, out, errOut := run(t, m.person, busy, "mission", "start", "874", "--repo", "o/r")
+	if code != ExitExternal || !strings.Contains(errOut, "The Kanha of #874 started on cursor ("+url+"), and aayu did not record it: ") ||
+		!strings.Contains(errOut, "Do not start another while it runs.") || !strings.Contains(errOut, "next: stop the Kanha at "+url+", then run aayu mission start 874") {
+		t.Fatalf("a Kanha the ledger did not take: exit %d: %s%s", code, out, errOut)
 	}
 	race, pushed := m.opts, false
 	race.LedgerAttempt = func(int, string) {

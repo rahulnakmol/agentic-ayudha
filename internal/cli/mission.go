@@ -597,6 +597,9 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	}
 	if !rep.DryRun {
 		if rep.Parent, rep.Kanha, err = e.startKanha(ctx, c, w, repo, f, again, appr2, p.Login); err != nil {
+			if k := (*kanhaUnrecorded)(nil); errors.As(err, &k) {
+				return unrecordedError(f, k)
+			}
 			return WithNext(Errorf(ExitExternal, "The mission of #%d runs on %s, and no Kanha of it is recorded: %v", f, tool, oneLineErr(err)), fmt.Sprintf("aayu mission start %d", f))
 		}
 	}
