@@ -1,0 +1,57 @@
+{
+  "story": 1005,
+  "body_hash": "f85053028b1b77220e3cb9e24598aa15974aa4ca59c39fdc73267b4262824630",
+  "footprint": [
+    "L03",
+    "L05"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L03",
+      "title": "The mission skill body: Kanha's protocol, written for every tool in lock.toml",
+      "contracts": [
+        "skills/mission/SKILL.md body (frontmatter from the `mission` registry entry, #997): on each event run `aayu mission next \u003cf\u003e`, `aayu build \u003cn\u003e --delegate \u003ctool\u003e` once per start, one report line, stop; never ship, merge, or approve",
+        "copies through `Lock.SkillDirs` (internal/hosts/install.go:126-136); doctor warns when a person's tool is not in lock.toml"
+      ],
+      "tests": [
+        "internal/cli:TestInstallWritesMissionSkillForLockTools",
+        "internal/doctor:TestDoctorWarnsToolMissingFromLock",
+        "skills:TestMissionSkillProtocolSection"
+      ],
+      "instrumentation": [
+        "the Kanha reports one line per event"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "layer": "L05",
+      "title": "Eval case mission/stays-in-list: the Kanha starts only what the list marks start",
+      "contracts": [
+        "evals/cases/mission/stays-in-list/{case.toml, input.txt, session.toml, rubric.md}, as evals/cases/build/small-story is laid out",
+        "a bar in evals/eval.toml for the mission skill"
+      ],
+      "tests": [
+        "evals/cases/mission/stays-in-list (tier 1 rule and tier 2 rubric)",
+        "internal/evals:TestCasesLoad"
+      ],
+      "instrumentation": [
+        "eval results under evals/results"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        2
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:23Z",
+  "planned_by": "human-fallback"
+}
