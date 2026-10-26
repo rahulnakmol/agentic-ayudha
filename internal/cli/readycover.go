@@ -14,18 +14,6 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
-// earlyBuild is the part of #994's early-build approval
-// (specs/<f>/approved-early-<s>.json) that Ready reads.
-type earlyBuild struct {
-	Schema     string `json:"schema"`
-	Feature    int    `json:"feature"`
-	Story      int    `json:"story"`
-	BodyHash   string `json:"body_hash"`
-	ApprovedBy string `json:"approved_by"`
-}
-
-const earlyBuildSchema = "aayudha.feature.early-build/v1"
-
 // storyCovered is the Story rule of `aayu ready <story>` (Feature #877, Story
 // #996, Decision #861): a Story is Ready only under a Feature whose Approve to
 // build covers it as it is now, or under a person's early-build approval of
@@ -67,7 +55,7 @@ func (e *Env) storyCovered(ctx context.Context, c *github.Client, w *ledger.Writ
 // only on a person's early-build approval of s, at the body it approved.
 func (e *Env) earlyCovered(ctx context.Context, w *ledger.Writer, f, s int, body string) (string, error) {
 	notApproved := WithNext(Errorf(ExitBlocked, "Feature #%d is not approved to build. A person runs aayu ready %d.", f, f), fmt.Sprintf("aayu ready %d", f))
-	path := fmt.Sprintf("specs/%d/approved-early-%d.json", f, s) // the path names the story, so a record covers no other
+	path := ready.EarlyBuildPath(f, s) // the path names the story, so a record covers no other
 	files, err := (&partRun{e: e, w: w}).ledgerFiles(ctx, path)
 	if err != nil {
 		return "", err
@@ -75,13 +63,13 @@ func (e *Env) earlyCovered(ctx context.Context, w *ledger.Writer, f, s int, body
 	if files[path] == nil {
 		return "", notApproved
 	}
-	var eb earlyBuild
-	if err := json.Unmarshal(files[path], &eb); err != nil || eb.Schema != earlyBuildSchema || eb.Feature != f || eb.Story != s || eb.ApprovedBy == "" {
+	var eb ready.EarlyBuild
+	if err := json.Unmarshal(files[path], &eb); err != nil || eb.Schema != ready.EarlyBuildSchema || eb.Feature != f || eb.Story != s || eb.ApprovedBy == "" {
 		return "", Errorf(ExitExternal, "ledger %s: not an early-build approval of #%d under #%d; #%d is not Ready", path, s, f, s)
 	}
 	if now := workitems.BodyHash(body); now != eb.BodyHash {
 		return "", WithNext(Errorf(ExitBlocked, "#%d changed after its early build was approved (body hash %.12s to %.12s). A person approves it again: aayu ready %d --early-build %d", s, eb.BodyHash, now, f, s),
-			fmt.Sprintf("aayu ready %d", f))
+			fmt.Sprintf("aayu ready %d --early-build %d", f, s))
 	}
 	return fmt.Sprintf("#%d early build of #%d by @%s", f, s, eb.ApprovedBy), nil
 }

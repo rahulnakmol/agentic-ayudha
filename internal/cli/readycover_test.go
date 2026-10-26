@@ -127,21 +127,29 @@ func TestReadyStoryCoverage(t *testing.T) {
 
 	// 6. An early-build approval of #852 covers #852 only.
 	early := func(body string) string {
-		b, _ := json.Marshal(map[string]any{"schema": "aayudha.feature.early-build/v1", "feature": 840, "story": 852, "body_hash": workitems.BodyHash(body),
-			"budget_usd": 60, "approved_by": "rahulnakmol", "presence": "device-flow", "at": "2026-10-26T00:00:00Z"})
+		b, _ := json.Marshal(ready.EarlyBuild{Schema: ready.EarlyBuildSchema, Feature: 840, Story: 852, BodyHash: workitems.BodyHash(body),
+			BudgetUSD: 60, ApprovedBy: "rahulnakmol", Presence: "device-flow", At: "2026-10-26T00:00:00Z"})
 		return string(b)
 	}
-	putLedger(t, bare, "specs/840/approved-early-852.json", early(stories[852].Body))
+	// A person approves the early build of #852 (Story #994): aayu writes specs/840/approved-early-852.json.
+	edit(func() {
+		stories[852].Labels = append(stories[852].Labels, fake.Label{Name: "early-build"})
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve"}
+	})
+	if code, out, errOut := run(t, person, opts, "ready", "840", "--repo", "o/r", "--early-build", "852"); code != 0 ||
+		!strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), ready.EarlyBuildPath(840, 852)) {
+		t.Fatalf("ready 840 --early-build 852: exit %d: %s%s", code, out, errOut)
+	}
 	passes(852, "#840 early build of #852 by @rahulnakmol")
 	refused(853, notApproved)
 	// The early build covers #852 at the body the person approved.
 	body852 := stories[852].Body
 	edit(func() { stories[852].Body = storyBody("Story 852", "An edit after the early build.") })
 	refused(852, "#852 changed after its early build was approved")
-	refused(852, "next: aayu ready 840\n")
+	refused(852, "next: aayu ready 840 --early-build 852")
 	edit(func() { stories[852].Body = body852 })
 	// A record that names another story covers neither.
-	putLedger(t, bare, "specs/840/approved-early-854.json", early(stories[854].Body))
+	putLedger(t, bare, ready.EarlyBuildPath(840, 854), early(stories[854].Body))
 	if code, out := readyRun(854); code != ExitExternal || !strings.Contains(out, "not an early-build approval of #854 under #840") || slices.Contains(g.LabelNames(854), ready.LabelReady) {
 		t.Fatalf("an early-build record of #852 at #854's path: exit %d:\n%s", code, out)
 	}
