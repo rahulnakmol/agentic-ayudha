@@ -1,0 +1,56 @@
+{
+  "story": 1015,
+  "body_hash": "74e91b9507582d74de1d42aa9e0a471abaaf0461f3164e6fea8724c478abcecc",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "Mission time: the estimate at Approve to build, the clock, the 24 h card, the 48 h hold, and extend",
+      "contracts": [
+        "internal/cli/ready.go: estimate along the longest chain from #886's per-effort working hours (learned, else #886's default)",
+        "internal/cli/mission.go: clock with not-counted parts; plan.json `missions[n].stories[].working_hours`; `aayu mission start --reason`, `aayu mission extend --reason`"
+      ],
+      "tests": [
+        "internal/cli:TestEstimateLearnedHours",
+        "internal/cli:TestEstimateDefaultHoursWarns",
+        "internal/cli:TestOver48LearnedNeedsReasonAtStart",
+        "internal/cli:TestOver48DefaultsOnlyWarns",
+        "internal/cli:TestMixedEstimateRefusesOnLearnedOnly",
+        "internal/cli:TestMissionStartReason",
+        "internal/cli:TestClockPausesOnPersonUsageCI",
+        "internal/cli:TestClockRunsWhileOneWorks",
+        "internal/cli:TestLocalCheckCounts",
+        "internal/cli:Test24hCard",
+        "internal/cli:Test48hHoldCardAndWaits",
+        "internal/cli:TestMissionExtend",
+        "internal/cli:TestLimitsPerMission"
+      ],
+      "instrumentation": [
+        "mission show prints the clock and what it did not count"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:49Z",
+  "planned_by": "human-fallback"
+}
