@@ -2,11 +2,11 @@
 
 [[criterion]]
 id = 1 # build 30 --stop "spec unclear" on a story of #889: #30 is status:blocked, and the Kanha gets "blocked #30: spec unclear: run aayu mission next 889"
-tests = ["internal/cli:TestBuildStopTellsKanha", "internal/cli:TestKanhaEventRecordedWhenNotSent"]
+tests = ["internal/cli:TestBuildStopTellsKanha", "internal/cli:TestKanhaEventRecordedWhenNotSent", "internal/cli:TestBlockWhenKanhaUnknown"]
 
 [[criterion]]
 id = 2 # build 32 --delegate amp fails to start (exit 1): claim line, lease, and status:in-progress released, #32 status:ready, the Kanha gets "start of #32 failed: <reason>"
-tests = ["internal/cli:TestFailedStartReleasesClaimAndTells"]
+tests = ["internal/cli:TestFailedStartReleasesClaimAndTells", "internal/delegate:TestKanhaBriefRunsNothingOnAFailedStart"]
 
 [[criterion]]
 id = 3 # an ask from #33's subthread is answered: #33 keeps its slot, and the Kanha gets "answered: #33 resumes"

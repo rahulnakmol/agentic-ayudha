@@ -418,3 +418,13 @@ func TestChoose(t *testing.T) {
 		t.Fatalf("nothing connected: %v", err)
 	}
 }
+
+// Story #1008: a failed start wakes the Kanha, and a wake is a paid run. The
+// brief says to run nothing on it, so a start that always fails cannot loop.
+func TestKanhaBriefRunsNothingOnAFailedStart(t *testing.T) {
+	for _, tatkal := range []bool{false, true} {
+		if b := KanhaBrief("o/r", 889, Amp, tatkal); !strings.Contains(b, "- On `start of #<n> failed: …`, run nothing: report it in one line and stop.") {
+			t.Errorf("the Kanha brief (tatkal %t) does not stop on a failed start:\n%s", tatkal, b)
+		}
+	}
+}

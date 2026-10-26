@@ -111,9 +111,6 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 // fails is recorded too, and returned. The note says what happened, for the
 // caller's output.
 func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) string) (string, error) {
-	if c.DryRun() {
-		return "", nil
-	}
 	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
 	if err != nil || plan == nil || plan.StartedBy == "" || appr.Parent == nil {
 		return "", err
@@ -123,10 +120,7 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 	if p.Mode == "local" {
 		how = "recorded; the local Kanha on " + p.Machine + " takes it at its next check"
 	} else {
-		l, err := e.Config()
-		if err != nil {
-			return "", err
-		}
+		l, _ := e.Config() // loaded and checked by the caller's GitHub client
 		log, err := e.Actions()
 		if err != nil {
 			return "", err
@@ -142,16 +136,13 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 			how = "not sent: " + oneLineErr(sendErr)
 		}
 	}
-	var st delegate.State
-	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err != nil {
-		return "", Wrap(ExitExternal, err)
+	st := delegate.State{Story: n, Feature: f, Kanha: p.Session, KanhaURL: p.URL} // a story no subthread runs has no state yet
+	if _, err = readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err == nil {
+		st.Events = append(st.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: "kanha", Detail: text + " (" + how + ")"})
+		b, _ := json.MarshalIndent(st, "", "  ")
+		_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: #%d tells the Kanha of #%d", n, f), Files: map[string][]byte{delegate.LedgerPath(n): append(b, '\n')}})
 	}
-	if st.Story == 0 {
-		st = delegate.State{Story: n, Feature: f, Kanha: p.Session, KanhaURL: p.URL}
-	}
-	st.Events = append(st.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: "kanha", Detail: text + " (" + how + ")"})
-	b, _ := json.MarshalIndent(st, "", "  ")
-	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: #%d tells the Kanha of #%d", n, f), Files: map[string][]byte{delegate.LedgerPath(n): append(b, '\n')}}); err != nil {
+	if err != nil {
 		return "", Wrap(ExitExternal, err)
 	}
 	note := fmt.Sprintf("the Kanha of #%d: %s (%s)", f, text, how)
@@ -166,15 +157,7 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 // Kanha is told that it resumes. #880's answer path calls it once an answer
 // settles; until #880 is built, nothing does.
 func (e *Env) answeredAsk(ctx context.Context, n int) error {
-	repo, err := e.RepoName(ctx)
-	if err != nil {
-		return err
-	}
-	c, bot, err := e.BotGitHub(ctx, "")
-	if err != nil {
-		return err
-	}
-	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+	repo, c, w, err := e.missionLedger(ctx)
 	if err != nil {
 		return err
 	}

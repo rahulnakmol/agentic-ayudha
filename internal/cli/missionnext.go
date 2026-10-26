@@ -433,9 +433,29 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // build already moved to in progress is not a change.
 func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool) error {
 	n := is.GetNumber()
-	path, claim, err := e.missionClaim(ctx, w, n)
+	t, err := w.Read(ctx)
 	if err != nil {
-		return err
+		return Wrap(ExitExternal, ignoreMissing(err))
+	}
+	defer t.Close()
+	paths, err := t.List(ctx, "missions")
+	if err != nil {
+		return Wrap(ExitExternal, ignoreMissing(err))
+	}
+	var path string
+	var claim loopClaim
+	for _, p := range paths {
+		if !strings.HasSuffix(p, "/claims.jsonl") {
+			continue
+		}
+		raw, err := t.File(ctx, p)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		lines := e.liveClaims(raw, nil)
+		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
+			path, claim = p, lines[i]
+		}
 	}
 	now := ""
 	switch {
@@ -453,50 +473,11 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		return nil
 	}
 	if !dryRun {
-		if err := releaseClaim(ctx, w, path, claim, fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now)); err != nil {
-			return err
+		claim.Release = true
+		b, _ := json.Marshal(claim)
+		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now), Append: map[string][]byte{path: append(b, '\n')}}); err != nil {
+			return Wrap(ExitExternal, err)
 		}
 	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
-}
-
-// missionClaim is story n's live claim line in a mission's claims file, and
-// that file; the path is "" when no list claimed n.
-func (e *Env) missionClaim(ctx context.Context, w *ledger.Writer, n int) (string, loopClaim, error) {
-	t, err := w.Read(ctx)
-	if err != nil {
-		return "", loopClaim{}, Wrap(ExitExternal, ignoreMissing(err))
-	}
-	defer t.Close()
-	paths, err := t.List(ctx, "missions")
-	if err != nil {
-		return "", loopClaim{}, Wrap(ExitExternal, ignoreMissing(err))
-	}
-	var path string
-	var claim loopClaim
-	for _, p := range paths {
-		if !strings.HasSuffix(p, "/claims.jsonl") {
-			continue
-		}
-		raw, err := t.File(ctx, p)
-		if err != nil {
-			return "", loopClaim{}, Wrap(ExitExternal, err)
-		}
-		lines := e.liveClaims(raw, nil)
-		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
-			path, claim = p, lines[i]
-		}
-	}
-	return path, claim, nil
-}
-
-// releaseClaim appends claim's release line to the claims file at path, so
-// the list no longer counts it.
-func releaseClaim(ctx context.Context, w *ledger.Writer, path string, claim loopClaim, msg string) error {
-	claim.Release = true
-	b, _ := json.Marshal(claim)
-	if _, err := w.Write(ctx, ledger.Commit{Message: msg, Append: map[string][]byte{path: append(b, '\n')}}); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	return nil
 }

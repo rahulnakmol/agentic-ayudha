@@ -147,6 +147,13 @@ func TestFailedStartReleasesClaimAndTells(t *testing.T) {
 	if code, out, errOut := m.next(889); code != 0 || out != "start #32\n" {
 		t.Fatalf("mission next after the failed start: exit %d: %q%s", code, out, errOut)
 	}
+	// A slot that cannot be released is said plainly, and the Kanha is not told it is free.
+	calls := len(m.callLog())
+	m.edit(func() { m.g.Fail = "DELETE /repos/o/r/issues/32/labels/" + LeaseLabel })
+	code, out, errOut = run(t, m.agent, m.opts, "build", "32", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code != ExitExternal || !strings.Contains(errOut, "no orb capacity; and its slot was not released") || len(m.callLog()) != calls+1 {
+		t.Fatalf("build 32 with a lease that is not released: exit %d, calls %q: %s%s", code, m.callLog()[calls:], out, errOut)
+	}
 }
 
 // Criterion 3: an ask from #33's subthread is answered: #33 keeps its slot
@@ -187,6 +194,36 @@ func TestAnsweredAskKeepsSlotAndTells(t *testing.T) {
 	}
 }
 
+// A Kanha that cannot be found or reached never stops the block: a failed
+// read of the story's mission tells nobody, and says so.
+func TestBlockWhenKanhaUnknown(t *testing.T) {
+	m := newMissionWorld(t)
+	m.ampMission(889, 37)
+	m.kanhaBuild(37, "amp")
+	// Ready reads the parent too: a dry run of the stop counts those reads, and the read after them fails.
+	m.g.Reset()
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "37", "--stop", "spec unclear", "--repo", "o/r", "--dry-run"); code != ExitBlocked {
+		t.Fatalf("build 37 --stop --dry-run: exit %d: %s", code, errOut)
+	}
+	reads := 0
+	for _, r := range m.g.Requests {
+		if r.Method == "GET" && r.Path == "/repos/o/r/issues/37/parent" {
+			reads++
+		}
+	}
+	calls := len(m.callLog())
+	m.edit(func() { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues/37/parent", reads })
+	code, out, errOut := run(t, m.agent, m.opts, "build", "37", "--stop", "spec unclear", "--repo", "o/r", "--json")
+	if code != ExitBlocked || !slices.Contains(m.labels(37), "status:blocked") || len(m.callLog()) != calls || !strings.Contains(out, "the Kanha was not told: ") {
+		t.Fatalf("build 37 --stop with its mission unread: exit %d, calls %q: %s%s", code, m.callLog()[calls:], out, errOut)
+	}
+	// The answer path refuses where it cannot read the repository, and tells nobody.
+	withHandler(t, "status", func(ctx context.Context, e *Env, _ Values) error { return e.answeredAsk(ctx, 37) })
+	if code, _, errOut := run(t, m.agent, Options{Dir: t.TempDir()}, "status"); code == 0 || len(m.callLog()) != calls {
+		t.Fatalf("the answer event with no repository: exit %d: %s", code, errOut)
+	}
+}
+
 // A Kanha whose send fails still gets the event in delegate/<n>/state.json,
 // where its next wake reads it; a local Kanha gets it there only, at its
 // next check (#1012).
@@ -208,12 +245,13 @@ func TestKanhaEventRecordedWhenNotSent(t *testing.T) {
 		t.Fatalf("delegate/35/state.json Kanha events: %q", got)
 	}
 	// The local Codex Kanha of #890 takes the event at its next check (#1012): it is recorded, and nothing runs.
+	// The builder's words reach it on one line.
 	m.featureWith(890, 36)
 	m.start(890, "rahulnakmol", "codex")
 	m.readyStory(36)
 	m.kanhaBuild(36, "codex")
 	calls := len(m.callLog())
-	if code, _, errOut := run(t, m.agent, m.opts, "build", "36", "--stop", "spec unclear", "--repo", "o/r"); code != ExitBlocked || len(m.callLog()) != calls {
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "36", "--stop", "spec\n  unclear", "--repo", "o/r"); code != ExitBlocked || len(m.callLog()) != calls {
 		t.Fatalf("build 36 --stop: exit %d, calls %q: %s", code, m.callLog()[calls:], errOut)
 	}
 	host, _ := os.Hostname()

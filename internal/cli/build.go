@@ -378,7 +378,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err == nil {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
 		}
-		if err != nil && starts {
+		if err != nil && starts && !c.DryRun() {
 			err = e.failedStart(ctx, c, w, repo, n, labels, &res, err)
 		}
 		if dlg == nil {
@@ -1149,8 +1149,9 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 	sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("build:%s#%d", repo, n), Subject: fmt.Sprintf("aayu build blocked #%d", n),
 		Body: fmt.Sprintf("%s#%d is status:blocked: %s. A human looks at it and runs `aayu ready %d` to let the build continue.", repo, n, why, n)})
 	res.Notes = append(res.Notes, "page: "+sent)
-	// The block frees the story's slot: its mission's Kanha is told, in the builder's own words for a stop.
-	reason := strings.TrimPrefix(why, stoppedByBuilder)
+	// The block frees the story's slot: its mission's Kanha is told, in the builder's own words for a stop, on
+	// one line, clipped.
+	reason := clipText(strings.Join(strings.Fields(strings.TrimPrefix(why, stoppedByBuilder)), " "), 300)
 	note, err := e.tellKanha(ctx, c, w, repo, n, func(f int) string { return fmt.Sprintf("blocked #%d: %s: run aayu mission next %d", n, reason, f) })
 	res.Notes = kanhaNote(res.Notes, note, err)
 	return sent, e.saveBuild(ctx, c, w, repo, n, st, res)
@@ -1161,13 +1162,18 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 // is status:ready again and holds no slot, and its Kanha is told why. It
 // returns cause, or what it could not undo with cause.
 func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, res *BuildResult, cause error) error {
-	if c.DryRun() {
-		return cause
-	}
 	reason := oneLineErr(cause)
-	path, claim, err := e.missionClaim(ctx, w, n)
-	if err == nil && path != "" {
-		err = releaseClaim(ctx, w, path, claim, fmt.Sprintf("missions: the start of #%d failed; its claim is released", n))
+	f, _, _, err := storyMission(ctx, c, w, repo, n)
+	var claims []loopClaim
+	if err == nil && f != 0 {
+		claims, err = e.claimLines(ctx, w, MissionClaimsPath(f), nil)
+	}
+	for _, cl := range claims {
+		if cl.Story == n && err == nil {
+			cl.Release = true
+			b, _ := json.Marshal(cl)
+			_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: the start of #%d failed; its claim is released", n), Append: map[string][]byte{MissionClaimsPath(f): append(b, '\n')}})
+		}
 	}
 	if err == nil {
 		_, err = e.releaseLease(ctx, c, repo, n, "the start of its subthread failed")
