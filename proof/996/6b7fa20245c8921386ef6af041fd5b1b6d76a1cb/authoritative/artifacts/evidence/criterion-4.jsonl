@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyStoryCoverage"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyStoryCoverage","Output":"=== RUN   TestReadyStoryCoverage\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyStoryCoverage","Output":"--- PASS: TestReadyStoryCoverage (2.09s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestReadyStoryCoverage"}
