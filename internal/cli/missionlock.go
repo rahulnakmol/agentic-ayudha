@@ -377,29 +377,6 @@ func readPlans(ctx context.Context, w *ledger.Writer) ([]*MissionPlan, error) {
 	return out, nil
 }
 
-// editPlan reads Feature f's mission plan, applies edit, and writes it on
-// the tip it read; when the ledger moved, it reads again, up to three times.
-func editPlan(ctx context.Context, w *ledger.Writer, f int, msg string, edit func(*MissionPlan) error) (string, error) {
-	for range 3 {
-		plan, _, tip, err := readMission(ctx, w, f)
-		if err != nil {
-			return "", err
-		}
-		if plan == nil {
-			return "", Errorf(ExitBlocked, "#%d has no mission plan. Nothing changed.", f)
-		}
-		if err := edit(plan); err != nil {
-			return "", err
-		}
-		data, _ := json.MarshalIndent(plan, "", "  ")
-		commit, err := w.Write(ctx, ledger.Commit{Message: msg, Files: map[string][]byte{MissionPlanPath(f): append(data, '\n')}, Base: tip})
-		if !errors.Is(err, ledger.ErrMoved) {
-			return commit, wrapExternal(err)
-		}
-	}
-	return "", Errorf(ExitExternal, "the ledger kept moving while aayu wrote %s. Nothing changed. Run it again.", MissionPlanPath(f))
-}
-
 // lockedEdits are the open issues that plan's active lock holds whose body
 // is not the one it locked, by number: each waits until a person keeps the
 // edit or the mission ends. aayu never writes such a body back; it posts one
@@ -578,7 +555,7 @@ func endLock(ctx context.Context, c *github.Client, w *ledger.Writer, f int, pla
 	if ms := plan.Milestones; len(ms) > 0 {
 		reason = fmt.Sprintf("%s, the last milestone of the last mission, is done", ms[len(ms)-1].Name)
 	}
-	_, err := editPlan(ctx, w, f, fmt.Sprintf("missions: the lock of #%d ended: %s", f, reason), func(p *MissionPlan) error {
+	_, err := writePlan(ctx, w, f, fmt.Sprintf("missions: the lock of #%d ended: %s", f, reason), func(p *MissionPlan) error {
 		if p.Lock != nil && p.Lock.State == LockActive {
 			p.Lock.State, p.Lock.EndedAt, p.Lock.EndReason = LockEnded, &at, &reason
 		}
@@ -629,7 +606,7 @@ func (e *Env) keepEdit(ctx context.Context, c *github.Client, repo string, it In
 		return nil
 	}
 	at := e.Now().UTC().Format(time.RFC3339)
-	if _, err := editPlan(ctx, w, f, fmt.Sprintf("missions: @%s kept the edit of #%d in the lock of #%d", p.Login, n, f), func(pl *MissionPlan) error {
+	if _, err := writePlan(ctx, w, f, fmt.Sprintf("missions: @%s kept the edit of #%d in the lock of #%d", p.Login, n, f), func(pl *MissionPlan) error {
 		li := pl.Lock.lockedIssue(n)
 		if li == nil {
 			return Errorf(ExitBlocked, "#%d is not locked by the mission of #%d any more. Nothing was kept.", n, f)
