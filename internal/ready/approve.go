@@ -32,6 +32,24 @@ type Approval struct {
 	Stories    []ApprovedStory    `json:"stories"`
 	Budget     Budget             `json:"budget"`
 	Dismissals []Dismissal        `json:"dismissals"`
+	// Parent is the mission's Kanha, which a person's Start began (Story #1004); nil until then.
+	Parent *Parent `json:"parent,omitempty"`
+}
+
+// Parent is the session that coordinates approved work: a Feature mission's
+// Kanha, started at a person's Start on the tool the plan records. Scope and
+// Key name the work (feature and its number; Kala, #911, takes repo). It is
+// information, never authority (#871).
+type Parent struct {
+	Scope     string `json:"scope"`
+	Key       string `json:"key"`
+	Host      string `json:"host"`              // the tool: amp, claude, cursor, codex, copilot, or opencode
+	Session   string `json:"session,omitempty"` // the thread, session, or cloud agent ID
+	URL       string `json:"url,omitempty"`
+	Mode      string `json:"mode"`              // cloud, or local on the starter's machine
+	Machine   string `json:"machine,omitempty"` // login@machine of a local Kanha
+	StartedBy string `json:"started_by"`
+	StartedAt string `json:"started_at"`
 }
 
 // Presence is how the person was proven present: the device-flow approval

@@ -1,0 +1,33 @@
+# Which tests prove Story #1004's Completion Goal.
+
+[[criterion]]
+id = 1 # start 889 on amp, drafted in an open Amp thread: approved.json parent is that thread (host, session, URL); it gets the Kanha brief
+tests = ["internal/cli:TestMissionStartBriefsDraftingThread"]
+
+[[criterion]]
+id = 2 # drafting thread not known, or archived, tool claude: a new Claude Code session with the Kanha brief is the parent
+tests = ["internal/cli:TestMissionStartNewClaudeSession"]
+
+[[criterion]]
+id = 3 # tool codex, copilot, or opencode: a local Kanha, parent mode local and login@machine, and the "runs on this machine" line
+tests = ["internal/cli:TestMissionStartLocalKanha"]
+
+[[criterion]]
+id = 4 # tool cursor: one Cursor cloud agent with the Kanha brief, parent mode cloud; each later event is POST /v1/agents/{id}/runs
+tests = ["internal/cli:TestMissionStartCursorCloudAgent"]
+
+[[criterion]]
+id = 5 # the Kanha starts #60 of #889: delegate/60/state.json has feature 889 and the Kanha's session and URL
+tests = ["internal/cli:TestStoryStateNamesFeatureAndKanha"]
+
+[[criterion]]
+id = 6 # mission tool cursor, story brief asks for codex: the story starts on cursor
+tests = ["internal/cli:TestMissionNeverMixesTools"]
+
+[[criterion]]
+id = 7 # #889 by @rahulnakmol on cursor, #874 by @bob on codex: each Kanha and story thread on its own plan's tool
+tests = ["internal/cli:TestTwoMissionsTwoTools"]
+
+[[criterion]]
+id = 8 # Tatkal #920: @bob starts #930 on codex, @rahulnakmol #931 on cursor; plan.json records each; the Kanha starts neither
+tests = ["internal/cli:TestTatkalStoryRunsOnStartersTool"]

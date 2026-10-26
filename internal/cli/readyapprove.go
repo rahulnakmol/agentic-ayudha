@@ -136,9 +136,12 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
 	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: e.presenceRecord(p.Login)}
 	plan.Approval, plan.ApprovedBy, plan.ApprovedAt = got.Version, got.By, got.At
-	if old != nil { // a started mission keeps who started it, its tool, and its budget (Decision #974)
+	if old != nil { // a started mission keeps who started it, its tool, its budget, and its stories' starts (Decision #974)
 		plan.StartedBy, plan.StartedAt, plan.Tool, plan.ToolSource = old.StartedBy, old.StartedAt, old.Tool, old.ToolSource
-		plan.Budget, plan.BudgetBasis, plan.Pause, plan.Controls = old.Budget, old.BudgetBasis, old.Pause, old.Controls
+		plan.Budget, plan.BudgetBasis, plan.Pause, plan.Controls, plan.StoryStarts = old.Budget, old.BudgetBasis, old.Pause, old.Controls, old.StoryStarts
+	}
+	if prev2 != nil { // and its Kanha (Story #1004): a new approval starts no second one
+		got.Parent = prev2.Parent
 	}
 	rep.State, rep.Approval, rep.Plan = "approved", &got, &plan
 	if !c.DryRun() {

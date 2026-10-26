@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -63,6 +64,8 @@ type MissionPlan struct {
 	ToolSource  string  `json:"tool_source,omitempty"`
 	Budget      float64 `json:"budget,omitempty"` // USD
 	BudgetBasis string  `json:"budget_basis,omitempty"`
+	// StoryStarts are a Tatkal Feature's stories that a person started on their own tool (R9).
+	StoryStarts []MissionStoryStart `json:"story_starts,omitempty"`
 	// Pause is a stop's record (#1002); show prints its reason.
 	Pause    *MissionPause    `json:"pause,omitempty"`
 	Controls []MissionControl `json:"controls"`
@@ -117,6 +120,14 @@ type Mission struct {
 type MissionStory struct {
 	Number int    `json:"number"`
 	Waits  string `json:"waits,omitempty"` // "waits on #950 (#874)"
+}
+
+// MissionStoryStart is a person's start of a Tatkal story: it runs on their tool.
+type MissionStoryStart struct {
+	Number    int    `json:"number"`
+	Tool      string `json:"tool"`
+	StartedBy string `json:"started_by"`
+	StartedAt string `json:"started_at"`
 }
 
 // MissionPause is why a mission is paused.
@@ -462,15 +473,20 @@ func readMission(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *r
 	return plan, appr, t.Tip, nil
 }
 
-// MissionStartReport is what `aayu mission start <f>` reports.
+// MissionStartReport is what `aayu mission start <f>` reports, or `aayu
+// mission start <story>` for a story of a Tatkal Feature.
 type MissionStartReport struct {
-	Repo         string       `json:"repo"`
-	Feature      int          `json:"feature"`
-	Effect       []string     `json:"effect"` // what the person saw before the device code
-	Plan         *MissionPlan `json:"plan"`
-	LedgerPath   string       `json:"ledger_path"`
-	LedgerCommit string       `json:"ledger_commit,omitempty"`
-	DryRun       bool         `json:"dry_run,omitempty"`
+	Repo         string        `json:"repo"`
+	Feature      int           `json:"feature"`
+	Story        int           `json:"story,omitempty"` // a Tatkal story the person started
+	Effect       []string      `json:"effect"`          // what the person saw before the device code
+	Plan         *MissionPlan  `json:"plan"`
+	LedgerPath   string        `json:"ledger_path"`
+	LedgerCommit string        `json:"ledger_commit,omitempty"`
+	Parent       *ready.Parent `json:"parent,omitempty"`     // the Kanha Start began
+	Kanha        string        `json:"kanha,omitempty"`      // where it runs, in words
+	Delegation   *Delegation   `json:"delegation,omitempty"` // the Tatkal story's hand-off
+	DryRun       bool          `json:"dry_run,omitempty"`
 }
 
 func runMission(ctx context.Context, e *Env, in Values) error {
@@ -485,9 +501,11 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 }
 
 // missionStart is `aayu mission start <f>`: a person starts the Feature's
-// approved mission, through GitHub's device flow, and the plan records them,
-// their tool for this repository, and the budget, once. An agent lane is
-// refused before anything is read.
+// approved mission, through GitHub's device flow. The plan records them,
+// their tool for this repository, and the budget, once; then the mission's
+// Kanha starts on that tool and is recorded as the approval's parent. A
+// started mission with no Kanha (its start failed) starts only its Kanha, on
+// the plan's tool. An agent lane is refused before anything is read.
 func missionStart(ctx context.Context, e *Env, f int) error {
 	if err := e.laneRefusal("mission start"); err != nil {
 		return err
@@ -496,33 +514,57 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	if err != nil {
 		return err
 	}
+	if plan, _, _, err := readMission(ctx, w, f); err != nil {
+		return err
+	} else if plan == nil { // a story of a Tatkal Feature is started by a person, on their tool
+		if tf, tp, ta, err := storyMission(ctx, c, w, repo, f); err != nil {
+			return err
+		} else if tp != nil {
+			return storyStart(ctx, e, repo, c, w, f, tf, tp, ta)
+		}
+	}
 	plan, appr, _, err := startable(ctx, w, f)
 	if err != nil {
 		return err
 	}
-	tool, err := e.repoTool(ctx, repo)
-	if err != nil {
-		return Wrap(ExitExternal, err)
+	tool, kanhaOnly := plan.Tool, plan.StartedBy != ""
+	var budget float64
+	var basis string
+	var effect []string
+	if kanhaOnly {
+		effect = []string{
+			fmt.Sprintf("Starts the Kanha of #%d's mission: @%s started the mission at %s on %s, and it has no Kanha", f, plan.StartedBy, plan.StartedAt, tool),
+			fmt.Sprintf("It runs in %s, the tool in %s", tool, MissionPlanPath(f)),
+		}
+	} else {
+		if tool, err = e.repoTool(ctx, repo); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if tool == "" {
+			return Errorf(ExitBlocked, "Start records your tool for %s from your user config, and none is set there. Nothing was started.", repo)
+		}
+		est, err := e.costEstimate(ctx, f)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		card := "the approved budget"
+		budget, basis = appr.Budget.TotalUSD, fmt.Sprintf("the approved budget, %d x %s ([budget] per_story_usd): no cost estimate from #886 yet",
+			appr.Budget.Stories, ready.USD(appr.Budget.PerStoryUSD))
+		if est != nil && est.HighUSD > 0 {
+			budget, card = est.HighUSD, "the top of the range"
+			basis = fmt.Sprintf("the top of %s's range %s–%s (estimate %s)", est.Source, ready.USD(est.LowUSD), ready.USD(est.HighUSD), ready.USD(est.USD))
+		}
+		effect = []string{
+			fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions)),
+			fmt.Sprintf("It runs in %s, the tool you set for this repository; up to %d stories at once", tool, plan.Agents),
+			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
+			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis),
+		}
 	}
-	if tool == "" {
-		return Errorf(ExitBlocked, "Start records your tool for %s from your user config, and none is set there. Nothing was started.", repo)
+	if why := e.kanhaCanStart(tool); why != "" {
+		return Errorf(ExitBlocked, "Start begins the mission's Kanha on %s, and %s. Nothing was started.", tool, why)
 	}
-	est, err := e.costEstimate(ctx, f)
-	if err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	budget, basis, card := appr.Budget.TotalUSD, fmt.Sprintf("the approved budget, %d x %s ([budget] per_story_usd): no cost estimate from #886 yet",
-		appr.Budget.Stories, ready.USD(appr.Budget.PerStoryUSD)), "the approved budget"
-	if est != nil && est.HighUSD > 0 {
-		budget, card = est.HighUSD, "the top of the range"
-		basis = fmt.Sprintf("the top of %s's range %s–%s (estimate %s)", est.Source, ready.USD(est.LowUSD), ready.USD(est.HighUSD), ready.USD(est.USD))
-	}
-	effect := []string{
-		fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions)),
-		fmt.Sprintf("It runs in %s, the tool you set for this repository; up to %d stories at once", tool, plan.Agents),
-		fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
-		fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis),
-	}
+	effect = append(effect, fmt.Sprintf("Its Kanha starts on %s now, and starts each story on %s", tool, tool))
 	p, err := e.presenceCheck(ctx, Pending{What: "mission start", Effect: effect}, AccessWrite, e.personOnly("mission start"))
 	if err != nil {
 		return err
@@ -535,31 +577,136 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	if was, now := missionJSON(plan), missionJSON(again); was != now || appr2.Version != appr.Version {
 		return Errorf(ExitBlocked, "The mission plan of #%d changed while the code was waiting. Nothing was started.", f)
 	}
-	at := e.Now().UTC().Format(time.RFC3339)
-	again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
-	again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
-	again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, At: at, Presence: p.Via})
 	rep := MissionStartReport{Repo: repo, Feature: f, Effect: effect, Plan: again, LedgerPath: MissionPlanPath(f), DryRun: c.DryRun()}
+	if !kanhaOnly {
+		at := e.Now().UTC().Format(time.RFC3339)
+		again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
+		again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
+		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, At: at, Presence: p.Via})
+		if !rep.DryRun {
+			data, _ := json.MarshalIndent(again, "", "  ")
+			rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: @%s started the mission of #%d on %s", p.Login, f, tool),
+				Files: map[string][]byte{rep.LedgerPath: append(data, '\n')}, Base: tip})
+			if errors.Is(err, ledger.ErrMoved) {
+				return Errorf(ExitBlocked, "The ledger changed while aayu wrote the start of #%d. Nothing was started. Run it again.", f)
+			}
+			if err != nil {
+				return Wrap(ExitExternal, err)
+			}
+		}
+	}
+	if !rep.DryRun {
+		if rep.Parent, rep.Kanha, err = e.startKanha(ctx, c, w, repo, f, again, appr2, p.Login); err != nil {
+			if k := (*kanhaUnrecorded)(nil); errors.As(err, &k) {
+				return unrecordedError(f, k)
+			}
+			return WithNext(Errorf(ExitExternal, "The mission of #%d runs on %s, and no Kanha of it is recorded: %v", f, tool, oneLineErr(err)), fmt.Sprintf("aayu mission start %d", f))
+		}
+	}
+	return e.Emit(rep, func(w io.Writer) error {
+		if !kanhaOnly {
+			fmt.Fprintf(w, "@%s started the mission of #%d on %s, with a budget of %s (%s).\n", p.Login, f, tool, ready.USD(budget), basis)
+		}
+		if rep.DryRun {
+			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s planned, not written; no Kanha started\n", rep.LedgerPath)
+			return err
+		}
+		if rep.LedgerCommit != "" {
+			fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
+		}
+		_, err := fmt.Fprintf(w, "  %s\n", rep.Kanha)
+		return err
+	})
+}
+
+// storyStart is `aayu mission start <n>` for story n of Tatkal Feature f: a
+// person starts it on their own tool, through GitHub's device flow. The plan
+// records the story's tool and starter, and the story is handed off on that
+// tool now; f's Kanha orders and tracks it and never starts it (R9).
+func storyStart(ctx context.Context, e *Env, repo string, c *github.Client, w *ledger.Writer, n, f int, plan *MissionPlan, appr *ready.Approval) error {
+	switch i := slices.IndexFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }); {
+	case plan.Release == 0:
+		return Errorf(ExitBlocked, "#%d is a story of #%d, whose Kanha starts it on the tool in %s. A person starts only a story of a Tatkal Feature. Nothing was started.", n, f, MissionPlanPath(f))
+	case plan.StartedBy == "":
+		return WithNext(Errorf(ExitBlocked, "The Tatkal mission of #%d has not started, so #%d does not start. Nothing was started.", f, n), fmt.Sprintf("aayu mission start %d", f))
+	case i >= 0:
+		s := plan.StoryStarts[i]
+		return Errorf(ExitBlocked, "@%s started #%d at %s on %s. Its tool does not change.", s.StartedBy, n, s.StartedAt, s.Tool)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if is.GetState() != "open" || !contains(github.IssueLabels(is), ready.LabelReady) {
+		return WithNext(Errorf(ExitBlocked, "#%d is %s, not Ready. Nothing was started.", n, storyState(is)), fmt.Sprintf("aayu ready %d", n))
+	}
+	tool, err := e.repoTool(ctx, repo)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if tool == "" {
+		return Errorf(ExitBlocked, "Start records your tool for %s from your user config, and none is set there. Nothing was started.", repo)
+	}
+	effect := []string{
+		fmt.Sprintf("Starts #%d of Tatkal Feature #%d on %s, the tool you set for this repository", n, f, tool),
+		fmt.Sprintf("The Kanha of #%d orders and tracks it, and does not start it", f),
+	}
+	p, err := e.presenceCheck(ctx, Pending{What: "mission start", Effect: effect}, AccessWrite, e.personOnly("mission start"))
+	if err != nil {
+		return err
+	}
+	again, appr2, tip, err := readMission(ctx, w, f)
+	if err != nil {
+		return err
+	}
+	if again == nil || appr2 == nil || missionJSON(plan) != missionJSON(again) || appr2.Version != appr.Version {
+		return Errorf(ExitBlocked, "The mission plan of #%d changed while the code was waiting. Nothing was started.", f)
+	}
+	at := e.Now().UTC().Format(time.RFC3339)
+	again.StoryStarts = append(again.StoryStarts, MissionStoryStart{Number: n, Tool: tool, StartedBy: p.Login, StartedAt: at})
+	again.Controls = append(again.Controls, MissionControl{Action: fmt.Sprintf("start #%d", n), By: p.Login, At: at, Presence: p.Via})
+	rep := MissionStartReport{Repo: repo, Feature: f, Story: n, Effect: effect, Plan: again, LedgerPath: MissionPlanPath(f), DryRun: c.DryRun()}
+	var berr error
 	if !rep.DryRun {
 		data, _ := json.MarshalIndent(again, "", "  ")
-		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: @%s started the mission of #%d on %s", p.Login, f, tool),
+		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: @%s started #%d of #%d on %s", p.Login, n, f, tool),
 			Files: map[string][]byte{rep.LedgerPath: append(data, '\n')}, Base: tip})
 		if errors.Is(err, ledger.ErrMoved) {
-			return Errorf(ExitBlocked, "The ledger changed while aayu wrote the start of #%d. Nothing was started. Run it again.", f)
+			return Errorf(ExitBlocked, "The ledger changed while aayu wrote the start of #%d. Nothing was started. Run it again.", n)
 		}
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
+		// The hand-off is build's, on the recorded tool (newDelegation reads it from the plan).
+		sub := *e
+		sub.JSON = true
+		var out bytes.Buffer
+		sub.Out, sub.Err = &out, io.Discard
+		berr = runBuild(ctx, &sub, Values{"issue": strconv.Itoa(n), "delegate": tool})
+		var res BuildResult
+		if json.NewDecoder(&out).Decode(&res) == nil {
+			rep.Delegation = res.Delegation
+		}
 	}
-	return e.Emit(rep, func(w io.Writer) error {
-		fmt.Fprintf(w, "@%s started the mission of #%d on %s, with a budget of %s (%s).\n", p.Login, f, tool, ready.USD(budget), basis)
+	if err := e.Emit(rep, func(w io.Writer) error {
+		fmt.Fprintf(w, "@%s started #%d of Tatkal Feature #%d on %s; the Kanha of #%d orders and tracks it.\n", p.Login, n, f, tool, f)
 		if rep.DryRun {
-			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s planned, not written\n", rep.LedgerPath)
+			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s planned, not written; nothing handed off\n", rep.LedgerPath)
 			return err
 		}
-		_, err := fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
+		fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
+		if d := rep.Delegation; d != nil && berr == nil {
+			fmt.Fprintf(w, "  handed off to %s (%s): %s\n", d.Receiver, d.Mode, orDefault(d.TaskURL, d.Task))
+		}
+		return nil
+	}); err != nil {
 		return err
-	})
+	}
+	if berr != nil {
+		return WithNext(Errorf(ExitExternal, "#%d is started on %s, and its hand-off did not finish: %v", n, tool, oneLineErr(berr)), fmt.Sprintf("aayu build %d --delegate %s", n, tool))
+	}
+	return nil
 }
 
 // missionLedger is the repository, the person's own GitHub client, and their
@@ -578,7 +725,7 @@ func (e *Env) missionLedger(ctx context.Context) (string, *github.Client, *ledge
 }
 
 // startable reads the plan Start may start: one that Approve to build wrote
-// at the Feature's current approval, and that no one has started.
+// at the Feature's current approval, and whose mission has no Kanha yet.
 func startable(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *ready.Approval, string, error) {
 	plan, appr, tip, err := readMission(ctx, w, f)
 	switch {
@@ -588,7 +735,7 @@ func startable(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *rea
 		return nil, nil, "", WithNext(Errorf(ExitBlocked, "#%d has no mission plan: a person approves it to build first. Nothing was started.", f), fmt.Sprintf("aayu ready %d", f))
 	case appr.Version != plan.Approval:
 		return nil, nil, "", WithNext(Errorf(ExitBlocked, "The mission plan of #%d is from approval %d, and #%d is at approval %d now. Nothing was started.", f, plan.Approval, f, appr.Version), fmt.Sprintf("aayu ready %d", f))
-	case plan.StartedBy != "":
+	case plan.StartedBy != "" && appr.Parent != nil:
 		return nil, nil, "", Errorf(ExitBlocked, "The mission of #%d started at %s: @%s started it on %s. Its tool and budget do not change while it runs.", f, plan.StartedAt, plan.StartedBy, plan.Tool)
 	}
 	return plan, appr, tip, nil

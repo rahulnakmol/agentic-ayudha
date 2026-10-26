@@ -66,8 +66,10 @@ type delegation struct {
 	root     string
 	body     string // the story's body (untrusted; quoted in the brief as data)
 	bot      identity.Bot
-	wallEnd  time.Time // when the build's wall-time budget ends; zero without one
-	lease    *Lease    // the story's lease as last renewed during a usage-limit wait
+	wallEnd  time.Time     // when the build's wall-time budget ends; zero without one
+	lease    *Lease        // the story's lease as last renewed during a usage-limit wait
+	feature  int           // the Feature whose started mission the story is in
+	kanha    *ready.Parent // that mission's Kanha, when Start recorded one
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -221,6 +223,18 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &d.state); err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
+	// A story of a started mission runs on the mission's tool, whatever --delegate or its brief asks: a mission
+	// never mixes agent tools. Its thread names the Feature and the Kanha (Story #1004).
+	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
+	if err != nil {
+		return nil, err
+	}
+	if plan != nil && plan.StartedBy != "" {
+		if tool := plan.storyTool(n); d.receiver != tool {
+			d.receiver, d.reason = tool, fmt.Sprintf("the mission of #%d runs on %s (%s), and a mission never mixes agent tools", f, tool, MissionPlanPath(f))
+		}
+		d.feature, d.kanha = f, appr.Parent
+	}
 	ongoing := d.state.Receiver != "" && d.state.Status != dlgFailed && d.state.Status != dlgMerged
 	if d.receiver == "auto" && ongoing {
 		d.receiver, d.local, d.reason = d.state.Receiver, d.state.Mode == "local", d.state.Reason
@@ -267,20 +281,7 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 		}
 		d.bin = bin
 	}
-	ex := e.delegateExec()
-	switch d.receiver {
-	case delegate.Cursor:
-		key, _, _ := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key"))
-		d.adapter = delegate.CursorAPI{BaseURL: orDefault(cfg.CursorAPI, "https://api.cursor.com"), Key: key, Model: cfg.CursorModel, HTTP: e.HTTP}
-	case delegate.Amp:
-		d.adapter = delegate.AmpCLI{Exec: ex, OrbSize: cfg.AmpOrbSize, Env: delegate.ScrubEnv(e.Environ, delegate.Amp, os.TempDir())}
-	case delegate.Claude:
-		d.adapter = delegate.ClaudeCloud{Exec: ex, Dir: root, Env: delegate.ScrubEnv(e.Environ, delegate.Claude, os.TempDir()), GitHub: ghOps{e, c, repo, root}}
-	case delegate.Codex:
-		d.adapter = delegate.CodexCloud{Exec: ex, EnvID: cfg.CodexEnv, Env: delegate.ScrubEnv(e.Environ, delegate.Codex, os.TempDir())}
-	default:
-		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
-	}
+	d.adapter = e.receiverAdapter(cfg, d.receiver, c, repo, root)
 	// Every hand-off is fresh: a new branch and, locally, a new worktree; a
 	// sync keeps the hand-off's own.
 	d.fresh = d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
@@ -297,6 +298,21 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 		d.branch = delegate.Branch(n, slug(chk.Title), d.handoff)
 	}
 	return d, nil
+}
+
+// receiverAdapter is receiver r's cloud transport; r is one of delegate.Receivers.
+func (e *Env) receiverAdapter(cfg config.Delegate, r string, c *github.Client, repo, root string) delegate.Adapter {
+	ex := e.delegateExec()
+	switch r {
+	case delegate.Cursor:
+		key, _, _ := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key"))
+		return delegate.CursorAPI{BaseURL: orDefault(cfg.CursorAPI, "https://api.cursor.com"), Key: key, Model: cfg.CursorModel, HTTP: e.HTTP}
+	case delegate.Amp:
+		return delegate.AmpCLI{Exec: ex, OrbSize: cfg.AmpOrbSize, Env: delegate.ScrubEnv(e.Environ, delegate.Amp, os.TempDir())}
+	case delegate.Claude:
+		return delegate.ClaudeCloud{Exec: ex, Dir: root, Env: delegate.ScrubEnv(e.Environ, delegate.Claude, os.TempDir()), GitHub: ghOps{e, c, repo, root}}
+	}
+	return delegate.CodexCloud{Exec: ex, EnvID: cfg.CodexEnv, Env: delegate.ScrubEnv(e.Environ, delegate.Codex, os.TempDir())}
 }
 
 // taken reports a worktree directory or a branch on origin that an earlier
@@ -427,7 +443,10 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			return nil, true, err
 		}
 		d.state = delegate.State{Story: d.story, Receiver: d.receiver, Mode: mode(d.local), Model: d.model(), Family: delegate.Family(d.receiver, d.model()),
-			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch, Handoffs: d.handoff}
+			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch, Handoffs: d.handoff, Feature: d.feature}
+		if d.kanha != nil {
+			d.state.Kanha, d.state.KanhaURL = d.kanha.Session, d.kanha.URL
+		}
 		if d.local {
 			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver, d.handoff)))
 			report()

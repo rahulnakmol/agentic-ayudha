@@ -180,6 +180,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = usagePaused(st, now)
 		case running:
 			continue // it runs: the per-mission running view is #895's
+		case slices.ContainsFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }):
+			en.item.Reason = startedOn(plan, n) // a Tatkal story the Kanha only orders and tracks
 		case !contains(labels, ready.LabelReady):
 			en.item.Reason, en.item.detail = "not Ready", storyState(is)
 		default:

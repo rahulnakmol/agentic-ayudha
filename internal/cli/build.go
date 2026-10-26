@@ -261,6 +261,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err := e.changedSinceList(ctx, lw, is, chk.Pass, labels, c.DryRun()); err != nil {
 			return err
 		}
+		if err := tatkalHold(ctx, c, lw, repo, n); err != nil {
+			return err
+		}
 	}
 	why, err := e.notReady(ctx, c, repo, n, chk, labels)
 	if err != nil {
