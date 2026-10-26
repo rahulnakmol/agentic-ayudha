@@ -16,8 +16,8 @@ instance that answers.
 
 - `answered`: a plan question returns `status: answered` with citations; "my plan's" is not another person's record.
 - `errors`: wrong method (405), wrong media type (415), and 400 for an unknown field, an other-case or duplicate
-  key, a `null` value, text after the object, a `user_id` that is not pseudonymous, and an empty question. The
-  405, the 415, and the empty question also carry their JSON error.
+  key, a `null` value, text after the object, a `user_id` that is not pseudonymous, and an empty question. Each
+  carries its JSON error.
 - `health`: `GET /healthz` answers 200.
 
 ## How to reach it
@@ -40,12 +40,18 @@ instance that answers.
   {"api": {"method": "GET", "path": "/api/ask", "status": 405, "body": {"error": "use POST with a JSON body"}}},
   {"api": {"path": "/api/ask", "raw": "question=hi", "contentType": "text/plain", "status": 415,
            "body": {"error": "send Content-Type: application/json"}}},
-  {"api": {"path": "/api/ask", "json": {"question": "hi", "name": "Ada"}, "status": 400}},
-  {"api": {"path": "/api/ask", "json": {"Question": "hi"}, "status": 400}},
-  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\", \"question\": \"vision\"}", "status": 400}},
-  {"api": {"path": "/api/ask", "raw": "{\"question\": null}", "status": 400}},
-  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\"} {}", "status": 400}},
-  {"api": {"path": "/api/ask", "json": {"question": "hi", "user_id": "ada@example.com"}, "status": 400}},
+  {"api": {"path": "/api/ask", "json": {"question": "hi", "name": "Ada"}, "status": 400,
+           "body": {"error": "the body is not an AskRequest: unknown field \"name\""}}},
+  {"api": {"path": "/api/ask", "json": {"Question": "hi"}, "status": 400,
+           "body": {"error": "the body is not an AskRequest: unknown field \"Question\""}}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\", \"question\": \"vision\"}", "status": 400,
+           "body": {"error": "the body is not an AskRequest: duplicate field \"question\""}}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": null}", "status": 400,
+           "body": {"error": "the body is not an AskRequest: field \"question\": want a string"}}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\"} {}", "status": 400,
+           "body": {"error": "the body is not an AskRequest: something follows the JSON object"}}},
+  {"api": {"path": "/api/ask", "json": {"question": "hi", "user_id": "ada@example.com"}, "status": 400,
+           "body": {"error": "user_id must be a pseudonymous ID of letters, digits, and hyphens"}}},
   {"api": {"path": "/api/ask", "json": {"question": "  "}, "status": 400, "body": {"error": "question is required"}}}
 ]}
 ```
