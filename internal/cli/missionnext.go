@@ -478,18 +478,19 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // changedSinceList refuses to start a story a mission list marked start
 // when its live state changed since (Story #998, J4 rule 3): build reads the
 // issue first, and releases the claim so its agent is free again. A story a
-// build already moved to in progress is not a change. claimed says a list
-// marked n start and its claim is live.
-func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool) (claimed bool, err error) {
+// build already moved to in progress is not a change. A paused mission is
+// one (Story #1005). claimed is set when a live claim of an unpaused mission
+// marks n start; a plan it cannot read leaves it unset.
+func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool, claimed *bool) error {
 	n := is.GetNumber()
 	t, err := w.Read(ctx)
 	if err != nil {
-		return false, Wrap(ExitExternal, ignoreMissing(err))
+		return Wrap(ExitExternal, ignoreMissing(err))
 	}
 	defer t.Close()
 	paths, err := t.List(ctx, "missions")
 	if err != nil {
-		return false, Wrap(ExitExternal, ignoreMissing(err))
+		return Wrap(ExitExternal, ignoreMissing(err))
 	}
 	var path string
 	var claim loopClaim
@@ -499,7 +500,7 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 		raw, err := t.File(ctx, p)
 		if err != nil {
-			return false, Wrap(ExitExternal, err)
+			return Wrap(ExitExternal, err)
 		}
 		lines := e.liveClaims(raw, nil)
 		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
@@ -507,18 +508,16 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 	}
 	var plan MissionPlan
+	planOK := false
 	if path != "" {
 		raw, err := t.File(ctx, strings.TrimSuffix(path, "claims.jsonl")+"plan.json")
-		if ignoreMissing(err) != nil {
-			return false, Wrap(ExitExternal, err)
-		}
-		_ = json.Unmarshal(raw, &plan)
+		planOK = err == nil && json.Unmarshal(raw, &plan) == nil
 	}
 	now := ""
 	switch {
 	case path == "":
-		return false, nil // no list marked it start: build's own Ready checks apply
-	case plan.Pause != nil: // paused since the list: its claim is no person's ask any more (Story #1005)
+		return nil // no list marked it start: build's own Ready checks apply
+	case plan.Pause != nil:
 		now = "its mission is paused: " + plan.Pause.Reason
 	case is.GetState() != "open":
 		now = "closed"
@@ -529,16 +528,17 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 	case !pass:
 		now = "not Ready"
 	default:
-		return true, nil
+		*claimed = planOK
+		return nil
 	}
 	if !dryRun {
 		claim.Release = true
 		b, _ := json.Marshal(claim)
 		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now), Append: map[string][]byte{path: append(b, '\n')}}); err != nil {
-			return false, Wrap(ExitExternal, err)
+			return Wrap(ExitExternal, err)
 		}
 	}
-	return false, Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
+	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
 }
 
 // heldBy is the clock of story n's mission when it reached its time limit, else nil.

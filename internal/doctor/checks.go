@@ -611,13 +611,16 @@ func checkSkillCopies(ctx context.Context, p *Probe) Result {
 	if slices.Contains(lock.Hosts, "cursor") {
 		cursor = []string{"Cursor: aayu sees an aayudha plugin only in ~/.cursor/plugins/local, not one installed from a marketplace; if you installed one, disable it for this workspace in Cursor, or Cursor lists each aayudha skill twice"}
 	}
-	home := p.Getenv("HOME")
-	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
-		return Result{Status: Fail, Detail: "a host lists each aayudha skill twice", Lines: append(doubles, cursor...)}
-	}
 	// Each person installs for their own tool, and install keeps the lock's
 	// other tools (Story #1005), so a tool missing from the lock is only added.
 	missing := toolNotInLock(ctx, p, lock)
+	home := p.Getenv("HOME")
+	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
+		if missing != "" {
+			doubles = append(doubles, missing)
+		}
+		return Result{Status: Fail, Detail: "a host lists each aayudha skill twice", Lines: append(doubles, cursor...)}
+	}
 	if hosts.CursorReadsBoth(p.Root, lock) {
 		// Claude Code reads only .claude/skills and Codex only .agents/skills,
 		// so with both installed the copies are in both, and Cursor reads both.

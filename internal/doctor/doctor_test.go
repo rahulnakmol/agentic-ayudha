@@ -939,4 +939,12 @@ func TestDoctorWarnsToolMissingFromLock(t *testing.T) {
 	if r := checkSkillCopies(context.Background(), p); r.Status != Warn || !slices.Contains(r.Lines, "cannot read your tool for this repository: config.toml: bad syntax") {
 		t.Errorf("unreadable tool: %s %q %q", r.Status, r.Detail, r.Lines)
 	}
+	// With the plugin doubling the copies, the failing row still names the missing tool.
+	p.RepoTool = func(context.Context) (string, error) { return "copilot", nil }
+	p.Root = repoWith(t, map[string]string{".claude/skills/x/SKILL.md": "x\n", ".claude/settings.json": `{"enabledPlugins": {"aayudha@aayudha": true}}`,
+		".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\nx = { version = \"0.0.0\", sha256 = \"" + hosts.HashSkill(skill) + "\" }\n"})
+	if r := checkSkillCopies(context.Background(), p); r.Status != Fail || r.Detail != "a host lists each aayudha skill twice" ||
+		!slices.Contains(r.Lines, "copilot is @carol's tool but not in lock.toml: run aayu install --host copilot") {
+		t.Errorf("doubled copies, copilot missing: %s %q %q", r.Status, r.Detail, r.Lines)
+	}
 }
