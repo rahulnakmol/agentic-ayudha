@@ -157,6 +157,17 @@ type MilestoneGate struct {
 	At     string `json:"at,omitempty"`
 }
 
+// UnmarshalJSON reads the gate of an earlier v1 plan, a string that said it
+// runs when its last story merges: a gate that waits.
+func (g *MilestoneGate) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		*g = MilestoneGate{State: GateWaits}
+		return nil
+	}
+	type plain MilestoneGate
+	return json.Unmarshal(b, (*plain)(g))
+}
+
 // Gate states.
 const (
 	GateWaits   = "waits"
@@ -230,6 +241,21 @@ type MissionControl struct {
 	Presence string `json:"presence"`
 	Story    int    `json:"story,omitempty"` // a control of one story or Bug
 	Reason   string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON reads a control of an earlier v1 plan, which said "action".
+func (m *MissionControl) UnmarshalJSON(b []byte) error {
+	type plain MissionControl
+	var v struct {
+		plain
+		Old string `json:"action"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*m = MissionControl(v.plain)
+	m.Action = or(m.Action, v.Old)
+	return nil
 }
 
 // CostEstimate is #886's cost estimate of a Feature: the point and its range, in USD.

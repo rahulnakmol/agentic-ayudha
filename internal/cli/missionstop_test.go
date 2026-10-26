@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"maps"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -29,14 +31,21 @@ import (
 type execLog struct {
 	mu    sync.Mutex
 	calls []string
+	on    func(name string) // runs while the CLI runs, as a sync that writes meanwhile
 }
 
 func (x *execLog) exec(_ context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+	if x.on != nil {
+		x.on(name)
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	x.calls = append(x.calls, name+" "+strings.Join(args, " "))
 	if name == "claude" {
 		return `{"ok": true, "session_id": "session_21"}`, nil
+	}
+	if slices.Contains(args, "T-01a00000-0000-0000-0000-0000000000ff") { // a thread the CLI cannot reach
+		return "", fmt.Errorf("thread not found")
 	}
 	return "", nil
 }
@@ -112,6 +121,13 @@ func TestMissionStopKeepsClaimsAndPRs(t *testing.T) {
 	putLedger(t, w.bare, MissionClaimsPath(889), fmt.Sprintf(`{"story":21,"token":"t21","at":%q}`+"\n", time.Now().UTC().Format(time.RFC3339)))
 	claims := w.claims(889)
 	labels := map[int][]string{20: w.g.LabelNames(20), 21: w.g.LabelNames(21), 22: w.g.LabelNames(22)}
+	// #20's thread opens its PR while the stop reaches it: its sync lands on the ledger first.
+	w.x.on = func(name string) {
+		if name == "amp" {
+			b, _ := json.Marshal(delegate.State{Story: 20, Receiver: "amp", Mode: "cloud", Task: "T-01a00000-0000-0000-0000-000000000020", Status: dlgPROpen, PR: 7020, StartedAt: "2026-10-26T09:00:00Z"})
+			putLedger(t, w.bare, delegate.LedgerPath(20), string(b))
+		}
+	}
 	w.g.Reset()
 
 	code, out, errOut := w.control("rahulnakmol", "stop", 889, "--reason", "spec drift")
@@ -135,6 +151,12 @@ func TestMissionStopKeepsClaimsAndPRs(t *testing.T) {
 	w.cursor.mu.Unlock()
 	if len(reqs) != 1 || reqs[0]["path"] != "/v1/agents/bc-22/runs" || reqs[0]["body"].(map[string]any)["prompt"].(map[string]any)["text"] != stopMsg {
 		t.Fatalf("Cursor requests: %v", reqs)
+	}
+	// The stop is recorded on #20's delegation as the sync left it, not on the copy read before.
+	var st delegate.State
+	_ = json.Unmarshal([]byte(git(t, w.bare, "show", "ledger:"+delegate.LedgerPath(20))), &st)
+	if st.Status != dlgPROpen || st.PR != 7020 || len(st.Events) == 0 || st.Events[len(st.Events)-1].Detail != "delegate.mission-stop" {
+		t.Fatalf("#20's delegation after the stop: %+v", st)
 	}
 	p, raw := w.plan(889)
 	last := p.Controls[len(p.Controls)-1]
@@ -173,32 +195,41 @@ func TestMissionStopKeepsClaimsAndPRs(t *testing.T) {
 }
 
 // Criterion 2: a Codex cloud task and a Copilot task cannot hear a stop: the
-// result names each with its task URL, and nothing is sent to them.
+// result names each with its task URL, and nothing is sent to them. A run on
+// its builder's machine, and a thread the follow-up fails to reach, are named
+// the same way.
 func TestMissionStopNamesUnreachedTasks(t *testing.T) {
 	w := newThreads(t)
-	w.startedMission(889, []int{20, 21, 22})
+	w.startedMission(889, []int{20, 21, 22, 23, 24})
 	w.run(20, "amp", "T-01a00000-0000-0000-0000-000000000020", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000020")
 	w.run(21, "codex", "task_e_21", "https://chatgpt.com/codex/tasks/task_e_21")
 	w.run(22, "copilot", "22", "https://github.com/o/r/agents/22")
+	w.run(23, "claude", "", "")
+	b, _ := json.Marshal(delegate.State{Story: 23, Receiver: "claude", Mode: "local", Status: dlgWorking})
+	putLedger(t, w.bare, delegate.LedgerPath(23), string(b))
+	w.run(24, "amp", "T-01a00000-0000-0000-0000-0000000000ff", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-0000000000ff")
 	code, out, errOut := w.control("rahulnakmol", "stop", 889, "--reason", "spec drift")
 	for _, want := range []string{
 		"#20 told to stop its subagents, commit at its next checkpoint, and stop\n",
 		"#21 not reached: https://chatgpt.com/codex/tasks/task_e_21; it runs to its end, and its PR waits\n",
 		"#22 not reached: https://github.com/o/r/agents/22; it runs to its end, and its PR waits\n",
+		"#23 not reached: #23's Claude Code run on its builder's machine; it runs to its end, and its PR waits\n",
+		"#24 not reached: https://ampcode.com/threads/T-01a00000-0000-0000-0000-0000000000ff; it runs to its end, and its PR waits\n",
 	} {
 		if code != 0 || !strings.Contains(out, want) {
 			t.Fatalf("mission stop, want %q: exit %d: %s%s", want, code, out, errOut)
 		}
 	}
-	if calls := w.x.all(); len(calls) != 1 || !strings.HasPrefix(calls[0], "amp threads continue") {
-		t.Fatalf("only the Amp thread hears the stop: %q", calls)
+	if calls := w.x.all(); len(calls) != 2 || !strings.HasPrefix(calls[0], "amp threads continue T-01a00000-0000-0000-0000-000000000020") {
+		t.Fatalf("only the Amp threads are told the stop: %q", calls)
 	}
 	// The JSON result says the same.
 	m := w.missionWorld
 	m.setPlan(889, func(p *MissionPlan) { p.Pause = nil })
 	code, out, _ = w.control("rahulnakmol", "stop", 889, "--reason", "spec drift", "--json")
 	var rep MissionControlReport
-	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || len(rep.Threads) != 3 || rep.Threads[1].Reached || rep.Threads[1].URL != "https://chatgpt.com/codex/tasks/task_e_21" {
+	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || len(rep.Threads) != 5 || rep.Threads[1].Reached || rep.Threads[1].URL != "https://chatgpt.com/codex/tasks/task_e_21" ||
+		rep.Threads[4].Reached || !strings.Contains(rep.Threads[4].Error, "thread not found") {
 		t.Fatalf("stop --json: exit %d %v: %s", code, err, out)
 	}
 }
@@ -253,6 +284,12 @@ func TestMissionResumeContinues(t *testing.T) {
 	if code, out, errOut := w.control("rahulnakmol", "stop", 889, "--reason", "spec drift"); code != 0 {
 		t.Fatalf("stop: exit %d: %s%s", code, out, errOut)
 	}
+	w.edit(func() { w.g.Fail = "GET /repos/o/r/issues/889/sub_issues" })
+	if code, out, errOut := w.control("rahulnakmol", "resume", 889); code != ExitExternal || w.codes() != 0 {
+		t.Fatalf("resume when GitHub fails: exit %d: %s%s", code, out, errOut)
+	} else if p, _ := w.plan(889); p.Pause == nil {
+		t.Fatal("a failed resume cleared the stop")
+	}
 	code, out, errOut := w.control("rahulnakmol", "resume", 889)
 	if code != 0 || w.codes() != 1 || !strings.Contains(errOut, "Resumes the mission of #889 on amp: aayu reads missions/889/plan.json and GitHub") {
 		t.Fatalf("resume: exit %d, device codes %d: %s%s", code, w.codes(), out, errOut)
@@ -295,6 +332,119 @@ func TestMissionStopRefusedForAgentLane(t *testing.T) {
 	}
 }
 
+// A stop or resume that cannot apply is refused before the device code and
+// writes nothing; --dry-run asks for the device code, says what it would do,
+// and writes nothing.
+func TestMissionControlRefusedOrDryRun(t *testing.T) {
+	m := newMissionWorld(t)
+	m.startedMission(889, []int{20, 21})
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "stop", 889, "--story", "20", "--reason", "wrong approach"); code != 0 {
+		t.Fatalf("stop --story 20: exit %d: %s%s", code, out, errOut)
+	}
+	n := m.commits()
+	for _, tc := range []struct {
+		args []string
+		code int
+		want string
+	}{
+		{[]string{"stop", "889"}, ExitUsage, "mission stop needs --reason: why you stop it, in one line"},
+		{[]string{"stop", "889", "--end", "--story", "20", "--reason", "x"}, ExitUsage, "mission stop --end ends the whole mission: it takes no --story"},
+		{[]string{"stop", "777", "--reason", "x"}, ExitBlocked, "#777 has no mission plan: a person approves it to build first. Nothing changed."},
+		{[]string{"stop", "889", "--story", "20", "--reason", "again"}, ExitBlocked, "#20 is stopped already (wrong approach). Nothing changed."},
+		{[]string{"resume", "889", "--story", "21"}, ExitBlocked, "#21 is not stopped in the mission of #889. Nothing changed."},
+	} {
+		m.device("rahulnakmol")
+		code, out, errOut := run(t, m.person, m.opts, append(append([]string{"mission"}, tc.args...), "--repo", "o/r")...)
+		if code != tc.code || m.codes() != 0 || m.commits() != n || !strings.Contains(errOut, tc.want) {
+			t.Errorf("mission %v: exit %d, device codes %d, want %d %q: %s%s", tc.args, code, m.codes(), tc.code, tc.want, out, errOut)
+		}
+	}
+	for _, args := range [][]string{{"--reason", "spec drift"}, {"--story", "21", "--reason", "x"}} {
+		code, out, errOut := m.mission(m.person, "rahulnakmol", "stop", 889, append(args, "--dry-run")...)
+		if code != 0 || m.codes() != 1 || m.commits() != n || !strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written; no thread was told") {
+			t.Fatalf("stop %v --dry-run: exit %d: %s%s", args, code, out, errOut)
+		}
+	}
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "resume", 889, "--story", "20", "--dry-run"); code != 0 || m.commits() != n ||
+		!strings.Contains(out, "  Resumes #20 of the mission of #889 on amp: only its thread continues\n") {
+		t.Fatalf("resume --dry-run: exit %d: %s%s", code, out, errOut)
+	}
+	// A person who denies the device code, has no GitHub token, or whose tool aayu cannot read, changes nothing.
+	tool := m.opts.RepoTool
+	for action, story := range map[string]string{"stop": "21", "resume": "20"} {
+		args := []string{"mission", action, "889", "--story", story, "--reason", "x", "--repo", "o/r"}
+		m.edit(func() {
+			m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "deny"}
+		})
+		if code, _, errOut := run(t, m.person, m.opts, args...); code == 0 || m.codes() != 1 || m.commits() != n {
+			t.Errorf("%s with the device code denied: exit %d: %s", action, code, errOut)
+		}
+		if code, _, errOut := run(t, map[string]string{"XDG_STATE_HOME": m.dir + "/state"}, m.opts, args...); code == 0 || m.commits() != n {
+			t.Errorf("%s with no GitHub token: exit %d: %s", action, code, errOut)
+		}
+		m.opts.RepoTool = func(context.Context, string) (string, error) { return "", fmt.Errorf("config unreadable") }
+		if code, _, errOut := run(t, m.person, m.opts, args...); code != ExitExternal || m.commits() != n || !strings.Contains(errOut, "config unreadable") {
+			t.Errorf("%s when aayu cannot read the tool: exit %d: %s", action, code, errOut)
+		}
+		m.opts.RepoTool = tool
+	}
+	// A resume while the [budget] breaker pauses the agent lanes clears the stop, and says why nothing starts.
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "stop", 889, "--reason", "spec drift"); code != 0 {
+		t.Fatalf("stop: exit %d: %s%s", code, out, errOut)
+	}
+	pause := filepath.Join(m.dir, ".aayudha", "state", "paused")
+	_ = os.MkdirAll(filepath.Dir(pause), 0o755)
+	_ = os.WriteFile(pause, []byte("budget"), 0o644)
+	code, out, errOut := m.mission(m.person, "rahulnakmol", "resume", 889)
+	_ = os.Remove(pause)
+	if p, _ := m.plan(889); code != 0 || p.Pause != nil || !strings.Contains(out, "  nothing starts: mission next: agent lanes are paused by the [budget] breaker") {
+		t.Fatalf("resume while the breaker pauses the lanes: exit %d: %s%s", code, out, errOut)
+	}
+	// Another person's control that lands while the device code waits wins; this one changes nothing.
+	for _, tc := range []struct {
+		args []string
+		edit func(*MissionPlan)
+		want string
+	}{
+		{[]string{"stop", "--reason", "spec drift"}, func(p *MissionPlan) { p.Pause = &MissionPause{Reason: "budget", By: "alice"} },
+			"The mission of #889 was stopped while the code was waiting (budget). Nothing changed."},
+		{[]string{"stop", "--story", "21", "--reason", "x"}, func(p *MissionPlan) {
+			p.Stopped = append(p.Stopped, MissionStopped{Number: 21, Reason: "y", By: "alice"})
+		},
+			"#21 was stopped while the code was waiting. Nothing changed."},
+		{[]string{"resume", "--story", "20"}, func(p *MissionPlan) { p.Stopped = nil }, "It was resumed while the code was waiting. Nothing changed."},
+	} {
+		m.edit(func() {
+			m.g.Hook = func(_, path string) {
+				if path == "/login/device/code" {
+					m.setPlan(889, tc.edit)
+				}
+			}
+		})
+		before, _ := m.plan(889)
+		code, _, errOut := m.mission(m.person, "rahulnakmol", tc.args[0], 889, tc.args[1:]...)
+		m.edit(func() { m.g.Hook = nil })
+		if after, _ := m.plan(889); code != ExitBlocked || len(after.Controls) != len(before.Controls) || !strings.Contains(errOut, tc.want) {
+			t.Errorf("mission %v with a control while the code waits: exit %d: %s", tc.args, code, errOut)
+		}
+		m.setPlan(889, func(p *MissionPlan) {
+			p.Pause, p.Stopped = nil, []MissionStopped{{Number: 20, Reason: "wrong approach", By: "rahulnakmol"}}
+		})
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.StartedBy = "" })
+	if code, _, errOut := m.mission(m.person, "rahulnakmol", "resume", 889, "--story", "20"); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 has not started. Nothing changed.") {
+		t.Fatalf("resume of a mission not started: exit %d: %s", code, errOut)
+	}
+	// A plan aayu did not write is refused, never overwritten.
+	putLedger(t, m.bare, MissionPlanPath(889), "not json\n")
+	for _, action := range []string{"stop", "resume"} {
+		if code, _, errOut := m.mission(m.person, "rahulnakmol", action, 889, "--reason", "x"); code != ExitExternal ||
+			!strings.Contains(errOut, "ledger missions/889/plan.json: not a record aayu wrote for #889") {
+			t.Errorf("%s of a plan aayu did not write: exit %d: %s", action, code, errOut)
+		}
+	}
+}
+
 // Criteria 9, 10, and 11: a stop of one story tells only its thread to stop
 // its subagents and stop; the story keeps its claim, its PR, and its slot,
 // and the rest of the mission runs on. A Bug stops the same way. Resume of
@@ -307,6 +457,12 @@ func TestMissionStopOneStoryOrBug(t *testing.T) {
 	w.run(859, "amp", "T-01a00000-0000-0000-0000-000000000859", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000859")
 	w.status(860, "ready", "")
 	w.status(941, "ready", "")
+	w.edit(func() { w.g.Fail = "GET /repos/o/r/issues/858" })
+	if code, out, errOut := w.control("rahulnakmol", "stop", 889, "--story", "858", "--reason", "wrong approach"); code != ExitExternal || w.codes() != 0 {
+		t.Fatalf("stop --story when GitHub fails: exit %d: %s%s", code, out, errOut)
+	} else if p, _ := w.plan(889); len(p.Stopped) != 0 {
+		t.Fatal("a failed stop wrote the plan")
+	}
 	w.g.Reset()
 	code, out, errOut := w.control("rahulnakmol", "stop", 889, "--story", "858", "--reason", "wrong approach")
 	if code != 0 || w.codes() != 1 || !strings.Contains(errOut, "Stops #858 of the mission of #889 (wrong approach): its thread stops its subagents, commits at its next checkpoint, and stops; it keeps its claim, its PR, and its slot") ||
@@ -434,6 +590,13 @@ func TestMissionResumeRefusedOnOtherTool(t *testing.T) {
 func TestMissionControlsRecordWho(t *testing.T) {
 	w, _ := bobs(t)
 	w.setPlan(874, func(p *MissionPlan) { p.Pause = &MissionPause{Reason: "spec drift", By: "alice"} })
+	// The plan as an earlier v1 aayu wrote it: a gate as a string, and a control's "action".
+	_, raw := w.plan(874)
+	v1 := regexp.MustCompile(`"gate": \{[^}]*\}`).ReplaceAllString(strings.Replace(raw, `"control": "start"`, `"action": "start"`, 1), `"gate": "runs when its last story merges"`)
+	if v1 == raw || !strings.Contains(v1, `"action": "start"`) {
+		t.Fatalf("no v1 plan:\n%s", v1)
+	}
+	putLedger(t, w.bare, MissionPlanPath(874), v1)
 	w.as("dana", "codex")
 	code, out, errOut := w.control("dana", "resume", 874)
 	if code != 0 || w.codes() != 1 || !strings.Contains(out, "@dana resumed the mission of #874 on codex.") {
@@ -442,7 +605,7 @@ func TestMissionControlsRecordWho(t *testing.T) {
 	p, raw := w.plan(874)
 	last := p.Controls[len(p.Controls)-1]
 	at, err := time.Parse(time.RFC3339, last.At)
-	if p.Pause != nil || p.StartedBy != "bob" || err != nil || time.Since(at) > time.Minute ||
+	if p.Pause != nil || p.StartedBy != "bob" || err != nil || time.Since(at) > time.Minute || p.Controls[0].Action != "start" || p.Milestones[0].Gate.State != GateWaits ||
 		last != (MissionControl{Action: "resume", By: "dana", Tool: "codex", At: last.At, Presence: "device-flow"}) ||
 		!strings.Contains(raw, `"control": "resume",`+"\n"+`      "by": "dana",`+"\n"+`      "tool": "codex",`+"\n"+`      "at": "`) {
 		t.Fatalf("plan.json after dana's resume:\n%s", raw)
@@ -477,6 +640,18 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	}
 
 	w.as("bob", "codex")
+	// GitHub goes first, and each step is safe to run again: a run that fails
+	// at any step leaves the mission running, and the next run goes on from it.
+	for _, fail := range []string{"GET /user", "GET /repos/o/r/issues/874/sub_issues", "GET /repos/o/r/pulls", "PATCH /repos/o/r/issues/comments/8951", "POST /repos/o/r/issues/951/labels",
+		"GET /repos/o/r/issues/874/comments", "POST /repos/o/r/issues/951/comments", fmt.Sprintf("PATCH /repos/o/r/pulls/%d", prN)} {
+		w.edit(func() { w.g.Fail = fail })
+		if code, out, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded"); code != ExitExternal {
+			t.Fatalf("--end failing at %s: exit %d: %s%s", fail, code, out, errOut)
+		}
+		if p, _ := w.plan(874); p.State != "" || p.Lock.State != "active" {
+			t.Fatalf("--end failing at %s ended the mission", fail)
+		}
+	}
 	code, out, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded")
 	if code != 0 || w.codes() != 1 || !strings.Contains(errOut, "Ends the mission of #874 (superseded)") {
 		t.Fatalf("bob's --end: exit %d: %s%s", code, out, errOut)
@@ -513,6 +688,9 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 		w.g.Mu.Unlock()
 		if got := cs[len(cs)-1].Body; !strings.HasSuffix(got, tail) {
 			t.Errorf("#%d's comment: %s", k, got)
+		}
+		if got := slices.DeleteFunc(slices.Clone(cs), func(c *fake.Comment) bool { return !strings.Contains(c.Body, "aayudha:mission-ended") }); len(got) != 1 {
+			t.Errorf("#%d has %d mission-ended comments after the failed runs", k, len(got))
 		}
 	}
 	// #874 is no longer work in flight: show says it ended, and next starts nothing.
@@ -596,6 +774,17 @@ func TestShipRefusesStoppedMission(t *testing.T) {
 	shipMission(t, bare, func(p *MissionPlan) {
 		p.Stopped = []MissionStopped{{Number: 3, Reason: "wrong approach", By: "rahulnakmol"}}
 	})
+	// A mission ship cannot read holds the PR too.
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/issues/2/parent"
+	g.Mu.Unlock()
+	code, out = shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged = g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != ExitExternal || merged {
+		t.Fatalf("ship when the mission cannot be read: exit %d: %s", code, out)
+	}
 	if code, out := shipCmd(t, env, opts, prN); code != 0 {
 		t.Fatalf("ship with only #3 stopped: exit %d: %s", code, out)
 	}
@@ -652,6 +841,10 @@ func TestShipMergesOnlyListedFixPR(t *testing.T) {
 	stale.Approval.SHA256 = strings.Repeat("0", 64)
 	shipMission(t, bare, func(p *MissionPlan) { p.GateFixes = []GateFix{stale} })
 	shipRefused(t, g, env, opts, bare, fix.Number, fmt.Sprintf("ship #%d: gate fix #%d rests on specs/1/approved.json at 0000000, and #1's approved record has changed since, so its approval no longer covers the fix", fix.Number, fix.Number))
+	waits := entry
+	waits.Waits = "the fix changes the approved scope"
+	shipMission(t, bare, func(p *MissionPlan) { p.GateFixes = []GateFix{waits} })
+	shipRefused(t, g, env, opts, bare, fix.Number, fmt.Sprintf("ship #%d: gate fix #%d of #1 waits for a person (the fix changes the approved scope)", fix.Number, fix.Number))
 	shipMission(t, bare, func(p *MissionPlan) { p.GateFixes = []GateFix{entry} })
 
 	// Merge on proof (Decision #593), as for a story PR: the base's policy turns proof on, inspect is at merge

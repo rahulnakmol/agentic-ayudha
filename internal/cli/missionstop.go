@@ -464,7 +464,7 @@ func (e *Env) tell(ctx context.Context, c *github.Client, w *ledger.Writer, repo
 		return nil, err
 	}
 	now := e.Now().UTC().Format(time.RFC3339)
-	files := map[string][]byte{}
+	reached := map[int]string{} // story: the task ID its follow-up returned
 	for _, st := range sts {
 		th := MissionThread{Story: st.Story, Receiver: st.Receiver, URL: or(st.TaskURL, st.Task)}
 		if th.URL == "" {
@@ -481,12 +481,7 @@ func (e *Env) tell(ctx context.Context, c *github.Client, w *ledger.Writer, repo
 				})
 			if err == nil {
 				th.Reached = true
-				if task.ID != "" {
-					st.Task = task.ID
-				}
-				st.Events = append(st.Events, delegate.Event{At: now, Status: st.Status, Detail: kind})
-				b, _ := json.MarshalIndent(st, "", "  ")
-				files[delegate.LedgerPath(st.Story)] = append(b, '\n')
+				reached[st.Story] = task.ID
 			} else {
 				th.Error = oneLineErr(err)
 			}
@@ -497,12 +492,40 @@ func (e *Env) tell(ctx context.Context, c *github.Client, w *ledger.Writer, repo
 		}
 		out = append(out, th)
 	}
-	if len(files) > 0 {
-		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: %s told %d thread(s)", kind, len(files)), Files: files}); err != nil {
+	if len(reached) == 0 {
+		return out, nil
+	}
+	// Each delegation records the message on the state at the ledger tip, so a
+	// sync that wrote meanwhile is kept; a moved tip retries the write, never
+	// the follow-ups.
+	for range 3 {
+		t, err := w.Read(ctx)
+		if err != nil {
+			return out, Wrap(ExitExternal, err)
+		}
+		files := map[string][]byte{}
+		for n, id := range reached {
+			b, err := t.File(ctx, delegate.LedgerPath(n))
+			var st delegate.State
+			if err != nil || json.Unmarshal(b, &st) != nil {
+				t.Close()
+				return out, Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote for #%d", delegate.LedgerPath(n), n)
+			}
+			if id != "" {
+				st.Task = id
+			}
+			st.Events = append(st.Events, delegate.Event{At: now, Status: st.Status, Detail: kind})
+			b, _ = json.MarshalIndent(st, "", "  ")
+			files[delegate.LedgerPath(n)] = append(b, '\n')
+		}
+		tip := t.Tip
+		t.Close()
+		_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: %s told %d thread(s)", kind, len(files)), Files: files, Base: tip})
+		if !errors.Is(err, ledger.ErrMoved) {
 			return out, Wrap(ExitExternal, err)
 		}
 	}
-	return out, nil
+	return out, Errorf(ExitExternal, "the ledger kept moving while aayu recorded the message to %d thread(s); the threads have it", len(reached))
 }
 
 // endMission is --end's work on GitHub (Q8 A): each open story and Bug of
@@ -544,20 +567,9 @@ func (e *Env) endMission(ctx context.Context, c *github.Client, w *ledger.Writer
 		}
 		rep.Ready = append(rep.Ready, n)
 		for _, pr := range prs {
-			if StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()) != n {
-				continue
+			if StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()) == n {
+				closed[n] = append(closed[n], pr.GetNumber())
 			}
-			k := pr.GetNumber()
-			if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.close", Target: fmt.Sprintf("%s#%d", repo, k), Story: fmt.Sprintf("#%d", n),
-				Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/pulls/%d", repo, k)}, Payload: map[string]any{"state": "closed", "mission": f}},
-				func(ctx context.Context) (any, error) {
-					_, _, err := c.REST.PullRequests.Edit(ctx, owner, name, k, &gh.PullRequest{State: gh.Ptr("closed")})
-					return nil, err
-				}); err != nil {
-				return Wrap(ExitExternal, err)
-			}
-			closed[n] = append(closed[n], k)
-			rep.Closed = append(rep.Closed, k)
 		}
 	}
 	if len(release) > 0 {
@@ -605,6 +617,22 @@ func (e *Env) endMission(ctx context.Context, c *github.Client, w *ledger.Writer
 			return Wrap(ExitExternal, err)
 		}
 		rep.Commented = append(rep.Commented, n)
+	}
+	// The PRs close last: a run that fails before this closes them again, and
+	// the comments already name them.
+	for _, is := range subs {
+		n := is.GetNumber()
+		for _, k := range closed[n] {
+			if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.close", Target: fmt.Sprintf("%s#%d", repo, k), Story: fmt.Sprintf("#%d", n),
+				Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/pulls/%d", repo, k)}, Payload: map[string]any{"state": "closed", "mission": f}},
+				func(ctx context.Context) (any, error) {
+					_, _, err := c.REST.PullRequests.Edit(ctx, owner, name, k, &gh.PullRequest{State: gh.Ptr("closed")})
+					return nil, err
+				}); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			rep.Closed = append(rep.Closed, k)
+		}
 	}
 	return nil
 }
