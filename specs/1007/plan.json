@@ -1,0 +1,35 @@
+{
+  "story": 1007,
+  "body_hash": "c3aba8abe311bf5450751f23c1b6212540a65942174de2538eeeff252f46d533",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "ship tells the story's Kanha after each merge, in the same process; a failed message never fails ship",
+      "contracts": [
+        "internal/cli/ship.go: after completeStory (ship.go:553, :904), one FollowUp to the Kanha in specs/\u003cf\u003e/approved.json `parent` with `merged #n (PR #m): run aayu mission next \u003cf\u003e`"
+      ],
+      "tests": [
+        "internal/cli:TestShipTellsKanhaAfterMerge",
+        "internal/cli:TestShipMergeStandsWhenKanhaUnreached",
+        "internal/cli:TestShipSendsNothingOnRefusal"
+      ],
+      "instrumentation": [
+        "ship prints `next: told the Kanha of #\u003cf\u003e` or `next: ... was not reached: \u003creason\u003e`"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:30Z",
+  "planned_by": "human-fallback"
+}
