@@ -1,0 +1,70 @@
+{
+  "story": 998,
+  "body_hash": "c5d356dc4ca68117444eb8bdc3ad2c6c70a04d1957954a66cfbfa3626556bbc4",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L03",
+      "title": "The aayudha.work/v1 list shape for `aayu mission next --json`, shared with #911's loop list",
+      "contracts": [
+        "internal/verbs/registry.go: `mission next` output schema {schema, scope {kind, id}, items [{key, action, reason, subthread}]}; generated internal/mcp/schemas/mission.json"
+      ],
+      "tests": [
+        "internal/verbs:TestMissionNextSchema",
+        "internal/cli:TestMissionNextJSONShape"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        12
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "aayu mission next lists starts and waits in order, with no model call, and claims like admitClaim",
+      "contracts": [
+        "internal/cli/mission.go: `aayu mission next \u003cf\u003e`; claims through `admitClaim` (internal/cli/buildnext.go:261) and `buildable` (:365); halt through `checkHalt` (internal/cli/halt.go:105)",
+        "internal/cli/build.go: `aayu build \u003cn\u003e --delegate` re-reads the issue before it starts"
+      ],
+      "tests": [
+        "internal/cli:TestMissionNextOrderAndAgents",
+        "internal/cli:TestMissionNextWaitReasons",
+        "internal/cli:TestMissionNextOtherFeatureNeverListed",
+        "internal/cli:TestMissionNextOneClaimTwoRuns",
+        "internal/cli:TestMissionNextHaltedOrPaused",
+        "internal/cli:TestBuildDelegateReadsLiveState",
+        "internal/cli:TestMissionNextNotApproved",
+        "internal/cli:TestMissionNextBudgetFilter",
+        "internal/cli:TestMissionNextTatkalStoryJoins",
+        "internal/cli:TestMissionNextListsBugs",
+        "internal/cli:TestMissionNextDoneFeatureBugGoesToTatkal",
+        "internal/cli:TestMissionNextRefusedOnOtherTool"
+      ],
+      "instrumentation": [
+        "each wait line carries its reason; exit 4 or 6 as checkHalt and the breaker give"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:36:56Z",
+  "planned_by": "human-fallback"
+}
