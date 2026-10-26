@@ -755,6 +755,11 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 // one after (X1 A, Decision #974).
 func missionsNow(plan *MissionPlan, merged func(int) bool) []MissionState {
 	started := plan.StartedBy != "" && plan.Pause == nil
+	// A started mission that is paused is held; the one paused row is the header's.
+	held := map[bool]string{true: "running", false: "not started"}[started]
+	if plan.StartedBy != "" && plan.Pause != nil {
+		held = "held until the mission resumes"
+	}
 	var out []MissionState
 	for _, m := range plan.Missions {
 		ms := MissionState{Number: m.Number, Stories: []int{}}
@@ -762,7 +767,7 @@ func missionsNow(plan *MissionPlan, merged func(int) bool) []MissionState {
 			for _, s := range m.Stories {
 				ms.Stories = append(ms.Stories, s.Number)
 			}
-			ms.State = map[bool]string{true: "running", false: "not started"}[started]
+			ms.State = held
 			out = append(out, ms)
 			continue
 		}
@@ -788,6 +793,8 @@ func missionsNow(plan *MissionPlan, merged func(int) bool) []MissionState {
 			ms.State, ms.Waits = "waits", split[1].Stories
 		case started:
 			ms.State = fmt.Sprintf("running: started under approval %d on %s, with no new Approve to build", plan.Approval, plan.Tool)
+		case plan.StartedBy != "":
+			ms.State = held
 		default:
 			ms.State = "can start once the mission starts"
 		}
