@@ -131,10 +131,13 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		if typ, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); typ == "story" { // only while its Feature's approval covers it (Story #996)
-			r.Covered = func(ctx context.Context, it workitems.Item, body string) (string, error) {
-				return e.storyCovered(ctx, r.GH, w, repo, it, body)
+		// A Story is Ready only while its Feature's approval covers it (Story #996), judged on
+		// the item Apply checks, so a type that changes after the read above cannot skip it.
+		r.Covered = func(ctx context.Context, it workitems.Item, body string) (string, error) {
+			if it.Type != "story" {
+				return "", nil
 			}
+			return e.storyCovered(ctx, r.GH, w, repo, it, body)
 		}
 		if res, err = r.Apply(ctx, n); err != nil {
 			return err

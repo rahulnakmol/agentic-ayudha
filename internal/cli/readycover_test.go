@@ -105,6 +105,22 @@ func TestReadyStoryCoverage(t *testing.T) {
 
 	// 1. No parent Feature.
 	refused(857, "#857 has no parent Feature. A Story is Ready only under a Feature approved to build (Decision #861).")
+	// A Bug that becomes a Story between ready's first read and the read Ready checks is judged as a Story.
+	flip := numbered(g.AddIssue("Story 859", storyBody("Story 859", "A Bug at first."), "type:bug", "effort:S"), 859)
+	reads := 0
+	edit(func() {
+		g.Hook = func(method, path string) {
+			if method == "GET" && path == "/repos/o/r/issues/859" {
+				if reads++; reads == 2 {
+					flip.Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:S"}}
+				}
+			}
+		}
+	})
+	if code, out := readyRun(859); code != ExitBlocked || !strings.Contains(out, "#859 has no parent Feature.") || slices.Contains(g.LabelNames(859), ready.LabelReady) || snapshot(859) != "" {
+		t.Fatalf("ready 859, a Bug that became a Story: exit %d, labels %v:\n%s", code, g.LabelNames(859), out)
+	}
+	edit(func() { g.Hook = nil })
 	// 2. Under a Feature with no approved.json on the ledger.
 	notApproved := "Feature #840 is not approved to build. A person runs aayu ready 840."
 	refused(853, notApproved)
