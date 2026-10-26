@@ -1,0 +1,34 @@
+{
+  "story": 1006,
+  "body_hash": "fb8e5216fd1d5018013e113b23fe516f506743c287632bf23c7dc48213d9c0c2",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "The story brief: own one story, may use subagents, ship on proof; receivers that cannot run aayu never merge",
+      "contracts": [
+        "internal/delegate/brief.go (Brief, :39): the merge line at :118 depends on whether the receiver can run aayu",
+        "internal/cli/delegate.go (writeBrief, :314) passes the depends-on story's PR, ship record, and answered asks"
+      ],
+      "tests": [
+        "internal/delegate:TestBriefShipsOnProof",
+        "internal/delegate:TestBriefNeverMergeForCloudReceivers",
+        "internal/delegate:TestBriefListsUpstreamPRAndAsks",
+        "internal/cli:TestDelegateBriefForMissionStory"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:26Z",
+  "planned_by": "human-fallback"
+}
