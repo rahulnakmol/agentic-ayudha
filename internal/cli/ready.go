@@ -417,8 +417,15 @@ func (r *partRun) request(ctx context.Context, who, changesFile, fixesList strin
 	if err != nil {
 		return err
 	}
+	fixes, err := r.fixes(ctx, fixesList) // checked first, so a bad ID is never ignored
+	if err != nil {
+		return err
+	}
 	rep := ReadyPartReport{Repo: r.repo, Feature: r.n, Part: r.part, DryRun: r.c.DryRun()}
 	if base != nil && ready.PinsHash(base.Pins) == ready.PinsHash(pins) {
+		if len(fixes) > 0 || changesFile != "" { // a fix or a reason needs a change to record it in
+			return Errorf(ExitBlocked, "Nothing changed since %s v%d of #%d, so no new version records --changes or --fixes. No draft written.", ready.Label(r.part), base.Version, r.n)
+		}
 		rep.State, rep.Baseline = "unchanged", base
 		return r.e.Emit(rep, func(w io.Writer) error {
 			_, err := fmt.Fprintf(w, "Nothing changed since %s v%d of #%d. No draft written.\n", ready.Label(r.part), base.Version, r.n)
@@ -434,10 +441,6 @@ func (r *partRun) request(ctx context.Context, who, changesFile, fixesList strin
 		return err
 	}
 	changes, err := r.changes(changesFile, drift, v, l.Config.Baselines.WhyMinWords)
-	if err != nil {
-		return err
-	}
-	fixes, err := r.fixes(ctx, fixesList)
 	if err != nil {
 		return err
 	}

@@ -924,6 +924,23 @@ func TestReadyFeatureDrift(t *testing.T) {
 	if code, out := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Nothing changed since intent v1 of #874. No draft written.") || commits() != n {
 		t.Fatalf("intent --request with no drift: exit %d: %s", code, out)
 	}
+	// With no drift, --fixes is still checked, and a fix or a reason is refused rather than dropped.
+	putLedger(t, bare, "specs/874/reviews/intent-v1/revenue-architect.json", `{"findings": [{"id": "intent-v1/revenue-architect/1"}]}`)
+	n = commits()
+	for _, c := range []struct {
+		args []string
+		code int
+		want string
+	}{
+		{[]string{"--fixes", "intent-v1/revenue-architect/9"}, ExitUsage, "--fixes intent-v1/revenue-architect/9: no such finding"},
+		{[]string{"--fixes", "spec-v1/quality-architect/2"}, ExitUsage, "--fixes spec-v1/quality-architect/2: a finding of spec, not intent"},
+		{[]string{"--fixes", "intent-v1/revenue-architect/1"}, ExitBlocked, "Nothing changed since intent v1 of #874, so no new version records --changes or --fixes. No draft written."},
+		{[]string{"--changes", changesFile(full("#874 body"))}, ExitBlocked, "Nothing changed since intent v1 of #874, so no new version records --changes or --fixes."},
+	} {
+		if code, out := readyRun(agent, append([]string{"--part", "intent", "--request"}, c.args...)...); code != c.code || !strings.Contains(out, c.want) || commits() != n {
+			t.Errorf("intent --request %v with no drift: exit %d, want %d and %q: %s", c.args, code, c.code, c.want, out)
+		}
+	}
 
 	// 7. A draft of spec v4 reaches [baselines] version_warn = 4.
 	edit(func() { s915.Title = "Story fifteen, renamed" })
