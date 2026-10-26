@@ -10,6 +10,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -85,7 +86,7 @@ func budgetAsk(f, n int, budget float64, used SourcedNumber, est float64, fixes 
 // postAsk posts ask on Feature f, unless an open ask of its ID says the same.
 func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
 	owner, name, _ := github.SplitRepo(repo)
-	open, err := openAsks(ctx, c, owner, name, f, nil)
+	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))
 	if err != nil {
 		return err
 	}
@@ -110,7 +111,7 @@ func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int,
 // closeAsk closes Feature f's open ask id with a note, when one is open.
 func (e *Env) closeAsk(ctx context.Context, c *github.Client, repo string, f int, id, note string) error {
 	owner, name, _ := github.SplitRepo(repo)
-	open, err := openAsks(ctx, c, owner, name, f, nil)
+	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))
 	if err != nil {
 		return err
 	}
@@ -120,6 +121,32 @@ func (e *Env) closeAsk(ctx context.Context, c *github.Client, repo string, f int
 		}
 	}
 	return nil
+}
+
+// askTrusted trusts an ask comment as the inbox does (scopeTrusted): from
+// aayu's App, or from an account with write access. Anyone may comment, so
+// another account's marker neither asks nor closes an ask.
+func (e *Env) askTrusted(ctx context.Context, c *github.Client, owner, name string) func(*gh.User) (bool, error) {
+	l, err := e.Config()
+	id := config.Identity{}
+	if err == nil {
+		id = l.Config.Identity
+	}
+	perms := map[string]bool{}
+	return func(u *gh.User) (bool, error) {
+		return scopeTrusted(u, id, func(login string) (bool, error) {
+			if ok, seen := perms[login]; seen {
+				return ok, nil
+			}
+			perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+			if err != nil {
+				return false, err
+			}
+			q := permissionOf(perm)
+			perms[login] = q == "admin" || q == "maintain" || q == "write"
+			return perms[login], nil
+		})
+	}
 }
 
 // openAsks are Feature f's open asks, the newest of each ID, read from its

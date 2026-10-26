@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +31,7 @@ type gateWorld struct {
 	*missionWorld
 	sha   string
 	gmu   sync.Mutex
+	verr  error    // the verify runner's error
 	vfail []string // verify checks that fail on the tip
 	efail []string // eval cases that fail on the tip
 	seats []string // the seats the eval runner was asked for
@@ -63,6 +67,9 @@ func newGateWorld(t *testing.T, ms string, stories ...int) *gateWorld {
 		g.calls++
 		if sha != g.sha {
 			t.Errorf("verify ran on %s, not the dev tip %s", sha, g.sha)
+		}
+		if g.verr != nil {
+			return nil, g.verr
 		}
 		out := []GateCheck{{Check: "verify:mission.next-order", Result: gatePass, Detail: "passed"}}
 		for _, c := range g.vfail {
@@ -141,6 +148,90 @@ func (g *gateWorld) fixPR(n int, check, refs string) {
 	})
 }
 
+// eachRequestFails runs cmd, then runs it again once for each GitHub
+// request it made, with that request failing with a 500 and the ledger as
+// it was: each run exits 5 with GitHub's error and reports no success. The
+// ledger is then as it was before, so the test goes on from that state.
+func (g *gateWorld) eachRequestFails(cmd func() (int, string, string)) {
+	t := g.t
+	t.Helper()
+	tip := git(t, g.bare, "rev-parse", "ledger")
+	g.gmu.Lock()
+	calls := g.calls
+	g.gmu.Unlock()
+	comments := map[int][]*fake.Comment{} // the asks a run posts or closes
+	g.edit(func() {
+		for n, is := range g.g.Issues {
+			comments[n] = slices.Clone(is.Comments)
+		}
+	})
+	reset := func() {
+		git(t, g.bare, "update-ref", "refs/heads/ledger", tip)
+		g.edit(func() {
+			for n, is := range g.g.Issues {
+				is.Comments = slices.Clone(comments[n])
+			}
+		})
+	}
+	g.g.Reset()
+	if code, out, errOut := cmd(); code != 0 && code != ExitBudget {
+		t.Fatalf("the clean run: exit %d: %s%s", code, out, errOut)
+	}
+	g.g.Mu.Lock()
+	reqs := slices.Clone(g.g.Requests)
+	g.g.Mu.Unlock()
+	seen := map[string]int{}
+	for _, r := range reqs {
+		k := r.Method + " " + r.Path
+		if strings.HasPrefix(r.Path, "/login/") || r.Path == "/user" || strings.Contains(r.Path, "/actions/variables/") { // the presence check and the halt guard have their own tests
+			continue
+		}
+		n := seen[k]
+		seen[k]++
+		reset()
+		seenK, fired := 0, false
+		g.edit(func() {
+			g.g.Hook = func(method, path string) { // the n-th request k fails
+				if method+" "+path == k && !fired {
+					if seenK == n {
+						g.g.Fail, g.g.FailAfter, fired = k, 0, true
+					}
+					seenK++
+				}
+			}
+		})
+		code, out, errOut := cmd()
+		g.edit(func() { g.g.Hook, g.g.Fail = nil, "" })
+		if !fired {
+			t.Errorf("%s (time %d) was not requested again", k, n+1)
+		}
+		if code != ExitExternal || !strings.Contains(errOut, "500") {
+			t.Errorf("%s (time %d) failing: exit %d: %s%s", k, n+1, code, out, errOut)
+		}
+	}
+	reset()
+	g.gmu.Lock()
+	g.calls = calls
+	g.gmu.Unlock()
+}
+
+// answer answers #889's mission card in aayu inbox as @rahulnakmol, with
+// keys (an option, then y or the answer's line), past the cards before it.
+func (g *gateWorld) answer(keys string) (int, string, string) {
+	g.t.Helper()
+	code, out, errOut := run(g.t, g.person, g.opts, "inbox", "--list", "--json", "--repo", "o/r")
+	var l inboxList
+	if code != 0 || json.Unmarshal([]byte(out), &l) != nil {
+		g.t.Fatalf("inbox --list: exit %d: %s%s", code, out, errOut)
+	}
+	at := slices.IndexFunc(l.Items, func(it InboxItem) bool { return it.Kind == InboxMission })
+	if at < 0 || at >= l.NeedsYou {
+		g.t.Fatalf("no mission card: %+v", l.Items)
+	}
+	g.device("rahulnakmol")
+	return runIn(g.t, g.person, g.opts, strings.Repeat("s ", at)+keys+"\nq", "inbox", "--plain", "--repo", "o/r")
+}
+
 func (g *gateWorld) mergePR(n int) {
 	g.edit(func() { g.g.Pulls[n].State, g.g.Pulls[n].Merged, g.g.Issues[n].State = "closed", true, "closed" })
 }
@@ -162,6 +253,12 @@ func TestGateRunsChecksVerifyAndEvals(t *testing.T) {
 		t.Fatalf("gate before MS1's last merge: exit %d, verify runs %d: %q%s", code, g.calls, out, errOut)
 	}
 	g.closeIssue(21)
+	// A sweep that cannot run is no gate result: the command fails, and no run is recorded.
+	g.verr = Errorf(ExitExternal, "verify: the sweep cannot start")
+	if code, _, errOut := g.gate(); code != ExitExternal || !strings.Contains(errOut, "the sweep cannot start") || len(g.runs()) != 0 {
+		t.Fatalf("gate when verify cannot run: exit %d: %s", code, errOut)
+	}
+	g.verr, g.calls = nil, 0
 	code, out, errOut := g.gate()
 	if code != 0 || g.calls != 1 || !slices.Equal(g.seats, []string{"code-architect", "engineering-manager"}) {
 		t.Fatalf("gate after MS1's last merge: exit %d, verify runs %d, eval seats %v: %s%s", code, g.calls, g.seats, out, errOut)
@@ -221,6 +318,7 @@ func TestGateFailOpensOneFixPRPerCheck(t *testing.T) {
 	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
 	g.closeIssue(20)
 	g.vfail, g.efail = []string{"inbox.ship-once"}, []string{"mission/stays-in-list"}
+	g.eachRequestFails(func() (int, string, string) { return g.gate() })
 	rep := g.gateJSON()
 	if len(rep.Fixes) != 2 || rep.Milestones[0].State != GateFailed {
 		t.Fatalf("gate with two failed checks: %+v", rep)
@@ -243,6 +341,8 @@ func TestGateFailOpensOneFixPRPerCheck(t *testing.T) {
 	g.g.Reset()
 	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
 	g.fixPR(982, "eval:mission/stays-in-list", "Refs #889")
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 600 }) // room for both open fixes at their cap
+	g.eachRequestFails(func() (int, string, string) { return g.gate("--pr", "981") })
 	for _, n := range []string{"981", "982"} {
 		if code, out, errOut := g.gate("--pr", n); code != 0 || !strings.Contains(out, "Fix PR #"+n+" is the fix of MS1") {
 			t.Fatalf("gate --pr %s: exit %d: %s%s", n, code, out, errOut)
@@ -253,6 +353,7 @@ func TestGateFailOpensOneFixPRPerCheck(t *testing.T) {
 			t.Fatalf("a fix filed an issue: %+v", w)
 		}
 	}
+	g.eachRequestFails(func() (int, string, string) { return g.gate() })
 	if code, out, _ := g.gate(); code != 0 || !strings.Contains(out, "the gate runs again when its fixes merge: #981, #982") ||
 		!strings.Contains(out, "fixing fix MS1 verify:inbox.ship-once · PR #981\nfixing fix MS1 eval:mission/stays-in-list · PR #982\n") {
 		t.Fatalf("gate with both fixes open: exit %d: %s", code, out)
@@ -277,11 +378,23 @@ func TestGateFixesEntryShape(t *testing.T) {
 	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
 	g.closeIssue(20)
 	g.vfail = []string{"inbox.ship-once"}
+	// --dry-run lists the fix and writes nothing.
+	n := g.commits()
+	if code, out, errOut := g.gate("--dry-run"); code != 0 || g.commits() != n || len(g.claims(889)) != 0 ||
+		!strings.Contains(out, "start fix MS1 verify:inbox.ship-once\n") || !strings.HasSuffix(out, "--dry-run: nothing written, no check rerun, and no fix claimed\n") {
+		t.Fatalf("gate --dry-run: exit %d, claims %v: %s%s", code, g.claims(889), out, errOut)
+	}
 	g.gateJSON()
 	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
 	g.fixPR(983, "verify:inbox.ship-once", "Refs #889")
 	g.fixPR(984, "verify:inbox.ship-once", "Refs #870")
 	g.fixPR(985, "verify:mission.next-order", "Refs #889")
+	g.fixPR(986, "verify:inbox.ship-once", "Refs #889")
+	g.fixPR(987, "verify:inbox.ship-once", "Refs #889")
+	g.edit(func() {
+		g.g.Pulls[986].State = "closed"
+		g.g.Pulls[987].Body = "Refs #889\n\nFixes the ship-once check.\n"
+	})
 	g.g.Reset()
 	before := git(t, g.bare, "ls-tree", "-r", "--name-only", "ledger")
 	if code, out, errOut := g.gate("--pr", "981"); code != 0 {
@@ -315,6 +428,8 @@ func TestGateFixesEntryShape(t *testing.T) {
 		"983": "verify:inbox.ship-once of MS1 has its fix PR already, #981: one failed check gets one fix PR",
 		"984": "#984 does not say `Refs #889`",
 		"985": "verify:mission.next-order did not fail in the last gate of MS1 of #889: a fix PR comes only from a failed gate check (Decision #974)",
+		"986": "#986 is not an open PR to dev: a gate fix is one",
+		"987": "#987 names no failed check: its body needs the line `Aayudha-Gate-Fix: <milestone> <check>`",
 	} {
 		if code, _, errOut := g.gate("--pr", n); code != ExitBlocked || !strings.Contains(errOut, why) {
 			t.Errorf("gate --pr %s: exit %d: %s", n, code, errOut)
@@ -322,6 +437,46 @@ func TestGateFixesEntryShape(t *testing.T) {
 	}
 	if p, _ := g.plan(889); len(p.GateFixes) != 1 {
 		t.Fatalf("a refused fix was recorded: %+v", p.GateFixes)
+	}
+	// The fix merged, but dev did not move: the gate judged this tip already, so it does not run again.
+	g.mergePR(981)
+	calls := g.calls
+	if code, out, _ := g.gate(); code != 0 || g.calls != calls || !strings.Contains(out, "MS1       failed on dev 9f8e7d6, the tip now\n") {
+		t.Fatalf("gate on the tip it failed: exit %d, verify runs %d: %s", code, g.calls, out)
+	}
+}
+
+// No gate runs, and no fix or budget is recorded, for a Feature with no
+// plan or a mission no one started; a paused mission runs no gate, and
+// --once-more needs a stopped gate.
+func TestGateRefusesWithoutARunningMission(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.issue(901, "Feature 901", "feature", 0, "")
+	g.issue(60, "Story 60", "story", 901, "")
+	g.feature(901, 60)
+	refused := func(env map[string]string, f int, why string, args ...string) {
+		t.Helper()
+		n := g.commits()
+		if code, out, errOut := run(t, env, g.opts, append([]string{"mission", args[0], fmt.Sprint(f), "--repo", "o/r"}, args[1:]...)...); code != ExitBlocked ||
+			!strings.Contains(errOut, why) || g.commits() != n {
+			t.Errorf("mission %v %d: exit %d: %s%s", args, f, code, out, errOut)
+		}
+	}
+	refused(g.agent, 901, "#901 has no mission plan: a person approves it to build first. No gate runs.", "gate")
+	if code, out, errOut := g.approve(901); code != 0 {
+		t.Fatalf("approve 901: exit %d: %s%s", code, out, errOut)
+	}
+	refused(g.agent, 901, "The mission of #901 has not started: a person starts it. No gate runs.", "gate")
+	refused(g.agent, 901, "#901 has no started mission, so it has no gate fix", "gate", "--pr", "981")
+	refused(g.person, 901, "#901 has no started mission, so it has no budget to change", "budget", "--keep", "981")
+	refused(g.person, 889, "No gate of #889 is stopped: the gate runs on its own when a milestone's last story merges.", "gate", "--once-more")
+	g.setPlan(889, func(p *MissionPlan) {
+		p.Pause = &MissionPause{Reason: "a migration needs a person", By: "rahulnakmol", At: "2026-10-26T12:00:00Z"}
+	})
+	g.closeIssue(20)
+	refused(g.agent, 889, "The mission of #889 is paused: a migration needs a person. No gate runs.", "gate")
+	if g.calls != 0 || len(g.runs()) != 0 {
+		t.Fatalf("a refused gate ran: verify runs %d, gate runs %v", g.calls, g.runs())
 	}
 }
 
@@ -350,13 +505,59 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 	if err := os.WriteFile(log, []byte(`{"kind":"model.call","story":"o/r#981","status":"done","cost_usd":14}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r", "--json")
-	var show MissionShowReport
-	if code != 0 || json.Unmarshal([]byte(out), &show) != nil || show.Budget.Used.Value != 654 || show.Budget.Left.Value != 40 ||
-		!strings.HasSuffix(show.Budget.Used.Source, "; gate fix PRs at their measured spend: #981 $14") {
-		t.Fatalf("mission show: exit %d: %+v%s", code, show.Budget, errOut)
+	show := func() *MissionBudgetView {
+		code, out, errOut := run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r", "--json")
+		var rep MissionShowReport
+		if code != 0 || json.Unmarshal([]byte(out), &rep) != nil || rep.Budget == nil {
+			t.Fatalf("mission show: exit %d: %s%s", code, out, errOut)
+		}
+		return rep.Budget
 	}
-	code, out, errOut = g.gate("--pr", "982")
+	g.eachRequestFails(func() (int, string, string) {
+		return run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r")
+	})
+	// While #981 is open it may still spend its cap: it counts at least at $64, so a second fix cannot take the same $40.
+	if b := show(); b.Used.Value != 704 || !strings.HasSuffix(b.Used.Source, "; gate fix PRs: #981 $64 (open: at least the per-story cap)") {
+		t.Fatalf("mission show with #981 open: %+v", b)
+	}
+	g.mergePR(981)
+	if b := show(); b.Used.Value != 654 || b.Left.Value != 40 || !strings.HasSuffix(b.Used.Source, "; gate fix PRs: #981 $14 measured") {
+		t.Fatalf("mission show after #981 merged: %+v", b)
+	}
+	g.eachRequestFails(func() (int, string, string) { return g.gate("--pr", "982") })
+	// The card cannot be posted: the fix is not recorded, so the next --pr asks again.
+	g.edit(func() { g.g.Fail = "POST /repos/o/r/issues/889/comments" })
+	if code, _, errOut := g.gate("--pr", "982"); code != ExitExternal {
+		t.Fatalf("gate --pr 982 when the card cannot be posted: exit %d: %s", code, errOut)
+	}
+	if p, _ := g.plan(889); len(p.GateFixes) != 1 {
+		t.Fatalf("a fix whose card was not posted was recorded: %+v", p.GateFixes)
+	}
+	// The card posts, but the ledger refuses the write: the next --pr records the fix and does not post the card again.
+	hooks := t.TempDir()
+	if err := os.WriteFile(filepath.Join(hooks, "pre-receive"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, g.bare, "config", "core.hooksPath", hooks)
+	if code, _, errOut := g.gate("--pr", "982"); code != ExitExternal {
+		t.Fatalf("gate --pr 982 when the ledger refuses the write: exit %d: %s", code, errOut)
+	}
+	git(t, g.bare, "config", "--unset", "core.hooksPath")
+	asks := func() int {
+		g.g.Mu.Lock()
+		defer g.g.Mu.Unlock()
+		n := 0
+		for _, c := range g.g.Issues[889].Comments {
+			if strings.HasPrefix(c.Body, MissionAskMarker+`{"id":"budget-982"`) {
+				n++
+			}
+		}
+		return n
+	}
+	if n := asks(); n != 1 {
+		t.Fatalf("budget asks of #982 after the refused write: %d", n)
+	}
+	code, out, errOut := g.gate("--pr", "982")
 	if code != ExitBudget || !strings.Contains(out, "Fix PR #982 of MS1 eval:mission/stays-in-list waits: it would pass #889's budget ($654 used + $64, the fix's estimate, > $694).") {
 		t.Fatalf("gate --pr 982 over the budget: exit %d: %s%s", code, out, errOut)
 	}
@@ -376,7 +577,7 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 	}
 	g.gate("--pr", "982") // asks once: the same ask is not posted again
 	c := cards()
-	if len(c) != 1 || c[0].Title != "Fix PR #982 would pass #889's budget" || c[0].Number != 889 ||
+	if len(c) != 1 || asks() != 1 || c[0].Title != "Fix PR #982 would pass #889's budget" || c[0].Number != 889 || c[0].short() != "fix over budget" ||
 		c[0].Why != "#889 used $654 of its $694 budget, so $40 is left, and fix PR #982 is estimated at $64." ||
 		!slices.Contains(c[0].Details, "Fix PR #981 (MS1 verify:inbox.ship-once) spent $14") ||
 		!slices.Contains(c[0].Details, "Estimate of #982: $64, the per-story cap, until #872 measures spend") ||
@@ -384,10 +585,28 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 		c[0].Options[0].Recommended || c[0].Options[1].Recommended {
 		t.Fatalf("budget card: %+v", c)
 	}
+	// Keep #982 waiting: its card closes, and it still waits.
+	g.eachRequestFails(func() (int, string, string) {
+		return run(t, g.person, g.opts, "mission", "budget", "889", "--keep", "982", "--repo", "o/r")
+	})
+	if code, out, errOut := g.answer("2 y"); code != 0 || !strings.Contains(out, "Fix PR #982 of #889 keeps waiting; the budget stays $694.\n") || len(cards()) != 0 {
+		t.Fatalf("the card's keep (aayu mission budget 889 --keep 982): exit %d: %s%s", code, out, errOut)
+	}
+	if p, _ := g.plan(889); p.GateFixes[1].Waits != "budget" {
+		t.Fatalf("a kept fix stopped waiting: %+v", p.GateFixes[1])
+	}
+	for args, why := range map[string]string{"--to 600 --reason x": "give a budget above $694", "--to 720": "needs --reason", "--keep 981": "#981 is no gate fix of #889 that waits for the budget"} {
+		if code, _, errOut := run(t, g.person, g.opts, append([]string{"mission", "budget", "889", "--repo", "o/r"}, strings.Fields(args)...)...); code == 0 || !strings.Contains(errOut, why) {
+			t.Errorf("budget %s: exit %d: %s", args, code, errOut)
+		}
+	}
 	if code, _, errOut := run(t, g.agent, g.opts, "mission", "budget", "889", "--to", "720", "--reason", "x", "--repo", "o/r"); code != ExitBlocked ||
 		!strings.Contains(errOut, "mission budget is a person's decision and is refused for an agent lane (AMP_THREAD_ID)") {
 		t.Fatalf("agent budget raise: exit %d: %s", code, errOut)
 	}
+	g.eachRequestFails(func() (int, string, string) {
+		return g.mission(g.person, "rahulnakmol", "budget", 889, "--to", "720", "--reason", "the fix is needed for MS1")
+	})
 	code, out, errOut = g.mission(g.person, "rahulnakmol", "budget", 889, "--to", "720", "--reason", "the fix is needed for MS1")
 	if code != 0 || g.codes() != 1 || !strings.Contains(out, "raised the budget of #889 to $720; fix PRs that go on: #982") {
 		t.Fatalf("budget raise: exit %d, device codes %d: %s%s", code, g.codes(), out, errOut)
@@ -403,13 +622,35 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 func TestFailedGateDoesNotHoldStarts(t *testing.T) {
 	g := newGateWorld(t, "MS1=#20 MS2=#22,#23", 20, 22, 23)
 	g.closeIssue(20)
-	g.vfail = []string{"inbox.ship-once"}
-	g.gateJSON()
+	g.vfail = []string{"inbox.ship-once", "mission.stays"}
+	// A fix takes an agents slot as a story does: with one agent and #22 in progress, both fixes wait.
+	commitOnDev(g.g, ".aayudha/config.toml", "[build]\nagents = 1\n")
+	g.status(22, "in-progress", "")
+	actions := func() string {
+		var out []string
+		for _, fx := range g.gateJSON().Fixes {
+			out = append(out, fx.Action+" "+fx.Check+" "+fx.Reason)
+		}
+		return strings.Join(out, "; ")
+	}
+	if got := actions(); got != "waits verify:inbox.ship-once no free agent (1 of 1 busy); waits verify:mission.stays no free agent (1 of 1 busy)" || len(g.claims(889)) != 0 {
+		t.Fatalf("gate with no free agent: %s, claims %v", got, g.claims(889))
+	}
+	// #22 is done: the first fix takes the slot, and the second waits for it.
+	g.status(22, "ready", "")
+	if got := actions(); !strings.HasPrefix(got, "start verify:inbox.ship-once ; waits verify:mission.stays no free agent (1 of 1 busy)") {
+		t.Fatalf("gate with one free agent: %s", got)
+	}
 	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
 	if code, out, errOut := g.gate("--pr", "981"); code != 0 {
 		t.Fatalf("gate --pr 981: exit %d: %s%s", code, out, errOut)
 	}
-	putLedger(t, g.bare, MissionClaimsPath(889), "")                  // the fix's claim expired; its open PR holds the slot
+	// The fix's claim is gone, and its open PR still holds the slot.
+	putLedger(t, g.bare, MissionClaimsPath(889), "")
+	if got := actions(); got != "fixing verify:inbox.ship-once ; waits verify:mission.stays no free agent (1 of 1 busy)" {
+		t.Fatalf("gate with fix PR #981 open: %s", got)
+	}
+	g.eachRequestFails(func() (int, string, string) { return g.next(889) })
 	commitOnDev(g.g, ".aayudha/config.toml", "[build]\nagents = 2\n") // the gate's tip shares dev's committed files
 	g.status(22, "ready", "")
 	g.status(23, "ready", "")
@@ -434,6 +675,14 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	for i, check := range []string{"inbox.ship-once", "inbox.ship-once", "mission.stays"} {
 		g.vfail = []string{check}
 		g.tip(strings.Repeat(fmt.Sprint(i+1), 40), "success")
+		if i == 2 {
+			g.eachRequestFails(func() (int, string, string) { return g.gate() })
+			// The card cannot be posted: nothing is recorded, so the next run stops the mission and posts it.
+			g.edit(func() { g.g.Fail = "POST /repos/o/r/issues/889/comments" })
+			if code, _, errOut := g.gate(); code != ExitExternal || len(g.runs()) != 2 {
+				t.Fatalf("gate when the card cannot be posted: exit %d, runs %d: %s", code, len(g.runs()), errOut)
+			}
+		}
 		rep := g.gateJSON()
 		if i < 2 {
 			g.fixPR(981+i, "verify:"+check, "Refs #889")
@@ -455,6 +704,13 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	if code, _, errOut := g.next(889); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 is paused: MS1 of #889 failed its gate 3 times: its stories wait. Nothing starts.") {
 		t.Fatalf("mission next after the stop: exit %d: %s", code, errOut)
 	}
+	if code, out, errOut := run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "MS1       stopped: its gate failed on dev 3333333, and the mission asks a person · #20 merged\n") {
+		t.Fatalf("mission show after the stop: exit %d: %s%s", code, out, errOut)
+	}
+	g.eachRequestFails(func() (int, string, string) {
+		return run(t, g.agent, g.opts, "inbox", "--list", "--json", "--repo", "o/r")
+	})
 	if code, _, errOut := g.gate(); code != ExitBlocked || !strings.Contains(errOut, "A person runs the gate once more, or stops the mission, in aayu inbox.") {
 		t.Fatalf("the Kanha's gate after the stop: exit %d: %s", code, errOut)
 	}
@@ -470,17 +726,30 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 		fmt.Sprintf("Run 2 at %s on dev 2222222: verify:inbox.ship-once failed", runs[1].At),
 		fmt.Sprintf("Run 3 at %s on dev 3333333: verify:mission.stays failed", runs[2].At),
 	}
-	if len(cards) != 1 || cards[0].Title != "MS1 of #889 failed its gate 3 times: its stories wait" ||
+	if len(cards) != 1 || cards[0].Title != "MS1 of #889 failed its gate 3 times: its stories wait" || cards[0].short() != "gate stopped" ||
 		cards[0].Why != "The gate of MS1 failed 3 times, so the mission stopped and asks you." || !slices.Equal(cards[0].Details, wantLines) ||
 		len(cards[0].Options) != 2 || cards[0].Options[0].Label != "Run the gate once more" || cards[0].Options[1].Label != "Stop the mission, with a reason" ||
 		cards[0].Options[0].Recommended || cards[0].Options[1].Recommended || strings.Contains(cards[0].Counsel, "I recommend") {
 		t.Fatalf("no-go card: %+v", cards)
 	}
+	// Anyone may comment: another account's close marker neither hides the card nor stops the gate closing it.
+	g.edit(func() {
+		g.g.Issues[889].Comments = append(g.g.Issues[889].Comments, &fake.Comment{ID: 7001, Body: askClosed(noGoAskID("MS1")) + "\nclosed"})
+		g.g.Issues[889].Comments[len(g.g.Issues[889].Comments)-1].User.Login = "mallory"
+	})
+	// Until Story #1002 builds aayu mission stop, the stop option says so and does nothing.
+	if err := (&Env{}).missionAct(t.Context(), cards[0], cards[0].Options[1]); err == nil || !strings.Contains(err.Error(), "aayu mission stop is not built yet") {
+		t.Fatalf("the stop option: %v", err)
+	}
+	if err := (&Env{}).missionAct(t.Context(), cards[0], InboxAction{N: 1, Command: "aayu ship 1"}); err == nil || !strings.Contains(err.Error(), `"aayu ship 1" is not a mission step`) {
+		t.Fatalf("an option that is no mission step: %v", err)
+	}
 	if code, _, errOut := g.gate("--once-more"); code != ExitBlocked || !strings.Contains(errOut, "mission gate --once-more is a person's decision and is refused for an agent lane (AMP_THREAD_ID)") {
 		t.Fatalf("an agent's once more: exit %d: %s", code, errOut)
 	}
 	g.vfail = nil
-	code, out, errOut = g.mission(g.person, "rahulnakmol", "gate", 889, "--once-more")
+	g.eachRequestFails(func() (int, string, string) { return g.mission(g.person, "rahulnakmol", "gate", 889, "--once-more") })
+	code, out, errOut = g.answer("1 y") // the card's first option: aayu mission gate 889 --once-more
 	p, _ = g.plan(889)
 	if code != 0 || g.codes() != 1 || p.Milestones[0].Gate.State != GatePassed || p.Pause != nil || p.Controls[len(p.Controls)-1].Action != "gate once more" {
 		t.Fatalf("once more: exit %d, device codes %d, gate %+v, pause %+v: %s%s", code, g.codes(), p.Milestones[0].Gate, p.Pause, out, errOut)
@@ -503,7 +772,15 @@ func TestGateRerunsRunnerErrorOnce(t *testing.T) {
 	g.closeIssue(20)
 	var reruns []int64
 	g.edit(func() { g.g.OnRerunJob = func(id int64) { reruns = append(reruns, id) } })
+	// A required check that still runs: the gate waits, runs nothing else, and records nothing.
+	g.tip(strings.Repeat("b", 40), "")
+	g.edit(func() { g.g.CheckRuns[g.sha][0].Status = "in_progress" })
+	if rep := g.gateJSON(); rep.Milestones[0].Detail != "pending: build is in_progress on bbbbbbb" || g.calls != 0 || len(g.runs()) != 0 {
+		t.Fatalf("gate with build running: %+v", rep.Milestones[0])
+	}
 	g.tip(strings.Repeat("c", 40), "cancelled")
+	g.eachRequestFails(func() (int, string, string) { return g.gate() })
+	reruns = nil
 	rep := g.gateJSON()
 	if !slices.Equal(reruns, []int64{70}) || rep.Milestones[0].State != GateWaits ||
 		rep.Milestones[0].Detail != "pending: build is cancelled on ccccccc; aayu reran it once (runner error: cancelled)" || g.calls != 0 {
@@ -535,5 +812,125 @@ func TestGateRerunsRunnerErrorOnce(t *testing.T) {
 	g.edit(func() { g.g.CheckRuns[g.sha][0].ID, g.g.CheckRuns[g.sha][0].Conclusion = 74, "success" })
 	if rep := g.gateJSON(); rep.Milestones[0].State != GatePassed {
 		t.Fatalf("pass after the rerun: %+v", rep.Milestones[0])
+	}
+	// A failure whose log names no 5xx is the code's: no rerun, and the gate fails.
+	g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+	g.tip(strings.Repeat("e", 40), "failure")
+	g.edit(func() { g.g.JobLogs = map[int64]string{70: "--- FAIL: TestShip (0.01s)\n"} })
+	if rep := g.gateJSON(); len(reruns) != 2 || rep.Milestones[0].State != GateFailed ||
+		rep.Milestones[0].Checks[0] != (GateCheck{Check: "check:build", Result: gateFail, Detail: "build is failure on eeeeeee"}) {
+		t.Fatalf("a code failure: reruns %v: %+v", reruns, rep.Milestones[0])
+	}
+}
+
+// Criterion 1, the default eval runner: the evals of the touched seats are
+// read from evals.yml's results for the dev tip, against evals/eval.toml's
+// bars at that tip. A gating group with no run is dispatched once on dev and
+// the gate waits; a run in progress waits; a case below its bar fails.
+func TestGateEvalsReadEvalsResults(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.opts.GateEvals = nil
+	g.edit(func() {
+		is := g.g.Issues[20] // L03: the Engineering Manager's layer, whose seat owns the mission skill
+		i := slices.IndexFunc(is.Labels, func(l fake.Label) bool { return l.Name == "layer:L02" })
+		is.Labels[i] = fake.Label{Name: "layer:L03"}
+		g.g.RefFiles[devTip]["evals/eval.toml"] = "min_pass_k = 0.8\nmin_mean = 3.5\n\n[[groups]]\nname = \"missions\"\nprefixes = [\"mission/\"]\n\n" +
+			"[[groups]]\nname = \"plans\"\nprefixes = [\"plan/\"]\n\n[[groups]]\nname = \"inspect\"\nprefixes = [\"inspect/\"]\ngate = \"advisory\"\n"
+	})
+	g.closeIssue(20)
+	g.eachRequestFails(func() (int, string, string) { return g.gate() })
+	g.edit(func() { g.g.Dispatches = nil })
+	rep := g.gateJSON()
+	if rep.Milestones[0].State != GateWaits || len(g.g.Dispatches) != 1 || g.g.Dispatches[0]["workflow"] != "evals.yml" || g.g.Dispatches[0]["ref"] != "dev" ||
+		!strings.Contains(rep.Milestones[0].Detail, "pending: dispatched evals.yml on dev for ^(") {
+		t.Fatalf("gate with no eval results: %+v, dispatches %v", rep.Milestones[0], g.g.Dispatches)
+	}
+	if in, _ := g.g.Dispatches[0]["inputs"].(map[string]any); in["group"] != "missions" || !strings.Contains(in["cases"].(string), "|mission|") {
+		t.Fatalf("dispatch inputs: %v", g.g.Dispatches[0])
+	}
+	run := fake.WorkflowRun{ID: 501, Path: ".github/workflows/evals.yml", HeadSHA: g.sha, Event: "workflow_dispatch", Status: "in_progress", HTMLURL: "https://github.com/o/r/actions/runs/501"}
+	g.edit(func() { g.g.Runs = append(g.g.Runs, run) })
+	if rep := g.gateJSON(); rep.Milestones[0].Detail != "pending: evals.yml run https://github.com/o/r/actions/runs/501 is in_progress" || len(g.g.Dispatches) != 1 {
+		t.Fatalf("gate with the run in progress: %+v", rep.Milestones[0])
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, _ := zw.Create(fmt.Sprintf("%s-missions.json", g.sha))
+	_, _ = f.Write([]byte(`{"cases": [{"case": "mission/stays-in-list", "skill": "mission", "pass_k": 1, "mean": 3.1},
+		{"case": "mission/next-order", "skill": "mission", "pass_k": 1, "mean": 4.6}, {"case": "mission/flaky", "skill": "mission", "not_run": "pin"}]}`))
+	_ = zw.Close()
+	g.edit(func() {
+		g.g.Runs[len(g.g.Runs)-1].Status, g.g.Runs[len(g.g.Runs)-1].Conclusion = "completed", "success"
+		g.g.Artifacts = map[int64][]fake.ArtifactZip{501: {{ID: 601, Name: "eval-results-" + g.sha + "-missions", Zip: buf.Bytes()}}}
+	})
+	g.eachRequestFails(func() (int, string, string) { return g.gate() })
+	rep = g.gateJSON()
+	var evals []string
+	for _, ck := range rep.Milestones[0].Checks {
+		if strings.HasPrefix(ck.Check, "eval:") {
+			evals = append(evals, ck.Check+"="+ck.Result+" ("+ck.Detail+")")
+		}
+	}
+	want := []string{"eval:mission/stays-in-list=failed (mean 3.10, pass^k 1.00 (bars: mean 3.50, pass^k 0.80))", "eval:mission/next-order=passed (mean 4.60, pass^k 1.00)"}
+	if rep.Milestones[0].State != GateFailed || !slices.Equal(evals, want) || len(g.g.Dispatches) != 1 {
+		t.Fatalf("gate with the results: %+v\n got %v\nwant %v", rep.Milestones[0], evals, want)
+	}
+	// On a new tip, a dispatched run that finished with no results fails its group.
+	again := func(sha string) GateMSState {
+		g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+		putLedger(t, g.bare, MissionGatesPath(889), "")
+		g.tip(sha, "success")
+		return g.gateJSON().Milestones[0]
+	}
+	g.edit(func() {
+		g.g.Runs = append(g.g.Runs, fake.WorkflowRun{ID: 502, Path: ".github/workflows/evals.yml", HeadSHA: strings.Repeat("b", 40), Event: "workflow_dispatch", Status: "completed", Conclusion: "failure"})
+	})
+	if ms := again(strings.Repeat("b", 40)); ms.State != GateFailed || !slices.Contains(ms.Checks, GateCheck{Check: "eval:missions", Result: gateFail, Detail: "its dispatched evals.yml run left no results for bbbbbbb"}) {
+		t.Fatalf("gate after a dispatched run with no results: %+v", ms)
+	}
+	// A tip with no evals/eval.toml has no gating group: the evals pass.
+	g.edit(func() {
+		files := maps.Clone(g.g.RefFiles[devTip])
+		delete(files, "evals/eval.toml")
+		g.g.RefFiles[strings.Repeat("f", 40)] = files
+	})
+	if ms := again(strings.Repeat("f", 40)); ms.State != GatePassed ||
+		!slices.Contains(ms.Checks, GateCheck{Check: "eval:engineering-manager", Result: gatePass, Detail: "no gating eval group covers the skills of these seats"}) {
+		t.Fatalf("gate on a tip with no evals/eval.toml: %+v", ms)
+	}
+}
+
+// Criterion 1, the default verify runner: `aayu verify --check all` runs on
+// a worktree of the dev tip, each behaviour check is one gate check, and the
+// worktree is gone afterwards.
+func TestGateVerifyRunsTheSweepOnTheTip(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.opts.GateVerify = nil
+	g.agent["PATH"] = os.Getenv("PATH")
+	// A tip with no feature map has no behaviour check: verify --check all is one gate check.
+	g.closeIssue(20)
+	g.tip(git(t, g.dir, "rev-parse", "HEAD"), "success")
+	if ms := g.gateJSON().Milestones[0]; ms.State != GatePassed || !slices.Contains(ms.Checks, GateCheck{Check: "verify:all", Result: gatePass, Detail: "no behaviour check failed"}) {
+		t.Fatalf("gate on a tip with no feature map: %+v", ms)
+	}
+	g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+	putLedger(t, g.bare, MissionGatesPath(889), "")
+	sk := filepath.Join(g.dir, ".agents", "skills", "verify-app")
+	_ = os.MkdirAll(filepath.Join(sk, "features"), 0o755)
+	_ = os.WriteFile(filepath.Join(g.dir, "app.sh"), []byte("case $1 in hello) echo hi;; esac # cmd hello\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "control.sh"), []byte("cat >/dev/null\necho '{\"status\": \"failed\", \"reason\": \"printed nothing\", \"artifacts\": []}'\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "features", "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \".agents/skills/verify-app/control.sh\"], \"surfaces\": [{\"kind\": \"command\", \"files\": [\"app.sh\"], \"pattern\": \"cmd ([a-z]+)\"}]}\n```\n\n1. [Hello](hello.md)\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "features", "hello.md"), []byte("# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n## Gotchas\n"), 0o644)
+	git(t, g.dir, "add", "-A")
+	git(t, g.dir, "commit", "--quiet", "-m", "app")
+	git(t, g.dir, "update-ref", "refs/remotes/origin/dev", "HEAD")
+	g.tip(git(t, g.dir, "rev-parse", "HEAD"), "success")
+	rep := g.gateJSON()
+	i := slices.IndexFunc(rep.Milestones[0].Checks, func(ck GateCheck) bool { return strings.HasPrefix(ck.Check, "verify:") })
+	if rep.Milestones[0].State != GateFailed || i < 0 || rep.Milestones[0].Checks[i] != (GateCheck{Check: "verify:hello.hi", Result: gateFail, Detail: "failed printed nothing"}) {
+		t.Fatalf("gate with a failing behaviour check: %+v", rep.Milestones[0])
+	}
+	if wts := git(t, g.dir, "worktree", "list"); strings.Count(wts, "\n") != 0 {
+		t.Fatalf("the gate left a worktree:\n%s", wts)
 	}
 }

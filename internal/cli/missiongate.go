@@ -276,8 +276,6 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 			row.Detail = "waits for the milestones before it to pass their gates"
 		case k < len(m.Stories):
 			row.Detail = fmt.Sprintf("building: %d of %d merged; the gate runs when its last story merges", k, len(m.Stories))
-		case m.Gate.State == GateStopped && !once:
-			row.Detail = "stopped: " + plan.Pause.reason()
 		case !once && m.Gate.State == GateFailed && len(open) > 0:
 			row.Detail = "failed on dev " + short(m.Gate.DevSHA) + "; the gate runs again when its fixes merge: " + strings.Join(open, ", ")
 		case !once && last != nil && last.DevSHA == sha:
@@ -322,6 +320,11 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 			b, _ := json.Marshal(l)
 			buf.Write(append(b, '\n'))
 		}
+		for _, a := range asks { // before the stop is recorded: a run whose card cannot be posted is not recorded, and runs again
+			if err := e.postAsk(ctx, c, repo, f, a); err != nil {
+				return err
+			}
+		}
 		msg := fmt.Sprintf("missions: gate of #%d on dev %s", f, short(sha))
 		rep.LedgerCommit, err = e.editPlan(ctx, w, f, msg, map[string][]byte{MissionGatesPath(f): buf.Bytes()}, func(p *MissionPlan) error {
 			at := e.Now().UTC().Format(time.RFC3339)
@@ -342,18 +345,11 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 			if presence != nil {
 				p.Controls = append(p.Controls, MissionControl{Action: "gate once more", By: presence.Login, At: at, Presence: presence.Via})
 			}
+			plan = p
 			return nil
 		})
 		if err != nil {
 			return err
-		}
-		if plan, _, _, err = readMission(ctx, w, f); err != nil {
-			return err
-		}
-		for _, a := range asks {
-			if err := e.postAsk(ctx, c, repo, f, a); err != nil {
-				return err
-			}
 		}
 		for _, id := range closes {
 			if err := e.closeAsk(ctx, c, repo, f, id, "The gate passed, so the mission goes on."); err != nil {
@@ -966,6 +962,21 @@ func (e *Env) missionBusy(ctx context.Context, c *github.Client, w *ledger.Write
 	return busy, err
 }
 
+// mergedOf counts the plan's stories and Bugs that merged (are closed).
+func mergedOf(ctx context.Context, c *github.Client, owner, name string, plan *MissionPlan) (int, error) {
+	n := 0
+	for _, it := range plan.Graph {
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
+		if err != nil {
+			return 0, Wrap(ExitExternal, err)
+		}
+		if is.GetState() == "closed" {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // openFixPRs are the plan's fix PRs that are still open.
 func openFixPRs(ctx context.Context, c *github.Client, owner, name string, plan *MissionPlan) ([]GateFix, error) {
 	var out []GateFix
@@ -1045,18 +1056,16 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	fix := GateFix{PR: n, Milestone: ms, Check: check, DevSHA: last.DevSHA, Approval: GateApproval{Record: ready.ApprovalPath(f), SHA256: hex.EncodeToString(sum[:])},
 		At: e.Now().UTC().Format(time.RFC3339)}
 	// The budget: what the mission used, with this fix at the per-story cap, until #872 measures spend.
-	mergedN := 0
-	for _, it := range plan.Graph {
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
-		if err != nil {
-			return Wrap(ExitExternal, err)
-		}
-		if is.GetState() == "closed" {
-			mergedN++
-		}
+	mergedN, err := mergedOf(ctx, c, owner, name, plan)
+	if err != nil {
+		return err
 	}
 	costs := e.costs(repo)
-	used, est := missionUsed(plan, appr, mergedN, costs), appr.Budget.PerStoryUSD
+	open, err := openFixSet(ctx, c, repo, plan)
+	if err != nil {
+		return err
+	}
+	used, est := missionUsed(plan, appr, mergedN, costs, open), appr.Budget.PerStoryUSD
 	if fx := findFix(plan, ms, check, last.DevSHA); fx != nil {
 		fix = *fx
 	} else if plan.Budget > 0 && used.Value+est > plan.Budget {
@@ -1064,6 +1073,11 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	}
 	rep := GateReport{Schema: MissionGateSchema, Repo: repo, Feature: f, DevSHA: last.DevSHA, Milestones: []GateMSState{}, Fixes: []GateFixItem{}, Recorded: &fix, DryRun: c.DryRun()}
 	if !rep.DryRun && findFix(plan, ms, check, last.DevSHA) == nil {
+		if fix.Waits != "" { // before the fix is recorded: a fix whose card cannot be posted is not recorded, and is asked again
+			if err := e.postAsk(ctx, c, repo, f, budgetAsk(f, n, plan.Budget, used, est, plan.GateFixes, costs)); err != nil {
+				return err
+			}
+		}
 		rep.LedgerCommit, err = e.editPlan(ctx, w, f, fmt.Sprintf("missions: fix PR #%d of %s %s in the mission of #%d", n, ms, check, f), nil, func(p *MissionPlan) error {
 			if fx := findFix(p, ms, check, last.DevSHA); fx != nil && fx.PR != n {
 				return Errorf(ExitBlocked, "%s of %s has its fix PR already, #%d: one failed check gets one fix PR", check, ms, fx.PR)
@@ -1075,11 +1089,6 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 		})
 		if err != nil {
 			return err
-		}
-		if fix.Waits != "" {
-			if err := e.postAsk(ctx, c, repo, f, budgetAsk(f, n, plan.Budget, used, est, plan.GateFixes, costs)); err != nil {
-				return err
-			}
 		}
 	}
 	if err := e.Emit(rep, func(w io.Writer) error {
@@ -1201,28 +1210,27 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 		return err
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	mergedN := 0
-	for _, it := range plan.Graph {
-		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
-		if err != nil {
-			return Wrap(ExitExternal, err)
-		}
-		if is.GetState() == "closed" {
-			mergedN++
-		}
+	mergedN, err := mergedOf(ctx, c, owner, name, plan)
+	if err != nil {
+		return err
 	}
 	costs := e.costs(repo)
+	open, err := openFixSet(ctx, c, repo, plan)
+	if err != nil {
+		return err
+	}
 	var freed []int
 	commit, err := e.editPlan(ctx, w, f, fmt.Sprintf("missions: @%s raised the budget of #%d to %s", p.Login, f, ready.USD(to)), nil, func(pl *MissionPlan) error {
 		at := e.Now().UTC().Format(time.RFC3339)
 		pl.BudgetBasis = fmt.Sprintf("raised from %s to %s by @%s at %s: %s; before: %s", ready.USD(pl.Budget), ready.USD(to), p.Login, at, reason, pl.BudgetBasis)
 		pl.Budget = to
 		pl.Controls = append(pl.Controls, MissionControl{Action: "budget", By: p.Login, At: at, Presence: p.Via, Reason: reason})
-		used := missionUsed(pl, appr, mergedN, costs).Value
+		used := missionUsed(pl, appr, mergedN, costs, open).Value
 		freed = nil
-		for i := range pl.GateFixes {
-			if fx := &pl.GateFixes[i]; fx.Waits == "budget" && used+appr.Budget.PerStoryUSD <= to {
-				fx.Waits, used = "", used+appr.Budget.PerStoryUSD
+		for i := range pl.GateFixes { // a freed fix counts as the others do: an open one at least at the cap
+			fx := &pl.GateFixes[i]
+			if v := max(costs[fx.PR], appr.Budget.PerStoryUSD); fx.Waits == "budget" && used+v <= to {
+				fx.Waits, used = "", used+v
 				freed = append(freed, fx.PR)
 			}
 		}

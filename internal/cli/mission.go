@@ -1040,7 +1040,11 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 	}
 	rep.Missions = missionsNow(plan, func(n int) bool { return merged[n] })
 	if plan.StartedBy != "" && appr != nil {
-		used := missionUsed(plan, appr, mergedN, e.costs(repo))
+		open, err := openFixSet(ctx, c, repo, plan)
+		if err != nil {
+			return err
+		}
+		used := missionUsed(plan, appr, mergedN, e.costs(repo), open)
 		rep.Budget = &MissionBudgetView{
 			Budget: SourcedNumber{Value: plan.Budget, Source: plan.BudgetBasis + ", locked at Start"},
 			Used:   used,
@@ -1086,23 +1090,49 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 
 // missionUsed is what the mission used of its budget: each merged story or
 // Bug at the per-story cap of the approval, until #872 measures spend, and
-// each gate fix PR at its measured spend (Decision #974: fix PRs count
-// against the Feature's budget).
-func missionUsed(plan *MissionPlan, appr *ready.Approval, merged int, costs map[int]float64) SourcedNumber {
+// each gate fix PR that does not wait (Decision #974: fix PRs count against
+// the Feature's budget): a closed one at its measured spend, and an open one
+// at least at the per-story cap, which it may still spend.
+func missionUsed(plan *MissionPlan, appr *ready.Approval, merged int, costs map[int]float64, open map[int]bool) SourcedNumber {
 	per := appr.Budget.PerStoryUSD
 	used := SourcedNumber{Value: per * float64(merged),
 		Source: fmt.Sprintf("%d merged x %s (the per-story cap of approval %d), until #872 measures spend", merged, ready.USD(per), appr.Version)}
-	var fixes []string
-	for _, fx := range plan.GateFixes {
-		if v := costs[fx.PR]; v > 0 {
-			used.Value += v
-			fixes = append(fixes, fmt.Sprintf("#%d %s", fx.PR, ready.USD(v)))
-		}
-	}
+	v, fixes := fixSpend(plan, per, costs, open)
+	used.Value += v
 	if len(fixes) > 0 {
-		used.Source += "; gate fix PRs at their measured spend: " + strings.Join(fixes, ", ")
+		used.Source += "; gate fix PRs: " + strings.Join(fixes, ", ")
 	}
 	return used
+}
+
+// fixSpend is what the plan's gate fix PRs count against the budget, as
+// missionUsed says, with a note for each.
+func fixSpend(plan *MissionPlan, per float64, costs map[int]float64, open map[int]bool) (float64, []string) {
+	total, notes := 0.0, []string(nil)
+	for _, fx := range plan.GateFixes {
+		switch v := costs[fx.PR]; {
+		case fx.Waits != "": // a waiting fix spends nothing until a person lets it go on
+		case open[fx.PR]:
+			v = max(v, per)
+			total += v
+			notes = append(notes, fmt.Sprintf("#%d %s (open: at least the per-story cap)", fx.PR, ready.USD(v)))
+		case v > 0:
+			total += v
+			notes = append(notes, fmt.Sprintf("#%d %s measured", fx.PR, ready.USD(v)))
+		}
+	}
+	return total, notes
+}
+
+// openFixSet are the plan's fix PRs that are still open, by number.
+func openFixSet(ctx context.Context, c *github.Client, repo string, plan *MissionPlan) (map[int]bool, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	fixes, err := openFixPRs(ctx, c, owner, name, plan)
+	out := map[int]bool{}
+	for _, fx := range fixes {
+		out[fx.PR] = true
+	}
+	return out, err
 }
 
 // missionsNow is each mission as it stands: mission 1 as approved, and the

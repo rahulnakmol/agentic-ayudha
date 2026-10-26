@@ -159,9 +159,12 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	defer t.Close()
 	costs, spent := e.costs(repo), 0.0
-	for _, fx := range plan.GateFixes {
-		spent += costs[fx.PR]
+	openSet := map[int]bool{}
+	for _, fx := range open {
+		openSet[fx.PR] = true
 	}
+	fixes, _ := fixSpend(plan, appr.Budget.PerStoryUSD, costs, openSet)
+	spent += fixes
 	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
 	states := map[int]string{} // each listed item's state: a depends-on target in the list needs no read
