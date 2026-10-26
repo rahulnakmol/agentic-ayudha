@@ -33,6 +33,7 @@ var RACI = map[string]Roles{
 	"verify":     {Informed: []SeatID{EngineeringManager}},
 	"inspect":    {Consulted: []SeatID{QualityArchitect, CodeArchitect}, Informed: []SeatID{AINativeEngineer}},
 	"ship":       {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{ProductStrategist, Marketer}},
+	"mission":    {Consulted: []SeatID{ProductStrategist, AINativeEngineer}, Informed: []SeatID{Founder}},
 	"release":    {Consulted: []SeatID{QualityArchitect, EngineeringManager, ProductionEngineer}, Informed: []SeatID{Marketer, Founder}},
 	"proof":      {Consulted: []SeatID{AINativeEngineer}, Informed: []SeatID{Auditor}},
 	"ready":      {Consulted: []SeatID{CodeArchitect, QualityArchitect}, Informed: []SeatID{EngineeringManager}},

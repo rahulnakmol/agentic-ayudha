@@ -36,6 +36,7 @@ agent runs the verb as a skill, and the same rules apply either way.
 |  | [`polish`](polish.md) | Applies a design critique to a pull request and reviews it again. | UX Researcher & Evolutionist (Hanu) |
 |  | [`baseline`](baseline.md) | Captures reference screenshots of a commit to compare later changes against. | UX Researcher & Evolutionist (Hanu) |
 | [Build it](../journey-4-build.md) | [`build`](build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. | AI Native Engineer (Nakul) |
+|  | [`mission`](mission.md) | Starts the build of a Feature a person approved, and shows where its mission stands. | Engineering Manager (Drona) |
 | [Prove it](../journey-5-prove.md) | [`verify`](verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. | AI Native Engineer (Nakul) |
 |  | [`inspect`](inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. | Engineering Manager (Drona) |
 |  | [`proof`](proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. | Quality Architect (Yama) |

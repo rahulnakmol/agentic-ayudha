@@ -189,6 +189,7 @@ are not verbs; the verbs reference lists them.
 |  | [`polish`](skills/polish.md) | Applies a design critique to a pull request and reviews it again. |
 |  | [`baseline`](skills/baseline.md) | Captures reference screenshots of a commit to compare later changes against. |
 | [Build it](journey-4-build.md) | [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+|  | [`mission`](skills/mission.md) | Starts the build of a Feature a person approved, and shows where its mission stands. |
 | [Prove it](journey-5-prove.md) | [`verify`](skills/verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
 |  | [`inspect`](skills/inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 |  | [`proof`](skills/proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |

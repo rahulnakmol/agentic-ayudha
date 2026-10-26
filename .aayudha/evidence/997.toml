@@ -1,0 +1,41 @@
+# Which tests prove Story #997's Completion Goal.
+
+[[criterion]]
+id = 1 # approve #889 with MS1 (#20, #21) and MS2 (#22, #23), then Start: plan.json has the graph, milestones, agents, budget, started_by, tool, and runs ≥ 8
+tests = ["internal/cli:TestMissionStartWritesPlan"]
+
+[[criterion]]
+id = 2 # #24 and Bug #25 in no milestone: "#24 and #25 are in no milestone: every story and Bug belongs to one"
+tests = ["internal/cli:TestApproveToBuildRefusesStoryWithNoMilestone"]
+
+[[criterion]]
+id = 3 # one milestone with all stories passes; its gate runs when the last story merges
+tests = ["internal/cli:TestApproveToBuildRefusesStoryWithNoMilestone"]
+
+[[criterion]]
+id = 4 # Tatkal Feature #920 of Release #906: no Feature-done milestone; complete only when #906 is ready to promote and publish
+tests = ["internal/cli:TestMissionPlanTatkalHasNoFeatureDoneMilestone"]
+
+[[criterion]]
+id = 5 # mission show: milestones with stories and state, agents, budget used and left, estimate, each with its source; one "paused: <reason>" row, never "quiet"
+tests = ["internal/cli:TestMissionShowPrintsSourcesAndPausedRow"]
+
+[[criterion]]
+id = 6 # started on cursor, then the tool set to claude: #889 keeps cursor from plan.json; the new tool applies to a later mission
+tests = ["internal/cli:TestMissionToolReadFromPlanNotConfig"]
+
+[[criterion]]
+id = 7 # #22 depends on #950 (#874), not merged: mission 1 has #20 and #21; #22 waits for mission 2 with "waits on #950 (#874)"
+tests = ["internal/cli:TestMissionSplitsOnOpenExternalDependsOn"]
+
+[[criterion]]
+id = 8 # #950 merges: mission 2 starts with #22, with no new Approve to build, on the tool and approval in plan.json
+tests = ["internal/cli:TestMissionTwoStartsWhenDependsOnMerges"]
+
+[[criterion]]
+id = 9 # #886 estimates $420, range $360–$660: the card shows "BUDGET $660 · the top of the range, locked when you start"; budget 660 with its basis
+tests = ["internal/cli:TestMissionBudgetIsTopOfRange"]
+
+[[criterion]]
+id = 10 # an agent runs mission start: "aayu: mission start is a person's decision and is refused for an agent lane (AMP_THREAD_ID)"; nothing written
+tests = ["internal/cli:TestMissionStartRefusedForAgentLane"]

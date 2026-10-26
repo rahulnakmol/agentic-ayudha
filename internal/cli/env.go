@@ -102,6 +102,13 @@ type Options struct {
 	// CritiqueState is #876's critique.State of a Feature, which Approve to build reads (tests: its fake until #876
 	// merges); nil: no review or finding is recorded, so nothing waits.
 	CritiqueState func(ctx context.Context, feature int) (ready.Critique, error)
+	// What a mission plan reads from work not merged yet (Story #997; tests: their fakes). RepoTool is the
+	// person's tool for a repository from their user config (R9; nil: none is set, so Start refuses);
+	// CostEstimate is #886's cost estimate of a Feature (nil: none, so the budget is the approved one);
+	// TatkalRelease is the Release whose Tatkal Feature a Feature is (#877 S8; nil or 0: not one).
+	RepoTool      func(ctx context.Context, repo string) (string, error)
+	CostEstimate  func(ctx context.Context, feature int) (*CostEstimate, error)
+	TatkalRelease func(ctx context.Context, feature int) (int, error)
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

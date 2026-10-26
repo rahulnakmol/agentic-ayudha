@@ -371,6 +371,12 @@ func (e *Env) footprint(feature workitems.Item) []string {
 // featureStories lists Feature n's child stories (SubIssue.ListByIssue),
 // leaving out a cancelled one.
 func featureStories(ctx context.Context, c *github.Client, repo string, n int) ([]*gh.Issue, error) {
+	return featureItems(ctx, c, repo, n, "story")
+}
+
+// featureItems are the sub-issues of Feature n of the given types, without
+// cancelled ones.
+func featureItems(ctx context.Context, c *github.Client, repo string, n int, types ...string) ([]*gh.Issue, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
 		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(n), &o)
@@ -382,7 +388,7 @@ func featureStories(ctx context.Context, c *github.Client, repo string, n int) (
 	for _, s := range subs {
 		si := (*gh.Issue)(s)
 		labels := github.IssueLabels(si)
-		if typ, _ := workitems.TypeOf(si.GetType().GetName(), labels); typ == "story" && !slices.Contains(labels, "status:cancelled") {
+		if typ, _ := workitems.TypeOf(si.GetType().GetName(), labels); slices.Contains(types, typ) && !slices.Contains(labels, "status:cancelled") {
 			out = append(out, si)
 		}
 	}
