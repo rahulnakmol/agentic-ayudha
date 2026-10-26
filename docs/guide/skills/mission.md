@@ -6,7 +6,7 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 
 | Field | Value |
 |---|---|
-| In plain words | Starts the build of a Feature a person approved, shows where its mission stands, and says what can start next. |
+| In plain words | Starts the build of a Feature a person approved, shows where its mission stands, says what can start next, and lets a person stop it safely. |
 | Journey stage | [Build it](../journey-4-build.md) |
 | Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`mission`](../how-models.md) model lane, with the seat's paired human when it has one |
@@ -54,8 +54,11 @@ aayu mission <action> <feature>
 
 | Input | Required | What it does |
 |---|---|---|
-| `<action>` | yes | start: a person starts the approved mission, through GitHub's device flow, and the plan records them, their tool for this repository, and the budget; refused for an agent lane. show: print the plan, each number with its source. next: list the mission's stories and Bugs that can start now, in order (priority, slice order, Ready time), and why each other one waits, with no model call; it claims each start on the ledger (missions/\<f>/claims.jsonl), so two runs never start one story, and only the mission's recorded tool runs it. With --json it is an aayudha.work/v1 list: {schema, scope {kind, id}, items [{key, action, reason, subthread}]}. One of: `start`, `show`, `next`. |
-| `<feature>` | yes | Feature whose mission to start, show, or list. |
+| `<action>` | yes | start: a person starts the approved mission, through GitHub's device flow, and the plan records them, their tool for this repository, and the budget; refused for an agent lane. show: print the plan, each number with its source. next: list the mission's stories and Bugs that can start now, in order (priority, slice order, Ready time), and why each other one waits, with no model call; it claims each start on the ledger (missions/\<f>/claims.jsonl), so two runs never start one story, and only the mission's recorded tool runs it. With --json it is an aayudha.work/v1 list: {schema, scope {kind, id}, items [{key, action, reason, subthread}]}. stop: a person stops the mission (or one story or Bug with --story), through GitHub's device flow and from any tool: mission next starts nothing and ship merges none of its PRs; each running Amp, Claude Code, or Cursor thread is told to commit at its next checkpoint and stop, and a thread aayu cannot reach is named; claims, branches, and PRs stay, and other missions and loops run on. resume: a person on the mission's recorded tool continues it (or one story with --story) and starts stories up to its agents. Each control is recorded in the plan's controls; both are refused for an agent lane. One of: `start`, `show`, `next`, `stop`, `resume`. |
+| `<feature>` | yes | Feature whose mission to start, show, list, stop, or resume. |
+| `--story` | no | With stop or resume: only this story or Bug of the mission; the rest runs on. |
+| `--reason` | no | With stop: why, in one line; it is recorded and shown wherever the stop is. |
+| `--end` | no | With stop: end the mission, only by the person who started it. Merged stories stay merged; each open story and Bug loses its claims and goes back to status:ready, its open PRs close, the lock ends, and each locked issue gets one comment. |
 
 <!-- END GENERATED: skill-usage -->
 

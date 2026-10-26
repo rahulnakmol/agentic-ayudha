@@ -1,0 +1,73 @@
+# Which tests prove Story #1002's Completion Goal.
+
+[[criterion]]
+id = 1 # stop with 3 stories running: next starts nothing, Amp, Claude, and Cursor threads are told, claims, branches, and PRs stay
+tests = ["internal/cli:TestMissionStopKeepsClaimsAndPRs"]
+
+[[criterion]]
+id = 2 # a Codex cloud task and a Copilot task: not reached: <task URL>; it runs to its end, and its PR waits
+tests = ["internal/cli:TestMissionStopNamesUnreachedTasks"]
+
+[[criterion]]
+id = 3 # ship of a stopped mission's PR: #889's mission is stopped (spec drift): resume it first
+tests = ["internal/cli:TestShipRefusesStoppedMission"]
+
+[[criterion]]
+id = 4 # #874 and the loops run on while #889 is stopped, and AAYUDHA_HALT is not set
+tests = ["internal/cli:TestMissionStopLeavesOtherMissionsAndLoops"]
+
+[[criterion]]
+id = 5 # resume: reads the plan and GitHub, continues each stopped thread, starts up to agents
+tests = ["internal/cli:TestMissionResumeContinues"]
+
+[[criterion]]
+id = 6 # an agent's stop is refused, with the next step
+tests = ["internal/cli:TestMissionStopRefusedForAgentLane"]
+
+[[criterion]]
+id = 7 # a PR of MS2 while MS1's gate has not passed: #70 is in MS2: it merges after MS1's gate passes
+tests = ["internal/cli:TestShipMergesMilestonesInOrder"]
+
+[[criterion]]
+id = 8 # MS1's gate passes on dev: ship merges the MS2 PR
+tests = ["internal/cli:TestShipMergesMilestonesInOrder"]
+
+[[criterion]]
+id = 9 # stop --story 858: only its thread stops; it keeps its claim, PR, and slot; ship refuses its PR; the rest runs on
+tests = ["internal/cli:TestMissionStopOneStoryOrBug", "internal/cli:TestShipRefusesStoppedMission"]
+
+[[criterion]]
+id = 10 # resume --story 858: only its thread continues, and show no longer lists it stopped
+tests = ["internal/cli:TestMissionStopOneStoryOrBug"]
+
+[[criterion]]
+id = 11 # a Bug of the mission stops and resumes as a story does
+tests = ["internal/cli:TestMissionStopOneStoryOrBug"]
+
+[[criterion]]
+id = 12 # @alice on claude stops @bob's codex mission: the plan, ship's refusal, not reached, the Kanha's next wake
+tests = ["internal/cli:TestMissionStopFromAnyTool", "internal/cli:TestShipRefusesStoppedMission"]
+
+[[criterion]]
+id = 13 # @alice on claude cannot resume a codex mission
+tests = ["internal/cli:TestMissionResumeRefusedOnOtherTool"]
+
+[[criterion]]
+id = 14 # @dana on codex resumes: controls records resume by dana on codex
+tests = ["internal/cli:TestMissionControlsRecordWho"]
+
+[[criterion]]
+id = 15 # @bob ends #874: merged stays, open ones Ready, PR closed, lock ended, one comment per locked issue
+tests = ["internal/cli:TestMissionEndOnlyByStarter"]
+
+[[criterion]]
+id = 16 # @dana's --end of @bob's mission is refused
+tests = ["internal/cli:TestMissionEndOnlyByStarter"]
+
+[[criterion]]
+id = 17 # a listed gate fix PR on the current approved record merges on proof
+tests = ["internal/cli:TestShipMergesOnlyListedFixPR"]
+
+[[criterion]]
+id = 18 # an unlisted gate fix PR: #982 is not a listed gate fix of #889
+tests = ["internal/cli:TestShipMergesOnlyListedFixPR"]

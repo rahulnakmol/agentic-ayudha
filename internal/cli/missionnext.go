@@ -16,7 +16,6 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
-	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -95,9 +94,15 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	} else if len(changed) > 0 {
 		return WithNext(Errorf(ExitBlocked, "#%d is not approved to build: %s. Nothing starts.", f, strings.Join(changed, "; ")), fmt.Sprintf("aayu ready %d --check", f))
 	}
-	switch host, _ := doctor.DetectHost(e.Host, e.Getenv); {
+	host, err := e.callerTool(ctx, repo)
+	if err != nil {
+		return err
+	}
+	switch {
 	case plan.StartedBy == "":
 		return WithNext(Errorf(ExitBlocked, "The mission of #%d has not started: a person starts it. Nothing starts.", f), fmt.Sprintf("aayu mission start %d", f))
+	case plan.State != "":
+		return Errorf(ExitBlocked, "The mission of #%d %s. Nothing starts.", f, plan.State)
 	case host != plan.Tool:
 		return Errorf(ExitBlocked, "#%d's mission runs on %s, the tool of @%s, who started it: run this there", f, plan.Tool, plan.StartedBy)
 	case plan.Pause != nil:
@@ -178,6 +183,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = "blocked"
 		case usagePaused(st, now) != "":
 			en.item.Reason = usagePaused(st, now)
+		case plan.stopped(n) != nil: // a person stopped it alone (#1002): it keeps its slot while it runs
+			en.item.Reason = fmt.Sprintf("stopped (%s)", plan.stopped(n).Reason)
 		case running:
 			continue // it runs: the per-mission running view is #895's
 		case slices.ContainsFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }):
@@ -312,6 +319,10 @@ func openDeps(ctx context.Context, c *github.Client, owner, name, body string, s
 }
 
 func emitWorkList(e *Env, list WorkList) error {
+	if e.work != nil { // mission resume reports the list in its own result
+		*e.work = list
+		return nil
+	}
 	return e.Emit(list, func(w io.Writer) error {
 		for _, it := range list.Items {
 			line := it.Action + " " + it.Key

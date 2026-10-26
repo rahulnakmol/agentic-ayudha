@@ -1210,6 +1210,12 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 					is.Body = b
 				}
 			}
+			if st, ok := body["state"].(string); ok { // open or closed, on the PR and its issue
+				pr.State = st
+				if is := g.Issues[pr.Number]; is != nil {
+					is.State = st
+				}
+			}
 			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
 			g.seq++

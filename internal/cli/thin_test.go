@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -96,8 +97,13 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 // gateRunFor is gateRun for any story.
 func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head string, checks []proof.Check, footprint ...string) {
 	t.Helper()
-	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(story))
-	snap, _ := ready.ParseSnapshot(b)
+	var snap ready.LedgerSnapshot
+	if b, err := exec.Command("git", "-C", dir, "show", "origin/ledger:"+ready.LedgerPath(story)).Output(); err == nil {
+		snap, _ = ready.ParseSnapshot(string(b))
+	} else if b, err := exec.Command("git", "-C", dir, "show", "origin/ledger:"+ready.ApprovalPath(story)).Output(); err == nil {
+		sum := sha256.Sum256(b) // a gate fix's pack rests on its Feature's approved record (Story #1002)
+		snap.CompletionGoalHash = hex.EncodeToString(sum[:])
+	}
 	files := map[string][]byte{}
 	p := &proof.Pack{Repo: "o/r", Story: story, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
 		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks, Footprint: footprint}
@@ -108,9 +114,11 @@ func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head s
 		p.Criteria = append(p.Criteria, proof.Criterion{ID: c.N, Evidence: []string{rel}})
 	}
 	// A capture: in the artifact and hash-checked by ship, never landed on the ledger.
-	files["media/criterion-1.png"] = []byte("\x89PNG capture")
-	p.Artifacts = append(p.Artifacts, proof.NewArtifact("media/criterion-1.png", "screenshot", files["media/criterion-1.png"]))
-	p.Criteria[0].Evidence = append(p.Criteria[0].Evidence, "media/criterion-1.png")
+	if len(p.Criteria) > 0 {
+		files["media/criterion-1.png"] = []byte("\x89PNG capture")
+		p.Artifacts = append(p.Artifacts, proof.NewArtifact("media/criterion-1.png", "screenshot", files["media/criterion-1.png"]))
+		p.Criteria[0].Evidence = append(p.Criteria[0].Evidence, "media/criterion-1.png")
+	}
 	tmp := t.TempDir()
 	if err := proof.WriteLocal(filepath.Join(tmp, strconv.Itoa(story)), p, files); err != nil {
 		t.Fatal(err)

@@ -394,7 +394,7 @@ func TestMissionStartWritesPlan(t *testing.T) {
 	p, raw = m.plan(889)
 	if p.StartedBy != "rahulnakmol" || p.Tool != "cursor" || p.Budget != 240 || p.StartedAt == "" || p.Estimate.Runs != 8 ||
 		!strings.Contains(raw, `"started_by": "rahulnakmol"`) || !strings.Contains(raw, `"tool": "cursor"`) || !strings.Contains(raw, `"budget": 240`) ||
-		len(p.Controls) != 1 || p.Controls[0] != (MissionControl{Action: "start", By: "rahulnakmol", At: p.StartedAt, Presence: "device-flow"}) {
+		len(p.Controls) != 1 || p.Controls[0] != (MissionControl{Action: "start", By: "rahulnakmol", Tool: "cursor", At: p.StartedAt, Presence: "device-flow"}) {
 		t.Fatalf("plan.json after Start:\n%s", raw)
 	}
 	// Two commits: the start, which no second Start passes, then its Kanha (Story #1004).
@@ -465,7 +465,7 @@ func TestApproveToBuildOneMilestonePasses(t *testing.T) {
 		t.Fatalf("one milestone: exit %d: %s%s", code, out, errOut)
 	}
 	p, raw := m.plan(889)
-	if len(p.Milestones) != 1 || !slices.Equal(p.Milestones[0].Stories, []int{20, 21, 22, 23, 24, 25}) || p.Milestones[0].Gate != "runs when its last story merges" ||
+	if len(p.Milestones) != 1 || !slices.Equal(p.Milestones[0].Stories, []int{20, 21, 22, 23, 24, 25}) || p.Milestones[0].Gate != (MilestoneGate{State: GateWaits}) ||
 		p.Graph[5].Kind != "bug" || p.Graph[5].Milestone != "MS1" || p.Estimate.Basis != "runs ≥ 6 stories and Bugs + 2 × 1 milestones = 8" {
 		t.Fatalf("plan.json with one milestone:\n%s", raw)
 	}

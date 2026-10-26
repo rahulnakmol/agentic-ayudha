@@ -57,7 +57,7 @@ every input of every verb.
 | `release` | Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement. | DevOps & DevEx Tinkerer | chore | L09 | human | cli, skill, mcp |
 | `proof` | Push, get, verify, or list proof packs on the ledger branch; comment is the merge gate's pack check. | Quality Architect | chore | all | bot | cli, skill, mcp |
 | `ready` | Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only. | Product Strategist | chore | all | bot | cli, skill, mcp |
-| `mission` | Start a Feature's approved mission, show its plan, or list the stories and Bugs that can start now, in order. | Engineering Manager | mission | all | human | cli, skill, mcp |
+| `mission` | Start a Feature's approved mission, show its plan, list the stories and Bugs that can start now, in order, or stop, resume, or end it. | Engineering Manager | mission | all | human | cli, skill, mcp |
 | `research` | Gather pinned design references (URLs and IDs only) and user research for a Feature. | UX Researcher & Evolutionist | spec | L01 | bot | cli, skill, mcp |
 | `wireframe` | Produce wireframes for a Feature's states from its research and criteria. | UX Researcher & Evolutionist | build | L01 | bot | cli, skill, mcp |
 | `mockup` | Produce design-system mockups for a Feature from its wireframes. | UX Researcher & Evolutionist | build | L01 | bot | cli, skill, mcp |
