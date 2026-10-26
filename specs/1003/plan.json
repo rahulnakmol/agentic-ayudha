@@ -1,0 +1,49 @@
+{
+  "story": 1003,
+  "body_hash": "0a23f7aece953279fbce7be4ac5fc87363e396e789e4b7753026c248e2826d6a",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "aayu mission recover and retry: re-attach what lives, no story started twice, bounded retries",
+      "contracts": [
+        "internal/cli/mission.go: `aayu mission recover \u003cf\u003e` and `aayu mission retry \u003cf\u003e --story n`; reads delegate/\u003cn\u003e/state.json (internal/delegate/state.go:29) and each receiver's Status",
+        "story states `maybe started` and `unreadable: \u003csource\u003e` in plan.json"
+      ],
+      "tests": [
+        "internal/cli:TestMissionRecoverReattachesKeepsRestarts",
+        "internal/cli:TestMissionRecoverIsIdempotent",
+        "internal/cli:TestMissionRecoverMarksUnreadable",
+        "internal/cli:TestMissionMaybeStartedCheckedBeforeRestart",
+        "internal/cli:TestMissionRetryBackoffAndMax",
+        "internal/cli:TestMissionRetryStory",
+        "internal/cli:TestMissionRetryDoesNotRerunJudgedReview",
+        "internal/cli:TestMissionRecoverRefusedOnOtherTool",
+        "internal/cli:TestMissionRetryByTeammateRecorded"
+      ],
+      "instrumentation": [
+        "one line per story from recover",
+        "retries counted and costed in the record"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:15Z",
+  "planned_by": "human-fallback"
+}
