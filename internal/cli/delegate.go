@@ -351,6 +351,16 @@ func (e *Env) writeBrief(ctx context.Context, d *delegation, chk ready.Result) e
 	if ok, _ := readLedgerJSON(ctx, d.w, PlanLedgerPath(d.story), &plan); ok {
 		in.Checkpoints = plan.Checkpoints
 	}
+	// An Amp orb thread runs aayu, so it ships its own PR on proof; Codex, Cursor, and Claude cloud never merge
+	// (Story #1006). A local receiver's PR is aayu's own.
+	in.Ships = d.receiver == delegate.Amp && !d.local
+	for _, dep := range dependsOn(d.body) {
+		u, err := upstream(ctx, t, dep)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		in.Upstream = append(in.Upstream, u)
+	}
 	if a, err := os.ReadFile(filepath.Join(d.root, "AGENTS.md")); err == nil {
 		in.Conventions = string(a)
 	}
@@ -366,6 +376,44 @@ func (e *Env) writeBrief(ctx context.Context, d *delegation, chk ready.Result) e
 	}
 	d.brief = delegate.Brief(in)
 	return nil
+}
+
+// upstream is depends-on story n as a brief lists it: each PR it shipped, with
+// its ship record, oldest first, and the answers to the asks raised on it.
+func upstream(ctx context.Context, t *ledger.Tree, n int) (delegate.Upstream, error) {
+	u := delegate.Upstream{Story: n}
+	// Only absent data is optional: a read that fails, or a ship record without its PR and merge commit, stops the
+	// hand-off rather than send an incomplete brief.
+	ps, err := t.List(ctx, fmt.Sprintf("proof/%d/", n))
+	if err != nil {
+		return u, err
+	}
+	shippedAt := map[string]string{}
+	for _, p := range ps {
+		if !strings.HasSuffix(p, "/authoritative/ship.json") {
+			continue
+		}
+		var r ShipRecord
+		b, err := t.File(ctx, p)
+		if err == nil {
+			err = json.Unmarshal(b, &r)
+		}
+		if err == nil && (r.PR <= 0 || r.MergeCommit == "") {
+			err = errors.New("no PR or merge commit")
+		}
+		if err != nil {
+			return u, fmt.Errorf("%s: %w", p, err)
+		}
+		shippedAt[p] = r.ShippedAt
+		u.Shipped = append(u.Shipped, delegate.Shipped{PR: r.PR, Merge: r.MergeCommit, Record: p})
+	}
+	slices.SortStableFunc(u.Shipped, func(a, b delegate.Shipped) int { return strings.Compare(shippedAt[a.Record], shippedAt[b.Record]) })
+	b, err := t.File(ctx, fmt.Sprintf("specs/%d/answers.md", n))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return u, err
+	}
+	u.Answers = strings.TrimSpace(string(b))
+	return u, nil
 }
 
 // act records one hand-off step in the actions log (a receiver's API or CLI

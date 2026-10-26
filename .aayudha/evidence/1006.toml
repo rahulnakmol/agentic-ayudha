@@ -1,0 +1,13 @@
+# Which tests prove Story #1006's Completion Goal.
+
+[[criterion]]
+id = 1 # the Kanha starts #50 on amp: the brief says own it in its worktree and branch, subagents, act on inspect, rebase on dev, aayu ship on proof; never --admin, never another way
+tests = ["internal/delegate:TestBriefShipsOnProof", "internal/cli:TestDelegateBriefForMissionStory"]
+
+[[criterion]]
+id = 2 # a receiver that cannot run aayu (Codex, Cursor, Claude cloud): the brief says never merge, as today
+tests = ["internal/delegate:TestBriefNeverMergeForCloudReceivers", "internal/cli:TestDelegateBriefForMissionStory"]
+
+[[criterion]]
+id = 3 # #52 depends on #40, merged as PR #41: the brief lists PR #41, its ship record, and the asks answered on #40
+tests = ["internal/delegate:TestBriefListsUpstreamPRAndAsks", "internal/cli:TestDelegateBriefForMissionStory"]
