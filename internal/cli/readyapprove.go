@@ -112,12 +112,8 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int) error {
 	if !got.Agreed(want) || !slices.Equal(again, effect) || version(prev2) != version(prev) {
 		return Errorf(ExitBlocked, "The approval of #%d changed while the code was waiting; nothing was approved.", n)
 	}
-	rec := e.presenceRecord(p.Login)
-	if rec == "" {
-		return Errorf(ExitInternal, "the presence check of @%s is not in the actions log; nothing was approved", p.Login)
-	}
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
-	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: rec}
+	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: e.presenceRecord(p.Login)}
 	rep.State, rep.Approval = "approved", &got
 	if !c.DryRun() {
 		data, _ := json.MarshalIndent(got, "", "  ")
@@ -287,10 +283,8 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 // ledger tip it read.
 func (a *approveRun) last(ctx context.Context) (*ready.Approval, string, error) {
 	t, err := a.w.Read(ctx)
-	if errors.Is(err, ledger.ErrNoLedger) {
-		return nil, "", nil
-	} else if err != nil {
-		return nil, "", Wrap(ExitExternal, err)
+	if err != nil { // no ledger yet: no approval either
+		return nil, "", Wrap(ExitExternal, ignoreMissing(err))
 	}
 	defer t.Close()
 	b, err := t.File(ctx, ready.ApprovalPath(a.n))
@@ -322,14 +316,14 @@ func (r *partRun) version(ctx context.Context, v int) (*ready.Baseline, error) {
 // in this machine's actions log: the record audit matches to the approval.
 func (e *Env) presenceRecord(login string) string {
 	b, _ := os.ReadFile(e.ActionsPath())
-	lines := bytes.Split(bytes.TrimSpace(b), []byte("\n"))
-	for i := len(lines) - 1; i >= 0; i-- {
+	hash := ""
+	for line := range bytes.SplitSeq(bytes.TrimSpace(b), []byte("\n")) {
 		var r actions.Record
-		if json.Unmarshal(lines[i], &r) == nil && r.Kind == "presence.approve" && r.Payload["approver"] == login {
-			return r.Hash
+		if json.Unmarshal(line, &r) == nil && r.Kind == "presence.approve" && r.Payload["approver"] == login {
+			hash = r.Hash
 		}
 	}
-	return ""
+	return hash
 }
 
 // ready has Arjun post the Feature's Ready snapshot and label it
