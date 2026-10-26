@@ -212,9 +212,23 @@ func TestMissionNextOneClaimTwoRuns(t *testing.T) {
 		out != "waits #20: no free agent (1 of 1 busy after these starts)\nwaits #21: no free agent (1 of 1 busy after these starts)\n" {
 		t.Fatalf("a race for the last agent: exit %d: %q%s", code, out, errOut)
 	}
-	// A Ready story with a live lease is a build that another run started: it holds an agent too.
+	// With 2 agents and a budget of one story, the story another run won holds its cap: this run starts nothing.
 	putLedger(t, m.bare, MissionClaimsPath(889), "")
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 2 })
+	m.setPlan(889, func(p *MissionPlan) { p.Agents, p.Budget = 2, 60 })
+	pushed = false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, MissionClaimsPath(889), first)
+		}
+	}
+	if code, out, errOut := run(t, m.agent, race, "mission", "next", "889", "--repo", "o/r"); code != 0 ||
+		out != "waits #20: claimed by another run\nwaits #21: would pass #889's approved budget (60 + 60 > 60 USD)\n" {
+		t.Fatalf("a race within the budget: exit %d: %q%s", code, out, errOut)
+	}
+	// A Ready story with a live lease is a build that another run started: it holds an agent too.
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 600 })
+	putLedger(t, m.bare, MissionClaimsPath(889), "")
 	m.edit(func() {
 		is := m.g.Issues[21]
 		is.Labels = append(is.Labels, fake.Label{Name: LeaseLabel})

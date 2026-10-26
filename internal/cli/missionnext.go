@@ -225,9 +225,10 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 				return err
 			}
 		}
-		switch lost {
+		// The story this run lost runs too: it holds its cap, as the run that won it counted.
+		switch spent += per; lost {
 		case 0:
-			en.item.Action, spent = "start", spent+per
+			en.item.Action = "start"
 			busy[en.n] = true
 		case en.n:
 			en.item.Reason, busy[en.n] = "claimed by another run", true
