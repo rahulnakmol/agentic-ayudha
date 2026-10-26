@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefShipsOnProof"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefShipsOnProof","Output":"=== RUN   TestBriefShipsOnProof\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefShipsOnProof","Output":"--- PASS: TestBriefShipsOnProof (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefShipsOnProof"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory","Output":"=== RUN   TestDelegateBriefForMissionStory\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory","Output":"--- PASS: TestDelegateBriefForMissionStory (3.64s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory"}

@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefNeverMergeForCloudReceivers"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefNeverMergeForCloudReceivers","Output":"=== RUN   TestBriefNeverMergeForCloudReceivers\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefNeverMergeForCloudReceivers","Output":"--- PASS: TestBriefNeverMergeForCloudReceivers (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestBriefNeverMergeForCloudReceivers"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory","Output":"=== RUN   TestDelegateBriefForMissionStory\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory","Output":"--- PASS: TestDelegateBriefForMissionStory (3.64s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateBriefForMissionStory"}

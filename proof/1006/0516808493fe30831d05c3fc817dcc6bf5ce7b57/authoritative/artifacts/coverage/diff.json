@@ -1,0 +1,16 @@
+{
+  "covered": 68,
+  "executable": 72,
+  "percent": 94.44444444444444,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/delegate.go": [
+      389,
+      390,
+      413,
+      414
+    ]
+  },
+  "format": "go coverprofile"
+}
