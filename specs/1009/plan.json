@@ -1,0 +1,54 @@
+{
+  "story": 1009,
+  "body_hash": "01fdc6e20bc108b54348d7d1143dc2e7afce0285601842f60e944905bb6257bb",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L03",
+      "title": "loops/build-ready.toml: an hourly safety tick with the wake prompt, rendered for every host",
+      "contracts": [
+        "loops/build-ready.toml: `cron = \"0 * * * *\"` and the tick prompt (narrow set: a person ships it)",
+        "UTC renderings through loops.Offsets (internal/loops/loops.go:459) and CursorAutomations (:744)"
+      ],
+      "tests": [
+        "internal/loops:TestBuildReadyHourlyCronUTC",
+        "internal/cli:TestInstallLoopsWritesHourlyTick"
+      ],
+      "instrumentation": [
+        "`aayu doctor` reports loop drift"
+      ],
+      "rollback": "Revert the squash commit, then run `aayu install --loops --apply` so each host's installed schedule goes back to the old cron.",
+      "criteria": [
+        1,
+        5
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "The tick wakes only a Kanha that missed an event, reads from its cursor, and syncs cloud PRs",
+      "contracts": [
+        "internal/cli/mission.go: tick path; plan.json `events_cursor` moves only after the Kanha acted",
+        "cloud PRs synced through `aayu build \u003cn\u003e --delegate \u003creceiver\u003e` (internal/cli/delegate.go:421)"
+      ],
+      "tests": [
+        "internal/cli:TestTickWakesOnlyMissedKanha",
+        "internal/cli:TestWakeReadsFromEventsCursor",
+        "internal/cli:TestTickSyncsCloudPRVerdict"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:38Z",
+  "planned_by": "human-fallback"
+}
