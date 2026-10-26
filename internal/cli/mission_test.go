@@ -593,6 +593,16 @@ func TestMissionTwoStartsWhenDependsOnMerges(t *testing.T) {
 	if m.commits() != n || git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889)) != approved || git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != planned {
 		t.Fatal("mission 2 wrote a new approval or changed the plan")
 	}
+	// A pause holds mission 2 too, even though its depends-on merged.
+	var paused MissionPlan
+	_ = json.Unmarshal([]byte(planned), &paused)
+	paused.Pause = &MissionPause{Reason: "a migration needs a person"}
+	data, _ := json.MarshalIndent(paused, "", "  ")
+	putLedger(t, m.bare, MissionPlanPath(889), string(data))
+	if code, out, errOut := m.mission(m.person, "", "show", 889); code != 0 || !strings.Contains(out, "mission 2 held until the mission resumes · #22\n") {
+		t.Fatalf("show of a paused mission after #950 merged: exit %d: %s%s", code, out, errOut)
+	}
+	putLedger(t, m.bare, MissionPlanPath(889), planned)
 	m.closeIssue(951)
 	if code, out, errOut := m.mission(m.person, "", "show", 889); code != 0 || !strings.Contains(out, "on cursor, with no new Approve to build · #22, #23\n") || strings.Contains(out, "mission 3") {
 		t.Fatalf("show after #951 merged: exit %d: %s%s", code, out, errOut)
