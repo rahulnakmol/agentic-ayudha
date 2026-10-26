@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestDoctorWarnsToolMissingFromLock"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestDoctorWarnsToolMissingFromLock","Output":"=== RUN   TestDoctorWarnsToolMissingFromLock\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestDoctorWarnsToolMissingFromLock","Output":"--- PASS: TestDoctorWarnsToolMissingFromLock (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestDoctorWarnsToolMissingFromLock"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallWritesMissionSkillForLockTools"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallWritesMissionSkillForLockTools","Output":"=== RUN   TestInstallWritesMissionSkillForLockTools\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallWritesMissionSkillForLockTools","Output":"--- PASS: TestInstallWritesMissionSkillForLockTools (0.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallWritesMissionSkillForLockTools"}
