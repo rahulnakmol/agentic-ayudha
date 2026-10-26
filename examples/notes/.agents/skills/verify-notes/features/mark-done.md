@@ -7,13 +7,14 @@ list fails with exit 1 and leaves the file as it was.
 {"id": "mark-done", "layers": ["L02"],
  "sources": ["examples/notes/cmd/notes/main.go", "examples/notes/store/store.go"],
  "surfaces": {"command": ["done"]},
- "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
+ "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
 ```
 
 ## Sub-features
 
 - `done`: a note marked done is listed with `[x]`.
-- `missing`: an unknown number exits 1 with "no such note".
+- `missing`: an unknown number exits 1 with "no such note"; a word in place of the number is a usage error (exit 2).
+  Neither changes the file.
 
 ## How to reach it
 
@@ -36,6 +37,7 @@ list fails with exit 1 and leaves the file as it was.
   {"build": "./examples/notes/cmd/notes"},
   {"run": ["notes", "add", "buy milk"], "exit": 0},
   {"run": ["notes", "done", "5"], "exit": 1, "stderr": ["no such note: 5 (there are 1)"]},
+  {"run": ["notes", "done", "one"], "exit": 2, "stderr": ["done needs a note number"]},
   {"run": ["notes", "list"], "exit": 0, "stdout": ["1 [ ] buy milk"]}
 ]}
 ```
