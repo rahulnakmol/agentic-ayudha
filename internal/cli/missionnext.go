@@ -506,10 +506,20 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 			path, claim = p, lines[i]
 		}
 	}
+	var plan MissionPlan
+	if path != "" {
+		raw, err := t.File(ctx, strings.TrimSuffix(path, "claims.jsonl")+"plan.json")
+		if ignoreMissing(err) != nil {
+			return false, Wrap(ExitExternal, err)
+		}
+		_ = json.Unmarshal(raw, &plan)
+	}
 	now := ""
 	switch {
 	case path == "":
 		return false, nil // no list marked it start: build's own Ready checks apply
+	case plan.Pause != nil: // paused since the list: its claim is no person's ask any more (Story #1005)
+		now = "its mission is paused: " + plan.Pause.Reason
 	case is.GetState() != "open":
 		now = "closed"
 	case contains(labels, "status:blocked"):

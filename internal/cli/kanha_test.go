@@ -803,4 +803,13 @@ func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 	if code, _, errOut := run(t, m.agent, m.opts, "build", "61", "--delegate", "cursor", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the person has not asked for this story") {
 		t.Fatalf("build 61, which no list marked start: exit %d: %s", code, errOut)
 	}
+	// A list marks #61 start, then a person pauses the mission: its claim is no ask any more.
+	if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "start #61\n") {
+		t.Fatalf("mission next 889 after #61 is Ready: exit %d: %s%s", code, out, errOut)
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.Pause = &MissionPause{Reason: "the v0.4.0 cut", By: "rahulnakmol"} })
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "61", "--delegate", "cursor", "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "#61 changed since the list: now its mission is paused: the v0.4.0 cut; not started") || m.claims(889)[61] != 0 {
+		t.Fatalf("build 61 after the pause: exit %d: %s (claims %v)", code, errOut, m.claims(889))
+	}
 }
