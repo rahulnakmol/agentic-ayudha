@@ -144,12 +144,17 @@ type CostEstimate struct {
 
 // missionPlan is the mission plan Approve to build shows and writes for the
 // Feature, from its stories and Bugs as they are now and the milestones the
-// person named (spec), with the lines the person approves.
-func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, error) {
+// person named, with the lines the person approves, and the plan on the
+// ledger now (nil when there is none).
+func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, *MissionPlan, error) {
 	var p MissionPlan
+	old, _, _, err := readMission(ctx, a.w, a.n)
+	if err != nil {
+		return p, nil, nil, err
+	}
 	subs, err := featureItems(ctx, a.c, a.r.Repo, a.n, "story", "bug")
 	if err != nil {
-		return p, nil, err
+		return p, nil, nil, err
 	}
 	slices.SortFunc(subs, func(x, y *gh.Issue) int { return x.GetNumber() - y.GetNumber() })
 	nums := make([]int, len(subs))
@@ -158,10 +163,10 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, er
 	}
 	ms, err := parseMilestones(a.milestones, nums)
 	if err != nil {
-		return p, nil, err
+		return p, nil, nil, err
 	}
 	if msg := checkMilestones(a.n, ms, nums); msg != "" {
-		return p, nil, off("%s. Next: name each story's and Bug's milestone with aayu ready %d --milestones 'MS1=#a,#b MS2=#c'", msg, a.n)
+		return p, nil, nil, off("%s. Next: name each story's and Bug's milestone with aayu ready %d --milestones 'MS1=#a,#b MS2=#c'", msg, a.n)
 	}
 	owner, name, _ := github.SplitRepo(a.r.Repo)
 	done := map[int]bool{}
@@ -186,7 +191,7 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, er
 			}
 			dep, err := outsideDep(ctx, a.c, owner, name, d)
 			if err != nil {
-				return p, nil, err
+				return p, nil, nil, err
 			}
 			it.Outside = append(it.Outside, dep.MissionDep)
 			done[d] = dep.closed
@@ -195,7 +200,7 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, er
 	}
 	release, err := a.e.tatkalRelease(ctx, a.n)
 	if err != nil {
-		return p, nil, Wrap(ExitExternal, err)
+		return p, nil, nil, Wrap(ExitExternal, err)
 	}
 	what := "stories"
 	if bugs > 0 {
@@ -222,7 +227,7 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, er
 		missionsLine(p.Missions),
 		fmt.Sprintf("Estimate: %s; up to %d stories at once", p.Estimate.Basis, p.Agents),
 	}
-	return p, effect, nil
+	return p, effect, old, nil
 }
 
 // missionsLine says the missions: "Mission 1: #20, #21; #22 waits for mission 2: waits on #950 (#874)".
@@ -481,15 +486,7 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	if err := e.laneRefusal("mission start"); err != nil {
 		return err
 	}
-	repo, err := e.RepoName(ctx)
-	if err != nil {
-		return err
-	}
-	c, tok, err := e.HumanGitHub(ctx)
-	if err != nil {
-		return err
-	}
-	w, err := e.Ledger(ctx, tok, "human", "")
+	repo, c, w, err := e.missionLedger(ctx)
 	if err != nil {
 		return err
 	}
@@ -557,6 +554,21 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 		_, err := fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
 		return err
 	})
+}
+
+// missionLedger is the repository, the person's own GitHub client, and their
+// ledger writer.
+func (e *Env) missionLedger(ctx context.Context) (string, *github.Client, *ledger.Writer, error) {
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	w, err := e.Ledger(ctx, tok, "human", "")
+	return repo, c, w, err
 }
 
 // startable reads the plan Start may start: one that Approve to build wrote
@@ -630,23 +642,11 @@ type MissionState struct {
 // missionShow is `aayu mission show <f>`: the plan as it stands. It writes
 // nothing, and anyone may run it.
 func missionShow(ctx context.Context, e *Env, f int) error {
-	repo, err := e.RepoName(ctx)
+	repo, c, w, err := e.missionLedger(ctx)
 	if err != nil {
 		return err
 	}
-	l, err := e.Config()
-	if err != nil {
-		return err
-	}
-	c, tok, err := e.HumanGitHub(ctx)
-	if err != nil {
-		return err
-	}
-	w, err := e.Ledger(ctx, tok, "human", "")
-	if err != nil {
-		return err
-	}
-	plan, _, _, err := readMission(ctx, w, f)
+	plan, appr, _, err := readMission(ctx, w, f)
 	if err != nil {
 		return err
 	}
@@ -663,9 +663,6 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		}
 		state[it.Number], merged[it.Number] = storyState(is), is.GetState() == "closed"
 		for _, d := range it.Outside {
-			if _, ok := merged[d.Number]; ok {
-				continue
-			}
 			dep, _, err := c.REST.Issues.Get(ctx, owner, name, d.Number)
 			if err != nil {
 				return Wrap(ExitExternal, err)
@@ -700,12 +697,12 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		rep.Milestones = append(rep.Milestones, ms)
 	}
 	rep.Missions = missionsNow(plan, func(n int) bool { return merged[n] })
-	if plan.StartedBy != "" {
-		per := l.Config.Budget.PerStoryUSD
+	if plan.StartedBy != "" && appr != nil {
+		per := appr.Budget.PerStoryUSD
 		used := per * float64(mergedN)
 		rep.Budget = &MissionBudgetView{
 			Budget: SourcedNumber{Value: plan.Budget, Source: plan.BudgetBasis + ", locked at Start"},
-			Used:   SourcedNumber{Value: used, Source: fmt.Sprintf("%d merged x %s ([budget] per_story_usd), until #872 measures spend", mergedN, ready.USD(per))},
+			Used:   SourcedNumber{Value: used, Source: fmt.Sprintf("%d merged x %s (the per-story cap of approval %d), until #872 measures spend", mergedN, ready.USD(per), appr.Version)},
 			Left:   SourcedNumber{Value: plan.Budget - used, Source: "budget less used"},
 		}
 	}

@@ -100,11 +100,7 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if err != nil {
 		return err
 	}
-	plan, planEffect, err := a.missionPlan(ctx)
-	if err != nil {
-		return err
-	}
-	old, _, _, err := readMission(ctx, w, n)
+	plan, planEffect, old, err := a.missionPlan(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,12 +124,8 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if err != nil {
 		return err
 	}
-	plan2, planEffect2, err := a.missionPlan(ctx)
-	if err != nil {
-		return err
-	}
-	// A mission start while the code waits is in the tip the write is based on: read the plan again, so it is kept.
-	old2, _, _, err := readMission(ctx, w, n)
+	// A mission start while the code waits is in the tip the write is based on: the plan is read again, so it is kept.
+	plan2, planEffect2, old2, err := a.missionPlan(ctx)
 	if err != nil {
 		return err
 	}

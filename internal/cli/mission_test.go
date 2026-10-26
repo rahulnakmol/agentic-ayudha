@@ -138,6 +138,9 @@ func (m *missionWorld) commits() string { return git(m.t, m.bare, "rev-list", "-
 func (m *missionWorld) approve(f int, args ...string) (int, string, string) {
 	m.t.Helper()
 	m.device("rahulnakmol")
+	if f == 0 { // the issue is in args
+		return run(m.t, m.person, m.opts, append([]string{"ready", "--repo", "o/r"}, args...)...)
+	}
 	return run(m.t, m.person, m.opts, append([]string{"ready", fmt.Sprint(f), "--repo", "o/r"}, args...)...)
 }
 
@@ -203,6 +206,7 @@ func TestMissionStartRefusedForAgentLane(t *testing.T) {
 func TestMissionStartWritesPlan(t *testing.T) {
 	m := newMissionWorld(t)
 	m.scenario889(map[int]string{21: "depends-on #20"})
+	m.opts.CostEstimate = nil // #886 is not built: the budget is the approved one
 	n := m.commits()
 	code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21 MS2=#22,#23")
 	if code != 0 || m.codes() != 1 || !strings.Contains(errOut, "Approving: Mission plan: MS1 #20, #21 · MS2 #22, #23; every story and Bug is in one milestone") ||
@@ -223,6 +227,46 @@ func TestMissionStartWritesPlan(t *testing.T) {
 		!slices.Equal(p.Milestones[0].Stories, []int{20, 21}) || !slices.Equal(p.Milestones[1].Stories, []int{22, 23}) ||
 		p.Agents != 5 || p.Estimate.Runs != 8 || p.Estimate.Basis != "runs ≥ 4 stories + 2 × 2 milestones = 8" || p.StartedBy != "" || p.Tool != "" {
 		t.Fatalf("plan.json after Approve to build:\n%s", raw)
+	}
+
+	// Before the start: a plan from an older approval, a plan that changes while the code waits, another ledger
+	// write during the start, and --dry-run each start nothing.
+	approved := git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889))
+	putLedger(t, m.bare, ready.ApprovalPath(889), strings.Replace(approved, `"version": 1`, `"version": 2`, 1))
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != ExitBlocked || m.codes() != 0 ||
+		!strings.Contains(errOut, "The mission plan of #889 is from approval 1, and #889 is at approval 2 now. Nothing was started.") {
+		t.Fatalf("start of an older plan: exit %d: %s%s", code, out, errOut)
+	}
+	putLedger(t, m.bare, ready.ApprovalPath(889), approved)
+	changed := strings.Replace(raw, `"agents": 5`, `"agents": 9`, 1)
+	m.edit(func() {
+		m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve",
+			OnPoll: func(int) { putLedger(t, m.bare, MissionPlanPath(889), changed) }}
+	})
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "start", "889", "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "The mission plan of #889 changed while the code was waiting. Nothing was started.") {
+		t.Fatalf("a plan change during the code: exit %d: %s%s", code, out, errOut)
+	}
+	putLedger(t, m.bare, MissionPlanPath(889), raw)
+	race, pushed := m.opts, false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, "specs/889/other.json", "{}")
+		}
+	}
+	m.device("rahulnakmol")
+	if code, out, errOut := run(t, m.person, race, "mission", "start", "889", "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "The ledger changed while aayu wrote the start of #889. Nothing was started. Run it again.") {
+		t.Fatalf("a ledger write during the start: exit %d: %s%s", code, out, errOut)
+	}
+	n = m.commits()
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--dry-run"); code != 0 || m.commits() != n ||
+		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") {
+		t.Fatalf("start --dry-run: exit %d: %s%s", code, out, errOut)
+	}
+	if p, _ := m.plan(889); p.StartedBy != "" {
+		t.Fatalf("a refused start wrote the plan: %+v", p)
 	}
 
 	// Start: the effect before the device code, then the starter, the tool, and the budget.
@@ -265,9 +309,25 @@ func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 	for spec, want := range map[string]string{
 		"MS1=#20,#21,#22 MS2=#22,#23,#24,#25": "#22 is in MS1 and MS2: every story and Bug belongs to one milestone",
 		"MS1=#20,#21,#22,#23,#24,#25,#99":     "MS1 names #99, which is not a story or Bug of #889",
+		"MS1=20,21,22,23,24":                  "#25 is in no milestone: every story and Bug belongs to one",
 	} {
 		if code, out, errOut := m.approve(889, "--milestones", spec); code != ExitBlocked || !strings.Contains(errOut, want) || m.commits() != n {
 			t.Fatalf("--milestones %s: exit %d: %s%s", spec, code, out, errOut)
+		}
+	}
+	// A milestone list aayu cannot read, and --milestones anywhere but Approve to build, are usage errors.
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"889", "--milestones", "MS1"}, `ready --milestones: "MS1": want NAME=#n,#m`},
+		{[]string{"889", "--milestones", "MS1=20 MS1=21"}, "ready --milestones: MS1 is named twice"},
+		{[]string{"889", "--milestones", "MS1=20,x"}, `ready --milestones: MS1: "x" is not an issue number`},
+		{[]string{"889", "--check", "--milestones", "MS1=20"}, "ready: --milestones goes with Approve to build only"},
+		{[]string{"20", "--milestones", "MS1=20"}, "ready: --milestones names a Feature's milestones at Approve to build; #20 is not a Feature"},
+	} {
+		if code, out, errOut := m.approve(0, c.args...); code != ExitUsage || !strings.Contains(errOut, c.want) || m.commits() != n {
+			t.Fatalf("ready %v: exit %d: %s%s", c.args, code, out, errOut)
 		}
 	}
 
@@ -346,7 +406,7 @@ func TestMissionShowPrintsSourcesAndPausedRow(t *testing.T) {
 		"MS2       building: 0 of 2 merged; the gate runs when its last story merges · #22 open, #23 open",
 		"agents    5 (Decision #915 (5 at once))",
 		"budget    $660 (the top of #886's range $360–$660 (estimate $420), locked at Start)",
-		"used      $60 (1 merged x $60 ([budget] per_story_usd), until #872 measures spend)",
+		"used      $60 (1 merged x $60 (the per-story cap of approval 1), until #872 measures spend)",
 		"left      $600 (budget less used)",
 		"estimate  8 runs (runs ≥ 4 stories + 2 × 2 milestones = 8, at Approve to build)",
 	} {
@@ -410,20 +470,44 @@ func TestMissionToolReadFromPlanNotConfig(t *testing.T) {
 	if p, _ := m.plan(889); p.Tool != "cursor" {
 		t.Fatalf("#889's tool: %q", p.Tool)
 	}
-	// No tool set: Start refuses, and nothing is written.
-	m.mu.Lock()
-	m.tool = ""
-	m.mu.Unlock()
+	// No tool entry (R9 is not built, so no seam): Start refuses, and nothing is written. #60 depends on
+	// Feature #874 itself, which is open, so it waits for mission 2.
 	m.issue(901, "Feature 901", "feature", 0, "")
-	m.issue(60, "Story 60", "story", 901, "")
+	m.issue(60, "Story 60", "story", 901, "depends-on #874")
 	m.feature(901, 60)
+	for _, action := range []string{"show", "start"} {
+		if code, out, errOut := m.mission(m.person, "rahulnakmol", action, 901); code != ExitBlocked || !strings.Contains(errOut, "#901 has no mission plan: a person approves it to build first.") {
+			t.Fatalf("%s before Approve to build: exit %d: %s%s", action, code, out, errOut)
+		}
+	}
 	if code, out, errOut := m.approve(901); code != 0 {
 		t.Fatalf("approve 901: exit %d: %s%s", code, out, errOut)
 	}
+	if p, raw := m.plan(901); len(p.Missions) != 2 || p.Missions[1].Stories[0] != (MissionStory{Number: 60, Waits: "waits on #874"}) {
+		t.Fatalf("plan.json of #901:\n%s", raw)
+	}
 	n = m.commits()
+	m.opts.RepoTool = nil
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 901); code != ExitBlocked || m.codes() != 0 || m.commits() != n ||
 		!strings.Contains(errOut, "Start records your tool for o/r from your user config, and none is set there. Nothing was started.") {
 		t.Fatalf("start with no tool: exit %d: %s%s", code, out, errOut)
+	}
+	// A plan aayu did not write is never read as one; and outside a checkout there is no ledger.
+	for forged, want := range map[string]string{
+		`{"schema": "aayudha.mission.plan/v1", "feature": 902}`: "ledger missions/901/plan.json: not the mission plan of #901",
+		`not json`: "ledger missions/901/plan.json: not a record aayu wrote for #901",
+	} {
+		putLedger(t, m.bare, MissionPlanPath(901), forged)
+		if code, out, errOut := m.mission(m.person, "", "show", 901); code != ExitExternal || !strings.Contains(errOut, want) {
+			t.Fatalf("show of a forged plan: exit %d: %s%s", code, out, errOut)
+		}
+	}
+	away := m.opts
+	away.Dir = t.TempDir()
+	for _, action := range []string{"show", "start"} {
+		if code, out, errOut := run(t, m.person, away, "mission", action, "889", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "ledger writes need a checkout") {
+			t.Fatalf("%s outside a checkout: exit %d: %s%s", action, code, out, errOut)
+		}
 	}
 }
 
@@ -446,8 +530,18 @@ func TestMissionSplitsOnOpenExternalDependsOn(t *testing.T) {
 		fmt.Sprint(p.Graph[2].Outside) != fmt.Sprint([]MissionDep{{Number: 950, Feature: 874}}) {
 		t.Fatalf("missions in plan.json:\n%s", raw)
 	}
-	// A depends-on that merged already holds nothing back.
+	// #950 merges before the start: mission 2 can start once the mission starts.
 	m.closeIssue(950)
+	if code, out, errOut := m.mission(m.person, "", "show", 889); code != 0 || !strings.Contains(out, "not started: a person runs aayu mission start 889") ||
+		!strings.Contains(out, "mission 2 can start once the mission starts · #22, #23") {
+		t.Fatalf("show before the start: exit %d: %s%s", code, out, errOut)
+	}
+	// GitHub fails while show reads a depends-on: it says so, and shows nothing.
+	m.edit(func() { m.g.Fail = "GET /repos/o/r/issues/950" })
+	if code, out, errOut := m.mission(m.person, "", "show", 889); code != ExitExternal {
+		t.Fatalf("show with GitHub failing: exit %d: %s%s", code, out, errOut)
+	}
+	// A depends-on that merged already holds nothing back.
 	if code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21,#22 MS2=#23"); code != 0 {
 		t.Fatalf("approve again: exit %d: %s%s", code, out, errOut)
 	}
