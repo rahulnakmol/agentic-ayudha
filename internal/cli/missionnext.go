@@ -147,6 +147,10 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	costs, spent := e.costs(repo), 0.0
 	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
+	states := map[int]string{} // each listed item's state: a depends-on target in the list needs no read
+	for _, is := range append(slices.Clone(subs), extra...) {
+		states[is.GetNumber()] = is.GetState()
+	}
 	for i, is := range append(slices.Clone(subs), extra...) {
 		n, labels := is.GetNumber(), github.IssueLabels(is)
 		spent += costs[n] // the measured spend of every story and Bug, merged ones too
@@ -178,6 +182,18 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		case !contains(labels, ready.LabelReady):
 			en.item.Reason, en.item.detail = "not Ready", storyState(is)
 		default:
+			open, err := openDeps(ctx, c, owner, name, is.GetBody(), states)
+			if err != nil {
+				return err
+			}
+			if len(open) > 0 { // F19: never start before the target merges
+				verb := "is"
+				if len(open) > 1 {
+					verb = "are"
+				}
+				en.item.Reason = fmt.Sprintf("depends-on %s %s open", strings.Join(open, ", "), verb)
+				break
+			}
 			en.free = true
 			if en.readyAt, err = readyAt(ctx, c, owner, name, is); err != nil {
 				return Wrap(ExitExternal, err)
@@ -246,6 +262,40 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		list.note = fmt.Sprintf("Nothing to list: every open story and Bug of #%d runs, or none is open.", f)
 	}
 	return emitWorkList(e, list)
+}
+
+// openDeps are the depends-on targets in a Ready story's Links that are still
+// open (Story #999, F19): "#10", one per target. The body is the one Ready
+// froze, as the Ready guard removes status:ready when it drifts. A target in
+// states has its state from there; aayu reads the others. A target it cannot
+// read counts as open: one in another repository, a link line that ParseLinks
+// misses, or an issue that is gone.
+func openDeps(ctx context.Context, c *github.Client, owner, name, body string, states map[int]string) ([]string, error) {
+	_, fields := workitems.Sections(body)
+	var open []string
+	for _, line := range strings.Split(fields["Links"], "\n") {
+		links, _ := workitems.ParseLinks(line)
+		switch {
+		case len(links) == 0 && strings.Contains(line, "depends-on"):
+			_, target, _ := strings.Cut(line, "depends-on")
+			open = append(open, strings.Trim(target, ": \t"))
+		case len(links) == 0 || links[0].Kind != "depends-on":
+		default:
+			n := links[0].Number
+			st, ok := states[n]
+			if !ok {
+				is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+				if err != nil && !github.NotFound(err) {
+					return nil, Wrap(ExitExternal, err)
+				}
+				st, states[n] = is.GetState(), is.GetState()
+			}
+			if key := "#" + strconv.Itoa(n); st != "closed" && !slices.Contains(open, key) {
+				open = append(open, key)
+			}
+		}
+	}
+	return open, nil
 }
 
 func emitWorkList(e *Env, list WorkList) error {
