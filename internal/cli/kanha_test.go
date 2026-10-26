@@ -812,4 +812,19 @@ func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 		!strings.Contains(errOut, "#61 changed since the list: now its mission is paused: the v0.4.0 cut; not started") || m.claims(889)[61] != 0 {
 		t.Fatalf("build 61 after the pause: exit %d: %s (claims %v)", code, errOut, m.claims(889))
 	}
+	// The same holds when a person stops the story alone, or ends the mission, after the list.
+	for name, stop := range map[string]func(*MissionPlan){
+		"a person stopped it: spec unclear":   func(p *MissionPlan) { p.Stopped = []MissionStopped{{Number: 61, Reason: "spec unclear"}} },
+		"its mission is ended (out of scope)": func(p *MissionPlan) { p.State = "ended (out of scope)" },
+	} {
+		m.setPlan(889, func(p *MissionPlan) { p.Pause, p.Stopped, p.State = nil, nil, "" })
+		if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "start #61\n") {
+			t.Fatalf("mission next 889 before %q: exit %d: %s%s", name, code, out, errOut)
+		}
+		m.setPlan(889, stop)
+		if code, _, errOut := run(t, m.agent, m.opts, "build", "61", "--delegate", "cursor", "--repo", "o/r"); code != ExitBlocked ||
+			!strings.Contains(errOut, "#61 changed since the list: now "+name+"; not started") || m.claims(889)[61] != 0 {
+			t.Fatalf("build 61 after %q: exit %d: %s (claims %v)", name, code, errOut, m.claims(889))
+		}
+	}
 }

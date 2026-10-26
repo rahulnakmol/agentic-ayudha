@@ -478,8 +478,8 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // changedSinceList refuses to start a story a mission list marked start
 // when its live state changed since (Story #998, J4 rule 3): build reads the
 // issue first, and releases the claim so its agent is free again. A story a
-// build already moved to in progress is not a change. A paused mission is
-// one (Story #1005). claimed is set when a live claim of an unpaused mission
+// build already moved to in progress is not a change. A paused or ended
+// mission, or a story stopped alone, is one (Story #1005). claimed is set when a live claim of an unpaused mission
 // marks n start; a plan it cannot read leaves it unset.
 func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool, claimed *bool) error {
 	n := is.GetNumber()
@@ -519,6 +519,10 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		return nil // no list marked it start: build's own Ready checks apply
 	case plan.Pause != nil:
 		now = "its mission is paused: " + plan.Pause.Reason
+	case plan.stopped(n) != nil:
+		now = "a person stopped it: " + plan.stopped(n).Reason
+	case plan.State != "":
+		now = "its mission is " + plan.State
 	case is.GetState() != "open":
 		now = "closed"
 	case contains(labels, "status:blocked"):
