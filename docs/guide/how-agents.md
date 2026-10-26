@@ -30,6 +30,11 @@ Every receiver gets the same brief, built by `delegate.Brief`, redacted, and rec
 - the Ready snapshot's criteria and the story body, quoted as data;
 - the plan's checkpoints and an evidence map;
 - the branch and pull request rules, the required checks, the CODEOWNERS paths, and the cycle cap;
+- the merge rule: an Amp orb thread runs aayu, so it owns its PR, acts on inspect's findings, rebases on `dev`, and
+  runs `aayu ship <pr>` on proof (Story #1006). Codex, Cursor, Claude Code cloud, and every local receiver never merge.
+  No receiver uses `--admin` or merges another way;
+- each merged depends-on story: its PRs with their ship records, and the asks answered on it
+  (`specs/<n>/answers.md` on the ledger), quoted as data;
 - an abridged `AGENTS.md`;
 - "How to work and report": break the work down, use your own subagents, verify each criterion with evidence, and
   end with a `## What I proved` section.
@@ -305,6 +310,9 @@ type State struct {
 
 1. Every receiver gets the same brief, which asks for a `## What I proved` section and forbids handing the story on.
    Enforced by `delegate.Brief`, `TestBrief`.
+   Only a receiver that runs aayu (an Amp orb thread) is told to run `aayu ship`; ship's own gates decide the merge.
+   Enforced by `writeBrief`, `TestBriefShipsOnProof`, `TestBriefNeverMergeForCloudReceivers`, and
+   `TestDelegateBriefForMissionStory`.
 2. Cloud is the default: a receiver whose cloud agent is not connected is refused with exit 4, the missing steps,
    and the routes that are available; a local receiver runs with no GitHub or aayu credential, in a fresh worktree,
    and cannot delegate again. Enforced by `newDelegation` and `receiverHelp` in

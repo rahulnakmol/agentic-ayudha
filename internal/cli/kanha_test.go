@@ -298,6 +298,94 @@ func TestStoryStateNamesFeatureAndKanha(t *testing.T) {
 	}
 }
 
+// Story #1006: the Kanha of #889 runs on amp, whose orb runs aayu. Each story
+// thread it starts owns its PR and ships it on proof (criterion 1). A story
+// handed to Codex or Cursor cloud, which cannot run aayu, is told never to
+// merge (criterion 2). #52 depends on #40, which merged as PR #41: its brief
+// lists PR #41, its ship record, and the asks answered on #40 (criterion 3).
+func TestDelegateBriefForMissionStory(t *testing.T) {
+	m := newMissionWorld(t)
+	// Amp's cloud agent is connected: its CLI is installed and signed in, and its recorded project is this repository.
+	look := m.opts.LookPath
+	m.opts.LookPath = func(name string) (string, error) {
+		if name == "amp" {
+			return "/usr/bin/amp", nil
+		}
+		return look(name)
+	}
+	m.agent["AMP_API_KEY"] = "amp-key"
+	if err := (agentenv.Records{Cloud: map[string]agentenv.Record{agentenv.Amp: {Method: "cloud", Project: "o/r"}}}).Save(m.dir); err != nil {
+		t.Fatal(err)
+	}
+	m.issue(40, "Story 40", "story", 0, "")
+	m.closeIssue(40)
+	m.issue(889, "Feature 889", "feature", 0, "")
+	m.issue(50, "Story 50", "story", 889, "")
+	m.issue(52, "Story 52", "story", 889, "depends-on #40")
+	m.feature(889, 50, 52)
+	m.featureWith(874, 950, 951)
+	// #40 shipped as PR #41; #400 is another story, whose record a brief of #52 must not list.
+	for story, pr := range map[int]int{40: 41, 400: 401} {
+		head := fmt.Sprintf("%040d", pr)
+		rec, _ := json.Marshal(ShipRecord{Repo: "o/r", Story: story, PR: pr, Head: head, MergeCommit: fmt.Sprintf("%07d", pr*1000), ShippedAt: "2026-10-26T13:41:00Z"})
+		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/ship.json", story, head), string(rec))
+	}
+	putLedger(t, m.bare, "specs/40/answers.md", "Q: Which tool runs the Kanha?\nA: The tool in missions/<f>/plan.json.\n")
+	m.start(889, "rahulnakmol", "amp")
+	if code, out, errOut := m.approve(874); code != 0 {
+		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
+	}
+	for _, n := range []int{50, 52, 950, 951} {
+		m.readyStory(n)
+	}
+	brief := func(n int, tool string) string {
+		if d := m.kanhaBuild(n, tool).Delegation; d.Receiver != tool || d.Mode != "cloud" {
+			t.Fatalf("#%d: %+v", n, d)
+		}
+		if tool == "cursor" {
+			_, bodies := m.cursorCalls()
+			return bodies[len(bodies)-1]["prompt"].(map[string]any)["text"].(string)
+		}
+		return m.briefs[len(m.briefs)-1]
+	}
+	b50 := brief(50, "amp")
+	for _, want := range []string{
+		"You own story #50 to its merge, in your own worktree on a new branch `" + m.state(50).Branch + "` from `dev`",
+		"You may use subagents",
+		"After each push, run `aayu inspect <pr>` and act on its findings",
+		"Before you ship, rebase the branch on the latest `origin/dev`",
+		"run `aayu ship <pr>`: ship decides, and merges on proof",
+		"Never merge another way: never `gh pr merge`, never `--admin`",
+	} {
+		if !strings.Contains(b50, want) {
+			t.Errorf("#50's brief on amp lacks %q:\n%s", want, b50)
+		}
+	}
+	if strings.Contains(b50, "## Merged work") {
+		t.Errorf("#50 depends on nothing, and its brief lists merged work:\n%s", b50)
+	}
+	b52 := brief(52, "amp")
+	for _, want := range []string{
+		"### #40\n\n- Merged as PR #41 (merge commit `0041000`); its ship record is `proof/40/" + fmt.Sprintf("%040d", 41) + "/authoritative/ship.json` on the ledger.\n",
+		"- The asks answered on #40 (`specs/40/answers.md` on the ledger):\n\n```text\nQ: Which tool runs the Kanha?\nA: The tool in missions/<f>/plan.json.\n```\n",
+		"run `aayu ship <pr>`",
+	} {
+		if !strings.Contains(b52, want) {
+			t.Errorf("#52's brief lacks %q:\n%s", want, b52)
+		}
+	}
+	if strings.Contains(b52, "PR #401") {
+		t.Errorf("#52's brief lists #400's PR:\n%s", b52)
+	}
+	for n, tool := range map[int]string{950: "codex", 951: "cursor"} {
+		b := brief(n, tool)
+		if !strings.Contains(b, "- Never merge, approve, or close the PR, and never push to `dev`, `rolling`, or `main`. A human merges with `aayu ship` after the merge gate and inspect pass.") ||
+			strings.Contains(b, "run `aayu ship <pr>`") || strings.Contains(b, "You own story") {
+			t.Errorf("#%d's brief on %s, which cannot run aayu:\n%s", n, tool, b)
+		}
+	}
+}
+
 // Criterion 6: mission #889's tool is cursor, and story #60's brief asks for
 // codex: the Kanha starts it on cursor, and says why. A mission never mixes
 // agent tools.
