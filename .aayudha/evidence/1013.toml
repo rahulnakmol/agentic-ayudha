@@ -1,0 +1,37 @@
+# Which tests prove Story #1013's Completion Goal.
+
+[[criterion]]
+id = 1 # the start card in aayu inbox: 9 issues read-only, Locked, Open, Ends (MS3), It runs in Cursor, up to 5 stories at once; 1 Start, 2 Not now, 3 Read
+tests = ["internal/cli:TestStartCardWords"]
+
+[[criterion]]
+id = 2 # 1 Start the mission and the presence check: plan.json gains lock {state active, confirmed_by, started_at, ended_at null, end_reason null, issues}
+tests = ["internal/cli:TestMissionStartWritesLock"]
+
+[[criterion]]
+id = 3 # 2 Not now: no mission starts, nothing is locked, and the card stays in the inbox
+tests = ["internal/cli:TestNotNowLocksNothing"]
+
+[[criterion]]
+id = 4 # an aayu write to #20's body or priority: label is refused before the request leaves: #20 is locked by mission #889 until it ends
+tests = ["internal/cli:TestLockedWriteRefusedBeforeRequest", "internal/cli:TestUnlockedWritesUnchanged"]
+
+[[criterion]]
+id = 5 # @alice edits criterion 3 at 10:42: waits #20: changed while locked; one aayudha:lock comment; the locked-edit card with no recommendation
+tests = ["internal/cli:TestLockedEditHoldsStoryCommentsAndCard"]
+
+[[criterion]]
+id = 6 # a comment on #20 and a status: label change go through
+tests = ["internal/cli:TestLockLeavesCommentsAndStatusOpen"]
+
+[[criterion]]
+id = 7 # the last milestone of the last mission is done: lock.state ended, lock.ended_at set
+tests = ["internal/cli:TestLockEndsAtLastMilestone"]
+
+[[criterion]]
+id = 8 # mission 2 starts after mission 1: no new start card; the lock lists every issue and stays active
+tests = ["internal/cli:TestLockSpansMissions"]
+
+[[criterion]]
+id = 9 # 1 Keep the edit: the lock takes #20's new hash, controls record the keep, next lists #20 by the usual rules
+tests = ["internal/cli:TestKeepTheEdit"]

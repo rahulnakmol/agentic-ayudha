@@ -151,6 +151,10 @@ func (e *Env) workList(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	var extra []*gh.Issue
 	switch {
 	case release == 0 && missionDone(plan, subs):
+		// Every story and Bug merged, so the last milestone of the last mission is done, and its lock ends (Story #1013).
+		if err := endLock(ctx, c, w, f, plan, e.Now().UTC().Format(time.RFC3339)); err != nil {
+			return err
+		}
 		list.note = fmt.Sprintf("The mission of #%d is done: nothing starts. A new Bug of #%d starts from its Release's Tatkal mission.", f, f)
 		return nil
 	case release != 0:
@@ -158,13 +162,18 @@ func (e *Env) workList(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			return err
 		}
 	}
-	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, list, clocks, claim)
+	changed, err := e.lockedEdits(ctx, c, w, repo, plan, subs)
+	if err != nil {
+		return err
+	}
+	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, changed, list, clocks, claim)
 }
 
 // listNext classifies the mission's open stories and Bugs, sorts them, and,
-// with claim, claims each start.
+// with claim, claims each start. changed are the locked ones whose body a
+// person changed: each waits until a person keeps the edit.
 func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval,
-	subs, extra []*gh.Issue, list *WorkList, clocks []MissionClock, claim bool) error {
+	subs, extra []*gh.Issue, changed map[int]bool, list *WorkList, clocks []MissionClock, claim bool) error {
 	now := e.Now()
 	owner, name, _ := github.SplitRepo(repo)
 	busy := map[int]bool{}
@@ -232,6 +241,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = fmt.Sprintf("stopped (%s)", plan.stopped(n).Reason)
 		case running:
 			continue // it runs: the per-mission running view is #895's
+		case changed[n]: // before Ready: the Ready guard strips status:ready from an edited body
+			en.item.Reason = "changed while locked"
 		case slices.ContainsFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }):
 			en.item.Reason = startedOn(plan, n) // a Tatkal story the Kanha only orders and tracks
 		case !contains(labels, ready.LabelReady):

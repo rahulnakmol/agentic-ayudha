@@ -91,6 +91,10 @@ type Issue struct {
 		URL string `json:"url"`
 	} `json:"pull_request,omitempty"`
 	User Account `json:"user"` // the author: the viewer
+	// EditedBy and EditedAt are who last edited its body, and when: GitHub
+	// serves them only through GraphQL (editor, lastEditedAt).
+	EditedBy string    `json:"-"`
+	EditedAt time.Time `json:"-"`
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
@@ -627,7 +631,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(200, out)
 
-	// GraphQL: just Projects v2.
+	// GraphQL: Projects v2, a revert, and who last edited an issue.
 	case m == "POST" && p == "/graphql":
 		q, _ := body["query"].(string)
 		if strings.Contains(q, "revertPullRequest") {
@@ -647,6 +651,24 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			pr.URL = url
 			g.Pulls[is.Number] = pr
 			reply(200, map[string]any{"data": map[string]any{"revertPullRequest": map[string]any{"revertPullRequest": map[string]any{"url": url}}}})
+			return
+		}
+		if strings.Contains(q, "lastEditedAt") {
+			vars, _ := body["variables"].(map[string]any)
+			n, _ := vars["n"].(float64)
+			is := g.Issues[int(n)]
+			if is == nil {
+				reply(200, map[string]any{"data": map[string]any{"repository": map[string]any{"issue": nil}}})
+				return
+			}
+			out := map[string]any{"lastEditedAt": nil, "editor": nil}
+			if !is.EditedAt.IsZero() {
+				out["lastEditedAt"] = is.EditedAt.UTC().Format(time.RFC3339)
+			}
+			if is.EditedBy != "" {
+				out["editor"] = map[string]any{"login": is.EditedBy}
+			}
+			reply(200, map[string]any{"data": map[string]any{"repository": map[string]any{"issue": out}}})
 			return
 		}
 		if strings.Contains(q, "createProjectV2") {

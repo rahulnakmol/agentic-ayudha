@@ -1031,7 +1031,10 @@ func (e *Env) completeStory(ctx context.Context, c *github.Client, repo string, 
 		func(ctx context.Context) (any, error) {
 			_, _, err := c.REST.Issues.Update(ctx, owner, name, story, gh.UpdateIssueRequest{Body: &body})
 			return nil, err
-		}); err != nil {
+		}); lockRefused(err) {
+		// A running mission locks the story's body (Story #1013): the Outcome goes in a comment, and the body stays as locked.
+		return wrapExternal(postComment(ctx, c, repo, story, "github.comment.outcome", "### Outcome\n\n"+strings.TrimSpace(out.String())+"\n"))
+	} else if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	return nil

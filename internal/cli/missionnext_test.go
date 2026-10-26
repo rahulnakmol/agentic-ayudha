@@ -473,10 +473,13 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 	n := m.commits()
 	code, out, errOut := m.next(874, "--json")
 	var list WorkList
-	if code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 0 || m.commits() != n {
+	// Its last milestone is done, so its lock ends (Story #1013): that is the one ledger write.
+	if p, _ := m.plan(874); code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 0 || m.commits() != fmt.Sprint(atoiOr(n)+1) ||
+		p.Lock == nil || p.Lock.State != LockEnded {
 		t.Fatalf("mission next 874: exit %d: %s%s", code, out, errOut)
 	}
-	if code, out, errOut := m.next(874); code != 0 || out != "The mission of #874 is done: nothing starts. A new Bug of #874 starts from its Release's Tatkal mission.\n" {
+	n = m.commits()
+	if code, out, errOut := m.next(874); code != 0 || out != "The mission of #874 is done: nothing starts. A new Bug of #874 starts from its Release's Tatkal mission.\n" || m.commits() != n {
 		t.Fatalf("mission next 874: exit %d: %q%s", code, out, errOut)
 	}
 	if code, out, errOut := m.next(920); code != 0 || out != "waits #930: not Ready (open)\nstart #941 (bug)\nstart #940 (bug)\n" {
