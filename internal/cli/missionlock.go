@@ -226,8 +226,9 @@ func (c labelChange) changes(held map[string]string) bool {
 	case c.remove != "" && len(lockLabels([]string{c.remove})) > 0:
 		return true
 	}
-	for p, l := range lockLabels(c.add) {
-		if held[p] != l {
+	// Each locked label in the write, not only the last of its prefix: priority:P0 beside a held priority:P1 changes it.
+	for _, l := range slices.Concat(c.set, c.add) {
+		if p, _, _ := strings.Cut(l, ":"); len(lockLabels([]string{l})) > 0 && held[p] != l {
 			return true
 		}
 	}
@@ -593,17 +594,26 @@ func endLock(ctx context.Context, c *github.Client, w *ledger.Writer, f int, pla
 func (e *Env) keepEdit(ctx context.Context, c *github.Client, repo string, it InboxItem) error {
 	f, n := it.Feature, it.Number
 	owner, name, _ := github.SplitRepo(repo)
-	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
-	if err != nil {
-		return Wrap(ExitExternal, err)
+	same := func() error { // the body is still the one the card showed
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if workitems.BodyHash(is.GetBody()) != it.BodyHash {
+			return Errorf(ExitBlocked, "#%d's body changed again since the card was read. Nothing was kept.", n)
+		}
+		return nil
 	}
-	if hash := workitems.BodyHash(is.GetBody()); hash != it.BodyHash {
-		return Errorf(ExitBlocked, "#%d's body changed again since the card was read. Nothing was kept.", n)
+	if err := same(); err != nil {
+		return err
 	}
 	p, err := e.presenceCheck(ctx, Pending{What: "keep the edit", Effect: []string{
 		fmt.Sprintf("Keeps the edit of #%d: the lock of #%d takes its body as it is now, and #%d is planned again from it", n, f, n)}},
 		AccessWrite, e.personOnly("keep the edit"))
 	if err != nil {
+		return err
+	}
+	if err := same(); err != nil { // it can change while the person enters the code
 		return err
 	}
 	_, tok, err := e.HumanGitHub(ctx)

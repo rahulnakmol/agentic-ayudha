@@ -121,6 +121,15 @@ func labelWrites(c *github.Client, n int) map[string]func() error {
 			_, _, err := c.REST.Issues.Update(ctx, "o", "r", n, gh.UpdateIssueRequest{Labels: []string{"type:story", "effort:L", "risk:medium", "priority:P1"}})
 			return err
 		}),
+		// Two labels of one prefix: the held priority:P1 last does not hide priority:P0.
+		"add priority:P0 beside the held priority:P1": write(func(ctx context.Context) error {
+			_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, "o", "r", n, []string{"priority:P0", "priority:P1"})
+			return err
+		}),
+		"replace the labels with two priorities": write(func(ctx context.Context) error {
+			_, _, err := c.REST.Issues.ReplaceLabelsForIssue(ctx, "o", "r", n, []string{"type:story", "effort:S", "risk:medium", "priority:P0", "priority:P1"})
+			return err
+		}),
 		"remove every label": write(func(ctx context.Context) error {
 			_, err := c.REST.Issues.RemoveLabelsForIssue(ctx, "o", "r", n)
 			return err
@@ -628,9 +637,19 @@ func TestKeepTheEditRefusals(t *testing.T) {
 	if err == nil || CodeOf(err) != ExitBlocked || err.Error() != "#20's body changed again since the card was read. Nothing was kept." || m.codes() != codes {
 		t.Fatalf("keep a stale card: %v, device codes %d", err, m.codes()-codes)
 	}
+	// The body changes again while he enters the code: nothing is kept.
+	m.device("rahulnakmol")
+	m.edit(func() {
+		m.g.Device.OnPoll = func(int) { m.g.Issues[20].Body = strings.TrimSuffix(m.g.Issues[20].Body, "\n") + "\nA second note." }
+	})
+	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--repo", "o/r")
+	if p, raw := m.plan(889); !strings.Contains(out+errOut, "#20's body changed again since the card was read. Nothing was kept.") ||
+		slices.ContainsFunc(p.Controls, func(c MissionControl) bool { return strings.HasPrefix(c.Action, "keep the edit") }) {
+		t.Fatalf("keep while the body moved: exit %d:\n%s%s\n%s", code, out, errOut, raw)
+	}
 	// A dry run says what the keep would do, and keeps nothing.
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--dry-run", "--repo", "o/r")
+	code, out, errOut = runIn(t, m.person, m.opts, "1y", "inbox", "--dry-run", "--repo", "o/r")
 	if p, raw := m.plan(889); !strings.Contains(out, "--dry-run: the lock of #889 would take #20's new body") || p.Controls[len(p.Controls)-1].Action != "start" {
 		t.Fatalf("keep in a dry run: exit %d:\n%s%s\n%s", code, out, errOut, raw)
 	}
