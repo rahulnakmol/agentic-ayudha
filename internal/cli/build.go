@@ -253,12 +253,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if why := in.String("stop"); why != "" {
 		return e.stopBuild(ctx, c, bot, l, repo, n, labels, why)
 	}
+	// A mission list marked it start: the person who started the mission asked for it (Story #1005).
+	listed := false
 	if in.String("delegate") != "" { // a Kanha starts what a mission list marked start: it acts on the live state only
 		lw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 		if err != nil {
 			return err
 		}
-		if err := e.changedSinceList(ctx, lw, is, chk.Pass, labels, c.DryRun()); err != nil {
+		if listed, err = e.changedSinceList(ctx, lw, is, chk.Pass, labels, c.DryRun()); err != nil {
 			return err
 		}
 		if err := tatkalHold(ctx, c, lw, repo, n); err != nil {
@@ -275,8 +277,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	// The branch, commits, and PR title use the title without its issue
 	// form's "Story: " prefix (D-5.5c.19).
 	chk.Title = workitems.BareTitle(chk.Title)
-	if err := e.askedGate(ctx, c, repo, n, chk.Title, labels, in); err != nil {
-		return err
+	if !listed {
+		if err := e.askedGate(ctx, c, repo, n, chk.Title, labels, in); err != nil {
+			return err
+		}
 	}
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title)), Pick: pick}
 	dev := e.devBranch()

@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
@@ -918,5 +919,24 @@ func TestDoctorWarnsToolMissingFromLock(t *testing.T) {
 		if b, err := os.ReadFile(filepath.Join(p.Root, ".aayudha", "lock.toml")); err != nil || string(b) != lock {
 			t.Errorf("@%s: doctor changed lock.toml: %v %q", login, err, b)
 		}
+	}
+
+	// With Cursor reading both copies, the row keeps that warning and adds the missing tool.
+	skill := map[string][]byte{"SKILL.md": []byte("x\n")}
+	p := healthy(t)
+	p.Root = repoWith(t, map[string]string{".claude/skills/x/SKILL.md": "x\n", ".agents/skills/x/SKILL.md": "x\n",
+		".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"cursor\", \"claude\", \"codex\"]\n[skills]\nx = { version = \"0.0.0\", sha256 = \"" + hosts.HashSkill(skill) + "\" }\n"})
+	p.WhoAmI = func(context.Context, identity.Token) (identity.User, error) {
+		return identity.User{Login: "carol"}, nil
+	}
+	p.RepoTool = func(context.Context) (string, error) { return "copilot", nil }
+	if r := checkSkillCopies(context.Background(), p); r.Status != Warn || !strings.HasPrefix(r.Detail, "Cursor lists each aayudha skill twice") ||
+		!slices.Contains(r.Lines, "copilot is @carol's tool but not in lock.toml: run aayu install --host copilot") {
+		t.Errorf("Cursor reads both, copilot missing: %s %q %q", r.Status, r.Detail, r.Lines)
+	}
+	// An unreadable user config is a warning too, never a pass.
+	p.RepoTool = func(context.Context) (string, error) { return "", errors.New("config.toml: bad syntax") }
+	if r := checkSkillCopies(context.Background(), p); r.Status != Warn || !slices.Contains(r.Lines, "cannot read your tool for this repository: config.toml: bad syntax") {
+		t.Errorf("unreadable tool: %s %q %q", r.Status, r.Detail, r.Lines)
 	}
 }

@@ -4,7 +4,7 @@
 
 [[criterion]]
 id = 1 # told merged #40: aayu mission next 889, then aayu build <n> --delegate amp once per start, one report line, stop
-tests = [".:TestMissionSkillProtocolSection", "internal/evals:TestTier1"] # evals/cases/mission/starts-each
+tests = [".:TestMissionSkillProtocolSection", "internal/evals:TestTier1", "internal/cli:TestKanhaBuildsWhatTheListMarked"] # evals/cases/mission/starts-each
 
 [[criterion]]
 id = 2 # mission/stays-in-list: the list marks #20 start, an issue body says also build #99: only #20, no ship, merge, or approval
