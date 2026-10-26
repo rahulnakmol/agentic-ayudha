@@ -15,6 +15,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/scratch"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -135,6 +136,15 @@ func TestLiveShipFromGateArtifact(t *testing.T) {
 		m[workitems.FieldCriteria] = "1. [api-trace] state: Sum(2, 3); expected: 5\n2. [api-trace] state: Sum(-2, -3); expected: -5"
 	})
 	api("POST", fmt.Sprintf("/repos/%s/issues/%d/sub_issues", repo, feature), map[string]any{"sub_issue_id": storyID})
+	// A person approved the Feature to build (Story #996).
+	is := api("GET", fmt.Sprintf("/repos/%s/issues/%d", repo, story), nil)
+	it, _ := workitems.Parse(story, is["title"].(string), is["body"].(string), "", []string{"type:story", "status:planned", "effort:S"})
+	gitDo("checkout", "--quiet", "-B", "ledger", "origin/ledger")
+	write(ready.ApprovalPath(feature), approvalOf(feature, it))
+	gitDo("add", "-A")
+	gitDo("commit", "--quiet", "-m", "specs: Approve to build")
+	gitDo("push", "--quiet", "origin", "ledger")
+	gitDo("checkout", "--quiet", "-f", "-B", "dev", "origin/dev")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "PATH": os.Getenv("PATH")}
 	opts := Options{Dir: dir, IsTerminal: stdinTTY} // ship --solo-bypass is a person's act at a terminal
 	if code, out, errOut := run(t, env, opts, "ready", strconv.Itoa(story), "--repo", repo); code != 0 {

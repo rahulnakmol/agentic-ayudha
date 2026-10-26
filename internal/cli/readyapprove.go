@@ -175,13 +175,7 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 	rec.Stories = []ready.ApprovedStory{}
 	for _, si := range subs {
 		s, _ := workitems.Parse(si.GetNumber(), si.GetTitle(), si.GetBody(), si.GetType().GetName(), github.IssueLabels(si))
-		st := ready.ApprovedStory{Number: s.Number, Title: s.Title, CompletionGoalHash: workitems.CompletionGoalHash(s)}
-		for _, l := range s.Labels {
-			if v, ok := strings.CutPrefix(l, "effort:"); ok {
-				st.Effort = v
-			}
-		}
-		rec.Stories = append(rec.Stories, st)
+		rec.Stories = append(rec.Stories, ready.StoryOf(s))
 	}
 	if len(rec.Stories) == 0 {
 		return rec, nil, nil, "", off("#%d has no stories. Next: aayu slice %d", a.n, a.n)
@@ -329,7 +323,7 @@ func (e *Env) presenceRecord(login string) string {
 // ready has Arjun post the Feature's Ready snapshot and label it
 // status:ready, as the bot, after the approval.
 func (a *approveRun) ready(ctx context.Context, rep ApproveReport) error {
-	if err := a.e.botReady(ctx, a.r); err != nil {
+	if _, err := a.e.botReady(ctx, a.r); err != nil {
 		return err
 	}
 	res, err := a.r.Apply(ctx, a.n)

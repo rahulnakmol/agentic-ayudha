@@ -68,6 +68,37 @@ func fixtureBody(t *testing.T, typ string, f func(map[string]string)) string {
 	return workitems.Render(ty, fields)
 }
 
+// approvalOf is what a person's Approve to build of Feature f leaves on the
+// ledger: an approval of the stories as they are now, so a test can make one
+// of them Ready (Story #996).
+func approvalOf(f int, stories ...workitems.Item) string {
+	a := ready.Approval{Schema: ready.ApprovalSchema, Feature: f, Version: 1, By: "founder", At: "2026-10-26T00:00:00Z",
+		Baselines: []ready.ApprovedBaseline{}, Stories: []ready.ApprovedStory{}, Dismissals: []ready.Dismissal{}}
+	for _, it := range stories {
+		a.Stories = append(a.Stories, ready.StoryOf(it))
+	}
+	data, _ := json.Marshal(a)
+	return string(data)
+}
+
+// approveFor writes the approval of Feature f's stories in g on the ledger of dir's origin.
+func approveFor(t *testing.T, g *fake.GitHub, dir string, f int) {
+	t.Helper()
+	var stories []workitems.Item
+	g.Mu.Lock()
+	for _, n := range g.Issues[f].Subs {
+		is := g.Issues[n]
+		var labels []string
+		for _, l := range is.Labels {
+			labels = append(labels, l.Name)
+		}
+		it, _ := workitems.Parse(n, is.Title, is.Body, "", labels)
+		stories = append(stories, it)
+	}
+	g.Mu.Unlock()
+	putLedger(t, git(t, dir, "remote", "get-url", "origin"), ready.ApprovalPath(f), approvalOf(f, stories...))
+}
+
 // tree builds a Feature (#1) with Stories under it, plus a Decision.
 func readyTree(t *testing.T) *fake.GitHub {
 	g := fake.New(t, "o/r", "User")
@@ -137,6 +168,7 @@ func TestReadyHumanFallbackAndGuard(t *testing.T) {
 	dir, bare := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, g, dir, 1)
 	code, out, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r")
 	if code != 0 {
 		t.Fatalf("ready 2: exit %d: %s\n%s", code, errOut, out)

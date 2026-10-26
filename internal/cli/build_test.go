@@ -405,6 +405,7 @@ func buildSetup(t *testing.T) (g *fake.GitHub, env map[string]string, opts Optio
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	approveFor(t, g, dir, 1)
 	return g, env, opts, dir, bare
 }
 
@@ -421,6 +422,7 @@ func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[2].Title = "Show the empty list message when a cart has nothing in it"
 	g.Mu.Unlock()
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -749,6 +751,7 @@ func TestBuildDropsTheTypePrefix(t *testing.T) {
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -783,6 +786,7 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": session}
 	}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, person, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -820,6 +824,13 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if code != 0 || res.Issue == 0 {
 		t.Fatalf("grill: %d %s", code, errOut)
 	}
+	under := func(n int) { // a Story is Ready only under a Feature approved to build (Story #996)
+		g.Mu.Lock()
+		g.Issues[n].Parent, g.Issues[1].Subs = 1, append(g.Issues[1].Subs, n)
+		g.Mu.Unlock()
+		approveFor(t, g, dir, 1)
+	}
+	under(res.Issue)
 	n := strconv.Itoa(res.Issue)
 	if code, _, errOut := run(t, person, opts, "ready", n, "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready %s: %s", n, errOut)
@@ -840,12 +851,14 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if code != 0 || res.Issue == 0 {
 		t.Fatalf("grill in Copilot: %d %s", code, errOut)
 	}
+	under(res.Issue)
 	if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(res.Issue), "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready %d: %s", res.Issue, errOut)
 	}
 	if code, _, errOut := run(t, copilot("c2"), opts, "build", strconv.Itoa(res.Issue), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
 		t.Fatalf("another Copilot session's grilled story: %d %s", code, errOut)
 	}
+	under(6)
 	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready 6: %s", errOut)
 	}

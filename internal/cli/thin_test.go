@@ -35,6 +35,7 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_MODEL": "claude-opus-5-5"}
 	opts = Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}

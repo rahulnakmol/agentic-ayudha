@@ -74,6 +74,7 @@ func inspectFixture(t *testing.T, diff, body string) (*fake.GitHub, map[string]s
 	sink := &notify.Fake{}
 	monday := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC) // business hours in [time] (London), so pages go out at once
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, NotifySink: sink, Now: func() time.Time { return monday }, Assets: os.DirFS(filepath.Join("..", ".."))}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}

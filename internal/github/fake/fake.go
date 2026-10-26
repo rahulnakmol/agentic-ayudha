@@ -1003,7 +1003,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && p == repo+"/issues":
 		out := []*Issue{}
 		since := r.URL.Query().Get("since")
-		for n := 1; n <= len(g.Issues); n++ {
+		for _, n := range slices.Sorted(maps.Keys(g.Issues)) { // every issue, also one renumbered for a scenario
 			want, ms := r.URL.Query().Get("labels"), r.URL.Query().Get("milestone")
 			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
 				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) &&
