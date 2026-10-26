@@ -1,0 +1,14 @@
+{
+  "covered": 139,
+  "executable": 141,
+  "percent": 98.58156028368795,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/ready_early.go": [
+      84,
+      85
+    ]
+  },
+  "format": "go coverprofile"
+}
