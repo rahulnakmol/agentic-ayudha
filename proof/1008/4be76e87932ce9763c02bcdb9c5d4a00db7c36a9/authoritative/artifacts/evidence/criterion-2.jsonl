@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedStartReleasesClaimAndTells"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedStartReleasesClaimAndTells","Output":"=== RUN   TestFailedStartReleasesClaimAndTells\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedStartReleasesClaimAndTells","Output":"--- PASS: TestFailedStartReleasesClaimAndTells (1.59s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedStartReleasesClaimAndTells"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestKanhaBriefRunsNothingOnAFailedStart"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestKanhaBriefRunsNothingOnAFailedStart","Output":"=== RUN   TestKanhaBriefRunsNothingOnAFailedStart\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestKanhaBriefRunsNothingOnAFailedStart","Output":"--- PASS: TestKanhaBriefRunsNothingOnAFailedStart (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestKanhaBriefRunsNothingOnAFailedStart"}

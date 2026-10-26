@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildStopTellsKanha"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildStopTellsKanha","Output":"=== RUN   TestBuildStopTellsKanha\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildStopTellsKanha","Output":"--- PASS: TestBuildStopTellsKanha (1.92s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildStopTellsKanha"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaEventRecordedWhenNotSent"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaEventRecordedWhenNotSent","Output":"=== RUN   TestKanhaEventRecordedWhenNotSent\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaEventRecordedWhenNotSent","Output":"--- PASS: TestKanhaEventRecordedWhenNotSent (2.27s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaEventRecordedWhenNotSent"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBlockWhenKanhaUnknown"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBlockWhenKanhaUnknown","Output":"=== RUN   TestBlockWhenKanhaUnknown\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBlockWhenKanhaUnknown","Output":"--- PASS: TestBlockWhenKanhaUnknown (1.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBlockWhenKanhaUnknown"}
