@@ -15,6 +15,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -109,9 +110,21 @@ func TestLiveInspectApp(t *testing.T) {
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "PATH": os.Getenv("PATH")}
 	opts := Options{Dir: dir}
 	feature, _ := issue("Arithmetic", "feature", []string{"status:in-progress"}, nil)
+	var approved []workitems.Item
 	story := func(title, criteria string) int {
 		n, id := issue(title, "story", []string{"status:planned", "effort:S"}, func(m map[string]string) { m[workitems.FieldCriteria] = criteria })
 		api("POST", fmt.Sprintf("/repos/%s/issues/%d/sub_issues", repo, feature), map[string]any{"sub_issue_id": id})
+		// A person approved the Feature to build with this story in it (Story #996).
+		is := api("GET", fmt.Sprintf("/repos/%s/issues/%d", repo, n), nil)
+		it, _ := workitems.Parse(n, is["title"].(string), is["body"].(string), "", []string{"type:story", "status:planned", "effort:S"})
+		approved = append(approved, it)
+		gitDo("fetch", "--quiet", "origin", "ledger")
+		gitDo("checkout", "--quiet", "-B", "ledger", "origin/ledger")
+		write(ready.ApprovalPath(feature), approvalOf(feature, approved...))
+		gitDo("add", "-A")
+		gitDo("commit", "--quiet", "-m", "specs: Approve to build")
+		gitDo("push", "--quiet", "origin", "ledger")
+		gitDo("checkout", "--quiet", "-f", "-B", "dev", "origin/dev")
 		if code, out, errOut := run(t, env, opts, "ready", strconv.Itoa(n), "--repo", repo); code != 0 {
 			t.Fatalf("ready #%d: %d %s %s", n, code, out, errOut)
 		}

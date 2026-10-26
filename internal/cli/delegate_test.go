@@ -51,6 +51,7 @@ func delegateFixture(t *testing.T) (*fake.GitHub, map[string]string, Options, st
 		EnsureEnv: func(context.Context, string, string) (agentenv.HostStatus, error) {
 			return agentenv.HostStatus{State: agentenv.Verified}, nil
 		}}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}

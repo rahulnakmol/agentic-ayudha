@@ -28,6 +28,7 @@ func proofFixture(t *testing.T) (gh *fake.GitHub, dir, bare string, env map[stri
 	dir, bare = ledgerCheckout(t)
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	opts = Options{GitHubAPI: gh.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, gh, dir, 1)
 	code, out, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r", "--json")
 	if code != 0 {
 		t.Fatalf("ready 2: %d %s", code, errOut)

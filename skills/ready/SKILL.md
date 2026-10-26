@@ -241,3 +241,24 @@ nothing else spends build tokens. Its budget is `[baselines] early_build_budget`
    code, aayu writes `specs/<f>/approved-early-<story>.json` to the ledger: the story, its body hash, the budget, and
    who approved it. The record covers that story only.
 3. An early build's PR never merges into dev: inspect gives `hold`, and `aayu ship` refuses it.
+
+## A Story: Ready only while its Feature's approval covers it
+
+`aayu ready <story>` makes a Story Ready only while a person's Approve to build of its parent Feature covers it.
+aayu reads `specs/<f>/approved.json` on the ledger, never a comment. It refuses with exit 4, and
+writes nothing, when:
+
+- the Story has no parent Feature;
+- the Feature has no Approve to build: tell the person to run `aayu ready <f>`;
+- the Feature changed after the approval: a part was approved again (`technical design v1 to v2`), or the intent,
+  technical design, or UX design drifted from its pins. Its stories wait until a person approves the Feature again;
+- the Story's Completion Goal, effort, or title changed after the approval, or the Story was added after it. aayu
+  names the change and the person's acknowledgment, `--ack`. aayu does not have that flag yet. Until it does, draft a
+  new spec baseline; the person approves it, then approves the Feature again.
+
+Other edits to the Story, such as its Assumptions, need no acknowledgment. The Ready snapshot then has the row
+`Approved to build | #<f> approval <k> by @<login>`.
+
+A Feature with no Approve to build can still have one early build: a person's `specs/<f>/approved-early-<story>.json`
+covers that story only, at the body the person approved. `--check` does not read the approval. The Ready guard and
+`aayu build --next` never apply this rule, so a Story made Ready before it stays Ready.

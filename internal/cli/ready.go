@@ -127,8 +127,21 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			}
 			return e.approveToBuild(ctx, r, n)
 		}
-		if err := e.botReady(ctx, r); err != nil {
+		w, err := e.botReady(ctx, r)
+		if err != nil {
 			return err
+		}
+		// A Story is Ready only while its Feature's approval covers it (Story #996), judged on
+		// the item Apply checks, so a type that changes after the read above cannot skip it.
+		r.Covered = func(ctx context.Context, it workitems.Item, body string) (string, error) {
+			switch it.Type {
+			case "feature": // retyped after the read above: its Ready is a person's Approve to build
+				return "", Errorf(ExitBlocked, "#%d became a Feature while aayu read it. A Feature's Ready is Approve to build, a person's decision; nothing was written.", n)
+			case "story":
+			default:
+				return "", nil
+			}
+			return e.storyCovered(ctx, r.GH, w, repo, it, body)
 		}
 		if res, err = r.Apply(ctx, n); err != nil {
 			return err
@@ -179,11 +192,11 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 }
 
 // botReady makes r write as Arjun: the bot, or the person's token tagged
-// identity:human-fallback on the day-one path.
-func (e *Env) botReady(ctx context.Context, r *ready.Ready) error {
+// identity:human-fallback on the day-one path. It returns Arjun's ledger writer.
+func (e *Env) botReady(ctx context.Context, r *ready.Ready) (*ledger.Writer, error) {
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	r.GH, r.Tag, r.Login = c, bot.Tag, bot.Login
 	if r.Login == "" {
@@ -195,10 +208,10 @@ func (e *Env) botReady(ctx context.Context, r *ready.Ready) error {
 	}
 	w, err := e.Ledger(ctx, bot.Token, ident, bot.Tag)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	r.Ledger = func(ctx context.Context, c ledger.Commit) (string, error) { return w.Write(ctx, c) }
-	return nil
+	return w, nil
 }
 
 func short(sha string) string {

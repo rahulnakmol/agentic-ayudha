@@ -49,6 +49,7 @@ type Result struct {
 	Scenario           string                `json:"scenario,omitempty"`
 	Environment        string                `json:"environment,omitempty"`
 	TechnicalOwner     string                `json:"technical_owner,omitempty"`
+	ApprovedToBuild    string                `json:"approved_to_build,omitempty"` // a Story's: the approval that covers it (Story #996)
 	Identity           string                `json:"identity,omitempty"`
 	Tag                string                `json:"tag,omitempty"`
 	LedgerPath         string                `json:"ledger_path,omitempty"`
@@ -59,6 +60,7 @@ type Result struct {
 	DryRun             bool                  `json:"dry_run,omitempty"`
 
 	body string
+	item workitems.Item
 }
 
 // Ready is one run of the verb.
@@ -74,6 +76,11 @@ type Ready struct {
 	// The guard leaves it unset, so Ready that already holds is never
 	// withdrawn by a rule added after it was granted.
 	Concrete func(workitems.Item) []workitems.Problem
+	// Covered, when set, says which approval covers a Story that passes, or
+	// refuses it (Feature #877, Story #996). Only Apply runs it, on the issue
+	// the snapshot freezes: the guard and the build pick never do, so a Ready
+	// granted before the rule is never removed by it (F4).
+	Covered func(ctx context.Context, it workitems.Item, body string) (string, error)
 }
 
 // Check fetches and validates an issue for Ready. It writes nothing.
@@ -136,7 +143,7 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 	if t, ok := workitems.FindType(it.Type); ok && t.Intake {
 		ps = append(ps, workitems.Problem{Field: "type", Message: "a " + t.Name + " is intake: triage classifies it; it is never made Ready"})
 	}
-	res.Problems = ps
+	res.Problems, res.item = ps, it
 	res.Pass = len(ps) == 0
 	if res.Problems == nil {
 		res.Problems = []workitems.Problem{}
@@ -158,6 +165,9 @@ func Snapshot(res Result) string {
 		cg = "`" + res.CompletionGoalHash + "`"
 	}
 	fmt.Fprintf(&b, "| Completion Goal hash | %s |\n", cg)
+	if res.ApprovedToBuild != "" {
+		fmt.Fprintf(&b, "| Approved to build | %s |\n", res.ApprovedToBuild)
+	}
 	fmt.Fprintf(&b, "| Technical Owner | %s |\n", res.TechnicalOwner)
 	who := res.Identity
 	if res.Tag != "" {
@@ -184,6 +194,11 @@ func (r *Ready) Apply(ctx context.Context, n int) (Result, error) {
 	res, is, err := r.Check(ctx, n)
 	if err != nil || !res.Pass {
 		return res, err
+	}
+	if r.Covered != nil {
+		if res.ApprovedToBuild, err = r.Covered(ctx, res.item, res.body); err != nil {
+			return res, err
+		}
 	}
 	res.Identity, res.Tag, res.LedgerPath, res.DryRun = r.Login, r.Tag, LedgerPath(n), r.GH.DryRun()
 	snap := Snapshot(res)

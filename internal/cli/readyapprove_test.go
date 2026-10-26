@@ -187,11 +187,13 @@ func TestReadyApproveToBuild(t *testing.T) {
 	if code, out, errOut := run(t, agent, away, "ready", "840", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, refused) {
 		t.Fatalf("agent ready 840 outside a checkout: exit %d: %s%s", code, out, errOut)
 	}
-	// A story is still Ready from an agent lane: only a Feature's Ready is a person's.
-	if code, out, errOut := run(t, agent, opts, "ready", "851", "--repo", "o/r"); code != 0 || !slices.Contains(g.LabelNames(851), "status:ready") {
+	// A story's Ready is not refused for the lane, but for its Feature, which no person has approved to build (Story #996).
+	if code, out, errOut := run(t, agent, opts, "ready", "851", "--repo", "o/r"); code != ExitBlocked || slices.Contains(g.LabelNames(851), "status:ready") ||
+		!strings.Contains(errOut, "Feature #840 is not approved to build. A person runs aayu ready 840.") {
 		t.Fatalf("agent ready 851: exit %d: %s%s", code, out, errOut)
 	}
 	// In CI the bot reads a story, as it writes its Ready: a workflow token that cannot read the issue does not block it.
+	// It reaches the Story rule (Story #996), which refuses #852 for its Feature, not for the read.
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/issues/852" && r.Header.Get("Authorization") == "Bearer workflow-token" {
 			http.Error(w, `{"message": "Not Found"}`, http.StatusNotFound)
@@ -203,8 +205,8 @@ func TestReadyApproveToBuild(t *testing.T) {
 	defer proxy.Close()
 	ci := opts
 	ci.GitHubAPI = proxy.URL
-	if code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "XDG_STATE_HOME": state}, ci, "ready", "852", "--repo", "o/r", "--ci"); code != 0 ||
-		!slices.Contains(g.LabelNames(852), "status:ready") {
+	if code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "XDG_STATE_HOME": state}, ci, "ready", "852", "--repo", "o/r", "--ci"); code != ExitBlocked ||
+		!strings.Contains(errOut, "Feature #840 is not approved to build.") || slices.Contains(g.LabelNames(852), "status:ready") {
 		t.Fatalf("ci ready 852: exit %d: %s%s", code, out, errOut)
 	}
 	// A story in CI with no bot token is still refused for it: its Ready is the bot's write.

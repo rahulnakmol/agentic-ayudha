@@ -1,0 +1,29 @@
+# Which tests prove Story #996's Completion Goal.
+
+[[criterion]]
+id = 1 # Story #857 has no parent Feature: ready 857 exits 4 with "#857 has no parent Feature. A Story is Ready only under a Feature approved to build (Decision #861)."
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 2 # #853 under Feature #840 with no approved.json: "Feature #840 is not approved to build. A person runs aayu ready 840."
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 3 # technical design v2 approved after approval 1 (or #840's body changed): "#840 changed after Approve to build: technical design v1 to v2. Its stories wait until a person approves it again."
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 4 # #853's effort S to M and #858 added after approval 1: each refused with its --ack command
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 5 # #853 covered, with only its Assumptions changed: Ready, and the snapshot row "Approved to build | #840 approval 1 by @rahulnakmol"
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 6 # specs/840/approved-early-852.json and no full approval: ready 852 passes; ready 853 is refused as in criterion 2
+tests = ["internal/cli:TestReadyStoryCoverage"]
+
+[[criterion]]
+id = 7 # #700 Ready before the rule, no parent Feature, a new label: the guard keeps status:ready, and build --next picks #700
+tests = ["internal/cli:TestReadyStoryCoverage"]

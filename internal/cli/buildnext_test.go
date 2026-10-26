@@ -70,8 +70,16 @@ func commitOnDev(g *fake.GitHub, path, content string) {
 	g.RefFiles[devTip][path] = content
 }
 
-func readyAll(t *testing.T, env map[string]string, opts Options, ns ...int) {
+func readyAll(t *testing.T, g *fake.GitHub, env map[string]string, opts Options, ns ...int) {
 	t.Helper()
+	g.Mu.Lock() // a Story is Ready only under a Feature approved to build (Story #996)
+	for _, n := range ns {
+		if g.Issues[n].Parent == 0 {
+			g.Issues[n].Parent, g.Issues[1].Subs = 1, append(g.Issues[1].Subs, n)
+		}
+	}
+	g.Mu.Unlock()
+	approveFor(t, g, opts.Dir, 1)
 	person := map[string]string{"AAYU_GITHUB_TOKEN": env["AAYU_GITHUB_TOKEN"], "PATH": env["PATH"]}
 	for _, n := range ns {
 		if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(n), "--repo", "o/r"); code != 0 {
@@ -113,7 +121,7 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	}
 	commitOnDev(g, "loops/"+BuildLoop+".toml", string(b))
 
-	readyAll(t, env, opts, low.Number, newer.Number, older.Number, drifted.Number, withPR.Number, claimed.Number)
+	readyAll(t, g, env, opts, low.Number, newer.Number, older.Number, drifted.Number, withPR.Number, claimed.Number)
 	g.Mu.Lock()
 	drifted.Body += "\nOne more line after Ready."
 	claimed.Comments = append(claimed.Comments, &fake.Comment{ID: 901, Body: leaseBody("other@laptop", time.Now().Add(time.Hour))})
@@ -252,7 +260,7 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	}
 	// A person makes it Ready again and its build resumes: it is still the
 	// loop's build, and its PR is the loop's to ship again.
-	readyAll(t, env, opts, older.Number)
+	readyAll(t, g, env, opts, older.Number)
 	person := map[string]string{"AAYU_GITHUB_TOKEN": env["AAYU_GITHUB_TOKEN"], "PATH": env["PATH"]}
 	_, _, _ = run(t, person, opts, "build", strconv.Itoa(older.Number), "--repo", "o/r", "--resume")
 	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number {
@@ -410,7 +418,7 @@ func TestBuildNextFollowsTheCurrentBaseline(t *testing.T) {
 	old.State = "closed"
 	g.Mu.Unlock()
 	next, env, opts, _, bare := buildLoopFixture(t, g)
-	readyAll(t, env, opts, first.Number, second.Number, outside.Number)
+	readyAll(t, g, env, opts, first.Number, second.Number, outside.Number)
 	baseline := func(version string, release, n int, items ...int) string {
 		var its []map[string]any
 		for _, i := range items {

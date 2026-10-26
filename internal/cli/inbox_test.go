@@ -500,6 +500,10 @@ func TestInboxMarkedTerminalAppliesThePick(t *testing.T) {
 // in the PR before it ships.
 func TestInboxShipsReadyPRs(t *testing.T) {
 	g, env, opts, dir, bare, prA, headA := thinFixture(t)
+	g.Mu.Lock()
+	g.Issues[6].Parent, g.Issues[1].Subs = 1, append(g.Issues[1].Subs, 6)
+	g.Mu.Unlock()
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready 6: %s", errOut)
 	}

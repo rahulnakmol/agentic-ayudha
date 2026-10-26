@@ -28,6 +28,7 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -152,6 +153,7 @@ func skipAndWaiver(t *testing.T, floor, platforms string, detail func(string) bo
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -204,6 +206,7 @@ func TestVerifyGateCI(t *testing.T) {
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -567,6 +570,7 @@ func TestWaiverAuthority(t *testing.T) {
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}

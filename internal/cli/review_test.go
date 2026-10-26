@@ -45,6 +45,7 @@ func TestReviewAndPolish(t *testing.T) {
 	fake := &models.Fake{Replies: []models.Response{laneAReply("focus-visible", "contrast", "target-size"), laneAReply("focus-visible", "contrast", "target-size"),
 		laneAReply("contrast", "target-size"), laneAReply()}}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, ModelClient: func(models.Route, string) models.Client { return fake }}
+	approveFor(t, g, dir, 1)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
