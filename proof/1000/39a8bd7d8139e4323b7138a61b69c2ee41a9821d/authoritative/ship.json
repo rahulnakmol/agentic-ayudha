@@ -1,0 +1,68 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1000,
+  "pr": 1089,
+  "pr_head_sha": "39a8bd7d8139e4323b7138a61b69c2ee41a9821d",
+  "merge_commit": "f563bc4836344e94a04ef84a33f3526e97a98309",
+  "pack": "proof/1000/39a8bd7d8139e4323b7138a61b69c2ee41a9821d/authoritative/pack.json",
+  "pack_landed": "artifact 12688182262 of run 40397738620 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/40397738620), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 40397738620,
+  "artifact": 12688182262,
+  "pack_sha256": "0f1e2e2f34f9c5e475e0379db63c68046c9e679ebe1d2754d8c71e87a83a68bf",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/1089#issuecomment-6422831453",
+    "commit": "39a8bd7d8139e4323b7138a61b69c2ee41a9821d",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L07"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver",
+    "never_layers": [
+      "L04",
+      "L07"
+    ],
+    "never_paths": [
+      "CONSTRAINTS.md",
+      "internal/config/config.go",
+      "internal/config/config_test.go",
+      "internal/config/defaults.toml",
+      "internal/config/gen/main.go",
+      "internal/config/gen/main_test.go",
+      "internal/config/load.go",
+      "internal/config/schema.json"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "never_layers": [
+      "L04",
+      "L07"
+    ],
+    "autonomous": false,
+    "skipped": "the human pass is settled: solo-bypass"
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ],
+    "approved_by": "rahulnakmol",
+    "approved_at": "2026-10-26T09:02:45Z",
+    "as": "approver"
+  },
+  "actions_segment": "actions/2026-10-26/cli-20261026T223640Z.jsonl",
+  "shipped_at": "2026-10-26T22:37:25Z",
+  "shipped_by": "rahulnakmol"
+}
