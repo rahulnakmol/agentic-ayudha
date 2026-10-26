@@ -1,0 +1,48 @@
+{
+  "story": 1001,
+  "body_hash": "0817514b6e9295ae06ab5673852f8eda090b9bc2cdde5e0e32ca721b069b520f",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "Milestone gate on the dev tip, one fix PR per failed check, gate_fixes in the mission record",
+      "contracts": [
+        "internal/cli/mission.go: gate on the last merge of a milestone; plan.json `milestones[].gate` {state, dev_sha} and `gate_fixes[]` {pr, milestone, check, dev_sha, approval {record, sha256}, at}",
+        "no model decides pass or fail: required checks, `aayu verify --check all`, and the touched seats' evals"
+      ],
+      "tests": [
+        "internal/cli:TestGateRunsChecksVerifyAndEvals",
+        "internal/cli:TestGatePassMarksMilestone",
+        "internal/cli:TestGateFailOpensOneFixPRPerCheck",
+        "internal/cli:TestGateFixesEntryShape",
+        "internal/cli:TestGateFixCountsAgainstBudget",
+        "internal/cli:TestFailedGateDoesNotHoldStarts",
+        "internal/cli:TestGateStopsAtMaxNoGo",
+        "internal/cli:TestGateRerunsRunnerErrorOnce"
+      ],
+      "instrumentation": [
+        "one gate record per run with each check's result and the dev SHA",
+        "inbox card on the third failure"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:07Z",
+  "planned_by": "human-fallback"
+}
