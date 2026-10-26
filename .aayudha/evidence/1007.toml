@@ -1,0 +1,13 @@
+# Which tests prove Story #1007's Completion Goal.
+
+[[criterion]]
+id = 1 # ship merges #2 of #1: after the merge lines, one message to the Kanha of #1 and "next: told the Kanha of #1"
+tests = ["internal/cli:TestShipTellsKanhaAfterMerge"]
+
+[[criterion]]
+id = 2 # the message fails, or the Kanha is local: exit 0, merged, Complete section, status:merged, "was not reached: <reason>"
+tests = ["internal/cli:TestShipMergeStandsWhenKanhaUnreached"]
+
+[[criterion]]
+id = 3 # inspect says fix (its check is red): ship refuses and sends nothing
+tests = ["internal/cli:TestShipSendsNothingOnRefusal"]

@@ -59,7 +59,12 @@ A squash-merge commit on the base branch, the story's Outcome (Complete) section
 `status:merged`. The approval, the rule that let it pass, and the layer streak are recorded in `ship.json` beside
 the proof pack on the ledger. The build lease, the branch, and the worktree are cleaned up.
 
-**You should see** the pull request merged and the story's Outcome section filled in. Stuck? See
+When the story is in a started mission, ship then tells the mission's Kanha of the merge, so the Kanha starts the next
+story at once. ship sends this message only after the merge, the ship record, and the actions log are on the ledger.
+When the message fails, the merge stays and ship still exits 0. It says why, and the safety tick wakes the Kanha.
+
+**You should see** the pull request merged and the story's Outcome section filled in. In a mission, the last line
+is `next: told the Kanha of #<feature>`. Stuck? See
 [ship problems](../troubleshooting.md#ship).
 
 ## Gates
