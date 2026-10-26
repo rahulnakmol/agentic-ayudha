@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -253,32 +254,93 @@ type loopClaim struct {
 	Release bool   `json:"release,omitempty"`
 }
 
-// admitClaim reserves a slot for story n on the ledger. It appends this
-// pick's line, then reads the file back: the recent unreleased lines before
-// it that no build state carries yet are picks still claiming. When one of them is for n, or they and what is
-// in flight fill [build] in_flight, this pick lost; it releases its line and
-// says why. A line older than pickLockTTL no longer holds a slot.
+// admitClaim reserves a slot for story n on the ledger, in LoopClaimsPath
+// against [build] in_flight; it says why when this pick lost.
 func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n int) (string, error) {
+	busy := map[int]bool{}
+	for _, it := range p.InFlight {
+		busy[it.Story] = true
+	}
+	tok, lost, err := e.claimSlot(ctx, w, LoopClaimsPath, fmt.Sprintf("build: loop claim of #%d", n), n, busy, p.Limit, p.claimed)
+	switch {
+	case err != nil:
+		return "", err
+	case lost == n:
+		return fmt.Sprintf("another pick claimed #%d first (ledger %s): nothing claimed", n, LoopClaimsPath), nil
+	case lost != 0:
+		return fmt.Sprintf("another pick took the last of %d slot(s) first (#%d, ledger %s): nothing claimed", p.Limit, lost, LoopClaimsPath), nil
+	}
+	p.Claim = tok
+	return "", nil
+}
+
+// claimSlot appends this run's claim line for story n to the ledger file
+// path, then reads the file back: the live lines before it (claimLines) for
+// stories not in busy are runs still claiming. When one of them is for n, or
+// they and busy fill limit, this run lost: it releases its line and returns
+// the story it lost to, n or the one that took the last slot. Otherwise it
+// returns its token.
+func (e *Env) claimSlot(ctx context.Context, w *ledger.Writer, path, msg string, n int, busy map[int]bool, limit int, carried map[string]bool) (string, int, error) {
 	tok := make([]byte, 8)
 	_, _ = rand.Read(tok)
 	me := loopClaim{Story: n, Token: hex.EncodeToString(tok), At: e.Now().UTC().Format(time.RFC3339)}
 	write := func(c loopClaim) error {
 		b, _ := json.Marshal(c)
-		_, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("build: loop claim of #%d", c.Story), Append: map[string][]byte{LoopClaimsPath: append(b, '\n')}})
+		_, err := w.Write(ctx, ledger.Commit{Message: msg, Append: map[string][]byte{path: append(b, '\n')}})
 		return err
 	}
 	if err := write(me); err != nil {
-		return "", Wrap(ExitExternal, err)
+		return "", 0, Wrap(ExitExternal, err)
 	}
+	lines, err := e.claimLines(ctx, w, path, carried)
+	if err != nil {
+		return "", 0, err
+	}
+	counted := maps.Clone(busy)
+	ahead := 0
+	for _, c := range lines {
+		if c.Token == me.Token {
+			break
+		}
+		lost := 0
+		switch {
+		case c.Story == n:
+			lost = n
+		case !counted[c.Story]:
+			counted[c.Story] = true
+			ahead++
+			if len(busy)+ahead >= limit {
+				lost = c.Story
+			}
+		}
+		if lost != 0 {
+			me.Release = true
+			if err := write(me); err != nil {
+				return "", 0, Wrap(ExitExternal, err)
+			}
+			return "", lost, nil
+		}
+	}
+	return me.Token, 0, nil
+}
+
+// claimLines are the live lines of the claims file at path, in ledger order:
+// not released, not carried by a build state, and younger than pickLockTTL.
+func (e *Env) claimLines(ctx context.Context, w *ledger.Writer, path string, carried map[string]bool) ([]loopClaim, error) {
 	t, err := w.Read(ctx)
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return nil, Wrap(ExitExternal, ignoreMissing(err))
 	}
-	raw, err := t.File(ctx, LoopClaimsPath)
+	raw, err := t.File(ctx, path)
 	t.Close()
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return nil, Wrap(ExitExternal, ignoreMissing(err))
 	}
+	return e.liveClaims(raw, carried), nil
+}
+
+// liveClaims are the live lines of a claims file's bytes, as claimLines says.
+func (e *Env) liveClaims(raw []byte, carried map[string]bool) []loopClaim {
 	var lines []loopClaim
 	released := map[string]bool{}
 	sc := bufio.NewScanner(bytes.NewReader(raw))
@@ -293,40 +355,10 @@ func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n 
 		}
 		lines = append(lines, c)
 	}
-	counted := map[int]bool{}
-	for _, it := range p.InFlight {
-		counted[it.Story] = true
-	}
-	ahead := 0
-	for _, c := range lines {
-		if c.Token == me.Token {
-			break
-		}
+	return slices.DeleteFunc(lines, func(c loopClaim) bool {
 		at, err := time.Parse(time.RFC3339, c.At)
-		if err != nil || released[c.Token] || p.claimed[c.Token] || e.Now().Sub(at) > pickLockTTL {
-			continue
-		}
-		why := ""
-		switch {
-		case c.Story == n:
-			why = fmt.Sprintf("another pick claimed #%d first (ledger %s)", n, LoopClaimsPath)
-		case !counted[c.Story]:
-			counted[c.Story] = true
-			ahead++
-			if len(p.InFlight)+ahead >= p.Limit {
-				why = fmt.Sprintf("another pick took the last of %d slot(s) first (#%d, ledger %s)", p.Limit, c.Story, LoopClaimsPath)
-			}
-		}
-		if why != "" {
-			me.Release = true
-			if err := write(me); err != nil {
-				return "", Wrap(ExitExternal, err)
-			}
-			return why + ": nothing claimed", nil
-		}
-	}
-	p.Claim = me.Token
-	return "", nil
+		return err != nil || released[c.Token] || carried[c.Token] || e.Now().Sub(at) > pickLockTTL
+	})
 }
 
 // StaleGrace is how long after its lease runs out a loop claim with no PR

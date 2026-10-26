@@ -85,4 +85,5 @@ type Event struct {
 	At     string `json:"at"`
 	Status string `json:"status"`
 	Detail string `json:"detail,omitempty"`
+	Until  string `json:"until,omitempty"` // a pause: when the receiver's usage limit resets (RFC 3339)
 }

@@ -6,7 +6,7 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 
 | Field | Value |
 |---|---|
-| In plain words | Starts the build of a Feature a person approved, and shows where its mission stands. |
+| In plain words | Starts the build of a Feature a person approved, shows where its mission stands, and says what can start next. |
 | Journey stage | [Build it](../journey-4-build.md) |
 | Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`mission`](../how-models.md) model lane, with the seat's paired human when it has one |
@@ -22,7 +22,8 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 
 ## When to use it
 
-Starts the build of a Feature a person approved, and shows where its mission stands.
+Starts the build of a Feature a person approved, and shows where its mission stands. The mission's Kanha runs
+`aayu mission next <feature>` on each event and starts only the stories and Bugs it marks `start`.
 
 ## Run it
 
@@ -34,8 +35,8 @@ aayu mission <action> <feature>
 
 | Input | Required | What it does |
 |---|---|---|
-| `<action>` | yes | start: a person starts the approved mission, through GitHub's device flow, and the plan records them, their tool for this repository, and the budget; refused for an agent lane. show: print the plan, each number with its source. One of: `start`, `show`. |
-| `<feature>` | yes | Feature whose mission to start or show. |
+| `<action>` | yes | start: a person starts the approved mission, through GitHub's device flow, and the plan records them, their tool for this repository, and the budget; refused for an agent lane. show: print the plan, each number with its source. next: list the mission's stories and Bugs that can start now, in order (priority, slice order, Ready time), and why each other one waits, with no model call; it claims each start on the ledger (missions/\<f>/claims.jsonl), so two runs never start one story, and only the mission's recorded tool runs it. With --json it is an aayudha.work/v1 list: {schema, scope {kind, id}, items [{key, action, reason, subthread}]}. One of: `start`, `show`, `next`. |
+| `<feature>` | yes | Feature whose mission to start, show, or list. |
 
 <!-- END GENERATED: skill-usage -->
 

@@ -802,6 +802,7 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 					name, resets.UTC().Format(time.RFC3339), d.wallEnd.UTC().Format(time.RFC3339))}
 			}
 			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
+			d.state.Events[len(d.state.Events)-1].Until = resets.UTC().Format(time.RFC3339) // mission next waits on it (Story #998)
 			_ = e.saveDelegation(ctx, d)
 			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
 			// The story's lease is renewed before each stretch of the wait, so it

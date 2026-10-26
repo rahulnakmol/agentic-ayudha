@@ -253,6 +253,15 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if why := in.String("stop"); why != "" {
 		return e.stopBuild(ctx, c, bot, l, repo, n, labels, why)
 	}
+	if in.String("delegate") != "" { // a Kanha starts what a mission list marked start: it acts on the live state only
+		lw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+		if err != nil {
+			return err
+		}
+		if err := e.changedSinceList(ctx, lw, is, chk.Pass, labels, c.DryRun()); err != nil {
+			return err
+		}
+	}
 	why, err := e.notReady(ctx, c, repo, n, chk, labels)
 	if err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("build #%d: reading the Ready snapshot: %w", n, err))
