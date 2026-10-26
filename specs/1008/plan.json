@@ -1,0 +1,36 @@
+{
+  "story": 1008,
+  "body_hash": "651c5ef0e2aafbd654d882fe6f6eded903ee9c562e7adbdaef22bc58382d84ee",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "A stop, a failed start, or an answered ask tells the Kanha, and a failed start releases its claim",
+      "contracts": [
+        "internal/cli/build.go (`--stop`, build.go:253) and internal/cli/delegate.go (newDelegation, :210) send one message to the Kanha",
+        "the ask answer path (#880) sends `answered: #n resumes`"
+      ],
+      "tests": [
+        "internal/cli:TestBuildStopTellsKanha",
+        "internal/cli:TestFailedStartReleasesClaimAndTells",
+        "internal/cli:TestAnsweredAskKeepsSlotAndTells"
+      ],
+      "instrumentation": [
+        "one event per message in delegate/\u003cn\u003e/state.json"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:33Z",
+  "planned_by": "human-fallback"
+}
