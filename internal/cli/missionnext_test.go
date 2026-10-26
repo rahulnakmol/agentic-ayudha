@@ -22,7 +22,7 @@ import (
 // Kanha runs in Amp (m.agent), and each mission is started on amp.
 
 // startedMission adds Feature f with stories (Bugs when bug is set), in
-// sub-issue order, approves it, and starts its mission on amp.
+// sub-issue order, with m.links, approves it, and starts its mission on amp.
 func (m *missionWorld) startedMission(f int, stories []int, bugs ...int) {
 	m.t.Helper()
 	m.issue(f, fmt.Sprintf("Feature %d", f), "feature", 0, "")
@@ -31,7 +31,7 @@ func (m *missionWorld) startedMission(f int, stories []int, bugs ...int) {
 		if slices.Contains(bugs, n) {
 			typ = "bug"
 		}
-		m.issue(n, fmt.Sprintf("Item %d", n), typ, f, "")
+		m.issue(n, fmt.Sprintf("Item %d", n), typ, f, m.links[n])
 	}
 	m.feature(f, stories...)
 	m.mu.Lock()
@@ -583,5 +583,82 @@ func TestMissionNextGitHubFailsClosed(t *testing.T) {
 	m.opts.TatkalRelease = func(context.Context, int) (int, error) { return 0, errors.New("the Tatkal record is unreadable") }
 	if code, _, errOut := m.next(920); code != ExitExternal || !strings.Contains(errOut, "the Tatkal record is unreadable") {
 		t.Fatalf("Tatkal seam failing: exit %d: %s", code, errOut)
+	}
+}
+
+// Story #999: a Ready story waits while an issue it depends on is open.
+// #10 is a story of another Feature, so its state is read, not listed.
+func dependsOnWorld(t *testing.T) *missionWorld {
+	m := newMissionWorld(t)
+	m.issue(888, "Other Feature", "feature", 0, "")
+	m.issue(10, "Story 10", "story", 888, "")
+	m.status(10, "in-progress", "")
+	m.links = map[int]string{11: "depends-on #10"}
+	m.startedMission(889, []int{11})
+	m.status(11, "ready", "")
+	return m
+}
+
+// Criterion 1: #10 is open and in progress, so #11 waits and is not claimed.
+// A failed read of #10 stops the list: it never starts #11.
+func TestMissionNextHoldsOpenDependsOn(t *testing.T) {
+	m := dependsOnWorld(t)
+	n := m.commits()
+	m.edit(func() { m.g.Fail = "GET /repos/o/r/issues/10" })
+	if code, out, errOut := m.next(889); code != ExitExternal || out != "" || len(m.claims(889)) != 0 {
+		t.Fatalf("reading #10 fails: exit %d: %q%s", code, out, errOut)
+	}
+	m.edit(func() { m.g.Fail = "" })
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on #10 is open\n" || len(m.claims(889)) != 0 || m.commits() != n {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Criterion 2: once #10 closes as merged, #11 starts.
+func TestMissionNextStartsAfterDependsOnMerges(t *testing.T) {
+	m := dependsOnWorld(t)
+	m.status(10, "merged", "")
+	m.closeIssue(10)
+	if code, out, errOut := m.next(889); code != 0 || out != "start #11\n" || m.claims(889)[11] != 1 {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Criterion 3: #11 depends on #10 (open, in this Feature) and #12 (closed, in
+// another Feature). Only #10 holds it, and #13, later in the order, starts.
+func TestMissionNextHoldsOnlyTheDependent(t *testing.T) {
+	m := newMissionWorld(t)
+	m.issue(888, "Other Feature", "feature", 0, "")
+	m.issue(12, "Story 12", "story", 888, "")
+	m.links = map[int]string{11: "depends-on #10\ndepends-on #12"}
+	m.startedMission(889, []int{10, 11, 13})
+	m.setPlan(889, func(p *MissionPlan) { p.Agents = 2 })
+	m.status(12, "merged", "")
+	m.closeIssue(12)
+	m.status(10, "in-progress", "")
+	m.status(11, "ready", "")
+	m.status(13, "ready", "")
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on #10 is open\nstart #13\n" {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); got[13] != 1 || len(got) != 1 {
+		t.Fatalf("claims: %v", got)
+	}
+}
+
+// A depends-on line that ParseLinks misses counts as open (Story #999, review
+// guidance): a target in another repository, which aayu cannot read here, and
+// a link with other capitals, whose target #12 is closed, and a line with no
+// target after characters that grow when lowered.
+func TestMissionNextUnparsedDependsOnIsOpen(t *testing.T) {
+	m := newMissionWorld(t)
+	m.issue(888, "Other Feature", "feature", 0, "")
+	m.issue(12, "Story 12", "story", 888, "")
+	m.closeIssue(12)
+	m.links = map[int]string{11: "depends-on other/repo#10\nDepends-On #12\nȺȺȺȺȺȺȺȺȺȺȺȺ depends-on"}
+	m.startedMission(889, []int{11})
+	m.status(11, "ready", "")
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on other/repo#10, #12, ȺȺȺȺȺȺȺȺȺȺȺȺ depends-on are open\n" {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
 	}
 }

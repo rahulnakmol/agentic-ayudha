@@ -25,6 +25,9 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 Starts the build of a Feature a person approved, and shows where its mission stands. The mission's Kanha runs
 `aayu mission next <feature>` on each event and starts only the stories and Bugs it marks `start`.
 
+A Ready story waits while an issue in its `depends-on` links is open: `waits #11: depends-on #10 is open`. It
+starts after that issue closes. A target in another repository always counts as open.
+
 ## Run it
 
 <!-- BEGIN GENERATED: skill-usage -->

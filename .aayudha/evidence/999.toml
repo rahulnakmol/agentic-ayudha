@@ -1,0 +1,13 @@
+# Which tests prove Story #999's Completion Goal.
+
+[[criterion]]
+id = 1 # Ready #11 has depends-on #10, and #10 is open and in progress: waits #11: depends-on #10 is open
+tests = ["internal/cli:TestMissionNextHoldsOpenDependsOn"]
+
+[[criterion]]
+id = 2 # #10 closes with status:merged: start #11
+tests = ["internal/cli:TestMissionNextStartsAfterDependsOnMerges"]
+
+[[criterion]]
+id = 3 # #11 depends on #10 (open) and #12 (closed); #13 has no link and is later: #11 waits, #13 starts
+tests = ["internal/cli:TestMissionNextHoldsOnlyTheDependent"]

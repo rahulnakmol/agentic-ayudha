@@ -30,6 +30,7 @@ type missionWorld struct {
 	tool      string
 	est       *CostEstimate
 	tatkal    map[int]int
+	links     map[int]string // startedMission's depends-on links, by story
 }
 
 func newMissionWorld(t *testing.T) *missionWorld {
