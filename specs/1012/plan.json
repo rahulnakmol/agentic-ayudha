@@ -1,0 +1,68 @@
+{
+  "story": 1012,
+  "body_hash": "0f93de0b81cc98821820bc970e4d6a31e77fa21b3b958e500f5fa17f0017ff5c",
+  "footprint": [
+    "L02",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "The local Kanha's session record and its check timer key",
+      "contracts": [
+        "reads `[mission] check_minutes` (default 5), which #1000 adds to internal/config/defaults.toml; this story adds no key, so CONSTRAINTS.md does not change here, and any change there is go generate output only (L04 by path)",
+        "plan.json `parent` {mode: local, login@machine, session, last_check}"
+      ],
+      "tests": [
+        "internal/config:TestMissionCheckMinutesDefault",
+        "internal/cli:TestLocalKanhaPausesWhileMachineOff"
+      ],
+      "instrumentation": [
+        "the plan view says why a local Kanha paused"
+      ],
+      "rollback": "Revert the squash commit. Local session records in plan.json stay and are read as data by older code; no config or ledger migration to undo.",
+      "criteria": [
+        6,
+        7
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "One wake command for event hosts (the J3/K2 probe) and resume adapters for Codex, Copilot, OpenCode, and the Cursor fallback",
+      "contracts": [
+        "`aayu mission wake \u003cf\u003e` (stateless)",
+        "internal/delegate/local.go (LocalArgs, :29): resume argument lists",
+        "cloud follow-up paths stay receivers.go:171 (Cursor) and :401 (Codex)"
+      ],
+      "tests": [
+        "internal/cli:TestMissionWakeStartsOrRecordsOnly",
+        "internal/delegate:TestCodexExecResumeArgs",
+        "internal/delegate:TestCopilotResumeArgs",
+        "internal/delegate:TestCopilotCloudNeverCoordinates",
+        "internal/delegate:TestOpenCodeRunSessionArgs",
+        "internal/delegate:TestCursorLocalFallback",
+        "probe: one live run of a Claude scheduled task and a Cursor Automation on `Pull request merged`, recorded as proof"
+      ],
+      "instrumentation": [
+        "each wake writes one event; a failed probe step records `record-only`"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        8
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-26T08:37:41Z",
+  "planned_by": "human-fallback"
+}
