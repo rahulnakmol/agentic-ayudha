@@ -15,14 +15,26 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 )
 
-// Handoff is what a receiver is given: the brief and where to work.
+// Handoff is what a receiver is given: the brief and where to work. A story's
+// hand-off names the story; a coordinator's (a Feature's Kanha, Story #1004;
+// Kala, #911) names its scope (feature or repo) and work key, and opens no PR.
 type Handoff struct {
 	Repo   string // owner/name
 	Base   string // the branch the PR targets
 	Story  int
+	Scope  string // a coordinator's scope; empty for a story
+	Key    string // a coordinator's work key: the Feature's number
 	Title  string
 	Brief  string
 	Branch string // the suggested branch
+}
+
+// ref is the work the hand-off is for: "#20", or a Feature Kanha's "#889".
+func (h Handoff) ref() string {
+	if h.Key != "" {
+		return "#" + h.Key
+	}
+	return fmt.Sprintf("#%d", h.Story)
 }
 
 // Task statuses a receiver reports.
@@ -119,7 +131,7 @@ func (c CursorAPI) Handoff(ctx context.Context, h Handoff) (Task, error) {
 	req := map[string]any{
 		"prompt":       map[string]any{"text": h.Brief},
 		"repos":        []map[string]any{{"url": "https://github.com/" + h.Repo, "startingRef": h.Base}},
-		"autoCreatePR": true,
+		"autoCreatePR": h.Scope == "", // a coordinator writes no code
 	}
 	if c.Model != "" {
 		req["model"] = map[string]any{"id": c.Model}
@@ -203,7 +215,7 @@ var ampThread = regexp.MustCompile(`https://ampcode\.com/threads/(T-[0-9a-f-]{36
 
 // Handoff starts the orb thread with the brief.
 func (a AmpCLI) Handoff(ctx context.Context, h Handoff) (Task, error) {
-	args := []string{"-ox", h.Brief, "--project", h.Repo, "--title", fmt.Sprintf("aayu #%d: %s", h.Story, h.Title)}
+	args := []string{"-ox", h.Brief, "--project", h.Repo, "--title", fmt.Sprintf("aayu %s: %s", h.ref(), h.Title)}
 	if a.OrbSize != "" {
 		args = append(args, "--orb-size", a.OrbSize)
 	}
@@ -229,6 +241,29 @@ func (a AmpCLI) FollowUp(ctx context.Context, st State, msg string) (Task, error
 		return Task{}, fmt.Errorf("amp: %w", err)
 	}
 	return Task{ID: st.Task, URL: st.TaskURL, Status: TaskWorking}, nil
+}
+
+// AmpThread is the URL of an Amp thread ID, and whether the ID is one.
+func AmpThread(id string) (string, bool) {
+	u := "https://ampcode.com/threads/" + id
+	return u, ampThread.FindString(u) == u
+}
+
+// Archived reports whether the Amp thread is archived (`amp threads export`),
+// so a brief sent to it would wake nothing.
+func (a AmpCLI) Archived(ctx context.Context, thread string) (bool, error) {
+	out, err := a.Exec(ctx, "", a.Env, "", a.bin(), "threads", "export", thread)
+	if err != nil {
+		return false, fmt.Errorf("amp: %w", err)
+	}
+	var t struct {
+		ID       string `json:"id"`
+		Archived bool   `json:"archived"`
+	}
+	if json.Unmarshal([]byte(out), &t) != nil || t.ID != thread {
+		return false, fmt.Errorf("amp: threads export %s: not the thread's export: %s", thread, clip(out, 200))
+	}
+	return t.Archived, nil
 }
 
 func (a AmpCLI) bin() string {

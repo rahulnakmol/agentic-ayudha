@@ -109,6 +109,10 @@ type Options struct {
 	RepoTool      func(ctx context.Context, repo string) (string, error)
 	CostEstimate  func(ctx context.Context, feature int) (*CostEstimate, error)
 	TatkalRelease func(ctx context.Context, feature int) (int, error)
+	// LocalKanha starts a mission's local Kanha on the starter's machine with the brief, in the checkout dir, and
+	// returns its session (ST13: codex, copilot, or opencode; #1012 builds it; Story #1004's tests: a stub). nil:
+	// none is built, so Start refuses those tools before anything is written.
+	LocalKanha func(ctx context.Context, tool, dir, brief string) (string, error)
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

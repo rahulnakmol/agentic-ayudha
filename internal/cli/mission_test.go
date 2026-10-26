@@ -1,15 +1,22 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -31,16 +38,86 @@ type missionWorld struct {
 	est       *CostEstimate
 	tatkal    map[int]int
 	links     map[int]string // startedMission's depends-on links, by story
+	// The Kanha's and the story threads' receivers (Story #1004): Cursor's API and every CLI are fakes.
+	cursor   *fakeCursor
+	calls    []string        // each receiver CLI call: "amp threads export T-…", "local codex <brief>", …
+	briefs   []string        // the brief of each call that sent one
+	cursorAt string          // the fake Cursor API's URL
+	archived map[string]bool // Amp threads that are archived
+}
+
+// Fake receiver answers: a new Amp thread, a Claude Code cloud session, a Codex task, and a local session.
+const (
+	kanhaAmpThread = "T-01a17000-0000-7000-8000-000000000889"
+	kanhaClaude    = "session_01KanhaOf889"
+	localSession   = "s-123"
+	// cursorStoryAgent is the agent ID of the recorded fixture (delegate/testdata/cursor/create.json).
+	cursorStoryAgent = "bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f"
+	cursorKanhaAgent = "bc-0889a9c2e-kanha-4e8a-9b6c-0a1b2c3d4e5f"
+)
+
+// exec answers a receiver CLI as the real one does, and records the call (the brief left out).
+func (m *missionWorld) exec(_ context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	call := name
+	for _, a := range args {
+		if strings.Contains(a, "\n") { // a brief
+			m.briefs, a = append(m.briefs, a), "<brief>"
+		}
+		call += " " + a
+	}
+	m.calls = append(m.calls, call)
+	switch {
+	case name == "amp" && len(args) > 2 && args[0] == "threads" && args[1] == "export" && strings.HasSuffix(args[2], "dead"):
+		return "", errors.New("amp: exit status 1: Error: thread not found")
+	case name == "amp" && len(args) > 2 && args[0] == "threads" && args[1] == "export" && strings.HasSuffix(args[2], "beef"):
+		return "Login required\n", nil
+	case name == "amp" && len(args) > 2 && args[0] == "threads" && args[1] == "export":
+		return fmt.Sprintf(`{"id": %q, "archived": %t, "messages": []}`, args[2], m.archived[args[2]]), nil
+	case name == "amp" && args[0] == "threads":
+		return "", nil
+	case name == "amp":
+		return "Thread: https://ampcode.com/threads/" + kanhaAmpThread + "\n", nil
+	case name == "claude":
+		return "Created https://claude.ai/code/" + kanhaClaude + "\n", nil
+	case name == "codex":
+		return "Submitted https://chatgpt.com/codex/tasks/task_e_" + fmt.Sprint(len(m.calls)) + "\n", nil
+	}
+	return "", fmt.Errorf("%s: unexpected call", call)
+}
+
+func (m *missionWorld) callLog() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.calls)
 }
 
 func newMissionWorld(t *testing.T) *missionWorld {
 	t.Helper()
-	m := &missionWorld{t: t, g: fake.New(t, "o/r", "User"), tool: "cursor", tatkal: map[int]int{}}
+	m := &missionWorld{t: t, g: fake.New(t, "o/r", "User"), tool: "cursor", tatkal: map[int]int{}, cursor: &fakeCursor{}, archived: map[string]bool{}}
+	// A coordinator's agent (no PR) gets its own ID, so a story's agent is never mistaken for the Kanha.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(b))
+		rec := httptest.NewRecorder()
+		m.cursor.ServeHTTP(rec, r)
+		out := rec.Body.String()
+		if strings.Contains(string(b), `"autoCreatePR":false`) {
+			out = strings.ReplaceAll(out, cursorStoryAgent, cursorKanhaAgent)
+		}
+		_, _ = io.WriteString(w, out)
+	}))
+	t.Cleanup(srv.Close)
+	m.cursorAt = srv.URL
 	m.g.Viewer = "rahulnakmol"
 	m.dir, m.bare = ledgerCheckout(t)
 	state := m.dir + "/state"
 	m.person = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
 	m.agent = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
+	for _, env := range []map[string]string{m.person, m.agent} {
+		env["AAYU_SECRET_CURSOR_API_KEY"], env["AAYU_DELEGATE__CURSOR_API"], env["AAYU_DELEGATE__CODEX_ENV"] = "cursor-key", srv.URL, "env-1"
+	}
 	m.opts = Options{IsTerminal: stdinTTY, GitHubAPI: m.g.URL(), GitHubGap: -1, Dir: m.dir, DevicePoll: 10 * time.Millisecond,
 		RepoTool: func(_ context.Context, repo string) (string, error) {
 			if repo != "o/r" {
@@ -52,6 +129,32 @@ func newMissionWorld(t *testing.T) *missionWorld {
 		},
 		CostEstimate:  func(context.Context, int) (*CostEstimate, error) { m.mu.Lock(); defer m.mu.Unlock(); return m.est, nil },
 		TatkalRelease: func(_ context.Context, f int) (int, error) { m.mu.Lock(); defer m.mu.Unlock(); return m.tatkal[f], nil },
+		DelegateExec:  m.exec,
+		// Cursor's cloud agent has its key; the codex CLI is installed and signed in to ChatGPT; each cloud environment is verified.
+		LookPath: func(name string) (string, error) {
+			if name == "codex" {
+				return "/usr/bin/codex", nil
+			}
+			return "", os.ErrNotExist
+		},
+		Exec: func(_ context.Context, _, _ string, args ...string) (string, error) {
+			switch strings.Join(args, " ") {
+			case "login status":
+				return "Logged in using ChatGPT", nil
+			case "--version":
+				return "1.0.0", nil
+			}
+			return "", errors.New("unexpected probe")
+		},
+		EnsureEnv: func(context.Context, string, string) (agentenv.HostStatus, error) {
+			return agentenv.HostStatus{State: agentenv.Verified}, nil
+		},
+		LocalKanha: func(_ context.Context, tool, _, brief string) (string, error) {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			m.calls, m.briefs = append(m.calls, "local "+tool+" <brief>"), append(m.briefs, brief)
+			return localSession, nil
+		},
 	}
 	m.issue(870, "Human-dependency engine", "initiative", 0, "")
 	return m
@@ -293,8 +396,10 @@ func TestMissionStartWritesPlan(t *testing.T) {
 		len(p.Controls) != 1 || p.Controls[0] != (MissionControl{Action: "start", By: "rahulnakmol", At: p.StartedAt, Presence: "device-flow"}) {
 		t.Fatalf("plan.json after Start:\n%s", raw)
 	}
-	if got := git(t, m.bare, "rev-list", "--count", "ledger"); got == n || !strings.Contains(git(t, m.bare, "log", "-1", "--format=%s", "ledger"), "@rahulnakmol started the mission of #889 on cursor") {
-		t.Fatalf("Start's ledger commit: %s", git(t, m.bare, "log", "-1", "--format=%s", "ledger"))
+	// Two commits: the start, which no second Start passes, then its Kanha (Story #1004).
+	if got, log := git(t, m.bare, "rev-list", "--count", "ledger"), git(t, m.bare, "log", "-2", "--format=%s", "ledger"); got == n ||
+		log != "missions: the Kanha of #889 runs on cursor (cloud)\nmissions: @rahulnakmol started the mission of #889 on cursor" {
+		t.Fatalf("Start's ledger commits: %s", log)
 	}
 }
 

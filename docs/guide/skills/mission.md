@@ -28,6 +28,22 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 A Ready story waits while an issue in its `depends-on` links is open: `waits #11: depends-on #10 is open`. It
 starts after that issue closes. A target in another repository always counts as open.
 
+`aayu mission start <feature>` also starts the mission's Kanha on the tool it records:
+
+| Tool | The Kanha |
+|---|---|
+| Amp | The thread that drafted the Feature's intent gets the Kanha brief. When that thread is not known or is archived, a new thread starts. |
+| Claude Code | A new cloud session (`claude --cloud`). |
+| Cursor | One cloud agent. Each later event is a new run on that agent. |
+| Codex, Copilot, OpenCode | A local session on your machine. While the machine is off, the mission pauses at the next merge. |
+
+The Kanha is the `parent` in `specs/<feature>/approved.json`. Each story thread names its Feature and its Kanha in
+`delegate/<n>/state.json`, and runs on the mission's tool, whatever `--delegate` asks. When the Kanha does not start,
+run `aayu mission start <feature>` again: it starts only the Kanha.
+
+In a Tatkal Feature, each person starts a story on their own tool: `aayu mission start <story>`. The plan records the
+story's tool and starter, and the story is handed off at once. The Tatkal Kanha orders and tracks it.
+
 ## Run it
 
 <!-- BEGIN GENERATED: skill-usage -->

@@ -51,6 +51,9 @@ func Family(receiver, model string) verbs.Family {
 // PR with reviewers of other families.
 type State struct {
 	Story     int          `json:"story"`
+	Feature   int          `json:"feature,omitempty"`   // the Feature whose mission started it (Story #1004)
+	Kanha     string       `json:"kanha,omitempty"`     // that mission's Kanha: its session
+	KanhaURL  string       `json:"kanha_url,omitempty"` // and its URL
 	Receiver  string       `json:"receiver"`
 	Mode      string       `json:"mode"` // cloud or local
 	Model     string       `json:"model,omitempty"`
