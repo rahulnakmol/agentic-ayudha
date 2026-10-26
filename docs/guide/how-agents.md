@@ -31,7 +31,7 @@ Every receiver gets the same brief, built by `delegate.Brief`, redacted, and rec
 - the plan's checkpoints and an evidence map;
 - the branch and pull request rules, the required checks, the CODEOWNERS paths, and the cycle cap;
 - the merge rule: an Amp orb thread runs aayu, so it owns its PR, acts on inspect's findings, rebases on `dev`, and
-  runs `aayu ship <pr>` on proof (Story #1006). Codex, Cursor, Claude Code cloud, and every local receiver never merge.
+  runs `aayu ship <pr>` on proof. Codex, Cursor, Claude Code cloud, and every local receiver never merge.
   No receiver uses `--admin` or merges another way;
 - each merged depends-on story: its PRs with their ship records, and the asks answered on it
   (`specs/<n>/answers.md` on the ledger), quoted as data;

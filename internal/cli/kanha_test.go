@@ -322,20 +322,28 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	m.issue(889, "Feature 889", "feature", 0, "")
 	m.issue(50, "Story 50", "story", 889, "")
 	m.issue(52, "Story 52", "story", 889, "depends-on #40")
-	m.feature(889, 50, 52)
+	m.issue(44, "Story 44", "story", 0, "")
+	m.closeIssue(44)
+	m.issue(54, "Story 54", "story", 889, "depends-on #44")
+	m.feature(889, 50, 52, 54)
 	m.featureWith(874, 950, 951)
-	// #40 shipped as PR #41; #400 is another story, whose record a brief of #52 must not list.
-	for story, pr := range map[int]int{40: 41, 400: 401} {
-		head := fmt.Sprintf("%040d", pr)
-		rec, _ := json.Marshal(ShipRecord{Repo: "o/r", Story: story, PR: pr, Head: head, MergeCommit: fmt.Sprintf("%07d", pr*1000), ShippedAt: "2026-10-26T13:41:00Z"})
-		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/ship.json", story, head), string(rec))
+	// #40 shipped as PR #39, was reverted, and shipped again as PR #41; PR #39's head sorts after PR #41's, so only
+	// the ship time puts them in order. #400 is another story, whose record a brief of #52 must not list.
+	for _, s := range []struct {
+		story, pr int
+		head, at  string
+	}{{40, 41, fmt.Sprintf("%040d", 41), "2026-10-26T13:41:00Z"}, {40, 39, strings.Repeat("f", 40), "2026-10-25T09:00:00Z"}, {400, 401, fmt.Sprintf("%040d", 401), "2026-10-26T13:41:00Z"}} {
+		rec, _ := json.Marshal(ShipRecord{Repo: "o/r", Story: s.story, PR: s.pr, Head: s.head, MergeCommit: fmt.Sprintf("%07d", s.pr*1000), ShippedAt: s.at})
+		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/ship.json", s.story, s.head), string(rec))
+		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/pack.json", s.story, s.head), "{}")
 	}
+	putLedger(t, m.bare, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json", "{not json")
 	putLedger(t, m.bare, "specs/40/answers.md", "Q: Which tool runs the Kanha?\nA: The tool in missions/<f>/plan.json.\n")
 	m.start(889, "rahulnakmol", "amp")
 	if code, out, errOut := m.approve(874); code != 0 {
 		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
 	}
-	for _, n := range []int{50, 52, 950, 951} {
+	for _, n := range []int{50, 52, 54, 950, 951} {
 		m.readyStory(n)
 	}
 	brief := func(n int, tool string) string {
@@ -366,7 +374,8 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	}
 	b52 := brief(52, "amp")
 	for _, want := range []string{
-		"### #40\n\n- Merged as PR #41 (merge commit `0041000`); its ship record is `proof/40/" + fmt.Sprintf("%040d", 41) + "/authoritative/ship.json` on the ledger.\n",
+		"### #40\n\n- Merged as PR #39 (merge commit `0039000`); its ship record is `proof/40/" + strings.Repeat("f", 40) + "/authoritative/ship.json` on the ledger.\n" +
+			"- Merged as PR #41 (merge commit `0041000`); its ship record is `proof/40/" + fmt.Sprintf("%040d", 41) + "/authoritative/ship.json` on the ledger.\n",
 		"- The asks answered on #40 (`specs/40/answers.md` on the ledger):\n\n```text\nQ: Which tool runs the Kanha?\nA: The tool in missions/<f>/plan.json.\n```\n",
 		"run `aayu ship <pr>`",
 	} {
@@ -376,6 +385,12 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	}
 	if strings.Contains(b52, "PR #401") {
 		t.Errorf("#52's brief lists #400's PR:\n%s", b52)
+	}
+	// A ship record the ledger holds but that does not parse stops the hand-off: no brief leaves without it.
+	calls := len(m.callLog())
+	if code, out, errOut := run(t, m.agent, m.opts, "build", "54", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start"); code == 0 ||
+		!strings.Contains(errOut, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json") || len(m.callLog()) != calls {
+		t.Fatalf("build 54 with a broken ship record of #44: exit %d: %s%s", code, out, errOut)
 	}
 	for n, tool := range map[int]string{950: "codex", 951: "cursor"} {
 		b := brief(n, tool)

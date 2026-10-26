@@ -382,31 +382,26 @@ func (e *Env) writeBrief(ctx context.Context, d *delegation, chk ready.Result) e
 // its ship record, oldest first, and the answers to the asks raised on it.
 func upstream(ctx context.Context, t *ledger.Tree, n int) (delegate.Upstream, error) {
 	u := delegate.Upstream{Story: n}
-	ps, err := t.List(ctx, fmt.Sprintf("proof/%d/", n))
-	if err != nil {
-		return u, err
-	}
+	// Read as the plan is: what the ledger cannot list or hold is absent. A ship record it holds must parse.
+	ps, _ := t.List(ctx, fmt.Sprintf("proof/%d/", n))
 	shippedAt := map[string]string{}
 	for _, p := range ps {
 		if !strings.HasSuffix(p, "/authoritative/ship.json") {
 			continue
 		}
-		b, err := t.File(ctx, p)
-		if err != nil {
-			return u, err
-		}
 		var r ShipRecord
-		if err := json.Unmarshal(b, &r); err != nil {
+		b, err := t.File(ctx, p)
+		if err == nil {
+			err = json.Unmarshal(b, &r)
+		}
+		if err != nil {
 			return u, fmt.Errorf("%s: %w", p, err)
 		}
 		shippedAt[p] = r.ShippedAt
 		u.Shipped = append(u.Shipped, delegate.Shipped{PR: r.PR, Merge: r.MergeCommit, Record: p})
 	}
 	slices.SortStableFunc(u.Shipped, func(a, b delegate.Shipped) int { return strings.Compare(shippedAt[a.Record], shippedAt[b.Record]) })
-	b, err := t.File(ctx, fmt.Sprintf("specs/%d/answers.md", n))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return u, err
-	}
+	b, _ := t.File(ctx, fmt.Sprintf("specs/%d/answers.md", n))
 	u.Answers = strings.TrimSpace(string(b))
 	return u, nil
 }
