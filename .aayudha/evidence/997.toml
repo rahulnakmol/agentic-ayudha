@@ -10,7 +10,7 @@ tests = ["internal/cli:TestApproveToBuildRefusesStoryWithNoMilestone"]
 
 [[criterion]]
 id = 3 # one milestone with all stories passes; its gate runs when the last story merges
-tests = ["internal/cli:TestApproveToBuildRefusesStoryWithNoMilestone"]
+tests = ["internal/cli:TestApproveToBuildOneMilestonePasses"]
 
 [[criterion]]
 id = 4 # Tatkal Feature #920 of Release #906: no Feature-done milestone; complete only when #906 is ready to promote and publish

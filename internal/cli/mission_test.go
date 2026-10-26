@@ -297,17 +297,11 @@ func TestMissionStartWritesPlan(t *testing.T) {
 	}
 }
 
-// Criteria 2 and 3: a draft plan that leaves story #24 and Bug #25 in no
-// milestone is refused before the device code; one milestone with every
-// story passes, and its gate runs when the last story merges.
+// Criterion 2: a draft plan that leaves story #24 and Bug #25 in no
+// milestone is refused before the device code, and so is any other plan that
+// does not put each story and Bug in exactly one milestone.
 func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
-	m := newMissionWorld(t)
-	m.issue(889, "Agents pull the next story", "feature", 0, "")
-	for n := 20; n <= 24; n++ {
-		m.issue(n, fmt.Sprintf("Story %d", n), "story", 889, "")
-	}
-	m.issue(25, "Answers vanish", "bug", 889, "")
-	m.feature(889, 20, 21, 22, 23, 24)
+	m := storiesAndBug(t)
 	n := m.commits()
 	m.g.Reset()
 	code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21 MS2=#22,#23")
@@ -341,7 +335,25 @@ func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 		}
 	}
 
-	// 3. One milestone with every story and Bug passes.
+}
+
+// storiesAndBug is Feature #889 with stories #20 to #24 and Bug #25.
+func storiesAndBug(t *testing.T) *missionWorld {
+	t.Helper()
+	m := newMissionWorld(t)
+	m.issue(889, "Agents pull the next story", "feature", 0, "")
+	for n := 20; n <= 24; n++ {
+		m.issue(n, fmt.Sprintf("Story %d", n), "story", 889, "")
+	}
+	m.issue(25, "Answers vanish", "bug", 889, "")
+	m.feature(889, 20, 21, 22, 23, 24)
+	return m
+}
+
+// Criterion 3: one milestone with every story and Bug passes, and its gate
+// runs when the last story merges.
+func TestApproveToBuildOneMilestonePasses(t *testing.T) {
+	m := storiesAndBug(t)
 	if code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21,#22,#23,#24,#25"); code != 0 {
 		t.Fatalf("one milestone: exit %d: %s%s", code, out, errOut)
 	}
