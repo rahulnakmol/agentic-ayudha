@@ -602,7 +602,14 @@ func checkSkillCopies(ctx context.Context, p *Probe) Result {
 	case !ok:
 		return Result{Status: Warn, Detail: "skills are not installed here (aayu install shows the plan, --apply writes it)"}
 	}
+	// Each person installs for their own tool, and install keeps the lock's
+	// other tools (Story #1005), so a tool missing from the lock is only added.
+	// Every row below names it.
+	missing := toolNotInLock(ctx, p, lock)
 	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
+		if missing != "" {
+			problems = append(problems, missing)
+		}
 		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
 	}
 	// A Cursor plugin installed from a marketplace lives with the Cursor
@@ -611,9 +618,6 @@ func checkSkillCopies(ctx context.Context, p *Probe) Result {
 	if slices.Contains(lock.Hosts, "cursor") {
 		cursor = []string{"Cursor: aayu sees an aayudha plugin only in ~/.cursor/plugins/local, not one installed from a marketplace; if you installed one, disable it for this workspace in Cursor, or Cursor lists each aayudha skill twice"}
 	}
-	// Each person installs for their own tool, and install keeps the lock's
-	// other tools (Story #1005), so a tool missing from the lock is only added.
-	missing := toolNotInLock(ctx, p, lock)
 	home := p.Getenv("HOME")
 	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
 		if missing != "" {

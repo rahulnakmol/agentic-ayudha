@@ -947,4 +947,11 @@ func TestDoctorWarnsToolMissingFromLock(t *testing.T) {
 		!slices.Contains(r.Lines, "copilot is @carol's tool but not in lock.toml: run aayu install --host copilot") {
 		t.Errorf("doubled copies, copilot missing: %s %q %q", r.Status, r.Detail, r.Lines)
 	}
+	// With a copy that differs from the lock, the failing row still names the missing tool.
+	p.Root = repoWith(t, map[string]string{".claude/skills/x/SKILL.md": "edited\n",
+		".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\nx = { version = \"0.0.0\", sha256 = \"" + hosts.HashSkill(skill) + "\" }\n"})
+	if r := checkSkillCopies(context.Background(), p); r.Status != Fail || !strings.HasPrefix(r.Detail, "skill copies differ") ||
+		!slices.Contains(r.Lines, "copilot is @carol's tool but not in lock.toml: run aayu install --host copilot") {
+		t.Errorf("a copy differs, copilot missing: %s %q %q", r.Status, r.Detail, r.Lines)
+	}
 }
