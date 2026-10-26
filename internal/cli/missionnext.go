@@ -145,12 +145,23 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	for _, cl := range claims {
 		claimed[cl.Story], busy[cl.Story] = true, true
 	}
+	// A gate fix PR takes one agents slot while it is open, and its spend counts against the budget (Story #1001).
+	open, err := openFixPRs(ctx, c, owner, name, plan)
+	if err != nil {
+		return err
+	}
+	for _, fx := range open {
+		busy[fixKey(fx.Milestone, fx.Check, fx.DevSHA)] = true
+	}
 	t, err := w.Read(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	defer t.Close()
 	costs, spent := e.costs(repo), 0.0
+	for _, fx := range plan.GateFixes {
+		spent += costs[fx.PR]
+	}
 	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
 	states := map[int]string{} // each listed item's state: a depends-on target in the list needs no read

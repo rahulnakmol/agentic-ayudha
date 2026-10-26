@@ -292,6 +292,9 @@ type GitHub struct {
 	// jobs. Both run with Mu held and must not lock it.
 	OnDispatch func(workflow, ref string, inputs map[string]any) WorkflowRun
 	OnRerun    func(run *WorkflowRun)
+	// OnRerunJob re-runs one Actions job, by its check run ID (POST
+	// actions/jobs/{id}/rerun); nil answers 404. It runs with Mu held.
+	OnRerunJob func(job int64)
 	Requests   []Request
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
@@ -456,6 +459,7 @@ var (
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
+	reRerunJob  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/rerun$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
 	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
 	reRunJobs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/jobs$`)
@@ -1096,6 +1100,13 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]any{"id": len(out) + 1, "path": ".github/workflows/" + f, "state": "active"})
 		}
 		reply(200, map[string]any{"total_count": len(out), "workflows": out})
+	case m == "POST" && reRerunJob.MatchString(p):
+		if g.OnRerunJob == nil {
+			notFound()
+			return
+		}
+		g.OnRerunJob(int64(atoi(reRerunJob.FindStringSubmatch(p)[1])))
+		w.WriteHeader(http.StatusCreated)
 	case reRun.MatchString(p):
 		sm := reRun.FindStringSubmatch(p)
 		i := slices.IndexFunc(g.Runs, func(r WorkflowRun) bool { return r.ID == int64(atoi(sm[1])) })

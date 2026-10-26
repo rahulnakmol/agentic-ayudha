@@ -532,7 +532,7 @@ func TestMissionShowPrintsSourcesAndPausedRow(t *testing.T) {
 	for _, want := range []string{
 		"running: started by @rahulnakmol at ",
 		"MS1       building: 1 of 2 merged; the gate runs when its last story merges · #20 merged, #21 in-progress",
-		"MS2       building: 0 of 2 merged; the gate runs when its last story merges · #22 open, #23 open",
+		"MS2       building: 0 of 2 merged; the gate runs when its last story merges; its PRs merge after MS1's gate passes · #22 open, #23 open",
 		"agents    5 ([build] agents on dev)",
 		"budget    $660 (the top of #886's range $360–$660 (estimate $420), locked at Start)",
 		"used      $60 (1 merged x $60 (the per-story cap of approval 1), until #872 measures spend)",

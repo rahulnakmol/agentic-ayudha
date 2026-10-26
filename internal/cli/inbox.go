@@ -45,6 +45,7 @@ func init() { register("inbox", runInbox) }
 const (
 	InboxDecision    = "decision"     // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxScope       = "scope"        // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
+	InboxMission     = "mission"      // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
 	InboxReady       = "ready"        // an open Story PR that ship refused only for the human pass, its gate green
 	InboxNotReady    = "not-ready"    // a PR ship left Ready to ship that cannot ship now (a conflict, a check, new commits): nothing for a person yet (Story #796)
 	InboxHumanReview = "human-review" // a PR whose merge gate waits at the human rung for its head (Story #675)
@@ -55,7 +56,7 @@ const (
 	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -91,6 +92,13 @@ var inboxKinds = map[string]inboxKind{
 			"Within the budget in [scope] budget_percent, changes go ahead; past it, a change waits for a person, against a Decision someone accepted. " +
 			"Accepting writes the baseline or applies the change and records it on the ledger. If you leave it, nothing changes.",
 		Terms: []string{"Release", "Decision"}},
+	InboxMission: {Icon: "🧩", Word: "Mission", Seat: verbs.EngineeringManager,
+		Line: "A Feature's mission stopped at a step only a person takes; its stories wait for you.",
+		Explain: "A mission builds a Feature's stories in milestones, and each milestone ends with a gate of fixed checks on dev. " +
+			"When a gate fails too often, or a fix would pass the Feature's budget, the mission waits for you and makes no recommendation. " +
+			"Each choice runs its aayu mission step, which reads the plan again and asks for the device code where a person must be present. " +
+			"If you leave it, nothing merges past that milestone and the fix waits.",
+		Terms: []string{"Merge gate", "Budget breaker"}},
 	InboxReady: {Icon: "🚢", Word: "Ready to ship", Seat: verbs.EngineeringManager,
 		Line: "Finished work with every check green; it touches a sensitive area, so it merges when you say so.",
 		Explain: "Most agent pull requests merge into dev on their own once every check is green and the proof shows they do what they say. " +
@@ -203,6 +211,7 @@ type InboxItem struct {
 	Evidence    string        `json:"evidence"`              // the one link the counsel rests on
 	Updated     time.Time     `json:"updated,omitzero"`      // when the issue or PR last changed on GitHub
 	Story       int           `json:"story,omitempty"`       // the Story a ship of this PR completes, so two writes on it never run at once
+	Ask         string        `json:"ask,omitempty"`         // a mission card's ask ID: a Feature can ask more than one thing
 	Next        string        `json:"next,omitempty"`        // who acts next, in plain words, on a card with nothing for the person yet
 	Head        string        `json:"head,omitempty"`        // the PR's head commit the card was read at, which a ship or an approval acts on
 	BodyHash    string        `json:"body_hash,omitempty"`   // a Decision's body as read (workitems.BodyHash): accepting it accepts that text
@@ -238,6 +247,11 @@ func (it InboxItem) short() string {
 			return "one-way door"
 		}
 		return "a choice only you make"
+	case InboxMission:
+		if strings.HasPrefix(it.Ask, "budget-") {
+			return "fix over budget"
+		}
+		return "gate stopped"
 	case InboxReady:
 		return "green; needs your pass"
 	case InboxNotReady:
@@ -264,6 +278,9 @@ func (it InboxItem) key() string {
 	kind := it.Kind
 	if kind == InboxNotReady {
 		kind = InboxReady
+	}
+	if it.Ask != "" {
+		return kind + "#" + strconv.Itoa(it.Number) + "/" + it.Ask
 	}
 	return kind + "#" + strconv.Itoa(it.Number)
 }
@@ -604,6 +621,13 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 					return nil, err
 				}
 			}
+		case typ == "feature":
+			cards, err := s.missionItems(ctx, it)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, cards...)
+			continue
 		case typ == "release":
 			if ok, err := s.scopeItem(ctx, &it); err != nil {
 				return nil, err
@@ -908,6 +932,10 @@ func inboxCounsel(it InboxItem) string {
 		return fmt.Sprintf("What this is really about: keeping the board honest about what is already fixed. The evidence: PR #%d, the fix for "+
 			"Bug #%d, merged into %s as commit %s, and the Bug is still open. I recommend closing it as completed, with a note that links the fix. "+
 			"Leave it and the Bug keeps counting as open in every list and report, though no code changes either way.", it.PR, n, f.devBr, short(it.mergeSHA))
+	case InboxMission:
+		return fmt.Sprintf("What this is really about: Feature #%d's mission reached a step that only a person takes. The evidence: %s; the facts "+
+			"are under d. The gate is a fixed set of checks, and no model judged it. Decision #915 gives this call to you, so I make no "+
+			"recommendation here. Each choice reads the mission plan again before it writes. You decide.", n, f.problem)
 	case InboxScope:
 		return fmt.Sprintf("Release #%d: %s. A baseline is the plan we measure every later change against, so accept only the plan you see on "+
 			"the Release. Past the budget, accept only if the Decision says why this change beats moving it to the next release. Slipping "+
@@ -1661,6 +1689,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return decideAccept(ctx, e, cfg, repo, []int{it.Number}, []string{strconv.Itoa(a.N)})
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
+	case InboxMission: // the mission step reads the plan again and asks for the device code where a person must be present
+		return e.missionAct(ctx, it, a)
 	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
 		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
 	case InboxReady:
