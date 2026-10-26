@@ -382,8 +382,12 @@ func (e *Env) writeBrief(ctx context.Context, d *delegation, chk ready.Result) e
 // its ship record, oldest first, and the answers to the asks raised on it.
 func upstream(ctx context.Context, t *ledger.Tree, n int) (delegate.Upstream, error) {
 	u := delegate.Upstream{Story: n}
-	// Read as the plan is: what the ledger cannot list or hold is absent. A ship record it holds must parse.
-	ps, _ := t.List(ctx, fmt.Sprintf("proof/%d/", n))
+	// Only absent data is optional: a read that fails, or a ship record without its PR and merge commit, stops the
+	// hand-off rather than send an incomplete brief.
+	ps, err := t.List(ctx, fmt.Sprintf("proof/%d/", n))
+	if err != nil {
+		return u, err
+	}
 	shippedAt := map[string]string{}
 	for _, p := range ps {
 		if !strings.HasSuffix(p, "/authoritative/ship.json") {
@@ -394,6 +398,9 @@ func upstream(ctx context.Context, t *ledger.Tree, n int) (delegate.Upstream, er
 		if err == nil {
 			err = json.Unmarshal(b, &r)
 		}
+		if err == nil && (r.PR <= 0 || r.MergeCommit == "") {
+			err = errors.New("no PR or merge commit")
+		}
 		if err != nil {
 			return u, fmt.Errorf("%s: %w", p, err)
 		}
@@ -401,7 +408,10 @@ func upstream(ctx context.Context, t *ledger.Tree, n int) (delegate.Upstream, er
 		u.Shipped = append(u.Shipped, delegate.Shipped{PR: r.PR, Merge: r.MergeCommit, Record: p})
 	}
 	slices.SortStableFunc(u.Shipped, func(a, b delegate.Shipped) int { return strings.Compare(shippedAt[a.Record], shippedAt[b.Record]) })
-	b, _ := t.File(ctx, fmt.Sprintf("specs/%d/answers.md", n))
+	b, err := t.File(ctx, fmt.Sprintf("specs/%d/answers.md", n))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return u, err
+	}
 	u.Answers = strings.TrimSpace(string(b))
 	return u, nil
 }

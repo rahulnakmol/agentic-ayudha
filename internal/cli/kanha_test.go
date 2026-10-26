@@ -337,7 +337,7 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/ship.json", s.story, s.head), string(rec))
 		putLedger(t, m.bare, fmt.Sprintf("proof/%d/%s/authoritative/pack.json", s.story, s.head), "{}")
 	}
-	putLedger(t, m.bare, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json", "{not json")
+	putLedger(t, m.bare, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json", "{}")
 	putLedger(t, m.bare, "specs/40/answers.md", "Q: Which tool runs the Kanha?\nA: The tool in missions/<f>/plan.json.\n")
 	m.start(889, "rahulnakmol", "amp")
 	if code, out, errOut := m.approve(874); code != 0 {
@@ -386,10 +386,10 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	if strings.Contains(b52, "PR #401") {
 		t.Errorf("#52's brief lists #400's PR:\n%s", b52)
 	}
-	// A ship record the ledger holds but that does not parse stops the hand-off: no brief leaves without it.
+	// A ship record with no PR or merge commit stops the hand-off: no brief leaves without it.
 	calls := len(m.callLog())
 	if code, out, errOut := run(t, m.agent, m.opts, "build", "54", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start"); code == 0 ||
-		!strings.Contains(errOut, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json") || len(m.callLog()) != calls {
+		!strings.Contains(errOut, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json: no PR or merge commit") || len(m.callLog()) != calls {
 		t.Fatalf("build 54 with a broken ship record of #44: exit %d: %s%s", code, out, errOut)
 	}
 	for n, tool := range map[int]string{950: "codex", 951: "cursor"} {
