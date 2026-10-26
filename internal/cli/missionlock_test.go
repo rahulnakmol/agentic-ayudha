@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -119,6 +121,26 @@ func labelWrites(c *github.Client, n int) map[string]func() error {
 			_, _, err := c.REST.Issues.Update(ctx, "o", "r", n, gh.UpdateIssueRequest{Labels: []string{"type:story", "effort:L", "risk:medium", "priority:P1"}})
 			return err
 		}),
+		"remove every label": write(func(ctx context.Context) error {
+			_, err := c.REST.Issues.RemoveLabelsForIssue(ctx, "o", "r", n)
+			return err
+		}),
+		// GitHub also takes labels as objects, and a request whose body the client cannot replay.
+		"add priority:P0 as a label object": write(func(ctx context.Context) error {
+			req, err := c.REST.NewRequest(ctx, http.MethodPost, fmt.Sprintf("repos/o/r/issues/%d/labels", n), map[string]any{"labels": []map[string]string{{"name": "priority:P0"}}})
+			if err == nil {
+				_, err = c.REST.Do(req, nil)
+			}
+			return err
+		}),
+		"edit the body from a stream": write(func(ctx context.Context) error {
+			req, err := c.REST.NewRequest(ctx, http.MethodPatch, fmt.Sprintf("repos/o/r/issues/%d", n), nil)
+			if err == nil {
+				req.Body, req.GetBody = io.NopCloser(strings.NewReader(`{"body":"Another story."}`)), nil
+				_, err = c.REST.Do(req, nil)
+			}
+			return err
+		}),
 	}
 }
 
@@ -220,7 +242,9 @@ func TestNotNowLocksNothing(t *testing.T) {
 	code, out, errOut = run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r")
 	var list inboxList
 	if code != 0 || json.Unmarshal([]byte(out), &list) != nil ||
-		!slices.ContainsFunc(list.Items, func(it InboxItem) bool { return it.Kind == InboxStart && it.Number == 889 }) {
+		!slices.ContainsFunc(list.Items, func(it InboxItem) bool {
+			return it.Kind == InboxStart && it.Number == 889 && it.short() == "a person starts it"
+		}) {
 		t.Fatalf("inbox --list after Not now: exit %d: %s%s", code, out, errOut)
 	}
 }
@@ -281,6 +305,11 @@ func TestUnlockedWritesUnchanged(t *testing.T) {
 	}
 	if w := m.issueWrites(20); len(w) != 2 || len(m.issueWrites(870)) != 1 {
 		t.Fatalf("writes: %v", m.g.Writes())
+	}
+	// With no ledger, nothing is locked.
+	git(t, m.bare, "branch", "-D", "ledger")
+	if err := editBody(c, 870, "### Summary\n\nWith no ledger."); err != nil {
+		t.Fatalf("a body with no ledger: %v", err)
 	}
 }
 
@@ -350,7 +379,7 @@ func TestLockedEditHoldsStoryCommentsAndCard(t *testing.T) {
 			t.Errorf("the card recommends %q", o.Label)
 		}
 	}
-	if card.Title != "#20 changed while locked by the mission of #889" || !slices.Equal(labels, []string{"Keep the edit: #20 is planned again from its new body",
+	if card.Title != "#20 changed while locked by the mission of #889" || card.short() != "changed while locked" || !slices.Equal(labels, []string{"Keep the edit: #20 is planned again from its new body",
 		"Leave #20 waiting", "Open #20 on GitHub to undo the edit yourself"}) || slices.ContainsFunc(list.Items, func(it InboxItem) bool { return it.Kind == InboxLocked && it.Number != 20 }) {
 		t.Fatalf("locked-edit card: %+v", card)
 	}
@@ -490,5 +519,223 @@ func TestKeepTheEdit(t *testing.T) {
 	var list inboxList
 	if code != 0 || json.Unmarshal([]byte(out), &list) != nil || slices.ContainsFunc(list.Items, func(it InboxItem) bool { return it.Kind == InboxLocked }) {
 		t.Fatalf("inbox after the keep: %s", out)
+	}
+}
+
+// Criterion 4, failing closed: when aayu cannot read the locks, it writes no
+// body, not even an unlocked one; a comment still goes.
+func TestLockGuardFailsClosed(t *testing.T) {
+	m := startedLock(t)
+	putLedger(t, m.bare, "missions/900/plan.json", "not a plan\n")
+	_, c := m.client(m.agent)
+	m.g.Reset()
+	err := editBody(c, 870, "### Summary\n\nThe Initiative.")
+	if err == nil || CodeOf(Wrap(ExitBlocked, err)) != ExitExternal || !strings.Contains(err.Error(), "aayu reads the mission locks before it writes") ||
+		!strings.Contains(err.Error(), "missions/900/plan.json: not a mission plan aayu wrote") {
+		t.Fatalf("a body write with unreadable locks: %v", err)
+	}
+	if err := postComment(context.Background(), c, "o/r", 870, "github.comment", "A note."); err != nil {
+		t.Fatalf("a comment with unreadable locks: %v", err)
+	}
+	if w := m.issueWrites(870); len(w) != 0 {
+		t.Fatalf("the body write reached GitHub: %v", w)
+	}
+}
+
+// Criterion 2: Start locks the issues the card named. When one closes while
+// he enters the code, nothing starts.
+func TestStartRefusesWhenLockedIssuesChange(t *testing.T) {
+	m := lockWorld(t, "amp")
+	m.device("rahulnakmol")
+	m.edit(func() { m.g.Device.OnPoll = func(int) { m.g.Issues[27].State = "closed" } })
+	code, out, errOut := run(t, m.person, m.opts, "mission", "start", "889", "--repo", "o/r")
+	if code != ExitBlocked || !strings.Contains(errOut, "The issues the start of #889 locks changed while the code was waiting: now #889, #20, #21, #22, #23, #24, #25, #26. Nothing was started.") {
+		t.Fatalf("start 889: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); p.StartedBy != "" || p.Lock != nil {
+		t.Fatalf("start wrote:\n%s", raw)
+	}
+	// When GitHub fails as Start reads them again, nothing starts either.
+	m = lockWorld(t, "amp")
+	m.device("rahulnakmol")
+	m.edit(func() { m.g.Device.OnPoll = func(int) { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues/27", 0 } })
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "start", "889", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("start 889 with GitHub failing: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); p.StartedBy != "" || p.Lock != nil {
+		t.Fatalf("start wrote:\n%s", raw)
+	}
+}
+
+// Criterion 5: a wake that cannot check a changed body starts nothing, so no
+// story starts from a spec that moved. Once it can, the comment names no
+// editor GitHub did not give.
+func TestLockedEditCheckFailsClosed(t *testing.T) {
+	m := startedLock(t)
+	m.edit(func() { m.g.Issues[20].Body += "\nA person's note." })
+	// Each read and write of the check fails once, right after the request before it.
+	for _, c := range []struct{ after, fail string }{
+		{"GET /repos/o/r/issues/889/sub_issues", "GET /repos/o/r/issues/889"},
+		{"", "GET /repos/o/r/issues/20/comments"},
+		{"GET /repos/o/r/issues/20/comments", "POST /graphql"},
+		{"", "POST /repos/o/r/issues/20/comments"},
+	} {
+		m.edit(func() {
+			m.g.Fail, m.g.FailAfter = "", 0
+			if c.after == "" {
+				m.g.Fail = c.fail
+			}
+			m.g.Hook = func(method, path string) {
+				if method+" "+path == c.after {
+					m.g.Fail, m.g.Hook = c.fail, nil
+				}
+			}
+		})
+		if code, out, errOut := m.next(889); code != ExitExternal || strings.Contains(out, "start #") || len(m.claims(889)) != 0 {
+			t.Errorf("mission next with %s failing: exit %d, claims %v: %s%s", c.fail, code, m.claims(889), out, errOut)
+		}
+		m.edit(func() { m.g.Fail, m.g.Hook = "", nil })
+	}
+	if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "waits #20: changed while locked\n") {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	m.g.Mu.Lock()
+	last := m.g.Issues[20].Comments[len(m.g.Issues[20].Comments)-1].Body
+	m.g.Mu.Unlock()
+	if !strings.Contains(last, "holds it: its body, edited at ") || strings.Contains(last, " by @") {
+		t.Fatalf("lock comment: %q", last)
+	}
+}
+
+// Criterion 9: Keep the edit keeps only the body the card showed, and only
+// while the lock holds it.
+func TestKeepTheEditRefusals(t *testing.T) {
+	m := startedLock(t)
+	m.edit(func() { m.g.Issues[20].Body += "\nA person's note." })
+	e, c := m.client(m.person)
+	codes := m.codes()
+	err := e.keepEdit(context.Background(), c, "o/r", InboxItem{Feature: 889, Number: 20, BodyHash: workitems.BodyHash("an earlier edit")})
+	if err == nil || CodeOf(err) != ExitBlocked || err.Error() != "#20's body changed again since the card was read. Nothing was kept." || m.codes() != codes {
+		t.Fatalf("keep a stale card: %v, device codes %d", err, m.codes()-codes)
+	}
+	// A dry run says what the keep would do, and keeps nothing.
+	m.device("rahulnakmol")
+	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--dry-run", "--repo", "o/r")
+	if p, raw := m.plan(889); !strings.Contains(out, "--dry-run: the lock of #889 would take #20's new body") || p.Controls[len(p.Controls)-1].Action != "start" {
+		t.Fatalf("keep in a dry run: exit %d:\n%s%s\n%s", code, out, errOut, raw)
+	}
+	// The mission ends while he enters the code: nothing is kept.
+	m.device("rahulnakmol")
+	m.edit(func() {
+		m.g.Device.OnPoll = func(int) {
+			if p, _ := m.plan(889); p.Lock.State == LockActive {
+				m.setPlan(889, func(p *MissionPlan) { p.Lock.State = LockEnded })
+			}
+		}
+	})
+	code, out, errOut = runIn(t, m.person, m.opts, "1y", "inbox", "--repo", "o/r")
+	if !strings.Contains(out+errOut, "#20 is not locked by the mission of #889 any more. Nothing was kept.") {
+		t.Fatalf("keep after the lock ended: exit %d:\n%s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); slices.ContainsFunc(p.Controls, func(c MissionControl) bool { return strings.HasPrefix(c.Action, "keep the edit") }) {
+		t.Fatalf("a keep was recorded:\n%s", raw)
+	}
+}
+
+// Criterion 5: the lock comment names what changed: criteria by number,
+// other sections by label, and else the body.
+func TestBodyChangeNamesWhatChanged(t *testing.T) {
+	was := "### Summary\n\nPull the next story.\n\n### Completion Goal\n\n" +
+		"1. [api-trace] state: GET /a; expected: 200\n2. [api-trace] state: GET /b; expected: 200\n3. [api-trace] state: GET /c; expected: 200\n"
+	for _, c := range []struct{ now, want string }{
+		{strings.Replace(was, "/c;", "/d;", 1), "criterion 3"},
+		{strings.Replace(strings.Replace(was, "/a;", "/x;", 1), "/c;", "/d;", 1), "criteria 1 and 3"},
+		{strings.Replace(was, "Pull the next", "Push the next", 1), "its Summary section"},
+		{strings.Replace(strings.Replace(was, "Pull the next", "Push the next", 1), "/b;", "/x;", 1), "its Summary section and criterion 2"},
+		{"A note above the sections.\n\n" + was, "its body"},
+	} {
+		if got := bodyChange(was, c.now); got != c.want {
+			t.Errorf("bodyChange: %q, want %q, for:\n%s", got, c.want, c.now)
+		}
+	}
+}
+
+// Criterion 1 in each inbox: the full-screen inbox keeps the spacing of the
+// start card's lines that fit and wraps the rest, and Not now writes
+// nothing; a narrow terminal and --list show the same lines; with no tool
+// set, the card says Start refuses.
+func TestStartCardInEveryInbox(t *testing.T) {
+	m := lockWorld(t, "cursor")
+	var wide, narrow, status string
+	opts := m.opts
+	opts.TUI = func(tm tea.Model) error {
+		im := tm.(*inboxModel)
+		teaDrive(im, im.Init())
+		im.cur = slices.IndexFunc(im.rows, func(i int) bool { return im.items[i].Kind == InboxStart })
+		im.Update(tea.WindowSizeMsg{Width: 176, Height: 40})
+		wide = ansi.Strip(im.View().Content)
+		im.Update(tea.WindowSizeMsg{Width: 70, Height: 40})
+		narrow = ansi.Strip(im.View().Content)
+		teaKeys(im, "2", "enter")
+		status = im.status
+		teaKeys(im, "q")
+		return nil
+	}
+	m.device("rahulnakmol")
+	n := m.commits()
+	m.g.Reset()
+	if code, out, errOut := runIn(t, m.person, opts, "", "inbox", "--repo", "o/r"); code != 0 {
+		t.Fatalf("full-screen inbox: exit %d: %s%s", code, out, errOut)
+	}
+	// The spacing of a line that fits stays, so Locked, Open, and Ends line up; a long line wraps.
+	held := []string{"│ Locked  each body, and its effort:, risk: and priority: labels", "│ Open    comments and status: labels",
+		"│ Ends    at the last milestone of the last mission (MS3)", "│ Starting the mission makes 9 issues read-only until its last "}
+	for _, l := range held {
+		if !strings.Contains(wide, l) || !strings.Contains(narrow, strings.TrimPrefix(l, "│ ")) {
+			t.Errorf("the full-screen card lacks %q:\n%s\n%s", l, wide, narrow)
+		}
+	}
+	if status != "Not now: nothing is locked: nothing was written, and the card stays in the inbox." || m.commits() != n || len(m.g.Writes()) != 0 {
+		t.Fatalf("Not now: %q, writes %v", status, m.g.Writes())
+	}
+	m.person["COLUMNS"] = "70"
+	code, out, errOut := runIn(t, m.person, m.opts, "q", "inbox", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "\n  Starting the mission makes 9 issues read-only until its last\n  milestone: #889,") ||
+		!strings.Contains(out, "\n  Locked  each body, and its effort:, risk: and priority: labels\n  Open    comments and status: labels\n") {
+		t.Fatalf("inbox in 70 columns: exit %d:\n%s%s", code, out, errOut)
+	}
+	code, out, errOut = run(t, m.agent, m.opts, "inbox", "--list", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "_A Feature is approved to build; starting its mission locks its issues until the last milestone._  \n"+
+		"Starting the mission makes 9 issues read-only until its last milestone: \\#889, \\#20, \\#21, \\#22, \\#23, \\#24, \\#25, \\#26, \\#27  \nLocked  each body") {
+		t.Fatalf("inbox --list: exit %d:\n%s%s", code, out, errOut)
+	}
+	m.setTool("")
+	code, out, errOut = run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r")
+	var list inboxList
+	if code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 1 ||
+		!slices.Contains(list.Items[0].Lines, "It runs in the tool you set for this repository, and none is set there yet: Start refuses until you set one.") {
+		t.Fatalf("inbox --list with no tool: exit %d: %s%s", code, out, errOut)
+	}
+	// A closed Feature has no card.
+	m.closeIssue(889)
+	if code, out, errOut = run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 0 {
+		t.Fatalf("inbox --list with #889 closed: exit %d: %s%s", code, out, errOut)
+	}
+}
+
+// A mission started before its plan held a lock has none: mission next lists
+// its stories as before, and posts no lock comment.
+func TestMissionWithNoLock(t *testing.T) {
+	m := startedLock(t)
+	m.setPlan(889, func(p *MissionPlan) { p.Lock = nil })
+	m.edit(func() { m.g.Issues[20].Body += "\nA person's note." })
+	code, out, errOut := m.next(889)
+	if code != 0 || strings.Contains(out, "changed while locked") || !strings.Contains(out, "#20") {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	m.g.Mu.Lock()
+	defer m.g.Mu.Unlock()
+	if slices.ContainsFunc(m.g.Issues[20].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, LockMarker) }) {
+		t.Fatal("a lock comment on #20 with no lock")
 	}
 }
