@@ -1,0 +1,51 @@
+{
+  "story": 1013,
+  "body_hash": "df7433d1c991bf30fa65cba7b4ab329260f3538ed7d37ac391b3f99034443556",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "Lock at Start: the start card's words, the lock record, the write refusal in the client's transport, and the locked-edit card and comment",
+      "contracts": [
+        "plan.json `lock` {state, confirmed_by, started_at, ended_at, end_reason, issues [{number, body_sha256, labels}]}",
+        "internal/cli/github.go (Env.newGitHub, :14-29): a transport that refuses a locked body or effort/risk/priority label write before the request leaves",
+        "comment marker `\u003c!-- aayudha:lock --\u003e` (baseline v44 889-locked)"
+      ],
+      "tests": [
+        "internal/cli:TestStartCardWords",
+        "internal/cli:TestMissionStartWritesLock",
+        "internal/cli:TestNotNowLocksNothing",
+        "internal/cli:TestLockedWriteRefusedBeforeRequest",
+        "internal/cli:TestUnlockedWritesUnchanged",
+        "internal/cli:TestLockedEditHoldsStoryCommentsAndCard",
+        "internal/cli:TestLockLeavesCommentsAndStatusOpen",
+        "internal/cli:TestLockEndsAtLastMilestone",
+        "internal/cli:TestLockSpansMissions",
+        "internal/cli:TestKeepTheEdit"
+      ],
+      "instrumentation": [
+        "the refusal names the issue and the mission",
+        "the locked-edit card in aayu inbox"
+      ],
+      "rollback": "Revert the squash commit. Lock comments already posted stay on their issues; the lock record stays on the ledger as data.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:45Z",
+  "planned_by": "human-fallback"
+}
