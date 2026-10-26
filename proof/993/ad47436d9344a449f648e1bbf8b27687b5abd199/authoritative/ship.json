@@ -1,0 +1,66 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 993,
+  "pr": 1023,
+  "pr_head_sha": "ad47436d9344a449f648e1bbf8b27687b5abd199",
+  "merge_commit": "118408f29d80339056f91623802df735a71e3ef9",
+  "pack": "proof/993/ad47436d9344a449f648e1bbf8b27687b5abd199/authoritative/pack.json",
+  "pack_landed": "artifact 12613423018 of run 40231239135 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/40231239135), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 40231239135,
+  "artifact": 12613423018,
+  "pack_sha256": "bd88e2f61e0abdf3cce6378710953ffeb9549a505df63116952b7cf81abce0c9",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/1023#issuecomment-6411334228",
+    "commit": "ad47436d9344a449f648e1bbf8b27687b5abd199",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L07"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver",
+    "never_layers": [
+      "L04",
+      "L07"
+    ],
+    "never_paths": [
+      "CONSTRAINTS.md",
+      "internal/config/config.go",
+      "internal/config/config_test.go",
+      "internal/config/defaults.toml",
+      "internal/config/gen/main.go",
+      "internal/config/schema.json"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "never_layers": [
+      "L04",
+      "L07"
+    ],
+    "autonomous": false,
+    "skipped": "the human pass is settled: solo-bypass"
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ],
+    "approved_by": "rahulnakmol",
+    "approved_at": "2026-10-26T07:31:57Z",
+    "as": "approver"
+  },
+  "actions_segment": "actions/2026-10-26/cli-20261026T081455Z.jsonl",
+  "shipped_at": "2026-10-26T08:15:54Z",
+  "shipped_by": "rahulnakmol"
+}
