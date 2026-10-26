@@ -1,0 +1,47 @@
+{
+  "story": 1004,
+  "body_hash": "080972918a74f749c228109b3d399e41f4f1d5d86636864ace8980937fb52591",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "Start begins the mission's Kanha on the tool recorded in the plan, and each story thread names its Kanha",
+      "contracts": [
+        "specs/\u003cf\u003e/approved.json `parent` {host, session, url, mode}",
+        "delegate/\u003cn\u003e/state.json gains `feature` and the Kanha's session and URL (internal/delegate/state.go:52)",
+        "receivers start the Kanha through the existing Handoff/FollowUp (internal/delegate/receivers.go:118, :171, :205, :269)"
+      ],
+      "tests": [
+        "internal/cli:TestMissionStartBriefsDraftingThread",
+        "internal/cli:TestMissionStartNewClaudeSession",
+        "internal/cli:TestMissionStartLocalKanha",
+        "internal/cli:TestMissionStartCursorCloudAgent",
+        "internal/cli:TestStoryStateNamesFeatureAndKanha",
+        "internal/cli:TestMissionNeverMixesTools",
+        "internal/cli:TestTwoMissionsTwoTools",
+        "internal/cli:TestTatkalStoryRunsOnStartersTool"
+      ],
+      "instrumentation": [
+        "the parent record and its start event in the actions log"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:19Z",
+  "planned_by": "human-fallback"
+}
