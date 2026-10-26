@@ -524,6 +524,17 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 	if b := show(); b.Used.Value != 654 || b.Left.Value != 40 || !strings.HasSuffix(b.Used.Source, "; gate fix PRs: #981 $14 measured") {
 		t.Fatalf("mission show after #981 merged: %+v", b)
 	}
+	// A running story holds its cap too: with room for #982 but #30 in progress, #982 waits (--dry-run writes nothing).
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 720 })
+	g.status(30, "in-progress", "")
+	if code, out, errOut := g.gate("--pr", "982", "--dry-run"); code != ExitBudget || !strings.Contains(out, "($718 used + $64, the fix's estimate, > $720)") {
+		t.Fatalf("gate --pr 982 with #30 running: exit %d: %s%s", code, out, errOut)
+	}
+	g.status(30, "ready", "")
+	if code, out, errOut := g.gate("--pr", "982", "--dry-run"); code != 0 || !strings.Contains(out, "Fix PR #982 is the fix of MS1") {
+		t.Fatalf("gate --pr 982 with room and nothing running: exit %d: %s%s", code, out, errOut)
+	}
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 694 })
 	g.eachRequestFails(func() (int, string, string) { return g.gate("--pr", "982") })
 	// The card cannot be posted: the fix is not recorded, so the next --pr asks again.
 	g.edit(func() { g.g.Fail = "POST /repos/o/r/issues/889/comments" })

@@ -962,19 +962,53 @@ func (e *Env) missionBusy(ctx context.Context, c *github.Client, w *ledger.Write
 	return busy, err
 }
 
-// mergedOf counts the plan's stories and Bugs that merged (are closed).
-func mergedOf(ctx context.Context, c *github.Client, owner, name string, plan *MissionPlan) (int, error) {
-	n := 0
+// committed is what a fix PR is checked against the budget with: what the
+// mission used (missionUsed), plus each open story or Bug that runs or holds
+// a claim, at its measured spend or the per-story cap if more, as mission
+// next counts it. usedOf computes it for a plan as it is edited.
+func (e *Env) committed(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval) (usedOf func(*MissionPlan) SourcedNumber, costs map[int]float64, err error) {
+	owner, name, _ := github.SplitRepo(repo)
+	closed, merged := map[int]bool{}, 0
 	for _, it := range plan.Graph {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
 		if err != nil {
-			return 0, Wrap(ExitExternal, err)
+			return nil, nil, Wrap(ExitExternal, err)
 		}
-		if is.GetState() == "closed" {
-			n++
+		closed[it.Number] = is.GetState() == "closed"
+		if closed[it.Number] {
+			merged++
 		}
 	}
-	return n, nil
+	busy, err := e.missionBusy(ctx, c, w, repo, f, plan)
+	if err != nil {
+		return nil, nil, err
+	}
+	open, err := openFixSet(ctx, c, repo, plan)
+	if err != nil {
+		return nil, nil, err
+	}
+	costs, per := e.costs(repo), appr.Budget.PerStoryUSD
+	var held []int
+	for n := range busy {
+		if n > 0 && !closed[n] { // a fix's slot is negative, and fixSpend counts it
+			held = append(held, n)
+		}
+	}
+	slices.Sort(held)
+	heldV, notes := 0.0, []string(nil)
+	for _, n := range held {
+		v := max(per, costs[n])
+		heldV += v
+		notes = append(notes, fmt.Sprintf("#%d %s", n, ready.USD(v)))
+	}
+	return func(p *MissionPlan) SourcedNumber {
+		u := missionUsed(p, appr, merged, costs, open)
+		if len(notes) > 0 {
+			u.Value += heldV
+			u.Source += "; running or claimed: " + strings.Join(notes, ", ") + " (each at least the per-story cap)"
+		}
+		return u
+	}, costs, nil
 }
 
 // openFixPRs are the plan's fix PRs that are still open.
@@ -1055,17 +1089,12 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	sum := sha256.Sum256(record)
 	fix := GateFix{PR: n, Milestone: ms, Check: check, DevSHA: last.DevSHA, Approval: GateApproval{Record: ready.ApprovalPath(f), SHA256: hex.EncodeToString(sum[:])},
 		At: e.Now().UTC().Format(time.RFC3339)}
-	// The budget: what the mission used, with this fix at the per-story cap, until #872 measures spend.
-	mergedN, err := mergedOf(ctx, c, owner, name, plan)
+	// The budget: what the mission used and holds, with this fix at the per-story cap, until #872 measures spend.
+	usedOf, costs, err := e.committed(ctx, c, w, repo, f, plan, appr)
 	if err != nil {
 		return err
 	}
-	costs := e.costs(repo)
-	open, err := openFixSet(ctx, c, repo, plan)
-	if err != nil {
-		return err
-	}
-	used, est := missionUsed(plan, appr, mergedN, costs, open), appr.Budget.PerStoryUSD
+	used, est := usedOf(plan), appr.Budget.PerStoryUSD
 	if fx := findFix(plan, ms, check, last.DevSHA); fx != nil {
 		fix = *fx
 	} else if plan.Budget > 0 && used.Value+est > plan.Budget {
@@ -1209,13 +1238,7 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 	if err != nil {
 		return err
 	}
-	owner, name, _ := github.SplitRepo(repo)
-	mergedN, err := mergedOf(ctx, c, owner, name, plan)
-	if err != nil {
-		return err
-	}
-	costs := e.costs(repo)
-	open, err := openFixSet(ctx, c, repo, plan)
+	usedOf, costs, err := e.committed(ctx, c, w, repo, f, plan, appr)
 	if err != nil {
 		return err
 	}
@@ -1225,7 +1248,7 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 		pl.BudgetBasis = fmt.Sprintf("raised from %s to %s by @%s at %s: %s; before: %s", ready.USD(pl.Budget), ready.USD(to), p.Login, at, reason, pl.BudgetBasis)
 		pl.Budget = to
 		pl.Controls = append(pl.Controls, MissionControl{Action: "budget", By: p.Login, At: at, Presence: p.Via, Reason: reason})
-		used := missionUsed(pl, appr, mergedN, costs, open).Value
+		used := usedOf(pl).Value
 		freed = nil
 		for i := range pl.GateFixes { // a freed fix counts as the others do: an open one at least at the cap
 			fx := &pl.GateFixes[i]
