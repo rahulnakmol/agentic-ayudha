@@ -56,8 +56,8 @@ func (e *Env) missionAgents(ctx context.Context, c *github.Client, repo string, 
 		return 0, "", err
 	}
 	n := pol.Config.Build.Agents
-	if l.Config.Build.Agents < n {
-		return l.Config.Build.Agents, fmt.Sprintf("a local [build] agents, under %d on %s", n, dev), nil
+	if local := buildAgents(l, n); local < n {
+		return local, fmt.Sprintf("a local [build] agents, under %d on %s", n, dev), nil
 	}
 	return n, "[build] agents on " + dev, nil
 }

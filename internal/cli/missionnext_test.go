@@ -705,9 +705,10 @@ func TestMissionNextAgentsDefault(t *testing.T) {
 }
 
 // Story #1000, criterion 2: dev's committed [build] agents caps the list; a
-// local value (AAYU_BUILD__AGENTS, --set) only lowers it.
+// local value (AAYU_BUILD__AGENTS, --set) only lowers it, and the embedded
+// default (5) is no local value: dev's 7 holds over it.
 func TestAgentsDefaultAndLocalOnlyLowers(t *testing.T) {
-	stories := []int{20, 21, 22, 23, 24, 25, 26}
+	stories := []int{20, 21, 22, 23, 24, 25, 26, 27, 28}
 	for _, tc := range []struct {
 		name, committed string
 		local           map[string]string
@@ -717,6 +718,7 @@ func TestAgentsDefaultAndLocalOnlyLowers(t *testing.T) {
 		{"committed 5, local 10", "[build]\nagents = 5\n", map[string]string{"AAYU_BUILD__AGENTS": "10"}, nil, 5},
 		{"committed 3, --set 6", "[build]\nagents = 3\n", nil, []string{"--set", "build.agents=6"}, 3},
 		{"committed 5, local 2", "[build]\nagents = 5\n", map[string]string{"AAYU_BUILD__AGENTS": "2"}, nil, 2},
+		{"committed 7, no local", "[build]\nagents = 7\n", nil, nil, 7},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newMissionWorld(t)

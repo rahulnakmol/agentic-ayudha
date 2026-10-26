@@ -154,6 +154,11 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Unlock()
 	// --dry-run previews the pick on a ledger with no claims file yet, and
 	// claims nothing.
+	// Dev's committed agents holds over the embedded default (5), which is no local value.
+	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 7\n")
+	if code, _, pick, out := next(nil, "--next", "pick", "--dry-run"); code != 0 || pick.Limit != 7 {
+		t.Fatalf("--next pick --dry-run under dev's agents 7: %d %s", code, out)
+	}
 	commitOnDev(g, ".aayudha/config.toml", "[build]\nagents = 2\n")
 	if code, _, pick, out := next(nil, "--next", "pick", "--dry-run"); code != 0 || pick.Picked != older.Number || contains(g.LabelNames(older.Number), LeaseLabel) {
 		t.Fatalf("--next pick --dry-run: %d %s", code, out)

@@ -431,7 +431,7 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	} else if _, err := loops.Parse(BuildLoop, []byte(text)); err != nil {
 		return nil, 0, Errorf(ExitUsage, "loops/%s.toml on %s at %s: %v", BuildLoop, dev, short(pol.Tip), err)
 	}
-	p := &BuildPick{Mode: mode, Limit: min(l.Config.Build.Agents, pol.Config.Build.Agents), InFlight: []LoopItem{}, Ship: []LoopItem{}}
+	p := &BuildPick{Mode: mode, Limit: buildAgents(l, pol.Config.Build.Agents), InFlight: []LoopItem{}, Ship: []LoopItem{}}
 	prs, err := openStoryPRs(ctx, c, owner, name)
 	if err != nil {
 		return nil, 0, Wrap(ExitExternal, err)
@@ -682,6 +682,16 @@ func (e *Env) loopPolicy(ctx context.Context, c *github.Client, owner, name stri
 	}
 	pol, err := basePolicy(ctx, c, owner, name, branch)
 	return pol, branch, err
+}
+
+// buildAgents is the committed [build] agents, lowered by a value the
+// person's own config, AAYU_BUILD__AGENTS, or --set gives. The embedded
+// default is no such value: it never lowers a higher committed one.
+func buildAgents(l *config.Loaded, committed int) int {
+	if layer, _ := l.Origin("build.agents"); layer != config.LayerDefault {
+		return min(l.Config.Build.Agents, committed)
+	}
+	return committed
 }
 
 // buildUsage is a story's budget use, for a progress comment written outside
