@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -264,6 +265,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	return emitWorkList(e, list)
 }
 
+// dependsOnWord finds the link kind in any case, at offsets into the line itself.
+var dependsOnWord = regexp.MustCompile(`(?i)depends-on`)
+
 // openDeps are the depends-on targets in a Ready story's Links that are still
 // open (Story #999, F19): "#10", one per target. The body is the one Ready
 // froze, as the Ready guard removes status:ready when it drifts. A target in
@@ -276,9 +280,12 @@ func openDeps(ctx context.Context, c *github.Client, owner, name, body string, s
 	for _, line := range strings.Split(fields["Links"], "\n") {
 		links, _ := workitems.ParseLinks(line)
 		switch {
-		case len(links) == 0 && strings.Contains(strings.ToLower(line), "depends-on"): // "Depends-On #10" too
-			i := strings.Index(strings.ToLower(line), "depends-on") + len("depends-on")
-			open = append(open, strings.Trim(line[i:], ": \t"))
+		case len(links) == 0 && dependsOnWord.MatchString(line): // "Depends-On #10" too
+			target := strings.Trim(line[dependsOnWord.FindStringIndex(line)[1]:], ": \t")
+			if target == "" {
+				target = strings.TrimSpace(line)
+			}
+			open = append(open, target)
 		case len(links) == 0 || links[0].Kind != "depends-on":
 		default:
 			n := links[0].Number
