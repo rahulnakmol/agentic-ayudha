@@ -668,7 +668,8 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &ds)
 	paused := false
 	for _, ev := range ds.Events {
-		paused = paused || (ev.Status == dlgPaused && strings.Contains(ev.Detail, "Codex's subscription usage limit; resumes at "+resets.UTC().Format(time.RFC3339)))
+		paused = paused || (ev.Status == dlgPaused && strings.Contains(ev.Detail, "Codex's subscription usage limit; resumes at "+resets.UTC().Format(time.RFC3339)) &&
+			ev.Until == resets.UTC().Format(time.RFC3339))
 	}
 	if !paused {
 		t.Fatalf("no pause event: %+v", ds.Events)

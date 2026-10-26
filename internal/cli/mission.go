@@ -475,8 +475,11 @@ type MissionStartReport struct {
 
 func runMission(ctx context.Context, e *Env, in Values) error {
 	f := issueNumber(in.String("feature"))
-	if in.String("action") == "start" {
+	switch in.String("action") {
+	case "start":
 		return missionStart(ctx, e, f)
+	case "next":
+		return missionNext(ctx, e, f)
 	}
 	return missionShow(ctx, e, f)
 }

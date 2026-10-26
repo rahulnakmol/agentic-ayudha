@@ -1,0 +1,53 @@
+# Which tests prove Story #998's Completion Goal.
+
+[[criterion]]
+id = 1 # agents 2, none running: start #20, start #21 (P1, slice order), waits #22: no free agent (2 of 2 busy after these starts)
+tests = ["internal/cli:TestMissionNextOrderAndAgents"]
+
+[[criterion]]
+id = 2 # #23 blocked and #24 paused on amp until 20:10: both wait, neither starts
+tests = ["internal/cli:TestMissionNextWaitReasons"]
+
+[[criterion]]
+id = 3 # a Ready story #30 of another Feature is never named
+tests = ["internal/cli:TestMissionNextOtherFeatureNeverListed"]
+
+[[criterion]]
+id = 4 # two runs, 1 free agent: one says start #20, the other waits #20: claimed by another run; #20 is claimed once
+tests = ["internal/cli:TestMissionNextOneClaimTwoRuns"]
+
+[[criterion]]
+id = 5 # halted: exit 4; breaker paused: exit 6; nothing listed or claimed
+tests = ["internal/cli:TestMissionNextHaltedOrPaused"]
+
+[[criterion]]
+id = 6 # #20 blocked after the list: build 20 --delegate amp prints "#20 changed since the list: now blocked; not started"
+tests = ["internal/cli:TestBuildDelegateReadsLiveState"]
+
+[[criterion]]
+id = 7 # no approval at the current hashes: exit 4 with "#889 is not approved to build"
+tests = ["internal/cli:TestMissionNextNotApproved"]
+
+[[criterion]]
+id = 8 # 620 spent of 660 approved, cap 60: waits #25: would pass #889's approved budget (620 + 60 > 660 USD)
+tests = ["internal/cli:TestMissionNextBudgetFilter"]
+
+[[criterion]]
+id = 9 # a story joins the Tatkal Feature #920 after its one approval and becomes Ready: it starts
+tests = ["internal/cli:TestMissionNextTatkalStoryJoins"]
+
+[[criterion]]
+id = 10 # Ready Bug #26 next to story #27 in MS1: start #26 (bug), start #27
+tests = ["internal/cli:TestMissionNextListsBugs"]
+
+[[criterion]]
+id = 11 # #874's mission is done: next 874 lists nothing; next 920 starts its Ready Bugs
+tests = ["internal/cli:TestMissionNextDoneFeatureBugGoesToTatkal"]
+
+[[criterion]]
+id = 12 # --json is aayudha.work/v1 {schema, scope, items}; subthread on an item that has one
+tests = ["internal/cli:TestMissionNextJSONShape"]
+
+[[criterion]]
+id = 13 # next 874 on claude, recorded tool codex: refused with "#874's mission runs on codex, the tool of @bob, who started it: run this there"
+tests = ["internal/cli:TestMissionNextRefusedOnOtherTool"]
