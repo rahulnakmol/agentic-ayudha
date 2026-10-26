@@ -276,9 +276,9 @@ func openDeps(ctx context.Context, c *github.Client, owner, name, body string, s
 	for _, line := range strings.Split(fields["Links"], "\n") {
 		links, _ := workitems.ParseLinks(line)
 		switch {
-		case len(links) == 0 && strings.Contains(line, "depends-on"):
-			_, target, _ := strings.Cut(line, "depends-on")
-			open = append(open, strings.Trim(target, ": \t"))
+		case len(links) == 0 && strings.Contains(strings.ToLower(line), "depends-on"): // "Depends-On #10" too
+			i := strings.Index(strings.ToLower(line), "depends-on") + len("depends-on")
+			open = append(open, strings.Trim(line[i:], ": \t"))
 		case len(links) == 0 || links[0].Kind != "depends-on":
 		default:
 			n := links[0].Number

@@ -646,14 +646,18 @@ func TestMissionNextHoldsOnlyTheDependent(t *testing.T) {
 	}
 }
 
-// A depends-on target in another repository is one aayu cannot read here, so
-// it counts as open (Story #999, review guidance).
-func TestMissionNextOtherRepoDependsOnIsOpen(t *testing.T) {
+// A depends-on line that ParseLinks misses counts as open (Story #999, review
+// guidance): a target in another repository, which aayu cannot read here, and
+// a link with other capitals, whose target #12 is closed.
+func TestMissionNextUnparsedDependsOnIsOpen(t *testing.T) {
 	m := newMissionWorld(t)
-	m.links = map[int]string{11: "depends-on other/repo#10"}
+	m.issue(888, "Other Feature", "feature", 0, "")
+	m.issue(12, "Story 12", "story", 888, "")
+	m.closeIssue(12)
+	m.links = map[int]string{11: "depends-on other/repo#10\nDepends-On #12"}
 	m.startedMission(889, []int{11})
 	m.status(11, "ready", "")
-	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on other/repo#10 is open\n" {
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on other/repo#10, #12 are open\n" {
 		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
 	}
 }
