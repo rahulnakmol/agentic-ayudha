@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -186,6 +190,27 @@ func TestReadyApproveToBuild(t *testing.T) {
 	// A story is still Ready from an agent lane: only a Feature's Ready is a person's.
 	if code, out, errOut := run(t, agent, opts, "ready", "851", "--repo", "o/r"); code != 0 || !slices.Contains(g.LabelNames(851), "status:ready") {
 		t.Fatalf("agent ready 851: exit %d: %s%s", code, out, errOut)
+	}
+	// In CI the bot reads a story, as it writes its Ready: a workflow token that cannot read the issue does not block it.
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/repos/o/r/issues/852" && r.Header.Get("Authorization") == "Bearer workflow-token" {
+			http.Error(w, `{"message": "Not Found"}`, http.StatusNotFound)
+			return
+		}
+		target, _ := url.Parse(g.URL())
+		httputil.NewSingleHostReverseProxy(target).ServeHTTP(w, r)
+	}))
+	defer proxy.Close()
+	ci := opts
+	ci.GitHubAPI = proxy.URL
+	if code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "XDG_STATE_HOME": state}, ci, "ready", "852", "--repo", "o/r", "--ci"); code != 0 ||
+		!slices.Contains(g.LabelNames(852), "status:ready") {
+		t.Fatalf("ci ready 852: exit %d: %s%s", code, out, errOut)
+	}
+	// A story in CI with no bot token is still refused for it: its Ready is the bot's write.
+	if code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "XDG_STATE_HOME": state}, ci, "ready", "853", "--repo", "o/r", "--ci"); code != ExitBlocked ||
+		!strings.Contains(errOut, "AAYU_BOT_TOKEN") || slices.Contains(g.LabelNames(853), "status:ready") {
+		t.Fatalf("ci ready 853 with no bot token: exit %d: %s%s", code, out, errOut)
 	}
 	n = commits()
 

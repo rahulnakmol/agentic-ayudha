@@ -103,11 +103,12 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			return err
 		})
 	default:
-		// Read the type before any bot or ledger setup, so an agent lane on a
-		// Feature always gets the refusal, whatever else it lacks.
-		c, _, err := e.HumanGitHub(ctx)
+		// Read the type before the ledger setup, so an agent lane on a Feature
+		// always gets the refusal, whatever else it lacks. The bot reads, as
+		// it writes a story's Ready; the person's client only when there is no bot.
+		c, _, err := e.BotGitHub(ctx, "")
 		if err != nil {
-			c, _, err = e.BotGitHub(ctx, "")
+			c, _, err = e.HumanGitHub(ctx)
 		}
 		if err != nil {
 			return err
