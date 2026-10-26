@@ -102,6 +102,86 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 	return p, words, nil
 }
 
+// tellKanha sends one event line to the Kanha of the started mission story n
+// is in, and records it as one event in delegate/<n>/state.json (Story #1008,
+// Decision #915 M1): every event that changes a story's slot reaches its
+// Kanha. msg gets the mission's Feature. A story in no started mission, or in
+// one with no Kanha recorded, tells nobody. A local Kanha takes the event at
+// its next check (#1012), so the event is recorded and not sent. A send that
+// fails is recorded too, and returned. The note says what happened, for the
+// caller's output.
+func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) string) (string, error) {
+	if c.DryRun() {
+		return "", nil
+	}
+	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
+	if err != nil || plan == nil || plan.StartedBy == "" || appr.Parent == nil {
+		return "", err
+	}
+	p, text, how := appr.Parent, msg(f), "sent"
+	var sendErr error
+	if p.Mode == "local" {
+		how = "recorded; the local Kanha on " + p.Machine + " takes it at its next check"
+	} else {
+		l, err := e.Config()
+		if err != nil {
+			return "", err
+		}
+		log, err := e.Actions()
+		if err != nil {
+			return "", err
+		}
+		ad := e.receiverAdapter(l.Config.Delegate, p.Host, c, repo, config.RepoRoot(e.Dir))
+		_, sendErr = log.Do(ctx, actions.Action{Kind: "mission.kanha.tell", Target: fmt.Sprintf("%s#%d@%s", repo, f, p.Host), Story: fmt.Sprintf("#%d", n),
+			Seat: "engineering-manager", Host: e.Host, Identity: c.Identity(), Payload: map[string]any{"session": p.Session, "event": text}},
+			func(ctx context.Context) (actions.Outcome, error) {
+				_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
+				return actions.Outcome{Attempts: 1}, err
+			})
+		if sendErr != nil {
+			how = "not sent: " + oneLineErr(sendErr)
+		}
+	}
+	var st delegate.State
+	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	if st.Story == 0 {
+		st = delegate.State{Story: n, Feature: f, Kanha: p.Session, KanhaURL: p.URL}
+	}
+	st.Events = append(st.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: "kanha", Detail: text + " (" + how + ")"})
+	b, _ := json.MarshalIndent(st, "", "  ")
+	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: #%d tells the Kanha of #%d", n, f), Files: map[string][]byte{delegate.LedgerPath(n): append(b, '\n')}}); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	note := fmt.Sprintf("the Kanha of #%d: %s (%s)", f, text, how)
+	if sendErr != nil {
+		return note, Wrap(ExitExternal, fmt.Errorf("the Kanha of #%d: %w", f, sendErr))
+	}
+	return note, nil
+}
+
+// answeredAsk is the event of an answered ask on story n (Story #1008): the
+// story keeps its slot (its status, lease, and claim stay; #882 Q2), and its
+// Kanha is told that it resumes. #880's answer path calls it once an answer
+// settles; until #880 is built, nothing does.
+func (e *Env) answeredAsk(ctx context.Context, n int) error {
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return err
+	}
+	c, bot, err := e.BotGitHub(ctx, "")
+	if err != nil {
+		return err
+	}
+	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+	if err != nil {
+		return err
+	}
+	_, err = e.tellKanha(ctx, c, w, repo, n, func(int) string { return fmt.Sprintf("answered: #%d resumes", n) })
+	return err
+}
+
 // kanhaUnrecorded is a Kanha that started and that aayu did not record as
 // the parent: a second Start would start a second Kanha.
 type kanhaUnrecorded struct {

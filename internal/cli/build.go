@@ -352,7 +352,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 	// A story being built is in progress (D-5.5c.17): build is the verb that
 	// moves it there from status:ready, and later runs accept either label.
-	if !contains(labels, labelInProgress) {
+	starts := !contains(labels, labelInProgress) // this run starts the story
+	if starts {
 		if err := setStatus(ctx, c, repo, n, labels, "in-progress"); err != nil {
 			return Wrap(ExitExternal, err)
 		}
@@ -373,11 +374,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	var write func(context.Context, string) error
 	var dlg *delegation
 	if in.String("delegate") != "" {
-		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err != nil {
+		var done bool
+		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err == nil {
+			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
+		}
+		if err != nil && starts {
+			err = e.failedStart(ctx, c, w, repo, n, labels, &res, err)
+		}
+		if dlg == nil {
 			return err
 		}
-		var done bool
-		write, done, err = e.delegateStep(ctx, dlg, chk, &res)
 		if done {
 			if eerr := e.emitDelegation(res); eerr != nil && err == nil {
 				err = eerr
@@ -1143,8 +1149,58 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 	sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("build:%s#%d", repo, n), Subject: fmt.Sprintf("aayu build blocked #%d", n),
 		Body: fmt.Sprintf("%s#%d is status:blocked: %s. A human looks at it and runs `aayu ready %d` to let the build continue.", repo, n, why, n)})
 	res.Notes = append(res.Notes, "page: "+sent)
+	// The block frees the story's slot: its mission's Kanha is told, in the builder's own words for a stop.
+	reason := strings.TrimPrefix(why, stoppedByBuilder)
+	note, err := e.tellKanha(ctx, c, w, repo, n, func(f int) string { return fmt.Sprintf("blocked #%d: %s: run aayu mission next %d", n, reason, f) })
+	res.Notes = kanhaNote(res.Notes, note, err)
 	return sent, e.saveBuild(ctx, c, w, repo, n, st, res)
 }
+
+// failedStart undoes a start whose subthread did not start (Story #1008, R8):
+// the mission's claim line, the lease, and status:in-progress go, so story n
+// is status:ready again and holds no slot, and its Kanha is told why. It
+// returns cause, or what it could not undo with cause.
+func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, res *BuildResult, cause error) error {
+	if c.DryRun() {
+		return cause
+	}
+	reason := oneLineErr(cause)
+	path, claim, err := e.missionClaim(ctx, w, n)
+	if err == nil && path != "" {
+		err = releaseClaim(ctx, w, path, claim, fmt.Sprintf("missions: the start of #%d failed; its claim is released", n))
+	}
+	if err == nil {
+		_, err = e.releaseLease(ctx, c, repo, n, "the start of its subthread failed")
+	}
+	if err == nil {
+		err = setStatus(ctx, c, repo, n, labels, "ready")
+	}
+	if err != nil {
+		return Wrap(ExitExternal, fmt.Errorf("%s; and its slot was not released: %w", reason, err))
+	}
+	note, err := e.tellKanha(ctx, c, w, repo, n, func(int) string { return fmt.Sprintf("start of #%d failed: %s", n, reason) })
+	res.Notes = kanhaNote(res.Notes, note, err)
+	out := &Error{Code: CodeOf(cause), Err: fmt.Errorf("%w; #%d is status:ready again, and its claim and lease are released", cause, n)}
+	if ce := (*Error)(nil); errors.As(cause, &ce) {
+		out.Next = ce.Next
+	}
+	return out
+}
+
+// kanhaNote adds what tellKanha did to a build's notes: its note, or why it
+// told nobody.
+func kanhaNote(notes []string, note string, err error) []string {
+	if note == "" && err != nil {
+		note = "the Kanha was not told: " + oneLineErr(err)
+	}
+	if note == "" {
+		return notes
+	}
+	return append(notes, note)
+}
+
+// stoppedByBuilder starts the block reason of a stop (build --stop).
+const stoppedByBuilder = "stopped by its builder: "
 
 // stopBuild is `aayu build <n> --stop <why>`: the builder gives up on a story
 // it is building, so it is blocked with that reason and its owner paged, and
@@ -1178,7 +1234,7 @@ func (e *Env) stopBuild(ctx context.Context, c *github.Client, bot identity.Bot,
 	}
 	st.Story = n
 	res := BuildResult{Issue: n, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, e.Now())}
-	return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, "stopped by its builder: "+why)
+	return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, stoppedByBuilder+why)
 }
 
 // tighter is the stricter of a local and a committed limit, where 0 is off:

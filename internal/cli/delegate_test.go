@@ -426,7 +426,8 @@ func TestDelegateLocalFallback(t *testing.T) {
 		}
 		return probe(ctx, dir, name, args...)
 	}
-	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	// The two refused hand-offs left #2 Ready (Story #1008: a failed start holds no slot), so this start is asked for.
+	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local", "--asked", "yes, build #2 with the local codex")
 	if len(asked) > 0 {
 		t.Errorf("a delegated build asked Amp for the thread's model: %q", asked)
 	}
