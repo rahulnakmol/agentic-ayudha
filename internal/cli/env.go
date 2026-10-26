@@ -159,6 +159,8 @@ type Env struct {
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 
+	work *WorkList // set by mission resume: mission next's list goes here, not to the output (#1002)
+
 	telemetry *telemetry.Telemetry
 	span      trace.Span
 

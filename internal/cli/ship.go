@@ -78,6 +78,9 @@ type ShipRecord struct {
 	Artifact   int64     `json:"artifact,omitempty"`
 	PackSHA256 string    `json:"pack_sha256,omitempty"`
 	HumanPass  HumanPass `json:"human_pass"`
+	// GateFix is the gate_fixes entry of a fix PR (Story #1002): the PR refers
+	// to its Feature, and the entry, not a Ready snapshot, authorises it.
+	GateFix *GateFix `json:"gate_fix,omitempty"`
 	// Proof is what a merge on proof rested on (human pass kind proof).
 	Proof *ProofPass `json:"proof,omitempty"`
 	// The review ladder's rung of the PR's review at the head (Decision
@@ -169,12 +172,22 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	// An early build's PR never merges into dev (core design E1), whatever its checks and review say.
 	// A story that does not exist has no label; ship refuses it later (no Ready snapshot).
-	if is, _, err := c.REST.Issues.Get(ctx, owner, name, story); err != nil && !github.NotFound(err) {
+	ref, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+	if err != nil && !github.NotFound(err) {
 		return Wrap(ExitExternal, err)
-	} else if err == nil && contains(github.IssueLabels(is), ready.EarlyBuildLabel) {
+	} else if err == nil && contains(github.IssueLabels(ref), ready.EarlyBuildLabel) {
 		return Errorf(ExitBlocked, "ship #%d: %s", n, ready.EarlyBuildHold(story))
 	}
-	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
+	// The mission the PR is in holds it before anything lands (Story #1002),
+	// and again just before the merge. With no checkout there is no ledger to
+	// read, and ship stops before the merge (proofStore).
+	var fix *GateFix
+	if mw, lerr := e.Ledger(ctx, tok, "human", ""); lerr == nil {
+		if fix, err = missionHold(ctx, c, mw, repo, n, story, ref); err != nil {
+			return err
+		}
+	}
+	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login, GateFix: fix}
 	// Who may pass the PR, and how, is the base branch's committed policy at
 	// its tip now (#645), never this run's config: the checkout, the user
 	// config, AAYU_* variables and --set are the agent's to set. A run whose
@@ -241,6 +254,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
 	}
 	t.Close()
+	if fix != nil { // a listed gate fix rests on the approved record, not a Ready snapshot (Decision #974)
+		exp.CompletionGoalHash, exp.Criteria = fix.Approval.SHA256, nil
+	}
 	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
 	if exp.CompletionGoalHash == "" {
 		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
@@ -512,8 +528,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if tip != pol.Tip {
 		return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(pol.Tip), short(tip))
 	}
-	// A stop given while ship judged the PR still holds it: the label is read again at the merge.
+	// A stop given while ship judged the PR still holds it: the label and the mission are read again at the merge.
 	if err := held(); err != nil {
+		return err
+	}
+	if _, err := missionHold(ctx, c, s.Ledger, repo, n, story, ref); err != nil {
 		return err
 	}
 	var posted int64 // the bypass comment ship posts below, deleted again if the merge fails
@@ -557,8 +576,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	rec.ShippedAt, rec.Actions = e.Now().UTC().Format(time.RFC3339), log.SegmentPath(e.Now())
-	if err := e.completeStory(ctx, c, repo, story, rec); err != nil {
-		return err
+	if fix == nil { // a gate fix completes no story: its Feature stays as it is
+		if err := e.completeStory(ctx, c, repo, story, rec); err != nil {
+			return err
+		}
 	}
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
@@ -597,7 +618,11 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return Wrap(ExitExternal, fmt.Errorf("merged, but the actions segment did not reach the ledger: %w", err))
 	}
 	if err := e.Emit(res, func(w io.Writer) error {
-		fmt.Fprintf(w, "ship #%d: merged as %s; story #%d is status:merged with its Complete section\n", n, short(rec.MergeCommit), story)
+		if fix != nil {
+			fmt.Fprintf(w, "ship #%d: merged as %s; the gate fix of %s of #%d for %s\n", n, short(rec.MergeCommit), fix.Milestone, story, fix.Check)
+		} else {
+			fmt.Fprintf(w, "ship #%d: merged as %s; story #%d is status:merged with its Complete section\n", n, short(rec.MergeCommit), story)
+		}
 		fmt.Fprintf(w, "  pack %s (sha256 %s): %s\n", rec.Pack, short(rec.PackSHA256), rec.PackLanded)
 		fmt.Fprintf(w, "  human pass: %s by %s%s\n", rec.HumanPass.Kind, rec.HumanPass.Login, map[bool]string{true: " — " + rec.HumanPass.Note, false: ""}[rec.HumanPass.Note != ""])
 		fmt.Fprintf(w, "  review rung: %s (from the merge gate's inspect log)\n", or(rec.Review, "none recorded"))

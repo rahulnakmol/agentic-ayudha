@@ -15,6 +15,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -67,8 +68,53 @@ type MissionPlan struct {
 	// StoryStarts are a Tatkal Feature's stories that a person started on their own tool (R9).
 	StoryStarts []MissionStoryStart `json:"story_starts,omitempty"`
 	// Pause is a stop's record (#1002); show prints its reason.
-	Pause    *MissionPause    `json:"pause,omitempty"`
+	Pause *MissionPause `json:"pause,omitempty"`
+	// State is "ended (<reason>)" after the person who started the mission
+	// ends it (`aayu mission stop <f> --end`, Story #1002); empty before.
+	State string `json:"state,omitempty"`
+	// Stopped are the stories and Bugs a person stopped alone (`aayu mission
+	// stop <f> --story <n>`, Story #1002): the rest of the mission runs on.
+	Stopped []MissionStopped `json:"stopped,omitempty"`
+	// Lock is the mission's lock on its issues (Story #1013); --end ends it.
+	Lock     *MissionLock     `json:"lock,omitempty"`
 	Controls []MissionControl `json:"controls"`
+	// GateFixes are the fix PRs of failed gate checks (Story #1001).
+	GateFixes []GateFix `json:"gate_fixes,omitempty"`
+}
+
+// MissionStopped is one story or Bug a person stopped, and why.
+type MissionStopped struct {
+	Number int    `json:"number"`
+	Reason string `json:"reason"`
+	By     string `json:"by"`
+	At     string `json:"at"`
+}
+
+// stopped is story n's stop record in the plan, or nil.
+func (p *MissionPlan) stopped(n int) *MissionStopped {
+	if i := slices.IndexFunc(p.Stopped, func(s MissionStopped) bool { return s.Number == n }); i >= 0 {
+		return &p.Stopped[i]
+	}
+	return nil
+}
+
+// MissionLock is the lock a mission holds on the bodies and the effort:,
+// risk:, and priority: labels of its Feature, stories, and Bugs (Story #1013,
+// Decision #974): active from the start until the mission ends.
+type MissionLock struct {
+	State       string        `json:"state"` // active or ended
+	ConfirmedBy string        `json:"confirmed_by"`
+	StartedAt   string        `json:"started_at"`
+	EndedAt     *string       `json:"ended_at"`
+	EndReason   *string       `json:"end_reason"`
+	Issues      []LockedIssue `json:"issues"`
+}
+
+// LockedIssue is one issue the lock holds.
+type LockedIssue struct {
+	Number     int               `json:"number"`
+	BodySHA256 string            `json:"body_sha256"`
+	Labels     map[string]string `json:"labels"`
 }
 
 // MissionItem is one story or Bug of the Feature in the plan's graph.
@@ -94,11 +140,48 @@ func (d MissionDep) String() string {
 	return fmt.Sprintf("#%d", d.Number)
 }
 
-// MissionMilestone is one milestone: its stories and Bugs, and when its gate runs.
+// MissionMilestone is one milestone: its stories and Bugs, and its gate.
 type MissionMilestone struct {
-	Name    string `json:"name"`
-	Stories []int  `json:"stories"`
-	Gate    string `json:"gate"`
+	Name    string        `json:"name"`
+	Stories []int         `json:"stories"`
+	Gate    MilestoneGate `json:"gate"`
+}
+
+// MilestoneGate is a milestone's gate as it stands (Story #1001): it waits
+// for the milestone's last story to merge, then each gate run on the dev tip
+// sets it passed or failed with the SHA it judged. After [mission] max_no_go
+// failed runs it is stopped, and the mission waits for a person.
+type MilestoneGate struct {
+	State  string `json:"state"` // waits, passed, failed, or stopped
+	DevSHA string `json:"dev_sha,omitempty"`
+	At     string `json:"at,omitempty"`
+}
+
+// Gate states.
+const (
+	GateWaits   = "waits"
+	GatePassed  = "passed"
+	GateFailed  = "failed"
+	GateStopped = "stopped"
+)
+
+// GateFix is one fix PR of a failed gate check (Decision #974): the gate
+// files no issue, and the plan's approval pre-authorises the PR. Waits says
+// why it waits for a person ("budget").
+type GateFix struct {
+	PR        int          `json:"pr"`
+	Milestone string       `json:"milestone"`
+	Check     string       `json:"check"`
+	DevSHA    string       `json:"dev_sha"`
+	Approval  GateApproval `json:"approval"`
+	At        string       `json:"at"`
+	Waits     string       `json:"waits,omitempty"`
+}
+
+// GateApproval is the approved record a fix PR rests on, by its hash.
+type GateApproval struct {
+	Record string `json:"record"`
+	SHA256 string `json:"sha256"`
 }
 
 // MissionEstimate is the plan's estimate: one run per story or Bug, and two per milestone.
@@ -137,12 +220,16 @@ type MissionPause struct {
 	At     string `json:"at,omitempty"`
 }
 
-// MissionControl is a person's control of the mission, such as its start.
+// MissionControl is a person's control of the mission: its start, a stop, a
+// resume, or its end (Story #1002). By ran it, on Tool, and it counts as theirs.
 type MissionControl struct {
-	Action   string `json:"action"`
+	Action   string `json:"control"`
 	By       string `json:"by"`
+	Tool     string `json:"tool,omitempty"`
 	At       string `json:"at"`
 	Presence string `json:"presence"`
+	Story    int    `json:"story,omitempty"` // a control of one story or Bug
+	Reason   string `json:"reason,omitempty"`
 }
 
 // CostEstimate is #886's cost estimate of a Feature: the point and its range, in USD.
@@ -353,7 +440,7 @@ var milestoneName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 // With none and no plan yet, the plan has one milestone, MS1, with every story and Bug.
 func parseMilestones(spec string, all []int) ([]MissionMilestone, error) {
 	if strings.TrimSpace(spec) == "" {
-		return []MissionMilestone{{Name: "MS1", Stories: all, Gate: "runs when its last story merges"}}, nil
+		return []MissionMilestone{{Name: "MS1", Stories: all, Gate: MilestoneGate{State: GateWaits}}}, nil
 	}
 	var ms []MissionMilestone
 	for _, part := range strings.FieldsFunc(spec, func(r rune) bool { return r == ' ' || r == ';' || r == '\n' || r == '\t' }) {
@@ -364,7 +451,7 @@ func parseMilestones(spec string, all []int) ([]MissionMilestone, error) {
 		if slices.ContainsFunc(ms, func(m MissionMilestone) bool { return m.Name == nm }) {
 			return nil, Errorf(ExitUsage, "ready --milestones: %s is named twice", nm)
 		}
-		m := MissionMilestone{Name: nm, Gate: "runs when its last story merges"}
+		m := MissionMilestone{Name: nm, Gate: MilestoneGate{State: GateWaits}}
 		for _, r := range strings.Split(refs, ",") {
 			n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(r), "#"))
 			if err != nil || n < 1 {
@@ -439,6 +526,18 @@ func (e *Env) repoTool(ctx context.Context, repo string) (string, error) {
 	return "", nil
 }
 
+// callerTool is the tool this run is on (R9, Story #1002): the host aayu
+// detects (--host, or an agent marker: doctor.DetectHost), else the person's
+// tool for repo from their user config. Any person on a mission's recorded
+// tool may run its next and resume.
+func (e *Env) callerTool(ctx context.Context, repo string) (string, error) {
+	if host, _ := doctor.DetectHost(e.Host, e.Getenv); host != "" {
+		return host, nil
+	}
+	tool, err := e.repoTool(ctx, repo)
+	return tool, Wrap(ExitExternal, err)
+}
+
 // costEstimate is #886's cost estimate of Feature f, nil until #886 merges
 // (tests set Options.CostEstimate).
 func (e *Env) costEstimate(ctx context.Context, f int) (*CostEstimate, error) {
@@ -496,6 +595,10 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 		return missionStart(ctx, e, f)
 	case "next":
 		return missionNext(ctx, e, f)
+	case "stop":
+		return missionStop(ctx, e, f, in)
+	case "resume":
+		return missionResume(ctx, e, f, in)
 	}
 	return missionShow(ctx, e, f)
 }
@@ -582,7 +685,7 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 		at := e.Now().UTC().Format(time.RFC3339)
 		again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
 		again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
-		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, At: at, Presence: p.Via})
+		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, Tool: tool, At: at, Presence: p.Via})
 		if !rep.DryRun {
 			data, _ := json.MarshalIndent(again, "", "  ")
 			rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: @%s started the mission of #%d on %s", p.Login, f, tool),
@@ -827,6 +930,8 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		Agents:   SourcedNumber{Value: float64(plan.Agents), Source: plan.AgentsSource},
 		Estimate: SourcedNumber{Value: float64(plan.Estimate.Runs), Source: plan.Estimate.Basis + ", at Approve to build"}}
 	switch {
+	case plan.State != "":
+		rep.State = plan.State
 	case plan.Pause != nil:
 		rep.State = "paused: " + plan.Pause.Reason
 	case plan.StartedBy != "":
@@ -837,7 +942,11 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		ms := MilestoneState{Name: m.Name}
 		k := 0
 		for _, n := range m.Stories {
-			ms.Stories = append(ms.Stories, StoryStateEntry{Number: n, State: state[n]})
+			st := state[n]
+			if s := plan.stopped(n); s != nil && !merged[n] {
+				st = fmt.Sprintf("stopped (%s)", s.Reason)
+			}
+			ms.Stories = append(ms.Stories, StoryStateEntry{Number: n, State: st})
 			if merged[n] {
 				k++
 			}
@@ -901,10 +1010,13 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 // story's depends-on outside the Feature have merged; the rest wait for the
 // one after (X1 A, Decision #974).
 func missionsNow(plan *MissionPlan, merged func(int) bool) []MissionState {
-	started := plan.StartedBy != "" && plan.Pause == nil
+	started := plan.StartedBy != "" && plan.Pause == nil && plan.State == ""
 	// A started mission that is paused is held; the one paused row is the header's.
 	held := map[bool]string{true: "running", false: "not started"}[started]
-	if plan.StartedBy != "" && plan.Pause != nil {
+	switch {
+	case plan.State != "":
+		held = plan.State
+	case plan.StartedBy != "" && plan.Pause != nil:
 		held = "held until the mission resumes"
 	}
 	var out []MissionState
