@@ -573,8 +573,10 @@ func endLock(ctx context.Context, c *github.Client, w *ledger.Writer, f int, pla
 	if plan.Lock == nil || plan.Lock.State != LockActive || c.DryRun() {
 		return nil
 	}
-	last := plan.Milestones[len(plan.Milestones)-1].Name
-	reason := fmt.Sprintf("%s, the last milestone of the last mission, is done", last)
+	reason := "every story and Bug of the mission is merged"
+	if ms := plan.Milestones; len(ms) > 0 {
+		reason = fmt.Sprintf("%s, the last milestone of the last mission, is done", ms[len(ms)-1].Name)
+	}
 	_, err := editPlan(ctx, w, f, fmt.Sprintf("missions: the lock of #%d ended: %s", f, reason), func(p *MissionPlan) error {
 		if p.Lock != nil && p.Lock.State == LockActive {
 			p.Lock.State, p.Lock.EndedAt, p.Lock.EndReason = LockEnded, &at, &reason

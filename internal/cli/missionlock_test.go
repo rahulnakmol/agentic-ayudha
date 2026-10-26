@@ -438,6 +438,16 @@ func TestLockEndsAtLastMilestone(t *testing.T) {
 	if err := editBody(c, 20, "### Summary\n\nAfter the mission."); err != nil {
 		t.Fatalf("#20's body after the lock ended: %v", err)
 	}
+	// A plan with no milestones ends its lock too, and says why.
+	m = startedLock(t)
+	m.setPlan(889, func(p *MissionPlan) { p.Milestones = nil })
+	for n := 20; n <= 27; n++ {
+		m.closeIssue(n)
+	}
+	code, out, errOut = m.next(889)
+	if p, raw := m.plan(889); code != 0 || p.Lock.State != LockEnded || p.Lock.EndReason == nil || *p.Lock.EndReason != "every story and Bug of the mission is merged" {
+		t.Fatalf("mission next 889 with no milestones: exit %d: %s%s\n%s", code, out, errOut, raw)
+	}
 }
 
 // Criterion 8: mission 2 of #889 starts after mission 1 with no new start
