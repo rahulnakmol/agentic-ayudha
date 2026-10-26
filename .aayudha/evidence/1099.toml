@@ -1,0 +1,13 @@
+# Which tests prove Bug #1099's Completion Goal.
+
+[[criterion]]
+id = 1 # start 889 on a clock that moves on each read: parent.started_at equals the plan's started_at
+tests = ["internal/cli:TestMissionStartOneStartTime"]
+
+[[criterion]]
+id = 2 # TestMissionStartBriefsDraftingThread -count=50: 50 of 50 pass
+tests = ["internal/cli:TestMissionStartBriefsDraftingThread"]
+
+[[criterion]]
+id = 3 # plan started at 10:00, Kanha-only start at 10:20 on the moving clock: the plan keeps its time, the parent records 10:20
+tests = ["internal/cli:TestMissionStartOneStartTime"]

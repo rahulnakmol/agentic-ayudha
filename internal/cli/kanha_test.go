@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -691,5 +692,62 @@ func TestMissionStartFailsClosed(t *testing.T) {
 	m.device("rahulnakmol")
 	if code, out, errOut := run(t, m.person, race, "mission", "start", "889", "--repo", "o/r"); code != 0 || !pushed || m.parent(889).Host != "cursor" {
 		t.Fatalf("a ledger write while the Kanha is recorded: exit %d, pushed %t: %s%s", code, pushed, out, errOut)
+	}
+}
+
+// tick is a clock that moves one second on each read, from start.
+func tick(start time.Time) func() time.Time {
+	var mu sync.Mutex
+	now := start.Add(-time.Second)
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		now = now.Add(time.Second)
+		return now
+	}
+}
+
+// Bug #1099: a mission start has one start time, which the plan and its
+// Kanha's parent both record, on a clock that moves on every read. When only
+// the Kanha starts later, the plan keeps its time and the parent records the
+// time of that later start.
+func TestMissionStartOneStartTime(t *testing.T) {
+	m := newMissionWorld(t)
+	m.featureWith(889, 20)
+	m.featureWith(874, 950)
+	for _, f := range []int{889, 874} {
+		if code, out, errOut := m.approve(f); code != 0 {
+			t.Fatalf("approve %d: exit %d: %s%s", f, code, out, errOut)
+		}
+	}
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC))
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
+		t.Fatalf("start 889: exit %d: %s%s", code, out, errOut)
+	}
+	if plan, _ := m.plan(889); plan.StartedAt == "" || m.parent(889).StartedAt != plan.StartedAt {
+		t.Fatalf("#889: plan started_at %q, parent started_at %q", plan.StartedAt, m.parent(889).StartedAt)
+	}
+
+	// #874's plan started at 10:00:00, and its Kanha did not start (no Cursor key).
+	noKey := map[string]string{}
+	for k, v := range m.person {
+		noKey[k] = v
+	}
+	delete(noKey, "AAYU_SECRET_CURSOR_API_KEY")
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC))
+	if code, _, errOut := m.mission(noKey, "rahulnakmol", "start", 874); code != ExitExternal {
+		t.Fatalf("start 874 with no Cursor key: exit %d: %s", code, errOut)
+	}
+	started, _ := m.plan(874)
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 20, 0, 0, time.UTC))
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 874); code != 0 {
+		t.Fatalf("Kanha-only start of 874: exit %d: %s%s", code, out, errOut)
+	}
+	// The clock is read a few times (the presence check) before the start stamps its one time, so each start's
+	// time falls within the first seconds of its own clock.
+	plan, _ := m.plan(874)
+	if !strings.HasPrefix(started.StartedAt, "2026-10-26T10:00:0") || plan.StartedAt != started.StartedAt ||
+		!strings.HasPrefix(m.parent(874).StartedAt, "2026-10-26T10:20:0") {
+		t.Fatalf("#874: plan started_at %q (was %q), parent started_at %q", plan.StartedAt, started.StartedAt, m.parent(874).StartedAt)
 	}
 }

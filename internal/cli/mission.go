@@ -740,8 +740,8 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 		return Errorf(ExitBlocked, "The mission plan of #%d changed while the code was waiting. Nothing was started.", f)
 	}
 	rep := MissionStartReport{Repo: repo, Feature: f, Effect: effect, Plan: again, LedgerPath: MissionPlanPath(f), DryRun: c.DryRun()}
+	at := e.Now().UTC().Format(time.RFC3339) // the one time of this start: the plan's and its Kanha's (Bug #1099)
 	if !kanhaOnly {
-		at := e.Now().UTC().Format(time.RFC3339)
 		again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
 		again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
 		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, Tool: tool, At: at, Presence: p.Via})
@@ -758,7 +758,7 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 		}
 	}
 	if !rep.DryRun {
-		if rep.Parent, rep.Kanha, err = e.startKanha(ctx, c, w, repo, f, again, appr2, p.Login); err != nil {
+		if rep.Parent, rep.Kanha, err = e.startKanha(ctx, c, w, repo, f, again, appr2, p.Login, at); err != nil {
 			if k := (*kanhaUnrecorded)(nil); errors.As(err, &k) {
 				return unrecordedError(f, k)
 			}
