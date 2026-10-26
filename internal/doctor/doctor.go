@@ -66,6 +66,9 @@ type Probe struct {
 	// executable host config files (hosts.ExecutableConfig) whose content
 	// differs from what it would write; nil outside an installed repository.
 	HostConfig func(ctx context.Context) ([]string, error)
+	// RepoTool is the person's tool for this repository from their user
+	// config (R9); nil or "": none is set.
+	RepoTool func(ctx context.Context) (string, error)
 	// CopilotModels lists the model IDs the account Copilot signs in with may
 	// pick, by family (hosts.CopilotFamilies); nil when aayu cannot ask: no
 	// token it can read, or Copilot signs in to a host other than github.com.

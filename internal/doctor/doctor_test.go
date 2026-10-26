@@ -892,3 +892,31 @@ func TestCopilotFamilies(t *testing.T) {
 		t.Errorf("no CopilotModels: lines %q steps %q, want none", lines, steps)
 	}
 }
+
+// Story #1005, criterion 5: each person installs aayudha's skills for their
+// own tool. When a person's tool for this repository is not in lock.toml,
+// skills-copies names it and the command that adds it, and changes nothing.
+func TestDoctorWarnsToolMissingFromLock(t *testing.T) {
+	const lock = "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"cursor\", \"codex\"]\n[skills]\n"
+	tools := map[string]string{"rahulnakmol": "cursor", "bob": "codex", "carol": "copilot"}
+	for login, want := range map[string]string{
+		"rahulnakmol": "",
+		"bob":         "",
+		"carol":       "copilot is @carol's tool but not in lock.toml: run aayu install --host copilot",
+	} {
+		p := healthy(t)
+		p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": lock})
+		p.WhoAmI = func(context.Context, identity.Token) (identity.User, error) { return identity.User{Login: login}, nil }
+		p.RepoTool = func(context.Context) (string, error) { return tools[login], nil }
+		r := checkSkillCopies(context.Background(), p)
+		switch {
+		case want == "" && r.Status != Pass:
+			t.Errorf("@%s (%s, in lock.toml): %s %s", login, tools[login], r.Status, r.Detail)
+		case want != "" && (r.Status != Warn || r.Detail != want):
+			t.Errorf("@%s: %s %q, want warn %q", login, r.Status, r.Detail, want)
+		}
+		if b, err := os.ReadFile(filepath.Join(p.Root, ".aayudha", "lock.toml")); err != nil || string(b) != lock {
+			t.Errorf("@%s: doctor changed lock.toml: %v %q", login, err, b)
+		}
+	}
+}

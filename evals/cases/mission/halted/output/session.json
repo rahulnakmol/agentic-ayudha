@@ -1,0 +1,24 @@
+[
+ {
+  "turn": {
+   "say": "Running the mission's list for #889.",
+   "commands": [
+    "aayu mission next 889"
+   ],
+   "done": false
+  },
+  "results": [
+   {
+    "command": "aayu mission next 889",
+    "code": 4,
+    "out": "aayu: the repository is halted (AAYUDHA_HALT): release freeze for the v0.4.0 cut; a human clears it with `aayu resume`\n  next: aayu resume"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "say": "merged #40: nothing started; the repository is halted (release freeze for the v0.4.0 cut), and a person clears it with aayu resume.",
+   "done": true
+  }
+ }
+]

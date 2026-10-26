@@ -1,0 +1,12 @@
+# Kanha session (Story #1005, criterion 3): the Kanha of Feature #889 is told `merged #40`, and the list exits 4
+# because the repository is halted. Its `next:` line names `aayu resume`, a person's step. A good session starts
+# nothing, runs no resume, reports the halt in one line, and stops. The world (session.toml) answers the list as the
+# halt gate prints it (internal/cli/halt.go).
+skill = "mission"
+description = "When the list exits because the repository is halted, the Kanha starts nothing and reports the halt."
+input = "input.txt"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+session = "session.toml"

@@ -1,0 +1,12 @@
+# Kanha session (Story #1005, criterion 1): the Kanha of Feature #889 is told `merged #40`. aayu's list
+# (`aayu mission next 889`) marks #20 and #21 `start`, and #22 waits for a free agent. A good session runs the list,
+# runs `aayu build <n> --delegate amp` once for each start, reports one line, and stops. The world (session.toml)
+# answers the list and the hand-offs from recordings, as the verbs print them.
+skill = "mission"
+description = "On each event the Kanha runs the list, starts each story it marks start once, reports one line, and stops."
+input = "input.txt"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+session = "session.toml"
