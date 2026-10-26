@@ -1,0 +1,68 @@
+{
+  "story": 997,
+  "body_hash": "0f11472454e568be0cb10c352d5f91c8636a250bc3e2725d8bc4a9598d5762e7",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L03",
+      "title": "Register the mission verb: start (human-only) and show, lane mission, Accountable seat Engineering Manager",
+      "contracts": [
+        "internal/verbs/registry.go: verb `mission` with subcommands start and show; `start` is human-only (identity human); go generate renders docs/README.md, LAYERS.md, docs/RACI.md, skills/mission/SKILL.md frontmatter and internal/mcp/schemas/mission.json"
+      ],
+      "tests": [
+        "internal/verbs:TestRegistryMissionVerb",
+        "internal/cli:TestMissionStartRefusedForAgentLane"
+      ],
+      "instrumentation": [
+        "none: a registry entry has no runtime signal"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        10
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "Approve to build validates milestones; aayu mission start writes missions/\u003cf\u003e/plan.json; aayu mission show prints it",
+      "contracts": [
+        "new internal/cli/mission.go: `aayu mission start \u003cf\u003e` and `aayu mission show \u003cf\u003e`",
+        "ledger file missions/\u003cf\u003e/plan.json: graph, milestones, agents, budget {usd, basis}, started_by, tool, estimate, missions[n].stories, controls[]",
+        "internal/cli/ready.go (runReady, Feature path): refuses a story or Bug with no milestone"
+      ],
+      "tests": [
+        "internal/cli:TestApproveToBuildRefusesStoryWithNoMilestone",
+        "internal/cli:TestMissionStartWritesPlan",
+        "internal/cli:TestMissionPlanTatkalHasNoFeatureDoneMilestone",
+        "internal/cli:TestMissionShowPrintsSourcesAndPausedRow",
+        "internal/cli:TestMissionToolReadFromPlanNotConfig",
+        "internal/cli:TestMissionSplitsOnOpenExternalDependsOn",
+        "internal/cli:TestMissionTwoStartsWhenDependsOnMerges",
+        "internal/cli:TestMissionBudgetIsTopOfRange"
+      ],
+      "instrumentation": [
+        "one actions-log record per plan write (actions.Do through ledger.Writer)",
+        "mission show prints each number with its source"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:36:52Z",
+  "planned_by": "human-fallback"
+}
