@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesOnlyListedFixPR"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesOnlyListedFixPR","Output":"=== RUN   TestShipMergesOnlyListedFixPR\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesOnlyListedFixPR","Output":"--- PASS: TestShipMergesOnlyListedFixPR (1.13s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesOnlyListedFixPR"}

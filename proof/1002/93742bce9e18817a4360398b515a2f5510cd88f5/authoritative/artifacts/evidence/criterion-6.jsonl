@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopRefusedForAgentLane"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopRefusedForAgentLane","Output":"=== RUN   TestMissionStopRefusedForAgentLane\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopRefusedForAgentLane","Output":"--- PASS: TestMissionStopRefusedForAgentLane (0.97s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopRefusedForAgentLane"}

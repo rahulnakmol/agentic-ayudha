@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesMilestonesInOrder"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesMilestonesInOrder","Output":"=== RUN   TestShipMergesMilestonesInOrder\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesMilestonesInOrder","Output":"--- PASS: TestShipMergesMilestonesInOrder (0.97s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergesMilestonesInOrder"}

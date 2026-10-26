@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopLeavesOtherMissionsAndLoops"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopLeavesOtherMissionsAndLoops","Output":"=== RUN   TestMissionStopLeavesOtherMissionsAndLoops\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopLeavesOtherMissionsAndLoops","Output":"--- PASS: TestMissionStopLeavesOtherMissionsAndLoops (2.39s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopLeavesOtherMissionsAndLoops"}
