@@ -1,0 +1,11 @@
+{
+  "pr": 1094,
+  "story": 1006,
+  "head": "0516808493fe30831d05c3fc817dcc6bf5ce7b57",
+  "merge_commit": "53186c97d0c35b8914b1aba240b9376f8acfcb14",
+  "footprint": [
+    "L02"
+  ],
+  "human_pass": "proof",
+  "merged_at": "2026-10-26T20:17:09Z"
+}
