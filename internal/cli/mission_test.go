@@ -229,6 +229,16 @@ func TestMissionStartWritesPlan(t *testing.T) {
 		t.Fatalf("plan.json after Approve to build:\n%s", raw)
 	}
 
+	// Run again with no --milestones and nothing changed: the approval and its milestones hold, with no device code.
+	n = m.commits()
+	if code, out, errOut := m.approve(889); code != 0 || m.codes() != 0 || m.commits() != n ||
+		!strings.Contains(out, "#889 is approved to build already: approval 1 by @rahulnakmol agrees it as it is now.") {
+		t.Fatalf("approve again with no --milestones: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
+	}
+	if again, _ := m.plan(889); len(again.Milestones) != 2 {
+		t.Fatalf("milestones after a bare approval: %+v", again.Milestones)
+	}
+
 	// Before the start: a plan from an older approval, a plan that changes while the code waits, another ledger
 	// write during the start, and --dry-run each start nothing.
 	approved := git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889))

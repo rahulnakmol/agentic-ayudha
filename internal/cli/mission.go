@@ -161,8 +161,11 @@ func (a *approveRun) missionPlan(ctx context.Context) (MissionPlan, []string, *M
 	for i, s := range subs {
 		nums[i] = s.GetNumber()
 	}
-	ms, err := parseMilestones(a.milestones, nums)
-	if err != nil {
+	// With no --milestones, the milestones the person named last time hold; the check below still refuses new stories.
+	ms := []MissionMilestone(nil)
+	if strings.TrimSpace(a.milestones) == "" && old != nil {
+		ms = slices.Clone(old.Milestones)
+	} else if ms, err = parseMilestones(a.milestones, nums); err != nil {
 		return p, nil, nil, err
 	}
 	if msg := checkMilestones(a.n, ms, nums); msg != "" {
@@ -336,7 +339,7 @@ func outsideDep(ctx context.Context, c *github.Client, owner, name string, n int
 var milestoneName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // parseMilestones reads --milestones: "MS1=#20,#21 MS2=#22,#23", in order.
-// With none, the plan has one milestone, MS1, with every story and Bug.
+// With none and no plan yet, the plan has one milestone, MS1, with every story and Bug.
 func parseMilestones(spec string, all []int) ([]MissionMilestone, error) {
 	if strings.TrimSpace(spec) == "" {
 		return []MissionMilestone{{Name: "MS1", Stories: all, Gate: "runs when its last story merges"}}, nil

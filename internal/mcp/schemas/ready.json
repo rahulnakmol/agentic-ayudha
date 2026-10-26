@@ -43,7 +43,7 @@
       "x-aayu-type": "issue"
     },
     "milestones": {
-      "description": "With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, one milestone MS1 holds them all. Written to missions/<f>/plan.json.",
+      "description": "With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, the last plan's milestones hold, or for a first plan one milestone MS1 holds them all. Written to missions/<f>/plan.json.",
       "type": "string",
       "x-aayu-type": "string"
     },
