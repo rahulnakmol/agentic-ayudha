@@ -1,0 +1,63 @@
+{
+  "story": 1002,
+  "body_hash": "cef735cfd3a29074fec27b1b7b0d2d167e4e00a2f4e3a167cb4c4e5482bba641",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "aayu mission stop, resume, and stop --end; ship refuses a stopped mission, an unlisted fix PR, and a later milestone's PR",
+      "contracts": [
+        "internal/cli/mission.go: `aayu mission stop \u003cf\u003e [--story n] [--end] --reason`, `aayu mission resume \u003cf\u003e [--story n]`; plan.json `state`, `stopped[]`, `controls[]`",
+        "internal/cli/ship.go (runShip, ship.go:118): three new refusals before the merge; fix PRs from `gate_fixes` merge on proof",
+        "--end: claims released, open PRs closed, stories back to status:ready, lock.state ended with end_reason, one comment on each locked issue"
+      ],
+      "tests": [
+        "internal/cli:TestMissionStopKeepsClaimsAndPRs",
+        "internal/cli:TestMissionStopNamesUnreachedTasks",
+        "internal/cli:TestShipRefusesStoppedMission",
+        "internal/cli:TestMissionStopLeavesOtherMissionsAndLoops",
+        "internal/cli:TestMissionResumeContinues",
+        "internal/cli:TestMissionStopRefusedForAgentLane",
+        "internal/cli:TestShipMergesMilestonesInOrder",
+        "internal/cli:TestMissionStopOneStoryOrBug",
+        "internal/cli:TestMissionStopFromAnyTool",
+        "internal/cli:TestMissionResumeRefusedOnOtherTool",
+        "internal/cli:TestMissionControlsRecordWho",
+        "internal/cli:TestMissionEndOnlyByStarter",
+        "internal/cli:TestShipMergesOnlyListedFixPR"
+      ],
+      "instrumentation": [
+        "each control writes a `controls` entry {control, by, tool, at}",
+        "the stop result lists `not reached: \u003ctask URL\u003e`"
+      ],
+      "rollback": "Revert the squash commit. Closed PRs and the --end comments stay on GitHub: reopen a PR by hand if a revert needs it.",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:37:11Z",
+  "planned_by": "human-fallback"
+}
