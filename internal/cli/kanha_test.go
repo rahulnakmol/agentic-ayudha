@@ -386,10 +386,12 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	if strings.Contains(b52, "PR #401") {
 		t.Errorf("#52's brief lists #400's PR:\n%s", b52)
 	}
-	// A ship record with no PR or merge commit stops the hand-off: no brief leaves without it.
+	// A ship record with no PR or merge commit stops the hand-off: no brief leaves without it (the Kanha hears of
+	// the failed start, Story #1008).
 	calls := len(m.callLog())
 	if code, out, errOut := run(t, m.agent, m.opts, "build", "54", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start"); code == 0 ||
-		!strings.Contains(errOut, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json: no PR or merge commit") || len(m.callLog()) != calls {
+		!strings.Contains(errOut, "proof/44/"+strings.Repeat("4", 40)+"/authoritative/ship.json: no PR or merge commit") ||
+		slices.ContainsFunc(m.callLog()[calls:], func(c string) bool { return strings.HasPrefix(c, "amp -ox") }) {
 		t.Fatalf("build 54 with a broken ship record of #44: exit %d: %s%s", code, out, errOut)
 	}
 	for n, tool := range map[int]string{950: "codex", 951: "cursor"} {

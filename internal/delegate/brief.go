@@ -340,5 +340,6 @@ func KanhaBrief(repo string, feature int, tool string, tatkal bool) string {
 	b.WriteString("- Never merge, approve, ship, or skip a gate.\n")
 	fmt.Fprintf(&b, "- The mission runs on %s, the tool in missions/%d/plan.json. Never start a story on another tool.\n", tool, feature)
 	b.WriteString("- When the list exits with an error (halted, paused, not approved), start nothing and report why.\n")
+	b.WriteString("- On `start of #<n> failed: …`, run nothing: report it in one line and stop. The next event or safety tick lists the story again, so a start that fails every time cannot loop.\n")
 	return b.String()
 }
