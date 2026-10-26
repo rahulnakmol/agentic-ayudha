@@ -31,7 +31,7 @@
       "x-aayu-type": "bool"
     },
     "issue": {
-      "description": "Work item to make Ready.",
+      "description": "Work item to make Ready. On a Feature this is Approve to build: a person approves its baselines, stories, and budget through GitHub's device flow, and it is refused for an agent lane.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"

@@ -1087,6 +1087,18 @@
       "additionalProperties": false,
       "type": "object",
       "description": "A Feature's baselines (aayu ready \u003cfeature\u003e --part \u003cpart\u003e): what a new version must say, and when it warns."
+    },
+    "critique": {
+      "properties": {
+        "review_wait_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hours after a Feature's reviews were asked for that Approve to build opens with some of them not in."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The seats' reviews of a Feature's baselines, which Approve to build (aayu ready \u003cfeature\u003e) waits for."
     }
   },
   "additionalProperties": false,

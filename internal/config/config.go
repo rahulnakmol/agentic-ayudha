@@ -52,6 +52,12 @@ type Config struct {
 	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
 	Approvals     Approvals              `koanf:"approvals" jsonschema_description:"Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."`
 	Baselines     Baselines              `koanf:"baselines" jsonschema_description:"A Feature's baselines (aayu ready <feature> --part <part>): what a new version must say, and when it warns."`
+	Critique      Critique               `koanf:"critique" jsonschema_description:"The seats' reviews of a Feature's baselines, which Approve to build (aayu ready <feature>) waits for."`
+}
+
+// Critique is [critique] (Feature #877).
+type Critique struct {
+	ReviewWaitHours int `koanf:"review_wait_hours" jsonschema:"minimum=0" jsonschema_description:"Hours after a Feature's reviews were asked for that Approve to build opens with some of them not in."`
 }
 
 // Baselines is [baselines] (Feature #874).

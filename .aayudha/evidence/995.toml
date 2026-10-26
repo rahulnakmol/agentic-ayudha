@@ -1,0 +1,29 @@
+# Which tests prove Story #995's Completion Goal.
+
+[[criterion]]
+id = 1 # an agent lane (AMP_THREAD_ID) runs ready 840, and an MCP client calls the ready tool for #840: both exit 4 with the refusal; no ledger commit, label, or comment
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 2 # a person runs ready 840: the effect line before the device code; specs/840/approved.json holds version 1, by, at, presence, baselines, stories, budget, and empty dismissals
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 3 # after the ledger write: the Ready snapshot of #840, status:ready, and "Approved #840 to build as @rahulnakmol, approval 1. Next: Arjun makes its 6 stories Ready."
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 4 # UX needed (L01) and not approved, technical design changed after approval, no Initiative parent: each exit 4 with one line and the next command; nothing written
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 5 # the Completion Goal of #853 changes while the device code waits: "The stories of #840 changed while the code was waiting; nothing was approved." and no ledger commit
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 6 # technical design v2 approved with its changes: the effect shows what changed, why it matters, and the need behind it; approved.json holds version 2; the ledger log keeps version 1
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 7 # critique.State (its test fake) with an open gap, then 2 of 5 reviews in: both refused; dismissed and every review in: "1 dismissal ratified: ..." before the code, and approved.json holds the dismissal
+tests = ["internal/cli:TestReadyApproveToBuild"]

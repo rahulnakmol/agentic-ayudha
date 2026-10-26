@@ -88,6 +88,11 @@ in_flight = 1
 why_min_words = 5
 version_warn = 4
 
+# Approve to build (`aayu ready <feature>`) opens when every seat's review of the Feature's baselines is in, or
+# review_wait_hours after the reviews were asked for.
+[critique]
+review_wait_hours = 24
+
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]
 per_story_usd = 60.0 # at least autonomy.budget.cost_usd, so the breaker never stops a story before its build budget
