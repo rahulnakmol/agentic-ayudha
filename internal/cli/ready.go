@@ -103,23 +103,20 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			return err
 		})
 	default:
-		c, bot, err := e.BotGitHub(ctx, "")
-		if err != nil {
+		if err := e.botReady(ctx, r); err != nil {
 			return err
 		}
-		r.GH, r.Tag, r.Login = c, bot.Tag, bot.Login
-		if r.Login == "" {
-			r.Login = bot.Kind
-		}
-		ident := "bot"
-		if bot.Kind == identity.KindHumanFallback {
-			ident = identity.KindHumanFallback
-		}
-		w, err := e.Ledger(ctx, bot.Token, ident, bot.Tag)
+		owner, name, _ := github.SplitRepo(repo)
+		is, _, err := r.GH.REST.Issues.Get(ctx, owner, name, n)
 		if err != nil {
-			return err
+			return Wrap(ExitExternal, err)
 		}
-		r.Ledger = func(ctx context.Context, c ledger.Commit) (string, error) { return w.Write(ctx, c) }
+		if typ, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); typ == "feature" { // Approve to build: a person's decision
+			if err := e.approveRefusal(); err != nil {
+				return err
+			}
+			return e.approveToBuild(ctx, r, n)
+		}
 		if res, err = r.Apply(ctx, n); err != nil {
 			return err
 		}
@@ -165,6 +162,29 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 	if !in.Bool("check") && !in.Bool("guard") && !res.DryRun {
 		e.milestone("first-ready", true, "Your first Ready story!", fmt.Sprintf("#%d is Ready; the build lane can pick it up with aayu build %d.", n, n))
 	}
+	return nil
+}
+
+// botReady makes r write as Arjun: the bot, or the person's token tagged
+// identity:human-fallback on the day-one path.
+func (e *Env) botReady(ctx context.Context, r *ready.Ready) error {
+	c, bot, err := e.BotGitHub(ctx, "")
+	if err != nil {
+		return err
+	}
+	r.GH, r.Tag, r.Login = c, bot.Tag, bot.Login
+	if r.Login == "" {
+		r.Login = bot.Kind
+	}
+	ident := "bot"
+	if bot.Kind == identity.KindHumanFallback {
+		ident = identity.KindHumanFallback
+	}
+	w, err := e.Ledger(ctx, bot.Token, ident, bot.Tag)
+	if err != nil {
+		return err
+	}
+	r.Ledger = func(ctx context.Context, c ledger.Commit) (string, error) { return w.Write(ctx, c) }
 	return nil
 }
 

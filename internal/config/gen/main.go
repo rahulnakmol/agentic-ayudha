@@ -117,6 +117,14 @@ var sections = []section{
 		note: "`aayu ready <feature> --check` shows each part's drift from its pins when it is read; nothing writes a drift record. A new version's hash covers its changes and the review findings it fixes, so a reason edited after a person saw it baselines nothing.",
 	},
 	{
+		heading: "Approve to build",
+		roots:   []string{"critique"},
+		rows: []row{
+			{"critique.review_wait_hours", "Hours after the seats' reviews of a Feature's baselines were asked for that Approve to build (`aayu ready <feature>`) opens with some of them not in. Before that it waits for every review. An open gap keeps it off at any time.", "0.4"},
+		},
+		note: "Approve to build is a person's decision, through GitHub's device flow every time. It is off while a needed part of the Feature is not approved or has drifted, the Feature has no Initiative parent, a review gap is open, or the reviews are not in. The record is `specs/<feature>/approved.json` on the `ledger` branch.",
+	},
+	{
 		heading: "Outcomes",
 		roots:   []string{"outcomes"},
 		rows: []row{

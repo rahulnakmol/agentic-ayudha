@@ -833,7 +833,7 @@ var Verbs = []Command{
 		Reader:  "Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
-			pos("issue", TypeIssue, "Work item to make Ready."),
+			pos("issue", TypeIssue, "Work item to make Ready. On a Feature this is Approve to build: a person approves its baselines, stories, and budget through GitHub's device flow, and it is refused for an agent lane."),
 			readOnlyWith(flag("check", TypeBool, "Validate only; write nothing."), "true"),
 			readOnlyWith(flag("guard", TypeBool, "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."), "false"),
 			enumIn("part", false, false, "Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane.", "intent", "spec", "tech", "ux"),

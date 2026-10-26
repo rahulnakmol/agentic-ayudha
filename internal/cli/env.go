@@ -21,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/telemetry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
@@ -98,6 +99,9 @@ type Options struct {
 	Sleep      func(ctx context.Context, d time.Duration) error
 	RunPoll    time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
 	DevicePoll time.Duration // how often the presence check polls GitHub's device flow (tests); 0 uses GitHub's interval
+	// CritiqueState is #876's critique.State of a Feature, which Approve to build reads (tests: its fake until #876
+	// merges); nil: no review or finding is recorded, so nothing waits.
+	CritiqueState func(ctx context.Context, feature int) (ready.Critique, error)
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

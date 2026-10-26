@@ -25,17 +25,25 @@ import (
 // stdio, and connects the official SDK client to it.
 func serveMCP(t *testing.T, repo string, args ...string) *sdk.ClientSession {
 	t.Helper()
+	return serveMCPWith(t, Options{Dir: repo}, nil, args...)
+}
+
+// serveMCPWith is serveMCP with the server's options and environment.
+func serveMCPWith(t *testing.T, opts Options, env map[string]string, args ...string) *sdk.ClientSession {
+	t.Helper()
 	clientR, serverW := io.Pipe()
 	serverR, clientW := io.Pipe()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan int, 1)
-	home := t.TempDir()
+	vars := map[string]string{"HOME": t.TempDir()}
+	for k, v := range env {
+		vars[k] = v
+	}
+	opts.Assets, opts.Build = aayudha.Assets, BuildInfo{Version: "1.0.0"}
+	opts.Getenv = func(k string) string { return vars[k] }
+	opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }
 	go func() {
-		done <- Run(ctx, append([]string{"mcp"}, args...), IO{In: serverR, Out: serverW, Err: io.Discard}, Options{
-			Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"},
-			Getenv:  func(k string) string { return map[string]string{"HOME": home}[k] },
-			GHToken: func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
-		})
+		done <- Run(ctx, append([]string{"mcp"}, args...), IO{In: serverR, Out: serverW, Err: io.Discard}, opts)
 	}()
 	client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "1"}, nil)
 	cs, err := client.Connect(ctx, &sdk.IOTransport{Reader: clientR, Writer: clientW}, nil)

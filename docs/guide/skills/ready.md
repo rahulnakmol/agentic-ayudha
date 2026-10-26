@@ -47,7 +47,7 @@ aayu ready <issue>
 
 | Input | Required | What it does |
 |---|---|---|
-| `<issue>` | yes | Work item to make Ready. |
+| `<issue>` | yes | Work item to make Ready. On a Feature this is Approve to build: a person approves its baselines, stories, and budget through GitHub's device flow, and it is refused for an agent lane. |
 | `--check` | no | Validate only; write nothing. |
 | `--guard` | no | Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot. |
 | `--part` | no | Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane. One of: `intent`, `spec`, `tech`, `ux`. |
