@@ -504,6 +504,23 @@ func TestMissionBudgetIsTopOfRange(t *testing.T) {
 	if code, out, errOut := m.approve(889); code != 0 {
 		t.Fatalf("approve: exit %d: %s%s", code, out, errOut)
 	}
+	// A start that lands while a new approval waits for its code is never overwritten: nothing is approved.
+	p, unstarted := m.plan(889)
+	p.StartedBy, p.Tool, p.Budget = "bob", "codex", 660
+	started, _ := json.MarshalIndent(p, "", "  ")
+	m.edit(func() {
+		m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve",
+			OnPoll: func(int) { putLedger(t, m.bare, MissionPlanPath(889), string(started)) }}
+	})
+	if code, out, errOut := run(t, m.person, m.opts, "ready", "889", "--repo", "o/r", "--milestones", "MS1=20,21 MS2=22,23"); code != ExitBlocked ||
+		!strings.Contains(errOut, "The approval of #889 changed while the code was waiting; nothing was approved.") {
+		t.Fatalf("approve during a start: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); p.StartedBy != "bob" || p.Tool != "codex" || p.Approval != 1 {
+		t.Fatalf("plan.json after a start during an approval:\n%s", raw)
+	}
+	putLedger(t, m.bare, MissionPlanPath(889), unstarted) // as it was before that start
+
 	code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889)
 	card := "BUDGET $660 · the top of the range, locked when you start"
 	if at := strings.Index(errOut, card); code != 0 || at < 0 || at > strings.Index(errOut, "/login/device") {

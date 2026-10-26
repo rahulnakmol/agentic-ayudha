@@ -132,7 +132,13 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if err != nil {
 		return err
 	}
-	if !got.Agreed(want) || !slices.Equal(append(again, planEffect2...), effect) || version(prev2) != version(prev) || missionJSON(&plan2) != missionJSON(&plan) {
+	// A mission start while the code waits is in the tip the write is based on: read the plan again, so it is kept.
+	old2, _, _, err := readMission(ctx, w, n)
+	if err != nil {
+		return err
+	}
+	if !got.Agreed(want) || !slices.Equal(append(again, planEffect2...), effect) || version(prev2) != version(prev) || missionJSON(&plan2) != missionJSON(&plan) ||
+		(old == nil) != (old2 == nil) || old != nil && missionJSON(old) != missionJSON(old2) {
 		return Errorf(ExitBlocked, "The approval of #%d changed while the code was waiting; nothing was approved.", n)
 	}
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
