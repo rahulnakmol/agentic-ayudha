@@ -1,0 +1,32 @@
+{
+  "story": 999,
+  "body_hash": "b42dac58454b8c2fc8f01ddad557c58ab7f3eaa9ef62d08ec1b3aaec332eced6",
+  "footprint": [
+    "L02"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "The runnable list holds a story whose depends-on target is still open",
+      "contracts": [
+        "internal/cli/mission.go: reads `depends-on #n` from Links (workitems.Parse) and prints `waits #n: depends-on #m is open`"
+      ],
+      "tests": [
+        "internal/cli:TestMissionNextHoldsOpenDependsOn",
+        "internal/cli:TestMissionNextStartsAfterDependsOnMerges",
+        "internal/cli:TestMissionNextHoldsOnlyTheDependent"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:36:59Z",
+  "planned_by": "human-fallback"
+}
