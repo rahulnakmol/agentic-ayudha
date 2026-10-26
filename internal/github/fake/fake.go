@@ -657,15 +657,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			vars, _ := body["variables"].(map[string]any)
 			n, _ := vars["n"].(float64)
 			is := g.Issues[int(n)]
-			if is == nil {
-				reply(200, map[string]any{"data": map[string]any{"repository": map[string]any{"issue": nil}}})
-				return
-			}
 			out := map[string]any{"lastEditedAt": nil, "editor": nil}
-			if !is.EditedAt.IsZero() {
+			if is != nil && !is.EditedAt.IsZero() {
 				out["lastEditedAt"] = is.EditedAt.UTC().Format(time.RFC3339)
 			}
-			if is.EditedBy != "" {
+			if is != nil && is.EditedBy != "" {
 				out["editor"] = map[string]any{"login": is.EditedBy}
 			}
 			reply(200, map[string]any{"data": map[string]any{"repository": map[string]any{"issue": out}}})

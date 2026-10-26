@@ -135,10 +135,7 @@ func issueNumbers(issues []*gh.Issue) []int {
 
 // lockedIssue is n's entry in an active lock, or nil.
 func (l *MissionLock) lockedIssue(n int) *LockedIssue {
-	if l == nil || l.State != LockActive {
-		return nil
-	}
-	if i := slices.IndexFunc(l.Issues, func(li LockedIssue) bool { return li.Number == n }); i >= 0 {
+	if i := slices.IndexFunc(l.Issues, func(li LockedIssue) bool { return li.Number == n }); i >= 0 && l.State == LockActive {
 		return &l.Issues[i]
 	}
 	return nil
@@ -314,18 +311,7 @@ func requestBody(req *http.Request) ([]byte, error) {
 // no ledger, nothing is locked.
 func (e *Env) missionLocks(tok identity.Token, ident string) func(ctx context.Context) (string, map[int]lockHold, error) {
 	return func(ctx context.Context) (string, map[int]lockHold, error) {
-		if config.RepoRoot(e.Dir) == "" {
-			return "", nil, nil
-		}
-		repo, err := e.RepoName(ctx)
-		if err != nil {
-			return "", nil, err
-		}
-		w, err := e.Ledger(ctx, tok, ident, "")
-		if err != nil {
-			return "", nil, err
-		}
-		plans, err := readPlans(ctx, w)
+		repo, _, plans, err := e.ledgerPlans(ctx, tok, ident)
 		if err != nil {
 			return "", nil, err
 		}
@@ -340,6 +326,22 @@ func (e *Env) missionLocks(tok identity.Token, ident string) func(ctx context.Co
 		}
 		return repo, holds, nil
 	}
+}
+
+// ledgerPlans reads the checkout's repository, its ledger, and every mission
+// plan on it. With no checkout there is no ledger, and no plan.
+func (e *Env) ledgerPlans(ctx context.Context, tok identity.Token, ident string) (repo string, w *ledger.Writer, plans []*MissionPlan, err error) {
+	if config.RepoRoot(e.Dir) == "" {
+		return "", nil, nil, nil
+	}
+	if repo, err = e.RepoName(ctx); err != nil {
+		return "", nil, nil, err
+	}
+	if w, err = e.Ledger(ctx, tok, ident, ""); err != nil {
+		return "", nil, nil, err
+	}
+	plans, err = readPlans(ctx, w)
+	return repo, w, plans, err
 }
 
 // readPlans reads every mission plan on the ledger.
@@ -642,22 +644,11 @@ type missionFacts struct {
 // startAndLockCards reads the mission plans on the ledger for the inbox: the
 // ones a person may start, and the ones that hold a lock.
 func (e *Env) startAndLockCards(ctx context.Context) ([]missionFacts, error) {
-	if config.RepoRoot(e.Dir) == "" { // no checkout, so no ledger to read
-		return nil, nil
-	}
-	repo, err := e.RepoName(ctx)
-	if err != nil {
-		return nil, err
-	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return nil, err
 	}
-	w, err := e.Ledger(ctx, tok, "human", "")
-	if err != nil {
-		return nil, err
-	}
-	plans, err := readPlans(ctx, w)
+	repo, w, plans, err := e.ledgerPlans(ctx, tok, "human")
 	if err != nil {
 		return nil, err
 	}

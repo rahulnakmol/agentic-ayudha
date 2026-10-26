@@ -1766,15 +1766,9 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	case InboxMission: // the mission step reads the plan again and asks for the device code where a person must be present
 		return e.missionAct(ctx, it, a)
-	case InboxStart, InboxLocked:
-		switch {
-		case a.Command == inboxLeave:
-			fmt.Fprintf(e.Out, "  done: %s; nothing was written, and the card stays\n", a.Label)
-			return nil
-		case it.Kind == InboxLocked: // keep the edit: a person's, through the device flow
-			return e.keepEdit(ctx, c, repo, it)
-		}
-		// Start reads the plan again, and asks for the device code: the lock is the person's to confirm.
+	case InboxLocked: // keep the edit: a person's, through the device flow (Leave writes nothing and never gets here)
+		return e.keepEdit(ctx, c, repo, it)
+	case InboxStart: // Start reads the plan again, and asks for the device code: the lock is the person's to confirm.
 		return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(it.Number)})
 	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
 		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
