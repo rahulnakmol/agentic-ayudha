@@ -283,6 +283,13 @@ func TestGateRunsChecksVerifyAndEvals(t *testing.T) {
 // SHA, and show stops holding MS2's PRs behind it (ST16 reads the state).
 func TestGatePassMarksMilestone(t *testing.T) {
 	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	// A plan Story #997 wrote has each gate as a string: it reads as a gate that waits.
+	raw := git(t, g.bare, "show", "ledger:"+MissionPlanPath(889))
+	old := strings.ReplaceAll(raw, `"gate": {`+"\n"+`        "state": "waits"`+"\n"+`      }`, `"gate": "runs when its last story merges"`)
+	if strings.Count(old, `"gate": "runs when its last story merges"`) != 2 {
+		t.Fatalf("the plan's gates:\n%s", raw)
+	}
+	putLedger(t, g.bare, MissionPlanPath(889), old)
 	show := func() MissionShowReport {
 		code, out, errOut := run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r", "--json")
 		var rep MissionShowReport
@@ -775,6 +782,33 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	}
 }
 
+// [mission] max_no_go is dev's committed value: the embedded default (3)
+// does not lower a committed 4, and a person's --set does.
+func TestGateMaxNoGoIsDevs(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.closeIssue(20)
+	commitOnDev(g.g, ".aayudha/config.toml", "[mission]\nmax_no_go = 4\n")
+	g.vfail = []string{"inbox.ship-once"}
+	var two strings.Builder
+	for i := 1; i <= 2; i++ {
+		b, _ := json.Marshal(GateRun{Milestone: "MS1", DevSHA: strings.Repeat(fmt.Sprint(i), 40), At: "2026-10-26T10:00:00Z", Result: gateFail,
+			Checks: []GateCheck{{Check: "verify:inbox.ship-once", Result: gateFail}}})
+		two.Write(append(b, '\n'))
+	}
+	third := func(sha string, args ...string) GateMSState {
+		putLedger(t, g.bare, MissionGatesPath(889), two.String())
+		g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+		g.tip(sha, "success")
+		return g.gateJSON(args...).Milestones[0]
+	}
+	if ms := third(strings.Repeat("a", 40)); ms.State != GateFailed || !strings.Contains(ms.Detail, "(3 of 4 failed runs before the mission stops)") {
+		t.Fatalf("third failure with a committed max_no_go of 4: %+v", ms)
+	}
+	if ms := third(strings.Repeat("b", 40), "--set", "mission.max_no_go=3"); ms.State != GateStopped {
+		t.Fatalf("third failure with --set mission.max_no_go=3: %+v", ms)
+	}
+}
+
 // Criterion 9: a required check cancelled, or failed with a 5xx from
 // GitHub, is rerun once, and the gate records why; a second failure fails
 // the gate, and a pass after the rerun passes it.
@@ -898,6 +932,19 @@ func TestGateEvalsReadEvalsResults(t *testing.T) {
 	})
 	if ms := again(strings.Repeat("b", 40)); ms.State != GateFailed || !slices.Contains(ms.Checks, GateCheck{Check: "eval:missions", Result: gateFail, Detail: "its dispatched evals.yml run left no results for bbbbbbb"}) {
 		t.Fatalf("gate after a dispatched run with no results: %+v", ms)
+	}
+	// Results that judge no case (each one not run) prove nothing: the group fails.
+	var empty bytes.Buffer
+	ez := zip.NewWriter(&empty)
+	ef, _ := ez.Create("results.json")
+	_, _ = ef.Write([]byte(`{"cases": [{"case": "mission/flaky", "skill": "mission", "not_run": "pin"}]}`))
+	_ = ez.Close()
+	g.edit(func() {
+		g.g.Runs = append(g.g.Runs, fake.WorkflowRun{ID: 503, Path: ".github/workflows/evals.yml", HeadSHA: strings.Repeat("c", 40), Event: "push", Status: "completed", Conclusion: "success"})
+		g.g.Artifacts[503] = []fake.ArtifactZip{{ID: 603, Name: "eval-results-" + strings.Repeat("c", 40) + "-missions", Zip: empty.Bytes()}}
+	})
+	if ms := again(strings.Repeat("c", 40)); ms.State != GateFailed || !slices.Contains(ms.Checks, GateCheck{Check: "eval:missions", Result: gateFail, Detail: "its results for ccccccc judge no case of the touched seats' skills"}) {
+		t.Fatalf("gate on results that judge no case: %+v", ms)
 	}
 	// A tip with no evals/eval.toml has no gating group: the evals pass.
 	g.edit(func() {

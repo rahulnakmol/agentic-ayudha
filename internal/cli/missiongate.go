@@ -53,7 +53,8 @@ const MissionGateSchema = "aayudha.mission.gate/v1"
 func MissionGatesPath(f int) string { return fmt.Sprintf("missions/%d/gates.jsonl", f) }
 
 // missionMaxNoGo is [mission] max_no_go, committed on the integration branch
-// at its tip; a local value may only lower it, as [build] agents.
+// at its tip; a value the person's own config, the environment, or --set
+// gives may only lower it, as buildAgents does. The embedded default never does.
 func (e *Env) missionMaxNoGo(ctx context.Context, c *github.Client, repo string) (int, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	pol, _, err := e.loopPolicy(ctx, c, owner, name)
@@ -64,7 +65,11 @@ func (e *Env) missionMaxNoGo(ctx context.Context, c *github.Client, repo string)
 	if err != nil {
 		return 0, err
 	}
-	return max(min(pol.Config.Mission.MaxNoGo, l.Config.Mission.MaxNoGo), 1), nil
+	n := pol.Config.Mission.MaxNoGo
+	if layer, _ := l.Origin("mission.max_no_go"); layer != config.LayerDefault {
+		n = min(n, l.Config.Mission.MaxNoGo)
+	}
+	return max(n, 1), nil
 }
 
 // evalsResultsMinRuns is how many evals.yml runs of a commit the gate reads,
@@ -632,6 +637,7 @@ func (e *Env) gateEvals(ctx context.Context, c *github.Client, repo, dev, sha st
 		}
 		switch {
 		case res != nil:
+			judged := len(checks)
 			for _, cs := range res.Cases {
 				if !slices.Contains(skills, cs.Skill) || cs.NotRun != "" {
 					continue
@@ -642,6 +648,9 @@ func (e *Env) gateEvals(ctx context.Context, c *github.Client, repo, dev, sha st
 					ck.Detail += fmt.Sprintf(" (bars: mean %.2f, pass^k %.2f)", cfg.MinMean, cfg.MinPassK)
 				}
 				checks = append(checks, ck)
+			}
+			if len(checks) == judged { // a gating group whose results judge no case of these skills proves nothing
+				checks = append(checks, GateCheck{Check: "eval:" + grp.Name, Result: gateFail, Detail: "its results for " + short(sha) + " judge no case of the touched seats' skills"})
 			}
 		case waiting != "":
 			checks = append(checks, GateCheck{Check: "eval:" + grp.Name, Result: gatePending, Detail: waiting})
