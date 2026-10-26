@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextHoldsOpenDependsOn"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextHoldsOpenDependsOn","Output":"=== RUN   TestMissionNextHoldsOpenDependsOn\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextHoldsOpenDependsOn","Output":"--- PASS: TestMissionNextHoldsOpenDependsOn (1.10s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextHoldsOpenDependsOn"}
