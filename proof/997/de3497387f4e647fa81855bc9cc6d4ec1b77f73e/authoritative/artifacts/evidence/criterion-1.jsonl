@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWritesPlan"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWritesPlan","Output":"=== RUN   TestMissionStartWritesPlan\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWritesPlan","Output":"--- PASS: TestMissionStartWritesPlan (1.22s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWritesPlan"}

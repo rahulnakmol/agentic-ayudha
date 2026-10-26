@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionShowPrintsSourcesAndPausedRow"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionShowPrintsSourcesAndPausedRow","Output":"=== RUN   TestMissionShowPrintsSourcesAndPausedRow\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionShowPrintsSourcesAndPausedRow","Output":"--- PASS: TestMissionShowPrintsSourcesAndPausedRow (0.73s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionShowPrintsSourcesAndPausedRow"}
