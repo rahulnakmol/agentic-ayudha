@@ -830,3 +830,36 @@ func TestPromptNeverSetsALimit(t *testing.T) {
 		t.Fatalf("claims: %v", got)
 	}
 }
+
+// Story #1000: [build] agents is read from dev's tip on GitHub. When that read
+// fails, approve, start, show, and next exit 5 and write nothing; none falls
+// back to a local value or a constant.
+func TestMissionAgentsReadFailsClosed(t *testing.T) {
+	m := newMissionWorld(t)
+	m.startedMission(889, []int{20, 21})
+	m.status(20, "ready", "")
+	m.issue(874, "Feature 874", "feature", 0, "")
+	m.issue(30, "Item 30", "story", 874, "")
+	m.feature(874, 30)
+	if code, out, errOut := m.approve(874); code != 0 {
+		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
+	}
+	commits := m.commits()
+	failDev := func() { m.edit(func() { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/git/ref/heads/dev", 0 }) }
+	for name, cmd := range map[string]func() (int, string, string){
+		"next 889": func() (int, string, string) { return m.next(889) },
+		"show 889": func() (int, string, string) {
+			return run(t, m.agent, m.opts, "mission", "show", "889", "--repo", "o/r")
+		},
+		"approve 889": func() (int, string, string) { return m.approve(889) },
+		"start 874":   func() (int, string, string) { return m.mission(m.person, "rahulnakmol", "start", 874) },
+	} {
+		failDev()
+		if code, out, errOut := cmd(); code != ExitExternal || !strings.Contains(errOut, "heads/dev") {
+			t.Errorf("%s with dev's config unreadable: exit %d: %s%s", name, code, out, errOut)
+		}
+	}
+	if m.commits() != commits || len(m.claims(889)) != 0 {
+		t.Fatalf("a failed read wrote the ledger: %s -> %s commits, claims %v", commits, m.commits(), m.claims(889))
+	}
+}

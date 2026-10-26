@@ -90,7 +90,7 @@ var sections = []section{
 		heading: "Budgets",
 		roots:   []string{"budget", "build"},
 		rows: []row{
-			{"build.agents", "Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it.", "Decision #918"},
+			{"build.agents", "Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it.", "Feature #889"},
 			{"budget.per_story_usd", "Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does.", proposed},
 			{"budget.per_day_usd", "Model spend per repository per day, in USD, before the breaker trips.", proposed},
 			{"budget.per_pr_inspect_max", "Model spend, in USD, for `inspect` on one PR across all its cycles.", proposed},

@@ -60,7 +60,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 
 | Key | Default | Meaning | Source |
 |---|---|---|---|
-| `build.agents` | `5` | Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it. | Decision #918 |
+| `build.agents` | `5` | Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it. | Feature #889 |
 | `budget.per_story_usd` | `60.0` | Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does. | proposed (WP0.5) |
 | `budget.per_day_usd` | `100.0` | Model spend per repository per day, in USD, before the breaker trips. | proposed (WP0.5) |
 | `budget.per_pr_inspect_max` | `5.0` | Model spend, in USD, for `inspect` on one PR across all its cycles. | proposed (WP0.5) |
