@@ -38,6 +38,9 @@ const (
 	// after MaxRounds rounds, and the builder reconsiders the approach
 	// (Decision #544, point 1).
 	StepBack = "step-back"
+	// Hold is the disposition of a PR that never merges whatever its review
+	// says: its story is an early build (core design E1).
+	Hold = "hold"
 )
 
 // MaxCycles is how many fix cycles a delegated build's follow-ups (inspect's

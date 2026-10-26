@@ -83,6 +83,7 @@ When a budget trips, the breaker pauses agent lanes and pages through `[notify]`
 |---|---|---|---|
 | `baselines.why_min_words` | `5` | Words that each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version of a Feature part (`aayu ready <feature> --part <part> --request --changes <file>`). A change with one of the three missing or too short writes no draft. | 0.4 |
 | `baselines.version_warn` | `4` | A draft of this version of a Feature part, or a later one, warns that each review finds new gaps. 0 never warns. | 0.4 |
+| `baselines.early_build_budget` | `1` | The budget of one early build a person approves before a Feature's Approve to build (`aayu ready <feature> --early-build <story>`), in multiples of `autonomy.budget.cost_usd`. The person sees it before the device code, and the approval records it. | Feature #874 (E1) |
 
 `aayu ready <feature> --check` shows each part's drift from its pins when it is read; nothing writes a drift record. A new version's hash covers its changes and the review findings it fixes, so a reason edited after a person saw it baselines nothing.
 

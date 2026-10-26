@@ -105,6 +105,7 @@ func TestRejects(t *testing.T) {
 		{"gateway secret from a committed local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[models.gateway]\nsecret = \"github-token\"\n"}, nil, nil, "never from the checkout"},
 		{"Copilot route opt-in from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n"}, nil, nil, "never from the checkout"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
+		{"early build budget below one", nil, nil, []string{"baselines.early_build_budget=0"}, "[baselines] early_build_budget = 0: want at least 1"},
 		{"newer schema", map[string]string{"repo/.aayudha/config.toml": "version = 2\n"}, nil, nil, "newer than this binary"},
 		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
 		{"decision authority value", nil, nil, []string{"decisions.authority.story=not a login!"}, "want a seat slug or a GitHub login"},

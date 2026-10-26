@@ -961,7 +961,171 @@ func TestReadyFeatureDrift(t *testing.T) {
 		t.Fatalf("the checkout has a config: %v", err)
 	}
 	code, cfg, errOut := run(t, person, opts, "config", "show")
-	if code != 0 || !strings.Contains(cfg, "[baselines]\nversion_warn = 4\nwhy_min_words = 5\n") || !regexp.MustCompile(`always_person_sections = \[[^\]]*'baselines'`).MatchString(cfg) {
+	if code != 0 || !strings.Contains(cfg, "[baselines]\nearly_build_budget = 1\nversion_warn = 4\nwhy_min_words = 5\n") || !regexp.MustCompile(`always_person_sections = \[[^\]]*'baselines'`).MatchString(cfg) {
 		t.Fatalf("config show: exit %d: %s%s", code, cfg, errOut)
+	}
+}
+
+// Story #994: a person approves one early build of a Feature before Approve to
+// build, through GitHub's device flow, and sees its budget before the code.
+// A story that is not a flagged child of the Feature, or an agent lane, is
+// refused before the code, and nothing is written.
+func TestReadyEarlyBuild(t *testing.T) {
+	g := readyTree(t) // #1 Feature; #2, #3, #4 its child stories; #6 a story with no parent
+	for _, n := range []int{2, 4, 6} {
+		g.Issues[n].Labels = append(g.Issues[n].Labels, fake.Label{Name: "early-build"})
+	}
+	dir, bare := ledgerCheckout(t)
+	state := filepath.Join(dir, "state")
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state} // a terminal with no agent marker
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": state}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
+	early := func(env map[string]string, story string, args ...string) (int, string, string) {
+		t.Helper()
+		return run(t, env, opts, append([]string{"ready", "1", "--repo", "o/r", "--early-build", story}, args...)...)
+	}
+	commits := func() int {
+		t.Helper()
+		if out := git(t, bare, "log", "--format=%H", "ledger", "--", "specs/1"); out != "" {
+			return len(strings.Split(out, "\n"))
+		}
+		return 0
+	}
+	record := func(story int) ready.EarlyBuild {
+		t.Helper()
+		var b ready.EarlyBuild
+		if err := json.Unmarshal([]byte(git(t, bare, "show", fmt.Sprintf("ledger:specs/1/approved-early-%d.json", story))), &b); err != nil {
+			t.Fatalf("ledger approved-early-%d.json: %v", story, err)
+		}
+		return b
+	}
+	device := func(onPoll func(int)) {
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", OnPoll: onPoll}
+		g.Mu.Unlock()
+	}
+	started := func() int {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		return g.Device.Started
+	}
+	// shown reports whether want is on the error stream before the device code.
+	shown := func(errOut, want string) bool {
+		at, code := strings.Index(errOut, want), strings.Index(errOut, "/login/device")
+		return at >= 0 && code > at
+	}
+
+	// 5. An agent lane is refused before the issue is read; no code, nothing written.
+	device(nil)
+	g.Reset()
+	code, out, errOut := early(agent, "2")
+	g.Mu.Lock()
+	reads := slices.ContainsFunc(g.Requests, func(r fake.Request) bool { return strings.Contains(r.Path, "/issues") })
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(errOut, "ready --early-build is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") ||
+		reads || started() != 0 || commits() != 0 {
+		t.Fatalf("agent --early-build: exit %d, issue read %t, device codes %d, %d commits: %s%s", code, reads, started(), commits(), out, errOut)
+	}
+
+	// 2. A story with no early-build label, and one that is not a child of #1: refused before the code; nothing written.
+	for story, want := range map[string]string{
+		"3": "#3 has no early-build label, so it is not an early build. Nothing was approved.",
+		"6": "#6 is not a child of #1: it has no parent. Nothing was approved.",
+		"5": "#5 is a decision, not a story, so it is not an early build.",
+	} {
+		g.Reset()
+		if code, out, errOut := early(person, story); code != ExitBlocked || !strings.Contains(errOut, want) || started() != 0 || len(g.Writes()) != 0 || commits() != 0 {
+			t.Errorf("--early-build %s: exit %d, device codes %d, writes %v, %d commits: %s%s", story, code, started(), g.Writes(), commits(), out, errOut)
+		}
+	}
+	if code, out, errOut := run(t, person, opts, "ready", "2", "--repo", "o/r", "--early-build", "3"); code != ExitUsage || !strings.Contains(errOut, "#2 is a story") {
+		t.Errorf("--early-build under a story: exit %d: %s%s", code, out, errOut)
+	}
+	if code, out, errOut := early(person, "2", "--part", "intent"); code != ExitUsage || started() != 0 {
+		t.Errorf("--early-build with --part: exit %d: %s%s", code, out, errOut)
+	}
+
+	// 1. A person approves #2: the effect and its budget show before the code; one ledger commit writes the record.
+	code, out, errOut = early(person, "2")
+	if code != 0 || started() != 1 || !shown(errOut, "Approve the early build #2 of #1. Budget up to $60.00 (1 × [autonomy.budget] cost_usd).") {
+		t.Fatalf("person --early-build 2: exit %d, device codes %d: %s%s", code, started(), out, errOut)
+	}
+	if n := commits(); n != 1 || strings.Fields(git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "--", "specs/1"))[0] != "specs/1/approved-early-2.json" {
+		t.Fatalf("after the approval: %d commits", n)
+	}
+	b := record(2)
+	if b.Schema != ready.EarlyBuildSchema || b.Feature != 1 || b.Story != 2 || b.BodyHash != workitems.BodyHash(g.Issues[2].Body) ||
+		b.BudgetUSD != 60 || b.ApprovedBy != "founder" || b.Presence != "device-flow" || b.At == "" {
+		t.Fatalf("record: %+v", b)
+	}
+
+	// 3. [baselines] early_build_budget 2: the budget shown, and the one written, is 2 × 60.
+	env := map[string]string{"AAYU_BASELINES__EARLY_BUILD_BUDGET": "2"}
+	for k, v := range person {
+		env[k] = v
+	}
+	device(nil)
+	if code, out, errOut := early(env, "4"); code != 0 || !shown(errOut, "Budget up to $120.00 (2 × [autonomy.budget] cost_usd)") || record(4).BudgetUSD != 120 || commits() != 2 {
+		t.Fatalf("early_build_budget 2: exit %d, %d commits, record %+v: %s%s", code, commits(), record(4), out, errOut)
+	}
+
+	// --dry-run plans the record and writes nothing; a denied code, no token, a missing issue,
+	// another parent, and no checkout are each refused, and nothing is written.
+	device(nil)
+	if code, out, errOut := early(person, "2", "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: ledger specs/1/approved-early-2.json planned") || commits() != 2 {
+		t.Fatalf("--dry-run: exit %d, %d commits: %s%s", code, commits(), out, errOut)
+	}
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	g.Issues[6].Parent = 3
+	g.Mu.Unlock()
+	away := opts
+	away.Dir = t.TempDir()
+	for _, c := range []struct {
+		env  map[string]string
+		opts Options
+		args []string
+		code int
+		want string
+	}{
+		{person, opts, []string{"1", "--early-build", "2"}, ExitBlocked, "denied"},
+		{map[string]string{"XDG_STATE_HOME": state}, opts, []string{"1", "--early-build", "2"}, ExitBlocked, ""},
+		{person, opts, []string{"1", "--early-build", "99"}, ExitExternal, "404"},
+		{person, opts, []string{"99", "--early-build", "2"}, ExitExternal, "404"},
+		{person, opts, []string{"1", "--early-build", "6"}, ExitBlocked, "#6 is not a child of #1: its parent is #3. Nothing was approved."},
+		{person, away, []string{"1", "--early-build", "2"}, ExitUsage, "ledger writes need a checkout"},
+		{person, opts, []string{"1", "--early-build", "2", "--set", "baselines.early_build_budget=0"}, ExitUsage, "[baselines] early_build_budget = 0: want at least 1"},
+	} {
+		if code, out, errOut := run(t, c.env, c.opts, append(append([]string{"ready"}, c.args...), "--repo", "o/r")...); code != c.code || !strings.Contains(errOut, c.want) {
+			t.Errorf("ready %v: exit %d, want %d and %q: %s%s", c.args, code, c.code, c.want, out, errOut)
+		}
+	}
+	if code, out, errOut := run(t, person, away, "ready", "1", "--early-build", "2"); code == 0 {
+		t.Errorf("--early-build with no repository to name: exit 0: %s%s", out, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/parent", 0
+	g.Mu.Unlock()
+	if code, out, errOut := early(person, "2"); code != ExitExternal {
+		t.Errorf("the parent cannot be read: exit %d: %s%s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+	// The label is removed while the code waits: nothing is approved.
+	device(func(int) {
+		g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "early-build" })
+	})
+	if code, out, errOut := early(person, "2"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no early-build label") {
+		t.Errorf("label removed during the code: exit %d: %s%s", code, out, errOut)
+	}
+	if commits() != 2 {
+		t.Fatalf("a refused run wrote: %d commits", commits())
+	}
+
+	// The story is edited while the code waits: nothing is approved.
+	device(func(int) { g.Issues[4].Body += "\nAnother state.\n" })
+	if code, out, errOut := early(person, "4"); code != ExitBlocked || !strings.Contains(errOut, "#4 changed while the code waited. Nothing was approved.") || commits() != 2 {
+		t.Fatalf("edited during the code: exit %d, %d commits: %s%s", code, commits(), out, errOut)
 	}
 }

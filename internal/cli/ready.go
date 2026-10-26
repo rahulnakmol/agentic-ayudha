@@ -47,6 +47,9 @@ func (e *Env) technicalOwner() string {
 
 func runReady(ctx context.Context, e *Env, in Values) error {
 	n := issueNumber(in.String("issue"))
+	if in.Has("early-build") {
+		return runReadyEarly(ctx, e, in, n)
+	}
 	if in.Has("part") || in.Bool("request") {
 		return runReadyPart(ctx, e, in, n)
 	}
@@ -232,7 +235,7 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 	case !request && (in.Has("changes") || in.Has("fixes")):
 		return Errorf(ExitUsage, "ready: --changes and --fixes go with --request")
 	case !request && (e.Getenv("AAYU_AGENT") == "1" || e.CI):
-		return e.partRefusal()
+		return e.personOnly("ready --part")
 	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
@@ -262,12 +265,12 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 	return r.approve(ctx)
 }
 
-// partRefusal is why a person's approval cannot be asked for here.
-func (e *Env) partRefusal() error {
+// personOnly is why a person's approval (what: "ready --part") cannot be asked for here.
+func (e *Env) personOnly(what string) error {
 	if sig := e.agentSignal(); sig != "" {
-		return Errorf(ExitBlocked, "ready --part is a person's decision and is refused for an agent lane (%s)", sig)
+		return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s)", what, sig)
 	}
-	return Errorf(ExitBlocked, "ready --part needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code")
+	return Errorf(ExitBlocked, "%s needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code", what)
 }
 
 // feature reads the Feature and what the part pins in it now.
@@ -601,7 +604,7 @@ func (r *partRun) approve(ctx context.Context) error {
 	}
 	effect := fmt.Sprintf("Baselines %s v%d of #%d at hash %s, as %s drafted it; a later edit shows as drift.",
 		ready.Label(r.part), draft.Version, r.n, draft.Hash[:12], or(draft.DraftedBy, "an agent"))
-	a, err := r.e.presenceCheck(ctx, Pending{What: "ready --part", Effect: []string{effect}}, AccessWrite, r.e.partRefusal())
+	a, err := r.e.presenceCheck(ctx, Pending{What: "ready --part", Effect: []string{effect}}, AccessWrite, r.e.personOnly("ready --part"))
 	if err != nil {
 		return err
 	}

@@ -167,6 +167,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if b := StoryOf("", "", pr.GetHead().GetRef()); b != 0 && b != story {
 		return Errorf(ExitBlocked, "ship #%d: the PR body refers to story #%d, but its branch %s is story #%d's; fix the body's Refs line", n, story, pr.GetHead().GetRef(), b)
 	}
+	// An early build's PR never merges into dev (core design E1), whatever its checks and review say.
+	// A story that does not exist has no label; ship refuses it later (no Ready snapshot).
+	if is, _, err := c.REST.Issues.Get(ctx, owner, name, story); err != nil && !github.NotFound(err) {
+		return Wrap(ExitExternal, err)
+	} else if err == nil && contains(github.IssueLabels(is), ready.EarlyBuildLabel) {
+		return Errorf(ExitBlocked, "ship #%d: %s", n, ready.EarlyBuildHold(story))
+	}
 	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
 	// Who may pass the PR, and how, is the base branch's committed policy at
 	// its tip now (#645), never this run's config: the checkout, the user

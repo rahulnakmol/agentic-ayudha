@@ -464,6 +464,13 @@ fixed head, returned `merge`, and the spend covers both calls.
 12. A failed required check on a delegated pull request goes back to the builder once per head, within the cycle cap;
     then a human is paged. Enforced in [internal/cli/delegate.go](../../internal/cli/delegate.go) and
     [internal/cli/cirepair.go](../../internal/cli/cirepair.go), `TestDelegateCIRepair`.
+13. A PR whose story has the `early-build` label never merges into `dev` (core design E1). Inspect turns `merge` into
+    `hold`, says "#n is an early build: its PR never merges into dev (E1)", and exits 4; `aayu ship` refuses it with
+    the same reason; a delegated build gets no fix prompt for it. A person approves an early build with
+    `aayu ready <feature> --early-build <story>`. Enforced by `earlyBuildHold` in
+    [internal/cli/inspect_app.go](../../internal/cli/inspect_app.go) and in
+    [internal/cli/ship.go](../../internal/cli/ship.go), `TestInspectMergeBudgetDraft`, `TestShipOnProof`, and
+    `TestDelegateCycleCapPages`.
 
 ## Where it lives in the code
 

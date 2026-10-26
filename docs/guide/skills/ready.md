@@ -54,6 +54,7 @@ aayu ready <issue>
 | `--request` | no | With --part: draft the part's next baseline on the ledger (specs/\<f>/baselines/\<part>-v\<k>.draft.json) and ask a person to approve it; never approves. |
 | `--changes` | no | With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change. |
 | `--fixes` | no | With --request: comma-separated IDs (\<part>-v\<k>/\<seat>/\<n>) of this part's review findings that the new version fixes; the draft's hash covers them. |
+| `--early-build` | no | A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev. |
 
 <!-- END GENERATED: skill-usage -->
 

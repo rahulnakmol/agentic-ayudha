@@ -17,6 +17,12 @@
       ],
       "x-aayu-type": "bool"
     },
+    "early-build": {
+      "description": "A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev.",
+      "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
+      "type": "string",
+      "x-aayu-type": "issue"
+    },
     "fixes": {
       "description": "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them.",
       "type": "string",
