@@ -9,13 +9,15 @@ instance that answers.
  "sources": ["examples/benefits-qa/api/api.go", "examples/benefits-qa/contracts/contracts.go",
              "examples/benefits-qa/contracts/ask.schema.json"],
  "surfaces": {"route": ["/api/ask", "GET /healthz"]},
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
 ```
 
 ## Sub-features
 
 - `answered`: a plan question returns `status: answered` with citations; "my plan's" is not another person's record.
-- `errors`: wrong method (405), wrong media type (415), unknown field (400), empty question (400).
+- `errors`: wrong method (405), wrong media type (415), and 400 for an unknown field, an other-case or duplicate
+  key, a `null` value, text after the object, a `user_id` that is not pseudonymous, and an empty question. The
+  405, the 415, and the empty question also carry their JSON error.
 - `health`: `GET /healthz` answers 200.
 
 ## How to reach it
@@ -35,10 +37,16 @@ instance that answers.
 
 ```check
 {"id": "errors", "kind": "api", "evidence": "api-trace", "steps": [
-  {"api": {"method": "GET", "path": "/api/ask", "status": 405}},
-  {"api": {"path": "/api/ask", "raw": "question=hi", "contentType": "text/plain", "status": 415}},
+  {"api": {"method": "GET", "path": "/api/ask", "status": 405, "body": {"error": "use POST with a JSON body"}}},
+  {"api": {"path": "/api/ask", "raw": "question=hi", "contentType": "text/plain", "status": 415,
+           "body": {"error": "send Content-Type: application/json"}}},
   {"api": {"path": "/api/ask", "json": {"question": "hi", "name": "Ada"}, "status": 400}},
-  {"api": {"path": "/api/ask", "json": {"question": "  "}, "status": 400}}
+  {"api": {"path": "/api/ask", "json": {"Question": "hi"}, "status": 400}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\", \"question\": \"vision\"}", "status": 400}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": null}", "status": 400}},
+  {"api": {"path": "/api/ask", "raw": "{\"question\": \"dental\"} {}", "status": 400}},
+  {"api": {"path": "/api/ask", "json": {"question": "hi", "user_id": "ada@example.com"}, "status": 400}},
+  {"api": {"path": "/api/ask", "json": {"question": "  "}, "status": 400, "body": {"error": "question is required"}}}
 ]}
 ```
 
@@ -51,3 +59,5 @@ instance that answers.
 ## Gotchas
 
 - Keys are case-sensitive and may appear once; `{"Question": …}` is an unknown field, not a question.
+- A body over 4 KiB (413) and a question over 500 characters (400) are not driven here: a step would have to
+  spell the long body out. `TestAskRejects` (`api/api_test.go`) covers both.

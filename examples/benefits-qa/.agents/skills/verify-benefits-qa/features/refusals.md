@@ -6,7 +6,7 @@ retrieval, with a message that says who can help.
 ```feature
 {"id": "refusals", "layers": ["L01", "L04"],
  "sources": ["examples/benefits-qa/web/web.go", "examples/benefits-qa/policy/policy.go"],
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
 ```
 
 ## Sub-features
@@ -38,7 +38,11 @@ retrieval, with a message that says who can help.
   {"goto": "/?q=Should%20I%20choose%20the%20HSA%20plan%3F"},
   {"expect": {"role": "heading", "name": "We cannot answer this"}},
   {"expectText": "medical or financial advice"},
-  {"screenshot": "advice.png"}
+  {"screenshot": "advice.png"},
+  {"api": {"path": "/api/ask", "json": {"question": "Should I choose the HSA plan?"},
+           "status": 200, "body": {"status": "refused", "reason": "advice"}}},
+  {"api": {"path": "/api/ask", "json": {"question": "What dosage of ibuprofen can I take?"},
+           "status": 200, "body": {"status": "refused", "reason": "advice"}}}
 ]}
 ```
 

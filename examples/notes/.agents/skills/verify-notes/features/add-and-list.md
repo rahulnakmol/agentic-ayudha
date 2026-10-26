@@ -7,14 +7,15 @@ usage error (exit 2) with a message that says what is wrong.
 {"id": "add-and-list", "layers": ["L02"],
  "sources": ["examples/notes/cmd/notes/main.go", "examples/notes/store/store.go"],
  "surfaces": {"command": ["add", "list"], "flag": ["file"]},
- "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
+ "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
 ```
 
 ## Sub-features
 
 - `add-then-list`: two notes are added and listed in order, not done.
 - `empty`: listing with no notes says so.
-- `usage`: no command, or `add` with no text, exits 2.
+- `usage`: no command, an unknown command, or `add` with no text, exits 2.
+- `file`: `-file` and `NOTES_FILE` pick another file; the default `notes.txt` is left alone.
 
 ## How to reach it
 
@@ -43,7 +44,18 @@ usage error (exit 2) with a message that says what is wrong.
   {"build": "./examples/notes/cmd/notes"},
   {"run": ["notes"], "exit": 2, "stderr": ["no command"]},
   {"run": ["notes", "add"], "exit": 2, "stderr": ["add needs the note's text"]},
+  {"run": ["notes", "remove", "1"], "exit": 2, "stderr": ["unknown command \"remove\""]},
   {"run": ["notes", "-file"], "exit": 2}
+]}
+```
+
+```check
+{"id": "file", "kind": "cli", "evidence": "api-trace", "steps": [
+  {"build": "./examples/notes/cmd/notes"},
+  {"run": ["notes", "-file", "work.txt", "add", "ship it"], "exit": 0, "stdout": ["added 1: ship it"]},
+  {"run": ["notes", "list"], "exit": 0, "stdout": ["no notes yet"]},
+  {"run": ["notes", "list"], "env": {"NOTES_FILE": "work.txt"}, "exit": 0, "stdout": ["1 [ ] ship it"]},
+  {"run": ["notes", "-file", "work.txt", "list"], "exit": 0, "stdout": ["1 [ ] ship it"]}
 ]}
 ```
 
