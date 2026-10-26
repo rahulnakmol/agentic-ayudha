@@ -1,0 +1,62 @@
+{
+  "story": 1000,
+  "body_hash": "2025090bf2f91e4fa27617e371746ff9925450c67c0dd339d31a3c50a1850ce7",
+  "footprint": [
+    "L02",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Config: [build] agents = 5 replaces [build] in_flight, and the [mission] keys with defaults",
+      "contracts": [
+        "internal/config/config.go: Build.InFlight (config.go:81) becomes Build.Agents, default 5; a local value only lowers it, as InFlight does today",
+        "new [mission] section: max_no_go 3, retry_max 2, retry_backoff_minutes 10, check_minutes 5, warn_hours 24, max_hours 48",
+        "internal/config/defaults.toml: [build] agents = 5 and [mission]; rows in internal/config/gen for each key",
+        "CONSTRAINTS.md changes only as go generate output from defaults.toml (L04 by path, not by hand); the plan cannot name L04 because plan reads layers from labels"
+      ],
+      "tests": [
+        "internal/config:TestAgentsDefaultAndLocalOnlyLowers",
+        "internal/config:TestInFlightReplacedByAgents",
+        "internal/config:TestMissionKeysDefaults",
+        "internal/config/gen:TestConstraintsRows"
+      ],
+      "instrumentation": [
+        "`aayu config validate` names the replaced key"
+      ],
+      "rollback": "Revert the squash commit. The ledger holds no state from this checkpoint. A repository that already replaced `in_flight` with `agents` in .aayudha/config.toml edits it back by hand; go generate restores CONSTRAINTS.md.",
+      "criteria": [
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "The list and Approve to build use agents: the committed key, --agents on the Feature, never a prompt",
+      "contracts": [
+        "internal/cli/ready.go: `aayu ready \u003cf\u003e --agents N` writes `agents` to specs/\u003cf\u003e/approved.json",
+        "internal/cli/buildnext.go and mission.go read agents from the committed config at the integration tip (buildnext.go:382-402)"
+      ],
+      "tests": [
+        "internal/cli:TestMissionNextAgentsDefault",
+        "internal/cli:TestReadyAgentsFlagWritesApproval",
+        "internal/cli:TestPromptNeverSetsALimit"
+      ],
+      "rollback": "Revert the squash commit; nothing else to undo.",
+      "criteria": [
+        1,
+        3,
+        4
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-26T08:37:03Z",
+  "planned_by": "human-fallback"
+}
