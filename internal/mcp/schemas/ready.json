@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only.",
   "properties": {
+    "changes": {
+      "description": "With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "check": {
       "description": "Validate only; write nothing.",
       "type": "boolean",
@@ -11,6 +16,11 @@
         "true"
       ],
       "x-aayu-type": "bool"
+    },
+    "fixes": {
+      "description": "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them.",
+      "type": "string",
+      "x-aayu-type": "string"
     },
     "guard": {
       "description": "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot.",

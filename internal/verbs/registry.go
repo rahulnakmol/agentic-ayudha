@@ -838,6 +838,8 @@ var Verbs = []Command{
 			readOnlyWith(flag("guard", TypeBool, "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."), "false"),
 			enumIn("part", false, false, "Feature part to baseline: a person approves its waiting draft, through GitHub's device flow every time; refused for an agent lane.", "intent", "spec", "tech", "ux"),
 			flag("request", TypeBool, "With --part: draft the part's next baseline on the ledger (specs/<f>/baselines/<part>-v<k>.draft.json) and ask a person to approve it; never approves."),
+			flag("changes", TypePath, "With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change."),
+			flag("fixes", TypeString, "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them."),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot", "feature-baseline"},
 		Gates:    []GateID{GateValidator},

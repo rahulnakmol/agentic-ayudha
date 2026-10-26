@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -407,10 +408,14 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	g.Mu.Lock()
 	feature.Body = edited
 	g.Mu.Unlock()
-	if code, out, errOut := readyRun(agent, "--part", "intent", "--request", "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run") || len(commits()) != 2 {
+	changes := filepath.Join(t.TempDir(), "changes.json") // a version after v1 says why (Story #993)
+	if err := os.WriteFile(changes, []byte(`[{"ref": "#1 body", "what": "The body asks one more question.", "why": "The check needs it to decide.", "need": "A person decides eligibility in one pass."}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request", "--changes", changes, "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run") || len(commits()) != 2 {
 		t.Fatalf("--dry-run request: exit %d, %d commits: %s%s", code, len(commits()), out, errOut)
 	}
-	if code, out, errOut := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Intent v2 of #1 waits for a person") || len(commits()) != 3 {
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request", "--changes", changes); code != 0 || !strings.Contains(out, "Intent v2 of #1 waits for a person") || len(commits()) != 3 {
 		t.Fatalf("request after an edit: exit %d, %d commits: %s%s", code, len(commits()), out, errOut)
 	}
 	hand := filepath.Join(t.TempDir(), "hand")
@@ -447,7 +452,7 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	g.Mu.Lock()
 	feature.Body = body + "\nA third question.\n"
 	g.Mu.Unlock()
-	if code, out, errOut := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Intent v3 of #1 waits for a person") {
+	if code, out, errOut := readyRun(agent, "--part", "intent", "--request", "--changes", changes); code != 0 || !strings.Contains(out, "Intent v3 of #1 waits for a person") {
 		t.Fatalf("request after v2: exit %d: %s%s", code, out, errOut)
 	}
 	v3 := record("specs/1/baselines/intent-v3.draft.json")
@@ -467,7 +472,7 @@ func TestReadyFeatureBaseline(t *testing.T) {
 	// The draft is drafted again while the code waits: nothing is baselined.
 	other := v3
 	other.Pins = []ready.Pin{{Ref: "#1 body", Hash: strings.Repeat("1", 64)}}
-	other.Hash = ready.PinsHash(other.Pins)
+	other.Hash = ready.DraftHash(other.Pins, other.Changes, other.Fixes)
 	device(func(int) { handDraft(other) })
 	if code, out, errOut := readyRun(person, "--part", "intent"); code != ExitBlocked || !strings.Contains(errOut, "Intent v3 of #1 was approved or drafted again while the code waited. Nothing was baselined.") {
 		t.Fatalf("re-drafted during the code: exit %d: %s%s", code, out, errOut)
@@ -696,5 +701,250 @@ func TestReadyFeaturePartPins(t *testing.T) {
 	}
 	if commits() != n {
 		t.Fatalf("a refused request wrote: commits %s → %s", n, commits())
+	}
+}
+
+// Story #993: drift after a baseline shows from the pins at read time, and
+// a new version says what changed, why it matters, and the need behind it,
+// for each change, inside the hash a person approves.
+func TestReadyFeatureDrift(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Viewer = "founder"
+	numbered := func(is *fake.Issue, n int) *fake.Issue { // the issue numbers of the Story's scenario
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		delete(g.Issues, is.Number)
+		is.Number, g.Issues[n] = n, is
+		return is
+	}
+	feature := numbered(g.AddIssue("Feature baselines", fixtureBody(t, "feature", nil), "type:feature"), 874)
+	story := func(n int, title string) *fake.Issue {
+		s := numbered(g.AddIssue(title, fixtureBody(t, "story", func(f map[string]string) {
+			f[workitems.FieldCriteria] = strings.Replace(f[workitems.FieldCriteria], "cart is empty", title+" is empty", 1)
+		}), "type:story", "effort:S", "layer:L02"), n)
+		g.Mu.Lock()
+		s.Parent, feature.Subs = 874, append(feature.Subs, n)
+		g.Mu.Unlock()
+		return s
+	}
+	s912, s913 := story(912, "Story twelve"), story(913, "Story thirteen")
+	dir, bare := ledgerCheckout(t)
+	state := filepath.Join(dir, "state")
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
+	readyRun := func(env map[string]string, args ...string) (int, string) {
+		t.Helper()
+		code, out, errOut := run(t, env, opts, append([]string{"ready", "874", "--repo", "o/r"}, args...)...)
+		return code, out + errOut
+	}
+	commits := func() string { return git(t, bare, "rev-list", "--count", "ledger") }
+	raw := func(path string) string { return git(t, bare, "show", "ledger:"+path) }
+	record := func(path string) ready.Baseline {
+		t.Helper()
+		var b ready.Baseline
+		if err := json.Unmarshal([]byte(raw(path)), &b); err != nil {
+			t.Fatalf("ledger %s: %v", path, err)
+		}
+		return b
+	}
+	approveByHand := func(part string, v int) { // the device-flow approval is TestReadyFeatureBaseline's
+		t.Helper()
+		b := record(ready.BaselinePath(874, part, v, true))
+		b.ApprovedBy = "founder"
+		data, _ := json.Marshal(b)
+		putLedger(t, bare, ready.BaselinePath(874, part, v, false), string(data))
+	}
+	changesFile := func(cs ...ready.Change) string {
+		t.Helper()
+		p := filepath.Join(t.TempDir(), "changes.json")
+		data, _ := json.Marshal(cs)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	edit := func(f func()) { g.Mu.Lock(); f(); g.Mu.Unlock() }
+	marker := func() string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		for _, c := range feature.Comments {
+			if strings.HasPrefix(c.Body, "<!-- aayudha:baseline part=spec -->") {
+				return c.Body
+			}
+		}
+		return ""
+	}
+
+	// The first version has nothing to change from: a changes file for it is refused, and so is --changes without --request.
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(ready.Change{Ref: "#912"})); code != ExitUsage || !strings.Contains(out, "spec v1 of #874 is the first version and has no changes") {
+		t.Fatalf("changes for v1: exit %d: %s", code, out)
+	}
+	if code, out := readyRun(person, "--part", "spec", "--changes", "changes.json"); code != ExitUsage || !strings.Contains(out, "--changes and --fixes go with --request") {
+		t.Fatalf("--changes without --request: exit %d: %s", code, out)
+	}
+	// 6. The first request of a part writes v1 with no changes field.
+	for _, part := range []string{"intent", "spec"} {
+		if code, out := readyRun(agent, "--part", part, "--request"); code != 0 {
+			t.Fatalf("%s --request: exit %d: %s", part, code, out)
+		}
+	}
+	if d := raw("specs/874/baselines/spec-v1.draft.json"); strings.Contains(d, `"changes"`) || strings.Contains(d, `"fixes"`) {
+		t.Fatalf("spec v1 draft has changes or fixes:\n%s", d)
+	}
+	approveByHand("intent", 1)
+	approveByHand("spec", 1)
+	// Spec v2: #913's title changed.
+	edit(func() { s913.Title = "Story thirteen, renamed" })
+	full := func(ref string) ready.Change {
+		return ready.Change{Ref: ref, What: ref + " now says what the list shows.", Why: "A person reads the list before each build.", Need: "The founder approves a change knowing its reason."}
+	}
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#913"))); code != 0 {
+		t.Fatalf("spec v2 --request: exit %d: %s", code, out)
+	}
+	approveByHand("spec", 2)
+
+	// 1. #912's Completion Goal changes and #915 is added: --check shows the drift from the pins now, and writes nothing.
+	edit(func() {
+		s912.Body = strings.Replace(s912.Body, "422 with code cart.empty", "422 with code cart.none", 1)
+	})
+	s915 := story(915, "Story fifteen")
+	n := commits()
+	g.Reset()
+	code, out := readyRun(person, "--check")
+	if !strings.Contains(out, "Baselines:\n  intent v1 · no drift\n  spec v2 · drift: #912 Completion Goal changed · #915 added\n  tech: no baseline yet\n  UX: not needed (no UI layer in the footprint)\n") {
+		t.Fatalf("--check on the Feature: exit %d: %s", code, out)
+	}
+	if w := g.Writes(); len(w) != 0 || commits() != n {
+		t.Fatalf("--check wrote: %v, ledger commits %s → %s", w, n, commits())
+	}
+	// Outside a checkout the ledger cannot be read: --check says so, and its Ready verdict and exit code stand.
+	away := opts
+	away.Dir = t.TempDir()
+	if c, o, e := run(t, person, away, "ready", "874", "--repo", "o/r", "--check"); c != code || !strings.Contains(o+e, "Baselines:\n  not read: ledger writes need a checkout of the repository\n") {
+		t.Fatalf("--check outside a checkout: exit %d, want %d: %s%s", c, code, o, e)
+	}
+
+	// 2. A reason for #912 and none for #915: refused, nothing written.
+	draftV3 := "specs/874/baselines/spec-v3.draft.json"
+	exists := func(p string) bool {
+		return slices.Contains(strings.Fields(git(t, bare, "ls-tree", "-r", "--name-only", "ledger")), p)
+	}
+	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#912")))
+	if code != ExitBlocked || !strings.Contains(out, "spec v3 of #874 needs what changed, why it matters, and the need behind it for each change. Missing: #915 (added): what, why, need.") ||
+		commits() != n || exists(draftV3) {
+		t.Fatalf("no reason for #915: exit %d, commits %s → %s: %s", code, n, commits(), out)
+	}
+	// 3. #912's need has 2 words: refused under the default of 5, and passes when the key says 2.
+	short := full("#912")
+	short.Need = "Founder clarity."
+	shortFile := changesFile(short, full("#915"))
+	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", shortFile)
+	if code != ExitBlocked || !strings.Contains(out, "#912 need: 2 words, at least 5 ([baselines] why_min_words)") || strings.Contains(out, "Missing") || commits() != n {
+		t.Fatalf("a 2-word need: exit %d: %s", code, out)
+	}
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", shortFile, "--dry-run", "--set", "baselines.why_min_words=2"); code != 0 {
+		t.Fatalf("a 2-word need with why_min_words = 2: exit %d: %s", code, out)
+	}
+	// A change for a pin that did not drift is refused.
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#912"), full("#915"), full("#913"))); code != ExitUsage || !strings.Contains(out, "names #913: not a change of spec v3 of #874 since v2") {
+		t.Fatalf("a change for #913: exit %d: %s", code, out)
+	}
+
+	// 4, 8. Each change complete, and a finding of spec v1 fixed: the draft holds both, inside its hash.
+	putLedger(t, bare, "specs/874/reviews/spec-v1/quality-architect.json", `{"findings": [{"id": "spec-v1/quality-architect/1"}, {"id": "spec-v1/quality-architect/2"}]}`)
+	hostile := full("#915")
+	hostile.Why = "It ends | the row <!-- aayudha:baseline part=spec --> and pings @rahulnakmol\nhere."
+	hostile.Need = "See ![x](https://t.example/p.png), [docs](https://example.com), `rm -rf`, and www.example.com now."
+	hostile.What = `A backslash \| ends no cell, and \` + "`" + ` opens no code.`
+	fullFile := changesFile(full("#912"), hostile)
+	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", fullFile, "--fixes", "spec-v1/quality-architect/2")
+	if code != 0 || !strings.Contains(out, "Spec v3 of #874 waits for a person") || strings.Contains(out, "warning") {
+		t.Fatalf("spec v3 --request: exit %d: %s", code, out)
+	}
+	d := record(draftV3)
+	want := []ready.Change{full("#912"), {Ref: "#915", What: hostile.What, Why: hostile.Why, Need: hostile.Need}}
+	if !slices.Equal(d.Changes, want) || !slices.Equal(d.Fixes, []string{"spec-v1/quality-architect/2"}) {
+		t.Fatalf("spec v3 draft: changes %+v, fixes %v", d.Changes, d.Fixes)
+	}
+	// The hash, computed here from its definition: the pin lines, then a line per change and per fix.
+	var lines strings.Builder
+	for _, p := range d.Pins {
+		fmt.Fprintf(&lines, "%s %s\n", p.Ref, p.Hash)
+	}
+	for _, c := range want {
+		j, _ := json.Marshal(c)
+		fmt.Fprintf(&lines, "change %s\n", j)
+	}
+	lines.WriteString("fixes spec-v1/quality-architect/2\n")
+	if sum := sha256.Sum256([]byte(lines.String())); d.Hash != hex.EncodeToString(sum[:]) || d.Hash == ready.PinsHash(d.Pins) {
+		t.Fatalf("spec v3 hash %s does not cover its changes and fixes", d.Hash)
+	}
+	m := marker()
+	if !strings.Contains(m, "#### What changed since v2\n\n| Change | Why it matters | Need |\n|---|---|---|\n| #912: #912 now says what the list shows. | A person reads the list before each build. | The founder approves a change knowing its reason. |\n") ||
+		!strings.Contains(m, `| It ends \| the row &lt;!-- aayudha:baseline part=spec --&gt; and pings &#64;rahulnakmol here. |`) ||
+		!strings.Contains(m, "| #915: A backslash \\\\\\| ends no cell, and \\\\\\` opens no code. |") ||
+		!strings.Contains(m, "| See !\\[x\\](https:&#8203;//t.example/p.png), \\[docs\\](https:&#8203;//example.com), \\`rm -rf\\`, and www&#8203;.example.com now. |") ||
+		!strings.Contains(m, "Fixes: `spec-v1/quality-architect/2`") || strings.Count(m, "<!--") != 1 {
+		t.Fatalf("marker comment:\n%s", m)
+	}
+	// 8. A finding of another part, and a finding the review does not hold: exit 2, the ID named, no draft written.
+	n = commits()
+	for _, id := range []string{"tech-v1/devops-devex-tinkerer/1", "spec-v1/quality-architect/9", "spec-v1/no such seat/1"} {
+		if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", fullFile, "--fixes", id); code != ExitUsage || !strings.Contains(out, "--fixes "+id) || commits() != n {
+			t.Errorf("--fixes %s: exit %d, commits %s → %s: %s", id, code, n, commits(), out)
+		}
+	}
+	// One change given twice is refused.
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#912"), full("#915"), full("#912"))); code != ExitUsage || !strings.Contains(out, "names #912 twice") {
+		t.Fatalf("#912 twice: exit %d: %s", code, out)
+	}
+	// A reason edited after the draft is another draft, with another hash.
+	edited := hostile
+	edited.Why = "A person reads the list before each build, twice."
+	if code, out := readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#912"), edited), "--fixes", "spec-v1/quality-architect/2"); code != 0 || commits() == n {
+		t.Fatalf("an edited reason: exit %d, commits %s: %s", code, commits(), out)
+	}
+	if again := record(draftV3); again.Hash == d.Hash || again.Changes[1].Why != edited.Why {
+		t.Fatalf("an edited reason kept the hash %s", again.Hash)
+	}
+	// A person approves v3 at the hash of its pins, changes, and fixes.
+	edit(func() {
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	})
+	if code, out := readyRun(person, "--part", "spec"); code != 0 {
+		t.Fatalf("approve spec v3: exit %d: %s", code, out)
+	}
+	if b := record("specs/874/baselines/spec-v3.json"); b.ApprovedBy != "founder" || b.Hash != record(draftV3).Hash || len(b.Changes) != 2 || len(b.Fixes) != 1 {
+		t.Fatalf("spec v3 baseline: %+v", b)
+	}
+
+	// 5. The intent pins equal intent v1: no draft.
+	n = commits()
+	if code, out := readyRun(agent, "--part", "intent", "--request"); code != 0 || !strings.Contains(out, "Nothing changed since intent v1 of #874. No draft written.") || commits() != n {
+		t.Fatalf("intent --request with no drift: exit %d: %s", code, out)
+	}
+
+	// 7. A draft of spec v4 reaches [baselines] version_warn = 4.
+	edit(func() { s915.Title = "Story fifteen, renamed" })
+	code, out = readyRun(agent, "--part", "spec", "--request", "--changes", changesFile(full("#915")))
+	if code != 0 || !strings.Contains(out, "warning: The spec of #874 reaches v4 ([baselines] version_warn). Check why each review finds new gaps.") {
+		t.Fatalf("spec v4 --request: exit %d: %s", code, out)
+	}
+
+	// A story removed from the Feature: its own entry says it, and the set of stories is not a second entry.
+	approveByHand("spec", 4)
+	edit(func() { feature.Subs = slices.DeleteFunc(feature.Subs, func(n int) bool { return n == 913 }) })
+	if _, out := readyRun(person, "--check"); !strings.Contains(out, "  spec v4 · drift: #913 removed\n") {
+		t.Fatalf("--check after #913 was removed: %s", out)
+	}
+
+	// 9. With no [baselines] in the checkout's config, the base layer's defaults, and baselines is a person's section.
+	if _, err := os.Stat(filepath.Join(dir, ".aayudha", "config.toml")); !os.IsNotExist(err) {
+		t.Fatalf("the checkout has a config: %v", err)
+	}
+	code, cfg, errOut := run(t, person, opts, "config", "show")
+	if code != 0 || !strings.Contains(cfg, "[baselines]\nversion_warn = 4\nwhy_min_words = 5\n") || !regexp.MustCompile(`always_person_sections = \[[^\]]*'baselines'`).MatchString(cfg) {
+		t.Fatalf("config show: exit %d: %s%s", code, cfg, errOut)
 	}
 }

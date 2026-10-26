@@ -108,6 +108,15 @@ var sections = []section{
 		note: "`aayu scope` stores each accepted baseline and its drift on the `ledger` branch under `releases/<version>/`. Accepting a baseline, and any change over budget, is a person's call.",
 	},
 	{
+		heading: "Feature baselines",
+		roots:   []string{"baselines"},
+		rows: []row{
+			{"baselines.why_min_words", "Words that each of what changed, why it matters, and the need behind it has at least, for each change in a new baseline version of a Feature part (`aayu ready <feature> --part <part> --request --changes <file>`). A change with one of the three missing or too short writes no draft.", "0.4"},
+			{"baselines.version_warn", "A draft of this version of a Feature part, or a later one, warns that each review finds new gaps. 0 never warns.", "0.4"},
+		},
+		note: "`aayu ready <feature> --check` shows each part's drift from its pins when it is read; nothing writes a drift record. A new version's hash covers its changes and the review findings it fixes, so a reason edited after a person saw it baselines nothing.",
+	},
+	{
 		heading: "Outcomes",
 		roots:   []string{"outcomes"},
 		rows: []row{
