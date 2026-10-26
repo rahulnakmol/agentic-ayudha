@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPromptNeverSetsALimit"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPromptNeverSetsALimit","Output":"=== RUN   TestPromptNeverSetsALimit\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPromptNeverSetsALimit","Output":"--- PASS: TestPromptNeverSetsALimit (1.72s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestPromptNeverSetsALimit"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInFlightReplacedByAgents"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInFlightReplacedByAgents","Output":"=== RUN   TestInFlightReplacedByAgents\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInFlightReplacedByAgents","Output":"--- PASS: TestInFlightReplacedByAgents (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInFlightReplacedByAgents"}
