@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestStoryStateNamesFeatureAndKanha"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestStoryStateNamesFeatureAndKanha","Output":"=== RUN   TestStoryStateNamesFeatureAndKanha\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestStoryStateNamesFeatureAndKanha","Output":"--- PASS: TestStoryStateNamesFeatureAndKanha (2.41s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestStoryStateNamesFeatureAndKanha"}

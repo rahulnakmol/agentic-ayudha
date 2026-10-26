@@ -1,0 +1,36 @@
+{
+  "covered": 322,
+  "executable": 342,
+  "percent": 94.15204678362574,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/delegate.go": [
+      230,
+      231
+    ],
+    "internal/cli/kanha.go": [
+      81,
+      82,
+      112,
+      149,
+      150,
+      156,
+      157
+    ],
+    "internal/cli/mission.go": [
+      518,
+      570,
+      571,
+      575,
+      576,
+      594,
+      595,
+      649,
+      676,
+      703,
+      705
+    ]
+  },
+  "format": "go coverprofile"
+}

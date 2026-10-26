@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTatkalStoryRunsOnStartersTool"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTatkalStoryRunsOnStartersTool","Output":"=== RUN   TestTatkalStoryRunsOnStartersTool\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTatkalStoryRunsOnStartersTool","Output":"--- PASS: TestTatkalStoryRunsOnStartersTool (3.57s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTatkalStoryRunsOnStartersTool"}
