@@ -163,7 +163,7 @@ func TestFailedStartReleasesClaimAndTells(t *testing.T) {
 func TestAnsweredAskKeepsSlotAndTells(t *testing.T) {
 	m := newMissionWorld(t)
 	tell := m.ampMission(889, 33, 34)
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 1 })
+	commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 1\n") // the cap is dev's [build] agents (#1000), not the plan's record
 	wait34 := "waits #34: no free agent (1 of 1 busy after these starts)\n"
 	if code, out, errOut := m.next(889); code != 0 || out != "start #33\n"+wait34 {
 		t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)

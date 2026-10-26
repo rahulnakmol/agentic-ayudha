@@ -795,13 +795,20 @@ func TestReadyAgentsFlagWritesApproval(t *testing.T) {
 }
 
 // Story #1000, criterion 4: a wake's prompt says "agents 10" and "budget
-// 2000". aayu never reads a prompt: mission next takes no limit, so the
-// prompt can reach it only as a flag, which is refused, or as a local value,
-// which only lowers. The list uses the approved budget, then dev's
-// [build] agents (5).
+// 2000". aayu never reads a prompt: mission takes no input that sets a limit
+// (its other inputs, such as --story or --reason, set none), so the prompt
+// can reach it only as a flag, which is refused, or as a local value, which
+// only lowers. The list uses the approved budget, then dev's [build] agents (5).
 func TestPromptNeverSetsALimit(t *testing.T) {
-	if spec, ok := verbs.Find("mission"); !ok || slices.ContainsFunc(spec.Inputs, func(in verbs.Input) bool { return in.Name != "action" && in.Name != "feature" }) {
-		t.Fatalf("mission takes an input other than its action and Feature: %+v", spec.Inputs)
+	limits := []string{"agents", "budget", "max_no_go", "retry_max", "retry_backoff_minutes", "check_minutes", "warn_hours", "max_hours"}
+	spec, ok := verbs.Find("mission")
+	if !ok {
+		t.Fatal("no mission verb")
+	}
+	for _, in := range spec.Inputs {
+		if slices.Contains(limits, strings.ReplaceAll(in.Name, "-", "_")) {
+			t.Fatalf("mission takes the limit --%s", in.Name)
+		}
 	}
 	m := newMissionWorld(t)
 	stories := []int{20, 21, 22, 23, 24, 25, 26}

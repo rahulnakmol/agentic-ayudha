@@ -295,7 +295,7 @@ func TestMissionStopLeavesOtherMissionsAndLoops(t *testing.T) {
 func TestMissionResumeContinues(t *testing.T) {
 	w := newThreads(t)
 	w.startedMission(889, []int{20, 21, 22, 23})
-	w.setPlan(889, func(p *MissionPlan) { p.Agents = 3 })
+	commitOnDev(w.g, ".aayudha/config.toml", "[build]\nagents = 3\n") // the cap is dev's [build] agents (#1000), not the plan's record
 	w.run(20, "amp", "T-01a00000-0000-0000-0000-000000000020", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000020")
 	for _, n := range []int{21, 22, 23} {
 		w.status(n, "ready", "")
@@ -471,7 +471,8 @@ func TestMissionControlRefusedOrDryRun(t *testing.T) {
 func TestMissionStopOneStoryOrBug(t *testing.T) {
 	w := newThreads(t)
 	w.startedMission(889, []int{858, 859, 860, 941}, 941)
-	w.setPlan(889, func(p *MissionPlan) { p.Agents, p.Budget = 3, 1000 })
+	commitOnDev(w.g, ".aayudha/config.toml", "[build]\nagents = 3\n")
+	w.setPlan(889, func(p *MissionPlan) { p.Budget = 1000 })
 	w.run(858, "amp", "T-01a00000-0000-0000-0000-000000000858", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000858")
 	w.run(859, "amp", "T-01a00000-0000-0000-0000-000000000859", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000859")
 	w.status(860, "ready", "")
