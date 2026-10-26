@@ -86,19 +86,13 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err != nil {
 		return err
 	}
-	if plan == nil {
+	if plan == nil || appr == nil { // Approve to build writes both in one ledger commit
 		return WithNext(Errorf(ExitBlocked, "#%d has no mission plan: a person approves it to build first. Nothing starts.", f), fmt.Sprintf("aayu ready %d", f))
-	}
-	notApproved := func(why string) error {
-		return WithNext(Errorf(ExitBlocked, "#%d is not approved to build%s. Nothing starts.", f, why), fmt.Sprintf("aayu ready %d --check", f))
-	}
-	if appr == nil {
-		return notApproved("")
 	}
 	if changed, err := (&approveRun{e: e, c: c, w: w, n: f}).featureChanges(ctx, repo, *appr); err != nil {
 		return err
 	} else if len(changed) > 0 {
-		return notApproved(": " + strings.Join(changed, "; "))
+		return WithNext(Errorf(ExitBlocked, "#%d is not approved to build: %s. Nothing starts.", f, strings.Join(changed, "; ")), fmt.Sprintf("aayu ready %d --check", f))
 	}
 	switch host, _ := doctor.DetectHost(e.Host, e.Getenv); {
 	case plan.StartedBy == "":

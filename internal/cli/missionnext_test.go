@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -148,6 +150,10 @@ func TestMissionNextWaitReasons(t *testing.T) {
 	if code, out, _ := m.next(889); code != 0 || out != "waits #23: blocked\n" || len(m.claims(889)) != 0 {
 		t.Fatalf("after the reset: exit %d: %q", code, out)
 	}
+	m.closeIssue(23)
+	if code, out, _ := m.next(889); code != 0 || out != "Nothing to list: every open story and Bug of #889 runs, or none is open.\n" {
+		t.Fatalf("with only #24 running: exit %d: %q", code, out)
+	}
 }
 
 // Criterion 3: a Ready story of another Feature is never listed.
@@ -192,6 +198,30 @@ func TestMissionNextOneClaimTwoRuns(t *testing.T) {
 	}
 	if got := m.claims(889); got[20] != 1 || len(got) != 1 {
 		t.Fatalf("#20 must be claimed once: %v\n%s", got, git(t, m.bare, "show", "ledger:"+MissionClaimsPath(889)))
+	}
+	// Another run's claim of #21 lands while this run claims #20: it took the last free agent.
+	putLedger(t, m.bare, MissionClaimsPath(889), "")
+	other, pushed := strings.Replace(first, `"story":20`, `"story":21`, 1), false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, MissionClaimsPath(889), other)
+		}
+	}
+	if code, out, errOut := run(t, m.agent, race, "mission", "next", "889", "--repo", "o/r"); code != 0 ||
+		out != "waits #20: no free agent (1 of 1 busy after these starts)\nwaits #21: no free agent (1 of 1 busy after these starts)\n" {
+		t.Fatalf("a race for the last agent: exit %d: %q%s", code, out, errOut)
+	}
+	// A Ready story with a live lease is a build that another run started: it holds an agent too.
+	putLedger(t, m.bare, MissionClaimsPath(889), "")
+	m.setPlan(889, func(p *MissionPlan) { p.Agents = 2 })
+	m.edit(func() {
+		is := m.g.Issues[21]
+		is.Labels = append(is.Labels, fake.Label{Name: LeaseLabel})
+		is.Comments = append(is.Comments, &fake.Comment{ID: 8021, Body: leaseBody("bob@laptop", time.Now().Add(time.Hour))})
+	})
+	if code, out, errOut := m.next(889); code != 0 || out != "start #20\nwaits #21: claimed by another run\n" {
+		t.Fatalf("a leased story: exit %d: %q%s", code, out, errOut)
 	}
 }
 
@@ -249,6 +279,29 @@ func TestBuildDelegateReadsLiveState(t *testing.T) {
 		strings.Contains(errOut, "changed since the list") || !strings.Contains(errOut, "not labelled status:ready") {
 		t.Fatalf("build 21, on no list: exit %d: %s", code, errOut)
 	}
+	// Each change since the list is named; a story a build already took (in progress) is no change.
+	for _, n := range []int{22, 23, 24, 25} {
+		m.issue(n, fmt.Sprintf("Story %d", n), "story", 889, "")
+		m.status(n, "ready", "")
+	}
+	m.status(21, "planned", "")
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 600 })
+	if code, out, errOut := m.next(889); code != 0 || strings.Count(out, "start #") != 4 {
+		t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
+	}
+	m.closeIssue(22)
+	m.status(23, "planned", "")
+	m.edit(func() { m.g.Issues[24].Body = "### Summary\n\nNo Completion Goal now.\n" })
+	m.status(25, "in-progress", "")
+	for n, want := range map[int]string{22: "now closed", 23: "now planned", 24: "now not Ready"} {
+		if code, _, errOut := run(t, m.agent, m.opts, "build", fmt.Sprint(n), "--delegate", "amp", "--repo", "o/r"); code != ExitBlocked ||
+			!strings.Contains(errOut, fmt.Sprintf("#%d changed since the list: %s; not started", n, want)) {
+			t.Fatalf("build %d: exit %d: %s", n, code, errOut)
+		}
+	}
+	if _, _, errOut := run(t, m.agent, m.opts, "build", "25", "--delegate", "amp", "--repo", "o/r"); strings.Contains(errOut, "changed since the list") {
+		t.Fatalf("build 25, in progress: %s", errOut)
+	}
 }
 
 // Criterion 7: a Feature whose approved intent drifted is not approved to
@@ -261,6 +314,40 @@ func TestMissionNextNotApproved(t *testing.T) {
 	m.edit(func() { m.g.Issues[889].Body += "\nA new paragraph of intent.\n" })
 	if code, out, errOut := m.next(889); code != ExitBlocked || out != "" || !strings.Contains(errOut, "#889 is not approved to build: intent v1 drifted") || m.commits() != n {
 		t.Fatalf("mission next of a drifted Feature: exit %d: %s%s", code, out, errOut)
+	}
+	// Nothing starts, either, for a Feature with no plan, a mission no one started or one that is paused, a
+	// plan aayu did not write, or a run outside a checkout.
+	m.issue(901, "Feature 901", "feature", 0, "")
+	m.issue(60, "Story 60", "story", 901, "")
+	m.feature(901, 60)
+	if code, _, errOut := m.next(901); code != ExitBlocked || !strings.Contains(errOut, "#901 has no mission plan: a person approves it to build first. Nothing starts.") {
+		t.Fatalf("next before Approve to build: exit %d: %s", code, errOut)
+	}
+	if code, out, errOut := m.approve(901); code != 0 {
+		t.Fatalf("approve 901: exit %d: %s%s", code, out, errOut)
+	}
+	m.status(60, "ready", "")
+	if code, _, errOut := m.next(901); code != ExitBlocked || !strings.Contains(errOut, "The mission of #901 has not started: a person starts it. Nothing starts.") {
+		t.Fatalf("next before Start: exit %d: %s", code, errOut)
+	}
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 901); code != 0 {
+		t.Fatalf("start 901: exit %d: %s%s", code, out, errOut)
+	}
+	m.setPlan(901, func(p *MissionPlan) { p.Pause = &MissionPause{Reason: "a migration needs a person"} })
+	if code, _, errOut := m.next(901); code != ExitBlocked || !strings.Contains(errOut, "The mission of #901 is paused: a migration needs a person. Nothing starts.") {
+		t.Fatalf("next of a paused mission: exit %d: %s", code, errOut)
+	}
+	putLedger(t, m.bare, MissionPlanPath(901), "not json")
+	if code, _, errOut := m.next(901); code != ExitExternal || !strings.Contains(errOut, "not a record aayu wrote for #901") {
+		t.Fatalf("next of a forged plan: exit %d: %s", code, errOut)
+	}
+	away := m.opts
+	away.Dir = t.TempDir()
+	if code, _, errOut := run(t, m.agent, away, "mission", "next", "889", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "ledger writes need a checkout") {
+		t.Fatalf("next outside a checkout: exit %d: %s", code, errOut)
+	}
+	if len(m.claims(889)) != 0 || len(m.claims(901)) != 0 {
+		t.Fatal("a refused next claimed a story")
 	}
 }
 
@@ -358,6 +445,15 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 	m.status(941, "ready", "")
 	m.readyAt(940, time.Now().Add(-time.Hour))
 	m.readyAt(941, time.Now().Add(-2*time.Hour)) // Ready first
+	// The Release's milestone also holds the Tatkal Feature itself, a story, and a Feature with no plan: none adds a Bug.
+	m.issue(877, "Feature 877", "feature", 0, "")
+	m.issue(942, "Bug 942", "bug", 877, "")
+	m.status(942, "ready", "")
+	m.edit(func() {
+		for _, n := range []int{920, 930, 877} {
+			m.g.Issues[n].Milestone = m.g.Milestones[0]
+		}
+	})
 	n := m.commits()
 	code, out, errOut := m.next(874, "--json")
 	var list WorkList
@@ -374,6 +470,12 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 	m.edit(func() { m.g.Issues[950].State = "open" })
 	if code, out, _ := m.next(920); code != 0 || strings.Contains(out, "#94") {
 		t.Fatalf("mission next 920 with #874 not done: exit %d: %q", code, out)
+	}
+	// With #874 done again but no milestone for the Release's version, no Feature is in the Release.
+	m.closeIssue(950)
+	m.edit(func() { m.g.Milestones[0].Title = "v0.5.0" })
+	if code, out, _ := m.next(920); code != 0 || out != "waits #930: not Ready (open)\n" {
+		t.Fatalf("mission next 920 with no v0.4.0 milestone: exit %d: %q", code, out)
 	}
 }
 
@@ -436,5 +538,36 @@ func TestMissionNextRefusedOnOtherTool(t *testing.T) {
 	codex := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "CODEX_THREAD_ID": "t-1", "XDG_STATE_HOME": m.agent["XDG_STATE_HOME"]}
 	if code, out, errOut := run(t, codex, m.opts, "mission", "next", "874", "--repo", "o/r"); code != 0 || out != "start #950\n" {
 		t.Fatalf("mission next on codex: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// GitHub failing at any read stops the list: exit 5, and nothing is claimed.
+func TestMissionNextGitHubFailsClosed(t *testing.T) {
+	m := tatkalWorld(t)
+	m.issue(940, "Bug 940", "bug", 874, "")
+	m.status(940, "ready", "")
+	m.status(930, "ready", "")
+	m.edit(func() {
+		is := m.g.Issues[930]
+		is.Labels = append(is.Labels, fake.Label{Name: LeaseLabel})
+		is.Comments = append(is.Comments, &fake.Comment{ID: 8930, Body: leaseBody("bob@laptop", time.Now().Add(-time.Hour))}) // run out
+	})
+	for _, c := range []struct {
+		fail  string
+		after int
+	}{
+		{"GET /repos/o/r/issues/920", 0}, {"GET /repos/o/r/issues/920/sub_issues", 0}, {"GET /repos/o/r/issues/906", 0},
+		{"GET /repos/o/r/milestones", 0}, {"GET /repos/o/r/issues", 0}, {"GET /repos/o/r/issues/874/sub_issues", 0},
+		{"GET /repos/o/r/issues/930/comments", 0}, {"GET /repos/o/r/issues/930/comments", 1},
+	} {
+		m.edit(func() { m.g.Fail, m.g.FailAfter = c.fail, c.after })
+		if code, out, errOut := m.next(920); code != ExitExternal || out != "" || len(m.claims(920)) != 0 {
+			t.Fatalf("%s failing (after %d): exit %d: %s%s", c.fail, c.after, code, out, errOut)
+		}
+	}
+	m.edit(func() { m.g.Fail = "" })
+	m.opts.TatkalRelease = func(context.Context, int) (int, error) { return 0, errors.New("the Tatkal record is unreadable") }
+	if code, _, errOut := m.next(920); code != ExitExternal || !strings.Contains(errOut, "the Tatkal record is unreadable") {
+		t.Fatalf("Tatkal seam failing: exit %d: %s", code, errOut)
 	}
 }
