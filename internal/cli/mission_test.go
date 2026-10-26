@@ -430,7 +430,8 @@ func TestMissionShowPrintsSourcesAndPausedRow(t *testing.T) {
 	data, _ := json.MarshalIndent(p, "", "  ")
 	putLedger(t, m.bare, MissionPlanPath(889), string(data))
 	code, out, errOut = m.mission(m.person, "", "show", 889)
-	if code != 0 || strings.Count(out, "paused: ") != 1 || !strings.Contains(out, "\npaused: a migration needs a person\n") || strings.Contains(out, "quiet") || strings.Contains(out, "running") {
+	if code != 0 || strings.Count(out, "paused: ") != 1 || !strings.Contains(out, "\npaused: a migration needs a person\n") || strings.Contains(out, "quiet") || strings.Contains(out, "running") ||
+		!strings.Contains(out, "mission 1 held until the mission resumes · #20, #21, #22, #23\n") || strings.Contains(out, "not started") {
 		t.Fatalf("show of a paused mission: exit %d: %s%s", code, out, errOut)
 	}
 	// --json carries each number with its source.
@@ -465,12 +466,12 @@ func TestMissionToolReadFromPlanNotConfig(t *testing.T) {
 		!strings.Contains(errOut, "@rahulnakmol started it on cursor. Its tool and budget do not change while it runs.") {
 		t.Fatalf("a second start: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
 	}
-	m.g.Viewer = "bob" // a teammate reads the mission
+	m.edit(func() { m.g.Viewer = "bob" }) // a teammate reads the mission
 	if code, out, errOut := m.mission(m.person, "", "show", 889); code != 0 || !strings.Contains(out, "tool      cursor (missions/889/plan.json: the tool of @rahulnakmol, who started it)") ||
 		git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != before {
 		t.Fatalf("show 889 after the tool change: exit %d: %s%s", code, out, errOut)
 	}
-	m.g.Viewer = "rahulnakmol"
+	m.edit(func() { m.g.Viewer = "rahulnakmol" })
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 874); code != 0 {
 		t.Fatalf("start 874: exit %d: %s%s", code, out, errOut)
 	}
