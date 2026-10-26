@@ -128,20 +128,32 @@ func TestMissionStopKeepsClaimsAndPRs(t *testing.T) {
 	claims := w.claims(889)
 	labels := map[int][]string{20: w.g.LabelNames(20), 21: w.g.LabelNames(21), 22: w.g.LabelNames(22)}
 	// #20's thread opens its PR while the stop reaches it: its sync lands on the ledger first.
+	synced := false
 	w.x.on = func(name string) {
-		if name == "amp" {
+		if name == "amp" && !synced {
+			synced = true
 			b, _ := json.Marshal(delegate.State{Story: 20, Receiver: "amp", Mode: "cloud", Task: "T-01a00000-0000-0000-0000-000000000020", Status: dlgPROpen, PR: 7020, StartedAt: "2026-10-26T09:00:00Z"})
 			putLedger(t, w.bare, delegate.LedgerPath(20), string(b))
+		}
+	}
+	// #23 starts on Amp while the device code waits: the stop tells it too.
+	started := false
+	w.g.Hook = func(_, path string) {
+		if path == "/login/device/code" && !started {
+			started = true
+			b, _ := json.Marshal(delegate.State{Story: 23, Receiver: "amp", Mode: "cloud", Task: "T-01a00000-0000-0000-0000-000000000023", Status: dlgWorking})
+			putLedger(t, w.bare, delegate.LedgerPath(23), string(b))
 		}
 	}
 	w.g.Reset()
 
 	code, out, errOut := w.control("rahulnakmol", "stop", 889, "--reason", "spec drift")
+	w.edit(func() { w.g.Hook = nil })
 	if code != 0 || w.codes() != 1 || strings.Index(errOut, "Stops the mission of #889 (spec drift)") > strings.Index(errOut, "/login/device") {
 		t.Fatalf("mission stop: exit %d, device codes %d: %s%s", code, w.codes(), out, errOut)
 	}
 	told := "told to stop its subagents, commit at its next checkpoint, and stop"
-	for _, n := range []int{20, 21, 22} {
+	for _, n := range []int{20, 21, 22, 23} {
 		if !strings.Contains(out, fmt.Sprintf("#%d %s\n", n, told)) {
 			t.Errorf("the stop result does not say #%d was told: %s", n, out)
 		}
@@ -149,6 +161,7 @@ func TestMissionStopKeepsClaimsAndPRs(t *testing.T) {
 	if calls := w.x.all(); !slices.Equal(calls, []string{
 		"amp threads continue T-01a00000-0000-0000-0000-000000000020 -ox " + stopMsg,
 		"claude -p " + stopMsg + " --cloud session_21 --output-format json",
+		"amp threads continue T-01a00000-0000-0000-0000-000000000023 -ox " + stopMsg,
 	}) {
 		t.Fatalf("CLI calls: %q", calls)
 	}
@@ -291,7 +304,7 @@ func TestMissionResumeContinues(t *testing.T) {
 		t.Fatalf("stop: exit %d: %s%s", code, out, errOut)
 	}
 	w.edit(func() { w.g.Fail = "GET /repos/o/r/issues/889/sub_issues" })
-	if code, out, errOut := w.control("rahulnakmol", "resume", 889); code != ExitExternal || w.codes() != 0 {
+	if code, out, errOut := w.control("rahulnakmol", "resume", 889); code != ExitExternal || w.codes() != 1 {
 		t.Fatalf("resume when GitHub fails: exit %d: %s%s", code, out, errOut)
 	} else if p, _ := w.plan(889); p.Pause == nil {
 		t.Fatal("a failed resume cleared the stop")
@@ -464,7 +477,7 @@ func TestMissionStopOneStoryOrBug(t *testing.T) {
 	w.status(860, "ready", "")
 	w.status(941, "ready", "")
 	w.edit(func() { w.g.Fail = "GET /repos/o/r/issues/858" })
-	if code, out, errOut := w.control("rahulnakmol", "stop", 889, "--story", "858", "--reason", "wrong approach"); code != ExitExternal || w.codes() != 0 {
+	if code, out, errOut := w.control("rahulnakmol", "stop", 889, "--story", "858", "--reason", "wrong approach"); code != ExitExternal || w.codes() != 1 {
 		t.Fatalf("stop --story when GitHub fails: exit %d: %s%s", code, out, errOut)
 	} else if p, _ := w.plan(889); len(p.Stopped) != 0 {
 		t.Fatal("a failed stop wrote the plan")
@@ -723,6 +736,37 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	n = w.commits()
 	if code, _, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded"); code != ExitBlocked || w.commits() != n || !strings.Contains(errOut, "The mission of #874 ended (superseded). Nothing changed.") {
 		t.Fatalf("a second --end: exit %d: %s", code, errOut)
+	}
+}
+
+// A story that merges while @bob's device code waits stays merged: --end
+// reads the issues after the code, so it neither makes the story Ready nor
+// says so.
+func TestMissionEndKeepsStoryMergedDuringWait(t *testing.T) {
+	w, _ := bobs(t)
+	w.as("bob", "codex")
+	w.g.Hook = func(_, path string) {
+		if path == "/login/device/code" {
+			is := w.g.Issues[952]
+			is.State = "closed"
+			is.Labels = slices.DeleteFunc(is.Labels, func(l fake.Label) bool { return strings.HasPrefix(l.Name, "status:") })
+			is.Labels = append(is.Labels, fake.Label{Name: "status:merged"})
+		}
+	}
+	code, out, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded", "--json")
+	w.edit(func() { w.g.Hook = nil })
+	var rep MissionControlReport
+	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || !slices.Equal(rep.Ready, []int{951}) {
+		t.Fatalf("--end: exit %d %v: %s%s", code, err, out, errOut)
+	}
+	if got := w.g.LabelNames(952); !slices.Contains(got, "status:merged") || slices.Contains(got, "status:ready") {
+		t.Fatalf("#952 labels after --end: %v", got)
+	}
+	w.g.Mu.Lock()
+	cs := w.g.Issues[952].Comments
+	w.g.Mu.Unlock()
+	if len(cs) == 0 || strings.Contains(cs[len(cs)-1].Body, "Ready again") {
+		t.Fatalf("#952's comment: %v", cs)
 	}
 }
 

@@ -122,14 +122,6 @@ func missionStop(ctx context.Context, e *Env, f int, in Values) error {
 	if err != nil {
 		return err
 	}
-	subs, err := controlItems(ctx, c, repo, f, story)
-	if err != nil {
-		return err
-	}
-	running, err := runningThreads(ctx, w, subs, func(n int) bool { return story != 0 || plan.stopped(n) == nil })
-	if err != nil {
-		return err
-	}
 	var effect []string
 	switch control {
 	case "end":
@@ -155,6 +147,12 @@ func missionStop(ctx context.Context, e *Env, f int, in Values) error {
 		Threads: []MissionThread{}, Ledger: MissionPlanPath(f), DryRun: c.DryRun()}
 	if rep.DryRun {
 		return emitControl(e, rep)
+	}
+	// The issues and threads as they are now, after the device code: a story
+	// that started or merged while it waited counts as it is.
+	subs, err := controlItems(ctx, c, repo, f, story)
+	if err != nil {
+		return err
 	}
 	var msg string
 	switch {
@@ -193,6 +191,11 @@ func missionStop(ctx context.Context, e *Env, f int, in Values) error {
 		})
 		msg = fmt.Sprintf("aayu: @%s stopped the mission of #%d (%s). Stop your subagents, commit your work at your next checkpoint, push it, and stop. Keep the branch and the PR. Start nothing new until aayu says resume.", p.Login, f, reason)
 	}
+	if err != nil {
+		return err
+	}
+	// Read after the stop is written: from here mission next starts nothing more.
+	running, err := runningThreads(ctx, w, subs, func(n int) bool { return story != 0 || plan.stopped(n) == nil })
 	if err != nil {
 		return err
 	}
@@ -242,14 +245,6 @@ func missionResume(ctx context.Context, e *Env, f int, in Values) error {
 	case story == 0 && plan.Pause == nil:
 		return Errorf(ExitBlocked, "The mission of #%d is not stopped. Nothing changed.", f)
 	}
-	subs, err := controlItems(ctx, c, repo, f, story)
-	if err != nil {
-		return err
-	}
-	running, err := runningThreads(ctx, w, subs, func(n int) bool { return story != 0 || plan.stopped(n) == nil })
-	if err != nil {
-		return err
-	}
 	effect := []string{fmt.Sprintf("Resumes the mission of #%d on %s: aayu reads %s and GitHub, continues each stopped story thread, and starts stories up to its agents", f, tool, MissionPlanPath(f))}
 	if story != 0 {
 		effect = []string{fmt.Sprintf("Resumes #%d of the mission of #%d on %s: only its thread continues", story, f, tool)}
@@ -263,6 +258,14 @@ func missionResume(ctx context.Context, e *Env, f int, in Values) error {
 		Threads: []MissionThread{}, Ledger: MissionPlanPath(f), DryRun: c.DryRun()}
 	if rep.DryRun {
 		return emitControl(e, rep)
+	}
+	subs, err := controlItems(ctx, c, repo, f, story)
+	if err != nil {
+		return err
+	}
+	running, err := runningThreads(ctx, w, subs, func(n int) bool { return story != 0 || plan.stopped(n) == nil })
+	if err != nil {
+		return err
 	}
 	ctl := MissionControl{Action: "resume", By: p.Login, Tool: tool, At: at, Presence: p.Via, Story: story}
 	msg := fmt.Sprintf("aayu: @%s resumed the mission of #%d. Continue from your last checkpoint.", p.Login, f)
