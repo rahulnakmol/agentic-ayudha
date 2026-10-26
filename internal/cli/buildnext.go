@@ -336,6 +336,11 @@ func (e *Env) claimLines(ctx context.Context, w *ledger.Writer, path string, car
 	if err != nil {
 		return nil, Wrap(ExitExternal, ignoreMissing(err))
 	}
+	return e.liveClaims(raw, carried), nil
+}
+
+// liveClaims are the live lines of a claims file's bytes, as claimLines says.
+func (e *Env) liveClaims(raw []byte, carried map[string]bool) []loopClaim {
 	var lines []loopClaim
 	released := map[string]bool{}
 	sc := bufio.NewScanner(bytes.NewReader(raw))
@@ -353,7 +358,7 @@ func (e *Env) claimLines(ctx context.Context, w *ledger.Writer, path string, car
 	return slices.DeleteFunc(lines, func(c loopClaim) bool {
 		at, err := time.Parse(time.RFC3339, c.At)
 		return err != nil || released[c.Token] || carried[c.Token] || e.Now().Sub(at) > pickLockTTL
-	}), nil
+	})
 }
 
 // StaleGrace is how long after its lease runs out a loop claim with no PR

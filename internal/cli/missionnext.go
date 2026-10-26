@@ -151,6 +151,7 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	defer t.Close()
 	costs, spent := e.costs(repo), 0.0
+	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
 	for i, is := range append(slices.Clone(subs), extra...) {
 		n, labels := is.GetNumber(), github.IssueLabels(is)
@@ -169,6 +170,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		running := contains(labels, labelInProgress) || contains(labels, "status:validation")
 		if running {
 			busy[n] = true
+		}
+		if running || claimed[n] {
+			held[n] = true
 		}
 		switch {
 		case contains(labels, "status:blocked"):
@@ -190,7 +194,7 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 					return Wrap(ExitExternal, err)
 				}
 				if lease != nil && lease.Expires.After(now) {
-					claimed[n], busy[n] = true, true
+					claimed[n], busy[n], held[n] = true, true, true
 				}
 			}
 		}
@@ -200,6 +204,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		return cmp.Or(a.prio-b.prio, a.slice-b.slice, a.readyAt.Compare(b.readyAt), a.n-b.n)
 	})
 	per, agents := appr.Budget.PerStoryUSD, plan.Agents
+	for n := range held {
+		spent += max(per-costs[n], 0)
+	}
 	for i := range entries {
 		en := &entries[i]
 		if !en.free {
@@ -376,8 +383,8 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 	if err != nil {
 		return Wrap(ExitExternal, ignoreMissing(err))
 	}
+	defer t.Close()
 	paths, err := t.List(ctx, "missions")
-	t.Close()
 	if err != nil {
 		return Wrap(ExitExternal, ignoreMissing(err))
 	}
@@ -387,10 +394,11 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		if !strings.HasSuffix(p, "/claims.jsonl") {
 			continue
 		}
-		lines, err := e.claimLines(ctx, w, p, nil)
+		raw, err := t.File(ctx, p)
 		if err != nil {
-			return err
+			return Wrap(ExitExternal, err)
 		}
+		lines := e.liveClaims(raw, nil)
 		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
 			path, claim = p, lines[i]
 		}

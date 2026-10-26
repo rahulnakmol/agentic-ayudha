@@ -283,7 +283,14 @@ func TestMissionNextBudgetFilter(t *testing.T) {
 	if code, out, errOut := m.next(889); code != 0 || out != "waits #25: would pass #889's approved budget (620 + 60 > 660 USD)\n" || len(m.claims(889)) != 0 {
 		t.Fatalf("mission next over budget: exit %d: %q%s", code, out, errOut)
 	}
-	m.setPlan(889, func(p *MissionPlan) { p.Budget = 680 }) // 620 + 60 = 680 is within it
+	// #21 runs with no measured spend yet: it counts at its cap, so a later run cannot pass the budget either.
+	m.issue(21, "Story 21", "story", 889, "")
+	m.status(21, "in-progress", "")
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 680 })
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #25: would pass #889's approved budget (680 + 60 > 680 USD)\n" {
+		t.Fatalf("mission next with #21 running: exit %d: %q%s", code, out, errOut)
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 740 }) // 680 + 60 = 740 is within it
 	if code, out, errOut := m.next(889); code != 0 || out != "start #25\n" {
 		t.Fatalf("mission next at the budget: exit %d: %q%s", code, out, errOut)
 	}
