@@ -52,12 +52,13 @@ func (e *Env) storyCovered(ctx context.Context, c *github.Client, w *ledger.Writ
 		return "", WithNext(Errorf(ExitBlocked, "#%d changed after Approve to build: %s. Its stories wait until a person approves it again.", f, strings.Join(changed, "; ")),
 			fmt.Sprintf("aayu ready %d --check", f))
 	}
+	// --ack is not built yet: until it is, the next step that runs is a new spec baseline, then Approve to build again.
 	i := slices.IndexFunc(prev.Stories, func(st ready.ApprovedStory) bool { return st.Number == s })
 	if i < 0 {
-		return "", WithNext(Errorf(ExitBlocked, "#%d was added after Approve to build. A person acknowledges it: aayu ready %d --ack %d", s, f, s), fmt.Sprintf("aayu ready %d --ack %d", f, s))
+		return "", WithNext(Errorf(ExitBlocked, "#%d was added after Approve to build. A person acknowledges it: aayu ready %d --ack %d", s, f, s), fmt.Sprintf("aayu ready %d --part spec --request", f))
 	}
 	if changes := ready.StoryChanges(prev.Stories[i], ready.StoryOf(it)); len(changes) > 0 {
-		return "", WithNext(Errorf(ExitBlocked, "#%d changed after Approve to build (%s). A person acknowledges it: aayu ready %d --ack %d", s, strings.Join(changes, ", "), f, s), fmt.Sprintf("aayu ready %d --ack %d", f, s))
+		return "", WithNext(Errorf(ExitBlocked, "#%d changed after Approve to build (%s). A person acknowledges it: aayu ready %d --ack %d", s, strings.Join(changes, ", "), f, s), fmt.Sprintf("aayu ready %d --part spec --request", f))
 	}
 	return fmt.Sprintf("#%d approval %d by @%s", f, prev.Version, prev.By), nil
 }
@@ -80,7 +81,7 @@ func (e *Env) earlyCovered(ctx context.Context, w *ledger.Writer, f, s int, body
 	}
 	if now := workitems.BodyHash(body); now != eb.BodyHash {
 		return "", WithNext(Errorf(ExitBlocked, "#%d changed after its early build was approved (body hash %.12s to %.12s). A person approves it again: aayu ready %d --early-build %d", s, eb.BodyHash, now, f, s),
-			fmt.Sprintf("aayu ready %d --early-build %d", f, s))
+			fmt.Sprintf("aayu ready %d", f))
 	}
 	return fmt.Sprintf("#%d early build of #%d by @%s", f, s, eb.ApprovedBy), nil
 }

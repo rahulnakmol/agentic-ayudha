@@ -122,6 +122,7 @@ func TestReadyStoryCoverage(t *testing.T) {
 	body852 := stories[852].Body
 	edit(func() { stories[852].Body = storyBody("Story 852", "An edit after the early build.") })
 	refused(852, "#852 changed after its early build was approved")
+	refused(852, "next: aayu ready 840\n")
 	edit(func() { stories[852].Body = body852 })
 	// A record that names another story covers neither.
 	putLedger(t, bare, "specs/840/approved-early-854.json", early(stories[854].Body))
@@ -173,6 +174,7 @@ func TestReadyStoryCoverage(t *testing.T) {
 		stories[853].Labels = append(stories[853].Labels, fake.Label{Name: "effort:M"})
 	})
 	refused(853, "#853 changed after Approve to build (effort S to M). A person acknowledges it: aayu ready 840 --ack 853")
+	refused(853, "next: aayu ready 840 --part spec --request") // a command that runs today
 	added := numbered(g.AddIssue("Story 858", storyBody("Story 858", "Added later."), "type:story", "effort:S"), 858)
 	edit(func() { added.Parent, feature.Subs = 840, append(feature.Subs, 858) })
 	refused(858, "#858 was added after Approve to build. A person acknowledges it: aayu ready 840 --ack 858")
