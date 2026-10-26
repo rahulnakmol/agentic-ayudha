@@ -1,0 +1,80 @@
+{
+  "story": 995,
+  "body_hash": "3fb20df001443ba9da3488d2e0b3c6f4b1b50293cebbb8fbab0939fe513a3b31",
+  "footprint": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Never layer L07 (operational config): a new [critique] table in the embedded defaults with review_wait_hours = 24 (minimum 0). Approve to build opens with reviews missing only after that many hours since they were asked for. internal/config/gen renders an Approve to build section; schema.json is regenerated. No existing key, default, load rule, or protected-key rule changes, and [autonomy] is not changed. Never layer L04 (policy), generated only: CONSTRAINTS.md gains the Approve to build section with its one row. No floor, threshold, or existing row is lowered or removed",
+      "contracts": [
+        "config.Critique{ReviewWaitHours int}, koanf key critique.review_wait_hours (minimum 0)",
+        "internal/config/defaults.toml: [critique] review_wait_hours = 24",
+        "internal/config/gen: an Approve to build section, roots critique, one row; CONSTRAINTS.md regenerated from it"
+      ],
+      "tests": [
+        "internal/cli:TestReadyApproveToBuild"
+      ],
+      "rollback": "revert the PR; the [critique] table and its CONSTRAINTS.md row go, and only Approve to build reads the key",
+      "criteria": [
+        7
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "CLI and ready package: aayu ready \u003cfeature\u003e without --check, --guard, or --part is Approve to build. It is refused with exit 4 for an agent lane (a host marker, AAYU_AGENT=1 over MCP, or CI) before any write. For a person it checks the Initiative parent, Ready, the stories, each needed part approved with no drift, open review gaps, and the reviews (#876's critique.State through Options.CritiqueState, a test fake until #876 merges), and refuses with one line and the next command. It shows the effect (stories, baseline versions, budget, the changes of each version since the last approval, and the dismissals it ratifies) before GitHub's device code, reads everything again after it, and writes specs/\u003cf\u003e/approved.json only when both reads agree, on the ledger tip of the second read. Then Arjun posts the Feature's Ready snapshot and labels it status:ready. A story's Ready is unchanged",
+      "contracts": [
+        "ready.Approval{Schema, Feature, Version, By, At, Presence, Baselines, Stories, Budget, Dismissals} at ready.ApprovalPath(f) = specs/\u003cf\u003e/approved.json",
+        "ready.Presence{Login, Via, Permission, ActionsRecord}: ActionsRecord is the hash of the presence.approve record in the actions log",
+        "ready.Critique{Reviews, In, AskedAt, Open, Dismissed}; ready.Dismissal{Finding, Reason, Words}",
+        "cli.Options.CritiqueState func(ctx, feature) (ready.Critique, error); nil means no review or finding is recorded",
+        "cli.ApproveReport{Repo, Feature, State approved|unchanged, Approval, LedgerPath, LedgerCommit, Ready, DryRun}"
+      ],
+      "tests": [
+        "internal/cli:TestReadyApproveToBuild",
+        "internal/ready:TestEffectNumbers",
+        "internal/cli:TestReadyHumanFallbackAndGuard",
+        "internal/cli:TestReadyFeatureBaseline"
+      ],
+      "instrumentation": [
+        "each approval is one ledger commit and one presence.approve record in the actions log; the Ready snapshot is a github.comment.ready-snapshot action"
+      ],
+      "rollback": "revert the PR; aayu ready \u003cfeature\u003e labels the Feature Ready as the bot again, and approved.json records already on the ledger stay there unread",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Verbs and skills: the registry's ready verb says that on a Feature it is Approve to build, a person's decision; go generate updates skills/ready/SKILL.md frontmatter, internal/mcp/schemas/ready.json, and docs/guide/skills/ready.md. The ready skill body says never to run Approve to build, what keeps it off, and what the person sees. No verb, flag, or seat is added or removed",
+      "contracts": [
+        "internal/verbs/registry.go: the ready verb's issue input description"
+      ],
+      "tests": [
+        "internal/cli:TestReadyApproveToBuild",
+        "github.com/rahulnakmol/agentic-ayudha:TestSkillLint"
+      ],
+      "rollback": "revert the PR; go generate restores the old frontmatter, schema, and usage table",
+      "criteria": [
+        1
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-26T07:40:09Z",
+  "planned_by": "human-fallback"
+}
