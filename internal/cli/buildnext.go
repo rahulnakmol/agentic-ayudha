@@ -36,7 +36,7 @@ const BuildLoop = "build-ready"
 
 // BuildPick is what `aayu build --next` decided, with no model: the loop's
 // open pull requests to ship, what it has in flight against [build]
-// in_flight, the stale claims it blocked, and the queue it picked from.
+// agents, the stale claims it blocked, and the queue it picked from.
 type BuildPick struct {
 	Mode     string          `json:"mode"` // ship or pick
 	Limit    int             `json:"in_flight_limit"`
@@ -255,7 +255,7 @@ type loopClaim struct {
 }
 
 // admitClaim reserves a slot for story n on the ledger, in LoopClaimsPath
-// against [build] in_flight; it says why when this pick lost.
+// against [build] agents; it says why when this pick lost.
 func (e *Env) admitClaim(ctx context.Context, w *ledger.Writer, p *BuildPick, n int) (string, error) {
 	busy := map[int]bool{}
 	for _, it := range p.InFlight {
@@ -403,7 +403,7 @@ func buildable(is *gh.Issue) bool {
 // loop's open pull requests and writes nothing. Mode pick first blocks every
 // loop claim whose lease ran out with no pull request (it is never retried
 // until a person makes it Ready again), then, while the loop's open pull
-// requests and live claims are fewer than [build] in_flight, returns the
+// requests and live claims are fewer than [build] agents, returns the
 // first item of the queue that is open, status:ready, passes Ready with an
 // undrifted snapshot, and has no open pull request and no live lease. The
 // queue is the current release's accepted baseline in its order when there is
@@ -411,10 +411,10 @@ func buildable(is *gh.Issue) bool {
 // priority, then age. It returns 0 when it picked nothing; runBuild then
 // claims the pick with the lease, as for any build.
 func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, l *config.Loaded, repo, mode string) (*BuildPick, int, error) {
-	// The loop's definition and its [build] in_flight are a person's standing
+	// The loop's definition and its [build] agents are a person's standing
 	// ask, so they are read from the integration branch's tip on GitHub, as
 	// ship reads its policy: never from the checkout, AAYU_* or --set, which
-	// the agent running the loop controls. A local in_flight may only lower it.
+	// the agent running the loop controls. A local agents value may only lower it.
 	owner, name, _ := github.SplitRepo(repo)
 	pol, dev, err := e.loopPolicy(ctx, c, owner, name)
 	if err != nil {
@@ -431,7 +431,7 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	} else if _, err := loops.Parse(BuildLoop, []byte(text)); err != nil {
 		return nil, 0, Errorf(ExitUsage, "loops/%s.toml on %s at %s: %v", BuildLoop, dev, short(pol.Tip), err)
 	}
-	p := &BuildPick{Mode: mode, Limit: min(l.Config.Build.InFlight, pol.Config.Build.InFlight), InFlight: []LoopItem{}, Ship: []LoopItem{}}
+	p := &BuildPick{Mode: mode, Limit: min(l.Config.Build.Agents, pol.Config.Build.Agents), InFlight: []LoopItem{}, Ship: []LoopItem{}}
 	prs, err := openStoryPRs(ctx, c, owner, name)
 	if err != nil {
 		return nil, 0, Wrap(ExitExternal, err)
@@ -528,7 +528,7 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		return p, 0, nil
 	}
 	if p.Limit <= 0 {
-		p.Reason = "[build] in_flight is 0: the loop picks nothing"
+		p.Reason = "[build] agents is 0: the loop picks nothing"
 		return p, 0, nil
 	}
 	if len(p.InFlight) >= p.Limit {

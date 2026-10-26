@@ -112,7 +112,7 @@ type BuildState struct {
 	// ReviewPR is the PR that spend belongs to; 0 before the PR is opened.
 	ReviewPR int `json:"session_review_pr,omitempty"`
 	// Loop names the loop that claimed the story (BuildLoop, `build --next
-	// pick`): its claim and its pull request count toward [build] in_flight.
+	// pick`): its claim and its pull request count toward [build] agents.
 	Loop string `json:"loop,omitempty"`
 	// Claim is the loop pick's line in LoopClaimsPath: once a state carries
 	// it, the line no longer holds a slot of its own.
@@ -291,7 +291,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		// A loop's build stays the loop's: its PR still counts toward [build] in_flight.
+		// A loop's build stays the loop's: its PR still counts toward [build] agents.
 		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD, ReviewPR: st.ReviewPR, Loop: st.Loop, Claim: st.Claim}
 	}
 	if st.StartedAt == "" {
@@ -303,7 +303,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 	if st.Loop != "" {
 		// No person asked for a loop's build, so its limits are the committed
-		// policy of the trusted integration branch, as for in_flight: AAYU_* or
+		// policy of the trusted integration branch, as for [build] agents: AAYU_* or
 		// --set may tighten one, never loosen it or turn it off. The run's
 		// config is clamped in place, so the session review spends within it too.
 		owner, name, _ := github.SplitRepo(repo)
@@ -344,7 +344,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			return Errorf(ExitBlocked, "build --next: another run claimed #%d first (%s)", n, cur.Holder)
 		}
 		// The loop's claim reaches the ledger before its status changes or its
-		// worktree is cut: a later failure leaves a claim in_flight counts and,
+		// worktree is cut: a later failure leaves a claim [build] agents counts and,
 		// once its lease runs out, a Ready item the queue picks again.
 		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 			return err

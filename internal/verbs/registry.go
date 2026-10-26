@@ -743,7 +743,7 @@ var Verbs = []Command{
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Ready story or bug to build; required unless --next."),
-			enumIn("next", false, false, "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.", "ship", "pick"),
+			enumIn("next", false, false, "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] agents, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.", "ship", "pick"),
 			flag("stop", TypeString, "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires."),
 			flag("resume", TypeBool, "Resume from the last Aayudha-Checkpoint trailer."),
 			enumIn("delegate", false, false, "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).", "codex", "cursor", "claude", "amp", "auto"),
@@ -844,6 +844,7 @@ var Verbs = []Command{
 			flag("fixes", TypeString, "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them."),
 			flag("early-build", TypeIssue, "A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev."),
 			flag("milestones", TypeString, "With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, the last plan's milestones hold, or for a first plan one milestone MS1 holds them all. Written to missions/<f>/plan.json."),
+			flag("agents", TypeInt, "With Approve to build: how many of the Feature's stories its mission runs at once, written to specs/<f>/approved.json. With none, the last approval's value holds, or for a first approval [build] agents on the integration branch applies."),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot", "feature-baseline", "early-build-approval"},
 		Gates:    []GateID{GateValidator},

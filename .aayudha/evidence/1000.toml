@@ -1,0 +1,25 @@
+# Which tests prove Story #1000's Completion Goal.
+
+[[criterion]]
+id = 1 # no [build] agents in any config: mission next 889 starts 5 of 6 Ready stories; waits #25: no free agent (5 of 5 busy after these starts)
+tests = ["internal/cli:TestMissionNextAgentsDefault"]
+
+[[criterion]]
+id = 2 # dev commits agents = 5, AAYU_BUILD__AGENTS=10: 5 start; --set build.agents=6 over a committed 3: 3 start; a local 2 lowers it to 2
+tests = ["internal/cli:TestAgentsDefaultAndLocalOnlyLowers"]
+
+[[criterion]]
+id = 3 # aayu ready 889 --agents 3: specs/889/approved.json has agents 3; next 889 starts 3, next 874 starts dev's 2
+tests = ["internal/cli:TestReadyAgentsFlagWritesApproval"]
+
+[[criterion]]
+id = 4 # a prompt's agents 10 and budget 2000: mission next takes no limit flag; the list uses the approved budget and dev's agents (5)
+tests = ["internal/cli:TestPromptNeverSetsALimit"]
+
+[[criterion]]
+id = 5 # committed [build] in_flight = 2: aayu config validate says "[build] in_flight is replaced by [build] agents (Y1)"
+tests = ["internal/cli:TestInFlightReplacedByAgents"]
+
+[[criterion]]
+id = 6 # go generate: CONSTRAINTS.md lists build.agents 5 and the six [mission] keys, and none of the retired caps
+tests = ["internal/config/gen:TestConstraintsRows", "internal/config:TestMissionKeysDefaults"]

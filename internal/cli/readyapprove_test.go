@@ -40,7 +40,10 @@ func TestReadyApproveToBuild(t *testing.T) {
 	edit := func(f func()) { g.Mu.Lock(); f(); g.Mu.Unlock() }
 	initiative := numbered(g.AddIssue("Human-dependency engine", fixtureBody(t, "initiative", func(f map[string]string) { delete(f, workitems.FieldLinks) }), "type:initiative"), 870)
 	feature := numbered(g.AddIssue("Approve to build", fixtureBody(t, "feature", func(f map[string]string) { delete(f, workitems.FieldLinks) }), "type:feature", "status:planned"), 840)
-	edit(func() { feature.Parent, initiative.Subs = 870, []int{840} })
+	edit(func() {
+		feature.Parent, initiative.Subs = 870, []int{840}
+		g.Refs["heads/dev"], g.RefFiles = devTip, map[string]map[string]string{devTip: {}} // [build] agents is read from dev's tip
+	})
 	stories := map[int]*fake.Issue{}
 	for n := 851; n <= 856; n++ {
 		title := fmt.Sprintf("Story %d", n)

@@ -111,6 +111,7 @@ func newMissionWorld(t *testing.T) *missionWorld {
 	t.Cleanup(srv.Close)
 	m.cursorAt = srv.URL
 	m.g.Viewer = "rahulnakmol"
+	m.g.Refs["heads/dev"], m.g.RefFiles = devTip, map[string]map[string]string{devTip: {}} // [build] agents is read from dev's tip
 	m.dir, m.bare = ledgerCheckout(t)
 	state := m.dir + "/state"
 	m.person = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
@@ -532,7 +533,7 @@ func TestMissionShowPrintsSourcesAndPausedRow(t *testing.T) {
 		"running: started by @rahulnakmol at ",
 		"MS1       building: 1 of 2 merged; the gate runs when its last story merges · #20 merged, #21 in-progress",
 		"MS2       building: 0 of 2 merged; the gate runs when its last story merges · #22 open, #23 open",
-		"agents    5 (Decision #915 (5 at once))",
+		"agents    5 ([build] agents on dev)",
 		"budget    $660 (the top of #886's range $360–$660 (estimate $420), locked at Start)",
 		"used      $60 (1 merged x $60 (the per-story cap of approval 1), until #872 measures spend)",
 		"left      $600 (budget less used)",

@@ -432,7 +432,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||
 		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) ||
 		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof",
-			"delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "baselines", "critique"}) {
+			"delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "mission", "baselines", "critique"}) {
 		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)
 	}
 }
@@ -625,5 +625,18 @@ func TestMalformedLocalConfigInCI(t *testing.T) {
 	src = fixture(t, files)
 	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "config.local.toml") {
 		t.Fatalf("outside CI: err = %v; want the parse error naming config.local.toml", err)
+	}
+}
+
+// Story #1000, criterion 6: [build] agents (5) is the one cap on parallel
+// work (Decision #918), and the mission limits are [mission] keys with these
+// defaults. internal/config/gen:TestConstraintsRows checks CONSTRAINTS.md.
+func TestMissionKeysDefaults(t *testing.T) {
+	l, err := Load(Sources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Mission{MaxNoGo: 3, RetryMax: 2, RetryBackoffMinutes: 10, CheckMinutes: 5, WarnHours: 24, MaxHours: 48}); l.Config.Build.Agents != 5 || l.Config.Mission != want {
+		t.Fatalf("defaults: [build] agents %d, [mission] %+v", l.Config.Build.Agents, l.Config.Mission)
 	}
 }

@@ -90,7 +90,7 @@ var sections = []section{
 		heading: "Budgets",
 		roots:   []string{"budget", "build"},
 		rows: []row{
-			{"build.in_flight", "Items the build-ready loop (`aayu build --next`) has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks.", "proposed (build loop)"},
+			{"build.agents", "Stories each Kanha runs at once, the one cap on parallel work: a Feature's mission starts at most this many story subthreads (`aayu mission next`), and the build-ready loop (`aayu build --next`) has at most this many items from claim to merge. 0 starts nothing. The integration branch's committed value caps a local one. A Feature's Approve to build may set its own (`aayu ready <feature> --agents N`); a prompt never sets it.", "Decision #918"},
 			{"budget.per_story_usd", "Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does.", proposed},
 			{"budget.per_day_usd", "Model spend per repository per day, in USD, before the breaker trips.", proposed},
 			{"budget.per_pr_inspect_max", "Model spend, in USD, for `inspect` on one PR across all its cycles.", proposed},
@@ -124,6 +124,19 @@ var sections = []section{
 			{"critique.review_wait_hours", "Hours after the seats' reviews of a Feature's baselines were asked for that Approve to build (`aayu ready <feature>`) opens with some of them not in. Before that it waits for every review. An open gap keeps it off at any time.", "0.4"},
 		},
 		note: "Approve to build is a person's decision, through GitHub's device flow every time. It is off while a needed part of the Feature is not approved or has drifted, the Feature has no Initiative parent, a review gap is open, or some reviews are not in and fewer than `critique.review_wait_hours` have passed since they were asked for. The record is `specs/<feature>/approved.json` on the `ledger` branch.",
+	},
+	{
+		heading: "Missions",
+		roots:   []string{"mission"},
+		rows: []row{
+			{"mission.max_no_go", "Times a milestone's gate may fail before the mission stops and asks a person.", "Feature #889"},
+			{"mission.retry_max", "Retries of a failed mission step, such as a story's start, before it waits for a person.", "Feature #889"},
+			{"mission.retry_backoff_minutes", "Minutes before the first retry of a failed mission step. Each later retry waits twice as long as the one before.", "Feature #889"},
+			{"mission.check_minutes", "Minutes between a local Kanha's checks of its missions.", "Feature #889"},
+			{"mission.warn_hours", "Working hours of a mission's estimate past which Approve to build warns. It refuses nothing.", "Feature #889"},
+			{"mission.max_hours", "Working hours a mission may use. After them it starts no new story until a person extends it; running stories finish.", "Feature #889"},
+		},
+		note: "A mission reads every limit from config, never from a prompt. How many stories it runs at once is `build.agents`.",
 	},
 	{
 		heading: "Outcomes",

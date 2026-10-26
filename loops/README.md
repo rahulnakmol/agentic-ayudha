@@ -87,13 +87,13 @@ agent loop, and the binary decides everything except the code:
    pull request (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Within those
    4 hours the claim keeps its slot, so a builder that resumes keeps its story. Then it counts what the
    loop has in flight: its open pull requests, its live claims with no pull request yet, and any Ready item with a
-   live lease (a claim another pick is still setting up). Under `[build] in_flight`
-   (default 1, so one item from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
+   live lease (a claim another pick is still setting up). Under `[build] agents`
+   (default 5, so five items from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
    open Story or Bug, `status:ready`, passes Ready with an undrifted snapshot, and has no open pull request and no
    live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and
    `status:in-progress`, and the loop's name on `build/<n>/state.json` on the ledger. It cuts the worktree as
    `aayu build <n>` does. A local lock (`.aayudha/state/build-next.lock`) lets one pick at a time run on a machine.
-   The loop's definition, `[build] in_flight`, and a loop build's `[autonomy.budget]` and `[budget]` limits come
+   The loop's definition, `[build] agents`, and a loop build's `[autonomy.budget]` and `[budget]` limits come
    from the integration branch's tip on GitHub, as merged. That branch is your user config's `[branches] dev`, else
    the one the default branch's committed config names, else the default branch. A checkout's file, `AAYU_*`, or
    `--set` never names that branch, adds the loop, or loosens a limit; a local value may only tighten one.

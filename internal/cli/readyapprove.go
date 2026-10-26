@@ -78,6 +78,8 @@ type approveRun struct {
 	n int
 	// milestones is --milestones: the mission's milestones the person names.
 	milestones string
+	// agents is --agents: how many stories the Feature's mission runs at once; 0 keeps the last approval's.
+	agents int
 }
 
 // approveToBuild is `aayu ready <feature>` (Feature #877, Decision #903): a
@@ -85,7 +87,7 @@ type approveRun struct {
 // through GitHub's device flow every time. Everything is read again after the
 // code, and only what the person saw is approved. Then Arjun posts the
 // Feature's Ready snapshot.
-func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milestones string) error {
+func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milestones string, agents int) error {
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return err
@@ -95,12 +97,12 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		return err
 	}
 	r.GH = c
-	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones}
+	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones, agents: agents}
 	want, effect, prev, _, err := a.prepare(ctx)
 	if err != nil {
 		return err
 	}
-	plan, planEffect, old, err := a.missionPlan(ctx)
+	plan, planEffect, old, err := a.missionPlan(ctx, want.Agents)
 	if err != nil {
 		return err
 	}
@@ -125,7 +127,7 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		return err
 	}
 	// A mission start while the code waits is in the tip the write is based on: the plan is read again, so it is kept.
-	plan2, planEffect2, old2, err := a.missionPlan(ctx)
+	plan2, planEffect2, old2, err := a.missionPlan(ctx, got.Agents)
 	if err != nil {
 		return err
 	}
@@ -180,6 +182,10 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 	rec = ready.Approval{Schema: ready.ApprovalSchema, Feature: a.n, Baselines: []ready.ApprovedBaseline{}, Dismissals: []ready.Dismissal{}}
 	if prev, tip, err = a.last(ctx); err != nil {
 		return rec, nil, nil, "", err
+	}
+	// With no --agents, the Feature's agents from the last approval hold, as its milestones do.
+	if rec.Agents = a.agents; rec.Agents == 0 && prev != nil {
+		rec.Agents = prev.Agents
 	}
 	res, is, err := a.r.Check(ctx, a.n)
 	if err != nil {

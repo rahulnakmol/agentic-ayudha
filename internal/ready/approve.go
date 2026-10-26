@@ -32,6 +32,8 @@ type Approval struct {
 	Stories    []ApprovedStory    `json:"stories"`
 	Budget     Budget             `json:"budget"`
 	Dismissals []Dismissal        `json:"dismissals"`
+	// Agents is how many stories the Feature's mission runs at once (aayu ready <f> --agents N); 0: [build] agents.
+	Agents int `json:"agents,omitempty"`
 	// Parent is the mission's Kanha, which a person's Start began (Story #1004); nil until then.
 	Parent *Parent `json:"parent,omitempty"`
 }
@@ -101,10 +103,10 @@ type Critique struct {
 }
 
 // Agreed reports whether a and b agree the same Feature: the same baselines,
-// stories, budget, and dismissals, whoever approved them and when.
+// stories, budget, dismissals, and agents, whoever approved them and when.
 func (a Approval) Agreed(b Approval) bool {
 	agreed := func(x Approval) string {
-		j, _ := json.Marshal([]any{x.Baselines, x.Stories, x.Budget, x.Dismissals})
+		j, _ := json.Marshal([]any{x.Baselines, x.Stories, x.Budget, x.Dismissals, x.Agents})
 		return string(j)
 	}
 	return agreed(a) == agreed(b)

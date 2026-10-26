@@ -47,8 +47,13 @@ func (e *Env) technicalOwner() string {
 
 func runReady(ctx context.Context, e *Env, in Values) error {
 	n := issueNumber(in.String("issue"))
-	if in.Has("milestones") && (in.Has("early-build") || in.Has("part") || in.Bool("request") || in.Bool("check") || in.Bool("guard")) {
-		return Errorf(ExitUsage, "ready: --milestones goes with Approve to build only, not --early-build, --part, --request, --check, or --guard")
+	for _, f := range []string{"milestones", "agents"} {
+		if in.Has(f) && (in.Has("early-build") || in.Has("part") || in.Bool("request") || in.Bool("check") || in.Bool("guard")) {
+			return Errorf(ExitUsage, "ready: --%s goes with Approve to build only, not --early-build, --part, --request, --check, or --guard", f)
+		}
+	}
+	if in.Has("agents") && in.Int("agents") < 1 {
+		return Errorf(ExitUsage, "ready --agents %d: want 1 or more stories at once", in.Int("agents"))
 	}
 	if in.Has("early-build") {
 		return runReadyEarly(ctx, e, in, n)
@@ -128,10 +133,13 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			if err := e.approveRefusal(); err != nil {
 				return err
 			}
-			return e.approveToBuild(ctx, r, n, in.String("milestones"))
+			return e.approveToBuild(ctx, r, n, in.String("milestones"), in.Int("agents"))
 		}
 		if in.Has("milestones") {
 			return Errorf(ExitUsage, "ready: --milestones names a Feature's milestones at Approve to build; #%d is not a Feature", n)
+		}
+		if in.Has("agents") {
+			return Errorf(ExitUsage, "ready: --agents sets a Feature's agents at Approve to build; #%d is not a Feature", n)
 		}
 		w, err := e.botReady(ctx, r)
 		if err != nil {

@@ -216,7 +216,11 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	slices.SortStableFunc(entries, func(a, b nextEntry) int {
 		return cmp.Or(a.prio-b.prio, a.slice-b.slice, a.readyAt.Compare(b.readyAt), a.n-b.n)
 	})
-	per, agents := appr.Budget.PerStoryUSD, plan.Agents
+	per := appr.Budget.PerStoryUSD
+	agents, _, err := e.missionAgents(ctx, c, repo, f, appr.Agents)
+	if err != nil {
+		return err
+	}
 	for n := range held {
 		spent += max(per-costs[n], 0)
 	}

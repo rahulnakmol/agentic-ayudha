@@ -1014,15 +1014,52 @@
     },
     "build": {
       "properties": {
-        "in_flight": {
+        "agents": {
           "type": "integer",
           "minimum": 0,
-          "description": "Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__IN_FLIGHT or --set may only lower it."
+          "description": "Stories each Kanha runs at once: a Feature's mission starts at most this many story subthreads, and the build-ready loop has at most this many items from claim to merge. 0 starts nothing. Read from the integration branch's committed config at its tip; a local value, AAYU_BUILD__AGENTS or --set may only lower it. A Feature's Approve to build may set its own (aayu ready \u003cfeature\u003e --agents N)."
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "The build-ready loop (aayu build --next): how many items it has in progress at once."
+      "description": "How many stories each Kanha runs at once: a Feature's mission and the build-ready loop (aayu build --next)."
+    },
+    "mission": {
+      "properties": {
+        "max_no_go": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Times a milestone's gate may fail before the mission stops and asks a person."
+        },
+        "retry_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retries of a failed mission step before it waits for a person."
+        },
+        "retry_backoff_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minutes before the first retry of a failed mission step; each later retry waits twice as long as the one before."
+        },
+        "check_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minutes between a local Kanha's checks of its missions."
+        },
+        "warn_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Working hours of a mission's estimate past which Approve to build warns."
+        },
+        "max_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Working hours a mission may use before it starts no new story until a person extends it; running stories finish."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The limits of a Feature's mission: gate failures, retries, check interval, and working hours."
     },
     "hosts": {
       "properties": {
