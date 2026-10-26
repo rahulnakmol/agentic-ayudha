@@ -79,6 +79,7 @@ type Issue struct {
 	// request that shares its number, through the fake; the issue list
 	// filters on it with since, as GitHub does.
 	UpdatedAt string     `json:"updated_at"`
+	ClosedAt  string     `json:"closed_at,omitempty"` // set by a test that needs when it closed
 	URL       string     `json:"html_url"`
 	Comments  []*Comment `json:"-"`
 	Subs      []int      `json:"-"`
@@ -172,14 +173,15 @@ type ReviewComment struct {
 
 // CheckRun is a check run on a commit.
 type CheckRun struct {
-	ID         int64  `json:"id,omitempty"`
-	HTMLURL    string `json:"html_url,omitempty"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	StartedAt  string `json:"started_at,omitempty"` // RFC 3339
-	App        *App   `json:"app,omitempty"`        // the GitHub App that made it
-	Suite      *Suite `json:"check_suite,omitempty"`
+	ID          int64  `json:"id,omitempty"`
+	HTMLURL     string `json:"html_url,omitempty"`
+	Name        string `json:"name"`
+	Status      string `json:"status"`
+	Conclusion  string `json:"conclusion"`
+	StartedAt   string `json:"started_at,omitempty"`   // RFC 3339
+	CompletedAt string `json:"completed_at,omitempty"` // RFC 3339
+	App         *App   `json:"app,omitempty"`          // the GitHub App that made it
+	Suite       *Suite `json:"check_suite,omitempty"`
 }
 
 // Suite is a check suite: one workflow run's checks, reruns included.

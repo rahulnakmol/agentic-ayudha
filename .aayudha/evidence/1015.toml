@@ -1,0 +1,53 @@
+# Which tests prove Story #1015's Completion Goal.
+
+[[criterion]]
+id = 1 # 13-story chain, 7 S, 4 M, 2 L at learned 1, 1.5, 3 h: "about 19 working hours (7 × 1 h + 4 × 1.5 h + 2 × 3 h; source: #886 history)", no warning
+tests = ["internal/cli:TestEstimateLearnedHours"]
+
+[[criterion]]
+id = 2 # 4 S at a learned 1 h and 1 M at #886's default 22 h: "about 26 h (S: #886 history; M: #886 default)", warns over [mission] warn_hours (24) and approves
+tests = ["internal/cli:TestEstimateDefaultHoursWarns"]
+
+[[criterion]]
+id = 3 # 60 learned hours: the override line, plan.json marks "over 48 h", and start with no reason is refused before the device code
+tests = ["internal/cli:TestOver48LearnedNeedsReasonAtStart"]
+
+[[criterion]]
+id = 4 # 220 default hours: warns "about 220 h, no history: over [mission] max_hours (48)", marks "no history", and refuses nothing
+tests = ["internal/cli:TestOver48DefaultsOnlyWarns"]
+
+[[criterion]]
+id = 5 # 30 learned + 40 default hours: warns "30 h learned + 40 h default (no history for M)" and refuses nothing
+tests = ["internal/cli:TestMixedEstimateRefusesOnLearnedOnly"]
+
+[[criterion]]
+id = 6 # start --reason "one migration" after the presence check records the override, the reason, and the person; an agent is refused
+tests = ["internal/cli:TestMissionStartReason"]
+
+[[criterion]]
+id = 7 # 30 h wall, 5 h person, 2 h usage limit, 4 h CI: show says "19 h of 48 (11 h not counted: …)", plan.json keeps working_hours
+tests = ["internal/cli:TestClockPausesOnPersonUsageCI"]
+
+[[criterion]]
+id = 8 # #20 waits on its CI review while #21 works: the clock runs
+tests = ["internal/cli:TestClockRunsWhileOneWorks"]
+
+[[criterion]]
+id = 9 # 25 minutes of .agents/check --full count; the CI run after the push does not
+tests = ["internal/cli:TestLocalCheckCounts"]
+
+[[criterion]]
+id = 10 # at 24 h: one inbox card "#889 has run 24 h", no recommendation, nothing stops
+tests = ["internal/cli:Test24hCard"]
+
+[[criterion]]
+id = 11 # at 48 h: "waits #25: #889 reached max_hours (48 h)", running stories go on, one card with Extend (reason) and Stop
+tests = ["internal/cli:Test48hHoldCardAndWaits"]
+
+[[criterion]]
+id = 12 # extend --reason "two stories left" after the presence check: new starts resume for another 48 h; an agent is refused
+tests = ["internal/cli:TestMissionExtend"]
+
+[[criterion]]
+id = 13 # mission 1 30 h and mission 2 40 h: both warn, none refused; mission 2's clock starts at 0 h
+tests = ["internal/cli:TestLimitsPerMission"]

@@ -323,10 +323,10 @@ func TestMissionStartWritesPlan(t *testing.T) {
 	}
 	p, raw := m.plan(889)
 	wantGraph := []MissionItem{
-		{Number: 20, Kind: "story", Title: "Story 20", Milestone: "MS1", DependsOn: []int{}, Outside: []MissionDep{}},
-		{Number: 21, Kind: "story", Title: "Story 21", Milestone: "MS1", DependsOn: []int{20}, Outside: []MissionDep{}},
-		{Number: 22, Kind: "story", Title: "Story 22", Milestone: "MS2", DependsOn: []int{}, Outside: []MissionDep{}},
-		{Number: 23, Kind: "story", Title: "Story 23", Milestone: "MS2", DependsOn: []int{}, Outside: []MissionDep{}},
+		{Number: 20, Kind: "story", Title: "Story 20", Milestone: "MS1", Effort: "S", DependsOn: []int{}, Outside: []MissionDep{}},
+		{Number: 21, Kind: "story", Title: "Story 21", Milestone: "MS1", Effort: "S", DependsOn: []int{20}, Outside: []MissionDep{}},
+		{Number: 22, Kind: "story", Title: "Story 22", Milestone: "MS2", Effort: "S", DependsOn: []int{}, Outside: []MissionDep{}},
+		{Number: 23, Kind: "story", Title: "Story 23", Milestone: "MS2", Effort: "S", DependsOn: []int{}, Outside: []MissionDep{}},
 	}
 	if p.Approval != 1 || p.ApprovedBy != "rahulnakmol" || fmt.Sprint(p.Graph) != fmt.Sprint(wantGraph) || len(p.Milestones) != 2 ||
 		!slices.Equal(p.Milestones[0].Stories, []int{20, 21}) || !slices.Equal(p.Milestones[1].Stories, []int{22, 23}) ||

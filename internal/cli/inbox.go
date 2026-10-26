@@ -54,9 +54,10 @@ const (
 	InboxFixed       = "fixed"        // an open Bug whose fix merged into dev
 	InboxReplaced    = "replaced"     // an open Story or Bug that another issue replaces
 	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
+	InboxMissionTime = "mission-time" // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -99,6 +100,12 @@ var inboxKinds = map[string]inboxKind{
 			"Each choice runs its aayu mission step, which reads the plan again and asks for the device code where a person must be present. " +
 			"If you leave it, nothing merges past that milestone and the fix waits.",
 		Terms: []string{"Merge gate", "Budget breaker"}},
+	InboxMissionTime: {Icon: "⌛", Word: "Mission time", Seat: verbs.EngineeringManager,
+		Line: "A mission's clock passed one of its limits; past the last one, only a person lets it start new stories.",
+		Explain: "Each mission of a Feature has a clock that runs while at least one of its story threads works, and pauses while every running " +
+			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours it starts no new story, " +
+			"and the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
+		Terms: []string{"Work item"}},
 	InboxReady: {Icon: "🚢", Word: "Ready to ship", Seat: verbs.EngineeringManager,
 		Line: "Finished work with every check green; it touches a sensitive area, so it merges when you say so.",
 		Explain: "Most agent pull requests merge into dev on their own once every check is green and the proof shows they do what they say. " +
@@ -227,6 +234,7 @@ type inboxFacts struct {
 	head, status, disp, by string
 	problem                string
 	devBr                  string
+	mission                int // a mission card's mission
 }
 
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
@@ -268,6 +276,8 @@ func (it InboxItem) short() string {
 		return fmt.Sprintf("replaced by #%d", it.ReplacedBy)
 	case InboxAudit:
 		return "merged; look it over"
+	case InboxMissionTime:
+		return it.f.problem
 	}
 	return ""
 }
@@ -621,13 +631,17 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 					return nil, err
 				}
 			}
-		case typ == "feature":
+		case typ == "feature": // its mission's asks (Story #1001), then its time card (Story #1015)
 			cards, err := s.missionItems(ctx, it)
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, cards...)
-			continue
+			if ok, err := s.missionItem(ctx, &it); err != nil {
+				return nil, err
+			} else if !ok {
+				continue
+			}
 		case typ == "release":
 			if ok, err := s.scopeItem(ctx, &it); err != nil {
 				return nil, err
@@ -1703,6 +1717,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return err
 	case InboxAudit:
 		return e.auditAct(ctx, c, repo, login, it, a.N == 2)
+	case InboxMissionTime:
+		return e.missionTimeAct(ctx, c, repo, it, a)
 	}
 	var note, status, reason string
 	switch it.Kind {
