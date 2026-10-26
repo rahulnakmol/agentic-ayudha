@@ -1,0 +1,77 @@
+{
+  "story": 996,
+  "body_hash": "a7741895dc350aba395eae85e1a6cdeb4be89e760f4a4fd4951ee19a302a67bc",
+  "footprint": [
+    "L02",
+    "L03",
+    "L06"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "CLI and ready package: aayu ready \u003cstory\u003e makes a Story Ready only while its Feature's Approve to build covers it. ready.Ready gains Covered, which only Apply runs, after the issue passes, on the same read the snapshot freezes; Check and Guard never call it, so the Ready guard and build --next (which use Check) never remove a Ready granted before the rule. storyCovered refuses with exit 4 and writes nothing when the Story has no parent Feature, the Feature has no specs/\u003cf\u003e/approved.json (unless specs/\u003cf\u003e/approved-early-\u003cs\u003e.json of #994 covers this one story at its body hash), a part of the Feature was approved again or its intent, tech, or UX pins drifted after the approval (spec drift is left to the per-story check), or the story's Completion Goal hash, effort, or title differs from the approval, or the story is not in it. The refusals name aayu ready \u003cf\u003e or aayu ready \u003cf\u003e --ack \u003cs\u003e, as the criteria say; --ack itself is #877 S3, not this story. A covered story's snapshot gains the row Approved to build | #\u003cf\u003e approval \u003ck\u003e by @\u003clogin\u003e",
+      "contracts": [
+        "ready.Ready.Covered func(ctx, workitems.Item, body string) (row string, err error); nil keeps Ready as before",
+        "ready.Result.ApprovedToBuild string (json approved_to_build), rendered as the snapshot row Approved to build",
+        "ready.StoryOf(workitems.Item) ApprovedStory and ready.StoryChanges(was, now) []string; Approve to build pins stories with StoryOf too",
+        "cli: botReady returns Arjun's *ledger.Writer; the early-build record is read by path and schema aayudha.feature.early-build/v1 only"
+      ],
+      "tests": [
+        "internal/cli:TestReadyStoryCoverage",
+        "internal/cli:TestReadyApproveToBuild",
+        "internal/cli:TestReadyHumanFallbackAndGuard",
+        "internal/cli:TestBuildNextPicksClaimsAndLimits"
+      ],
+      "instrumentation": [
+        "a refusal writes nothing; a covered Ready is the existing ledger commit and github.comment.ready-snapshot action, now naming the approval"
+      ],
+      "rollback": "revert the PR; aayu ready \u003cstory\u003e makes a story Ready without reading the approval again, and snapshots already written keep their row",
+      "criteria": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Skill: skills/ready/SKILL.md gains a section on the Story rule: what refuses a Story, that only the Completion Goal, effort, and title need an acknowledgment, the early build, that --check does not read the approval, and that the guard and build --next never apply the rule. No verb, flag, or seat changes, so no generated file changes",
+      "contracts": [
+        "skills/ready/SKILL.md body only; the frontmatter is unchanged"
+      ],
+      "tests": [
+        "github.com/rahulnakmol/agentic-ayudha:TestSkillLint"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        1,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "layer": "L06",
+      "title": "Test fake: internal/github/fake lists every issue in number order, not only issues 1 to n, so the scenario's issue numbers (#700, #840, #851-#858) are listed. Production code is unchanged",
+      "contracts": [
+        "fake GET /repos/\u003cr\u003e/issues iterates the sorted issue numbers"
+      ],
+      "tests": [
+        "internal/cli:TestReadyStoryCoverage",
+        "internal/cli:TestBuildNextPicksClaimsAndLimits"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        7
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-26T08:29:04Z",
+  "planned_by": "human-fallback"
+}
