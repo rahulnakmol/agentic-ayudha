@@ -398,7 +398,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err == nil {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
 		}
-		if err != nil && starts && !c.DryRun() {
+		// A start that got no answer may run on the host: it keeps its slot until mission recover checks (#1003).
+		if err != nil && starts && !c.DryRun() && (dlg == nil || dlg.state.Status != dlgMaybe) {
 			err = e.failedStart(ctx, c, w, repo, n, labels, &res, err)
 		}
 		if dlg == nil {

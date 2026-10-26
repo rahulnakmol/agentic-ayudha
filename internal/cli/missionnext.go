@@ -239,6 +239,10 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = usagePaused(st, now)
 		case plan.stopped(n) != nil: // a person stopped it alone (#1002): it keeps its slot while it runs
 			en.item.Reason = fmt.Sprintf("stopped (%s)", plan.stopped(n).Reason)
+		case plan.stateOf(n) != nil && plan.stateOf(n).State != "": // recover's record (#1003): a story that may run holds its slot
+			ss := plan.stateOf(n)
+			en.item.Reason = ss.summary()
+			busy[n] = busy[n] || ss.State == stateMaybe || strings.HasPrefix(ss.State, stateUnreadable)
 		case running:
 			continue // it runs: the per-mission running view is #895's
 		case changed[n]: // before Ready: the Ready guard strips status:ready from an edited body

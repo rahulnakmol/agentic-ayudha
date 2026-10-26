@@ -123,7 +123,7 @@ func (m *missionWorld) state(n int) delegate.State {
 // checkKanhaBrief fails unless brief is the Kanha brief of Feature f on tool.
 func checkKanhaBrief(t *testing.T, brief string, f int, tool string) {
 	t.Helper()
-	for _, want := range []string{fmt.Sprintf("# Kanha of Feature #%d", f), fmt.Sprintf("Run `aayu mission next %d`", f),
+	for _, want := range []string{fmt.Sprintf("# Kanha of Feature #%d", f), fmt.Sprintf("Run `aayu mission recover %d`", f), fmt.Sprintf("Run `aayu mission next %d`", f),
 		"run `aayu build <n> --delegate " + tool + "` once", "Never merge, approve, ship, or skip a gate."} {
 		if !strings.Contains(brief, want) {
 			t.Fatalf("the Kanha brief does not say %q:\n%s", want, brief)

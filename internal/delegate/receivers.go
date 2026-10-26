@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 )
@@ -53,6 +55,27 @@ type Task struct {
 	PRURL  string `json:"pr_url,omitempty"`
 	Diff   string `json:"-"` // Codex: the change, which aayu applies and commits (diff return)
 	Detail string `json:"detail,omitempty"`
+	Title  string `json:"title,omitempty"` // a listed task's title (Lister)
+}
+
+// Lister is a receiver that lists its recent tasks: mission recover reads
+// the list to find the task of a start that got no answer (Story #1003).
+type Lister interface {
+	List(ctx context.Context) ([]Task, error)
+}
+
+// ForStory reports whether a listed task's title names story n ("#64"):
+// the brief's first line, "# Delegated story #64: …", is the task's title.
+func ForStory(title string, n int) bool {
+	return regexp.MustCompile(fmt.Sprintf(`#%d\b`, n)).MatchString(title)
+}
+
+// NoAnswer reports whether err is a request the host did not answer before
+// its timeout: the request may have reached the host, so the work may have
+// started (Story #1003, "maybe started").
+func NoAnswer(err error) bool {
+	var ne net.Error
+	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &ne) && ne.Timeout()
 }
 
 // Adapter is one receiver's transport. Every adapter sends the same brief;
@@ -165,7 +188,7 @@ func (c CursorAPI) Status(ctx context.Context, st State) (Task, error) {
 	switch r.Status {
 	case "FINISHED":
 		t.Status = TaskDone
-	case "ERROR", "CANCELLED", "EXPIRED":
+	case "ERROR", "CANCELLED", "EXPIRED", "ARCHIVED": // an archived agent runs no more
 		t.Status = TaskFailed
 	}
 	for _, b := range r.Git.Branches {
@@ -389,10 +412,15 @@ func (c CodexCloud) bin() string {
 	return c.Bin
 }
 
+// SubmitTimeout is how long `codex cloud exec` may take to submit a task.
+const SubmitTimeout = 2 * time.Minute
+
 func (c CodexCloud) submit(ctx context.Context, branch, prompt string) (Task, error) {
 	if c.EnvID == "" {
 		return Task{}, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
 	}
+	ctx, cancel := context.WithTimeout(ctx, SubmitTimeout) // past it, the task may exist: "maybe started" (NoAnswer)
+	defer cancel()
 	out, err := c.Exec(ctx, "", c.Env, "", c.bin(), "cloud", "exec", "--env", c.EnvID, "--branch", branch, prompt)
 	if err != nil {
 		return Task{}, fmt.Errorf("codex: %w", err)
@@ -435,6 +463,36 @@ func (c CodexCloud) Status(ctx context.Context, st State) (Task, error) {
 // FollowUp submits a new task on the PR's branch with the findings.
 func (c CodexCloud) FollowUp(ctx context.Context, st State, msg string) (Task, error) {
 	return c.submit(ctx, st.Branch, msg)
+}
+
+// List reads the environment's recent cloud tasks (`codex cloud list
+// --json`): each task's ID, URL, title, and status.
+func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
+	if c.EnvID == "" {
+		return nil, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
+	}
+	out, err := c.Exec(ctx, "", c.Env, "", c.bin(), "cloud", "list", "--env", c.EnvID, "--json", "--limit", "20")
+	if err != nil {
+		return nil, fmt.Errorf("codex: %w", err)
+	}
+	var r struct {
+		Tasks []struct{ ID, URL, Title, Status string } `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil {
+		return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
+	}
+	tasks := make([]Task, 0, len(r.Tasks))
+	for _, t := range r.Tasks {
+		task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
+		switch {
+		case codexFailed.MatchString(t.Status):
+			task.Status = TaskFailed
+		case codexDone.MatchString(t.Status):
+			task.Status = TaskDone
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }
 
 func clip(s string, n int) string {
