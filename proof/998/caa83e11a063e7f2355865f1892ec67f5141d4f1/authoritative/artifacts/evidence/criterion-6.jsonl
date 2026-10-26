@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildDelegateReadsLiveState"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildDelegateReadsLiveState","Output":"=== RUN   TestBuildDelegateReadsLiveState\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildDelegateReadsLiveState","Output":"--- PASS: TestBuildDelegateReadsLiveState (1.58s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildDelegateReadsLiveState"}

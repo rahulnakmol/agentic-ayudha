@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextOneClaimTwoRuns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextOneClaimTwoRuns","Output":"=== RUN   TestMissionNextOneClaimTwoRuns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextOneClaimTwoRuns","Output":"--- PASS: TestMissionNextOneClaimTwoRuns (2.37s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextOneClaimTwoRuns"}

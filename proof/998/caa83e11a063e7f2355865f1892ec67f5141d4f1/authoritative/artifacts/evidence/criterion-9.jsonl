@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextTatkalStoryJoins"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextTatkalStoryJoins","Output":"=== RUN   TestMissionNextTatkalStoryJoins\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextTatkalStoryJoins","Output":"--- PASS: TestMissionNextTatkalStoryJoins (1.68s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextTatkalStoryJoins"}

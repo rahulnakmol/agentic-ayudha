@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextRefusedOnOtherTool"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextRefusedOnOtherTool","Output":"=== RUN   TestMissionNextRefusedOnOtherTool\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextRefusedOnOtherTool","Output":"--- PASS: TestMissionNextRefusedOnOtherTool (1.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextRefusedOnOtherTool"}
