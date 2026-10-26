@@ -228,9 +228,15 @@ func missionResume(ctx context.Context, e *Env, f int, in Values) error {
 	if err != nil {
 		return err
 	}
+	// R9: the tool only, never the person. A Tatkal story a person started on
+	// their own tool resumes on that tool (ST9).
+	runs, want, starter := fmt.Sprintf("#%d's mission", f), plan.Tool, plan.StartedBy
+	if i := slices.IndexFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == story }); story != 0 && i >= 0 {
+		runs, want, starter = fmt.Sprintf("#%d", story), plan.StoryStarts[i].Tool, plan.StoryStarts[i].StartedBy
+	}
 	switch {
-	case tool != plan.Tool: // R9: the tool only, never the person
-		return Errorf(ExitBlocked, "#%d's mission runs on %s, the tool of @%s, who started it: run this there", f, plan.Tool, plan.StartedBy)
+	case tool != want:
+		return Errorf(ExitBlocked, "%s runs on %s, the tool of @%s, who started it: run this there", runs, want, starter)
 	case story != 0 && plan.stopped(story) == nil:
 		return Errorf(ExitBlocked, "#%d is not stopped in the mission of #%d. Nothing changed.", story, f)
 	case story == 0 && plan.Pause == nil:

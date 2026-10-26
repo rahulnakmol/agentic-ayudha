@@ -26,15 +26,21 @@ import (
 // missionWorld of Stories #997 and #998, with the receivers' CLIs and
 // Cursor's API stubbed, and `aayu ship` on the thin fixture.
 
-// execLog stubs the receivers' CLIs: it records each call, and answers the
-// Claude Code CLI's follow-up as queued.
+// execLog records the follow-ups a stop or resume sends through the
+// receivers' CLIs, and answers the Claude Code CLI's follow-up as queued;
+// every other call goes to the mission world's stub (Kanha starts).
 type execLog struct {
 	mu    sync.Mutex
 	calls []string
 	on    func(name string) // runs while the CLI runs, as a sync that writes meanwhile
+	next  func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error)
 }
 
-func (x *execLog) exec(_ context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+func (x *execLog) exec(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
+	followUp := (name == "amp" && len(args) > 1 && args[0] == "threads" && args[1] == "continue") || (name == "claude" && slices.Contains(args, "-p"))
+	if !followUp {
+		return x.next(ctx, dir, env, stdin, name, args...)
+	}
 	if x.on != nil {
 		x.on(name)
 	}
@@ -64,7 +70,7 @@ type threads struct {
 
 func newThreads(t *testing.T) *threads {
 	m := newMissionWorld(t)
-	w := &threads{missionWorld: m, x: &execLog{}, cursor: &fakeCursor{}}
+	w := &threads{missionWorld: m, x: &execLog{next: m.exec}, cursor: &fakeCursor{}}
 	srv := httptest.NewServer(w.cursor)
 	t.Cleanup(srv.Close)
 	m.opts.DelegateExec = w.x.exec
@@ -582,6 +588,20 @@ func TestMissionResumeRefusedOnOtherTool(t *testing.T) {
 	if code != ExitBlocked || w.codes() != 0 || w.commits() != n || len(w.repoWrites()) != 0 ||
 		!strings.Contains(errOut, "#874's mission runs on codex, the tool of @bob, who started it: run this there") {
 		t.Fatalf("alice's resume: exit %d, device codes %d: %s%s", code, w.codes(), out, errOut)
+	}
+	// In a Tatkal mission a story that @carol started on her own tool resumes on that tool (ST9), not the mission's.
+	w.setPlan(874, func(p *MissionPlan) {
+		p.Pause, p.Stopped = nil, []MissionStopped{{Number: 951, Reason: "wrong approach", By: "bob"}}
+		p.StoryStarts = []MissionStoryStart{{Number: 951, Tool: "claude", StartedBy: "carol", StartedAt: "2026-10-26T10:00:00Z"}}
+	})
+	w.as("bob", "codex")
+	if code, _, errOut := w.control("bob", "resume", 874, "--story", "951"); code != ExitBlocked || w.codes() != 0 ||
+		!strings.Contains(errOut, "#951 runs on claude, the tool of @carol, who started it: run this there") {
+		t.Fatalf("bob's resume of carol's story on codex: exit %d: %s", code, errOut)
+	}
+	w.as("alice", "claude")
+	if code, out, errOut := w.control("alice", "resume", 874, "--story", "951"); code != 0 || !strings.Contains(out, "@alice resumed #951 in the mission of #874 on claude.") {
+		t.Fatalf("alice's resume of carol's story on claude: exit %d: %s%s", code, out, errOut)
 	}
 }
 
