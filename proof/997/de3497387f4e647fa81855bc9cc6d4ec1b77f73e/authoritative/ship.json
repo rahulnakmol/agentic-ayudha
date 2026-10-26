@@ -1,0 +1,59 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 997,
+  "pr": 1084,
+  "pr_head_sha": "de3497387f4e647fa81855bc9cc6d4ec1b77f73e",
+  "merge_commit": "d941d1511d06a2afa1caf77d696bc83192407514",
+  "pack": "proof/997/de3497387f4e647fa81855bc9cc6d4ec1b77f73e/authoritative/pack.json",
+  "pack_landed": "artifact 12649514313 of run 40321927807 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/40321927807), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 40321927807,
+  "artifact": 12649514313,
+  "pack_sha256": "805ea74cccfc11de1a0a3e14079b75e7a21a229fcbfbaf3c8c23acdeb542dd21",
+  "human_pass": {
+    "kind": "proof",
+    "login": "rahulnakmol",
+    "commit": "de3497387f4e647fa81855bc9cc6d4ec1b77f73e",
+    "note": "merged on proof (Decision #593): required checks build, generate-drift, lint, commits, security, docs, release-snapshot green, the pack verified with its floors holding, inspect at merge with review rung B, and nothing in the narrow set; CODEOWNERS paths seats/ai-native-engineer/CHARTER.md, seats/engineering-manager/CHARTER.md, seats/founder/CHARTER.md, seats/product-strategist/CHARTER.md, skills/mission/SKILL.md, skills/ready/SKILL.md merged with no code owner's review"
+  },
+  "proof": {
+    "rung": "B",
+    "required_checks": [
+      "build",
+      "generate-drift",
+      "lint",
+      "commits",
+      "security",
+      "docs",
+      "release-snapshot"
+    ],
+    "protected": [
+      "seats/ai-native-engineer/CHARTER.md",
+      "seats/engineering-manager/CHARTER.md",
+      "seats/founder/CHARTER.md",
+      "seats/product-strategist/CHARTER.md",
+      "skills/mission/SKILL.md",
+      "skills/ready/SKILL.md"
+    ],
+    "policy": "52f8b96bef74189ba298f9600932016dab2d2691"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "autonomous": false,
+    "skipped": "the human pass is settled: proof"
+  },
+  "actions_segment": "actions/2026-10-26/cli-20261026T124624Z.jsonl",
+  "shipped_at": "2026-10-26T12:46:42Z",
+  "shipped_by": "rahulnakmol"
+}
