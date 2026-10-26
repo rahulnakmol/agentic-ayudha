@@ -29,6 +29,7 @@ type ApproveReport struct {
 	Feature      int             `json:"feature"`
 	State        string          `json:"state"` // approved, or unchanged when the last approval agrees the Feature as it is
 	Approval     *ready.Approval `json:"approval"`
+	Plan         *MissionPlan    `json:"plan"` // missions/<f>/plan.json, written with the approval (Story #997)
 	LedgerPath   string          `json:"ledger_path"`
 	LedgerCommit string          `json:"ledger_commit,omitempty"`
 	Ready        *ready.Result   `json:"ready,omitempty"` // the Feature's Ready snapshot, which Arjun posts after the approval
@@ -39,6 +40,12 @@ type ApproveReport struct {
 // marker, aayu's own agent lanes (AAYU_AGENT=1: MCP and the loops), or CI.
 // It is checked before anything is written.
 func (e *Env) approveRefusal() error {
+	return e.laneRefusal("Approve to build (aayu ready on a Feature)")
+}
+
+// laneRefusal refuses what, a person's decision, for an agent lane, naming
+// the lane's variable but never its value; nil for a person.
+func (e *Env) laneRefusal(what string) error {
 	lane := ""
 	switch m := hosts.AgentMarker(e.Getenv); {
 	case m != "":
@@ -50,7 +57,7 @@ func (e *Env) approveRefusal() error {
 	default:
 		return nil
 	}
-	return Errorf(ExitBlocked, "Approve to build (aayu ready on a Feature) is a person's decision and is refused for an agent lane (%s)", lane)
+	return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s)", what, lane)
 }
 
 // critique is #876's critique.State of Feature n. Until #876 merges no
@@ -69,6 +76,8 @@ type approveRun struct {
 	w *ledger.Writer // the person's ledger writer
 	r *ready.Ready
 	n int
+	// milestones is --milestones: the mission's milestones the person names.
+	milestones string
 }
 
 // approveToBuild is `aayu ready <feature>` (Feature #877, Decision #903): a
@@ -76,7 +85,7 @@ type approveRun struct {
 // through GitHub's device flow every time. Everything is read again after the
 // code, and only what the person saw is approved. Then Arjun posts the
 // Feature's Ready snapshot.
-func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int) error {
+func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milestones string) error {
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return err
@@ -86,16 +95,22 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int) error {
 		return err
 	}
 	r.GH = c
-	a := &approveRun{e: e, c: c, w: w, r: r, n: n}
+	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones}
 	want, effect, prev, _, err := a.prepare(ctx)
 	if err != nil {
 		return err
 	}
+	plan, planEffect, old, err := a.missionPlan(ctx)
+	if err != nil {
+		return err
+	}
 	rep := ApproveReport{Repo: r.Repo, Feature: n, LedgerPath: ready.ApprovalPath(n), DryRun: c.DryRun()}
-	if prev != nil && prev.Agreed(want) { // approved already, as it is now: no new approval, and the snapshot is posted again if it is missing
-		rep.State, rep.Approval = "unchanged", prev
+	// Approved already, as it is now, with the same milestones: no new approval, and the snapshot is posted again if it is missing.
+	if prev != nil && prev.Agreed(want) && old != nil && old.Approval == prev.Version && missionJSON(&MissionPlan{Milestones: old.Milestones}) == missionJSON(&MissionPlan{Milestones: plan.Milestones}) {
+		rep.State, rep.Approval, rep.Plan = "unchanged", prev, old
 		return a.ready(ctx, rep)
 	}
+	effect = append(effect, planEffect...)
 	p, err := e.presenceCheck(ctx, Pending{What: "Approve to build", Effect: effect}, AccessWrite,
 		Errorf(ExitBlocked, "Approve to build needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code"))
 	if err != nil {
@@ -109,16 +124,28 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int) error {
 	if err != nil {
 		return err
 	}
-	if !got.Agreed(want) || !slices.Equal(again, effect) || version(prev2) != version(prev) {
+	// A mission start while the code waits is in the tip the write is based on: the plan is read again, so it is kept.
+	plan2, planEffect2, old2, err := a.missionPlan(ctx)
+	if err != nil {
+		return err
+	}
+	if !got.Agreed(want) || !slices.Equal(append(again, planEffect2...), effect) || version(prev2) != version(prev) || missionJSON(&plan2) != missionJSON(&plan) ||
+		(old == nil) != (old2 == nil) || old != nil && missionJSON(old) != missionJSON(old2) {
 		return Errorf(ExitBlocked, "The approval of #%d changed while the code was waiting; nothing was approved.", n)
 	}
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
 	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: e.presenceRecord(p.Login)}
-	rep.State, rep.Approval = "approved", &got
+	plan.Approval, plan.ApprovedBy, plan.ApprovedAt = got.Version, got.By, got.At
+	if old != nil { // a started mission keeps who started it, its tool, and its budget (Decision #974)
+		plan.StartedBy, plan.StartedAt, plan.Tool, plan.ToolSource = old.StartedBy, old.StartedAt, old.Tool, old.ToolSource
+		plan.Budget, plan.BudgetBasis, plan.Pause, plan.Controls = old.Budget, old.BudgetBasis, old.Pause, old.Controls
+	}
+	rep.State, rep.Approval, rep.Plan = "approved", &got, &plan
 	if !c.DryRun() {
 		data, _ := json.MarshalIndent(got, "", "  ")
-		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: Approve to build of #%d, approval %d, by @%s", n, got.Version, p.Login),
-			Files: map[string][]byte{rep.LedgerPath: append(data, '\n')}, Base: tip})
+		pdata, _ := json.MarshalIndent(plan, "", "  ")
+		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: Approve to build of #%d, approval %d, by @%s, and its mission plan", n, got.Version, p.Login),
+			Files: map[string][]byte{rep.LedgerPath: append(data, '\n'), MissionPlanPath(n): append(pdata, '\n')}, Base: tip})
 		if errors.Is(err, ledger.ErrMoved) {
 			return Errorf(ExitBlocked, "The ledger changed while aayu wrote the approval of #%d. Nothing was approved. Run it again.", n)
 		}
@@ -343,10 +370,10 @@ func (a *approveRun) ready(ctx context.Context, rep ApproveReport) error {
 		}
 		switch {
 		case rep.DryRun:
-			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s, the Ready snapshot, and status:ready planned, not written\n", rep.LedgerPath)
+			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s and %s, the Ready snapshot, and status:ready planned, not written\n", rep.LedgerPath, MissionPlanPath(a.n))
 			return err
 		case rep.LedgerCommit != "":
-			fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
+			fmt.Fprintf(w, "  ledger %s and %s (%s)\n", rep.LedgerPath, MissionPlanPath(a.n), short(rep.LedgerCommit))
 		}
 		_, err := fmt.Fprintf(w, "  Ready snapshot posted and labelled status:ready; ledger %s\n", res.LedgerPath)
 		return err

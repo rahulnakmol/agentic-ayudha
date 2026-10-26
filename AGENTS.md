@@ -209,7 +209,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 | Product Strategist (`product-strategist`) | Arjun | — | `grill`, `slice`, `triage`, `brain`, `ready`, `scope` |
 | Code Architect (`code-architect`) | Vishwa | L02, L06 | `plan`, `survey` |
 | Data & AI Architect (`data-ai-architect`) | Shuka | L05, L08 | `measure`, `chart` |
-| Engineering Manager (`engineering-manager`) | Drona | L03 | `inspect`, `ship`, `status`, `retro`, `next` |
+| Engineering Manager (`engineering-manager`) | Drona | L03 | `inspect`, `ship`, `mission`, `status`, `retro`, `next` |
 | AI Native Engineer (`ai-native-engineer`) | Nakul | — | `build`, `verify`, `evolve` |
 | Production Engineer (`production-engineer`) | Shesha | L07 | `respond`, `investigate`, `slo`, `runbook` |
 | UX Researcher & Evolutionist (`ux-researcher-evolutionist`) | Hanu | L01 | `research`, `wireframe`, `mockup`, `prototype`, `review`, `polish`, `baseline` |

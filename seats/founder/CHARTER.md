@@ -86,6 +86,7 @@ Layers owned: none.
 | `counsel` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
 | `brain` | Consulted |
 | `release` | Informed |
+| `mission` | Informed |
 | `experiment` | Informed |
 | `readout` | Informed |
 | `respond` | Informed |

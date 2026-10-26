@@ -30,6 +30,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | write |
 | `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
 | `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
+| `mission` | Engineering Manager | Engineering Manager twin, mission lane | Engineering Manager | Product Strategist, AI Native Engineer | Founder | all | human | none | read |
 | `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
 | `wireframe` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
 | `mockup` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
@@ -136,6 +137,12 @@ The reviewer model family must differ from the builder model family on every sto
 | `plan` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
 | `plan` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
 | `plan` | GitHub Copilot | Claude Sonnet 5.5 | `claude-sonnet-5.5` | anthropic | escalation: Claude Opus 5.5 (`claude-opus-5.5`) |
+| `mission` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
+| `mission` | Cursor (x plan) | Grok 4.7 | `grok-4.7` | xai | — |
+| `mission` | Cursor (legacy plan) | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `mission` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `mission` | OpenAI Codex | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort (`gpt-6-astra`) |
+| `mission` | GitHub Copilot | Claude Sonnet 5.5 | `claude-sonnet-5.5` | anthropic | escalation: Claude Opus 5.5 (`claude-opus-5.5`) |
 | `review` (adversarial) | Amp | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | Cursor (x plan) | Grok 4.6 | `grok-4.6` | xai | — |
 | `review` (adversarial) | Cursor (legacy plan) | Grok 4.7 | `grok-4.7` | xai | — |

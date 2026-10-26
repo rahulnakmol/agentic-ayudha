@@ -47,6 +47,9 @@ func (e *Env) technicalOwner() string {
 
 func runReady(ctx context.Context, e *Env, in Values) error {
 	n := issueNumber(in.String("issue"))
+	if in.Has("milestones") && (in.Has("early-build") || in.Has("part") || in.Bool("request") || in.Bool("check") || in.Bool("guard")) {
+		return Errorf(ExitUsage, "ready: --milestones goes with Approve to build only, not --early-build, --part, --request, --check, or --guard")
+	}
 	if in.Has("early-build") {
 		return runReadyEarly(ctx, e, in, n)
 	}
@@ -125,7 +128,10 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			if err := e.approveRefusal(); err != nil {
 				return err
 			}
-			return e.approveToBuild(ctx, r, n)
+			return e.approveToBuild(ctx, r, n, in.String("milestones"))
+		}
+		if in.Has("milestones") {
+			return Errorf(ExitUsage, "ready: --milestones names a Feature's milestones at Approve to build; #%d is not a Feature", n)
 		}
 		w, err := e.botReady(ctx, r)
 		if err != nil {

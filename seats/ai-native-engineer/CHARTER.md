@@ -92,6 +92,7 @@ Layers owned: none.
 | `verify` | Accountable; the twin executes it (chore lane) |
 | `inspect` | Informed |
 | `proof` | Consulted |
+| `mission` | Consulted |
 | `respond` | Consulted |
 | `retro` | Consulted |
 | `evolve` | Accountable; the twin executes it (build lane); owns thresholds and policy |

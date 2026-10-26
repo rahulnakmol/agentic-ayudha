@@ -392,6 +392,7 @@ const (
 	LaneReview   LaneID = "review"
 	LaneUIReview LaneID = "ui-review"
 	LaneChore    LaneID = "chore"
+	LaneMission  LaneID = "mission"
 )
 
 // Model IDs as the AI gateway lists them (GET /v1/models, verified 2026-10-11).
@@ -493,6 +494,7 @@ var Lanes = []Lane{
 	{ID: LaneBuild, Summary: "Writes code and artifacts.", Defaults: builderDefaults()},
 	{ID: LaneSpec, Summary: "Authors specs, decisions, briefs, and copy.", Defaults: builderDefaults()},
 	{ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
+	{ID: LaneMission, Summary: "Runs a Feature's mission: starts its stories and follows its milestones.", Defaults: builderDefaults()},
 	{ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
 		reviewDefault(HostAmp),
 		// On a new plan the builder is Grok 4.7, and no other family is
@@ -841,10 +843,24 @@ var Verbs = []Command{
 			flag("changes", TypePath, "With --request: a JSON array with one entry per change since the last baseline (ref, what, why, need). A version after v1 needs what changed, why it matters, and the need behind it for each change."),
 			flag("fixes", TypeString, "With --request: comma-separated IDs (<part>-v<k>/<seat>/<n>) of this part's review findings that the new version fixes; the draft's hash covers them."),
 			flag("early-build", TypeIssue, "A child story of the Feature, labelled early-build, that a person approves to build before Approve to build, within [baselines] early_build_budget × [autonomy.budget] cost_usd; GitHub's device flow every time, refused for an agent lane. Its PR never merges into dev."),
+			flag("milestones", TypeString, "With Approve to build: the mission's milestones in order, as 'MS1=20,21 MS2=22,23'. Each story and Bug of the Feature is in exactly one; with none, the last plan's milestones hold, or for a first plan one milestone MS1 holds them all. Written to missions/<f>/plan.json."),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot", "feature-baseline", "early-build-approval"},
 		Gates:    []GateID{GateValidator},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
+	},
+	{
+		Name: "mission", WP: "v0.4.0", Stage: StageBuild,
+		Summary: "Start a Feature's approved mission, or show its plan: milestones, missions, agents, budget, and estimate.",
+		Reader:  "Starts the build of a Feature a person approved, and shows where its mission stands.",
+		Seat:    EngineeringManager, Lane: LaneMission, Layers: AllLayers(),
+		Inputs: []Input{
+			readOnlyWith(enumIn("action", true, true, "start: a person starts the approved mission, through GitHub's device flow, and the plan records them, their tool for this repository, and the budget; refused for an agent lane. show: print the plan, each number with its source.", "start", "show"), "show"),
+			pos("feature", TypeIssue, "Feature whose mission to start or show."),
+		},
+		Outputs:  []string{"mission-plan"},
+		Gates:    []GateID{GateHumanIdentity},
+		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
 		Name: "research", WP: "WP6.5", Stage: StageDesign,

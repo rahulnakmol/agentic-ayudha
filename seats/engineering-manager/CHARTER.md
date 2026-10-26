@@ -97,6 +97,7 @@ Sources:
 | `ship` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `release` | Consulted |
 | `ready` | Informed |
+| `mission` | Accountable; the twin executes it (mission lane); owns thresholds and policy |
 | `wireframe` | Informed |
 | `mockup` | Informed |
 | `prototype` | Informed |

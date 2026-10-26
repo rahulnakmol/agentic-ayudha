@@ -91,6 +91,7 @@ Layers owned: none.
 | `brain` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `ship` | Informed |
 | `ready` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
+| `mission` | Consulted |
 | `research` | Consulted |
 | `wireframe` | Consulted |
 | `mockup` | Consulted |
