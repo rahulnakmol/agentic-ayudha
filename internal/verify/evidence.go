@@ -21,6 +21,10 @@ type TestEvent struct {
 	Test    string  `json:"Test,omitempty"`
 	Elapsed float64 `json:"Elapsed,omitempty"`
 	Output  string  `json:"Output,omitempty"`
+	// ImportPath names a build-output event's build; FailedBuild names it on
+	// the fail event of a package whose build failed.
+	ImportPath  string `json:"ImportPath,omitempty"`
+	FailedBuild string `json:"FailedBuild,omitempty"`
 }
 
 func testEvents(b []byte) []TestEvent {
