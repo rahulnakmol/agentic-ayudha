@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipSendsNothingOnRefusal"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipSendsNothingOnRefusal","Output":"=== RUN   TestShipSendsNothingOnRefusal\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipSendsNothingOnRefusal","Output":"--- PASS: TestShipSendsNothingOnRefusal (0.68s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipSendsNothingOnRefusal"}

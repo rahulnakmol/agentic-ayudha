@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipTellsKanhaAfterMerge"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipTellsKanhaAfterMerge","Output":"=== RUN   TestShipTellsKanhaAfterMerge\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipTellsKanhaAfterMerge","Output":"--- PASS: TestShipTellsKanhaAfterMerge (1.11s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipTellsKanhaAfterMerge"}
