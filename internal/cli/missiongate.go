@@ -910,10 +910,21 @@ func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, approv
 	one := *r
 	one.Checks, one.Work = ref, filepath.Join(r.Work, "gate-fix")
 	rep := verify.Execute(ctx, &one, []verify.Floor{verify.Behaviour{}})
-	switch c := rep.Checks[0]; c.Result {
-	case proof.Pass:
+	// The floor passes an unreachable check, which proves nothing: the fix
+	// passes only when every check it selects ran and passed.
+	var ran struct {
+		Checks []verify.CheckResult `json:"checks"`
+	}
+	for _, a := range rep.Artifacts {
+		if a.Path == "reports/behaviour.json" {
+			_ = json.Unmarshal(a.Data, &ran)
+		}
+	}
+	passed := len(ran.Checks) > 0 && !slices.ContainsFunc(ran.Checks, func(x verify.CheckResult) bool { return x.Status != verify.CheckPassed })
+	switch c := rep.Checks[0]; {
+	case passed:
 		note = fmt.Sprintf("%s, and that check passes at %s", what, short(r.Head))
-	case proof.Fail:
+	case c.Result == proof.Fail:
 		problems = append(problems, fmt.Sprintf("%s, and that check still fails at %s", what, short(r.Head)))
 	default:
 		problems = append(problems, fmt.Sprintf("%s, and that check did not run at %s: %s", what, short(r.Head), c.Detail))

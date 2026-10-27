@@ -581,14 +581,20 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 		}
 		exp.CompletionGoalHash, exp.Criteria, crit = snap.CompletionGoalHash, snap.Numbers(), snap.Criteria
 	}
-	if exp.CompletionGoalHash == "" { // a gate fix PR of a Feature rests on the approved record its entry names (Bug #1100)
-		fix, _, err := listedGateFix(ctx, t, story, p.PR)
+	// A gate fix PR of a Feature rests on the approved record its entry names
+	// (Bug #1100); stale says when that record has changed since.
+	stale := ""
+	if exp.CompletionGoalHash == "" {
+		fix, now, err := listedGateFix(ctx, t, story, p.PR)
 		if err != nil {
 			t.Close()
 			return err
 		}
 		if fix != nil {
 			exp.CompletionGoalHash, exp.Criteria, crit = fix.Approval.SHA256, nil, nil
+			if fix.Approval.Record != ready.ApprovalPath(story) || fix.Approval.SHA256 != now {
+				stale = fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fix.PR, story)
+			}
 		}
 	}
 	t.Close()
@@ -605,6 +611,10 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 		return Wrap(ExitExternal, err)
 	}
 	g.Report = proof.VerifyLocal(dir, p, exp)
+	if stale != "" {
+		g.Report.Problems = append(g.Report.Problems, stale)
+		g.Report.OK = false
+	}
 	if exp.CompletionGoalHash == "" {
 		g.Report.Problems = append(g.Report.Problems, fmt.Sprintf("no Ready snapshot at ledger %s", ready.LedgerPath(story)))
 		g.Report.OK = false

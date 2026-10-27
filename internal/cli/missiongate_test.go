@@ -1075,7 +1075,7 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 	_ = os.MkdirAll(fdir, 0o755)
 	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"control.sh\"]}\n```\n\n1. [Inbox](inbox.md)\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(fdir, "inbox.md"), []byte("# Inbox\n\nx\n\n```feature\n{\"id\": \"inbox\", \"sources\": [\"inbox.txt\"], \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"ship-once\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"cat\"]}]}\n```\n\n## Gotchas\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "control.sh"), []byte("cat >/dev/null\nif [ -f fixed ]; then echo '{\"status\": \"passed\"}'; else echo '{\"status\": \"failed\", \"reason\": \"two ship records\"}'; fi\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "control.sh"), []byte("cat >/dev/null\nif [ -f unreachable ]; then echo '{\"status\": \"unreachable\", \"reason\": \"no inbox to read\"}'; elif [ -f fixed ]; then echo '{\"status\": \"passed\"}'; else echo '{\"status\": \"failed\", \"reason\": \"two ship records\"}'; fi\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "fixed"), []byte("x\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"), 0o644)
@@ -1137,13 +1137,28 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 		t.Fatalf("listed fix, check fails: exit %d %q: %s", code, res.Gate, out)
 	}
 
+	// A check that could not reach its precondition proves nothing: the fix does not pass on it.
+	_ = os.WriteFile(filepath.Join(dir, "unreachable"), []byte("x\n"), 0o644)
+	git(t, dir, "add", "unreachable")
+	git(t, dir, "commit", "--quiet", "-m", "fix(gate): no inbox")
+	sha = head()
+	if code, res, out := verifyPR(981); code != ExitBlocked || len(res.Gate) != 1 ||
+		!strings.HasPrefix(res.Gate[0], "#981 fixes verify:inbox.ship-once in MS1 of #889, and that check did not run at "+sha[:7]+": ") {
+		t.Fatalf("listed fix, check unreachable: exit %d %q: %s", code, res.Gate, out)
+	}
+	git(t, dir, "rm", "--quiet", "unreachable")
+	git(t, dir, "commit", "--quiet", "-m", "fix(gate): inbox back")
+	head()
+
 	// 3. An unlisted PR that refers to the Feature fails as before.
 	if code, res, out := verifyPR(982); code != ExitBlocked || res.GateFix != nil || !slices.Equal(res.Gate, []string{"story #889 has no Ready snapshot on the ledger"}) {
 		t.Fatalf("unlisted PR: exit %d %q: %s", code, res.Gate, out)
 	}
 
 	// A required CI job or an eval: the gate cannot run it, names it, and ship's required checks decide.
-	git(t, dir, "revert", "--quiet", "--no-edit", "HEAD")
+	_ = os.WriteFile(filepath.Join(dir, "fixed"), []byte("x\n"), 0o644)
+	git(t, dir, "add", "fixed")
+	git(t, dir, "commit", "--quiet", "-m", "fix(gate): ship once again")
 	g.fixPR(983, "check:build", "Refs #889")
 	head()
 	g.edit(func() { g.g.Pulls[983].Head.SHA, g.g.Pulls[983].Base.SHA = g.g.Pulls[981].Head.SHA, base })
@@ -1164,5 +1179,9 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 	putLedger(t, g.bare, ready.ApprovalPath(889), again+"\n")
 	if code, res, out := verifyPR(981); code != ExitBlocked || !slices.Equal(res.Gate, []string{"the gate fix entry of #981 was made under an earlier approval of #889"}) {
 		t.Fatalf("earlier approval: exit %d %q: %s", code, res.Gate, out)
+	}
+	if code, out, errOut := run(t, gateEnv, g.opts, "proof", "comment", "889", "--ci", "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "the gate fix entry of #981 was made under an earlier approval of #889") {
+		t.Fatalf("pack job under an earlier approval: exit %d: %s%s", code, out, errOut)
 	}
 }
