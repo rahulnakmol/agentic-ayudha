@@ -1405,6 +1405,7 @@ type kanhaShip struct {
 	mu        sync.Mutex
 	calls     []string
 	send      func() error
+	stall     bool   // each send waits until its context ends, as a stalled CLI does
 	shippedAt []bool // at each call: merged, ship record on the ledger, merge in a ledger actions segment
 }
 
@@ -1427,7 +1428,14 @@ func newKanhaShip(t *testing.T, k ready.Parent) *kanhaShip {
 	pb, _ := json.Marshal(MissionPlan{Schema: MissionPlanSchema, Feature: 1, Approval: a.Version, Tool: k.Host, StartedBy: k.StartedBy})
 	putLedger(t, bare, MissionPlanPath(1), string(pb))
 	s := &kanhaShip{g: g, env: env, bare: bare, prN: prN, head: head, send: func() error { return nil }}
-	opts.DelegateExec = func(_ context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+	opts.DelegateExec = func(ctx context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+		if s.stall {
+			<-ctx.Done()
+			s.mu.Lock()
+			s.calls = append(s.calls, name+" "+strings.Join(args, " "))
+			s.mu.Unlock()
+			return "", ctx.Err()
+		}
 		g.Mu.Lock()
 		merged := g.Pulls[prN].Merged
 		g.Mu.Unlock()
@@ -1504,6 +1512,12 @@ func TestShipMergeStandsWhenKanhaUnreached(t *testing.T) {
 		{"the amp CLI fails", amp, func(s *kanhaShip) {
 			s.send = func() error { return fmt.Errorf("amp: exit status 1: thread %s not found", shipKanhaThread) }
 		}, 1, []string{unreached("#1", "amp: amp: exit status 1: thread "+shipKanhaThread+" not found")}},
+		{"the amp CLI stalls", amp, func(s *kanhaShip) {
+			was := kanhaSendTimeout
+			kanhaSendTimeout = 200 * time.Millisecond
+			t.Cleanup(func() { kanhaSendTimeout = was })
+			s.stall = true
+		}, 1, []string{unreached("#1", "amp: context deadline exceeded")}},
 		{"a local Kanha takes it at its next check", ready.Parent{Scope: "feature", Key: "1", Host: "codex", Session: "s-123", Mode: "local", Machine: "founder@laptop", StartedBy: "founder"}, nil, 0,
 			[]string{"next: the Kanha of #1: merged #2 (PR #7): run aayu mission next 1 (recorded; the local Kanha on founder@laptop takes it at its next check)\n"}},
 		{"GitHub fails the read of #2's Feature after the merge", amp, func(s *kanhaShip) {

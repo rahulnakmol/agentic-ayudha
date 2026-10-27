@@ -1,0 +1,9 @@
+# Which tests prove Bug #1118's Completion Goal.
+
+[[criterion]]
+id = 1 # ship merges #2 of #1, and amp threads continue never returns: exit 0 in the limit, merged, "was not reached: amp: context deadline exceeded"
+tests = ["internal/cli:TestShipMergeStandsWhenKanhaUnreached"]
+
+[[criterion]]
+id = 2 # build --stop on #37 of #889, and amp threads continue never returns: exit 4 in the limit, status:blocked, the event "(not sent: …)"
+tests = ["internal/cli:TestBuildStopWhenKanhaStalls"]

@@ -110,6 +110,11 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 // its next check (#1012), so the event is recorded and not sent. A send that
 // fails is recorded too, and returned. The note says what happened, for the
 // caller's output.
+// kanhaSendTimeout bounds one send to the Kanha: a receiver CLI that stalls
+// is a send that failed, never a ship or build that hangs after its work is
+// done (Bug #1118). A variable so tests can shorten it.
+var kanhaSendTimeout = 2 * time.Minute
+
 func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) string) (string, error) {
 	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
 	if err != nil || plan == nil || plan.StartedBy == "" || appr.Parent == nil {
@@ -129,6 +134,8 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 		_, sendErr = log.Do(ctx, actions.Action{Kind: "mission.kanha.tell", Target: fmt.Sprintf("%s#%d@%s", repo, f, p.Host), Story: fmt.Sprintf("#%d", n),
 			Seat: "engineering-manager", Host: e.Host, Identity: c.Identity(), Payload: map[string]any{"session": p.Session, "event": text}},
 			func(ctx context.Context) (actions.Outcome, error) {
+				ctx, cancel := context.WithTimeout(ctx, kanhaSendTimeout)
+				defer cancel()
 				_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
 				return actions.Outcome{Attempts: 1}, err
 			})

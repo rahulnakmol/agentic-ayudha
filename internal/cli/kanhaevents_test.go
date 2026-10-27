@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
@@ -258,5 +259,30 @@ func TestKanhaEventRecordedWhenNotSent(t *testing.T) {
 	want := fmt.Sprintf("blocked #36: spec unclear: run aayu mission next 890 (recorded; the local Kanha on rahulnakmol@%s takes it at its next check)", host)
 	if got := m.kanhaEvents(36); !slices.Equal(got, []string{want}) {
 		t.Fatalf("delegate/36/state.json Kanha events: %q", got)
+	}
+}
+
+// A Kanha's receiver that stalls never holds build past the send limit: the
+// stop still blocks #37, and the event is recorded as not sent.
+func TestBuildStopWhenKanhaStalls(t *testing.T) {
+	m := newMissionWorld(t)
+	m.ampMission(889, 37)
+	m.kanhaBuild(37, "amp")
+	was := kanhaSendTimeout
+	kanhaSendTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { kanhaSendTimeout = was })
+	exec := m.opts.DelegateExec
+	m.opts.DelegateExec = func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
+		if name == "amp" && len(args) > 1 && args[1] == "continue" {
+			<-ctx.Done() // a CLI that never answers
+			return "", ctx.Err()
+		}
+		return exec(ctx, dir, env, stdin, name, args...)
+	}
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "37", "--stop", "spec unclear", "--repo", "o/r"); code != ExitBlocked || !slices.Contains(m.labels(37), "status:blocked") {
+		t.Fatalf("build 37 --stop: exit %d: %s", code, errOut)
+	}
+	if got := m.kanhaEvents(37); len(got) != 1 || !strings.HasPrefix(got[0], "blocked #37: spec unclear: run aayu mission next 889 (not sent: ") || !strings.Contains(got[0], "context deadline exceeded") {
+		t.Fatalf("delegate/37/state.json Kanha events: %q", got)
 	}
 }
