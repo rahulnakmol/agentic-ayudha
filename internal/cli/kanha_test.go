@@ -132,7 +132,21 @@ func checkKanhaBrief(t *testing.T, brief string, f int, tool string) {
 // Criterion 1: @rahulnakmol starts #889 from the thread that drafted its
 // intent, and his tool is amp: that thread gets the Kanha brief, and is the
 // parent in specs/889/approved.json; no new thread starts.
-func TestMissionStartBriefsDraftingThread(t *testing.T) {
+func TestMissionStartBriefsDraftingThread(t *testing.T) { briefsDraftingThread(t) }
+
+// Bug #1099, criterion 2: the drafting-thread start passes 50 runs of 50. Its
+// plan and parent times differed when a start crossed a second, about 1 run in 8.
+func TestMissionStartBriefsDraftingThreadFiftyRuns(t *testing.T) {
+	for i := 1; i <= 50; i++ {
+		t.Run(fmt.Sprintf("run-%02d", i), func(t *testing.T) {
+			t.Parallel()
+			briefsDraftingThread(t)
+		})
+	}
+}
+
+func briefsDraftingThread(t *testing.T) {
+	t.Helper()
 	m := newMissionWorld(t)
 	m.scenario889(nil)
 	const drafting = "T-01a12c63-e530-769d-9c2b-1cd261372018"

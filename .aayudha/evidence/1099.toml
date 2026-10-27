@@ -5,8 +5,8 @@ id = 1 # start 889 on a clock that moves on each read: parent.started_at equals 
 tests = ["internal/cli:TestMissionStartOneStartTime"]
 
 [[criterion]]
-id = 2 # TestMissionStartBriefsDraftingThread -count=50: 50 of 50 pass
-tests = ["internal/cli:TestMissionStartBriefsDraftingThread"]
+id = 2 # TestMissionStartBriefsDraftingThread 50 times (50 subtests in this run): 50 of 50 pass
+tests = ["internal/cli:TestMissionStartBriefsDraftingThreadFiftyRuns"]
 
 [[criterion]]
 id = 3 # plan started at 10:00, Kanha-only start at 10:20 on the moving clock: the plan keeps its time, the parent records 10:20
