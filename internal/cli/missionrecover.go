@@ -808,6 +808,7 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 		return err
 	}
 	pr := r.openPR(story, st)
+	was := st // what the person approves a retry of
 	ss := plan.stateOf(story)
 	if st.Status != dlgFailed && st.Status != dlgMaybe && (ss == nil || ss.State == "" || len(ss.Attempts) == 0) {
 		return Errorf(ExitBlocked, "#%d has no failed step in the mission of #%d: nothing to retry. Nothing changed.", story, f)
@@ -836,6 +837,10 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	// The issue and its delegation as they are now, after the device code.
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(story), &st); err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	// Another run (a recover) that moved the story while the code waited owns it now: a retry would start a second agent.
+	if st.Status != was.Status || st.PR != was.PR || st.Task != was.Task {
+		return Errorf(ExitBlocked, "#%d changed while the code waited (now %s): another run acted on it, so the retry starts nothing. Nothing changed.", story, st.Status)
 	}
 	if st.Status == dlgFailed {
 		r.counted(story, st)

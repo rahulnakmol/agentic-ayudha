@@ -789,6 +789,21 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 	if code != 0 || !strings.Contains(out, fmt.Sprintf("it runs the sync of #87's PR #%d on amp again; the attempt is counted", pr87.Number)) || strings.Contains(out+errOut, "is judged") || m.commits() != commits {
 		t.Fatalf("retry #87 --dry-run: exit %d: %s%s", code, out, errOut)
 	}
+	// A recover restarts #95 while the person enters the device code: the retry starts no second agent.
+	m.device("rahulnakmol")
+	restarted := amp(95)
+	restarted.Task, restarted.Status = "T-01a00000-0000-0000-0000-000000000195", dlgHandedOff
+	m.edit(func() {
+		m.g.Device.OnPoll = func(int) {
+			b, _ := json.Marshal(restarted)
+			putLedger(t, m.bare, delegate.LedgerPath(95), string(b))
+		}
+	})
+	code, out, errOut = run(t, m.person, m.opts, "mission", "retry", "889", "--story", "95", "--repo", "o/r")
+	if code != ExitBlocked || !strings.Contains(errOut, "#95 changed while the code waited (now handed-off): another run acted on it, so the retry starts nothing.") || m.handoffs(95) != 0 {
+		t.Fatalf("retry of #95 that a recover restarted meanwhile: exit %d, hand-offs %d: %s%s", code, m.handoffs(95), out, errOut)
+	}
+	commits = m.commits()
 	// A GitHub read that fails stops the run before it changes anything.
 	for _, c := range []struct {
 		fail string
