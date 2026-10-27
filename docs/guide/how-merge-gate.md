@@ -53,7 +53,8 @@ A gate fix PR of a mission says `Refs #<feature>`, and a Feature has no Ready sn
 the mission plan's `gate_fixes` on the ledger lists it, and the entry's `approval.sha256` matches the Feature's approved
 record now. The pack then rests on that record. The gate runs the verify check the fix names at the head, and fails
 when it still fails. A required CI job or an eval the gate cannot run: it names it, and ship's required checks
-decide. A PR that only says `Refs #<feature>` fails as before.
+decide. No required check runs an eval on a PR, so the milestone gate judges the eval again on the dev tip after the
+merge. A PR that only says `Refs #<feature>` fails as before.
 
 When the story is a Bug, `verify --ci` also runs a **red-on-base** check: each test its evidence map names is run on
 the base commit, with the pull request's test files copied over, in the same sandbox. A test that fails on the base
@@ -479,7 +480,9 @@ fixed head, returned `merge`, and the spend covers both calls.
     [internal/cli/ship.go](../../internal/cli/ship.go), `TestInspectMergeBudgetDraft`, `TestShipOnProof`, and
     `TestDelegateCycleCapPages`.
 14. A PR that refers to a Feature passes the gate only when the mission plan's `gate_fixes` on the ledger lists it,
-    under the Feature's approved record as it is now, and the verify check it fixes passes at the head. Enforced by
+    under the Feature's approved record as it is now. A `verify:` entry also needs its check to run and pass at the
+    head. A `check:` entry is decided by ship's required checks. No required check runs an `eval:` entry on a PR:
+    the milestone gate judges it again on the dev tip after the merge. Enforced by
     `listedGateFix` and `judgeGateFix` in [internal/cli/missiongate.go](../../internal/cli/missiongate.go),
     `TestMergeGateJudgesAListedGateFix`.
 

@@ -901,11 +901,10 @@ func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, approv
 	what := fmt.Sprintf("#%d fixes %s in %s of #%d", fx.PR, fx.Check, fx.Milestone, f)
 	ref, ok := strings.CutPrefix(fx.Check, "verify:")
 	if !ok {
-		job := "the required check " + strings.TrimPrefix(fx.Check, "check:")
-		if c, isEval := strings.CutPrefix(fx.Check, "eval:"); isEval {
-			job = "the eval " + c + " (" + evalsWorkflow + ")"
+		if c, isEval := strings.CutPrefix(fx.Check, "eval:"); isEval { // no required check runs an eval on a PR
+			return problems, fmt.Sprintf("%s: the merge gate does not run the eval %s (%s), and no required check runs it; ship's required checks decide, and the milestone gate judges the eval again on the dev tip after the merge", what, c, evalsWorkflow)
 		}
-		return problems, fmt.Sprintf("%s: the merge gate does not run %s; ship's required checks decide", what, job)
+		return problems, fmt.Sprintf("%s: the merge gate does not run the required check %s; ship's required checks decide", what, strings.TrimPrefix(fx.Check, "check:"))
 	}
 	one := *r
 	one.Checks, one.Work = ref, filepath.Join(r.Work, "gate-fix")
