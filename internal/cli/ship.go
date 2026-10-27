@@ -104,6 +104,8 @@ type ShipResult struct {
 	ShipRecord
 	Record string `json:"ship_record"`
 	Branch string `json:"branch_deleted,omitempty"`
+	// Next says whether the Kanha of the story's Feature was told of the merge (Story #1007).
+	Next string `json:"next,omitempty"`
 }
 
 // runShip (WP5.5, from the WP4.10 thin slice; S-4.2b): the merge gate's
@@ -617,6 +619,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err := e.checkpoint(tok); err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("merged, but the actions segment did not reach the ledger: %w", err))
 	}
+	// Only now that the merge, the ship record, and the actions segment stand
+	// does the Kanha of the story's Feature hear of the merge (Story #1007): a
+	// message that fails changes none of them, nor ship's exit code.
+	if res.Next = e.tellMerged(ctx, c, s.Ledger, repo, story, n); res.Next != "" {
+		if err := e.checkpoint(tok); err != nil { // the message's own record
+			fmt.Fprintf(e.Err, "aayu: warning: the record of the message to the Kanha did not reach the ledger; it stays in the local actions log: %v\n", err)
+		}
+	}
 	if err := e.Emit(res, func(w io.Writer) error {
 		if fix != nil {
 			fmt.Fprintf(w, "ship #%d: merged as %s; the gate fix of %s of #%d for %s\n", n, short(rec.MergeCommit), fix.Milestone, story, fix.Check)
@@ -627,6 +637,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		fmt.Fprintf(w, "  human pass: %s by %s%s\n", rec.HumanPass.Kind, rec.HumanPass.Login, map[bool]string{true: " — " + rec.HumanPass.Note, false: ""}[rec.HumanPass.Note != ""])
 		fmt.Fprintf(w, "  review rung: %s (from the merge gate's inspect log)\n", or(rec.Review, "none recorded"))
 		fmt.Fprintf(w, "  ship record %s; actions segment %s\n", res.Record, rec.Actions)
+		if res.Next != "" {
+			fmt.Fprintf(w, "next: %s\n", res.Next)
+		}
 		return nil
 	}); err != nil {
 		return err
@@ -635,6 +648,29 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// one is the first proven ship.
 	e.milestone("first-proven-ship", true, "Your first proven ship!", fmt.Sprintf("Story #%d merged with an authoritative proof pack and a recorded human pass.", story))
 	return nil
+}
+
+// tellMerged tells the Kanha of story n's Feature that PR pr merged it, so
+// the Kanha starts the next story now (Story #1007), and returns ship's
+// `next:` line: "" when the story is in no started mission. It never fails
+// ship: the safety tick wakes a Kanha the message did not reach.
+func (e *Env) tellMerged(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n, pr int) string {
+	var f int // the Feature, once tellKanha has found the Kanha
+	note, err := e.tellKanha(ctx, c, w, repo, n, func(ff int) string {
+		f = ff
+		return fmt.Sprintf("merged #%d (PR #%d): run aayu mission next %d", n, pr, f)
+	})
+	switch {
+	case err != nil && f == 0:
+		return fmt.Sprintf("the Kanha of #%d's Feature was not reached: %s; the safety tick wakes it", n, oneLineErr(err))
+	case err != nil && note != "": // the send failed, and its event is recorded
+		return fmt.Sprintf("the Kanha of #%d was not reached: %s; the safety tick wakes it", f, strings.TrimPrefix(oneLineErr(err), fmt.Sprintf("the Kanha of #%d: ", f)))
+	case err != nil: // the event is recorded after the send
+		return fmt.Sprintf("the Kanha of #%d may not have been told: its event was not recorded: %s; the safety tick wakes it", f, oneLineErr(err))
+	case strings.HasSuffix(note, "(sent)"):
+		return fmt.Sprintf("told the Kanha of #%d", f)
+	}
+	return note // a local Kanha takes it at its next check
 }
 
 func dirExists(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }

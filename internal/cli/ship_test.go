@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1386,5 +1387,185 @@ func TestShipLoosens(t *testing.T) {
 		if got := loosens(load(t, config.Sources{Sets: c.sets}), &base); !slices.Equal(got, c.want) {
 			t.Errorf("%s: loosens = %q, want %q", c.why, got, c.want)
 		}
+	}
+}
+
+// Story #1007: a merge through ship tells the Kanha of the story's Feature at
+// once. kanhaShip is the ship world of a PR for story #2 of Feature #1 with a
+// green merge gate and a person's approval, #1's mission started with its
+// Kanha k on the ledger, and every receiver CLI stubbed: send answers each
+// call, and calls are what ship sent.
+type kanhaShip struct {
+	g         *fake.GitHub
+	env       map[string]string
+	opts      Options
+	bare      string
+	prN       int
+	head      string
+	mu        sync.Mutex
+	calls     []string
+	send      func() error
+	shippedAt []bool // at each call: merged, ship record on the ledger, merge in a ledger actions segment
+}
+
+const shipKanhaThread = "T-01a17000-0000-7000-8000-000000000001"
+
+func newKanhaShip(t *testing.T, k ready.Parent) *kanhaShip {
+	t.Helper()
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+	g.Mu.Unlock()
+	var a ready.Approval
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+ready.ApprovalPath(1))), &a); err != nil {
+		t.Fatal(err)
+	}
+	a.Parent = &k
+	ab, _ := json.Marshal(a)
+	putLedger(t, bare, ready.ApprovalPath(1), string(ab))
+	pb, _ := json.Marshal(MissionPlan{Schema: MissionPlanSchema, Feature: 1, Approval: a.Version, Tool: k.Host, StartedBy: k.StartedBy})
+	putLedger(t, bare, MissionPlanPath(1), string(pb))
+	s := &kanhaShip{g: g, env: env, bare: bare, prN: prN, head: head, send: func() error { return nil }}
+	opts.DelegateExec = func(_ context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+		g.Mu.Lock()
+		merged := g.Pulls[prN].Merged
+		g.Mu.Unlock()
+		segs := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "actions/")
+		inSeg := false
+		for _, p := range strings.Fields(segs) {
+			inSeg = inSeg || strings.Contains(git(t, bare, "show", "ledger:"+p), "github.pull.merge")
+		}
+		record := strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/2/"+head+"/authoritative/"), "ship.json")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.calls = append(s.calls, name+" "+strings.Join(args, " "))
+		s.shippedAt = append(s.shippedAt, merged && record && inSeg)
+		return "", s.send()
+	}
+	s.opts = opts
+	return s
+}
+
+func (s *kanhaShip) sent() ([]string, []bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.calls), slices.Clone(s.shippedAt)
+}
+
+// Criterion 1: ship merges #2's PR, and #2 belongs to #1: after the merge
+// lines it sends the Kanha of #1 one message, and says so; the message goes
+// only once the merge, the ship record, and the actions segment stand, and
+// its own record reaches the ledger.
+func TestShipTellsKanhaAfterMerge(t *testing.T) {
+	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, URL: "https://ampcode.com/threads/" + shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
+	code, out := shipCmd(t, s.env, s.opts, s.prN)
+	if code != 0 {
+		t.Fatalf("ship: %d %s", code, out)
+	}
+	msg := fmt.Sprintf("merged #2 (PR #%d): run aayu mission next 1", s.prN)
+	calls, shipped := s.sent()
+	if want := []string{"amp threads continue " + shipKanhaThread + " -ox " + msg}; !slices.Equal(calls, want) {
+		t.Fatalf("ship sent %q, want %q", calls, want)
+	}
+	if !shipped[0] {
+		t.Fatal("ship told the Kanha before the merge, the ship record, and the actions segment stood")
+	}
+	merged, next := strings.Index(out, fmt.Sprintf("ship #%d: merged as", s.prN)), strings.Index(out, "next: told the Kanha of #1\n")
+	if merged < 0 || next < merged {
+		t.Fatalf("no next line after the merge lines:\n%s", out)
+	}
+	var found bool
+	for _, p := range strings.Fields(git(t, s.bare, "ls-tree", "-r", "--name-only", "ledger", "actions/")) {
+		seg := git(t, s.bare, "show", "ledger:"+p)
+		found = found || strings.Contains(seg, `"mission.kanha.tell"`) && strings.Contains(seg, msg)
+	}
+	if !found {
+		t.Fatal("the message's mission.kanha.tell record did not reach the ledger")
+	}
+}
+
+// Criterion 2: the message to the Kanha fails, waits for a local Kanha's
+// next check, has no mission to read, or its records miss the ledger: ship
+// still exits 0 with the merge, the Complete section, and status:merged in
+// place, and says what happened and why.
+func TestShipMergeStandsWhenKanhaUnreached(t *testing.T) {
+	amp := ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, Mode: "cloud", StartedBy: "founder"}
+	unreached := func(who, why string) string {
+		return "next: the Kanha of " + who + " was not reached: " + why + "; the safety tick wakes it\n"
+	}
+	for _, c := range []struct {
+		name  string
+		k     ready.Parent
+		setup func(s *kanhaShip)
+		calls int
+		want  []string
+	}{
+		{"the amp CLI fails", amp, func(s *kanhaShip) {
+			s.send = func() error { return fmt.Errorf("amp: exit status 1: thread %s not found", shipKanhaThread) }
+		}, 1, []string{unreached("#1", "amp: amp: exit status 1: thread "+shipKanhaThread+" not found")}},
+		{"a local Kanha takes it at its next check", ready.Parent{Scope: "feature", Key: "1", Host: "codex", Session: "s-123", Mode: "local", Machine: "founder@laptop", StartedBy: "founder"}, nil, 0,
+			[]string{"next: the Kanha of #1: merged #2 (PR #7): run aayu mission next 1 (recorded; the local Kanha on founder@laptop takes it at its next check)\n"}},
+		{"GitHub fails the read of #2's Feature after the merge", amp, func(s *kanhaShip) {
+			s.g.Hook = func(method, path string) { // the fake is locked
+				if method == "PUT" && strings.HasSuffix(path, "/merge") {
+					s.g.Fail, s.g.FailAfter = "GET /repos/o/r/issues/2/parent", 0
+				}
+			}
+		}, 0, []string{"next: the Kanha of #2's Feature was not reached: ", "; the safety tick wakes it\n"}},
+		{"the message's record misses the ledger", amp, func(s *kanhaShip) {
+			s.send = func() error { // the ledger refuses every push from now on, whatever the global hooks path
+				git(t, s.bare, "config", "core.hooksPath", "hooks")
+				return os.WriteFile(filepath.Join(s.bare, "hooks", "pre-receive"), []byte("#!/bin/sh\nexit 1\n"), 0o755)
+			}
+		}, 1, []string{"next: the Kanha of #1 may not have been told: its event was not recorded: ",
+			"aayu: warning: the record of the message to the Kanha did not reach the ledger; it stays in the local actions log: "}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := newKanhaShip(t, c.k)
+			if c.setup != nil {
+				c.setup(s)
+			}
+			code, out := shipCmd(t, s.env, s.opts, s.prN)
+			for _, want := range c.want {
+				if code != 0 || !strings.Contains(out, want) {
+					t.Fatalf("ship: %d, want exit 0 and %q:\n%s", code, want, out)
+				}
+			}
+			if calls, _ := s.sent(); len(calls) != c.calls {
+				t.Fatalf("ship sent %q", calls)
+			}
+			s.g.Mu.Lock()
+			merged, body := s.g.Pulls[s.prN].Merged, s.g.Issues[2].Body
+			s.g.Mu.Unlock()
+			if labels := s.g.LabelNames(2); !merged || !contains(labels, "status:merged") || !strings.Contains(body, "### Outcome") {
+				t.Fatalf("after ship: merged %t, labels %v, body:\n%s", merged, labels, body)
+			}
+		})
+	}
+}
+
+// Criterion 3: ship refuses because inspect says fix (its check is red on
+// the head): it sends the Kanha nothing.
+func TestShipSendsNothingOnRefusal(t *testing.T) {
+	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
+	s.g.Mu.Lock()
+	for i, r := range s.g.CheckRuns[s.head] {
+		if r.Name == "aayudha/inspect" || r.Name == "aayudha/merge-gate" {
+			s.g.CheckRuns[s.head][i].Conclusion = "failure"
+		}
+	}
+	s.g.Mu.Unlock()
+	code, out := shipCmd(t, s.env, s.opts, s.prN)
+	if code != ExitBlocked || !strings.Contains(out, "is failure on "+short(s.head)) {
+		t.Fatalf("ship with inspect at fix: %d %s", code, out)
+	}
+	if calls, _ := s.sent(); len(calls) != 0 || strings.Contains(out, "Kanha") {
+		t.Fatalf("a refused ship told the Kanha: %q\n%s", calls, out)
+	}
+	s.g.Mu.Lock()
+	defer s.g.Mu.Unlock()
+	if s.g.Pulls[s.prN].Merged {
+		t.Fatal("merged although inspect says fix")
 	}
 }
