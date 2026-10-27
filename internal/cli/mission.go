@@ -144,8 +144,9 @@ type MissionItem struct {
 	Kind      string       `json:"kind"` // story or bug
 	Title     string       `json:"title"`
 	Milestone string       `json:"milestone"`
-	DependsOn []int        `json:"depends_on"` // depends-on inside the Feature
-	Outside   []MissionDep `json:"outside"`    // depends-on outside the Feature
+	Effort    string       `json:"effort,omitempty"` // its effort:<size> label, which #886's working hours are per
+	DependsOn []int        `json:"depends_on"`       // depends-on inside the Feature
+	Outside   []MissionDep `json:"outside"`          // depends-on outside the Feature
 }
 
 // MissionDep is a depends-on target outside the Feature, with its Feature.
@@ -227,14 +228,18 @@ type MissionEstimate struct {
 // Mission is one mission of the Feature (X1 A, Decision #974): the stories
 // it takes, and for a later one why each waits.
 type Mission struct {
-	Number  int            `json:"number"`
-	Stories []MissionStory `json:"stories"`
+	Number   int            `json:"number"`
+	Stories  []MissionStory `json:"stories"`
+	Estimate *MissionHours  `json:"estimate,omitempty"` // in working hours, from #886's read (Story #1015)
 }
 
 // MissionStory is a story or Bug of a mission.
 type MissionStory struct {
-	Number int    `json:"number"`
-	Waits  string `json:"waits,omitempty"` // "waits on #950 (#874)"
+	Number       int     `json:"number"`
+	Waits        string  `json:"waits,omitempty"`         // "waits on #950 (#874)"
+	WorkingHours float64 `json:"working_hours,omitempty"` // once it ended: the time its thread worked, less its waits (Story #1015)
+	// Run is an ended story's run and waits, kept so the clock reads GitHub only for the stories still open.
+	Run *StoryRunRecord `json:"run,omitempty"`
 }
 
 // MissionStoryStart is a person's start of a Tatkal story: it runs on their tool.
@@ -253,7 +258,8 @@ type MissionPause struct {
 }
 
 // MissionControl is a person's control of the mission: its start, a stop, a
-// resume, or its end (Story #1002). By ran it, on Tool, and it counts as theirs.
+// resume, its end (Story #1002), or an extension of its time limit (Story
+// #1015). By ran it, on Tool, and it counts as theirs.
 type MissionControl struct {
 	Action   string `json:"control"`
 	By       string `json:"by"`
@@ -262,6 +268,11 @@ type MissionControl struct {
 	Presence string `json:"presence"`
 	Story    int    `json:"story,omitempty"` // a control of one story or Bug
 	Reason   string `json:"reason,omitempty"`
+	// Story #1015: a start past [mission] max_hours records its override, and an
+	// extension of a mission's time limit names the mission and the hours it adds.
+	Override string  `json:"override,omitempty"`
+	Mission  int     `json:"mission,omitempty"`
+	Hours    float64 `json:"hours,omitempty"`
 }
 
 // UnmarshalJSON reads a control of an earlier v1 plan, which said "action".
@@ -330,6 +341,11 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 			bugs++
 		}
 		it := MissionItem{Number: si.GetNumber(), Kind: kind, Title: si.GetTitle(), DependsOn: []int{}, Outside: []MissionDep{}}
+		for _, l := range labels {
+			if v, ok := strings.CutPrefix(l, "effort:"); ok {
+				it.Effort = v
+			}
+		}
 		for _, m := range ms {
 			if slices.Contains(m.Stories, it.Number) {
 				it.Milestone = m.Name
@@ -364,6 +380,19 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 		Estimate: MissionEstimate{Runs: runs, Stories: len(nums), Milestones: len(ms),
 			Basis: fmt.Sprintf("runs ≥ %d %s + 2 × %d milestones = %d", len(nums), what, len(ms), runs)},
 		Missions: splitMissions(p.Graph, func(n int) bool { return done[n] }), Controls: []MissionControl{}}
+	// Each mission's estimate in working hours (Story #1015): it warns, and refuses nothing here.
+	wh, err := a.e.workingHours(ctx)
+	if err != nil {
+		return p, nil, nil, Wrap(ExitExternal, err)
+	}
+	l, err := a.e.Config()
+	if err != nil {
+		return p, nil, nil, err
+	}
+	warn, maxH := missionLimits(&l.Config)
+	for i := range p.Missions {
+		p.Missions[i].Estimate = estimateMission(p.Graph, p.Missions[i], wh, func(n int) bool { return done[n] }, maxH)
+	}
 	if release != 0 { // a Tatkal Feature lives as long as its Release
 		p.CompleteWhen = fmt.Sprintf("Release #%d is ready to promote and publish", release)
 	} else {
@@ -379,6 +408,7 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 		missionsLine(p.Missions),
 		fmt.Sprintf("Estimate: %s; up to %d stories at once (%s)", p.Estimate.Basis, p.Agents, p.AgentsSource),
 	}
+	effect = append(effect, estimateLines(p.Missions, warn, maxH)...)
 	return p, effect, old, nil
 }
 
@@ -643,7 +673,9 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 	f := issueNumber(in.String("feature"))
 	switch in.String("action") {
 	case "start":
-		return missionStart(ctx, e, f)
+		return missionStart(ctx, e, f, strings.TrimSpace(in.String("reason")))
+	case "extend":
+		return missionExtend(ctx, e, f, strings.TrimSpace(in.String("reason")), 0)
 	case "next":
 		return missionNext(ctx, e, f)
 	case "stop":
@@ -663,8 +695,10 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 // their tool for this repository, and the budget, once; then the mission's
 // Kanha starts on that tool and is recorded as the approval's parent. A
 // started mission with no Kanha (its start failed) starts only its Kanha, on
-// the plan's tool. An agent lane is refused before anything is read.
-func missionStart(ctx context.Context, e *Env, f int) error {
+// the plan's tool. An agent lane is refused before anything is read. A
+// mission whose learned hours pass [mission] max_hours starts only with the
+// person's reason (Story #1015).
+func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 	if err := e.laneRefusal("mission start"); err != nil {
 		return err
 	}
@@ -686,6 +720,15 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 		return err
 	}
 	tool, kanhaOnly := plan.Tool, plan.StartedBy != ""
+	override := ""
+	for _, m := range plan.Missions {
+		if h := m.Estimate; !kanhaOnly && h.over() && override == "" {
+			if reason == "" {
+				return Errorf(ExitBlocked, "#%d's estimate is %s working hours, %s: split this Feature, or start it with --reason", f, hrs(h.Hours), h.Mark)
+			}
+			override = fmt.Sprintf("mission %d's estimate, %s working hours, %s", m.Number, hrs(h.Hours), h.Mark)
+		}
+	}
 	var budget float64
 	var basis string
 	var effect []string
@@ -722,6 +765,16 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
 			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis),
 		}
+		for _, m := range plan.Missions {
+			if m.Estimate != nil {
+				effect = append(effect, fmt.Sprintf("MISSION %d %s", m.Number, m.Estimate.Basis))
+			}
+		}
+		if override != "" {
+			effect = append(effect, fmt.Sprintf("OVERRIDE %s: you start it anyway, for the reason %q", override, reason))
+		} else if reason != "" {
+			effect = append(effect, fmt.Sprintf("REASON %q", reason))
+		}
 	}
 	if why := e.kanhaCanStart(tool); why != "" {
 		return Errorf(ExitBlocked, "Start begins the mission's Kanha on %s, and %s. Nothing was started.", tool, why)
@@ -744,7 +797,7 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	if !kanhaOnly {
 		again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
 		again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
-		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, Tool: tool, At: at, Presence: p.Via})
+		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, Tool: tool, At: at, Presence: p.Via, Override: override, Reason: reason})
 		if !rep.DryRun {
 			data, _ := json.MarshalIndent(again, "", "  ")
 			rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: @%s started the mission of #%d on %s", p.Login, f, tool),
@@ -768,6 +821,9 @@ func missionStart(ctx context.Context, e *Env, f int) error {
 	return e.Emit(rep, func(w io.Writer) error {
 		if !kanhaOnly {
 			fmt.Fprintf(w, "@%s started the mission of #%d on %s, with a budget of %s (%s).\n", p.Login, f, tool, ready.USD(budget), basis)
+			if override != "" {
+				fmt.Fprintf(w, "  override: %s; reason: %s\n", override, reason)
+			}
 		}
 		if rep.DryRun {
 			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s planned, not written; no Kanha started\n", rep.LedgerPath)
@@ -917,6 +973,7 @@ type MissionShowReport struct {
 	Agents     SourcedNumber      `json:"agents"`
 	Budget     *MissionBudgetView `json:"budget,omitempty"` // nil until Start
 	Estimate   SourcedNumber      `json:"estimate"`
+	Clock      []MissionClock     `json:"clock,omitempty"` // each started mission's clock (Story #1015)
 	Plan       *MissionPlan       `json:"plan"`
 }
 
@@ -1039,6 +1096,14 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		rep.Milestones = append(rep.Milestones, ms)
 	}
 	rep.Missions = missionsNow(plan, func(n int) bool { return merged[n] })
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	_, maxH := missionLimits(&l.Config)
+	if rep.Clock, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity); err != nil {
+		return err
+	}
 	if plan.StartedBy != "" && appr != nil {
 		open, err := openFixSet(ctx, c, repo, plan)
 		if err != nil {
@@ -1083,6 +1148,18 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 			fmt.Fprintln(w, "budget    not set: Start sets it")
 		}
 		fmt.Fprintf(w, "estimate  %d runs (%s)\n", plan.Estimate.Runs, rep.Estimate.Source)
+		for _, m := range plan.Missions {
+			if h := m.Estimate; h != nil {
+				mark := ""
+				if h.Mark != "" {
+					mark = "; marked " + h.Mark
+				}
+				fmt.Fprintf(w, "          mission %d: %s%s\n", m.Number, h.Basis, mark)
+			}
+		}
+		for _, mc := range rep.Clock {
+			fmt.Fprintf(w, "clock     mission %d: %s\n", mc.Mission, mc)
+		}
 		_, err := fmt.Fprintf(w, "complete  when %s\n", plan.CompleteWhen)
 		return err
 	})

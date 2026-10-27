@@ -108,6 +108,22 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	case plan.Pause != nil:
 		return Errorf(ExitBlocked, "The mission of #%d is paused: %s. Nothing starts.", f, plan.Pause.Reason)
 	}
+	// Each mission's clock (Story #1015): ended stories' working totals go into the plan, and the time cards to the inbox.
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	warn, maxH := missionLimits(&l.Config)
+	clocks, err := e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
+	if err != nil {
+		return err
+	}
+	if err := e.recordWorking(ctx, c, w, f, clocks); err != nil {
+		return err
+	}
+	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity); err != nil {
+		return err
+	}
 	list := WorkList{Schema: WorkSchema, Scope: WorkScope{Kind: "feature", ID: strconv.Itoa(f)}, Items: []WorkListItem{}}
 	subs, err := featureItems(ctx, c, repo, f, "story", "bug") // in sub-issue order: the slice order
 	if err != nil {
@@ -127,13 +143,13 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 			return err
 		}
 	}
-	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, list)
+	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, list, clocks)
 }
 
 // listNext classifies the mission's open stories and Bugs, sorts them, and
 // claims each start.
 func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval,
-	subs, extra []*gh.Issue, list WorkList) error {
+	subs, extra []*gh.Issue, list WorkList, clocks []MissionClock) error {
 	now := e.Now()
 	owner, name, _ := github.SplitRepo(repo)
 	busy := map[int]bool{}
@@ -253,6 +269,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		switch {
 		case claimed[en.n]:
 			en.item.Reason = "claimed by another run"
+			continue
+		case heldBy(plan, clocks, en.n) != nil: // past its time limit a mission starts nothing new; running stories go on
+			en.item.Reason = heldBy(plan, clocks, en.n).holdReason(f)
 			continue
 		case plan.Budget > 0 && spent+per > plan.Budget: // a story counts at its per-story cap until #872 measures spend per story
 			en.item.Reason = fmt.Sprintf("would pass #%d's approved budget", f)
@@ -509,4 +528,19 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
+}
+
+// heldBy is the clock of story n's mission when it reached its time limit, else nil.
+func heldBy(plan *MissionPlan, clocks []MissionClock, n int) *MissionClock {
+	for _, m := range plan.Missions {
+		if !slices.ContainsFunc(m.Stories, func(s MissionStory) bool { return s.Number == n }) {
+			continue
+		}
+		for i := range clocks {
+			if clocks[i].Mission == m.Number && clocks[i].reached() {
+				return &clocks[i]
+			}
+		}
+	}
+	return nil
 }

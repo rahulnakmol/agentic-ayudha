@@ -109,6 +109,8 @@ type Options struct {
 	RepoTool      func(ctx context.Context, repo string) (string, error)
 	CostEstimate  func(ctx context.Context, feature int) (*CostEstimate, error)
 	TatkalRelease func(ctx context.Context, feature int) (int, error)
+	// WorkingHours is #886's working hours per effort size (Story #1015; nil: no estimate in hours).
+	WorkingHours func(ctx context.Context) (*WorkingHours, error)
 	// LocalKanha starts a mission's local Kanha on the starter's machine with the brief, in the checkout dir, and
 	// returns its session (ST13: codex, copilot, or opencode; #1012 builds it; Story #1004's tests: a stub). nil:
 	// none is built, so Start refuses those tools before anything is written.

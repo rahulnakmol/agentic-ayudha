@@ -142,6 +142,17 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		plan.StartedBy, plan.StartedAt, plan.Tool, plan.ToolSource = old.StartedBy, old.StartedAt, old.Tool, old.ToolSource
 		plan.Budget, plan.BudgetBasis, plan.Pause, plan.Controls, plan.StoryStarts = old.Budget, old.BudgetBasis, old.Pause, old.Controls, old.StoryStarts
 		plan.GateFixes = old.GateFixes
+		for _, om := range old.Missions { // and each ended story's working total (Story #1015)
+			for _, os := range om.Stories {
+				for i, m := range plan.Missions {
+					for j, s := range m.Stories {
+						if s.Number == os.Number {
+							plan.Missions[i].Stories[j].WorkingHours, plan.Missions[i].Stories[j].Run = os.WorkingHours, os.Run
+						}
+					}
+				}
+			}
+		}
 	}
 	if prev2 != nil { // and its Kanha (Story #1004): a new approval starts no second one
 		got.Parent = prev2.Parent
