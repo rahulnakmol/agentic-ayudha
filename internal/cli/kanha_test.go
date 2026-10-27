@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,6 +128,19 @@ func checkKanhaBrief(t *testing.T, brief string, f int, tool string) {
 			t.Fatalf("the Kanha brief does not say %q:\n%s", want, brief)
 		}
 	}
+}
+
+// Bug #1099, criterion 2: `go test -run 'TestMissionStartBriefsDraftingThread$'
+// -count=50` passes 50 of 50, run by this test binary. Its plan and parent times
+// differed when a start crossed a second, about 1 run in 8.
+func TestMissionStartBriefsDraftingThreadFiftyRuns(t *testing.T) {
+	t.Parallel()
+	out, err := exec.Command(os.Args[0], "-test.run=^TestMissionStartBriefsDraftingThread$", "-test.count=50", "-test.v").CombinedOutput()
+	pass := strings.Count(string(out), "--- PASS: TestMissionStartBriefsDraftingThread ")
+	if err != nil || pass != 50 {
+		t.Fatalf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=50: %d of 50 pass (%v)\n%s", pass, err, out)
+	}
+	t.Logf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=50: %d of 50 pass", pass)
 }
 
 // Criterion 1: @rahulnakmol starts #889 from the thread that drafted its
@@ -692,4 +707,70 @@ func TestMissionStartFailsClosed(t *testing.T) {
 	if code, out, errOut := run(t, m.person, race, "mission", "start", "889", "--repo", "o/r"); code != 0 || !pushed || m.parent(889).Host != "cursor" {
 		t.Fatalf("a ledger write while the Kanha is recorded: exit %d, pushed %t: %s%s", code, pushed, out, errOut)
 	}
+}
+
+// tick is a clock that moves one second on each read, from start.
+func tick(start time.Time) func() time.Time {
+	var mu sync.Mutex
+	now := start.Add(-time.Second)
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		now = now.Add(time.Second)
+		return now
+	}
+}
+
+// Bug #1099, criterion 1: a mission start has one start time, which the plan
+// and its Kanha's parent both record, on a clock that moves on every read.
+func TestMissionStartOneStartTime(t *testing.T) {
+	m := newMissionWorld(t)
+	m.featureWith(889, 20)
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
+	}
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC))
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
+		t.Fatalf("start 889: exit %d: %s%s", code, out, errOut)
+	}
+	plan, _ := m.plan(889)
+	if plan.StartedAt == "" || m.parent(889).StartedAt != plan.StartedAt {
+		t.Fatalf("#889: plan started_at %q, parent started_at %q", plan.StartedAt, m.parent(889).StartedAt)
+	}
+	t.Logf("#889: missions/889/plan.json started_at %s, specs/889/approved.json parent.started_at %s", plan.StartedAt, m.parent(889).StartedAt)
+}
+
+// Bug #1099, criterion 3: the plan of #889 started at 10:00:00 and its Kanha
+// did not (no Cursor key). Start at 10:20:00 starts only the Kanha, on the
+// moving clock: the plan keeps 10:00:00, and the parent records 10:20:00.
+func TestMissionStartKanhaOnlyStartTime(t *testing.T) {
+	m := newMissionWorld(t)
+	m.featureWith(889, 20)
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
+	}
+	m.setTool("cursor")
+	noKey := map[string]string{}
+	for k, v := range m.person {
+		noKey[k] = v
+	}
+	delete(noKey, "AAYU_SECRET_CURSOR_API_KEY")
+	// A start reads the clock 5 times before it stamps its one time: the actions
+	// log, the device code's expiry, and the GitHub client's 3 reads of one call.
+	// So each clock starts 5 seconds before the time of its start.
+	const before = -5 * time.Second
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 0, 0, 0, time.UTC).Add(before))
+	if code, _, errOut := m.mission(noKey, "rahulnakmol", "start", 889); code != ExitExternal {
+		t.Fatalf("start 889 with no Cursor key: exit %d: %s", code, errOut)
+	}
+	started, raw := m.plan(889)
+	m.opts.Now = tick(time.Date(2026, 10, 26, 10, 20, 0, 0, time.UTC).Add(before))
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
+		t.Fatalf("Kanha-only start of 889: exit %d: %s%s", code, out, errOut)
+	}
+	plan, now := m.plan(889)
+	if started.StartedAt != "2026-10-26T10:00:00Z" || now != raw || m.parent(889).StartedAt != "2026-10-26T10:20:00Z" {
+		t.Fatalf("#889: plan started_at %q (was %q), parent started_at %q", plan.StartedAt, started.StartedAt, m.parent(889).StartedAt)
+	}
+	t.Logf("#889: missions/889/plan.json started_at %s (unchanged), specs/889/approved.json parent.started_at %s", plan.StartedAt, m.parent(889).StartedAt)
 }

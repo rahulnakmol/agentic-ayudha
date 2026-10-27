@@ -46,11 +46,12 @@ func (e *Env) kanhaCanStart(tool string) string {
 // records it as the approval's parent. On amp it briefs the thread that
 // drafted the Feature's intent while that thread is open; else it starts a
 // new session, or a local one. The start is one record in the actions log.
-// It returns the parent and where the Kanha runs, in words.
-func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval, login string) (*ready.Parent, string, error) {
+// It returns the parent and where the Kanha runs, in words. at is the time of
+// the Start that began it, which the parent records.
+func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval, login, at string) (*ready.Parent, string, error) {
 	l, _ := e.Config() // loaded and checked by the presence check before this
 	root, tool := config.RepoRoot(e.Dir), plan.Tool
-	p := &ready.Parent{Scope: "feature", Key: strconv.Itoa(f), Host: tool, Mode: "cloud", StartedBy: login, StartedAt: e.Now().UTC().Format(time.RFC3339)}
+	p := &ready.Parent{Scope: "feature", Key: strconv.Itoa(f), Host: tool, Mode: "cloud", StartedBy: login, StartedAt: at}
 	brief := delegate.KanhaBrief(repo, f, tool, plan.Release != 0)
 	how := "new"
 	start := func(ctx context.Context) error {
