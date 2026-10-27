@@ -75,7 +75,7 @@ type MissionPlan struct {
 	Milestones   []MissionMilestone `json:"milestones"`
 	FeatureDone  string             `json:"feature_done,omitempty"` // the milestone whose gate ends the Feature; a Tatkal Feature has none
 	CompleteWhen string             `json:"complete_when"`
-	Agents       int                `json:"agents"`
+	Agents       int                `json:"agents"` // the cap Approve to build showed: a record; the list reads it at each run (Env.missionAgents, #1000)
 	AgentsSource string             `json:"agents_source"`
 	Estimate     MissionEstimate    `json:"estimate"`
 	Missions     []Mission          `json:"missions"`
