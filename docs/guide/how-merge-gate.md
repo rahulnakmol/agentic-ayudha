@@ -53,7 +53,7 @@ A gate fix PR of a mission says `Refs #<feature>`, and a Feature has no Ready sn
 the mission plan's `gate_fixes` on the ledger lists it, and the entry's `approval.sha256` matches the Feature's approved
 record now. The pack then rests on that record. The gate runs the verify check the fix names at the head, and fails
 when it still fails. A required CI job or an eval the gate cannot run: it names it, and ship's required checks
-decide. A PR that only says `Refs #<feature>` fails as before (Bug #1100).
+decide. A PR that only says `Refs #<feature>` fails as before.
 
 When the story is a Bug, `verify --ci` also runs a **red-on-base** check: each test its evidence map names is run on
 the base commit, with the pull request's test files copied over, in the same sandbox. A test that fails on the base
