@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget","Output":"=== RUN   TestGateFixCountsAgainstBudget\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget","Output":"--- PASS: TestGateFixCountsAgainstBudget (5.31s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget"}

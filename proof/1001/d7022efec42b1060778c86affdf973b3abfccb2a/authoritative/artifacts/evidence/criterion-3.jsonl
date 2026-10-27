@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFailOpensOneFixPRPerCheck"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFailOpensOneFixPRPerCheck","Output":"=== RUN   TestGateFailOpensOneFixPRPerCheck\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFailOpensOneFixPRPerCheck","Output":"--- PASS: TestGateFailOpensOneFixPRPerCheck (3.64s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFailOpensOneFixPRPerCheck"}

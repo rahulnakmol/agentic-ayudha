@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateRerunsRunnerErrorOnce"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateRerunsRunnerErrorOnce","Output":"=== RUN   TestGateRerunsRunnerErrorOnce\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateRerunsRunnerErrorOnce","Output":"--- PASS: TestGateRerunsRunnerErrorOnce (2.28s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateRerunsRunnerErrorOnce"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedGateDoesNotHoldStarts"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedGateDoesNotHoldStarts","Output":"=== RUN   TestFailedGateDoesNotHoldStarts\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedGateDoesNotHoldStarts","Output":"--- PASS: TestFailedGateDoesNotHoldStarts (2.57s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestFailedGateDoesNotHoldStarts"}

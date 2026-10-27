@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopsAtMaxNoGo"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopsAtMaxNoGo","Output":"=== RUN   TestGateStopsAtMaxNoGo\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopsAtMaxNoGo","Output":"--- PASS: TestGateStopsAtMaxNoGo (4.29s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopsAtMaxNoGo"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopOptionStopsTheMission"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopOptionStopsTheMission","Output":"=== RUN   TestGateStopOptionStopsTheMission\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopOptionStopsTheMission","Output":"--- PASS: TestGateStopOptionStopsTheMission (1.42s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateStopOptionStopsTheMission"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateMaxNoGoIsDevs"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateMaxNoGoIsDevs","Output":"=== RUN   TestGateMaxNoGoIsDevs\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateMaxNoGoIsDevs","Output":"--- PASS: TestGateMaxNoGoIsDevs (1.21s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateMaxNoGoIsDevs"}
