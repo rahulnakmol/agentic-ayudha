@@ -279,7 +279,8 @@ func TestCodexCloud(t *testing.T) {
 		{"id": "task_e_65", "title": "# Delegated story #65: Item", "status": "completed"}, {"id": "task_e_66", "title": "# Delegated story #640: Item", "status": "error"}], "cursor": null}`
 	tasks, err := c.List(ctx)
 	if err != nil || len(tasks) != 3 || !slices.Equal(calls[len(calls)-1].args, []string{"codex", "cloud", "list", "--env", "env_123", "--json", "--limit", "20"}) ||
-		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed || !ForStory(tasks[0].Title, 64) || ForStory(tasks[2].Title, 64) {
+		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed || !ForStory(tasks[0].Title, 64) || ForStory(tasks[2].Title, 64) ||
+		ForStory("# Delegated story #65: Follow-up to #64", 64) || !ForStory("Delegated story #64: Item", 64) {
 		t.Fatalf("list: %v %+v", err, tasks)
 	}
 	out["cloud list"] = "Error: 401 Unauthorized"

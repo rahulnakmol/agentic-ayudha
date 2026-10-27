@@ -64,10 +64,11 @@ type Lister interface {
 	List(ctx context.Context) ([]Task, error)
 }
 
-// ForStory reports whether a listed task's title names story n ("#64"):
-// the brief's first line, "# Delegated story #64: …", is the task's title.
+// ForStory reports whether a listed task is story n's: the brief's first
+// line, "# Delegated story #64: …", is the task's title. Only that heading
+// counts, so a story #65 titled "Follow-up to #64" is not #64's task.
 func ForStory(title string, n int) bool {
-	return regexp.MustCompile(fmt.Sprintf(`#%d\b`, n)).MatchString(title)
+	return regexp.MustCompile(fmt.Sprintf(`(?i)\bstory #%d:`, n)).MatchString(title)
 }
 
 // NoAnswer reports whether err is a request the host did not answer before

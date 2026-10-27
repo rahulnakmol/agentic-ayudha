@@ -203,6 +203,37 @@ func TestMissionRecoverReattachesKeepsRestarts(t *testing.T) {
 	if code != 0 || m.handoffs(60) != 0 || !strings.Contains(out, "#60  its Amp thread is archived with no PR: a live claim of another run holds it, so this run starts nothing") {
 		t.Fatalf("recover with another run's claim: exit %d, #60 hand-offs %d: %s%s", code, m.handoffs(60), out, errOut)
 	}
+	// The next wake finds the same claim: the plan records nothing new.
+	plan := git(t, m.bare, "show", "ledger:"+MissionPlanPath(889))
+	if code, out, errOut := m.recover(889, ""); code != 0 || !strings.Contains(out, "  nothing changed\n") || git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != plan {
+		t.Fatalf("a second wake with another run's claim: exit %d: %s%s", code, out, errOut)
+	}
+	// The ledger refuses the restart's claim line: recover says nothing restarted, and starts nothing.
+	refuseClaims(t, m.bare, true)
+	code, out, errOut = m.recover(889, "")
+	refuseClaims(t, m.bare, false)
+	if code != 0 || m.handoffs(60) != 0 || !strings.Contains(out, "#60  its Amp thread is archived with no PR; nothing restarted: ") {
+		t.Fatalf("recover when the ledger refuses the claim: exit %d, #60 hand-offs %d: %s%s", code, m.handoffs(60), out, errOut)
+	}
+}
+
+// refuseClaims makes the bare ledger remote refuse every push that changes a claims file, or accept them again.
+func refuseClaims(t *testing.T, bare string, on bool) {
+	t.Helper()
+	hook := filepath.Join(bare, "hooks", "pre-receive")
+	if !on {
+		if err := os.Remove(hook); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	git(t, bare, "config", "core.hooksPath", "hooks") // over any global hooks path
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nwhile read old new ref; do\n  if git diff --name-only \"$old\" \"$new\" | grep -q claims; then echo 'the ledger refuses this claim' >&2; exit 1; fi\ndone\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // codexWorld is a mission on codex whose Kanha runs locally: list is what
@@ -641,7 +672,16 @@ func TestMissionRecoverRefusedOnOtherTool(t *testing.T) {
 func TestMissionRetryByTeammateRecorded(t *testing.T) {
 	m := bobsCodex(t)
 	m.as("dana", "codex")
-	code, out, errOut := m.mission(m.person, "dana", "retry", 874, "--story", "950")
+	// A recover marks the codex task list unreadable while dana enters her code: the retry keeps that mark.
+	m.device("dana")
+	m.edit(func() {
+		m.g.Device.OnPoll = func(int) {
+			m.setPlan(874, func(p *MissionPlan) {
+				p.Sources = []MissionSource{{Name: "codex task list", Unreadable: "401", Since: "2026-10-26T09:40:00Z"}}
+			})
+		}
+	})
+	code, out, errOut := run(t, m.person, m.opts, "mission", "retry", "874", "--story", "950", "--repo", "o/r")
 	if code != 0 || m.codes() != 1 || !strings.Contains(out, "#950  retried by @dana: restarted from story/950-item-950 and its brief") || m.handoffs(950) != 1 {
 		t.Fatalf("dana's retry: exit %d, hand-offs %d: %s%s", code, m.handoffs(950), out, errOut)
 	}
@@ -655,6 +695,9 @@ func TestMissionRetryByTeammateRecorded(t *testing.T) {
 	}
 	if ss := p.stateOf(950); ss == nil || len(ss.Attempts) != 2 || ss.Attempts[1].By != "dana" {
 		t.Fatalf("#950's attempts:\n%s", raw)
+	}
+	if len(p.Sources) != 1 || p.Sources[0].Unreadable != "401" {
+		t.Fatalf("the retry dropped the source a recover marked meanwhile:\n%s", raw)
 	}
 }
 
@@ -788,6 +831,13 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "87", "--dry-run")
 	if code != 0 || !strings.Contains(out, fmt.Sprintf("it runs the sync of #87's PR #%d on amp again; the attempt is counted", pr87.Number)) || strings.Contains(out+errOut, "is judged") || m.commits() != commits {
 		t.Fatalf("retry #87 --dry-run: exit %d: %s%s", code, out, errOut)
+	}
+	// The ledger refuses the retry's claim line: the retry fails, starts nothing, and records no attempt.
+	refuseClaims(t, m.bare, true)
+	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "95")
+	refuseClaims(t, m.bare, false)
+	if code != ExitExternal || m.handoffs(95) != 0 || m.commits() != commits {
+		t.Fatalf("retry when the ledger refuses the claim: exit %d, hand-offs %d: %s%s", code, m.handoffs(95), out, errOut)
 	}
 	// A recover restarts #95 while the person enters the device code: the retry starts no second agent.
 	m.device("rahulnakmol")

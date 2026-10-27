@@ -199,6 +199,13 @@ type sourceRead struct {
 
 var errClaimed = errors.New("a live claim of another run holds it, so this run starts nothing")
 
+// notRun is an error of attempt before its hand-off or sync ran: nothing
+// started, and no attempt is counted.
+type notRun struct{ err error }
+
+func (e notRun) Error() string { return e.err.Error() }
+func (e notRun) Unwrap() error { return e.err }
+
 // newRecovery reads what recover and retry act on: the open PRs and the receivers' config.
 func (e *Env) newRecovery(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval, verb, tool, by string) (*recovery, error) {
 	l, err := e.Config()
@@ -399,7 +406,7 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 			s.PR, s.Status = pr, dlgPROpen
 			s.Events = append(s.Events, delegate.Event{At: started, Status: dlgPROpen, Detail: fmt.Sprintf("PR #%d found by aayu mission %s", pr, r.verb)})
 		}); err != nil {
-			return st, err
+			return st, notRun{err}
 		}
 	}
 	if pr == 0 {
@@ -410,16 +417,16 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 		path := MissionClaimsPath(r.f)
 		spent, err := r.spentClaims(ctx, path, n, st)
 		if err != nil {
-			return st, err
+			return st, notRun{err}
 		}
 		tok, lost, err := r.e.claimSlot(ctx, r.w, path, fmt.Sprintf("missions: %s of #%d in the mission of #%d", kind, n, r.f), n, map[int]bool{}, math.MaxInt, spent)
 		if err != nil {
-			return st, err
+			return st, notRun{err}
 		}
-		r.changed = true
-		if lost != 0 {
+		if lost != 0 { // claimSlot released this run's line: the plan has nothing new to record
 			return st, errClaimed
 		}
+		r.changed = true
 		defer func() {
 			b, _ := json.Marshal(loopClaim{Story: n, Token: tok, At: started, Release: true})
 			_, _ = r.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: the %s of #%d is on its delegation; its claim is released", kind, n), Append: map[string][]byte{path: append(b, '\n')}})
@@ -429,7 +436,7 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 				s.Status = dlgFailed
 				s.Events = append(s.Events, delegate.Event{At: started, Status: dlgFailed, Detail: why + " (aayu mission " + r.verb + ")"})
 			}); err != nil {
-				return st, err
+				return st, notRun{err}
 			}
 		}
 	}
@@ -568,8 +575,9 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 			r.touch(n).State = stateMaybe
 			return say("maybe started", fmt.Sprintf("maybe started: a %s task exists for #%d but no PR yet; aayu does not start it again", st.Receiver, n))
 		}
-		r.note(st.Receiver, nil, true)
-		return r.restart(ctx, n, st, fmt.Sprintf("no %s task and no PR for #%d", st.Receiver, n), "restart")
+		got := r.restart(ctx, n, st, fmt.Sprintf("no %s task and no PR for #%d", st.Receiver, n), "restart")
+		r.note(st.Receiver, nil, got.State != "left") // a restart another run holds tells recover nothing new
+		return got
 	case st.Status == dlgFailed:
 		_, why := lastFailure(st)
 		ss := r.counted(n, st)
@@ -590,13 +598,15 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 	}
 	// A running story: its host says whether its agent lives.
 	t, lost, err := r.read(ctx, st)
-	r.note(st.Receiver, err, lost != "")
+	r.note(st.Receiver, err, false)
 	switch {
 	case err != nil:
 		r.touch(n).State = fmt.Sprintf("%s%s (%s)", stateUnreadable, src, unreadable(err))
 		return say("unreadable", r.next.stateOf(n).State+": aayu starts nothing for it")
 	case lost != "":
-		return r.restart(ctx, n, st, lost+" with no PR", "restart")
+		got := r.restart(ctx, n, st, lost+" with no PR", "restart")
+		r.note(st.Receiver, nil, got.State != "left") // a restart another run holds tells recover nothing new
+		return got
 	}
 	r.clear(n)
 	where := or(t.URL, or(st.TaskURL, st.Task))
@@ -628,9 +638,14 @@ func (r *recovery) restart(ctx context.Context, n int, st delegate.State, why, k
 	}
 	after, err := r.attempt(ctx, n, st, 0, kind, why)
 	ss := r.next.stateOf(n)
+	var nr notRun
 	switch {
 	case errors.Is(err, errClaimed):
 		out.State, out.Line = "left", why+": "+err.Error()
+	case errors.As(err, &nr):
+		out.State, out.Line = "failed", fmt.Sprintf("%s; nothing restarted: %s", why, oneLineErr(err))
+	case err != nil && ss == nil: // the hand-off ran, and its record could not be read
+		out.State, out.Line = "failed", fmt.Sprintf("%s; the restart's record could not be read: %s", why, oneLineErr(err))
 	case after.Status == dlgMaybe:
 		out.State, out.Line = "maybe started", fmt.Sprintf("%s; restarted, and %s gave no answer before the timeout: maybe started, and aayu does not start it again", why, delegate.Names[st.Receiver])
 	case err != nil && strings.HasPrefix(ss.State, stateWaits):
@@ -690,7 +705,14 @@ func (r *recovery) write(ctx context.Context, ctl MissionControl, msg string) (s
 			}
 		}
 		slices.SortFunc(pl.StoryStates, func(a, b MissionStoryState) int { return a.Number - b.Number })
-		pl.Sources = r.next.Sources
+		for receiver := range r.reads { // only the sources this run read: another run's reads stay
+			name := sourceNames[receiver]
+			pl.Sources = slices.DeleteFunc(pl.Sources, func(s MissionSource) bool { return s.Name == name })
+			if i := slices.IndexFunc(r.next.Sources, func(s MissionSource) bool { return s.Name == name }); i >= 0 {
+				pl.Sources = append(pl.Sources, r.next.Sources[i])
+			}
+		}
+		slices.SortFunc(pl.Sources, func(a, b MissionSource) int { return strings.Compare(a.Name, b.Name) })
 		pl.Controls = append(pl.Controls, ctl)
 		return nil
 	})
@@ -859,9 +881,14 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	line := RecoverStory{Story: story, State: "retried"}
 	after, err := r.attempt(ctx, story, st, pr, "retry", "a person's retry")
 	got := r.next.stateOf(story)
+	var nr notRun
 	switch {
+	case errors.As(err, &nr): // nothing ran: there is no attempt to record
+		return err
 	case errors.Is(err, errClaimed):
 		line.State, line.Line = "left", err.Error()
+	case err != nil && got == nil: // the step ran, and its record could not be read
+		line.State, line.Line = "failed", fmt.Sprintf("retried by @%s: its record could not be read: %s", p.Login, oneLineErr(err))
 	case err != nil:
 		line.State, line.Line = "failed", fmt.Sprintf("retried by @%s: failed again: %s; %s", p.Login, oneLineErr(err), or(got.State, "failed"))
 	case pr != 0:
