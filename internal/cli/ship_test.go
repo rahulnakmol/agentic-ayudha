@@ -1518,7 +1518,7 @@ func TestShipMergeStandsWhenKanhaUnreached(t *testing.T) {
 			kanhaSendTimeout = 200 * time.Millisecond
 			t.Cleanup(func() { kanhaSendTimeout = was })
 			s.stall = true
-		}, 1, []string{unreached("#1", "no answer in 200ms: context deadline exceeded")}},
+		}, 1, []string{unreached("#1", "amp: context deadline exceeded")}},
 		{"a local Kanha takes it at its next check", ready.Parent{Scope: "feature", Key: "1", Host: "codex", Session: "s-123", Mode: "local", Machine: "founder@laptop", StartedBy: "founder"}, nil, 0,
 			[]string{"next: the Kanha of #1: merged #2 (PR #7): run aayu mission next 1 (recorded; the local Kanha on founder@laptop takes it at its next check)\n"}},
 		{"GitHub fails the read of #2's Feature after the merge", amp, func(s *kanhaShip) {

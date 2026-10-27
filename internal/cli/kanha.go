@@ -138,7 +138,7 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 				defer cancel()
 				_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
 				if err != nil && ctx.Err() != nil { // a CLI the limit killed reports how it exited, not why
-					err = fmt.Errorf("no answer in %s: %w", kanhaSendTimeout, ctx.Err())
+					err = fmt.Errorf("%s: %w", p.Host, ctx.Err())
 				}
 				return actions.Outcome{Attempts: 1}, err
 			})

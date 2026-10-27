@@ -282,7 +282,7 @@ func TestBuildStopWhenKanhaStalls(t *testing.T) {
 	if code, _, errOut := run(t, m.agent, m.opts, "build", "37", "--stop", "spec unclear", "--repo", "o/r"); code != ExitBlocked || !slices.Contains(m.labels(37), "status:blocked") {
 		t.Fatalf("build 37 --stop: exit %d: %s", code, errOut)
 	}
-	if got := m.kanhaEvents(37); len(got) != 1 || !strings.HasPrefix(got[0], "blocked #37: spec unclear: run aayu mission next 889 (not sent: ") || !strings.Contains(got[0], "no answer in 200ms: context deadline exceeded") {
+	if got := m.kanhaEvents(37); len(got) != 1 || !strings.HasPrefix(got[0], "blocked #37: spec unclear: run aayu mission next 889 (not sent: ") || !strings.Contains(got[0], "(not sent: amp: context deadline exceeded)") {
 		t.Fatalf("delegate/37/state.json Kanha events: %q", got)
 	}
 }
