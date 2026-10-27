@@ -38,6 +38,7 @@ type Result struct {
 	Issue              int                   `json:"issue"`
 	Title              string                `json:"title"`
 	Type               string                `json:"type"`
+	Parent             *workitems.Ref        `json:"parent,omitempty"` // the issue's parent when it was read: build checks a mission claim against it (Bug #1129)
 	Pass               bool                  `json:"pass"`
 	Problems           []workitems.Problem   `json:"problems"`
 	Warnings           []workitems.Problem   `json:"warnings,omitempty"` // what passes Ready but should be rewritten
@@ -102,6 +103,7 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 		case perr == nil:
 			pt, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
 			it.Parent = &workitems.Ref{Number: parent.GetNumber(), Type: pt}
+			res.Parent = it.Parent
 		case !github.NotFound(perr):
 			return res, is, perr
 		}

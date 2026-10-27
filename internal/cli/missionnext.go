@@ -508,9 +508,10 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // when its live state changed since (Story #998, J4 rule 3): build reads the
 // issue first, and releases the claim so its agent is free again. A story a
 // build already moved to in progress is not a change. A paused or ended
-// mission, or a story stopped alone, is one (Story #1005). claimed is set when a live claim of an unpaused mission
+// mission, or a story stopped alone, is one (Story #1005), and so is a story
+// a person moved out of the mission's Feature (Bug #1129). claimed is set when a live claim of an unpaused mission
 // marks n start; a plan it cannot read leaves it unset.
-func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool, claimed *bool) error {
+func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, chk ready.Result, labels []string, dryRun bool, claimed *bool) error {
 	n := is.GetNumber()
 	t, err := w.Read(ctx)
 	if err != nil {
@@ -552,13 +553,15 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		now = "a person stopped it: " + plan.stopped(n).Reason
 	case plan.State != "":
 		now = "its mission is " + plan.State
+	case planOK && movedOut(chk, &plan):
+		now = fmt.Sprintf("under %s, not #%d", parentRef(chk.Parent), plan.Feature)
 	case is.GetState() != "open":
 		now = "closed"
 	case contains(labels, "status:blocked"):
 		now = "blocked"
 	case !contains(labels, ready.LabelReady) && !contains(labels, labelInProgress):
 		now = storyState(is)
-	case !pass:
+	case !chk.Pass:
 		now = "not Ready"
 	default:
 		*claimed = planOK
@@ -572,6 +575,23 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
+}
+
+// movedOut reports whether the item chk read is no longer under the plan's
+// Feature. A Bug that a Tatkal list starts keeps its own parent (Decision #915).
+func movedOut(chk ready.Result, plan *MissionPlan) bool {
+	if plan.Release != 0 && chk.Type == "bug" {
+		return false
+	}
+	return chk.Parent == nil || chk.Parent.Number != plan.Feature
+}
+
+// parentRef names a parent for a refusal: "#920", or "no Feature".
+func parentRef(p *workitems.Ref) string {
+	if p == nil {
+		return "no Feature"
+	}
+	return fmt.Sprintf("#%d", p.Number)
 }
 
 // heldBy is the clock of story n's mission when it reached its time limit, else nil.

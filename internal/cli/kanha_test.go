@@ -828,4 +828,21 @@ func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 			t.Fatalf("build 61 after %q: exit %d: %s (claims %v)", name, code, errOut, m.claims(889))
 		}
 	}
+	// Bug #1129: a person moves #61 to another Feature, or out of any, after the list: the claim is #889's.
+	m.setPlan(889, func(p *MissionPlan) { p.Pause, p.Stopped, p.State = nil, nil, "" })
+	m.issue(977, "Feature 977", "feature", 0, "")
+	for _, to := range []struct {
+		parent int
+		now    string
+	}{{977, "under #977, not #889"}, {0, "under no Feature, not #889"}} {
+		m.move(61, 889)
+		if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "start #61\n") {
+			t.Fatalf("mission next 889 before the move to %d: exit %d: %s%s", to.parent, code, out, errOut)
+		}
+		m.move(61, to.parent)
+		if code, _, errOut := run(t, m.agent, m.opts, "build", "61", "--delegate", "cursor", "--repo", "o/r"); code != ExitBlocked ||
+			!strings.Contains(errOut, "#61 changed since the list: now "+to.now+"; not started") || m.claims(889)[61] != 0 {
+			t.Fatalf("build 61 after the move to %d: exit %d: %s (claims %v)", to.parent, code, errOut, m.claims(889))
+		}
+	}
 }

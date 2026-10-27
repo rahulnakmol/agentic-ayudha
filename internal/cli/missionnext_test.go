@@ -320,6 +320,19 @@ func TestBuildDelegateReadsLiveState(t *testing.T) {
 	}
 }
 
+// move makes issue n a sub-issue of parent, or of no issue when parent is 0.
+func (m *missionWorld) move(n, parent int) {
+	m.edit(func() {
+		if old := m.g.Issues[n].Parent; old != 0 {
+			m.g.Issues[old].Subs = slices.DeleteFunc(m.g.Issues[old].Subs, func(s int) bool { return s == n })
+		}
+		m.g.Issues[n].Parent = parent
+		if parent != 0 {
+			m.g.Issues[parent].Subs = append(m.g.Issues[parent].Subs, n)
+		}
+	})
+}
+
 // Criterion 7: a Feature whose approved intent drifted is not approved to
 // build at its current hashes: exit 4, and nothing is listed or claimed.
 func TestMissionNextNotApproved(t *testing.T) {
@@ -484,6 +497,10 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 	}
 	if code, out, errOut := m.next(920); code != 0 || out != "waits #930: not Ready (open)\nstart #941 (bug)\nstart #940 (bug)\n" {
 		t.Fatalf("mission next 920: exit %d: %q%s", code, out, errOut)
+	}
+	// Bug #1129: #940 stays under #874, and the Tatkal list's claim still holds for it.
+	if _, _, errOut := run(t, m.agent, m.opts, "build", "940", "--delegate", "amp", "--repo", "o/r"); strings.Contains(errOut, "changed since the list") {
+		t.Fatalf("build 940 from the Tatkal list: %s", errOut)
 	}
 	// While #874's mission is not done (a story of its plan reopened), its Bugs stay with it.
 	m.edit(func() { m.g.Issues[950].State = "open" })

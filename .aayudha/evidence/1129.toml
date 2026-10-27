@@ -1,0 +1,18 @@
+# Which tests prove Bug #1129's Completion Goal: a Kanha's build refuses a story that left its mission's Feature after
+# the list, and releases the claim; an unmoved story and a Tatkal Bug under its own Feature still start.
+
+[[criterion]]
+id = 1 # #61 moved under Feature #977 after #889's list: build 61 --delegate exits 4, starts nothing, and releases the claim
+tests = ["internal/cli:TestKanhaBuildsWhatTheListMarked"]
+
+[[criterion]]
+id = 2 # #61 given no parent after the list: the same refusal and release, "now under no Feature, not #889"
+tests = ["internal/cli:TestKanhaBuildsWhatTheListMarked"]
+
+[[criterion]]
+id = 3 # #60 still under #889: the Kanha's build starts it with no --asked
+tests = ["internal/cli:TestKanhaBuildsWhatTheListMarked"]
+
+[[criterion]]
+id = 4 # Tatkal #920's list marks Bug #940, under #874 whose mission is done: the build does not refuse it as moved
+tests = ["internal/cli:TestMissionNextDoneFeatureBugGoesToTatkal"]
