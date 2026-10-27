@@ -405,10 +405,14 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 	if pr == 0 {
 		// The claim line orders the restarts of every run: a live claim of
 		// another run for the story (a start or a restart) holds it, and this
-		// run starts nothing. The line is released once the hand-off is on
-		// the delegation, which guards the story from then on.
+		// run starts nothing. A claim made by the time of the delegation's last
+		// hand-off is spent: that hand-off guards the story from then on.
 		path := MissionClaimsPath(r.f)
-		tok, lost, err := r.e.claimSlot(ctx, r.w, path, fmt.Sprintf("missions: %s of #%d in the mission of #%d", kind, n, r.f), n, map[int]bool{}, math.MaxInt, nil)
+		spent, err := r.spentClaims(ctx, path, n, st)
+		if err != nil {
+			return st, err
+		}
+		tok, lost, err := r.e.claimSlot(ctx, r.w, path, fmt.Sprintf("missions: %s of #%d in the mission of #%d", kind, n, r.f), n, map[int]bool{}, math.MaxInt, spent)
 		if err != nil {
 			return st, err
 		}
@@ -459,6 +463,28 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 		ss.State, ss.RetryAt = "", ""
 	}
 	return after, berr
+}
+
+// spentClaims are the tokens of story n's live claim lines made by the time
+// of st's last hand-off (sent, or sent with no answer).
+func (r *recovery) spentClaims(ctx context.Context, path string, n int, st delegate.State) (map[string]bool, error) {
+	last := ""
+	for _, ev := range st.Events {
+		if ev.Status == dlgHandedOff || ev.Status == dlgMaybe {
+			last = max(last, ev.At)
+		}
+	}
+	spent := map[string]bool{}
+	if last == "" {
+		return spent, nil
+	}
+	lines, err := r.e.claimLines(ctx, r.w, path, nil)
+	for _, c := range lines {
+		if c.Story == n && c.At <= last {
+			spent[c.Token] = true
+		}
+	}
+	return spent, err
 }
 
 // setDelegation edits delegate/<n>/state.json at the ledger tip.

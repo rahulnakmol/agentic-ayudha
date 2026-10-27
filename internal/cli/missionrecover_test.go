@@ -339,8 +339,8 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	if st := w.state(64); st.Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") {
 		t.Fatalf("#64 does not keep its slot: %+v, labels %v", st, w.g.LabelNames(64))
 	}
-	if n := w.claims(889)[64]; n != 0 { // the delegation guards it now, so recover can restart it at once
-		t.Fatalf("the list's claim of #64 is still live (%d)", n)
+	if n := w.claims(889)[64]; n != 1 { // it holds its slot; the hand-off spends the claim for recover, which can restart it at once
+		t.Fatalf("the list's claim of #64 is not live (%d)", n)
 	}
 	if p, raw := w.plan(889); p.stateOf(64) == nil || p.stateOf(64).State != "maybe started" {
 		t.Fatalf("plan.json does not mark #64 maybe started:\n%s", raw)
@@ -366,7 +366,8 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		t.Fatalf("#64 is still marked after its restart:\n%s", raw)
 	}
 	// A restart that gets no answer either is maybe started again, and the list that cannot be read stops the next check.
-	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64b", Branch: "story/64-item-64", Status: dlgMaybe})
+	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64b", Branch: "story/64-item-64", Status: dlgMaybe,
+		Events: []delegate.Event{{At: time.Now().UTC().Format(time.RFC3339), Status: dlgMaybe, Detail: "no answer before the timeout"}}})
 	w.list = `{"tasks": [], "cursor": null}`
 	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
 	code, out, errOut = w.recover(889, "codex")
