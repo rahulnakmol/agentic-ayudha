@@ -154,6 +154,13 @@ func lockRefused(err error) bool {
 	return errors.As(err, &r)
 }
 
+// lockUnread is the refusal of a guarded write when the locks cannot be read.
+type lockUnread struct{ err error }
+
+func (u *lockUnread) Error() string {
+	return fmt.Sprintf("aayu reads the mission locks before it writes an issue body or an effort:, risk:, or priority: label, and could not: %v. Nothing was written.", u.err)
+}
+
 // lockHold is what an active lock holds on one issue.
 type lockHold struct {
 	feature int
@@ -191,7 +198,7 @@ func (g *lockGuard) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	repo, holds, err := g.locks(req.Context())
 	if err != nil {
-		return nil, Errorf(ExitExternal, "aayu reads the mission locks before it writes an issue body or an effort:, risk:, or priority: label, and could not: %v. Nothing was written.", err)
+		return nil, &Error{Code: ExitExternal, Err: &lockUnread{err}}
 	}
 	n, _ := strconv.Atoi(m[3])
 	if h, ok := holds[n]; ok && strings.EqualFold(m[1]+"/"+m[2], repo) && change.changes(h.labels) {

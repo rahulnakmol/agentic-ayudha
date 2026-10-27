@@ -558,6 +558,20 @@ func TestLockGuardFailsClosed(t *testing.T) {
 	if w := m.issueWrites(870); len(w) != 0 {
 		t.Fatalf("the body write reached GitHub: %v", w)
 	}
+	// ship completes a story after the merge: its Outcome goes in a comment, so
+	// ship still writes its record.
+	e, c := m.client(m.agent)
+	rec := ShipRecord{PR: 99, MergeCommit: strings.Repeat("a", 40), Head: strings.Repeat("b", 40), Pack: "proof/21/pack.json", ShippedAt: "2026-10-26T10:00:00Z",
+		HumanPass: HumanPass{Kind: "proof", Note: "on proof"}, Actions: "actions/2026-10-26.jsonl"}
+	if err := e.completeStory(context.Background(), c, "o/r", 21, rec); err != nil {
+		t.Fatalf("ship's completion of #21 with unreadable locks: %v", err)
+	}
+	m.g.Mu.Lock()
+	last := m.g.Issues[21].Comments[len(m.g.Issues[21].Comments)-1].Body
+	m.g.Mu.Unlock()
+	if !strings.HasPrefix(last, "### Outcome\n\nMerged in #99") || slices.ContainsFunc(m.issueWrites(21), func(r fake.Request) bool { return r.Method == http.MethodPatch }) {
+		t.Fatalf("ship's completion of #21 with unreadable locks: last comment %q, writes %v", last, m.issueWrites(21))
+	}
 }
 
 // Criterion 2: Start locks the issues the card named. When one closes while
