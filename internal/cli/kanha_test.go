@@ -130,17 +130,20 @@ func checkKanhaBrief(t *testing.T, brief string, f int, tool string) {
 	}
 }
 
-// Bug #1099, criterion 2: `go test -run 'TestMissionStartBriefsDraftingThread$'
-// -count=50` passes 50 of 50, run by this test binary. Its plan and parent times
-// differed when a start crossed a second, about 1 run in 8.
-func TestMissionStartBriefsDraftingThreadFiftyRuns(t *testing.T) {
+// Bug #1099, criterion 2: `go test -run 'TestMissionStartBriefsDraftingThread$'`
+// passes every run of 20, run by this test binary. Its plan and parent times
+// differed when a start crossed a second: 37 of 50 runs passed on the old code,
+// so 20 passing runs had odds of about 0.74^20 ≈ 0.24 %. Twenty runs cost about
+// 54 s of one core; 50 cost about 135 s (CodeRabbit's Major on #1117).
+func TestMissionStartBriefsDraftingThreadRepeated(t *testing.T) {
 	t.Parallel()
-	out, err := exec.Command(os.Args[0], "-test.run=^TestMissionStartBriefsDraftingThread$", "-test.count=50", "-test.v").CombinedOutput()
+	const runs = 20
+	out, err := exec.Command(os.Args[0], "-test.run=^TestMissionStartBriefsDraftingThread$", fmt.Sprintf("-test.count=%d", runs), "-test.v").CombinedOutput()
 	pass := strings.Count(string(out), "--- PASS: TestMissionStartBriefsDraftingThread ")
-	if err != nil || pass != 50 {
-		t.Fatalf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=50: %d of 50 pass (%v)\n%s", pass, err, out)
+	if err != nil || pass != runs {
+		t.Fatalf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=%d: %d of %d pass (%v)\n%s", runs, pass, runs, err, out)
 	}
-	t.Logf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=50: %d of 50 pass", pass)
+	t.Logf("go test -run 'TestMissionStartBriefsDraftingThread$' -count=%d: %d of %d pass", runs, pass, runs)
 }
 
 // Criterion 1: @rahulnakmol starts #889 from the thread that drafted its
