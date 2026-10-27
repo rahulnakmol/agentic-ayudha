@@ -324,7 +324,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 
 	var snap ready.LedgerSnapshot
-	approvedNow := "" // with res.GateFix: the hash of the Feature's approved record now
+	fixCurrent := false // with res.GateFix: the Feature's approved record is the one its entry was made under
 	if res.Story > 0 {
 		if client == nil {
 			if _, tok, err = e.readClient(ctx); err != nil {
@@ -338,7 +338,6 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		if t, err := w.Read(ctx); err == nil {
 			if b, err := t.File(ctx, ready.LedgerPath(res.Story)); err == nil {
 				if snap, err = ready.ParseSnapshot(string(b)); err != nil {
-					t.Close()
 					return err
 				}
 				r.Criteria = snap.Criteria
@@ -346,11 +345,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			// A Feature has no Completion Goal: a gate fix PR its mission plan
 			// lists rests on the approved record (Decision #974, Bug #1100).
 			if snap.CompletionGoalHash == "" && e.CI && res.PR > 0 {
-				if res.GateFix, approvedNow, err = listedGateFix(ctx, t, res.Story, res.PR); err != nil {
-					t.Close()
-					return err
-				}
-				if res.GateFix != nil {
+				if res.GateFix, fixCurrent = listedGateFix(ctx, t, res.Story, res.PR); res.GateFix != nil {
 					r.Criteria = nil
 				}
 			}
@@ -504,7 +499,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if e.CI && res.PR > 0 && res.Story > 0 {
 		res.Gate = e.gateProblems(ctx, repo, res, snap.CompletionGoalHash)
 		if res.GateFix != nil {
-			problems, note := judgeGateFix(ctx, r, res.Story, res.GateFix, approvedNow)
+			problems, note := judgeGateFix(ctx, r, res.Story, res.GateFix, fixCurrent)
 			res.Gate, res.GateFixNote = append(res.Gate, problems...), note
 		}
 	}

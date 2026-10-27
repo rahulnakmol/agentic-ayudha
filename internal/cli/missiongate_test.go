@@ -1122,6 +1122,10 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 	if err != nil || p.PR != 981 || p.PRHeadSHA != res.Head || p.CompletionGoalHash != fix.Approval.SHA256 || p.Links.ReadySnapshot != ready.ApprovalPath(889) {
 		t.Fatalf("fix pack: %+v %v", p, err)
 	}
+	if code, out, errOut := run(t, ci, g.opts, "verify", "981", "--floor", "coverage", "--ci", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "\n  gate fix: #981 fixes verify:inbox.ship-once in MS1 of #889, and that check passes at "+short(res.Head)+"\n") {
+		t.Fatalf("text output of a listed fix: exit %d: %s%s", code, out, errOut)
+	}
 	gateEnv := map[string]string{"GITHUB_TOKEN": "workflow-token", "GITHUB_WORKFLOW_REF": "o/r/.github/workflows/aayudha-merge-gate.yml@refs/pull/981/merge",
 		"GITHUB_EVENT_NAME": "pull_request_target", "XDG_STATE_HOME": g.person["XDG_STATE_HOME"]}
 	if code, out, errOut := run(t, gateEnv, g.opts, "proof", "comment", "889", "--ci", "--repo", "o/r"); code != 0 || strings.Contains(out+errOut, "Ready snapshot") {
@@ -1168,6 +1172,15 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 	if code, res, out := verifyPR(983); code != 0 || len(res.Gate) != 0 ||
 		res.GateFixNote != "#983 fixes check:build in MS1 of #889: the merge gate does not run the required check build; ship's required checks decide" {
 		t.Fatalf("listed fix of a CI job: exit %d %q %q: %s", code, res.Gate, res.GateFixNote, out)
+	}
+	g.fixPR(984, "eval:mission/stays-in-list", "Refs #889")
+	g.edit(func() { g.g.Pulls[984].Head.SHA, g.g.Pulls[984].Base.SHA = g.g.Pulls[981].Head.SHA, base })
+	g.setPlan(889, func(p *MissionPlan) {
+		p.GateFixes = append(p.GateFixes, GateFix{PR: 984, Milestone: "MS1", Check: "eval:mission/stays-in-list", DevSHA: fix.DevSHA, Approval: fix.Approval, At: fix.At})
+	})
+	if code, res, out := verifyPR(984); code != 0 || len(res.Gate) != 0 || !strings.HasPrefix(res.GateFixNote,
+		"#984 fixes eval:mission/stays-in-list in MS1 of #889: the merge gate does not run the eval mission/stays-in-list (evals.yml), and no required check runs it") {
+		t.Fatalf("listed fix of an eval: exit %d %q %q: %s", code, res.Gate, res.GateFixNote, out)
 	}
 
 	// 4. #889 is approved again: the entry was made under the earlier approval (read from the ledger, never the PR body).

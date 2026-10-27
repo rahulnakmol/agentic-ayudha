@@ -861,32 +861,29 @@ func findFix(plan *MissionPlan, m, check, sha string) *GateFix {
 }
 
 // listedGateFix is the gate_fixes entry of Feature f's mission plan that
-// names PR n, with the SHA-256 of f's approved record on the ledger now; nil
-// when no entry names it (Bug #1100). Only the plan on the ledger counts: a
-// PR body can claim any check.
-func listedGateFix(ctx context.Context, t *ledger.Tree, f, n int) (*GateFix, string, error) {
-	b, err := t.File(ctx, MissionPlanPath(f))
-	if err != nil || b == nil {
-		return nil, "", ignoreMissing(err)
-	}
+// names PR n, nil when no entry names it, and whether f's approved record on
+// the ledger is still the one the entry was made under (Bug #1100). Only the
+// plan on the ledger counts: a PR body can claim any check. It fails closed:
+// a plan it cannot read names no fix, and a record it cannot read is not current.
+func listedGateFix(ctx context.Context, t *ledger.Tree, f, n int) (fix *GateFix, current bool) {
 	var plan MissionPlan
-	if json.Unmarshal(b, &plan) != nil || plan.Schema != MissionPlanSchema || plan.Feature != f {
-		return nil, "", Errorf(ExitExternal, "ledger %s: not the mission plan of #%d", MissionPlanPath(f), f)
+	if b, err := t.File(ctx, MissionPlanPath(f)); err != nil || json.Unmarshal(b, &plan) != nil || plan.Schema != MissionPlanSchema || plan.Feature != f {
+		return nil, false
 	}
 	i := slices.IndexFunc(plan.GateFixes, func(g GateFix) bool { return g.PR == n })
 	if i < 0 {
-		return nil, "", nil
+		return nil, false
 	}
+	fix = &plan.GateFixes[i]
 	record, err := t.File(ctx, ready.ApprovalPath(f))
-	if err := ignoreMissing(err); err != nil {
-		return nil, "", err
-	}
-	now := ""
-	if record != nil {
-		sum := sha256.Sum256(record)
-		now = hex.EncodeToString(sum[:])
-	}
-	return &plan.GateFixes[i], now, nil
+	sum := sha256.Sum256(record)
+	return fix, err == nil && fix.Approval.Record == ready.ApprovalPath(f) && fix.Approval.SHA256 == hex.EncodeToString(sum[:])
+}
+
+// staleGateFix is the merge gate's problem with a gate fix entry made under
+// an earlier approval of Feature f.
+func staleGateFix(fx *GateFix, f int) string {
+	return fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fx.PR, f)
 }
 
 // judgeGateFix is the merge gate's check of listed gate fix fx of Feature f
@@ -894,9 +891,9 @@ func listedGateFix(ctx context.Context, t *ledger.Tree, f, n int) (*GateFix, str
 // is now, and the verify check it fixes must pass at the head. A required
 // CI job or an eval the gate cannot run: it names it, and ship's required
 // checks decide. note says what passed or what decides.
-func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, approvedNow string) (problems []string, note string) {
-	if fx.Approval.Record != ready.ApprovalPath(f) || fx.Approval.SHA256 != approvedNow {
-		problems = append(problems, fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fx.PR, f))
+func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, current bool) (problems []string, note string) {
+	if !current {
+		problems = append(problems, staleGateFix(fx, f))
 	}
 	what := fmt.Sprintf("#%d fixes %s in %s of #%d", fx.PR, fx.Check, fx.Milestone, f)
 	ref, ok := strings.CutPrefix(fx.Check, "verify:")

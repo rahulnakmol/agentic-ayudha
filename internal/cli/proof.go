@@ -573,31 +573,22 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 		return ledgerErr(err)
 	}
 	b, err := t.File(ctx, ready.LedgerPath(story))
+	// A gate fix PR of a Feature rests on the approved record its entry names (Bug #1100).
+	fix, fixCurrent := listedGateFix(ctx, t, story, p.PR)
+	t.Close()
 	if err == nil {
 		snap, err := ready.ParseSnapshot(string(b))
 		if err != nil {
-			t.Close()
 			return err
 		}
 		exp.CompletionGoalHash, exp.Criteria, crit = snap.CompletionGoalHash, snap.Numbers(), snap.Criteria
 	}
-	// A gate fix PR of a Feature rests on the approved record its entry names
-	// (Bug #1100); stale says when that record has changed since.
-	stale := ""
-	if exp.CompletionGoalHash == "" {
-		fix, now, err := listedGateFix(ctx, t, story, p.PR)
-		if err != nil {
-			t.Close()
-			return err
-		}
-		if fix != nil {
-			exp.CompletionGoalHash, exp.Criteria, crit = fix.Approval.SHA256, nil, nil
-			if fix.Approval.Record != ready.ApprovalPath(story) || fix.Approval.SHA256 != now {
-				stale = fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fix.PR, story)
-			}
+	stale := "" // the Feature's approved record has changed since the entry was made
+	if fix != nil && exp.CompletionGoalHash == "" {
+		if exp.CompletionGoalHash, exp.Criteria, crit = fix.Approval.SHA256, nil, nil; !fixCurrent {
+			stale = staleGateFix(fix, story)
 		}
 	}
-	t.Close()
 	sum := sha256.Sum256(raw)
 	g := GateComment{Story: story, PR: p.PR, HeadSHA: p.PRHeadSHA, PackSHA256: hex.EncodeToString(sum[:]),
 		Artifact: e.Getenv("AAYU_PACK_ARTIFACT_URL")}
