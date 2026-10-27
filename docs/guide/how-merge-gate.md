@@ -437,8 +437,9 @@ fixed head, returned `merge`, and the spend covers both calls.
    and [internal/verify/netns_linux.go](../../internal/verify/netns_linux.go), `TestChildEnvironmentIsScrubbed`,
    `TestChildHasNoNetwork`, `TestChildLeavesNoProcesses`.
 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
-   Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
-   missing evidence, Completion Goal drift, and a pull request with no story.
+   A gate fix PR that the mission plan lists has no Completion Goal of its own: invariant 14 judges it. Enforced by
+   `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers missing
+   evidence, Completion Goal drift, and a pull request with no story.
 4. A review is different-family only when the reviewer's reported family is outside every family the builder may
    be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives the
    streak's autonomous pass; it merges on proof only where `[autonomy] proof_rungs` lists C. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
@@ -477,6 +478,10 @@ fixed head, returned `merge`, and the spend covers both calls.
     [internal/cli/inspect_app.go](../../internal/cli/inspect_app.go) and in
     [internal/cli/ship.go](../../internal/cli/ship.go), `TestInspectMergeBudgetDraft`, `TestShipOnProof`, and
     `TestDelegateCycleCapPages`.
+14. A PR that refers to a Feature passes the gate only when the mission plan's `gate_fixes` on the ledger lists it,
+    under the Feature's approved record as it is now, and the verify check it fixes passes at the head. Enforced by
+    `listedGateFix` and `judgeGateFix` in [internal/cli/missiongate.go](../../internal/cli/missiongate.go),
+    `TestMergeGateJudgesAListedGateFix`.
 
 ## Where it lives in the code
 
