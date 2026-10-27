@@ -6,7 +6,7 @@ Starts the build of a Feature a person approved, and shows where its mission sta
 
 | Field | Value |
 |---|---|
-| In plain words | Starts the build of a Feature a person approved, shows where its mission stands, says what can start next, proves each milestone on the dev tip, and lets a person stop it safely. |
+| In plain words | Starts a Feature a person approved, shows where its mission stands, says what can start next, checks each milestone, and lets a person stop it safely. |
 | Journey stage | [Build it](../journey-4-build.md) |
 | Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Does the work | Drona, the Accountable seat's twin, in the [`mission`](../how-models.md) model lane, with the seat's paired human when it has one |

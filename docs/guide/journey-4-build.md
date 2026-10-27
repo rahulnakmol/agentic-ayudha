@@ -76,7 +76,7 @@ Checking every small step is cheaper than reviewing one big change. And a clear 
 | Verb | What it does |
 |---|---|
 | [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
-| [`mission`](skills/mission.md) | Starts the build of a Feature a person approved, shows where its mission stands, says what can start next, proves each milestone on the dev tip, and lets a person stop it safely. |
+| [`mission`](skills/mission.md) | Starts a Feature a person approved, shows where its mission stands, says what can start next, checks each milestone, and lets a person stop it safely. |
 | [`research`](skills/research.md) | Collects design references and user research for a Feature. |
 | [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |
 | [`mockup`](skills/mockup.md) | Turns wireframes into mockups that use your design system. |

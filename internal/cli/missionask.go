@@ -237,9 +237,6 @@ func (e *Env) missionAct(ctx context.Context, it InboxItem, a InboxAction) error
 	if len(fields) < 4 || fields[0] != "aayu" || fields[1] != "mission" {
 		return Errorf(ExitUsage, "inbox: %q is not a mission step", a.Command)
 	}
-	if !missionActions[fields[2]] {
-		return Errorf(ExitBlocked, "aayu mission %s is not built yet (Story #1002 adds it); the mission of #%d stays stopped by its gate", fields[2], it.Number)
-	}
 	in := Values{"action": fields[2], "feature": fields[3]}
 	for i := 4; i < len(fields); i++ {
 		switch fl := strings.TrimPrefix(fields[i], "--"); fl {
@@ -258,20 +255,12 @@ func (e *Env) missionAct(ctx context.Context, it InboxItem, a InboxAction) error
 			}
 		}
 	}
-	return handlers["mission"](ctx, e, in)
-}
-
-// missionActions are the actions of `aayu mission` this binary has, from the registry.
-var missionActions = func() map[string]bool {
-	out := map[string]bool{}
-	if v, ok := verbs.Find("mission"); ok {
-		for _, in := range v.Inputs {
-			if in.Name == "action" {
-				for _, e := range in.Enum {
-					out[e] = true
-				}
-			}
-		}
+	if err := handlers["mission"](ctx, e, in); err != nil || fields[2] != "stop" {
+		return err // a gate run or a budget step closes its own card
 	}
-	return out
-}()
+	repo, c, _, err := e.missionLedger(ctx) // the person stopped the mission: the card has its answer
+	if err != nil {
+		return err
+	}
+	return e.closeAsk(ctx, c, repo, it.Number, it.Ask, "A person stopped the mission: "+a.Answer)
+}

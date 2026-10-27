@@ -115,7 +115,7 @@ func missionStop(ctx context.Context, e *Env, f int, in Values) error {
 		if s := plan.stopped(story); s != nil {
 			return WithNext(Errorf(ExitBlocked, "#%d is stopped already (%s). Nothing changed.", story, s.Reason), fmt.Sprintf("aayu mission resume %d --story %d", f, story))
 		}
-	case plan.Pause != nil:
+	case plan.Pause != nil && !plan.Pause.byGate():
 		return WithNext(Errorf(ExitBlocked, "The mission of #%d is stopped already (%s). Nothing changed.", f, plan.Pause.Reason), fmt.Sprintf("aayu mission resume %d", f))
 	}
 	tool, err := e.callerTool(ctx, repo) // any tool may stop: the record is what ship and the Kanha read
@@ -182,7 +182,7 @@ func missionStop(ctx context.Context, e *Env, f int, in Values) error {
 		msg = fmt.Sprintf("aayu: @%s stopped #%d (%s). Stop your subagents, commit your work at your next checkpoint, push it, and stop. Keep the branch and the PR. Start nothing new until aayu says resume.", p.Login, story, reason)
 	default:
 		rep.Commit, err = writePlan(ctx, w, f, fmt.Sprintf("missions: @%s stopped the mission of #%d (%s)", p.Login, f, reason), func(pl *MissionPlan) error {
-			if pl.Pause != nil {
+			if pl.Pause != nil && !pl.Pause.byGate() { // a person's stop takes over a stop of the gate (Story #1001)
 				return Errorf(ExitBlocked, "The mission of #%d was stopped while the code was waiting (%s). Nothing changed.", f, pl.Pause.Reason)
 			}
 			pl.Pause = &MissionPause{Reason: reason, By: p.Login, At: at}

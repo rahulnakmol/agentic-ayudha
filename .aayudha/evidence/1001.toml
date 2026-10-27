@@ -30,7 +30,7 @@ tests = ["internal/cli:TestFailedGateDoesNotHoldStarts"]
 
 [[criterion]]
 id = 8 # the third failed gate: the mission stops; one card lists each run with its check and time, gives no recommendation, and offers once more and stop
-tests = ["internal/cli:TestGateStopsAtMaxNoGo"]
+tests = ["internal/cli:TestGateStopsAtMaxNoGo", "internal/cli:TestGateStopOptionStopsTheMission", "internal/cli:TestGateMaxNoGoIsDevs"]
 
 [[criterion]]
 id = 9 # a cancelled check, or a 5xx in its log, reruns once with its reason recorded; a second failure fails the gate

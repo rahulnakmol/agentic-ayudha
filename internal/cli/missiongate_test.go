@@ -348,7 +348,36 @@ func TestGateFailOpensOneFixPRPerCheck(t *testing.T) {
 	g.g.Reset()
 	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
 	g.fixPR(982, "eval:mission/stays-in-list", "Refs #889")
-	g.setPlan(889, func(p *MissionPlan) { p.Budget = 600 }) // room for both open fixes at their cap
+	// Two fix PRs race for the room of one: #981 is recorded while #982's run reads the plan, so #982's write
+	// sees it on the ledger tip, posts its budget card once, and waits ($60 merged + $60 for open #981 + $60 > $170).
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 170 })
+	comments := len(g.g.Issues[889].Comments)
+	fired := false
+	g.edit(func() {
+		g.g.Hook = func(method, path string) {
+			if !fired && method == "GET" && path == "/repos/o/r/pulls/982" {
+				fired = true
+				g.setPlan(889, func(p *MissionPlan) {
+					p.GateFixes = append(p.GateFixes, GateFix{PR: 981, Milestone: "MS1", Check: "verify:inbox.ship-once", DevSHA: g.sha, At: "2026-10-26T10:00:00Z"})
+				})
+			}
+		}
+	})
+	code, out, errOut := g.gate("--pr", "982")
+	g.edit(func() { g.g.Hook = nil })
+	p, _ := g.plan(889)
+	asks := 0
+	for _, c := range g.g.Issues[889].Comments[comments:] {
+		if strings.HasPrefix(c.Body, MissionAskMarker+`{"id":"budget-982"`) {
+			asks++
+		}
+	}
+	if code != ExitBudget || !fired || !strings.Contains(out, "($120 used + $60, the fix's estimate, > $170)") || asks != 1 ||
+		len(p.GateFixes) != 2 || p.GateFixes[0].Waits != "" || p.GateFixes[1].PR != 982 || p.GateFixes[1].Waits != "budget" {
+		t.Fatalf("gate --pr 982 racing #981: exit %d, asks %d, fixes %+v: %s%s", code, asks, p.GateFixes, out, errOut)
+	}
+	g.edit(func() { g.g.Issues[889].Comments = g.g.Issues[889].Comments[:comments] })
+	g.setPlan(889, func(p *MissionPlan) { p.Budget, p.GateFixes = 600, nil }) // room for both open fixes at their cap
 	g.eachRequestFails(func() (int, string, string) { return g.gate("--pr", "981") })
 	for _, n := range []string{"981", "982"} {
 		if code, out, errOut := g.gate("--pr", n); code != 0 || !strings.Contains(out, "Fix PR #"+n+" is the fix of MS1") {
@@ -729,7 +758,7 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	g.eachRequestFails(func() (int, string, string) {
 		return run(t, g.agent, g.opts, "inbox", "--list", "--json", "--repo", "o/r")
 	})
-	if code, _, errOut := g.gate(); code != ExitBlocked || !strings.Contains(errOut, "A person runs the gate once more, or stops the mission, in aayu inbox.") {
+	if code, _, errOut := g.gate(); code != ExitBlocked || !strings.Contains(errOut, "A person runs aayu mission gate 889 --once-more, or stops the mission.") {
 		t.Fatalf("the Kanha's gate after the stop: exit %d: %s", code, errOut)
 	}
 	code, out, errOut := run(t, g.agent, g.opts, "inbox", "--list", "--json", "--repo", "o/r")
@@ -755,10 +784,6 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 		g.g.Issues[889].Comments = append(g.g.Issues[889].Comments, &fake.Comment{ID: 7001, Body: askClosed(noGoAskID("MS1")) + "\nclosed"})
 		g.g.Issues[889].Comments[len(g.g.Issues[889].Comments)-1].User.Login = "mallory"
 	})
-	// Until Story #1002 builds aayu mission stop, the stop option says so and does nothing.
-	if err := (&Env{}).missionAct(t.Context(), cards[0], cards[0].Options[1]); err == nil || !strings.Contains(err.Error(), "aayu mission stop is not built yet") {
-		t.Fatalf("the stop option: %v", err)
-	}
 	if err := (&Env{}).missionAct(t.Context(), cards[0], InboxAction{N: 1, Command: "aayu ship 1"}); err == nil || !strings.Contains(err.Error(), `"aayu ship 1" is not a mission step`) {
 		t.Fatalf("an option that is no mission step: %v", err)
 	}
@@ -779,6 +804,43 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	}
 	if code, out, errOut := g.next(889); code != 0 || out != "start #22\n" {
 		t.Fatalf("mission next after the pass: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Criterion 8, the card's other option: "Stop the mission, with a reason"
+// runs aayu mission stop (Story #1002) with the person's line. Their stop
+// takes over the gate's, the card closes, and a pass of the gate no longer
+// resumes the mission: only the person's resume does.
+func TestGateStopOptionStopsTheMission(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.closeIssue(20)
+	g.status(22, "ready", "")
+	commitOnDev(g.g, ".aayudha/config.toml", "[mission]\nmax_no_go = 1\n")
+	g.vfail = []string{"inbox.ship-once"}
+	if rep := g.gateJSON(); rep.Milestones[0].State != GateStopped {
+		t.Fatalf("first failed gate with max_no_go 1: %+v", rep.Milestones[0])
+	}
+	if code, out, errOut := g.answer("2 the gate keeps failing on the same check"); code != 0 || !strings.Contains(out, "stopped the mission of #889") {
+		t.Fatalf("the card's stop: exit %d: %s%s", code, out, errOut)
+	}
+	p, _ := g.plan(889)
+	if p.Pause == nil || p.Pause.By != "rahulnakmol" || p.Pause.Reason != "the gate keeps failing on the same check" || p.Controls[len(p.Controls)-1].Action != "stop" {
+		t.Fatalf("plan after the card's stop: pause %+v, controls %+v", p.Pause, p.Controls)
+	}
+	l := inboxList{}
+	if code, out, _ := run(t, g.agent, g.opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &l) != nil ||
+		slices.ContainsFunc(l.Items, func(it InboxItem) bool { return it.Kind == InboxMission }) {
+		t.Fatalf("the card after the stop: %s", out)
+	}
+	g.vfail = nil
+	if code, out, errOut := g.mission(g.person, "rahulnakmol", "gate", 889, "--once-more"); code != 0 {
+		t.Fatalf("once more after the stop: exit %d: %s%s", code, out, errOut)
+	}
+	if p, _ := g.plan(889); p.Milestones[0].Gate.State != GatePassed || p.Pause == nil || p.Pause.By != "rahulnakmol" {
+		t.Fatalf("a pass lifted the person's stop: gate %+v, pause %+v", p.Milestones[0].Gate, p.Pause)
+	}
+	if code, out, errOut := g.mission(g.person, "rahulnakmol", "resume", 889); code != 0 || !strings.Contains(out, "start #22") {
+		t.Fatalf("resume (it starts what can start): exit %d: %s%s", code, out, errOut)
 	}
 }
 

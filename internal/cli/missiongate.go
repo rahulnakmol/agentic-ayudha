@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -189,7 +190,7 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 	case once && stopped < 0:
 		return Errorf(ExitBlocked, "No gate of #%d is stopped: the gate runs on its own when a milestone's last story merges.", f)
 	case !once && stopped >= 0:
-		return Errorf(ExitBlocked, "The mission of #%d stopped: %s. A person runs the gate once more, or stops the mission, in aayu inbox.", f, plan.Pause.reason())
+		return Errorf(ExitBlocked, "The mission of #%d stopped: %s. A person runs aayu mission gate %d --once-more, or stops the mission.", f, plan.Pause.reason(), f)
 	case plan.Pause != nil && stopped < 0:
 		return Errorf(ExitBlocked, "The mission of #%d is paused: %s. No gate runs.", f, plan.Pause.Reason)
 	}
@@ -342,8 +343,8 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 				fails := len(gateFailures(runs, o.m))
 				switch {
 				case o.stop:
-					p.Pause = &MissionPause{Reason: noGoTitle(o.m, f, fails), By: "the gate of " + o.m, At: at}
-				case o.gate.State == GatePassed && p.Pause != nil && p.Pause.By == "the gate of "+o.m:
+					p.Pause = &MissionPause{Reason: noGoTitle(o.m, f, fails), By: gatePause(o.m), At: at}
+				case o.gate.State == GatePassed && p.Pause != nil && p.Pause.By == gatePause(o.m):
 					p.Pause = nil // a person's once-more passed: the mission goes on
 				}
 			}
@@ -367,6 +368,14 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 	}
 	return e.Emit(rep, func(w io.Writer) error { return renderGate(w, rep) })
 }
+
+// gatePause is who a stop of milestone m's gate is by, in the plan's pause.
+func gatePause(m string) string { return "the gate of " + m }
+
+// byGate says the pause is a gate's stop after [mission] max_no_go failed
+// runs: a person's mission stop takes it over, and only a person's resume
+// then lifts it.
+func (p *MissionPause) byGate() bool { return p != nil && strings.HasPrefix(p.By, gatePause("")) }
 
 func (p *MissionPause) reason() string {
 	if p == nil {
@@ -974,7 +983,8 @@ func (e *Env) missionBusy(ctx context.Context, c *github.Client, w *ledger.Write
 // committed is what a fix PR is checked against the budget with: what the
 // mission used (missionUsed), plus each open story or Bug that runs or holds
 // a claim, at its measured spend or the per-story cap if more, as mission
-// next counts it. usedOf computes it for a plan as it is edited.
+// next counts it. usedOf computes it for a plan as it is edited, read again
+// at the ledger tip: a fix PR recorded since counts as open, at least at the cap.
 func (e *Env) committed(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval) (usedOf func(*MissionPlan) SourcedNumber, costs map[int]float64, err error) {
 	owner, name, _ := github.SplitRepo(repo)
 	closed, merged := map[int]bool{}, 0
@@ -1010,8 +1020,18 @@ func (e *Env) committed(ctx context.Context, c *github.Client, w *ledger.Writer,
 		heldV += v
 		notes = append(notes, fmt.Sprintf("#%d %s", n, ready.USD(v)))
 	}
+	known := map[int]bool{}
+	for _, fx := range plan.GateFixes {
+		known[fx.PR] = true
+	}
 	return func(p *MissionPlan) SourcedNumber {
-		u := missionUsed(p, appr, merged, costs, open)
+		o := maps.Clone(open)
+		for _, fx := range p.GateFixes {
+			if !known[fx.PR] {
+				o[fx.PR] = true
+			}
+		}
+		u := missionUsed(p, appr, merged, costs, o)
 		if len(notes) > 0 {
 			u.Value += heldV
 			u.Source += "; running or claimed: " + strings.Join(notes, ", ") + " (each at least the per-story cap)"
@@ -1110,24 +1130,35 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 		fix.Waits = "budget"
 	}
 	rep := GateReport{Schema: MissionGateSchema, Repo: repo, Feature: f, DevSHA: last.DevSHA, Milestones: []GateMSState{}, Fixes: []GateFixItem{}, Recorded: &fix, DryRun: c.DryRun()}
-	if !rep.DryRun && findFix(plan, ms, check, last.DevSHA) == nil {
+	for !rep.DryRun && findFix(plan, ms, check, last.DevSHA) == nil {
 		if fix.Waits != "" { // before the fix is recorded: a fix whose card cannot be posted is not recorded, and is asked again
 			if err := e.postAsk(ctx, c, repo, f, budgetAsk(f, n, plan.Budget, used, est, plan.GateFixes, costs)); err != nil {
 				return err
 			}
 		}
+		var fresh *MissionPlan
 		rep.LedgerCommit, err = e.editPlan(ctx, w, f, fmt.Sprintf("missions: fix PR #%d of %s %s in the mission of #%d", n, ms, check, f), nil, func(p *MissionPlan) error {
 			if fx := findFix(p, ms, check, last.DevSHA); fx != nil && fx.PR != n {
 				return Errorf(ExitBlocked, "%s of %s has its fix PR already, #%d: one failed check gets one fix PR", check, ms, fx.PR)
+			}
+			// The budget again, on the plan at the ledger tip: a fix recorded since this run read it counts too.
+			if fix.Waits == "" && p.Budget > 0 && usedOf(p).Value+est > p.Budget {
+				fresh = p
+				return errFixOverBudget
 			}
 			if findFix(p, ms, check, last.DevSHA) == nil {
 				p.GateFixes = append(p.GateFixes, fix)
 			}
 			return nil
 		})
+		if errors.Is(err, errFixOverBudget) { // it no longer fits: ask first, then record it waiting
+			plan, used, fix.Waits = fresh, usedOf(fresh), "budget"
+			continue
+		}
 		if err != nil {
 			return err
 		}
+		break
 	}
 	if err := e.Emit(rep, func(w io.Writer) error {
 		if fix.Waits != "" {
@@ -1145,6 +1176,9 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	}
 	return nil
 }
+
+// errFixOverBudget is a fix PR that no longer fits the budget on the plan at the ledger tip.
+var errFixOverBudget = errors.New("the fix no longer fits the budget")
 
 // editPlan writes Feature f's mission plan as edit leaves it, read again at
 // the ledger tip, with appends, in one commit; a write that loses a race
