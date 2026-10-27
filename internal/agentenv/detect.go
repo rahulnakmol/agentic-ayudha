@@ -233,6 +233,18 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		am.Cloud, am.CloudDetail = true, "amp -ox --project "+project
 	}
 	out = append(out, am)
+
+	// OpenCode: its CLI on the model provider its own config names; it has no
+	// hosted cloud agent, so its stories run locally (Story #1012).
+	oc := Agent{Name: "opencode", CLI: look("opencode"),
+		Install:     []string{"npm install -g opencode-ai"},
+		SignIn:      []string{"opencode auth login"},
+		CloudDetail: "OpenCode has no hosted cloud agent; its stories run as local sessions (`--local`)"}
+	if oc.CLI != "" {
+		oc.Version, oc.Warnings = version(oc.CLI)
+		_, oc.SignedIn = run(oc.CLI, "auth", "list")
+	}
+	out = append(out, oc)
 	return out
 }
 

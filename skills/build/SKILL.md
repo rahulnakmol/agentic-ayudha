@@ -43,8 +43,9 @@ aayu:
         - "cursor"
         - "claude"
         - "amp"
+        - "opencode"
         - "auto"
-      description: "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one)."
+      description: "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one). OpenCode has no cloud agent, so it always runs locally."
     - name: local
       type: bool
       required: false

@@ -162,6 +162,8 @@ PASS  agents  local CLIs signed in: codex, cursor, claude, amp; cloud agents con
                 cursor: /usr/bin/x 1.0.0, signed in; cloud: no Cursor API key: create one at https://cursor.com/dashboard (Integrations, API keys), then `aayu auth set-secret cursor-api-key` (the value on stdin)
                 claude: /usr/bin/x 1.0.0, signed in; cloud: claude --cloud with a claude.ai account
                 amp: /usr/bin/x 1.0.0, signed in; cloud: no Amp project recorded for this repository: `aayu install --env --host amp --cloud` finds it and proves the orb environment
+                opencode: /usr/bin/x 1.0.0, not signed in; cloud: OpenCode has no hosted cloud agent; its stories run as local sessions (`--local`)
+                  sign in: opencode auth login
 ## reviewer-apps pass
 PASS  reviewer-apps  merge-gate reviewer: codex (openai); its review counts as different-family only for a builder of another family (a review service always does), and is labelled same-family otherwise
                        codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o

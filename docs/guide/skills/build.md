@@ -49,7 +49,7 @@ aayu build [<issue>]
 | `--next` | no | The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] agents, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree. One of: `ship`, `pick`. |
 | `--stop` | no | Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires. |
 | `--resume` | no | Resume from the last Aayudha-Checkpoint trailer. |
-| `--delegate` | no | Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one). One of: `codex`, `cursor`, `claude`, `amp`, `auto`. |
+| `--delegate` | no | Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one). OpenCode has no cloud agent, so it always runs locally. One of: `codex`, `cursor`, `claude`, `amp`, `opencode`, `auto`. |
 | `--local` | no | With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR. |
 | `--asked` | no | The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story. |
 | `--decline` | no | Decline open items of the last session review, one "\<id>: \<why>" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them. |

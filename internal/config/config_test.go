@@ -640,3 +640,16 @@ func TestMissionKeysDefaults(t *testing.T) {
 		t.Fatalf("defaults: [build] agents %d, [mission] %+v", l.Config.Build.Agents, l.Config.Mission)
 	}
 }
+
+// Story #1012, criterion 6: with no [mission] check_minutes in any config, a
+// local Kanha is checked every 5 minutes, and a repository's value replaces it.
+func TestMissionCheckMinutesDefault(t *testing.T) {
+	l, err := Load(fixture(t, nil))
+	if err != nil || l.Config.Mission.CheckMinutes != 5 {
+		t.Fatalf("no config: check_minutes %d, err %v; want 5", l.Config.Mission.CheckMinutes, err)
+	}
+	l, err = Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[mission]\ncheck_minutes = 2\n"}))
+	if err != nil || l.Config.Mission.CheckMinutes != 2 {
+		t.Fatalf("check_minutes = 2: got %d, err %v", l.Config.Mission.CheckMinutes, err)
+	}
+}

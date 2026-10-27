@@ -285,6 +285,9 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if !slices.Contains(delegate.Receivers, d.receiver) {
 		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
 	}
+	if d.receiver == delegate.OpenCode {
+		d.local = true // OpenCode has no cloud agent: its stories run as local sessions (Story #1012)
+	}
 	if !d.local && !cloud[d.receiver] {
 		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, false))
 	}
@@ -880,10 +883,7 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			return err
 		}
 		defer func() { _ = os.RemoveAll(gh) }()
-		limit := 60 * time.Minute
-		if l, err := e.Config(); err == nil && l.Config.Delegate.LocalTimeoutMinutes > 0 {
-			limit = time.Duration(l.Config.Delegate.LocalTimeoutMinutes) * time.Minute
-		}
+		limit := e.localLimit()
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
 		for {
 			var out string

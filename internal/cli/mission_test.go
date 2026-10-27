@@ -83,6 +83,10 @@ func (m *missionWorld) exec(_ context.Context, _ string, _ []string, _, name str
 		return "Created https://claude.ai/code/" + kanhaClaude + "\n", nil
 	case name == "codex":
 		return "Submitted https://chatgpt.com/codex/tasks/task_e_" + fmt.Sprint(len(m.calls)) + "\n", nil
+	case name == "agent" && args[0] == "create-chat": // a local Cursor Kanha (Story #1012)
+		return "c-456\n", nil
+	case name == "agent", name == "copilot": // a local Kanha's CLI prints nothing aayu reads
+		return "", nil
 	}
 	return "", fmt.Errorf("%s: unexpected call", call)
 }

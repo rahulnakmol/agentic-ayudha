@@ -17,13 +17,19 @@ const (
 	Cursor = "cursor"
 	Claude = "claude"
 	Amp    = "amp"
+	// OpenCode has no hosted cloud agent: its stories and its Kanha run as
+	// local sessions of its CLI (Story #1012, #893 story F).
+	OpenCode = "opencode"
+	// Copilot runs a mission's Kanha as a local session (Story #1012); its
+	// story receivers are #917's.
+	Copilot = "copilot"
 )
 
 // Receivers lists the agents a story can be delegated to.
-var Receivers = []string{Codex, Cursor, Claude, Amp}
+var Receivers = []string{Codex, Cursor, Claude, Amp, OpenCode}
 
 // Names are the receivers' product names, for messages.
-var Names = map[string]string{Codex: "Codex", Cursor: "Cursor", Claude: "Claude Code", Amp: "Amp"}
+var Names = map[string]string{Codex: "Codex", Cursor: "Cursor", Claude: "Claude Code", Amp: "Amp", OpenCode: "OpenCode", Copilot: "GitHub Copilot"}
 
 // LedgerPath is where a story's delegation state lives on the ledger.
 func LedgerPath(story int) string { return fmt.Sprintf("delegate/%d/state.json", story) }
@@ -89,4 +95,5 @@ type Event struct {
 	Status string `json:"status"`
 	Detail string `json:"detail,omitempty"`
 	Until  string `json:"until,omitempty"` // a pause: when the receiver's usage limit resets (RFC 3339)
+	Text   string `json:"text,omitempty"`  // a Kanha event: the line its Kanha is told (Story #1012)
 }

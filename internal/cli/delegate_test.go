@@ -477,6 +477,37 @@ func TestDelegateLocalFallback(t *testing.T) {
 	}
 }
 
+// Criterion 5 (Story #1012): OpenCode has no cloud agent, so `build --delegate
+// opencode` runs its story as a local `opencode run` session with no --local.
+func TestDelegateOpenCodeRunsLocal(t *testing.T) {
+	_, env, opts, dir, _ := delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) {
+		if name == "opencode" {
+			return "/usr/local/bin/opencode", nil
+		}
+		return "", os.ErrNotExist
+	}
+	probe := opts.Exec
+	opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+		if strings.Join(args, " ") == "auth list" { // signed in to a model provider
+			return "1 credentials", nil
+		}
+		return probe(ctx, dir, name, args...)
+	}
+	var gotArgs []string
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, name string, args ...string) (string, error) {
+		gotArgs = append([]string{name}, args...)
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	code, res, errOut := delegateRun(t, env, opts, "--delegate", "opencode")
+	if code != 0 || res.Delegation == nil || res.Delegation.Mode != "local" || res.Worktree != delegate.Worktree(dir, 2, "opencode", 1) {
+		t.Fatalf("build --delegate opencode: %d %+v %s", code, res.Delegation, errOut)
+	}
+	if len(gotArgs) != 3 || gotArgs[0] != "/usr/local/bin/opencode" || gotArgs[1] != "run" || !strings.Contains(gotArgs[2], "#2") {
+		t.Fatalf("command: %q", gotArgs)
+	}
+}
+
 // A local receiver that changes nothing: its own report and the hand-off's
 // state survive (megaman: Codex's "not proved" was lost, D-5.5c.16), and the
 // next run hands off afresh.

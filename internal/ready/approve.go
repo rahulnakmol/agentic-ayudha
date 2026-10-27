@@ -52,6 +52,7 @@ type Parent struct {
 	Machine   string `json:"machine,omitempty"` // login@machine of a local Kanha
 	StartedBy string `json:"started_by"`
 	StartedAt string `json:"started_at"`
+	LastCheck string `json:"last_check,omitempty"` // a local Kanha: when its last check gave it the events before it (Story #1012)
 }
 
 // Presence is how the person was proven present: the device-flow approval

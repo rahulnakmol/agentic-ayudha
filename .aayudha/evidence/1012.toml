@@ -1,0 +1,33 @@
+# Which tests prove Story #1012's Completion Goal.
+
+[[criterion]]
+id = 1 # aayu mission wake 889 on an event host: on the mission's tool with its cloud agent connected it starts the next story; on a failed start or another tool it only records the next stories in the plan's wakes and claims none. The live J3/K2 probe (a Claude scheduled task and a Cursor Automation on Pull request merged) needs @rahulnakmol's Claude and Cursor setup and is not recorded here
+tests = ["internal/cli:TestMissionWakeStartsOrRecordsOnly"]
+
+[[criterion]]
+id = 2 # local Codex Kanha s-123, #40 merges: codex exec <sandbox flags> resume s-123 "merged #40 (PR #41): run aayu mission next 889"
+tests = ["internal/delegate:TestCodexExecResumeArgs"]
+
+[[criterion]]
+id = 3 # local Copilot Kanha p-456, #63 blocks: copilot -p "blocked #63: spec unclear: run aayu mission next 889" --resume=p-456
+tests = ["internal/delegate:TestCopilotResumeArgs"]
+
+[[criterion]]
+id = 4 # tool copilot: Start starts a local copilot -p session with the ID aayu picks; a Copilot cloud task never coordinates
+tests = ["internal/delegate:TestCopilotCloudNeverCoordinates", "internal/cli:TestMissionStartLocalKanha"]
+
+[[criterion]]
+id = 5 # local OpenCode Kanha o-789: opencode run --session o-789 "answered: #33 resumes"; OpenCode stories run as local opencode run sessions
+tests = ["internal/delegate:TestOpenCodeRunSessionArgs", "internal/cli:TestDelegateOpenCodeRunsLocal"]
+
+[[criterion]]
+id = 6 # default check_minutes (5): an event 4 minutes old is taken at the check 5 minutes after the last one, not a second before, or at once when the inbox opens
+tests = ["internal/config:TestMissionCheckMinutesDefault", "internal/cli:TestLocalKanhaPausesWhileMachineOff"]
+
+[[criterion]]
+id = 7 # the laptop is off when #40 merges: show says "#889 paused: its Kanha runs on rahulnakmol@laptop, which is off; it resumes at the next check", and mission next starts nothing
+tests = ["internal/cli:TestLocalKanhaPausesWhileMachineOff"]
+
+[[criterion]]
+id = 8 # tool cursor with no Cursor API key: a local chat c-456, resumed with agent -p --resume=c-456 --force --trust "<event>"; show says "#889's Kanha is local: it pauses while rahulnakmol@laptop is off"
+tests = ["internal/delegate:TestCursorLocalFallback", "internal/cli:TestLocalKanhaPausesWhileMachineOff"]

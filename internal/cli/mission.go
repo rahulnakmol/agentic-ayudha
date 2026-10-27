@@ -110,6 +110,8 @@ type MissionPlan struct {
 	// or Bug (Story #1003); Sources are the hosts recover reads, each with its cursor.
 	StoryStates []MissionStoryState `json:"story_states,omitempty"`
 	Sources     []MissionSource     `json:"sources,omitempty"`
+	// HostWakes are the event hosts' wakes (`aayu mission wake`, Story #1012), at most keptWakes.
+	HostWakes []MissionHostWake `json:"host_wakes,omitempty"`
 }
 
 // MissionStopped is one story or Bug a person stopped, and why.
@@ -693,6 +695,8 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 		return missionExtend(ctx, e, f, strings.TrimSpace(in.String("reason")), 0)
 	case action == "next":
 		return missionNext(ctx, e, f)
+	case action == "wake":
+		return missionWake(ctx, e, f)
 	case action == "stop":
 		return missionStop(ctx, e, f, in)
 	case action == "resume":
@@ -990,12 +994,13 @@ func startable(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *rea
 	return plan, appr, tip, nil
 }
 
-// missionJSON is the plan as a person saw it: the Kanha's events cursor and
-// the tick's wakes move while a mission runs, and change nothing they decide.
+// missionJSON is the plan as a person saw it: the Kanha's events cursor, the
+// tick's wakes, and the event hosts' wakes move while a mission runs, and
+// change nothing they decide.
 func missionJSON(p *MissionPlan) string {
 	if p != nil {
 		c := *p
-		c.EventsCursor, c.Wakes = "", nil
+		c.EventsCursor, c.Wakes, c.HostWakes = "", nil, nil
 		p = &c
 	}
 	b, _ := json.Marshal(p)
@@ -1015,6 +1020,7 @@ type MissionShowReport struct {
 	Budget     *MissionBudgetView `json:"budget,omitempty"` // nil until Start
 	Estimate   SourcedNumber      `json:"estimate"`
 	Clock      []MissionClock     `json:"clock,omitempty"` // each started mission's clock (Story #1015)
+	Kanha      string             `json:"kanha,omitempty"` // where the Kanha runs (Story #1012)
 	Plan       *MissionPlan       `json:"plan"`
 }
 
@@ -1101,6 +1107,13 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		rep.State = "paused: " + plan.Pause.Reason
 	case plan.StartedBy != "":
 		rep.State = fmt.Sprintf("running: started by @%s at %s", plan.StartedBy, plan.StartedAt)
+		if appr != nil {
+			paused := ""
+			if rep.Kanha, paused, err = e.kanhaLine(ctx, w, f, plan, appr.Parent); err != nil {
+				return err
+			}
+			rep.State = orDefault(paused, rep.State)
+		}
 	}
 	mergedN, before := 0, ""
 	for _, m := range plan.Milestones {
@@ -1167,6 +1180,9 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		}
 		for _, s := range plan.Sources {
 			fmt.Fprintf(w, "source    %s\n", s.summary())
+		}
+		if rep.Kanha != "" {
+			fmt.Fprintln(w, rep.Kanha)
 		}
 		for _, m := range rep.Milestones {
 			parts := make([]string, len(m.Stories))

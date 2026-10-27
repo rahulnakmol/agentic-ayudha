@@ -14,7 +14,7 @@ reach the same commands on a schedule, in the one tool you pick.*
 
 ### Hand-offs to another agent
 
-A hand-off sends a Ready story to a receiver: Codex, Cursor, Claude Code, or Amp. A Ready story is one whose
+A hand-off sends a Ready story to a receiver: Codex, Cursor, Claude Code, Amp, or OpenCode. A Ready story is one whose
 Completion Goal was frozen by `aayu ready` into a snapshot on the ledger, aayu's record branch. The entry point is
 `aayu build <story> --delegate <receiver>`. It is a flag on `build`, not a new verb, so a hand-off passes the same
 gates as a normal build: the Ready check, the lease, the budget, and `halt`.
@@ -50,7 +50,8 @@ asks `agentenv.Detect`, described below. The receiver adapters in `internal/dele
 | Codex | `CodexCloud` | `codex cloud exec`, `status`, and `diff`; aayu applies the diff in a worktree and opens the pull request |
 
 **Local only with `--local`.** The user's explicit `--local` runs the receiver's CLI on this machine instead:
-`codex exec`, `cursor-agent -p --force`, `claude -p`, or `amp -x`, in a fresh `.aayudha/worktrees/<n>-<agent>`.
+`codex exec`, `cursor-agent -p --force`, `claude -p`, `amp -x`, or `opencode run`, in a fresh
+`.aayudha/worktrees/<n>-<agent>`. OpenCode has no cloud agent, so its hand-offs are always local.
 `delegate.ScrubEnv` gives it the toolchain variables and only its own CLI's key (`CODEX_API_KEY`, `CURSOR_API_KEY`,
 `CLAUDE_CODE_OAUTH_TOKEN`, or `AMP_API_KEY`). Provider keys, GitHub and aayu variables, git credential helpers, and
 SSH are removed, so the receiver cannot push. aayu commits, verifies, pushes, and opens the pull request. The scrubbed
@@ -63,6 +64,15 @@ from `Detect`. It then offers what is available: `--local` when the CLI is ready
 connected cloud agent. aayu never installs or signs in for you. `--delegate auto` picks the cheapest adequate
 connected cloud agent for the story's Effort label (`delegate.Choose`), and picks among local CLIs only with
 `--local`.
+
+**A mission's local Kanha.** On Codex, Copilot, or OpenCode, and on Cursor with no Cursor API key, a Feature
+mission's Kanha is a session of the tool's CLI on the starter's machine (`delegate.KanhaStart`). aayu records each
+event for it and resumes the session with the events at the next check (`delegate.KanhaResume`): `aayu mission wake
+<f>` on that machine, once `[mission] check_minutes` passed since the last check, or `aayu inbox` as it opens. While
+that machine is off, `aayu mission show` says the Feature is paused, and `aayu mission next` starts nothing. On an
+event host, such as a Claude scheduled task or a Cursor Automation on a merged pull request, `aayu mission wake <f>`
+starts the next stories when the session runs on the mission's tool and its cloud agent is connected. Otherwise it
+only records the wake in the plan, and the Kanha starts them.
 
 **The review loop.** Every hand-off starts on a fresh branch (`story/<n>-<slug>-<k>` from the second on). Running the
 same command again syncs it, keeping its branch, worktree, and mode. aayu finds the pull request, reads the
