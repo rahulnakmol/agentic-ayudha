@@ -150,6 +150,14 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [models.ui-review.copilot] (the Copilot route for UI review) is read only from the user config or --set, never from the checkout", source))
 			return
 		}
+		// The exchange receives the host's identity token and serves the
+		// page where the owner's App is created, so an uncommitted local
+		// file must not point it elsewhere; the repository config is a
+		// protected path and CI reads it there.
+		if name == LayerLocal && k.Exists("identity.exchange") {
+			errs = append(errs, fmt.Errorf("%s: [identity] exchange is read only from .aayudha/config.toml (a protected path), the user config, AAYU_IDENTITY__EXCHANGE, or --set", source))
+			return
+		}
 		// Like [autonomy], the solo window is the protected repository
 		// config's alone (Story #432): no person's or agent's own layer sets it.
 		if !protectedSource(name, source) && k.Exists("decisions.solo_provisional_after_hours") {
