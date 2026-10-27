@@ -906,8 +906,6 @@ func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, curren
 	one := *r
 	one.Checks, one.Work = ref, filepath.Join(r.Work, "gate-fix")
 	rep := verify.Execute(ctx, &one, []verify.Floor{verify.Behaviour{}})
-	// The floor passes an unreachable check, which proves nothing: the fix
-	// passes only when every check it selects ran and passed.
 	var ran struct {
 		Checks []verify.CheckResult `json:"checks"`
 	}
@@ -916,9 +914,8 @@ func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, curren
 			_ = json.Unmarshal(a.Data, &ran)
 		}
 	}
-	passed := len(ran.Checks) > 0 && !slices.ContainsFunc(ran.Checks, func(x verify.CheckResult) bool { return x.Status != verify.CheckPassed })
 	switch c := rep.Checks[0]; {
-	case passed:
+	case gateFixPassed(ref, ran.Checks):
 		note = fmt.Sprintf("%s, and that check passes at %s", what, short(r.Head))
 	case c.Result == proof.Fail:
 		problems = append(problems, fmt.Sprintf("%s, and that check still fails at %s", what, short(r.Head)))
@@ -926,6 +923,17 @@ func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, curren
 		problems = append(problems, fmt.Sprintf("%s, and that check did not run at %s: %s", what, short(r.Head), c.Detail))
 	}
 	return problems, note
+}
+
+// gateFixPassed says whether behaviour results show that the check a gate
+// fix names (a feature's check, a feature, or all) ran, and that every
+// check passed. The floor passes an unreachable check, which proves nothing,
+// and a result for another check proves nothing about this one.
+func gateFixPassed(ref string, results []verify.CheckResult) bool {
+	named := slices.ContainsFunc(results, func(x verify.CheckResult) bool {
+		return ref == verify.SelectAll || x.Ref == ref || strings.HasPrefix(x.Ref, ref+".")
+	})
+	return named && !slices.ContainsFunc(results, func(x verify.CheckResult) bool { return x.Status != verify.CheckPassed })
 }
 
 // gateFixItems lists the fix of each failed check of each milestone's last

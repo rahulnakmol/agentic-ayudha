@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 // Story #1001: the milestone gate on the missionWorld of Stories #997 and
@@ -1196,5 +1197,29 @@ func TestMergeGateJudgesAListedGateFix(t *testing.T) {
 	if code, out, errOut := run(t, gateEnv, g.opts, "proof", "comment", "889", "--ci", "--repo", "o/r"); code != ExitBlocked ||
 		!strings.Contains(errOut, "the gate fix entry of #981 was made under an earlier approval of #889") {
 		t.Fatalf("pack job under an earlier approval: exit %d: %s%s", code, out, errOut)
+	}
+}
+
+// Bug #1100, inspect 1746d7cf34: a gate fix passes only on a result for the
+// check it names. A result for another check, or one that did not pass,
+// proves nothing about it.
+func TestGateFixPassedNeedsTheNamedCheck(t *testing.T) {
+	ok := func(ref string) verify.CheckResult { return verify.CheckResult{Ref: ref, Status: verify.CheckPassed} }
+	for _, c := range []struct {
+		ref     string
+		results []verify.CheckResult
+		want    bool
+	}{
+		{"inbox.ship-once", []verify.CheckResult{ok("inbox.ship-once")}, true},
+		{"inbox.ship-once", []verify.CheckResult{ok("mission.next-order")}, false},
+		{"inbox.ship-once", nil, false},
+		{"inbox.ship-once", []verify.CheckResult{ok("inbox.ship-once"), {Ref: "inbox.read", Status: verify.CheckUnreachable}}, false},
+		{"inbox", []verify.CheckResult{ok("inbox.ship-once"), ok("inbox.read")}, true},
+		{"inbox", []verify.CheckResult{ok("inboxes.read")}, false},
+		{verify.SelectAll, []verify.CheckResult{ok("mission.next-order")}, true},
+	} {
+		if got := gateFixPassed(c.ref, c.results); got != c.want {
+			t.Errorf("gateFixPassed(%q, %+v) = %t, want %t", c.ref, c.results, got, c.want)
+		}
 	}
 }

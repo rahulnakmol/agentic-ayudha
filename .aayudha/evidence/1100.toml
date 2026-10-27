@@ -2,7 +2,7 @@
 
 [[criterion]]
 id = 1 # listed fix #981 under the current approval, and its check passes at the head: no Ready snapshot problem; the pack rests on the approved record
-tests = ["internal/cli:TestMergeGateJudgesAListedGateFix"]
+tests = ["internal/cli:TestMergeGateJudgesAListedGateFix", "internal/cli:TestGateFixPassedNeedsTheNamedCheck"]
 
 [[criterion]]
 id = 2 # the same PR, and inbox.ship-once still fails at the head: "#981 fixes verify:inbox.ship-once in MS1 of #889, and that check still fails at <head>"
