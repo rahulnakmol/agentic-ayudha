@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockedWriteRefusedBeforeRequest"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockedWriteRefusedBeforeRequest","Output":"=== RUN   TestLockedWriteRefusedBeforeRequest\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockedWriteRefusedBeforeRequest","Output":"--- PASS: TestLockedWriteRefusedBeforeRequest (1.37s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockedWriteRefusedBeforeRequest"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestUnlockedWritesUnchanged"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestUnlockedWritesUnchanged","Output":"=== RUN   TestUnlockedWritesUnchanged\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestUnlockedWritesUnchanged","Output":"--- PASS: TestUnlockedWritesUnchanged (1.21s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestUnlockedWritesUnchanged"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockGuardFailsClosed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockGuardFailsClosed","Output":"=== RUN   TestLockGuardFailsClosed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockGuardFailsClosed","Output":"--- PASS: TestLockGuardFailsClosed (1.18s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockGuardFailsClosed"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockLeavesCommentsAndStatusOpen"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockLeavesCommentsAndStatusOpen","Output":"=== RUN   TestLockLeavesCommentsAndStatusOpen\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockLeavesCommentsAndStatusOpen","Output":"--- PASS: TestLockLeavesCommentsAndStatusOpen (1.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockLeavesCommentsAndStatusOpen"}
