@@ -113,6 +113,10 @@ type Options struct {
 	// returns its session (ST13: codex, copilot, or opencode; #1012 builds it; Story #1004's tests: a stub). nil:
 	// none is built, so Start refuses those tools before anything is written.
 	LocalKanha func(ctx context.Context, tool, dir, brief string) (string, error)
+	// GateVerify and GateEvals replace the milestone gate's runners (Story #1001; tests: their stubs). nil runs
+	// `aayu verify --check all` in a worktree of the dev tip, and reads evals.yml's results for it.
+	GateVerify func(ctx context.Context, sha string) ([]GateCheck, error)
+	GateEvals  func(ctx context.Context, sha string, seats []string) ([]GateCheck, error)
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

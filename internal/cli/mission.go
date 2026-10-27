@@ -650,6 +650,10 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 		return missionStop(ctx, e, f, in)
 	case "resume":
 		return missionResume(ctx, e, f, in)
+	case "gate":
+		return missionGate(ctx, e, f, in)
+	case "budget":
+		return missionBudget(ctx, e, f, in)
 	}
 	return missionShow(ctx, e, f)
 }
@@ -1000,7 +1004,7 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 	case plan.StartedBy != "":
 		rep.State = fmt.Sprintf("running: started by @%s at %s", plan.StartedBy, plan.StartedAt)
 	}
-	mergedN := 0
+	mergedN, before := 0, ""
 	for _, m := range plan.Milestones {
 		ms := MilestoneState{Name: m.Name}
 		k := 0
@@ -1016,19 +1020,35 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		}
 		mergedN += k
 		ms.State = fmt.Sprintf("building: %d of %d merged; the gate runs when its last story merges", k, len(m.Stories))
-		if k == len(m.Stories) {
+		switch g := m.Gate; {
+		case g.State == GatePassed:
+			ms.State = fmt.Sprintf("passed its gate on dev %s at %s", short(g.DevSHA), g.At)
+		case g.State == GateFailed:
+			ms.State = fmt.Sprintf("failed its gate on dev %s: its fix PRs run, and the gate runs again when they merge", short(g.DevSHA))
+		case g.State == GateStopped:
+			ms.State = fmt.Sprintf("stopped: its gate failed on dev %s, and the mission asks a person", short(g.DevSHA))
+		case k == len(m.Stories):
 			ms.State = "gate: its last story merged, so its gate runs"
+		}
+		if before != "" && m.Gate.State != GatePassed { // ST16: a milestone's PRs merge in order
+			ms.State += fmt.Sprintf("; its PRs merge after %s's gate passes", before)
+		}
+		if before == "" && m.Gate.State != GatePassed {
+			before = m.Name
 		}
 		rep.Milestones = append(rep.Milestones, ms)
 	}
 	rep.Missions = missionsNow(plan, func(n int) bool { return merged[n] })
 	if plan.StartedBy != "" && appr != nil {
-		per := appr.Budget.PerStoryUSD
-		used := per * float64(mergedN)
+		open, err := openFixSet(ctx, c, repo, plan)
+		if err != nil {
+			return err
+		}
+		used := missionUsed(plan, appr, mergedN, e.costs(repo), open)
 		rep.Budget = &MissionBudgetView{
 			Budget: SourcedNumber{Value: plan.Budget, Source: plan.BudgetBasis + ", locked at Start"},
-			Used:   SourcedNumber{Value: used, Source: fmt.Sprintf("%d merged x %s (the per-story cap of approval %d), until #872 measures spend", mergedN, ready.USD(per), appr.Version)},
-			Left:   SourcedNumber{Value: plan.Budget - used, Source: "budget less used"},
+			Used:   used,
+			Left:   SourcedNumber{Value: plan.Budget - used.Value, Source: "budget less used"},
 		}
 	}
 	return e.Emit(rep, func(w io.Writer) error {
@@ -1066,6 +1086,53 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		_, err := fmt.Fprintf(w, "complete  when %s\n", plan.CompleteWhen)
 		return err
 	})
+}
+
+// missionUsed is what the mission used of its budget: each merged story or
+// Bug at the per-story cap of the approval, until #872 measures spend, and
+// each gate fix PR that does not wait (Decision #974: fix PRs count against
+// the Feature's budget): a closed one at its measured spend, and an open one
+// at least at the per-story cap, which it may still spend.
+func missionUsed(plan *MissionPlan, appr *ready.Approval, merged int, costs map[int]float64, open map[int]bool) SourcedNumber {
+	per := appr.Budget.PerStoryUSD
+	used := SourcedNumber{Value: per * float64(merged),
+		Source: fmt.Sprintf("%d merged x %s (the per-story cap of approval %d), until #872 measures spend", merged, ready.USD(per), appr.Version)}
+	v, fixes := fixSpend(plan, per, costs, open)
+	used.Value += v
+	if len(fixes) > 0 {
+		used.Source += "; gate fix PRs: " + strings.Join(fixes, ", ")
+	}
+	return used
+}
+
+// fixSpend is what the plan's gate fix PRs count against the budget, as
+// missionUsed says, with a note for each.
+func fixSpend(plan *MissionPlan, per float64, costs map[int]float64, open map[int]bool) (float64, []string) {
+	total, notes := 0.0, []string(nil)
+	for _, fx := range plan.GateFixes {
+		switch v := costs[fx.PR]; {
+		case fx.Waits != "": // a waiting fix spends nothing until a person lets it go on
+		case open[fx.PR]:
+			v = max(v, per)
+			total += v
+			notes = append(notes, fmt.Sprintf("#%d %s (open: at least the per-story cap)", fx.PR, ready.USD(v)))
+		case v > 0:
+			total += v
+			notes = append(notes, fmt.Sprintf("#%d %s measured", fx.PR, ready.USD(v)))
+		}
+	}
+	return total, notes
+}
+
+// openFixSet are the plan's fix PRs that are still open, by number.
+func openFixSet(ctx context.Context, c *github.Client, repo string, plan *MissionPlan) (map[int]bool, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	fixes, err := openFixPRs(ctx, c, owner, name, plan)
+	out := map[int]bool{}
+	for _, fx := range fixes {
+		out[fx.PR] = true
+	}
+	return out, err
 }
 
 // missionsNow is each mission as it stands: mission 1 as approved, and the

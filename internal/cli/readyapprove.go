@@ -141,6 +141,7 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if old != nil { // a started mission keeps who started it, its tool, its budget, and its stories' starts (Decision #974)
 		plan.StartedBy, plan.StartedAt, plan.Tool, plan.ToolSource = old.StartedBy, old.StartedAt, old.Tool, old.ToolSource
 		plan.Budget, plan.BudgetBasis, plan.Pause, plan.Controls, plan.StoryStarts = old.Budget, old.BudgetBasis, old.Pause, old.Controls, old.StoryStarts
+		plan.GateFixes = old.GateFixes
 	}
 	if prev2 != nil { // and its Kanha (Story #1004): a new approval starts no second one
 		got.Parent = prev2.Parent
