@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48DefaultsOnlyWarns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48DefaultsOnlyWarns","Output":"=== RUN   TestOver48DefaultsOnlyWarns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48DefaultsOnlyWarns","Output":"--- PASS: TestOver48DefaultsOnlyWarns (0.67s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48DefaultsOnlyWarns"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestClockPausesOnPersonUsageCI"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestClockPausesOnPersonUsageCI","Output":"=== RUN   TestClockPausesOnPersonUsageCI\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestClockPausesOnPersonUsageCI","Output":"--- PASS: TestClockPausesOnPersonUsageCI (1.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestClockPausesOnPersonUsageCI"}

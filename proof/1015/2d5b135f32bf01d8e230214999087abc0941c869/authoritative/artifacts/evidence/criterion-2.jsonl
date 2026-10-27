@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEstimateDefaultHoursWarns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEstimateDefaultHoursWarns","Output":"=== RUN   TestEstimateDefaultHoursWarns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEstimateDefaultHoursWarns","Output":"--- PASS: TestEstimateDefaultHoursWarns (0.52s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEstimateDefaultHoursWarns"}

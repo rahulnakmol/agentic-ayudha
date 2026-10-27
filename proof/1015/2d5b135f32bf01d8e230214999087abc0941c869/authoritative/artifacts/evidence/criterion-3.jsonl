@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48LearnedNeedsReasonAtStart"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48LearnedNeedsReasonAtStart","Output":"=== RUN   TestOver48LearnedNeedsReasonAtStart\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48LearnedNeedsReasonAtStart","Output":"--- PASS: TestOver48LearnedNeedsReasonAtStart (0.55s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOver48LearnedNeedsReasonAtStart"}
