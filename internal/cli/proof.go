@@ -573,14 +573,25 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 		return ledgerErr(err)
 	}
 	b, err := t.File(ctx, ready.LedgerPath(story))
-	t.Close()
 	if err == nil {
 		snap, err := ready.ParseSnapshot(string(b))
 		if err != nil {
+			t.Close()
 			return err
 		}
 		exp.CompletionGoalHash, exp.Criteria, crit = snap.CompletionGoalHash, snap.Numbers(), snap.Criteria
 	}
+	if exp.CompletionGoalHash == "" { // a gate fix PR of a Feature rests on the approved record its entry names (Bug #1100)
+		fix, _, err := listedGateFix(ctx, t, story, p.PR)
+		if err != nil {
+			t.Close()
+			return err
+		}
+		if fix != nil {
+			exp.CompletionGoalHash, exp.Criteria, crit = fix.Approval.SHA256, nil, nil
+		}
+	}
+	t.Close()
 	sum := sha256.Sum256(raw)
 	g := GateComment{Story: story, PR: p.PR, HeadSHA: p.PRHeadSHA, PackSHA256: hex.EncodeToString(sum[:]),
 		Artifact: e.Getenv("AAYU_PACK_ARTIFACT_URL")}

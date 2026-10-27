@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
 
@@ -1052,5 +1053,116 @@ func TestGateVerifyRunsTheSweepOnTheTip(t *testing.T) {
 	}
 	if wts := git(t, g.dir, "worktree", "list"); strings.Count(wts, "\n") != 0 {
 		t.Fatalf("the gate left a worktree:\n%s", wts)
+	}
+}
+
+// Bug #1100: the merge gate (verify --ci) on a gate fix PR that says
+// `Refs #889`. A PR the plan's gate_fixes lists rests on #889's approved
+// record, not a Ready snapshot: it passes when the check it fixes passes at
+// its head, and fails when that check still fails or #889 was approved
+// again. An unlisted PR fails as before. The pack job (proof comment) checks
+// the pack against the same record.
+func TestMergeGateJudgesAListedGateFix(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.closeIssue(20)
+	g.vfail = []string{"inbox.ship-once"}
+	g.gateJSON()
+	dir := g.dir
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "--quiet", "-b", "fix/gate-981")
+	// inbox.ship-once passes only when the checkout has the fix.
+	fdir := filepath.Join(dir, ".agents", "skills", "verify-app", "features")
+	_ = os.MkdirAll(fdir, 0o755)
+	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"control.sh\"]}\n```\n\n1. [Inbox](inbox.md)\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(fdir, "inbox.md"), []byte("# Inbox\n\nx\n\n```feature\n{\"id\": \"inbox\", \"sources\": [\"inbox.txt\"], \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"ship-once\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"cat\"]}]}\n```\n\n## Gotchas\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "control.sh"), []byte("cat >/dev/null\nif [ -f fixed ]; then echo '{\"status\": \"passed\"}'; else echo '{\"status\": \"failed\", \"reason\": \"two ship records\"}'; fi\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "fixed"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"), 0o644)
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "-m", "fix(gate): ship once")
+	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
+	g.fixPR(982, "verify:inbox.ship-once", "Refs #889")
+	head := func() string {
+		sha := git(t, dir, "rev-parse", "HEAD")
+		g.edit(func() {
+			for _, n := range []int{981, 982} {
+				g.g.Pulls[n].Head.SHA, g.g.Pulls[n].Base.SHA = sha, base
+			}
+		})
+		return sha
+	}
+	head()
+	if code, out, errOut := g.gate("--pr", "981"); code != 0 {
+		t.Fatalf("gate --pr 981: exit %d: %s%s", code, out, errOut)
+	}
+	fix := g.plan2(889).GateFixes[0]
+	ci := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": os.Getenv("PATH"), "XDG_STATE_HOME": g.person["XDG_STATE_HOME"]}
+	type gateResult struct { // verify --json, as the merge gate workflow reads it
+		Head        string   `json:"head"`
+		Gate        []string `json:"gate_problems"`
+		GateFix     *GateFix `json:"gate_fix"`
+		GateFixNote string   `json:"gate_fix_note"`
+	}
+	verifyPR := func(n int) (int, gateResult, string) {
+		t.Helper()
+		code, out, errOut := run(t, ci, g.opts, "verify", fmt.Sprint(n), "--floor", "coverage", "--ci", "--repo", "o/r", "--json")
+		var res gateResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, out + errOut
+	}
+
+	// 1. Listed, under the current approval, and the check passes: no Ready snapshot problem; the pack rests on the approved record.
+	code, res, out := verifyPR(981)
+	if code != 0 || len(res.Gate) != 0 || res.GateFix == nil || res.GateFix.PR != 981 || strings.Contains(out, "Ready snapshot") ||
+		res.GateFixNote != fmt.Sprintf("#981 fixes verify:inbox.ship-once in MS1 of #889, and that check passes at %s", short(res.Head)) {
+		t.Fatalf("listed fix, check passes: exit %d %+v: %s", code, res.Gate, out)
+	}
+	p, err := proof.LoadLocal(proof.LocalDir(dir, 889))
+	if err != nil || p.PR != 981 || p.PRHeadSHA != res.Head || p.CompletionGoalHash != fix.Approval.SHA256 || p.Links.ReadySnapshot != ready.ApprovalPath(889) {
+		t.Fatalf("fix pack: %+v %v", p, err)
+	}
+	gateEnv := map[string]string{"GITHUB_TOKEN": "workflow-token", "GITHUB_WORKFLOW_REF": "o/r/.github/workflows/aayudha-merge-gate.yml@refs/pull/981/merge",
+		"GITHUB_EVENT_NAME": "pull_request_target", "XDG_STATE_HOME": g.person["XDG_STATE_HOME"]}
+	if code, out, errOut := run(t, gateEnv, g.opts, "proof", "comment", "889", "--ci", "--repo", "o/r"); code != 0 || strings.Contains(out+errOut, "Ready snapshot") {
+		t.Fatalf("pack job on the fix: exit %d: %s%s", code, out, errOut)
+	}
+
+	// 2. The same PR, and the check still fails at the head.
+	git(t, dir, "rm", "--quiet", "fixed")
+	git(t, dir, "commit", "--quiet", "-m", "fix(gate): not yet")
+	sha := head()
+	if code, res, out := verifyPR(981); code != ExitBlocked ||
+		!slices.Equal(res.Gate, []string{"#981 fixes verify:inbox.ship-once in MS1 of #889, and that check still fails at " + sha[:7]}) {
+		t.Fatalf("listed fix, check fails: exit %d %q: %s", code, res.Gate, out)
+	}
+
+	// 3. An unlisted PR that refers to the Feature fails as before.
+	if code, res, out := verifyPR(982); code != ExitBlocked || res.GateFix != nil || !slices.Equal(res.Gate, []string{"story #889 has no Ready snapshot on the ledger"}) {
+		t.Fatalf("unlisted PR: exit %d %q: %s", code, res.Gate, out)
+	}
+
+	// A required CI job or an eval: the gate cannot run it, names it, and ship's required checks decide.
+	git(t, dir, "revert", "--quiet", "--no-edit", "HEAD")
+	g.fixPR(983, "check:build", "Refs #889")
+	head()
+	g.edit(func() { g.g.Pulls[983].Head.SHA, g.g.Pulls[983].Base.SHA = g.g.Pulls[981].Head.SHA, base })
+	g.setPlan(889, func(p *MissionPlan) {
+		p.GateFixes = append(p.GateFixes, GateFix{PR: 983, Milestone: "MS1", Check: "check:build", DevSHA: fix.DevSHA, Approval: fix.Approval, At: fix.At})
+	})
+	if code, res, out := verifyPR(983); code != 0 || len(res.Gate) != 0 ||
+		res.GateFixNote != "#983 fixes check:build in MS1 of #889: the merge gate does not run the required check build; ship's required checks decide" {
+		t.Fatalf("listed fix of a CI job: exit %d %q %q: %s", code, res.Gate, res.GateFixNote, out)
+	}
+
+	// 4. #889 is approved again: the entry was made under the earlier approval (read from the ledger, never the PR body).
+	record := git(t, g.bare, "show", "ledger:"+ready.ApprovalPath(889))
+	again := strings.Replace(record, `"version": 1`, `"version": 2`, 1)
+	if again == record {
+		t.Fatalf("approved record has no version 1:\n%s", record)
+	}
+	putLedger(t, g.bare, ready.ApprovalPath(889), again+"\n")
+	if code, res, out := verifyPR(981); code != ExitBlocked || !slices.Equal(res.Gate, []string{"the gate fix entry of #981 was made under an earlier approval of #889"}) {
+		t.Fatalf("earlier approval: exit %d %q: %s", code, res.Gate, out)
 	}
 }

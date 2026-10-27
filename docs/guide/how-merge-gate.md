@@ -49,6 +49,12 @@ In CI, `verify` fails the job when a floor misses, and also when the pack does n
 story's Completion Goal hash no longer matches its Ready snapshot, a criterion has no evidence from this run, or the
 story has no Ready snapshot. A pull request that names no story passes with nothing to prove.
 
+A gate fix PR of a mission says `Refs #<feature>`, and a Feature has no Ready snapshot. The gate accepts it only when
+the mission plan's `gate_fixes` on the ledger lists it, and the entry's `approval.sha256` matches the Feature's approved
+record now. The pack then rests on that record. The gate runs the verify check the fix names at the head, and fails
+when it still fails. A required CI job or an eval the gate cannot run: it names it, and ship's required checks
+decide. A PR that only says `Refs #<feature>` fails as before (Bug #1100).
+
 When the story is a Bug, `verify --ci` also runs a **red-on-base** check: each test its evidence map names is run on
 the base commit, with the pull request's test files copied over, in the same sandbox. A test that fails on the base
 shows the fix; one that passes there does not. The check is advisory until the date in

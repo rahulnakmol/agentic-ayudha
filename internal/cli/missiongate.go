@@ -29,6 +29,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -857,6 +858,67 @@ func findFix(plan *MissionPlan, m, check, sha string) *GateFix {
 		}
 	}
 	return nil
+}
+
+// listedGateFix is the gate_fixes entry of Feature f's mission plan that
+// names PR n, with the SHA-256 of f's approved record on the ledger now; nil
+// when no entry names it (Bug #1100). Only the plan on the ledger counts: a
+// PR body can claim any check.
+func listedGateFix(ctx context.Context, t *ledger.Tree, f, n int) (*GateFix, string, error) {
+	b, err := t.File(ctx, MissionPlanPath(f))
+	if err != nil || b == nil {
+		return nil, "", ignoreMissing(err)
+	}
+	var plan MissionPlan
+	if json.Unmarshal(b, &plan) != nil || plan.Schema != MissionPlanSchema || plan.Feature != f {
+		return nil, "", Errorf(ExitExternal, "ledger %s: not the mission plan of #%d", MissionPlanPath(f), f)
+	}
+	i := slices.IndexFunc(plan.GateFixes, func(g GateFix) bool { return g.PR == n })
+	if i < 0 {
+		return nil, "", nil
+	}
+	record, err := t.File(ctx, ready.ApprovalPath(f))
+	if err := ignoreMissing(err); err != nil {
+		return nil, "", err
+	}
+	now := ""
+	if record != nil {
+		sum := sha256.Sum256(record)
+		now = hex.EncodeToString(sum[:])
+	}
+	return &plan.GateFixes[i], now, nil
+}
+
+// judgeGateFix is the merge gate's check of listed gate fix fx of Feature f
+// at r's head (Bug #1100): the entry must rest on f's approved record as it
+// is now, and the verify check it fixes must pass at the head. A required
+// CI job or an eval the gate cannot run: it names it, and ship's required
+// checks decide. note says what passed or what decides.
+func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, approvedNow string) (problems []string, note string) {
+	if fx.Approval.Record != ready.ApprovalPath(f) || fx.Approval.SHA256 != approvedNow {
+		problems = append(problems, fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fx.PR, f))
+	}
+	what := fmt.Sprintf("#%d fixes %s in %s of #%d", fx.PR, fx.Check, fx.Milestone, f)
+	ref, ok := strings.CutPrefix(fx.Check, "verify:")
+	if !ok {
+		job := "the required check " + strings.TrimPrefix(fx.Check, "check:")
+		if c, isEval := strings.CutPrefix(fx.Check, "eval:"); isEval {
+			job = "the eval " + c + " (" + evalsWorkflow + ")"
+		}
+		return problems, fmt.Sprintf("%s: the merge gate does not run %s; ship's required checks decide", what, job)
+	}
+	one := *r
+	one.Checks, one.Work = ref, filepath.Join(r.Work, "gate-fix")
+	rep := verify.Execute(ctx, &one, []verify.Floor{verify.Behaviour{}})
+	switch c := rep.Checks[0]; c.Result {
+	case proof.Pass:
+		note = fmt.Sprintf("%s, and that check passes at %s", what, short(r.Head))
+	case proof.Fail:
+		problems = append(problems, fmt.Sprintf("%s, and that check still fails at %s", what, short(r.Head)))
+	default:
+		problems = append(problems, fmt.Sprintf("%s, and that check did not run at %s: %s", what, short(r.Head), c.Detail))
+	}
+	return problems, note
 }
 
 // gateFixItems lists the fix of each failed check of each milestone's last

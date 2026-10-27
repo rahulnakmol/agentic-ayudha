@@ -1,0 +1,21 @@
+# Which tests prove Bug #1100's Completion Goal.
+
+[[criterion]]
+id = 1 # listed fix #981 under the current approval, and its check passes at the head: no Ready snapshot problem; the pack rests on the approved record
+tests = ["internal/cli:TestMergeGateJudgesAListedGateFix"]
+
+[[criterion]]
+id = 2 # the same PR, and inbox.ship-once still fails at the head: "#981 fixes verify:inbox.ship-once in MS1 of #889, and that check still fails at <head>"
+tests = ["internal/cli:TestMergeGateJudgesAListedGateFix"]
+
+[[criterion]]
+id = 3 # unlisted #982 says Refs #889: "story #889 has no Ready snapshot on the ledger", as before
+tests = ["internal/cli:TestMergeGateJudgesAListedGateFix"]
+
+[[criterion]]
+id = 4 # #889 approved again: "the gate fix entry of #981 was made under an earlier approval of #889"
+tests = ["internal/cli:TestMergeGateJudgesAListedGateFix"]
+
+[[criterion]]
+id = 5 # a story PR that says Refs #n with a Ready snapshot: the gate result is unchanged
+tests = ["internal/cli:TestVerifyGateCI"]
