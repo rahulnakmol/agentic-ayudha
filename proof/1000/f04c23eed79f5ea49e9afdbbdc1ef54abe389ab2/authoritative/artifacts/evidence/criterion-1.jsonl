@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextAgentsDefault"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextAgentsDefault","Output":"=== RUN   TestMissionNextAgentsDefault\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextAgentsDefault","Output":"--- PASS: TestMissionNextAgentsDefault (1.57s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextAgentsDefault"}

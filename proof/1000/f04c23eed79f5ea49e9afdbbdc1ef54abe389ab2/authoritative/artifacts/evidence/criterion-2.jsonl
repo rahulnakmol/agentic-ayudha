@@ -1,0 +1,20 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers","Output":"=== RUN   TestAgentsDefaultAndLocalOnlyLowers\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10","Output":"=== RUN   TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10","Output":"--- PASS: TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10 (1.62s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_10"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6","Output":"=== RUN   TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6","Output":"--- PASS: TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6 (1.43s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_3,_--set_6"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2","Output":"=== RUN   TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2","Output":"--- PASS: TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2 (1.34s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_5,_local_2"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local","Output":"=== RUN   TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local","Output":"--- PASS: TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local (1.72s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers/committed_7,_no_local"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers","Output":"--- PASS: TestAgentsDefaultAndLocalOnlyLowers (6.10s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAgentsDefaultAndLocalOnlyLowers"}
