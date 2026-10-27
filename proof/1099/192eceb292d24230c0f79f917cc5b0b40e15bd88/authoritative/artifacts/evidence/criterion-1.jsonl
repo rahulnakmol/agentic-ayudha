@@ -1,0 +1,5 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartOneStartTime"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartOneStartTime","Output":"=== RUN   TestMissionStartOneStartTime\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartOneStartTime","Output":"    kanha_test.go:740: #889: missions/889/plan.json started_at 2026-10-26T10:00:05Z, specs/889/approved.json parent.started_at 2026-10-26T10:00:05Z\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartOneStartTime","Output":"--- PASS: TestMissionStartOneStartTime (0.83s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartOneStartTime"}

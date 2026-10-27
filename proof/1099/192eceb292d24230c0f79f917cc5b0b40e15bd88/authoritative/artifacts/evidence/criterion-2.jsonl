@@ -1,0 +1,9 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns","Output":"=== RUN   TestMissionStartBriefsDraftingThreadFiftyRuns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns","Output":"=== PAUSE TestMissionStartBriefsDraftingThreadFiftyRuns\n"}
+{"Action":"pause","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns"}
+{"Action":"cont","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns","Output":"=== CONT  TestMissionStartBriefsDraftingThreadFiftyRuns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns","Output":"    kanha_test.go:143: go test -run 'TestMissionStartBriefsDraftingThread$' -count=50: 50 of 50 pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns","Output":"--- PASS: TestMissionStartBriefsDraftingThreadFiftyRuns (61.60s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartBriefsDraftingThreadFiftyRuns"}
