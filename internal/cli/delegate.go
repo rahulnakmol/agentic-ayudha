@@ -87,6 +87,11 @@ const (
 
 const delegateMarker = "<!-- aayudha:delegate -->"
 
+// receiverWaitDelay is how long a receiver CLI that its context ended may
+// keep its output open, through a child process, before aayu stops waiting
+// (Bug #1118). A variable so tests can shorten it.
+var receiverWaitDelay = 10 * time.Second
+
 func (e *Env) delegateExec() delegate.Exec {
 	if e.DelegateExec != nil {
 		return e.DelegateExec
@@ -94,6 +99,7 @@ func (e *Env) delegateExec() delegate.Exec {
 	return func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Dir, cmd.Env = dir, env
+		cmd.WaitDelay = receiverWaitDelay // a child that keeps the output open never holds a killed CLI's caller
 		if stdin != "" {
 			cmd.Stdin = strings.NewReader(stdin)
 		}

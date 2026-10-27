@@ -746,3 +746,19 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		t.Fatalf("no reset time: %d %+v %+v %s", code, res, st, errOut)
 	}
 }
+
+// Bug #1118: a receiver CLI whose context ends is killed, and a child that
+// keeps its output open does not hold the caller past receiverWaitDelay.
+func TestReceiverCLIWaitIsBounded(t *testing.T) {
+	was := receiverWaitDelay
+	receiverWaitDelay = 200 * time.Millisecond
+	t.Cleanup(func() { receiverWaitDelay = was })
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	// sh runs sleep as its child, which keeps the output pipe open after sh is killed.
+	_, err := (&Env{}).delegateExec()(ctx, "", nil, "", "sh", "-c", "sleep 20; true")
+	if took := time.Since(start); err == nil || took > 5*time.Second {
+		t.Fatalf("a killed CLI with a child holding its output: err %v after %s", err, took)
+	}
+}

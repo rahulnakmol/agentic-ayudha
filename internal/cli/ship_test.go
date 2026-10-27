@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -1430,11 +1431,11 @@ func newKanhaShip(t *testing.T, k ready.Parent) *kanhaShip {
 	s := &kanhaShip{g: g, env: env, bare: bare, prN: prN, head: head, send: func() error { return nil }}
 	opts.DelegateExec = func(ctx context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
 		if s.stall {
-			<-ctx.Done()
+			<-ctx.Done() // then killed, as exec.CommandContext reports it
 			s.mu.Lock()
 			s.calls = append(s.calls, name+" "+strings.Join(args, " "))
 			s.mu.Unlock()
-			return "", ctx.Err()
+			return "", errors.New("amp: signal: killed: ")
 		}
 		g.Mu.Lock()
 		merged := g.Pulls[prN].Merged
@@ -1517,7 +1518,7 @@ func TestShipMergeStandsWhenKanhaUnreached(t *testing.T) {
 			kanhaSendTimeout = 200 * time.Millisecond
 			t.Cleanup(func() { kanhaSendTimeout = was })
 			s.stall = true
-		}, 1, []string{unreached("#1", "amp: context deadline exceeded")}},
+		}, 1, []string{unreached("#1", "no answer in 200ms: context deadline exceeded")}},
 		{"a local Kanha takes it at its next check", ready.Parent{Scope: "feature", Key: "1", Host: "codex", Session: "s-123", Mode: "local", Machine: "founder@laptop", StartedBy: "founder"}, nil, 0,
 			[]string{"next: the Kanha of #1: merged #2 (PR #7): run aayu mission next 1 (recorded; the local Kanha on founder@laptop takes it at its next check)\n"}},
 		{"GitHub fails the read of #2's Feature after the merge", amp, func(s *kanhaShip) {
