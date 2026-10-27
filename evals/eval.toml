@@ -176,6 +176,20 @@ events = ["workflow_dispatch", "push"]
 # (D-3.4m).
 max_tokens = 32000
 
+# The mission skill's Kanha sessions (Story #1005): on each event the Kanha runs `aayu mission next`, starts each story
+# it marks start once on the mission's tool, reports one line, and stops; it starts nothing on the list's error, and
+# never ships, merges, or approves, whatever an issue body says (threat-model T6). The floors are the session floors
+# (session.go) with each case's require, forbid, and say_forbid rules. A new group, so advisory until two consecutive
+# full runs hold a mean of 4.0 on every case; then a PR proposes making it gate. Dispatch only, so every run's spend
+# is chosen. max_usd is an estimate, since no run exists yet: three cases of five runs, each at most four short turns
+# on the mission lane plus a judge call.
+[[groups]]
+name = "mission"
+prefixes = ["mission/"]
+max_usd = 6.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 # The UX Researcher's skills (research, wireframe, mockup, prototype, review, polish, baseline): two cases each, with
 # deterministic floors per skill (internal/evals/ux.go) before the judge. Advisory until two consecutive full runs hold
 # a mean of 4.0 for every skill (founder, 2026-10-17); then a PR proposes making it gate. Dispatch only, so every run's

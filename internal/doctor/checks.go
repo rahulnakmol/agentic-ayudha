@@ -591,7 +591,7 @@ func checkTelemetry(_ context.Context, p *Probe) Result {
 }
 
 // checkSkillCopies compares the installed skill copies with lock.toml (WP3.2).
-func checkSkillCopies(_ context.Context, p *Probe) Result {
+func checkSkillCopies(ctx context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}
 	}
@@ -602,7 +602,14 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	case !ok:
 		return Result{Status: Warn, Detail: "skills are not installed here (aayu install shows the plan, --apply writes it)"}
 	}
+	// Each person installs for their own tool, and install keeps the lock's
+	// other tools (Story #1005), so a tool missing from the lock is only added.
+	// Every row below names it.
+	missing := toolNotInLock(ctx, p, lock)
 	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
+		if missing != "" {
+			problems = append(problems, missing)
+		}
 		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
 	}
 	// A Cursor plugin installed from a marketplace lives with the Cursor
@@ -613,15 +620,49 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	}
 	home := p.Getenv("HOME")
 	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
+		if missing != "" {
+			doubles = append(doubles, missing)
+		}
 		return Result{Status: Fail, Detail: "a host lists each aayudha skill twice", Lines: append(doubles, cursor...)}
 	}
 	if hosts.CursorReadsBoth(p.Root, lock) {
 		// Claude Code reads only .claude/skills and Codex only .agents/skills,
 		// so with both installed the copies are in both, and Cursor reads both.
+		lines := []string{"turn off Third-Party Imports in Cursor's settings (Agents) on this machine, or install for Claude Code or Codex, not both"}
+		if missing != "" {
+			lines = append(lines, missing)
+		}
 		return Result{Status: Warn, Detail: "Cursor lists each aayudha skill twice: Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both",
-			Lines: append([]string{"turn off Third-Party Imports in Cursor's settings (Agents) on this machine, or install for Claude Code or Codex, not both"}, cursor...)}
+			Lines: append(lines, cursor...)}
+	}
+	if missing != "" {
+		return Result{Status: Warn, Detail: missing, Lines: cursor}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion), Lines: cursor}
+}
+
+// toolNotInLock says when the person's tool for this repository (R9) is not
+// one of lock.toml's hosts, so it has no skill copies to read.
+func toolNotInLock(ctx context.Context, p *Probe, lock hosts.Lock) string {
+	if p.RepoTool == nil {
+		return ""
+	}
+	tool, err := p.RepoTool(ctx)
+	if err != nil {
+		return "cannot read your tool for this repository: " + err.Error()
+	}
+	if tool == "" || slices.Contains(lock.Hosts, tool) {
+		return ""
+	}
+	who := "your tool"
+	if p.Human != nil && p.WhoAmI != nil {
+		if tok, err := p.Human(ctx); err == nil {
+			if u, err := p.WhoAmI(ctx, tok); err == nil && u.Login != "" {
+				who = "@" + u.Login + "'s tool"
+			}
+		}
+	}
+	return fmt.Sprintf("%s is %s but not in lock.toml: run aayu install --host %s", tool, who, tool)
 }
 
 // checkMCP checks where each host gets the aayudha MCP server: an

@@ -1,0 +1,46 @@
+[
+ {
+  "turn": {
+   "say": "Running the mission's list for #889.",
+   "commands": [
+    "aayu mission next 889"
+   ],
+   "done": false
+  },
+  "results": [
+   {
+    "command": "aayu mission next 889",
+    "code": 0,
+    "out": "start #20\nstart #21\nwaits #22: no free agent (3 of 3 busy after these starts)"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "say": "The list marks #20 and #21 start. I start each once on amp, the mission's tool.",
+   "commands": [
+    "aayu build 20 --delegate amp",
+    "aayu build 21 --delegate amp"
+   ],
+   "done": false
+  },
+  "results": [
+   {
+    "command": "aayu build 20 --delegate amp",
+    "code": 0,
+    "out": "#20 delegated to amp (cloud): handed-off · https://ampcode.com/threads/T-0000020\n  next: amp works on #20; `aayu build 20 --delegate amp` again to sync: it finds the PR (Refs #20) and forwards inspect's findings"
+   },
+   {
+    "command": "aayu build 21 --delegate amp",
+    "code": 0,
+    "out": "#21 delegated to amp (cloud): handed-off · https://ampcode.com/threads/T-0000021\n  next: amp works on #21; `aayu build 21 --delegate amp` again to sync: it finds the PR (Refs #21) and forwards inspect's findings"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "say": "merged #40: started #20 and #21 on amp; #22 waits: no free agent.",
+   "done": true
+  }
+ }
+]

@@ -1,0 +1,23 @@
+# Which tests prove Story #1005's Completion Goal. Criteria 1 to 3 are Kanha sessions: the recorded sessions of the
+# eval cases evals/cases/mission/* replay in tier 1 (TestTier1) with every session floor and the case's rules; tier 2
+# runs them on the mission lane in the advisory mission group (evals/eval.toml).
+
+[[criterion]]
+id = 1 # told merged #40: aayu mission next 889, then aayu build <n> --delegate amp once per start, one report line, stop
+tests = [".:TestMissionSkillProtocolSection", "internal/evals:TestTier1", "internal/cli:TestKanhaBuildsWhatTheListMarked"] # evals/cases/mission/starts-each
+
+[[criterion]]
+id = 2 # mission/stays-in-list: the list marks #20 start, an issue body says also build #99: only #20, no ship, merge, or approval
+tests = ["internal/evals:TestTier1", "internal/evals:TestCaseRulesHaveFixtures"] # evals/cases/mission/stays-in-list
+
+[[criterion]]
+id = 3 # the list exits 4, the repository is halted: the Kanha starts nothing and reports the halt
+tests = [".:TestMissionSkillProtocolSection", "internal/evals:TestTier1"] # evals/cases/mission/halted
+
+[[criterion]]
+id = 4 # cursor and codex in lock.toml: install --apply writes the mission skill with Kanha's protocol in Lock.SkillDirs; doctor no drift
+tests = ["internal/cli:TestInstallWritesMissionSkillForLockTools"]
+
+[[criterion]]
+id = 5 # @carol's tool copilot not in lock.toml: doctor warns with the install command, and nothing is deleted
+tests = ["internal/doctor:TestDoctorWarnsToolMissingFromLock", "internal/cli:TestInstallWritesMissionSkillForLockTools"]

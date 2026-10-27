@@ -525,3 +525,61 @@ func TestSetInspectReviewer(t *testing.T) {
 		}
 	}
 }
+
+// Story #1005, criteria 4 and 5: skill copies are committed per repository, so
+// install writes the mission skill, with Kanha's protocol, for every tool in
+// lock.toml, never only the caller's. @rahulnakmol installs for cursor and
+// @bob for codex: doctor finds no drift for either. @carol's tool, copilot, is
+// not in the lock: doctor says so and deletes nothing, and her install adds
+// copilot and keeps the others' copies.
+func TestInstallWritesMissionSkillForLockTools(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	env := map[string]string{"HOME": home}
+	tool := "cursor"
+	opts.RepoTool = func(context.Context, string) (string, error) { return tool, nil }
+	for _, h := range []string{"cursor", "codex"} {
+		if code, out, errs := run(t, env, opts, "install", "--host", h, "--apply", "--yes"); code != 0 {
+			t.Fatalf("install --host %s: exit %d\n%s%s", h, code, out, errs)
+		}
+	}
+	lock, ok, err := hosts.ReadLock(repo)
+	if err != nil || !ok || strings.Join(lock.Hosts, ",") != "cursor,codex" {
+		t.Fatalf("lock: %v %v hosts %v", ok, err, lock.Hosts)
+	}
+	want, _ := aayudha.Assets.ReadFile("skills/mission/SKILL.md")
+	copies := func() {
+		t.Helper()
+		for _, d := range lock.SkillDirs() {
+			b, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(d), "mission", "SKILL.md"))
+			if err != nil || string(b) != string(want) || !strings.Contains(string(b), "\n## Kanha's protocol\n") {
+				t.Errorf("%s/mission/SKILL.md is not the embedded skill with Kanha's protocol: %v", d, err)
+			}
+		}
+	}
+	copies()
+	for _, tool = range []string{"cursor", "codex"} {
+		if _, out, _ := run(t, env, opts, "doctor", "--repo", "o/r"); !strings.Contains(out, "PASS  skills-copies") {
+			t.Fatalf("doctor for a %s user:\n%s", tool, out)
+		}
+	}
+
+	tool = "copilot"
+	before := treeHash(t, repo)
+	if _, out, _ := run(t, env, opts, "doctor", "--repo", "o/r"); !strings.Contains(out, "WARN  skills-copies") ||
+		!strings.Contains(out, "copilot is your tool but not in lock.toml: run aayu install --host copilot") {
+		t.Fatalf("doctor for a copilot user:\n%s", out)
+	}
+	if treeHash(t, repo) != before {
+		t.Fatal("doctor changed the repository")
+	}
+	if code, out, errs := run(t, env, opts, "install", "--host", "copilot", "--apply", "--yes"); code != 0 {
+		t.Fatalf("install --host copilot: exit %d\n%s%s", code, out, errs)
+	}
+	if lock, _, _ = hosts.ReadLock(repo); strings.Join(lock.Hosts, ",") != "cursor,codex,copilot" {
+		t.Fatalf("lock after copilot: %v", lock.Hosts)
+	}
+	copies()
+	if _, out, _ := run(t, env, opts, "doctor", "--repo", "o/r"); !strings.Contains(out, "PASS  skills-copies") {
+		t.Fatalf("doctor after copilot's install:\n%s", out)
+	}
+}

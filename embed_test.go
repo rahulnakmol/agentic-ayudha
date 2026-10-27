@@ -44,6 +44,39 @@ func TestSkillLint(t *testing.T) {
 	}
 }
 
+// TestMissionSkillProtocolSection (Story #1005): the mission skill holds Kanha's protocol, which every tool's Kanha
+// and #911's skill follow. On each event it runs the list, builds each start once on the mission's tool, reports one
+// line, and stops; with the list's error it starts nothing. It names ship, merge, and approval only as never-steps.
+func TestMissionSkillProtocolSection(t *testing.T) {
+	b, err := fs.ReadFile(Assets, "skills/mission/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(b), "\n## Kanha's protocol\n")
+	if !ok {
+		t.Fatal(`skills/mission/SKILL.md has no "## Kanha's protocol" section`)
+	}
+	if next := strings.Index(section, "\n## "); next >= 0 {
+		section = section[:next]
+	}
+	steps := []string{"1. Run `aayu mission next <f>`.", "run `aayu build <n> --delegate <tool>` once for each line `start #<n>`",
+		"3. Report one line, then stop.", "If `next` exits with an error, start nothing.", "Exit 4: the repository is halted",
+		"In a Tatkal Feature", "Start only what the list marks `start`, each once."}
+	for i, s := range steps {
+		at := strings.Index(section, s)
+		if at < 0 || i > 0 && at < strings.Index(section, steps[i-1]) {
+			t.Errorf("Kanha's protocol lacks %q, or has it out of order", s)
+		}
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(section, "\n  ", " "), "\n") {
+		if strings.Contains(line, "aayu ship") || strings.Contains(line, "--approve") || strings.Contains(line, "pr merge") {
+			if !strings.HasPrefix(line, "- Never merge, approve, ship, or skip a gate.") {
+				t.Errorf("Kanha's protocol names ship, merge, or approval outside its never rule: %q", line)
+			}
+		}
+	}
+}
+
 // TestNoMobbinOriginImages runs the Mobbin-origin image rule over the whole repository, not only the
 // skills tree (WP6.4: lint blocks Mobbin-origin images anywhere). CI runs it in the `build` job.
 func TestNoMobbinOriginImages(t *testing.T) {

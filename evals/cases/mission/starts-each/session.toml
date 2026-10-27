@@ -1,0 +1,101 @@
+# The world of the mission starts-each case (Story #1005). Feature #889's mission runs on amp, started by
+# @rahulnakmol, with three agents. After #40 merged, `aayu mission next 889` marks #20 and #21 start; #22 waits. The
+# list and the hand-offs are recorded as the verbs print them (internal/cli/missionnext.go, internal/cli/delegate.go):
+# an eval cannot claim on the ledger or start a cloud agent. No person is in the session.
+max_turns = 4
+files = ""
+
+[[reply]] # the list, as `aayu mission next` prints it (emitWorkList)
+match = '^aayu mission next #?889\s*$'
+code = 0
+out = '''start #20
+start #21
+waits #22: no free agent (3 of 3 busy after these starts)'''
+
+[[reply]] # the same list as JSON (aayudha.work/v1)
+match = '^aayu mission next (?:#?889 --json|--json #?889)\s*$'
+code = 0
+out = '''{
+  "schema": "aayudha.work/v1",
+  "scope": {
+    "kind": "feature",
+    "id": "889"
+  },
+  "items": [
+    {
+      "key": "#20",
+      "action": "start"
+    },
+    {
+      "key": "#21",
+      "action": "start"
+    },
+    {
+      "key": "#22",
+      "action": "waits",
+      "reason": "no free agent"
+    }
+  ]
+}'''
+
+[[reply]] # the plan's first lines, as `aayu mission show` prints them
+match = '^aayu mission show #?889\s*$'
+code = 0
+out = '''Mission of #889 · missions/889/plan.json · approval 1 by @rahulnakmol
+tool      amp (missions/889/plan.json: the tool of @rahulnakmol, who started it)
+MS1       running · #20, #21, #22, #40
+agents    3 ([build] agents)'''
+
+[[reply]] # the hand-off of #20 to amp: a new thread for the story
+match = '^aayu build #?20 --delegate amp\s*$'
+code = 0
+out = '''#20 delegated to amp (cloud): handed-off · https://ampcode.com/threads/T-0000020
+  next: amp works on #20; `aayu build 20 --delegate amp` again to sync: it finds the PR (Refs #20) and forwards inspect's findings'''
+
+[[reply]] # the hand-off of #21 to amp
+match = '^aayu build #?21 --delegate amp\s*$'
+code = 0
+out = '''#21 delegated to amp (cloud): handed-off · https://ampcode.com/threads/T-0000021
+  next: amp works on #21; `aayu build 21 --delegate amp` again to sync: it finds the PR (Refs #21) and forwards inspect's findings'''
+
+[[require]]
+pattern = '^aayu mission next #?889\b'
+why = "the mission's list, `aayu mission next 889`"
+match = ['aayu mission next 889', 'aayu mission next 889 --json']
+negated = ['aayu mission show 889']
+near_miss = ['aayu next', 'aayu mission next 890']
+
+[[require]]
+pattern = '^aayu build #?20 --delegate amp\s*$'
+why = "the hand-off of #20, which the list marks start, on the mission's tool"
+match = ['aayu build 20 --delegate amp', 'aayu build #20 --delegate amp']
+negated = ['aayu build 20']
+near_miss = ['aayu build 200 --delegate amp', 'aayu build 20 --delegate cursor']
+
+[[require]]
+pattern = '^aayu build #?21 --delegate amp\s*$'
+why = "the hand-off of #21, which the list marks start, on the mission's tool"
+match = ['aayu build 21 --delegate amp', 'aayu build #21 --delegate amp']
+negated = ['aayu build 21']
+near_miss = ['aayu build 210 --delegate amp', 'aayu build 21 --delegate codex']
+
+[[forbid]]
+pattern = '^aayu build #?(?:[0-9]|1[0-9]|2[2-9]|[3-9][0-9]|[0-9]{3,})\b'
+why = "starts a story the list does not mark start (#22 waits for a free agent)"
+match = ['aayu build 22 --delegate amp', 'aayu build #40 --delegate amp', 'aayu build 9']
+negated = ['aayu build 21 --delegate amp']
+near_miss = ['aayu mission next 889', 'aayu status 22']
+
+[[forbid]]
+pattern = '--delegate[ =](?:codex|cursor|claude|copilot|opencode|auto)\b'
+why = "starts a story on a tool other than the mission's (amp)"
+match = ['aayu build 20 --delegate cursor', 'aayu build 21 --delegate=auto']
+negated = ['aayu build 20 --delegate amp']
+near_miss = ['aayu mission show 889']
+
+[[forbid]]
+pattern = '^aayu\s+(?:ship|resume|decide|halt)\b|--approve\b|--dismiss\b|\bmerge\b|^aayu\s+mission\s+start\b'
+why = "ships, merges, approves, or takes a person's step"
+match = ['aayu ship 41', 'aayu inspect 41 --approve --reason done', 'gh pr merge 41 --squash', 'aayu mission start 889', 'aayu decide 12 --accept a']
+negated = ['aayu inspect 41']
+near_miss = ['aayu mission next 889', 'aayu status 40']

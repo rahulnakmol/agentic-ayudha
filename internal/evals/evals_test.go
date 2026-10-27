@@ -1344,9 +1344,14 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("counsel"); err != nil || cg.MaxUSD != 3 || len(counsels) != 2 || cfg.Gates("counsel") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("counsel group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(counsels), cfg.Gates("counsel"))
 	}
+	// Story #1005: the mission skill's Kanha session cases, advisory until two consecutive full runs meet the bar, on dispatch only.
+	mg, missions, err := cfg.ForGroup("mission", all)
+	if g, _ := cfg.Group("mission"); err != nil || mg.MaxUSD != 6 || len(missions) != 3 || cfg.Gates("mission") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("mission group: %v, cap %v, %d cases, gates %v", err, mg.MaxUSD, len(missions), cfg.Gates("mission"))
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(counsels)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(counsels), len(other), len(all))
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(counsels)+len(missions)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(counsels), len(missions), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {
