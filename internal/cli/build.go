@@ -399,8 +399,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
 		}
 		// A start that got no answer may run on the host: it keeps its slot until mission recover checks (#1003).
-		if err != nil && starts && !c.DryRun() && (dlg == nil || dlg.state.Status != dlgMaybe) {
+		maybe := dlg != nil && dlg.state.Status == dlgMaybe
+		if err != nil && starts && !c.DryRun() && !maybe {
 			err = e.failedStart(ctx, c, w, repo, n, labels, &res, err)
+		}
+		// Once the hand-off is on the delegation, the delegation guards the story: the list's claim is released,
+		// so mission recover can restart a lost agent at once (#1003).
+		if starts && !c.DryRun() && dlg != nil && (err == nil && dlg.state.Status == dlgHandedOff || maybe) {
+			if rerr := e.releaseMissionClaim(ctx, c, w, repo, n, "its hand-off is on its delegation"); rerr != nil && err == nil {
+				err = rerr
+			}
 		}
 		if dlg == nil {
 			return err
@@ -1184,18 +1192,7 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 // returns cause, or what it could not undo with cause.
 func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, res *BuildResult, cause error) error {
 	reason := oneLineErr(cause)
-	f, _, _, err := storyMission(ctx, c, w, repo, n)
-	var claims []loopClaim
-	if err == nil && f != 0 {
-		claims, err = e.claimLines(ctx, w, MissionClaimsPath(f), nil)
-	}
-	for _, cl := range claims {
-		if cl.Story == n && err == nil {
-			cl.Release = true
-			b, _ := json.Marshal(cl)
-			_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: the start of #%d failed; its claim is released", n), Append: map[string][]byte{MissionClaimsPath(f): append(b, '\n')}})
-		}
-	}
+	err := e.releaseMissionClaim(ctx, c, w, repo, n, "its start failed")
 	if err == nil {
 		_, err = e.releaseLease(ctx, c, repo, n, "the start of its subthread failed")
 	}
@@ -1212,6 +1209,24 @@ func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Write
 		out.Next = ce.Next
 	}
 	return out
+}
+
+// releaseMissionClaim releases each live claim line of story n in its
+// Feature's mission claims file, and says why in the ledger commit.
+func (e *Env) releaseMissionClaim(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, why string) error {
+	f, _, _, err := storyMission(ctx, c, w, repo, n)
+	var claims []loopClaim
+	if err == nil && f != 0 {
+		claims, err = e.claimLines(ctx, w, MissionClaimsPath(f), nil)
+	}
+	for _, cl := range claims {
+		if cl.Story == n && err == nil {
+			cl.Release = true
+			b, _ := json.Marshal(cl)
+			_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: #%d: %s; its claim is released", n, why), Append: map[string][]byte{MissionClaimsPath(f): append(b, '\n')}})
+		}
+	}
+	return err
 }
 
 // kanhaNote adds what tellKanha did to a build's notes: its note, or why it

@@ -150,8 +150,13 @@ func Brief(in BriefInput) string {
 	b.WriteString("\n## Branch, commits, and pull request\n\n")
 	if in.Local {
 		fmt.Fprintf(&b, "- You work in an aayu worktree on `%s`. Do not commit, push, or open a PR: aayu commits your changes as a checkpoint, verifies them, pushes, and opens the PR.\n", in.Branch)
-	} else if in.Continue {
-		fmt.Fprintf(&b, "- An earlier run of this story stopped. Continue on its branch `%s`: start from its last commit on origin, or from `%s` when it is not on origin. Open one pull request into `%s`. If you cannot open a pull request, push the branch: aayu opens it.\n", in.Branch, in.Base, in.Base)
+	} else if in.Continue { // a restart (mission recover and retry)
+		fmt.Fprintf(&b, "- An earlier run of this story stopped. Continue on its branch `%s`: start from its last commit on origin, or from `%s` when it is not on origin.", in.Branch, in.Base)
+		if in.Ships {
+			fmt.Fprintf(&b, " You own story #%d to its merge, with one pull request into `%s`. You may use subagents; you integrate their work, and no other agent takes the story.\n", in.Story, in.Base)
+		} else {
+			fmt.Fprintf(&b, " Open one pull request into `%s`. If you cannot open a pull request, push the branch: aayu opens it.\n", in.Base)
+		}
 	} else {
 		if in.Ships {
 			fmt.Fprintf(&b, "- You own story #%d to its merge, in your own worktree on a new branch `%s` from `%s` (that exact name), with one pull request into `%s`. You may use subagents; you integrate their work, and no other agent takes the story.\n", in.Story, in.Branch, in.Base, in.Base)

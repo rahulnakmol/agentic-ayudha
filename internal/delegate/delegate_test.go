@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -107,6 +109,21 @@ func TestBriefShipsOnProof(t *testing.T) {
 	}
 	if strings.Contains(b, "A human merges with `aayu ship`") || strings.Contains(b, "no force-push") || strings.Contains(b, "If you cannot open a pull request") {
 		t.Errorf("the brief of a receiver that ships still hands the merge to a human:\n%s", b)
+	}
+}
+
+// Story #1003: a restart continues on the story's branch, and a receiver
+// that ships still owns the story to its merge.
+func TestBriefContinuesBranch(t *testing.T) {
+	in := briefInput()
+	in.Continue = true
+	cont := "Continue on its branch `story/2-show-empty-list`: start from its last commit on origin, or from `dev` when it is not on origin."
+	if b := Brief(in); !strings.Contains(b, cont) || !strings.Contains(b, "If you cannot open a pull request, push the branch: aayu opens it.") || strings.Contains(b, "on a new branch") {
+		t.Fatalf("a restart's brief:\n%s", b)
+	}
+	in.Ships = true
+	if b := Brief(in); !strings.Contains(b, cont) || !strings.Contains(b, "You own story #2 to its merge") || strings.Contains(b, "If you cannot open a pull request") {
+		t.Fatalf("a restart's brief for a receiver that ships:\n%s", b)
 	}
 }
 
@@ -256,6 +273,45 @@ func TestCodexCloud(t *testing.T) {
 	}
 	if _, err := (CodexCloud{Exec: c.Exec}).Handoff(ctx, Handoff{}); !errors.Is(err, ErrNotConnected) {
 		t.Fatalf("no environment: %v", err)
+	}
+	// Story #1003: the task list that mission recover reads, each task with its title and status.
+	out["cloud list"] = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item", "status": "running"},
+		{"id": "task_e_65", "title": "# Delegated story #65: Item", "status": "completed"}, {"id": "task_e_66", "title": "# Delegated story #640: Item", "status": "error"}], "cursor": null}`
+	tasks, err := c.List(ctx)
+	if err != nil || len(tasks) != 3 || !slices.Equal(calls[len(calls)-1].args, []string{"codex", "cloud", "list", "--env", "env_123", "--json", "--limit", "20"}) ||
+		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed || !ForStory(tasks[0].Title, 64) || ForStory(tasks[2].Title, 64) {
+		t.Fatalf("list: %v %+v", err, tasks)
+	}
+	out["cloud list"] = "Error: 401 Unauthorized"
+	if _, err := c.List(ctx); err == nil || !strings.Contains(err.Error(), "not a task list") {
+		t.Fatalf("list that is not JSON: %v", err)
+	}
+	delete(out, "cloud list")
+	if _, err := c.List(ctx); err == nil || !strings.HasPrefix(err.Error(), "codex: unexpected command") {
+		t.Fatalf("list that fails: %v", err)
+	}
+	if _, err := (CodexCloud{Exec: c.Exec}).List(ctx); !errors.Is(err, ErrNotConnected) {
+		t.Fatalf("list with no environment: %v", err)
+	}
+}
+
+// NoAnswer is a request that got no answer before its timeout: a deadline,
+// or a network timeout. Any other error is a plain failure.
+func TestNoAnswer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { select {} }))
+	defer srv.CloseClientConnections()
+	resp, err := (&http.Client{Timeout: 50 * time.Millisecond}).Get(srv.URL)
+	if err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("the server answered")
+	}
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{{fmt.Errorf("codex: %w", context.DeadlineExceeded), true}, {err, true}, {errors.New("exit status 1: 503"), false}, {context.Canceled, false}} {
+		if NoAnswer(c.err) != c.want {
+			t.Errorf("NoAnswer(%v) = %t", c.err, !c.want)
+		}
 	}
 }
 

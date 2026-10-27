@@ -443,14 +443,11 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 	a := MissionAttempt{Kind: kind, At: r.e.Now().UTC().Format(time.RFC3339), By: r.by, CostUSD: per}
 	ss := r.touch(n)
 	ss.CostBasis = basis
-	switch {
-	case berr != nil:
+	if berr != nil { // a start with no answer fails too, with the delegation maybe started
 		a.Error = clipText(oneLineErr(berr), 200)
 		if at, _ := lastFailure(after); at >= started { // the failure build recorded, so recover counts it once
 			a.At = at
 		}
-	case after.Status == dlgMaybe:
-		a.Error = "no answer before the timeout"
 	}
 	ss.Attempts = append(ss.Attempts, a)
 	switch {
@@ -541,7 +538,7 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 			r.touch(n).State = fmt.Sprintf("%s%s (%s)", stateUnreadable, src, unreadable(err))
 			return say("unreadable", r.next.stateOf(n).State+": aayu starts nothing for it")
 		}
-		if slices.ContainsFunc(tasks, func(t delegate.Task) bool { return delegate.ForStory(t.Title, n) }) {
+		if slices.ContainsFunc(tasks, func(t delegate.Task) bool { return t.Status != delegate.TaskFailed && delegate.ForStory(t.Title, n) }) { // a failed task runs no more
 			r.touch(n).State = stateMaybe
 			return say("maybe started", fmt.Sprintf("maybe started: a %s task exists for #%d but no PR yet; aayu does not start it again", st.Receiver, n))
 		}

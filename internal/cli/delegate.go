@@ -530,12 +530,12 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 				return err
 			})
 		})
-		if err != nil && delegate.NoAnswer(err) {
+		if err != nil && delegate.NoAnswer(err) && d.feature != 0 { // only a started mission's recover checks the host again
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
 			_ = e.saveDelegation(ctx, d)
-			if d.feature != 0 && !d.c.DryRun() {
+			if !d.c.DryRun() {
 				if _, perr := writePlan(ctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
 					p.storyState(d.story).State = stateMaybe
 					return nil

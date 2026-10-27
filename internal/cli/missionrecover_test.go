@@ -214,6 +214,7 @@ type codexWorld struct {
 	listErr error
 	lists   int
 	submit  func(brief string) error // fails a `codex cloud exec`
+	status  error                    // fails a `codex cloud status`
 }
 
 func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
@@ -225,6 +226,14 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 			defer w.mu.Unlock()
 			w.lists++
 			return w.list, w.listErr
+		}
+		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "status" {
+			w.mu.Lock()
+			err := w.status
+			w.mu.Unlock()
+			if err != nil {
+				return "", err
+			}
 		}
 		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "exec" {
 			w.mu.Lock()
@@ -296,6 +305,15 @@ func TestMissionRecoverMarksUnreadable(t *testing.T) {
 	if p, raw := w.plan(889); p.Sources[0].Unreadable != "" || p.stateOf(70) != nil {
 		t.Fatalf("plan.json after the list answers:\n%s", raw)
 	}
+	// #71 is older than the list, and its own status cannot be read either: it is unreadable, and nothing starts.
+	w.list = `{"tasks": [{"id": "task_e_70", "url": "https://chatgpt.com/codex/tasks/task_e_70", "title": "# Delegated story #70: Item 70", "status": "running"}], "cursor": null}`
+	w.status = errors.New("exit status 1: Error: request failed with status 503 Service Unavailable")
+	if code, out, errOut := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "#71  unreadable: codex task list (503): aayu starts nothing for it\n") || w.handoffs(71) != before {
+		t.Fatalf("recover when #71's status fails: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := w.plan(889); p.Sources[0].Unreadable != "503" || p.stateOf(71) == nil {
+		t.Fatalf("plan.json when #71's status fails:\n%s", raw)
+	}
 }
 
 // Criterion 4: the start of #64 sends its request and the host gives no
@@ -310,6 +328,9 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		}
 		return nil
 	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" || w.claims(889)[64] != 1 {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
 	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
 	if code == 0 || !strings.Contains(errOut, "Codex gave no answer before the timeout, so #64 may have started there") ||
 		!strings.Contains(errOut, "aayu mission recover 889 checks Codex and GitHub for #64 before it starts it again") {
@@ -317,6 +338,9 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	}
 	if st := w.state(64); st.Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") {
 		t.Fatalf("#64 does not keep its slot: %+v, labels %v", st, w.g.LabelNames(64))
+	}
+	if n := w.claims(889)[64]; n != 0 { // the delegation guards it now, so recover can restart it at once
+		t.Fatalf("the list's claim of #64 is still live (%d)", n)
 	}
 	if p, raw := w.plan(889); p.stateOf(64) == nil || p.stateOf(64).State != "maybe started" {
 		t.Fatalf("plan.json does not mark #64 maybe started:\n%s", raw)
@@ -332,8 +356,8 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || !strings.Contains(out, "waits #64: maybe started") {
 		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
 	}
-	// The next wake: no task for #64 on the host and no PR on GitHub, so it starts again, once.
-	w.list = `{"tasks": [], "cursor": null}`
+	// The next wake: no task for #64 that can still run on the host, and no PR on GitHub, so it starts again, once.
+	w.list = `{"tasks": [{"id": "task_e_old", "title": "# Delegated story #64: Item 64", "status": "error"}], "cursor": null}`
 	code, out, errOut = w.recover(889, "codex")
 	if code != 0 || !strings.Contains(out, "#64  restarted from story/64-") || !strings.Contains(out, "no codex task and no PR for #64") || w.handoffs(64) != tries+1 {
 		t.Fatalf("the next wake: exit %d, hand-offs %d → %d: %s%s", code, tries, w.handoffs(64), out, errOut)
@@ -341,10 +365,41 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	if p, raw := w.plan(889); p.stateOf(64) != nil && p.stateOf(64).State != "" {
 		t.Fatalf("#64 is still marked after its restart:\n%s", raw)
 	}
+	// A restart that gets no answer either is maybe started again, and the list that cannot be read stops the next check.
+	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64b", Branch: "story/64-item-64", Status: dlgMaybe})
+	w.list = `{"tasks": [], "cursor": null}`
+	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  no codex task and no PR for #64; restarted, and Codex gave no answer before the timeout: maybe started, and aayu does not start it again") {
+		t.Fatalf("a restart with no answer: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := w.plan(889); p.stateOf(64) == nil || p.stateOf(64).State != "maybe started" {
+		t.Fatalf("plan.json after a restart with no answer:\n%s", raw)
+	}
+	w.submit, w.listErr = nil, errors.New("exit status 1: network is unreachable")
+	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "#64  unreadable: codex task list (codex: exit status 1: network is unreachable): aayu starts nothing for it") {
+		t.Fatalf("an unreadable list for a maybe start: %s", out)
+	}
+	if p, raw := w.plan(889); len(p.Sources) != 1 || p.Sources[0].Unreadable == "" || p.Sources[0].Since == "" {
+		t.Fatalf("plan.json after an unreadable list:\n%s", raw)
+	}
+	w.listErr = nil
+	// A story outside a started mission has no recover: a start with no answer fails as before, and is Ready again.
+	w.featureWith(875, 66)
+	if code, out, errOut := w.approve(875); code != 0 {
+		t.Fatalf("approve 875: exit %d: %s%s", code, out, errOut)
+	}
+	w.readyStory(66)
+	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
+	if code, _, errOut := run(t, w.agent, w.opts, "build", "66", "--delegate", "codex", "--repo", "o/r", "--asked", "a person asked"); code == 0 || strings.Contains(errOut, "maybe") ||
+		w.state(66).Status != dlgFailed || !slices.Contains(w.g.LabelNames(66), "status:ready") {
+		t.Fatalf("#66 outside a mission: exit %d, %+v, labels %v: %s", code, w.state(66), w.g.LabelNames(66), errOut)
+	}
+	w.submit = nil
 	// A PR for the story counts as GitHub's answer: recover keeps it, and starts nothing.
 	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64", Status: dlgMaybe})
 	pr := w.g.AddPR("feat: item 64", "Refs #64", "rahulnakmol", "codex/item-64", strings.Repeat("b", 40), "dev")
-	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, fmt.Sprintf("#64  kept on its PR #%d", pr.Number)) || w.handoffs(64) != tries+1 {
+	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, fmt.Sprintf("#64  kept on its PR #%d", pr.Number)) || w.handoffs(64) != tries+2 {
 		t.Fatalf("recover with #64's PR: %s", out)
 	}
 }
@@ -457,11 +512,16 @@ func TestMissionRetryStory(t *testing.T) {
 	per := appr.Budget.PerStoryUSD
 	m.delegated(delegate.State{Story: 941, Receiver: "amp", Mode: "cloud", Task: "T-01a00000-0000-0000-0000-000000000941", Branch: "story/941-item-941", Status: dlgFailed,
 		Events: []delegate.Event{{At: "2026-10-26T09:30:00Z", Status: dlgFailed, Detail: "the receiver's task failed: run error"}}})
+	// A retry while the host still fails: one more attempt, counted, and it waits again.
+	code, out, errOut := m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "63")
+	if code != 0 || !strings.Contains(out, "#63  retried by @rahulnakmol: failed again: ") || !strings.Contains(out, "; waits on @rahulnakmol · 4 attempts, ") || m.handoffs(63) != 2 {
+		t.Fatalf("retry #63 while the host fails: exit %d, hand-offs %d: %s%s", code, m.handoffs(63), out, errOut)
+	}
 	fail.set(63, false)
 
-	code, out, errOut := m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "63")
+	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "63")
 	if code != 0 || m.codes() != 1 || !strings.Contains(out, "@rahulnakmol retried #63 in the mission of #889 on amp.") ||
-		!strings.Contains(out, "#63  retried by @rahulnakmol: restarted from story/63-") || !strings.Contains(out, fmt.Sprintf(" · 4 attempts, %s", ready.USD(3+per))) || m.handoffs(63) != 2 {
+		!strings.Contains(out, "#63  retried by @rahulnakmol: restarted from story/63-") || !strings.Contains(out, fmt.Sprintf(" · 5 attempts, %s", ready.USD(3+2*per))) || m.handoffs(63) != 3 {
 		t.Fatalf("retry #63: exit %d, hand-offs %d: %s%s", code, m.handoffs(63), out, errOut)
 	}
 	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "941")
@@ -471,7 +531,7 @@ func TestMissionRetryStory(t *testing.T) {
 	}
 	p, raw := m.plan(889)
 	s63, s941 := p.stateOf(63), p.stateOf(941)
-	if s63 == nil || len(s63.Attempts) != 4 || s63.State != "" || s63.Attempts[3].Kind != "retry" || s63.Attempts[3].By != "rahulnakmol" || s63.Attempts[3].CostUSD != per ||
+	if s63 == nil || len(s63.Attempts) != 5 || s63.State != "" || s63.Attempts[4].Kind != "retry" || s63.Attempts[4].By != "rahulnakmol" || s63.Attempts[4].CostUSD != per || s63.Attempts[3].Error == "" ||
 		s941 == nil || len(s941.Attempts) != 2 || s941.Attempts[0].Kind != "run" || s941.Attempts[1].By != "rahulnakmol" || s941.cost() != 2*per || s941.CostBasis == "" {
 		t.Fatalf("plan.json after the retries:\n%s", raw)
 	}
@@ -481,7 +541,7 @@ func TestMissionRetryStory(t *testing.T) {
 			retries = append(retries, c)
 		}
 	}
-	if len(retries) != 2 || retries[0].Story != 63 || retries[1].Story != 941 || retries[1].By != "rahulnakmol" || retries[1].Presence != "device-flow" {
+	if len(retries) != 3 || retries[0].Story != 63 || retries[2].Story != 941 || retries[2].By != "rahulnakmol" || retries[2].Presence != "device-flow" {
 		t.Fatalf("controls: %+v", p.Controls)
 	}
 	// An agent lane's retry is refused: a retry is a person's decision.
@@ -600,7 +660,11 @@ func TestMissionRetryByTeammateRecorded(t *testing.T) {
 // Recover twice in a row, with stories in every state, changes nothing the
 // second time (criterion 2), and recover is no person's decision: the Kanha runs it.
 func TestMissionRecoverIsIdempotent(t *testing.T) {
-	w := newCodexWorld(t, 889, 80, 81, 82)
+	w := newCodexWorld(t, 889, 80, 81, 82, 83)
+	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "  no story runs: mission next starts what can start\n  nothing changed\n") {
+		t.Fatalf("recover with no story running: %s", out)
+	}
+	w.delegated(delegate.State{Story: 83, Receiver: "codex", Mode: "cloud", Task: "task_e_83", TaskURL: "https://chatgpt.com/codex/tasks/task_e_83", Status: dlgWorking}) // older than the list: its status says
 	w.delegated(delegate.State{Story: 80, Receiver: "codex", Mode: "cloud", Task: "task_e_80", Status: dlgWorking})
 	w.delegated(delegate.State{Story: 81, Receiver: "codex", Mode: "cloud", Task: "task_e_81", Status: dlgMaybe})
 	w.delegated(delegate.State{Story: 82, Receiver: "codex", Mode: "cloud", Task: "task_e_82", Branch: "story/82-item-82", Status: dlgWorking})
@@ -608,7 +672,8 @@ func TestMissionRecoverIsIdempotent(t *testing.T) {
 		{"id": "task_e_81", "title": "# Delegated story #81: Item 81", "status": "running"},
 		{"id": "task_e_82", "title": "# Delegated story #82: Item 82", "status": "failed"}], "cursor": null}`
 	code, out, errOut := w.recover(889, "codex")
-	if code != 0 || len(storyLines(out)) != 3 || !strings.Contains(out, "#82  restarted from story/82-item-82") || w.handoffs(82) != 1 {
+	if code != 0 || len(storyLines(out)) != 4 || !strings.Contains(out, "#82  restarted from story/82-item-82") || w.handoffs(82) != 1 ||
+		!strings.Contains(out, "#83  re-attached: its Codex thread lives (https://chatgpt.com/codex/tasks/task_e_83)") {
 		t.Fatalf("first recover: exit %d: %s%s", code, out, errOut)
 	}
 	// #82's new task is in the list now; nothing else moved.
@@ -616,7 +681,151 @@ func TestMissionRecoverIsIdempotent(t *testing.T) {
 		fmt.Sprintf(`{"id": %q, "title": "# Delegated story #82: Item 82", "status": "running"}`, w.state(82).Task), 1)
 	commits := w.commits()
 	code, out, errOut = w.recover(889, "codex")
-	if code != 0 || !strings.Contains(out, "  nothing changed\n") || w.commits() != commits || w.handoffs(80)+w.handoffs(81) != 0 || w.handoffs(82) != 1 {
+	if code != 0 || !strings.Contains(out, "  nothing changed\n") || w.commits() != commits || w.handoffs(80)+w.handoffs(81)+w.handoffs(83) != 0 || w.handoffs(82) != 1 {
 		t.Fatalf("second recover: exit %d, commits %s → %s: %s%s", code, commits, w.commits(), out, errOut)
+	}
+}
+
+// Recover leaves what it must not start: a stopped story, a capped one, one
+// whose PR closed, a local run, a Tatkal story on another tool, and a start
+// with no answer on a host that lists no tasks. --dry-run writes nothing.
+// Retry refuses a run with no story, a story with no failed step, a stopped
+// story, another tool's story, and a paused mission.
+func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
+	m := newMissionWorld(t)
+	m.ampConnected()
+	m.startedMission(889, []int{87, 88, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99})
+	amp := func(n int) delegate.State {
+		id := fmt.Sprintf("T-01a00000-0000-0000-0000-0000000000%d", n)
+		return delegate.State{Story: n, Receiver: "amp", Mode: "cloud", Task: id, TaskURL: "https://ampcode.com/threads/" + id, Branch: fmt.Sprintf("story/%d-item-%d", n, n), Status: dlgWorking}
+	}
+	m.readyStory(98)
+	for _, n := range []int{88, 90, 98, 99} {
+		m.delegated(amp(n))
+	}
+	capped, closed, local, maybe := amp(91), amp(92), amp(93), amp(95)
+	capped.Status, closed.Status, closed.PR, local.Mode, maybe.Status = dlgCapped, dlgFailed, 777, "local", dlgMaybe
+	for _, st := range []delegate.State{capped, closed, local, maybe, {Story: 94, Receiver: "claude", Mode: "cloud", Task: "session_94", Status: dlgWorking}, amp(97)} {
+		m.delegated(st)
+	}
+	m.closeIssue(97)
+	m.mu.Lock()
+	m.archived[amp(98).Task] = true
+	m.mu.Unlock()
+	pr := m.g.AddPR("feat: item 99", "Refs #99", "rahulnakmol", "story/99-item-99", strings.Repeat("c", 40), "dev")
+	// #87's sync failed on an open PR that does not name it: the delegation's PR is the one.
+	pr87 := m.g.AddPR("fix: the empty list", "No story named here.", "rahulnakmol", "fix-empty-list", strings.Repeat("d", 40), "dev")
+	failed87 := amp(87)
+	failed87.PR, failed87.Status = pr87.Number, dlgFailed
+	failed87.Events = []delegate.Event{{At: "2026-10-26T09:30:00Z", Status: dlgFailed, Detail: "build #87: follow-up to amp: amp: exit status 1"}}
+	m.delegated(failed87)
+	m.setPlan(889, func(p *MissionPlan) {
+		p.Stopped = []MissionStopped{{Number: 90, Reason: "wrong approach", By: "rahulnakmol"}}
+		p.StoryStarts = []MissionStoryStart{{Number: 94, Tool: "claude", StartedBy: "carol", StartedAt: "2026-10-26T10:00:00Z"}}
+	})
+
+	commits := m.commits()
+	code, out, errOut := run(t, m.agent, m.opts, "mission", "recover", "889", "--repo", "o/r", "--dry-run")
+	for _, want := range []string{
+		"#88  re-attached: its Amp thread lives (https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000088); --dry-run: its Kanha is not updated",
+		"#98  its Amp thread is archived with no PR: --dry-run: would restart it from story/98-item-98 and its brief",
+		fmt.Sprintf("#99  kept on its PR #%d (--dry-run: the delegation is not updated)", pr.Number),
+		"  --dry-run: ledger missions/889/plan.json planned, not written; nothing restarted",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("recover --dry-run lacks %q", want)
+		}
+	}
+	if code != 0 || m.commits() != commits || m.handoffs(98) != 0 {
+		t.Fatalf("recover --dry-run: exit %d, commits %s → %s: %s%s", code, commits, m.commits(), out, errOut)
+	}
+
+	code, out, errOut = m.recover(889, "")
+	for _, want := range []string{
+		"#90  stopped (wrong approach): recover leaves it until a person resumes it\n",
+		"#91  capped: a person takes over, and recover starts nothing for it\n",
+		"#92  its PR #777 is not open: recover starts nothing for it\n",
+		"#93  runs Amp on its builder's machine: recover reads no host for it\n",
+		"#94  runs on claude, the tool of @carol, who started it: recover it there\n",
+		"#95  maybe started: Amp lists no tasks, so aayu cannot see whether #95 started there; a person checks Amp, and aayu does not start it again\n",
+		"     next: aayu mission retry 889 --story 95\n",
+		fmt.Sprintf("#87  kept on its PR #%d\n", pr87.Number),
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("recover lacks %q", want)
+		}
+	}
+	if code != 0 || strings.Contains(out, "#96 ") || strings.Contains(out, "#97 ") || m.handoffs(98) != 1 {
+		t.Fatalf("recover: exit %d, #98 hand-offs %d: %s%s", code, m.handoffs(98), out, errOut)
+	}
+
+	commits = m.commits()
+	for _, c := range []struct {
+		args []string
+		code int
+		want string
+	}{
+		{nil, ExitUsage, "mission retry needs --story"},
+		{[]string{"--story", "96"}, ExitBlocked, "#96 has no failed step in the mission of #889: nothing to retry. Nothing changed."},
+		{[]string{"--story", "90"}, ExitBlocked, "#90 is stopped (wrong approach): resume it first. Nothing changed."},
+		{[]string{"--story", "94"}, ExitBlocked, "#94 runs on claude, the tool of @carol, who started it: run this there"},
+		{[]string{"--story", "200"}, ExitBlocked, "#200 is not a story or Bug of #889. Nothing changed."},
+	} {
+		if code, _, errOut := m.mission(m.person, "rahulnakmol", "retry", 889, c.args...); code != c.code || !strings.Contains(errOut, c.want) {
+			t.Errorf("retry %v: exit %d: %s", c.args, code, errOut)
+		}
+	}
+	for _, action := range [][]string{{"recover"}, {"retry", "--story", "87"}} {
+		if code, _, errOut := m.mission(m.person, "rahulnakmol", action[0], 5, action[1:]...); code != ExitBlocked || !strings.Contains(errOut, "#5 has no mission plan: a person approves it to build first. Nothing changed.") {
+			t.Errorf("%s with no mission plan: exit %d: %s", action[0], code, errOut)
+		}
+	}
+	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "95", "--dry-run")
+	if code != 0 || !strings.Contains(out, "  Retries #95 of the mission of #889 once more: it hands #95 off again on amp, from its branch and its brief") || m.commits() != commits {
+		t.Fatalf("retry --dry-run: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "87", "--dry-run")
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("it runs the sync of #87's PR #%d on amp again; the attempt is counted", pr87.Number)) || strings.Contains(out+errOut, "is judged") || m.commits() != commits {
+		t.Fatalf("retry #87 --dry-run: exit %d: %s%s", code, out, errOut)
+	}
+	// A GitHub read that fails stops the run before it changes anything.
+	for _, c := range []struct {
+		fail string
+		args []string
+	}{
+		{"GET /user", []string{"recover"}},
+		{"GET /repos/o/r/pulls", []string{"recover"}},
+		{"GET /repos/o/r/issues/889/sub_issues", []string{"recover"}},
+		{"GET /repos/o/r/pulls", []string{"retry", "--story", "87"}},
+		{fmt.Sprintf("GET /repos/o/r/pulls/%d", pr87.Number), []string{"retry", "--story", "87"}},
+		{fmt.Sprintf("GET /repos/o/r/issues/%d/comments", pr87.Number), []string{"retry", "--story", "87"}},
+	} {
+		m.edit(func() { m.g.Fail, m.g.FailAfter = c.fail, 0 })
+		code, out, errOut := m.mission(m.person, "rahulnakmol", c.args[0], 889, c.args[1:]...)
+		m.edit(func() { m.g.Fail = "" })
+		if code != ExitExternal || !strings.Contains(errOut, "injected failure") || m.commits() != commits || m.handoffs(87) != 0 {
+			t.Errorf("%s with %s failing: exit %d, commits %s → %s: %s%s", c.args[0], c.fail, code, commits, m.commits(), out, errOut)
+		}
+	}
+	// The [budget] breaker's pause stops recover before it reads anything.
+	pause := (&Env{Options: Options{Dir: m.dir}}).PauseFile()
+	if err := os.MkdirAll(filepath.Dir(pause), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pause, []byte("budget"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := m.mission(m.person, "rahulnakmol", "recover", 889); code != ExitBudget || !strings.Contains(errOut, "agent lanes are paused by the [budget] breaker") || m.commits() != commits {
+		t.Errorf("recover under the breaker: exit %d: %s", code, errOut)
+	}
+	if err := os.Remove(pause); err != nil {
+		t.Fatal(err)
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.Pause = &MissionPause{Reason: "spec drift", By: "rahulnakmol"} })
+	if code, _, errOut := m.recover(889, ""); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 is paused: spec drift. Nothing starts.") {
+		t.Fatalf("recover of a paused mission: exit %d: %s", code, errOut)
+	}
+	if code, _, errOut := m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "95"); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 is paused (spec drift): resume it first.") {
+		t.Fatalf("retry in a paused mission: exit %d: %s", code, errOut)
 	}
 }
