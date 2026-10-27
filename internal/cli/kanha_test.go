@@ -546,7 +546,8 @@ func TestTatkalStoryRunsOnStartersTool(t *testing.T) {
 	// The Kanha's list starts neither, even when #931's hand-off left it Ready; a sync that asks for another tool
 	// keeps #930 on its starter's.
 	m.status(931, "ready", "")
-	if code, out, errOut := m.next(920); code != 0 || !strings.HasPrefix(out, "waits #931: @rahulnakmol started it on cursor · subthread ") || strings.Count(out, "\n") != 1 {
+	if code, out, errOut := m.next(920); code != 0 || !strings.HasPrefix(out, "waits #931: @rahulnakmol started it on cursor · subthread ") ||
+		strings.Count(workLines(out), "\n") != 1 {
 		t.Fatalf("mission next 920: exit %d: %q%s", code, out, errOut)
 	}
 	m.g.Viewer = "bob" // the lease is his start's

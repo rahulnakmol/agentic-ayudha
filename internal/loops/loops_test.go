@@ -93,6 +93,36 @@ func TestDue(t *testing.T) {
 	}
 }
 
+// Story #1009, criterion 1: the build-ready loop is the hourly safety tick, on
+// every day. Europe/London is UTC+1 in summer and UTC+0 in winter; on the hour
+// both offsets give the same UTC cron, so a tool with UTC triggers gets one,
+// and it is due each hour of a summer Saturday and a winter Tuesday.
+func TestBuildReadyHourlyCronUTC(t *testing.T) {
+	ls, err := Load(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, ok := Find(ls, "build-ready")
+	if !ok || l.Cron != "0 * * * *" || !slices.Equal(l.Command, []string{"mission", "tick"}) {
+		t.Fatalf("loops/build-ready.toml: cron %q, command %q", l.Cron, l.Command)
+	}
+	london := zone(t, "Europe/London")
+	for _, off := range []int{3600, 0} { // BST, GMT
+		if got, err := l.UTCCron(off); err != nil || !slices.Equal(got, []string{"0 * * * *"}) {
+			t.Errorf("offset %d: %v %v", off, got, err)
+		}
+	}
+	if got, err := l.UTCCrons(london); err != nil || !slices.Equal(got, []string{"0 * * * *"}) {
+		t.Errorf("UTCCrons(Europe/London): %v %v, want one cron", got, err)
+	}
+	for _, at := range []string{"2026-07-18T13:00:00Z", "2026-07-18T13:40:00Z", "2026-12-15T02:00:00Z", "2026-12-15T23:05:00Z"} {
+		now, _ := time.Parse(time.RFC3339, at)
+		if !l.Due(london, now, "0 * * * *") || !l.Due(london, now, "") {
+			t.Errorf("%s: not due", at)
+		}
+	}
+}
+
 func TestParseRefuses(t *testing.T) {
 	for name, body := range map[string]string{
 		"--yes":               `command = ["status", "--digest", "--yes"]` + "\ncron = \"0 9 * * *\"",

@@ -189,11 +189,13 @@ agent-authored PR. Write its plain sections to the
 writing rule (`skills/brief/references/writing.md`). Put one `Aayudha-Effort: <level>` line after the
 `Aayudha-Model:` lines when you know the effort, one token each, and never invent a model ID.
 
-## The build-ready loop (`--next`)
+## The build pick (`--next`)
 
-The `build-ready` loop (`loops/build-ready.toml`) builds Ready work on a schedule. Its definition in the repository is
-the person's standing ask (a narrow-set file, so only a person adds or changes it), and its pick passes the asked gate
-of step 1. The binary picks; you never choose the story.
+The `build-ready` loop (`loops/build-ready.toml`) no longer runs this pick: it runs the missions' hourly safety tick,
+`aayu mission tick`, which never builds (skills/mission/SKILL.md). `aayu build --next` stays for a person who runs it
+by hand. It runs only where `loops/build-ready.toml` exists: that file is the person's standing ask (a narrow-set
+file, so only a person adds or changes it), and its pick passes the asked gate of step 1. The binary picks; you never
+choose the story.
 
 1. `aayu build --next ship` lists the loop's open pull requests, oldest first, and changes nothing. Run
    `aayu ship <pr>` once on each and report what ship did. Never pass `--solo-bypass` or `--admin`, and never merge

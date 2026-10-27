@@ -501,7 +501,7 @@ func TestMissionStopOneStoryOrBug(t *testing.T) {
 		t.Fatalf("stop --story changed the repository: %v %v", got, w.g.LabelNames(858))
 	}
 	// #858 holds its slot: with 3 agents, #859 runs and one of #860 and #941 starts.
-	if code, out, errOut := w.next(889); code != 0 || out != "waits #858: stopped (wrong approach) · subthread T-01a00000-0000-0000-0000-000000000858\nstart #860\nwaits #941 (bug): no free agent (3 of 3 busy after these starts)\n" {
+	if code, out, errOut := w.next(889); code != 0 || workLines(out) != "waits #858: stopped (wrong approach) · subthread T-01a00000-0000-0000-0000-000000000858\nstart #860\nwaits #941 (bug): no free agent (3 of 3 busy after these starts)\n" {
 		t.Fatalf("mission next with #858 stopped: exit %d: %q%s", code, out, errOut)
 	}
 	if code, out, _ := run(t, w.person, w.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#858 stopped (wrong approach)") {

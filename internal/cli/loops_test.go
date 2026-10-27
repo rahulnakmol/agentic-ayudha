@@ -12,6 +12,7 @@ import (
 	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
@@ -464,5 +465,80 @@ func TestInstallLoopsAddsDefaults(t *testing.T) {
 		if b, _ := os.ReadFile(filepath.Join(dir, ".github", "workflows", loops.Workflow)); (host == "codex") != strings.Contains(string(b), "pnpm exec playwright install --with-deps chromium") {
 			t.Errorf("%s: the sweep's setup does not follow the lockfile:\n%s", host, b)
 		}
+	}
+}
+
+// Story #1009, criterion 5: with the repository's loops/build-ready.toml,
+// `aayu install --loops` finds every tool's render current, and each one has
+// the hourly schedule and the tick prompt: one Cursor cron trigger, Amp's
+// hourly rule, the Claude Code cron, and the Codex rule. Once the loop is
+// recorded as set up, `aayu doctor` shows it active, with no drift.
+func TestInstallLoopsWritesHourlyTick(t *testing.T) {
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("[time]\ntz = \"Europe/London\"\n"), 0o644)
+	def, err := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), def, 0o644)
+	ls, err := loops.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := loops.Files(ls, "o/r", "dev", "Europe/London", "dev", Implemented) // as init --gates and go generate write them
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, b := range files {
+		_ = os.MkdirAll(filepath.Join(dir, filepath.Dir(p)), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, p), b, 0o644)
+	}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
+	opts := Options{Dir: dir, LookPath: func(string) (string, error) { return "", os.ErrNotExist }}
+	tickPrompt := []string{"Run `AAYU_AGENT=1 aayu mission tick`.", "Never build, claim, or start a story in this run", "never run `aayu build` or `aayu mission next` yourself",
+		"Never pass --solo-bypass or --admin"}
+	for host, want := range map[string][]string{
+		"amp":    {"loops/amp/build-ready.json", "RRULE:FREQ=HOURLY;BYMINUTE=0", "Every hour at :00"},
+		"cursor": {"loops/cursor/aayudha-loops.tf", "# build-ready: Every hour at :00", `trigger = [` + "\n" + `    { cron = { schedule = "0 * * * *" } },` + "\n" + `  ]`},
+		"claude": {"loops/claude/routines.md", "on the cron schedule `0 * * * *` in the time zone Europe/London"},
+		"codex":  {"loops/codex/scheduled-tasks.md", "with the custom schedule RRULE:FREQ=HOURLY;BYMINUTE=0 in the time zone Europe/London"},
+	} {
+		code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", host, "--json")
+		var r loopsReport
+		if err := json.Unmarshal([]byte(out), &r); code != 0 || err != nil || len(r.Stale) != 0 {
+			t.Fatalf("install --loops --host %s: exit %d, stale %v: %s", host, code, r.Stale, errOut)
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, want[0]))
+		text := string(b)
+		if host == "amp" { // set_schedule's input: the prompt, the rule, and its label
+			var s struct {
+				Prompt   string `json:"prompt"`
+				Schedule string `json:"schedule"`
+				Label    string `json:"schedule_label"`
+			}
+			_ = json.Unmarshal(b, &s)
+			text = s.Prompt + "\n" + s.Schedule + "\n" + s.Label
+		}
+		for _, w := range append(want[1:], tickPrompt...) {
+			if !strings.Contains(text, w) {
+				t.Errorf("%s: %s does not say %q", host, want[0], w)
+			}
+		}
+		if strings.Contains(text, "build --next") {
+			t.Errorf("%s: %s still runs build --next", host, want[0])
+		}
+	}
+	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", BuildLoop+"=schedule s-1 on T-01a14215-c759-72bf-9a65-d2317a72a878"); code != 0 {
+		t.Fatalf("record: exit %d: %s", code, errOut)
+	}
+	_, out, _ := run(t, env, opts, "doctor", "--json")
+	var rep struct{ Results []doctor.Result }
+	_ = json.Unmarshal([]byte(out), &rep)
+	i := slices.IndexFunc(rep.Results, func(r doctor.Result) bool { return r.ID == "loops" })
+	if i < 0 || rep.Results[i].Status != doctor.Pass || !strings.HasPrefix(rep.Results[i].Detail, "1 active (0 in Actions), 0 stale, 0 missing, 0 double") ||
+		len(rep.Results[i].Lines) != 1 || !strings.HasPrefix(strings.Join(strings.Fields(rep.Results[i].Lines[0]), " "), "build-ready amp active") {
+		t.Fatalf("doctor's loops check: %+v", rep.Results)
 	}
 }
