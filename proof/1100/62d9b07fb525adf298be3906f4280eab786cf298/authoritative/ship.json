@@ -1,0 +1,50 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1100,
+  "pr": 1120,
+  "pr_head_sha": "62d9b07fb525adf298be3906f4280eab786cf298",
+  "merge_commit": "4f924f529da4ee7500d59253be063719f2fcd906",
+  "pack": "proof/1100/62d9b07fb525adf298be3906f4280eab786cf298/authoritative/pack.json",
+  "pack_landed": "artifact 12709379745 of run 40448344933 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/40448344933), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 40448344933,
+  "artifact": 12709379745,
+  "pack_sha256": "a9a0bdcc74577b85ba77440dc284607e7f3ef236304c124b22a1b5640ff69c09",
+  "human_pass": {
+    "kind": "proof",
+    "login": "rahulnakmol",
+    "commit": "62d9b07fb525adf298be3906f4280eab786cf298",
+    "note": "merged on proof (Decision #593): required checks build, generate-drift, lint, commits, security, docs, release-snapshot green, the pack verified with its floors holding, inspect at merge with review rung B, and nothing in the narrow set"
+  },
+  "proof": {
+    "rung": "B",
+    "required_checks": [
+      "build",
+      "generate-drift",
+      "lint",
+      "commits",
+      "security",
+      "docs",
+      "release-snapshot"
+    ],
+    "policy": "2c6c6b0404810d5f49b15ede4788281d185c0212"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L02"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "autonomous": false,
+    "skipped": "the human pass is settled: proof"
+  },
+  "actions_segment": "actions/2026-10-27/cli-20261027T044656Z.jsonl",
+  "shipped_at": "2026-10-27T04:47:16Z",
+  "shipped_by": "rahulnakmol"
+}
