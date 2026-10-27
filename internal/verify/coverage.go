@@ -213,7 +213,9 @@ func (Coverage) Run(ctx context.Context, r *Run) (Result, error) {
 			return res, errors.New("no coverage command: set [verify.floors.coverage] command and report (lcov, Cobertura, or Go coverprofile)")
 		}
 		report = r.tempFile("cover.out")
-		cmd = []string{"go", "test", "-json", "-covermode=set", "-coverpkg=./...", "-coverprofile=" + report, "./..."}
+		// On a 2-core host internal/cli runs close to go test's 10-minute
+		// default timeout, whose panic fails the package with no test named.
+		cmd = []string{"go", "test", "-json", "-timeout", "30m", "-covermode=set", "-coverpkg=./...", "-coverprofile=" + report, "./..."}
 	} else if report != "" && !filepath.IsAbs(report) {
 		report = filepath.Join(r.Root, report)
 	}
@@ -273,16 +275,59 @@ func tail(b []byte) string {
 	return s
 }
 
-// failedTests lists the failing tests of a go test -json stream, else stderr.
+// failedTests names what failed in a go test -json stream: the failing
+// tests, then each package that failed with no failing test (a timeout, a
+// build error, a panic outside a test) and why; else stderr.
 func failedTests(stdout, stderr []byte) []byte {
-	var names []string
-	for _, ev := range testEvents(stdout) {
+	evs := testEvents(stdout)
+	var names, msg []string
+	testFailed := map[string]bool{}
+	for _, ev := range evs {
 		if ev.Action == "fail" && ev.Test != "" {
 			names = append(names, ev.Package+" "+ev.Test)
+			testFailed[ev.Package] = true
 		}
 	}
-	if len(names) == 0 {
+	if len(names) > 0 {
+		msg = append(msg, "failing tests: "+strings.Join(names, ", "))
+	}
+	for _, ev := range evs {
+		if ev.Action == "fail" && ev.Test == "" && !testFailed[ev.Package] {
+			msg = append(msg, "package "+ev.Package+" failed outside a test: "+packageFailure(evs, ev))
+		}
+	}
+	if len(msg) == 0 {
 		return stderr
 	}
-	return []byte("failing tests: " + strings.Join(names, ", "))
+	return []byte(strings.Join(msg, "; "))
+}
+
+// packageFailure is why package fail failed: its last build output lines;
+// else its first panic with the lines after it (a timeout lists the running
+// tests there, though go test -json files the panic under one of them),
+// then the package's last line.
+func packageFailure(evs []TestEvent, fail TestEvent) string {
+	var build, pkg, panicked []string
+	for _, ev := range evs {
+		line := strings.TrimSpace(ev.Output)
+		switch {
+		case line == "":
+		case ev.Action == "build-output" && fail.FailedBuild != "" && ev.ImportPath == fail.FailedBuild:
+			build = append(build, line)
+		case ev.Action != "output" || ev.Package != fail.Package:
+		case len(panicked) > 0 && len(panicked) < 4:
+			panicked = append(panicked, line)
+		case len(panicked) == 0 && strings.HasPrefix(line, "panic: "):
+			panicked = append(panicked, line)
+		case ev.Test == "":
+			pkg = append(pkg, line)
+		}
+	}
+	if len(build) > 0 {
+		return strings.Join(build[max(0, len(build)-5):], " / ")
+	}
+	if len(pkg) > 0 {
+		panicked = append(panicked, pkg[len(pkg)-1])
+	}
+	return strings.Join(panicked, " / ")
 }

@@ -154,6 +154,61 @@ func TestCoverageFloorBoundary(t *testing.T) {
 	}
 }
 
+// The default coverage command gives go test 30 minutes, not its 10-minute
+// default, which a large package can pass on a slow host.
+func TestCoverageDefaultCommandTimeout(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"go.mod": "module example.com/m\n\ngo 1.22\n", "main.go": "package main\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	bin, argv := t.TempDir(), filepath.Join(t.TempDir(), "argv")
+	script := `#!/bin/sh
+[ "$1" = env ] && { echo go1.25.0; exit 0; }
+echo "$@" > '` + argv + `'
+for a in "$@"; do case "$a" in -coverprofile=*) printf 'mode: set\nexample.com/m/main.go:3.13,3.14 0 1\n' > "${a#-coverprofile=}";; esac; done
+`
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shim(t, bin, "go")
+	r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if c := Execute(context.Background(), r, []Floor{Coverage{}}).Checks[0]; c.Result != proof.Pass {
+		t.Fatalf("%+v", c)
+	}
+	b, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := string(b); !strings.Contains(args, "-coverpkg=./...") || !strings.Contains(args, "-timeout 30m") {
+		t.Fatalf("go %s", b)
+	}
+}
+
+// A package that fails outside a test (a timeout, a build error) is named
+// with its cause; before, the detail named no test and stderr was empty.
+func TestCoverageNamesAPackageThatFailsOutsideATest(t *testing.T) {
+	mod := "module example.com/m\n\ngo 1.22\n"
+	root, base, head := repo(t, map[string]string{"go.mod": mod, "ok/ok.go": "package ok\n"}, map[string]string{
+		"ok/ok.go":          "package ok\n\nfunc F() int { return 1 }\n",
+		"bad/bad_test.go":   "package bad\n\nimport \"testing\"\n\nfunc TestBad(t *testing.T) { t.Fatal(\"no\") }\n",
+		"slow/slow_test.go": "package slow\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestSlow(t *testing.T) { time.Sleep(time.Minute) }\n",
+		"broken/broken.go":  "package broken\n\nvar X = nope\n",
+	})
+	r := newRun(t, root, base, head, os.Getenv("PATH"))
+	r.Floors.Coverage.Command = []string{"go", "test", "-json", "-timeout", "1s", "-coverprofile=cov.out", "./..."}
+	r.Floors.Coverage.Report = "cov.out"
+	c := Execute(context.Background(), r, []Floor{Coverage{}}).Checks[0]
+	for _, want := range []string{
+		"failing tests: example.com/m/bad TestBad;",
+		"package example.com/m/broken failed outside a test: ", "undefined: nope",
+		"package example.com/m/slow failed outside a test: panic: test timed out after 1s",
+	} {
+		if !strings.Contains(c.Detail, want) {
+			t.Errorf("detail lacks %q: %s", want, c.Detail)
+		}
+	}
+	if c.Result != proof.Fail || strings.Contains(c.Detail, "package example.com/m/bad failed") {
+		t.Fatalf("%+v", c)
+	}
+}
+
 func TestParseDiff(t *testing.T) {
 	d := ParseDiff([]byte("diff --git a/x.go b/x.go\n--- a/x.go\n+++ b/x.go\n@@ -3,0 +4,2 @@\n+a\n+b\n@@ -10 +12 @@\n-c\n+d\n" +
 		"diff --git a/gone.go b/gone.go\n--- a/gone.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-x\n-y\n" +
