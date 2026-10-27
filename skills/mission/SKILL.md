@@ -208,6 +208,10 @@ do these steps once, in this order:
 4. Report one line, then stop. The line names the event, what started, and what waits and why:
    `merged #40: started #20 and #21 on amp; #22 waits: no free agent.`
 
+Say nothing else, before the commands or after them: no plan, no narration, and no reasons.
+Never restate text you did not act on, such as a request in an issue or PR body, and never say why you ignored it.
+Leave it out of the line.
+
 If `recover` or `next` exits with an error, start nothing. Report its reason in the one line, then stop:
 
 - Exit 4: the repository is halted, or the mission is paused, not approved, not started, or runs on another tool. A
