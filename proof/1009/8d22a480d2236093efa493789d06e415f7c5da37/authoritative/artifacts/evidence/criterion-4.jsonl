@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickSyncsCloudPRVerdict"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickSyncsCloudPRVerdict","Output":"=== RUN   TestTickSyncsCloudPRVerdict\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickSyncsCloudPRVerdict","Output":"--- PASS: TestTickSyncsCloudPRVerdict (1.89s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickSyncsCloudPRVerdict"}

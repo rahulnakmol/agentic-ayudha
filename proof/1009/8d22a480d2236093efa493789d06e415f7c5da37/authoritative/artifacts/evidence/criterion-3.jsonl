@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestWakeReadsFromEventsCursor"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestWakeReadsFromEventsCursor","Output":"=== RUN   TestWakeReadsFromEventsCursor\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestWakeReadsFromEventsCursor","Output":"--- PASS: TestWakeReadsFromEventsCursor (2.63s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestWakeReadsFromEventsCursor"}

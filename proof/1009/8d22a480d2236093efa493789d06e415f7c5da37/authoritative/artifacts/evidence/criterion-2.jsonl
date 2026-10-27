@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickWakesOnlyMissedKanha"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickWakesOnlyMissedKanha","Output":"=== RUN   TestTickWakesOnlyMissedKanha\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickWakesOnlyMissedKanha","Output":"--- PASS: TestTickWakesOnlyMissedKanha (4.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestTickWakesOnlyMissedKanha"}

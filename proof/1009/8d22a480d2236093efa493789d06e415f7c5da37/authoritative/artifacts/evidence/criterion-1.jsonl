@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestBuildReadyHourlyCronUTC"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestBuildReadyHourlyCronUTC","Output":"=== RUN   TestBuildReadyHourlyCronUTC\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestBuildReadyHourlyCronUTC","Output":"--- PASS: TestBuildReadyHourlyCronUTC (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestBuildReadyHourlyCronUTC"}

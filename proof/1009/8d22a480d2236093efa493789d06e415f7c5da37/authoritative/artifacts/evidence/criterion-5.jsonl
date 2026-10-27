@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsWritesHourlyTick"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsWritesHourlyTick","Output":"=== RUN   TestInstallLoopsWritesHourlyTick\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsWritesHourlyTick","Output":"--- PASS: TestInstallLoopsWritesHourlyTick (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInstallLoopsWritesHourlyTick"}
