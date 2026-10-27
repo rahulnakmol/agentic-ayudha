@@ -105,7 +105,7 @@ func TestBuildStopTellsKanha(t *testing.T) {
 func TestFailedStartReleasesClaimAndTells(t *testing.T) {
 	m := newMissionWorld(t)
 	tell := m.ampMission(889, 32)
-	if code, out, errOut := m.next(889); code != 0 || out != "start #32\n" {
+	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #32\n" {
 		t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
 	}
 	exec := m.opts.DelegateExec
@@ -144,7 +144,7 @@ func TestFailedStartReleasesClaimAndTells(t *testing.T) {
 		t.Fatalf("delegate/32/state.json Kanha events: %q", got)
 	}
 	// The slot is free: the list marks #32 start again, and claims one slot for it.
-	if code, out, errOut := m.next(889); code != 0 || out != "start #32\n" {
+	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #32\n" {
 		t.Fatalf("mission next after the failed start: exit %d: %q%s", code, out, errOut)
 	}
 	// A slot that cannot be released is said plainly, and the Kanha is not told it is free.
@@ -189,7 +189,7 @@ func TestAnsweredAskKeepsSlotAndTells(t *testing.T) {
 		t.Fatalf("the claim of #33 is not live: %v", got)
 	}
 	// #33 still holds the mission's one agent: #34 waits.
-	if code, out, errOut := m.next(889); code != 0 || out != wait34 {
+	if code, out, errOut := m.next(889); code != 0 || workLines(out) != wait34 {
 		t.Fatalf("mission next after the answer: exit %d: %q%s", code, out, errOut)
 	}
 }

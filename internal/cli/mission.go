@@ -101,6 +101,11 @@ type MissionPlan struct {
 	Controls []MissionControl `json:"controls"`
 	// GateFixes are the fix PRs of failed gate checks (Story #1001).
 	GateFixes []GateFix `json:"gate_fixes,omitempty"`
+	// EventsCursor is the newest event the Kanha has acted on (Story #1009, J4 rule 1): each wake reads every event
+	// after it, not a fixed window. Unset, it is StartedAt.
+	EventsCursor string `json:"events_cursor,omitempty"`
+	// Wakes are the safety tick's newest wakes of the Kanha, at most keptWakes (Story #1009).
+	Wakes []MissionWake `json:"wakes,omitempty"`
 }
 
 // MissionStopped is one story or Bug a person stopped, and why.
@@ -640,8 +645,8 @@ func readMission(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *r
 	var appr *ready.Approval
 	for path, v := range map[string]any{MissionPlanPath(f): &plan, ready.ApprovalPath(f): &appr} {
 		b, err := t.File(ctx, path)
-		if err != nil {
-			return nil, nil, "", Wrap(ExitExternal, ignoreMissing(err))
+		if err = ignoreMissing(err); err != nil {
+			return nil, nil, "", Wrap(ExitExternal, err)
 		}
 		if b != nil && json.Unmarshal(b, v) != nil {
 			return nil, nil, "", Errorf(ExitExternal, "ledger %s: not a record aayu wrote for #%d", path, f)
@@ -671,20 +676,26 @@ type MissionStartReport struct {
 
 func runMission(ctx context.Context, e *Env, in Values) error {
 	f := issueNumber(in.String("feature"))
-	switch in.String("action") {
-	case "start":
+	switch action := in.String("action"); {
+	case action == "tick" && f != 0:
+		return Errorf(ExitUsage, "mission tick: it ticks every started mission; give no Feature")
+	case action == "tick":
+		return missionTick(ctx, e)
+	case f == 0:
+		return Errorf(ExitUsage, "mission %s: name the Feature", action)
+	case action == "start":
 		return missionStart(ctx, e, f, strings.TrimSpace(in.String("reason")))
-	case "extend":
+	case action == "extend":
 		return missionExtend(ctx, e, f, strings.TrimSpace(in.String("reason")), 0)
-	case "next":
+	case action == "next":
 		return missionNext(ctx, e, f)
-	case "stop":
+	case action == "stop":
 		return missionStop(ctx, e, f, in)
-	case "resume":
+	case action == "resume":
 		return missionResume(ctx, e, f, in)
-	case "gate":
+	case action == "gate":
 		return missionGate(ctx, e, f, in)
-	case "budget":
+	case action == "budget":
 		return missionBudget(ctx, e, f, in)
 	}
 	return missionShow(ctx, e, f)
@@ -959,7 +970,17 @@ func startable(ctx context.Context, w *ledger.Writer, f int) (*MissionPlan, *rea
 	return plan, appr, tip, nil
 }
 
-func missionJSON(p *MissionPlan) string { b, _ := json.Marshal(p); return string(b) }
+// missionJSON is the plan as a person saw it: the Kanha's events cursor and
+// the tick's wakes move while a mission runs, and change nothing they decide.
+func missionJSON(p *MissionPlan) string {
+	if p != nil {
+		c := *p
+		c.EventsCursor, c.Wakes = "", nil
+		p = &c
+	}
+	b, _ := json.Marshal(p)
+	return string(b)
+}
 
 // MissionShowReport is what `aayu mission show <f>` reports. Each number
 // carries its source.

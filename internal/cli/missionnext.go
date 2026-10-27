@@ -39,6 +39,8 @@ type WorkList struct {
 	Schema string         `json:"schema"`
 	Scope  WorkScope      `json:"scope"`
 	Items  []WorkListItem `json:"items"`
+	// Events are the mission's events since the events_cursor of its plan (Story #1009): a late wake reads them all.
+	Events []MissionEvent `json:"events,omitempty"`
 	note   string         // text only: why nothing is listed
 }
 
@@ -124,11 +126,24 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity); err != nil {
 		return err
 	}
-	list := WorkList{Schema: WorkSchema, Scope: WorkScope{Kind: "feature", ID: strconv.Itoa(f)}, Items: []WorkListItem{}}
 	subs, err := featureItems(ctx, c, repo, f, "story", "bug") // in sub-issue order: the slice order
 	if err != nil {
 		return err
 	}
+	list := WorkList{Schema: WorkSchema, Scope: WorkScope{Kind: "feature", ID: strconv.Itoa(f)}, Items: []WorkListItem{}}
+	if err := e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, true); err != nil {
+		return err
+	}
+	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun()) // after the list and its claims: the cursor moves only now
+	return emitWorkList(e, list)
+}
+
+// workList fills list: what of the mission starts now and why the rest
+// waits, from its stories and Bugs as they are now (subs) and its clocks.
+// With claim, each start is claimed on the ledger; without, the list only
+// previews the starts.
+func (e *Env) workList(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval,
+	subs []*gh.Issue, clocks []MissionClock, list *WorkList, claim bool) error {
 	release, err := e.tatkalRelease(ctx, f)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -137,19 +152,19 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	switch {
 	case release == 0 && missionDone(plan, subs):
 		list.note = fmt.Sprintf("The mission of #%d is done: nothing starts. A new Bug of #%d starts from its Release's Tatkal mission.", f, f)
-		return emitWorkList(e, list)
+		return nil
 	case release != 0:
 		if extra, err = tatkalBugs(ctx, c, w, repo, f, release); err != nil {
 			return err
 		}
 	}
-	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, list, clocks)
+	return e.listNext(ctx, c, w, repo, f, plan, appr, subs, extra, list, clocks, claim)
 }
 
-// listNext classifies the mission's open stories and Bugs, sorts them, and
-// claims each start.
+// listNext classifies the mission's open stories and Bugs, sorts them, and,
+// with claim, claims each start.
 func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval,
-	subs, extra []*gh.Issue, list WorkList, clocks []MissionClock) error {
+	subs, extra []*gh.Issue, list *WorkList, clocks []MissionClock, claim bool) error {
 	now := e.Now()
 	owner, name, _ := github.SplitRepo(repo)
 	busy := map[int]bool{}
@@ -281,9 +296,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = "no free agent"
 			continue
 		}
-		// A dry run writes no claim line: it previews the start as admitted.
+		// A dry run, or a list that does not claim, writes no claim line: it previews the start as admitted.
 		lost := 0
-		if !c.DryRun() {
+		if claim && !c.DryRun() {
 			if _, lost, err = e.claimSlot(ctx, w, MissionClaimsPath(f), fmt.Sprintf("missions: claim of #%d in the mission of #%d", en.n, f), en.n, busy, agents, nil); err != nil {
 				return err
 			}
@@ -308,7 +323,7 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	if len(list.Items) == 0 {
 		list.note = fmt.Sprintf("Nothing to list: every open story and Bug of #%d runs, or none is open.", f)
 	}
-	return emitWorkList(e, list)
+	return nil
 }
 
 // dependsOnWord finds the link kind in any case, at offsets into the line itself.
@@ -375,6 +390,9 @@ func emitWorkList(e *Env, list WorkList) error {
 		}
 		if list.note != "" {
 			fmt.Fprintln(w, list.note)
+		}
+		for _, ev := range list.Events {
+			fmt.Fprintf(w, "event #%d at %s: %s\n", ev.Story, ev.At, ev.Event)
 		}
 		return nil
 	})

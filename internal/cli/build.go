@@ -266,6 +266,17 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err := tatkalHold(ctx, c, lw, repo, n); err != nil {
 			return err
 		}
+		// The safety tick only syncs (Story #1009): a delegation that ended or moved since it was listed is not
+		// handed off afresh, so the tick never starts a story.
+		if in.Bool("sync-only") {
+			var ds delegate.State
+			if _, err := readLedgerJSON(ctx, lw, delegate.LedgerPath(n), &ds); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			if ds.Receiver != in.String("delegate") || slices.Contains([]string{dlgMerged, dlgFailed, dlgCapped}, ds.Status) {
+				return Errorf(ExitBlocked, "build #%d: nothing to sync: its delegation is %s on %s; a sync never hands a story off", n, orDefault(ds.Status, "not started"), orDefault(ds.Receiver, "no receiver"))
+			}
+		}
 	}
 	why, err := e.notReady(ctx, c, repo, n, chk, labels)
 	if err != nil {
@@ -379,7 +390,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	var dlg *delegation
 	if in.String("delegate") != "" {
 		var done bool
-		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err == nil {
+		dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels)
+		if err == nil && in.Bool("sync-only") && dlg.fresh {
+			// The receiver changed, to the tool of the mission the story is now in: a fresh hand-off, which a sync never makes.
+			return Errorf(ExitBlocked, "build #%d: nothing to sync: its mission runs on %s, and the delegation is on %s; a sync never hands a story off", n, dlg.receiver, dlg.state.Receiver)
+		}
+		if err == nil {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
 		}
 		if err != nil && starts && !c.DryRun() {

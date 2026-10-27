@@ -1,0 +1,21 @@
+# Which tests prove Story #1009's Completion Goal.
+
+[[criterion]]
+id = 1 # loops/build-ready.toml: cron = "0 * * * *"; loops.UTCCrons gives one UTC cron for Europe/London in summer and in winter
+tests = ["internal/loops:TestBuildReadyHourlyCronUTC"]
+
+[[criterion]]
+id = 2 # a tick: #889's Kanha has a free agent, a runnable story, and no tell since the last tick; #870's (here #874's) was told 20 minutes ago: only #889's is told, once
+tests = ["internal/cli:TestTickWakesOnlyMissedKanha"]
+
+[[criterion]]
+id = 3 # the Kanha of #889 wakes 3 hours late: it reads every event since events_cursor, misses none, and moves the cursor only after it acted
+tests = ["internal/cli:TestWakeReadsFromEventsCursor"]
+
+[[criterion]]
+id = 4 # a Codex receiver's PR has a new inspect verdict on its head: the tick runs aayu build <n> --delegate codex once; it sends the findings, or lists the PR for ship at merge-ready
+tests = ["internal/cli:TestTickSyncsCloudPRVerdict"]
+
+[[criterion]]
+id = 5 # aayu install --loops: each host's loop file has the hourly schedule and the tick prompt, and aayu doctor reports no drift
+tests = ["internal/cli:TestInstallLoopsWritesHourlyTick"]
