@@ -104,6 +104,9 @@ func (e *Env) delegateExec() delegate.Exec {
 			cmd.Stdin = strings.NewReader(stdin)
 		}
 		out, err := cmd.CombinedOutput()
+		if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil {
+			err = nil // it exited 0, and only a child it left keeps the output open
+		}
 		if err != nil {
 			return string(out), fmt.Errorf("%s: %w: %s", name, err, clipText(actions.RedactString(string(out)), 400))
 		}

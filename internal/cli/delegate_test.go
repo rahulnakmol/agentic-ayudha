@@ -761,4 +761,10 @@ func TestReceiverCLIWaitIsBounded(t *testing.T) {
 	if took := time.Since(start); err == nil || took > 5*time.Second {
 		t.Fatalf("a killed CLI with a child holding its output: err %v after %s", err, took)
 	}
+	// A CLI that exits 0 and leaves a child holding its output succeeded, with what it wrote.
+	start = time.Now()
+	out, err := (&Env{}).delegateExec()(context.Background(), "", nil, "", "sh", "-c", "sleep 20 & echo started")
+	if took := time.Since(start); err != nil || strings.TrimSpace(out) != "started" || took > 5*time.Second {
+		t.Fatalf("a CLI that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
+	}
 }
