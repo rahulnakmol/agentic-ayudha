@@ -823,6 +823,21 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 			t.Errorf("%s with %s failing: exit %d, commits %s → %s: %s%s", c.args[0], c.fail, code, commits, m.commits(), out, errOut)
 		}
 	}
+	// A person stops #87 while the code of its retry waits: the retry runs nothing.
+	m.device("rahulnakmol")
+	m.edit(func() {
+		m.g.Device.OnPoll = func(int) {
+			m.setPlan(889, func(p *MissionPlan) {
+				p.Stopped = append(p.Stopped, MissionStopped{Number: 87, Reason: "wrong fix", By: "rahulnakmol"})
+			})
+		}
+	})
+	code, out, errOut = run(t, m.person, m.opts, "mission", "retry", "889", "--story", "87", "--repo", "o/r")
+	if p, _ := m.plan(889); code != ExitBlocked || !strings.Contains(errOut, "#87 was stopped while the code waited (wrong fix): resume it first. Nothing changed.") ||
+		slices.ContainsFunc(p.Controls, func(c MissionControl) bool { return c.Action == "retry" && c.Story == 87 }) || p.stateOf(87) != nil {
+		t.Fatalf("retry of #87 that a person stopped meanwhile: exit %d: %s%s", code, out, errOut)
+	}
+	commits = m.commits()
 	// The [budget] breaker's pause stops recover before it reads anything.
 	pause := (&Env{Options: Options{Dir: m.dir}}).PauseFile()
 	if err := os.MkdirAll(filepath.Dir(pause), 0o755); err != nil {

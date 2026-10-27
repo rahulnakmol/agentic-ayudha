@@ -842,6 +842,17 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	if st.Status != was.Status || st.PR != was.PR || st.Task != was.Task {
 		return Errorf(ExitBlocked, "#%d changed while the code waited (now %s): another run acted on it, so the retry starts nothing. Nothing changed.", story, st.Status)
 	}
+	// A person who paused the mission or stopped the story while the code waited wins too.
+	now, _, _, err := readMission(ctx, w, f)
+	if err != nil {
+		return err
+	}
+	switch {
+	case now.Pause != nil:
+		return WithNext(Errorf(ExitBlocked, "The mission of #%d was paused while the code waited (%s): resume it first. Nothing changed.", f, now.Pause.Reason), fmt.Sprintf("aayu mission resume %d", f))
+	case now.stopped(story) != nil:
+		return WithNext(Errorf(ExitBlocked, "#%d was stopped while the code waited (%s): resume it first. Nothing changed.", story, now.stopped(story).Reason), fmt.Sprintf("aayu mission resume %d --story %d", f, story))
+	}
 	if st.Status == dlgFailed {
 		r.counted(story, st)
 	}
