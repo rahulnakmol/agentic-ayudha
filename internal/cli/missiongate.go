@@ -29,6 +29,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -857,6 +858,82 @@ func findFix(plan *MissionPlan, m, check, sha string) *GateFix {
 		}
 	}
 	return nil
+}
+
+// listedGateFix is the gate_fixes entry of Feature f's mission plan that
+// names PR n, nil when no entry names it, and whether f's approved record on
+// the ledger is still the one the entry was made under (Bug #1100). Only the
+// plan on the ledger counts: a PR body can claim any check. It fails closed:
+// a plan it cannot read names no fix, and a record it cannot read is not current.
+func listedGateFix(ctx context.Context, t *ledger.Tree, f, n int) (fix *GateFix, current bool) {
+	var plan MissionPlan
+	if b, err := t.File(ctx, MissionPlanPath(f)); err != nil || json.Unmarshal(b, &plan) != nil || plan.Schema != MissionPlanSchema || plan.Feature != f {
+		return nil, false
+	}
+	i := slices.IndexFunc(plan.GateFixes, func(g GateFix) bool { return g.PR == n })
+	if i < 0 {
+		return nil, false
+	}
+	fix = &plan.GateFixes[i]
+	record, err := t.File(ctx, ready.ApprovalPath(f))
+	sum := sha256.Sum256(record)
+	return fix, err == nil && fix.Approval.Record == ready.ApprovalPath(f) && fix.Approval.SHA256 == hex.EncodeToString(sum[:])
+}
+
+// staleGateFix is the merge gate's problem with a gate fix entry made under
+// an earlier approval of Feature f.
+func staleGateFix(fx *GateFix, f int) string {
+	return fmt.Sprintf("the gate fix entry of #%d was made under an earlier approval of #%d", fx.PR, f)
+}
+
+// judgeGateFix is the merge gate's check of listed gate fix fx of Feature f
+// at r's head (Bug #1100): the entry must rest on f's approved record as it
+// is now, and the verify check it fixes must pass at the head. A required
+// CI job or an eval the gate cannot run: it names it, and ship's required
+// checks decide. note says what passed or what decides.
+func judgeGateFix(ctx context.Context, r *verify.Run, f int, fx *GateFix, current bool) (problems []string, note string) {
+	if !current {
+		problems = append(problems, staleGateFix(fx, f))
+	}
+	what := fmt.Sprintf("#%d fixes %s in %s of #%d", fx.PR, fx.Check, fx.Milestone, f)
+	ref, ok := strings.CutPrefix(fx.Check, "verify:")
+	if !ok {
+		if c, isEval := strings.CutPrefix(fx.Check, "eval:"); isEval { // no required check runs an eval on a PR
+			return problems, fmt.Sprintf("%s: the merge gate does not run the eval %s (%s), and no required check runs it; ship's required checks decide, and the milestone gate judges the eval again on the dev tip after the merge", what, c, evalsWorkflow)
+		}
+		return problems, fmt.Sprintf("%s: the merge gate does not run the required check %s; ship's required checks decide", what, strings.TrimPrefix(fx.Check, "check:"))
+	}
+	one := *r
+	one.Checks, one.Work = ref, filepath.Join(r.Work, "gate-fix")
+	rep := verify.Execute(ctx, &one, []verify.Floor{verify.Behaviour{}})
+	var ran struct {
+		Checks []verify.CheckResult `json:"checks"`
+	}
+	for _, a := range rep.Artifacts {
+		if a.Path == "reports/behaviour.json" {
+			_ = json.Unmarshal(a.Data, &ran)
+		}
+	}
+	switch c := rep.Checks[0]; {
+	case gateFixPassed(ref, ran.Checks):
+		note = fmt.Sprintf("%s, and that check passes at %s", what, short(r.Head))
+	case c.Result == proof.Fail:
+		problems = append(problems, fmt.Sprintf("%s, and that check still fails at %s", what, short(r.Head)))
+	default:
+		problems = append(problems, fmt.Sprintf("%s, and that check did not run at %s: %s", what, short(r.Head), c.Detail))
+	}
+	return problems, note
+}
+
+// gateFixPassed says whether behaviour results show that the check a gate
+// fix names (a feature's check, a feature, or all) ran, and that every
+// check passed. The floor passes an unreachable check, which proves nothing,
+// and a result for another check proves nothing about this one.
+func gateFixPassed(ref string, results []verify.CheckResult) bool {
+	named := slices.ContainsFunc(results, func(x verify.CheckResult) bool {
+		return ref == verify.SelectAll || x.Ref == ref || strings.HasPrefix(x.Ref, ref+".")
+	})
+	return named && !slices.ContainsFunc(results, func(x verify.CheckResult) bool { return x.Status != verify.CheckPassed })
 }
 
 // gateFixItems lists the fix of each failed check of each milestone's last

@@ -83,6 +83,11 @@ type VerifyResult struct {
 	// ScreenshotReview is the advisory model look at the run's screenshots.
 	// It is never a floor: Hold and the merge gate ignore it.
 	ScreenshotReview *ScreenshotReview `json:"screenshot_review,omitempty"`
+	// GateFix is the gate_fixes entry of the mission plan that names this PR,
+	// when the PR refers to a Feature (--ci, Bug #1100). The pack then rests on
+	// the approved record, and GateFixNote says how the gate judged its check.
+	GateFix     *GateFix `json:"gate_fix,omitempty"`
+	GateFixNote string   `json:"gate_fix_note,omitempty"`
 }
 
 // ScreenshotReview is verify's advisory judgement of its screenshots by the
@@ -319,6 +324,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 
 	var snap ready.LedgerSnapshot
+	fixCurrent := false // with res.GateFix: the Feature's approved record is the one its entry was made under
 	if res.Story > 0 {
 		if client == nil {
 			if _, tok, err = e.readClient(ctx); err != nil {
@@ -336,9 +342,16 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 				}
 				r.Criteria = snap.Criteria
 			}
+			// A Feature has no Completion Goal: a gate fix PR its mission plan
+			// lists rests on the approved record (Decision #974, Bug #1100).
+			if snap.CompletionGoalHash == "" && e.CI && res.PR > 0 {
+				if res.GateFix, fixCurrent = listedGateFix(ctx, t, res.Story, res.PR); res.GateFix != nil {
+					r.Criteria = nil
+				}
+			}
 			t.Close()
 		}
-		res.NoSnapshot = snap.CompletionGoalHash == ""
+		res.NoSnapshot = snap.CompletionGoalHash == "" && res.GateFix == nil
 	}
 
 	// Captures never run against production (WP4.5, V3): refuse before
@@ -441,9 +454,13 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		if host == "" {
 			host = "cli"
 		}
+		cg, spec := snap.CompletionGoalHash, ready.LedgerPath(res.Story)
+		if fx := res.GateFix; fx != nil { // ship checks a gate fix's pack against the entry's approved record
+			cg, spec = fx.Approval.SHA256, fx.Approval.Record
+		}
 		p := proof.Pack{Repo: repo, PR: res.PR, Seat: string(verbs.AINativeEngineer), Host: host, Identity: ident,
-			CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: e.Now().UTC().Format("2006-01-02T15:04:05Z"),
-			Links: proof.Links{Issue: fmt.Sprintf("%s#%d", repo, res.Story), ReadySnapshot: ready.LedgerPath(res.Story)}}
+			CompletionGoalHash: cg, CreatedAt: e.Now().UTC().Format("2006-01-02T15:04:05Z"),
+			Links: proof.Links{Issue: fmt.Sprintf("%s#%d", repo, res.Story), ReadySnapshot: spec}}
 		if res.PR > 0 {
 			p.Links.PR = fmt.Sprintf("%s#%d", repo, res.PR)
 		}
@@ -477,9 +494,14 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	// The merge gate (WP4.8): the pack must prove the PR's current head, the
 	// story must still match its Ready snapshot, and every criterion must have
-	// evidence from this run.
+	// evidence from this run. A listed gate fix must still rest on the
+	// approved record, and the check it fixes must pass (Bug #1100).
 	if e.CI && res.PR > 0 && res.Story > 0 {
 		res.Gate = e.gateProblems(ctx, repo, res, snap.CompletionGoalHash)
+		if res.GateFix != nil {
+			problems, note := judgeGateFix(ctx, r, res.Story, res.GateFix, fixCurrent)
+			res.Gate, res.GateFixNote = append(res.Gate, problems...), note
+		}
 	}
 	if err := e.Emit(res, func(w io.Writer) error { return renderVerify(w, res) }); err != nil {
 		return err
@@ -565,6 +587,9 @@ func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, s
 		out = append(out, "PR: "+err.Error())
 	} else if pr.GetHead().GetSHA() != res.Head {
 		out = append(out, fmt.Sprintf("pack.sha %s ≠ PR head %s (the PR moved; the gate re-runs on the new head)", short(res.Head), short(pr.GetHead().GetSHA())))
+	}
+	if res.GateFix != nil { // a gate fix has no Completion Goal of its own: judgeGateFix checks it
+		return out
 	}
 	now, _, err := (&ready.Ready{GH: c, Repo: repo, TechnicalOwner: e.technicalOwner()}).Check(ctx, res.Story)
 	switch {
@@ -664,6 +689,9 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 	}
 	for _, g := range res.Gate {
 		fmt.Fprintf(w, "  merge gate: %s\n", g)
+	}
+	if res.GateFixNote != "" {
+		fmt.Fprintf(w, "  gate fix: %s\n", res.GateFixNote)
 	}
 	if sr := res.ScreenshotReview; sr != nil {
 		if sr.Skipped != "" {

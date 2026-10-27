@@ -49,6 +49,13 @@ In CI, `verify` fails the job when a floor misses, and also when the pack does n
 story's Completion Goal hash no longer matches its Ready snapshot, a criterion has no evidence from this run, or the
 story has no Ready snapshot. A pull request that names no story passes with nothing to prove.
 
+A gate fix PR of a mission says `Refs #<feature>`, and a Feature has no Ready snapshot. The gate accepts it only when
+the mission plan's `gate_fixes` on the ledger lists it, and the entry's `approval.sha256` matches the Feature's approved
+record now. The pack then rests on that record. The gate runs the verify check the fix names at the head, and fails
+when it still fails. A required CI job or an eval the gate cannot run: it names it, and ship's required checks
+decide. No required check runs an eval on a PR, so the milestone gate judges the eval again on the dev tip after the
+merge. A PR that only says `Refs #<feature>` fails as before.
+
 When the story is a Bug, `verify --ci` also runs a **red-on-base** check: each test its evidence map names is run on
 the base commit, with the pull request's test files copied over, in the same sandbox. A test that fails on the base
 shows the fix; one that passes there does not. The check is advisory until the date in
@@ -431,8 +438,9 @@ fixed head, returned `merge`, and the spend covers both calls.
    and [internal/verify/netns_linux.go](../../internal/verify/netns_linux.go), `TestChildEnvironmentIsScrubbed`,
    `TestChildHasNoNetwork`, `TestChildLeavesNoProcesses`.
 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
-   Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
-   missing evidence, Completion Goal drift, and a pull request with no story.
+   A gate fix PR that the mission plan lists has no Completion Goal of its own: invariant 14 judges it. Enforced by
+   `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers missing
+   evidence, Completion Goal drift, and a pull request with no story.
 4. A review is different-family only when the reviewer's reported family is outside every family the builder may
    be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives the
    streak's autonomous pass; it merges on proof only where `[autonomy] proof_rungs` lists C. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
@@ -471,6 +479,12 @@ fixed head, returned `merge`, and the spend covers both calls.
     [internal/cli/inspect_app.go](../../internal/cli/inspect_app.go) and in
     [internal/cli/ship.go](../../internal/cli/ship.go), `TestInspectMergeBudgetDraft`, `TestShipOnProof`, and
     `TestDelegateCycleCapPages`.
+14. A PR that refers to a Feature passes the gate only when the mission plan's `gate_fixes` on the ledger lists it,
+    under the Feature's approved record as it is now. A `verify:` entry also needs its check to run and pass at the
+    head. A `check:` entry is decided by ship's required checks. No required check runs an `eval:` entry on a PR:
+    the milestone gate judges it again on the dev tip after the merge. Enforced by
+    `listedGateFix` and `judgeGateFix` in [internal/cli/missiongate.go](../../internal/cli/missiongate.go),
+    `TestMergeGateJudgesAListedGateFix`.
 
 ## Where it lives in the code
 
