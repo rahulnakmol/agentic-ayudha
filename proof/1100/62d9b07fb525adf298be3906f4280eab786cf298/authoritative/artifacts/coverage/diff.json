@@ -1,0 +1,9 @@
+{
+  "covered": 83,
+  "executable": 83,
+  "percent": 100,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {},
+  "format": "go coverprofile"
+}
