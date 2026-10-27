@@ -510,7 +510,6 @@ func TestLockSpansMissions(t *testing.T) {
 // mission next lists #20 by the usual rules again.
 func TestKeepTheEdit(t *testing.T) {
 	m := startedLock(t)
-	m.setPlan(889, func(p *MissionPlan) { p.Agents = 10 })
 	m.g.Mu.Lock()
 	edited := m.g.Issues[20].Body + "\nA person's note in the body."
 	m.g.Issues[20].Body, m.g.Issues[20].EditedBy = edited, "alice"
