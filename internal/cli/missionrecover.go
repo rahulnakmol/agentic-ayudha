@@ -225,19 +225,26 @@ func (e *Env) newRecovery(ctx context.Context, c *github.Client, w *ledger.Write
 	}
 	cm, lm := pol.Config.Mission, l.Config.Mission
 	r.most, r.backoff = min(lm.RetryMax, cm.RetryMax), time.Duration(max(lm.RetryBackoffMinutes, cm.RetryBackoffMinutes))*time.Minute
+	return r, r.readPRs(ctx)
+}
+
+// readPRs reads the open PRs, and the story each refers to.
+func (r *recovery) readPRs(ctx context.Context) error {
+	owner, name, _ := github.SplitRepo(r.repo)
 	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
-		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
+		return r.c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
 	})
 	if err != nil {
-		return nil, Wrap(ExitExternal, err)
+		return Wrap(ExitExternal, err)
 	}
+	r.prs, r.open = map[int]int{}, map[int]bool{}
 	for _, pr := range prs {
 		r.open[pr.GetNumber()] = true
 		if n := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()); n != 0 {
 			r.prs[n] = pr.GetNumber()
 		}
 	}
-	return r, nil
+	return nil
 }
 
 // openPR is story n's open PR: its delegation's, or one that refers to it.
@@ -874,6 +881,29 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 		return WithNext(Errorf(ExitBlocked, "The mission of #%d was paused while the code waited (%s): resume it first. Nothing changed.", f, now.Pause.Reason), fmt.Sprintf("aayu mission resume %d", f))
 	case now.stopped(story) != nil:
 		return WithNext(Errorf(ExitBlocked, "#%d was stopped while the code waited (%s): resume it first. Nothing changed.", story, now.stopped(story).Reason), fmt.Sprintf("aayu mission resume %d --story %d", f, story))
+	}
+	// The PRs and the host's tasks as they are now: a PR, or a task of a start
+	// that got no answer, owns the story, and a retry would start a second agent.
+	if err := r.readPRs(ctx); err != nil {
+		return err
+	}
+	if now := r.openPR(story, st); now != pr {
+		open := "no open PR"
+		if now != 0 {
+			open = fmt.Sprintf("PR #%d", now)
+		}
+		return Errorf(ExitBlocked, "#%d's PR changed while the code waited (now %s): run the retry again. Nothing changed.", story, open)
+	}
+	if _, lister := r.adapter(st.Receiver).(delegate.Lister); pr == 0 && st.Status == dlgMaybe && lister {
+		tasks, err := r.list(ctx, st.Receiver)
+		if err != nil {
+			return Errorf(ExitExternal, "#%d may have started on %s, and its task list cannot be read (%s): the retry starts nothing. Nothing changed.", story, delegate.Names[st.Receiver], unreadable(err))
+		}
+		if slices.ContainsFunc(tasks, func(t delegate.Task) bool {
+			return t.Status != delegate.TaskFailed && delegate.ForStory(t.Title, story)
+		}) {
+			return Errorf(ExitBlocked, "a %s task for #%d exists: #%d may run there, so the retry starts nothing. Nothing changed.", st.Receiver, story, story)
+		}
 	}
 	if st.Status == dlgFailed {
 		r.counted(story, st)

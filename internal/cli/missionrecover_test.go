@@ -209,19 +209,23 @@ func TestMissionRecoverReattachesKeepsRestarts(t *testing.T) {
 		t.Fatalf("a second wake with another run's claim: exit %d: %s%s", code, out, errOut)
 	}
 	// The ledger refuses the restart's claim line: recover says nothing restarted, and starts nothing.
-	refuseClaims(t, m.bare, true)
+	refuseLedger(t, m.bare, claimsPush)
 	code, out, errOut = m.recover(889, "")
-	refuseClaims(t, m.bare, false)
+	refuseLedger(t, m.bare, "")
 	if code != 0 || m.handoffs(60) != 0 || !strings.Contains(out, "#60  its Amp thread is archived with no PR; nothing restarted: ") {
 		t.Fatalf("recover when the ledger refuses the claim: exit %d, #60 hand-offs %d: %s%s", code, m.handoffs(60), out, errOut)
 	}
 }
 
-// refuseClaims makes the bare ledger remote refuse every push that changes a claims file, or accept them again.
-func refuseClaims(t *testing.T, bare string, on bool) {
+// claimsPush is a pre-receive test true for a push that changes a claims file.
+const claimsPush = `git diff --name-only "$old" "$new" | grep -q claims`
+
+// refuseLedger makes the bare ledger remote refuse every push for which the
+// shell test is true, or, with "", accept them all again.
+func refuseLedger(t *testing.T, bare, test string) {
 	t.Helper()
 	hook := filepath.Join(bare, "hooks", "pre-receive")
-	if !on {
+	if test == "" {
 		if err := os.Remove(hook); err != nil {
 			t.Fatal(err)
 		}
@@ -231,7 +235,7 @@ func refuseClaims(t *testing.T, bare string, on bool) {
 	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(hook, []byte("#!/bin/sh\nwhile read old new ref; do\n  if git diff --name-only \"$old\" \"$new\" | grep -q claims; then echo 'the ledger refuses this claim' >&2; exit 1; fi\ndone\n"), 0o755); err != nil {
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nwhile read old new ref; do\n  if "+test+"; then echo 'the ledger refuses this push' >&2; exit 1; fi\ndone\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -387,6 +391,11 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || !strings.Contains(out, "waits #64: maybe started") {
 		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
 	}
+	// A person's retry finds the task on the host too: it starts nothing.
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
+		!strings.Contains(errOut, "a codex task for #64 exists: #64 may run there, so the retry starts nothing.") || w.handoffs(64) != tries {
+		t.Fatalf("retry of #64 with its task on the host: exit %d, hand-offs %d → %d: %s", code, tries, w.handoffs(64), errOut)
+	}
 	// The next wake: no task for #64 that can still run on the host, and no PR on GitHub, so it starts again, once.
 	w.list = `{"tasks": [{"id": "task_e_old", "title": "# Delegated story #64: Item 64", "status": "error"}], "cursor": null}`
 	code, out, errOut = w.recover(889, "codex")
@@ -428,11 +437,46 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		t.Fatalf("#66 outside a mission: exit %d, %+v, labels %v: %s", code, w.state(66), w.g.LabelNames(66), errOut)
 	}
 	w.submit = nil
-	// A PR for the story counts as GitHub's answer: recover keeps it, and starts nothing.
+	// A PR opens while a person enters the code of a retry: the retry starts nothing.
 	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64", Status: dlgMaybe})
-	pr := w.g.AddPR("feat: item 64", "Refs #64", "rahulnakmol", "codex/item-64", strings.Repeat("b", 40), "dev")
+	w.device("rahulnakmol")
+	prc := make(chan *fake.PR, 1)
+	w.edit(func() {
+		w.g.Device.Pending = 1
+		w.g.Device.OnPoll = func(n int) {
+			if n == 1 { // the fake is locked here: the PR opens once this poll is answered
+				go func() {
+					prc <- w.g.AddPR("feat: item 64", "Refs #64", "rahulnakmol", "codex/item-64", strings.Repeat("b", 40), "dev")
+				}()
+			}
+		}
+	})
+	code, out, errOut = run(t, w.person, w.opts, "mission", "retry", "889", "--story", "64", "--repo", "o/r")
+	pr := <-prc
+	if code != ExitBlocked || !strings.Contains(errOut, fmt.Sprintf("#64's PR changed while the code waited (now PR #%d): run the retry again.", pr.Number)) || w.handoffs(64) != tries+2 {
+		t.Fatalf("retry of #64 whose PR opened meanwhile: exit %d, hand-offs %d: %s%s", code, w.handoffs(64), out, errOut)
+	}
+	// A PR for the story counts as GitHub's answer: recover keeps it, and starts nothing.
 	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, fmt.Sprintf("#64  kept on its PR #%d", pr.Number)) || w.handoffs(64) != tries+2 {
 		t.Fatalf("recover with #64's PR: %s", out)
+	}
+}
+
+// A start with no answer whose maybe-started record the ledger refuses fails
+// as a start: a record only in memory would hold the story with nothing to check it.
+func TestMissionMaybeStartNotSavedFailsTheStart(t *testing.T) {
+	w := newCodexWorld(t, 889, 67)
+	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #67\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	refuseLedger(t, w.bare, `git show "$new:delegate/67/state.json" 2>/dev/null | grep -q '"status": "maybe-started"'`)
+	code, out, errOut := run(t, w.agent, w.opts, "build", "67", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	refuseLedger(t, w.bare, "")
+	p, raw := w.plan(889)
+	if code == 0 || !strings.Contains(errOut, "the ledger refuses this push") || !slices.Contains(w.g.LabelNames(67), "status:ready") || w.claims(889)[67] != 0 ||
+		w.state(67).Status == dlgMaybe || p.stateOf(67) != nil {
+		t.Fatalf("a maybe start the ledger refused: exit %d, labels %v, claims %v, plan:\n%s\n%s%s", code, w.g.LabelNames(67), w.claims(889), raw, out, errOut)
 	}
 }
 
@@ -833,9 +877,9 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 		t.Fatalf("retry #87 --dry-run: exit %d: %s%s", code, out, errOut)
 	}
 	// The ledger refuses the retry's claim line: the retry fails, starts nothing, and records no attempt.
-	refuseClaims(t, m.bare, true)
+	refuseLedger(t, m.bare, claimsPush)
 	code, out, errOut = m.mission(m.person, "rahulnakmol", "retry", 889, "--story", "95")
-	refuseClaims(t, m.bare, false)
+	refuseLedger(t, m.bare, "")
 	if code != ExitExternal || m.handoffs(95) != 0 || m.commits() != commits {
 		t.Fatalf("retry when the ledger refuses the claim: exit %d, hand-offs %d: %s%s", code, m.handoffs(95), out, errOut)
 	}

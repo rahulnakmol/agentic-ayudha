@@ -534,7 +534,15 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
-			_ = e.saveDelegation(ctx, d)
+			if serr := e.saveDelegation(ctx, d); serr != nil {
+				// Only a maybe start on the ledger holds the story for recover; one only
+				// in memory would hold it with nothing to check it, so it fails as a start.
+				var saved delegate.State
+				if _, rerr := readLedgerJSON(ctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
+					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
+					return nil, true, serr
+				}
+			}
 			if !d.c.DryRun() {
 				if _, perr := writePlan(ctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
 					p.storyState(d.story).State = stateMaybe
