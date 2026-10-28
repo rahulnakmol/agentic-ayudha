@@ -455,7 +455,8 @@ func TestInboxNotReady(t *testing.T) {
 
 	// A read that fails says so and makes no card from half of it.
 	for _, path := range []string{"GET /repos/o/r/pulls/" + strconv.Itoa(a.Number), "GET /repos/o/r/commits/" + heads["a2"] + "/check-runs",
-		"GET /repos/o/r/commits/" + heads["a2"] + "/statuses", "GET /repos/o/r/rules/branches/dev", "GET /repos/o/r/branches/dev", "GET /repos/o/r/collaborators/o/permission"} {
+		"GET /repos/o/r/commits/" + heads["a2"] + "/statuses", "GET /repos/o/r/rules/branches/dev", "GET /repos/o/r/branches/dev", "GET /repos/o/r/collaborators/o/permission",
+		"GET /repos/o/r/actions/workflows/aayudha-merge-gate.yml/runs"} {
 		once, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
 		if err != nil {
 			t.Fatal(err)

@@ -256,6 +256,16 @@ func TestShipRefusals(t *testing.T) {
 			t.Errorf("ship when %s fails: %d %s", fail, code, out)
 		}
 	}
+	// The second read of the gate's runs is gateGreen's, for the suites its checks must come from.
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/actions/workflows/aayudha-merge-gate.yml/runs", 1
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitExternal || !strings.Contains(out, "500") {
+		t.Errorf("ship when the gate's suites cannot be read: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "", 0
+	g.Mu.Unlock()
 
 	// The gate's pack names another head than the run it came from.
 	gateRun(t, g, dir, prN, other, coverageHolds)
