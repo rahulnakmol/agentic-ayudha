@@ -307,8 +307,25 @@ func TestCodexCloud(t *testing.T) {
 	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "502") {
 		t.Fatalf("a page that fails: %v %+v", err, tasks)
 	}
-	pages["p3"] = `{"tasks": [], "cursor": "p3"}`
-	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "more than 50 pages") {
+	// A page with no tasks array is no list: an error object or null must not read as "no task for the story".
+	for _, page := range []string{`{}`, `{"tasks": null, "cursor": null}`, `{"error": "rate limited"}`} {
+		pages["p2"] = page
+		if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "not a task list") {
+			t.Fatalf("a page %s: %v %+v", page, err, tasks)
+		}
+	}
+	// A cursor that repeats fails at once, not after 50 pages.
+	pages["p2"], cursors = `{"tasks": [], "cursor": "p2"}`, nil
+	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "the cursor p2 repeats") || len(cursors) != 2 {
+		t.Fatalf("a cursor that repeats: %v %+v, cursors %q", err, tasks, cursors)
+	}
+	// A list that never ends, each cursor new, fails after 50 pages.
+	reads := 0
+	never := CodexCloud{EnvID: "env_123", Exec: func(context.Context, string, []string, string, string, ...string) (string, error) {
+		reads++
+		return fmt.Sprintf(`{"tasks": [], "cursor": "c%d"}`, reads), nil
+	}}
+	if tasks, err := never.List(ctx); err == nil || !strings.Contains(err.Error(), "more than 50 pages") || reads != 50 {
 		t.Fatalf("a list that never ends: %v %+v", err, tasks)
 	}
 	out["cloud list"] = "Error: 401 Unauthorized"

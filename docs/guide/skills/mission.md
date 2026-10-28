@@ -57,8 +57,9 @@ since the `events_cursor` in `missions/<feature>/plan.json`, so a Kanha that wak
 cursor moves only after the list and its claims are written.
 
 The hourly safety tick, `aayu mission tick`, catches a lost event. The `build-ready` loop runs it each hour, every
-day. It wakes a Kanha only when its mission has a free agent and a story that can start, and no event reached that
-Kanha in the last hour. Each wake is recorded in the plan, so a Kanha gets at most one wake a tick. A Kanha that
+day. It wakes a Kanha when its mission has a free agent and a story that can start, and no event reached that
+Kanha in the last hour. It also wakes it when a failed story's retry came due after the Kanha was last told, because
+only `aayu mission recover` runs a retry. Each wake is recorded in the plan, so a Kanha gets at most one wake a tick. A Kanha that
 runs on your machine is not woken: it reads its events at its own next check. The tick also syncs each open cloud
 pull request of Codex, Cursor, or Claude Code with `aayu build <n> --delegate <receiver>`, and the loop ships the
 ones at merge-ready with `aayu ship`. The tick never builds a story: each run is a paid agent turn, 24 a day.

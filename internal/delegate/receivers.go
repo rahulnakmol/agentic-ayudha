@@ -473,13 +473,14 @@ const codexListPages = 50
 // List reads the environment's cloud tasks (`codex cloud list --json`), page
 // by page until Codex returns no cursor: each task's ID, URL, title, and
 // status. A task on a later page still counts, so a list it cannot finish is
-// an error, never a short list (#1003: recover starts no second agent).
+// an error, never a short list (#1003: recover starts no second agent): a
+// page with no tasks array, a cursor that repeats, or too many pages.
 func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 	if c.EnvID == "" {
 		return nil, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
 	}
 	var tasks []Task
-	cursor := ""
+	cursor, seen := "", map[string]bool{}
 	for range codexListPages {
 		args := []string{"cloud", "list", "--env", c.EnvID, "--json", "--limit", "20"}
 		if cursor != "" {
@@ -490,13 +491,13 @@ func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 			return nil, fmt.Errorf("codex: %w", err)
 		}
 		var r struct {
-			Tasks  []struct{ ID, URL, Title, Status string } `json:"tasks"`
-			Cursor string                                    `json:"cursor"`
+			Tasks  *[]struct{ ID, URL, Title, Status string } `json:"tasks"`
+			Cursor string                                     `json:"cursor"`
 		}
-		if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil || r.Tasks == nil {
 			return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
 		}
-		for _, t := range r.Tasks {
+		for _, t := range *r.Tasks {
 			task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
 			switch {
 			case codexFailed.MatchString(t.Status):
@@ -506,10 +507,13 @@ func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 			}
 			tasks = append(tasks, task)
 		}
-		if r.Cursor == "" {
+		switch {
+		case r.Cursor == "":
 			return tasks, nil
+		case seen[r.Cursor]:
+			return nil, fmt.Errorf("codex: cloud list: the cursor %s repeats", clip(r.Cursor, 40))
 		}
-		cursor = r.Cursor
+		cursor, seen[r.Cursor] = r.Cursor, true
 	}
 	return nil, fmt.Errorf("codex: cloud list: more than %d pages of tasks", codexListPages)
 }
