@@ -260,7 +260,7 @@ State drives three limits:
   head gets no review request and no judged reply: the disposition is `step-back`, inspect exits 4, and the builder
   reconsiders the approach. A comment whose first line is `/aayu review again`, from a person with write or admin
   access to the repository, reopens review for three more rounds and re-runs the head's inspect job at once, with no
-  push; a bot's or a read-only account's does not (the reply job starts only for an owner, member, or collaborator, and aayu checks the author's access before it re-runs anything), and while the re-run reviews it the inbox lists the PR as not ready yet. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
+  push; a bot's or a read-only account's does not (the reply job starts only for an owner, member, or collaborator, and aayu checks the author's access before it re-runs anything), and while the re-run reviews it the inbox lists the PR as not ready yet. A reopen before the cap reopens nothing; the reply job answers it with a comment that says how many judged rounds remain in the window. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
   lists the earlier findings under "do not repeat". A reply that repeats an earlier P2 or P3 in the same file and
   class has it dropped as `repeat`; a repeated P0 or P1 still blocks but is not posted inline again. A finding that
   names a `class` lists every instance and asks for all of them to be fixed.
