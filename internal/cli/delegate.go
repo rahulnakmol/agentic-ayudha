@@ -530,21 +530,26 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 				return err
 			})
 		})
+		// A hand-off that failed or got no answer is recorded even when a person
+		// cancelled the command: the record is what recover reads, so it is
+		// written on a context of its own.
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
 		if err != nil && delegate.NoAnswer(err) && d.feature != 0 { // only a started mission's recover checks the host again
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
-			if serr := e.saveDelegation(ctx, d); serr != nil {
+			if serr := e.saveDelegation(rctx, d); serr != nil {
 				// Only a maybe start on the ledger holds the story for recover; one only
 				// in memory would hold it with nothing to check it, so it fails as a start.
 				var saved delegate.State
-				if _, rerr := readLedgerJSON(ctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
+				if _, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
 					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
 					return nil, true, serr
 				}
 			}
 			if !d.c.DryRun() {
-				if _, perr := writePlan(ctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
+				if _, perr := writePlan(rctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
 					p.storyState(d.story).State = stateMaybe
 					return nil
 				}); perr != nil {
@@ -556,7 +561,9 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		}
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
-			_ = e.saveDelegation(ctx, d)
+			if serr := e.saveDelegation(rctx, d); serr != nil {
+				return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v; and its failed record was not saved: %v", d.story, d.receiver, err, serr)
+			}
 			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err)
 		}
 		d.state.Task, d.state.TaskURL = task.ID, task.URL

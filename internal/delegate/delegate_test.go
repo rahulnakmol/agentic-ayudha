@@ -279,9 +279,32 @@ func TestCodexCloud(t *testing.T) {
 		{"id": "task_e_65", "title": "# Delegated story #65: Item", "status": "completed"}, {"id": "task_e_66", "title": "# Delegated story #640: Item", "status": "error"}], "cursor": null}`
 	tasks, err := c.List(ctx)
 	if err != nil || len(tasks) != 3 || !slices.Equal(calls[len(calls)-1].args, []string{"codex", "cloud", "list", "--env", "env_123", "--json", "--limit", "20"}) ||
-		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed || !ForStory(tasks[0].Title, 64) || ForStory(tasks[2].Title, 64) ||
-		ForStory("# Delegated story #65: Follow-up to #64", 64) || !ForStory("Delegated story #64: Item", 64) {
+		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed {
 		t.Fatalf("list: %v %+v", err, tasks)
+	}
+	// MayRun: only a task that can run and whose first heading names the story holds it; a running
+	// task whose title names no story could be any story's, so the list cannot rule one out.
+	listed := func(title, st string) Task { return Task{ID: "task_x", Title: title, Status: st} }
+	for _, tc := range []struct {
+		name  string
+		tasks []Task
+		n     int
+		runs  bool
+		clear bool
+	}{
+		{"its task runs", tasks, 64, true, true},
+		{"its task is done", tasks, 65, true, true},
+		{"only a failed task for #640", tasks, 640, false, true},
+		{"#64 is not #640's", tasks[:1], 640, false, true},
+		{"a follow-up that names #64 is #65's", []Task{listed("# Delegated story #65: Follow-up to #64", TaskWorking)}, 64, false, true},
+		{"a heading without the #", []Task{listed("Delegated story #64: Item", TaskWorking)}, 64, true, true},
+		{"a running task that names no story", []Task{listed("Fix the cart total", TaskWorking)}, 64, false, false},
+		{"a done task that names no story", []Task{listed("Fix the cart total", TaskDone)}, 64, false, true},
+		{"its task beside an unclear one", []Task{listed("Fix the cart total", TaskWorking), listed("# Delegated story #64: Item", TaskWorking)}, 64, true, true},
+	} {
+		if runs, err := MayRun(tc.tasks, tc.n); runs != tc.runs || (err == nil) != tc.clear {
+			t.Errorf("MayRun %s: %v, %v", tc.name, runs, err)
+		}
 	}
 	// A story's task on a later page counts: List follows each cursor, and a page it cannot read fails the whole list.
 	pages := map[string]string{
@@ -314,6 +337,15 @@ func TestCodexCloud(t *testing.T) {
 			t.Fatalf("a page %s: %v %+v", page, err, tasks)
 		}
 	}
+	// A task aayu cannot match to a story or a delegation (no title, no id) fails the list.
+	for _, page := range []string{`{"tasks": [{"id": "task_e_64", "status": "running"}], "cursor": null}`,
+		`{"tasks": [{"id": "task_e_64", "title": "  ", "status": "running"}], "cursor": null}`,
+		`{"tasks": [{"title": "# Delegated story #64: Item", "status": "running"}], "cursor": null}`} {
+		pages["p2"] = page
+		if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "a task with no id or no title") {
+			t.Fatalf("a page %s: %v %+v", page, err, tasks)
+		}
+	}
 	// A cursor that repeats fails at once, not after 50 pages.
 	pages["p2"], cursors = `{"tasks": [], "cursor": "p2"}`, nil
 	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "the cursor p2 repeats") || len(cursors) != 2 {
@@ -341,8 +373,8 @@ func TestCodexCloud(t *testing.T) {
 	}
 }
 
-// NoAnswer is a request that got no answer before its timeout: a deadline,
-// or a network timeout. Any other error is a plain failure.
+// NoAnswer is a request whose answer aayu did not get: a deadline, a network
+// timeout, or a person's cancel while it waited. Any other error is a plain failure.
 func TestNoAnswer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { select {} }))
 	defer srv.CloseClientConnections()
@@ -354,7 +386,7 @@ func TestNoAnswer(t *testing.T) {
 	for _, c := range []struct {
 		err  error
 		want bool
-	}{{fmt.Errorf("codex: %w", context.DeadlineExceeded), true}, {err, true}, {errors.New("exit status 1: 503"), false}, {context.Canceled, false}} {
+	}{{fmt.Errorf("codex: %w", context.DeadlineExceeded), true}, {err, true}, {errors.New("exit status 1: 503"), false}, {fmt.Errorf("codex: %w", context.Canceled), true}} {
 		if NoAnswer(c.err) != c.want {
 			t.Errorf("NoAnswer(%v) = %t", c.err, !c.want)
 		}

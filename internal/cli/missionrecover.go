@@ -574,11 +574,15 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 		}
 		tasks, err := r.list(ctx, st.Receiver)
 		r.note(st.Receiver, err, false)
+		runs := false
+		if err == nil {
+			runs, err = delegate.MayRun(tasks, n) // a task aayu cannot match is no proof of "no task"
+		}
 		if err != nil {
 			r.touch(n).State = fmt.Sprintf("%s%s (%s)", stateUnreadable, src, unreadable(err))
 			return say("unreadable", r.next.stateOf(n).State+": aayu starts nothing for it")
 		}
-		if slices.ContainsFunc(tasks, func(t delegate.Task) bool { return t.Status != delegate.TaskFailed && delegate.ForStory(t.Title, n) }) { // a failed task runs no more
+		if runs {
 			r.touch(n).State = stateMaybe
 			return say("maybe started", fmt.Sprintf("maybe started: a %s task exists for #%d but no PR yet; aayu does not start it again", st.Receiver, n))
 		}
@@ -898,12 +902,14 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	}
 	if _, lister := r.adapter(st.Receiver).(delegate.Lister); pr == 0 && st.Status == dlgMaybe && lister {
 		tasks, err := r.list(ctx, st.Receiver)
+		runs := false
+		if err == nil {
+			runs, err = delegate.MayRun(tasks, story)
+		}
 		if err != nil {
 			return Errorf(ExitExternal, "#%d may have started on %s, and its task list cannot be read (%s): the retry starts nothing. Nothing changed.", story, delegate.Names[st.Receiver], unreadable(err))
 		}
-		if slices.ContainsFunc(tasks, func(t delegate.Task) bool {
-			return t.Status != delegate.TaskFailed && delegate.ForStory(t.Title, story)
-		}) {
+		if runs {
 			return Errorf(ExitBlocked, "a %s task for #%d exists: #%d may run there, so the retry starts nothing. Nothing changed.", st.Receiver, story, story)
 		}
 	}

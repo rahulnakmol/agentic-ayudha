@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,19 +65,40 @@ type Lister interface {
 	List(ctx context.Context) ([]Task, error)
 }
 
-// ForStory reports whether a listed task is story n's: the brief's first
-// line, "# Delegated story #64: …", is the task's title. Only that heading
-// counts, so a story #65 titled "Follow-up to #64" is not #64's task.
-func ForStory(title string, n int) bool {
-	return regexp.MustCompile(fmt.Sprintf(`(?i)\bstory #%d:`, n)).MatchString(title)
+// storyHeading is the brief's first line, "# Delegated story #64: …", which
+// is a listed task's title.
+var storyHeading = regexp.MustCompile(`(?i)\bstory #(\d+):`)
+
+// MayRun reports whether a listed task may hold story n's agent: one that can
+// still run (not failed) whose title's first heading names n, so a story #65
+// titled "Follow-up to #64" is not #64's. A task that runs and whose title
+// names no story could be n's, so the list cannot rule n out: that is an
+// error, never "no task" (Story #1003: recover starts no second agent).
+func MayRun(tasks []Task, n int) (bool, error) {
+	var unclear *Task
+	for i, t := range tasks {
+		m := storyHeading.FindStringSubmatch(t.Title)
+		switch {
+		case t.Status == TaskFailed:
+		case m != nil && m[1] == strconv.Itoa(n):
+			return true, nil
+		case m == nil && t.Status == TaskWorking && unclear == nil:
+			unclear = &tasks[i]
+		}
+	}
+	if unclear != nil {
+		return false, fmt.Errorf("task %s runs, and its title names no story: %q", unclear.ID, clip(unclear.Title, 60))
+	}
+	return false, nil
 }
 
-// NoAnswer reports whether err is a request the host did not answer before
-// its timeout: the request may have reached the host, so the work may have
-// started (Story #1003, "maybe started").
+// NoAnswer reports whether err is a request whose answer aayu did not get:
+// its timeout passed, or a person cancelled the command while it waited. The
+// request may have reached the host, so the work may have started (Story
+// #1003, "maybe started").
 func NoAnswer(err error) bool {
 	var ne net.Error
-	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &ne) && ne.Timeout()
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.As(err, &ne) && ne.Timeout()
 }
 
 // Adapter is one receiver's transport. Every adapter sends the same brief;
@@ -474,7 +496,8 @@ const codexListPages = 50
 // by page until Codex returns no cursor: each task's ID, URL, title, and
 // status. A task on a later page still counts, so a list it cannot finish is
 // an error, never a short list (#1003: recover starts no second agent): a
-// page with no tasks array, a cursor that repeats, or too many pages.
+// page with no tasks array, a task with no id or no title, a cursor that
+// repeats, or too many pages.
 func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 	if c.EnvID == "" {
 		return nil, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
@@ -498,6 +521,9 @@ func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 			return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
 		}
 		for _, t := range *r.Tasks {
+			if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Title) == "" { // aayu cannot match it to a story
+				return nil, fmt.Errorf("codex: cloud list: a task with no id or no title: %s", clip(fmt.Sprintf("%+v", t), 120))
+			}
 			task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
 			switch {
 			case codexFailed.MatchString(t.Status):

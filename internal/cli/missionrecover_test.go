@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -396,6 +397,15 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		!strings.Contains(errOut, "a codex task for #64 exists: #64 may run there, so the retry starts nothing.") || w.handoffs(64) != tries {
 		t.Fatalf("retry of #64 with its task on the host: exit %d, hand-offs %d → %d: %s", code, tries, w.handoffs(64), errOut)
 	}
+	// A running task whose title names no story could be #64's: recover and retry start nothing.
+	w.list = `{"tasks": [{"id": "task_e_x", "title": "Fix the cart total", "status": "running"}], "cursor": null}`
+	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "#64  unreadable: codex task list (task task_e_x runs, and its title names no story") || w.handoffs(64) != tries {
+		t.Fatalf("recover with an unclear task: hand-offs %d: %s", w.handoffs(64), out)
+	}
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitExternal || !strings.Contains(errOut, "its task list cannot be read") || w.handoffs(64) != tries {
+		t.Fatalf("retry with an unclear task: exit %d, hand-offs %d: %s", code, w.handoffs(64), errOut)
+	}
+	w.setPlan(889, func(p *MissionPlan) { p.stateOf(64).State = "maybe started" })
 	// The next wake: no task for #64 that can still run on the host, and no PR on GitHub, so it starts again, once.
 	w.list = `{"tasks": [{"id": "task_e_old", "title": "# Delegated story #64: Item 64", "status": "error"}], "cursor": null}`
 	code, out, errOut = w.recover(889, "codex")
@@ -477,6 +487,29 @@ func TestMissionMaybeStartNotSavedFailsTheStart(t *testing.T) {
 	if code == 0 || !strings.Contains(errOut, "the ledger refuses this push") || !slices.Contains(w.g.LabelNames(67), "status:ready") || w.claims(889)[67] != 0 ||
 		w.state(67).Status == dlgMaybe || p.stateOf(67) != nil {
 		t.Fatalf("a maybe start the ledger refused: exit %d, labels %v, claims %v, plan:\n%s\n%s%s", code, w.g.LabelNames(67), w.claims(889), raw, out, errOut)
+	}
+}
+
+// A person cancels the start of #68 after Codex may have taken it: the start
+// is maybe started, saved on the ledger though the command's context is
+// cancelled, so recover checks the host before it starts #68 again.
+func TestMissionCancelledStartIsMaybeStarted(t *testing.T) {
+	w := newCodexWorld(t, 889, 68)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.submit = func(string) error { cancel(); return fmt.Errorf("codex: %w", context.Canceled) }
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #68\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := runCtx(t, ctx, w.agent, w.opts, "", "build", "68", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	raw, gerr := exec.Command("git", "-C", w.bare, "show", "ledger:"+delegate.LedgerPath(68)).Output()
+	var st delegate.State
+	_ = json.Unmarshal(raw, &st)
+	if code == 0 || gerr != nil || st.Status != dlgMaybe || !strings.Contains(errOut, "aayu mission recover 889 checks Codex and GitHub for #68") {
+		t.Fatalf("a cancelled start: exit %d, saved %v %+v: %s%s", code, gerr, st, out, errOut)
+	}
+	if p, raw := w.plan(889); p.stateOf(68) == nil || p.stateOf(68).State != "maybe started" {
+		t.Fatalf("plan.json does not mark #68 maybe started:\n%s", raw)
 	}
 }
 
