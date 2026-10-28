@@ -1294,6 +1294,49 @@ func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
 	return ""
 }
 
+// Bug #1155: a person's dismissal clears a carried P1 on a PR with no Story,
+// as on a Story PR; with no dismissal, the carried P1 still blocks.
+func TestInspectDismissalWithoutStory(t *testing.T) {
+	for _, dismiss := range []bool{true, false} {
+		g, env, opts, _ := inspectFixture(t, defectDiff, "Refs #2")
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		const codex = "chatgpt-codex-connector[bot]"
+		h1, h2 := strings.Repeat("d", 40), strings.Repeat("e", 40)
+		pr := g.AddPR("chore: guard an empty total", "Guards Percent against an empty total.", "founder", "chore/percent-empty", h1, "dev")
+		g.Mu.Lock()
+		pr.Diff = defectDiff
+		g.Mu.Unlock()
+		addComment(g, pr.Number, codex, "Bot", replyWith(h1, "fix", appFinding("P1", "bug", "return float64(covered) / float64(total) * 100", "Percent divides by a zero total", "")))
+		code, res, errOut := inspectApp(t, env, opts, pr.Number, "--ci")
+		if code != ExitBlocked || len(res.Findings) != 1 || res.Findings[0].Severity != "P1" {
+			t.Fatalf("round 1: exit %d %+v %s", code, res.Findings, errOut)
+		}
+		if dismiss {
+			person := opts
+			person.IsTerminal = stdinTTY
+			if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(pr.Number), "--dismiss", res.Findings[0].ID, "--reason", "total is never 0 here", "--repo", "o/r"); code != 0 {
+				t.Fatalf("dismiss: %d %s", code, errOut)
+			}
+		}
+		// A new head with percent.go's patch unchanged: the P1 carries.
+		g.Mu.Lock()
+		pr.Head.SHA = h2
+		g.Mu.Unlock()
+		addComment(g, pr.Number, codex, "Bot", replyWith(h2, "merge"))
+		code, res, errOut = inspectApp(t, env, opts, pr.Number, "--ci")
+		dropped := slices.ContainsFunc(res.Dropped, func(d inspect.Dropped) bool { return d.Why == inspect.DropDismissed && d.Severity == "P1" })
+		if dismiss && (code != 0 || res.Disposition != inspect.Merge || len(res.Findings) != 0 || !dropped) {
+			t.Fatalf("dismissed carried P1: exit %d %s findings %+v dropped %+v %s", code, res.Disposition, res.Findings, res.Dropped, errOut)
+		}
+		if !dismiss && (code != ExitBlocked || res.Disposition != inspect.Fix || len(res.Findings) != 1 || !strings.Contains(res.Findings[0].Detail, "still open")) {
+			t.Fatalf("undismissed carried P1: exit %d %s findings %+v %s", code, res.Disposition, res.Findings, errOut)
+		}
+	}
+}
+
 // Every PR that is ready for review gets a review, not only a story's: a PR
 // without a story is judged on the reviewer's disposition and the sealed
 // coverage manifest, with no pack and no criteria; one without a reply fails
