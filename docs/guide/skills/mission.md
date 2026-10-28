@@ -36,8 +36,8 @@ starts after that issue closes. A target in another repository always counts as 
 |---|---|
 | Amp | The thread that drafted the Feature's intent gets the Kanha brief. When that thread is not known or is archived, a new thread starts. |
 | Claude Code | A new cloud session (`claude --cloud`). |
-| Cursor | One cloud agent. Each later event is a new run on that agent. |
-| Codex, Copilot, OpenCode | A local session on your machine. While the machine is off, the mission pauses at the next merge. |
+| Cursor with a Cursor API key | One cloud agent. Each later event is a new run on that agent. |
+| Codex, Copilot, OpenCode, and Cursor with no API key | A local session on your machine. While the machine is off, the mission pauses at the next merge. |
 
 The Kanha is the `parent` in `specs/<feature>/approved.json`. Each story thread names its Feature and its Kanha in
 `delegate/<n>/state.json`, and runs on the mission's tool, whatever `--delegate` asks. When the Kanha does not start,
