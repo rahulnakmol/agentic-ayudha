@@ -570,7 +570,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		d.event(now, dlgHandedOff, "brief sent")
 		report()
 		res.Next = fmt.Sprintf("%s works on #%d; `aayu build %d --delegate %s` again to sync: it finds the PR (Refs #%d) and forwards inspect's findings", d.receiver, d.story, d.story, d.receiver, d.story)
-		return nil, true, e.saveDelegation(ctx, d)
+		return nil, true, e.saveDelegation(rctx, d) // the host has the work: its record must land even after a cancel
 	}
 
 	// Sync.

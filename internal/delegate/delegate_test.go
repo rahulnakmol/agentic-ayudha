@@ -346,6 +346,11 @@ func TestCodexCloud(t *testing.T) {
 			t.Fatalf("a page %s: %v %+v", page, err, tasks)
 		}
 	}
+	// An ended task holds no story, so it needs no title: it does not fail the list.
+	pages["p2"] = `{"tasks": [{"id": "task_e_9", "status": "completed"}, {"id": "task_e_8", "title": "", "status": "error"}], "cursor": null}`
+	if tasks, err := paged.List(ctx); err != nil || len(tasks) != 3 {
+		t.Fatalf("ended tasks with no title: %v %+v", err, tasks)
+	}
 	// A cursor that repeats fails at once, not after 50 pages.
 	pages["p2"], cursors = `{"tasks": [], "cursor": "p2"}`, nil
 	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "the cursor p2 repeats") || len(cursors) != 2 {

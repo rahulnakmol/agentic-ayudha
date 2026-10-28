@@ -513,6 +513,25 @@ func TestMissionCancelledStartIsMaybeStarted(t *testing.T) {
 	}
 }
 
+// A person cancels the start of #69 just after Codex took it: the hand-off's
+// record lands anyway, so the next build syncs #69 and does not hand it off again.
+func TestMissionCancelAfterHandoffKeepsRecord(t *testing.T) {
+	w := newCodexWorld(t, 889, 69)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.submit = func(string) error { cancel(); return nil } // Codex answers, then the person's Ctrl-C lands
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #69\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := runCtx(t, ctx, w.agent, w.opts, "", "build", "69", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	raw, gerr := exec.Command("git", "-C", w.bare, "show", "ledger:"+delegate.LedgerPath(69)).Output()
+	var st delegate.State
+	_ = json.Unmarshal(raw, &st)
+	if gerr != nil || st.Status != dlgHandedOff || st.Task == "" || w.handoffs(69) != 1 {
+		t.Fatalf("a hand-off cancelled after Codex took it: exit %d, saved %v %+v, hand-offs %d: %s%s", code, gerr, st, w.handoffs(69), out, errOut)
+	}
+}
+
 // failingAmp fails each Amp hand-off of story n with a host error while fail is set.
 type failingAmp struct {
 	mu   sync.Mutex

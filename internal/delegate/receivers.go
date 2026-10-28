@@ -496,7 +496,7 @@ const codexListPages = 50
 // by page until Codex returns no cursor: each task's ID, URL, title, and
 // status. A task on a later page still counts, so a list it cannot finish is
 // an error, never a short list (#1003: recover starts no second agent): a
-// page with no tasks array, a task with no id or no title, a cursor that
+// page with no tasks array, a task with no id or a running one with no title, a cursor that
 // repeats, or too many pages.
 func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 	if c.EnvID == "" {
@@ -521,15 +521,17 @@ func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 			return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
 		}
 		for _, t := range *r.Tasks {
-			if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Title) == "" { // aayu cannot match it to a story
-				return nil, fmt.Errorf("codex: cloud list: a task with no id or no title: %s", clip(fmt.Sprintf("%+v", t), 120))
-			}
 			task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
 			switch {
 			case codexFailed.MatchString(t.Status):
 				task.Status = TaskFailed
 			case codexDone.MatchString(t.Status):
 				task.Status = TaskDone
+			}
+			// recover matches a running story by id, and a running task to its story by
+			// title; an ended task holds no story, so it needs no title.
+			if strings.TrimSpace(t.ID) == "" || task.Status == TaskWorking && strings.TrimSpace(t.Title) == "" {
+				return nil, fmt.Errorf("codex: cloud list: a task with no id or no title: %s", clip(fmt.Sprintf("%+v", t), 120))
 			}
 			tasks = append(tasks, task)
 		}
