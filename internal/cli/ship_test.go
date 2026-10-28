@@ -1514,9 +1514,9 @@ func TestShipMergeStandsWhenKanhaUnreached(t *testing.T) {
 			s.send = func() error { return fmt.Errorf("amp: exit status 1: thread %s not found", shipKanhaThread) }
 		}, 1, []string{unreached("#1", "amp: amp: exit status 1: thread "+shipKanhaThread+" not found")}},
 		{"the amp CLI stalls", amp, func(s *kanhaShip) {
-			was := kanhaSendTimeout
-			kanhaSendTimeout = 200 * time.Millisecond
-			t.Cleanup(func() { kanhaSendTimeout = was })
+			was := receiverTimeout
+			receiverTimeout = 200 * time.Millisecond
+			t.Cleanup(func() { receiverTimeout = was })
 			s.stall = true
 		}, 1, []string{unreached("#1", "amp: context deadline exceeded")}},
 		{"a local Kanha takes it at its next check", ready.Parent{Scope: "feature", Key: "1", Host: "codex", Session: "s-123", Mode: "local", Machine: "founder@laptop", StartedBy: "founder"}, nil, 0,

@@ -829,3 +829,33 @@ func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 		}
 	}
 }
+
+// Bug #1124, criterion 3: Start's hand-off of a new Amp Kanha never answers.
+// Start ends within the time limit, says why, and records no parent.
+func TestMissionStartWhenKanhaHandoffStalls(t *testing.T) {
+	m := newMissionWorld(t)
+	m.featureWith(889, 20)
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve: exit %d: %s%s", code, out, errOut)
+	}
+	m.setTool("amp")
+	was := receiverTimeout
+	receiverTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { receiverTimeout = was })
+	exec := m.opts.DelegateExec
+	m.opts.DelegateExec = func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
+		if name == "amp" && len(args) > 0 && args[0] == "-ox" {
+			<-ctx.Done() // a CLI that never answers, then killed, as exec.CommandContext reports it
+			return "", errors.New("amp: signal: killed: ")
+		}
+		return exec(ctx, dir, env, stdin, name, args...)
+	}
+	start := time.Now()
+	code, _, errOut := m.mission(m.person, "rahulnakmol", "start", 889)
+	if code != ExitExternal || time.Since(start) > 30*time.Second || !strings.Contains(errOut, "no Kanha of it is recorded: amp: context deadline exceeded") {
+		t.Fatalf("start with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
+	}
+	if strings.Contains(git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889)), `"parent"`) {
+		t.Fatal("a Kanha that never started is recorded as the parent")
+	}
+}

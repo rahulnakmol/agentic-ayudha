@@ -66,11 +66,18 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 		if tool == delegate.Amp {
 			if id, url := e.draftingThread(ctx, w, f, appr, ad.(delegate.AmpCLI)); id != "" {
 				how, p.Session, p.URL = "drafting", id, url
-				_, err := ad.FollowUp(ctx, delegate.State{Task: id, TaskURL: url}, brief)
-				return err
+				return withReceiverTimeout(ctx, tool, func(ctx context.Context) error {
+					_, err := ad.FollowUp(ctx, delegate.State{Task: id, TaskURL: url}, brief)
+					return err
+				})
 			}
 		}
-		t, err := ad.Handoff(ctx, delegate.Handoff{Repo: repo, Base: e.devBranch(), Scope: p.Scope, Key: p.Key, Title: fmt.Sprintf("Kanha of #%d", f), Brief: brief})
+		var t delegate.Task
+		err := withReceiverTimeout(ctx, tool, func(ctx context.Context) error {
+			var err error
+			t, err = ad.Handoff(ctx, delegate.Handoff{Repo: repo, Base: e.devBranch(), Scope: p.Scope, Key: p.Key, Title: fmt.Sprintf("Kanha of #%d", f), Brief: brief})
+			return err
+		})
 		if tool == delegate.Cursor { // the cloud agent, not its first run: each later event is a run on it
 			t.ID, _, _ = strings.Cut(t.ID, "/")
 		}
@@ -111,10 +118,24 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 // its next check (#1012), so the event is recorded and not sent. A send that
 // fails is recorded too, and returned. The note says what happened, for the
 // caller's output.
-// kanhaSendTimeout bounds one send to the Kanha: a receiver CLI that stalls
-// is a send that failed, never a ship or build that hangs after its work is
-// done (Bug #1118). A variable so tests can shorten it.
-var kanhaSendTimeout = 2 * time.Minute
+// receiverTimeout bounds one call to a receiver (a hand-off or a follow-up,
+// to a story's receiver or to the Kanha): a receiver CLI that stalls is a
+// call that failed, never a ship, build, or Start that hangs (Bugs #1118,
+// #1124). A variable so tests can shorten it.
+var receiverTimeout = 2 * time.Minute
+
+// withReceiverTimeout runs call with ctx bounded by receiverTimeout. When the
+// limit ends it, the error names the tool and the deadline: a CLI the limit
+// killed reports only how it exited.
+func withReceiverTimeout(ctx context.Context, tool string, call func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(ctx, receiverTimeout)
+	defer cancel()
+	err := call(ctx)
+	if err != nil && ctx.Err() != nil {
+		return fmt.Errorf("%s: %w", tool, ctx.Err())
+	}
+	return err
+}
 
 func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) string) (string, error) {
 	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
@@ -135,12 +156,10 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 		_, sendErr = log.Do(ctx, actions.Action{Kind: "mission.kanha.tell", Target: fmt.Sprintf("%s#%d@%s", repo, f, p.Host), Story: fmt.Sprintf("#%d", n),
 			Seat: "engineering-manager", Host: e.Host, Identity: c.Identity(), Payload: map[string]any{"session": p.Session, "event": text}},
 			func(ctx context.Context) (actions.Outcome, error) {
-				ctx, cancel := context.WithTimeout(ctx, kanhaSendTimeout)
-				defer cancel()
-				_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
-				if err != nil && ctx.Err() != nil { // a CLI the limit killed reports how it exited, not why
-					err = fmt.Errorf("%s: %w", p.Host, ctx.Err())
-				}
+				err := withReceiverTimeout(ctx, p.Host, func(ctx context.Context) error {
+					_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
+					return err
+				})
 				return actions.Outcome{Attempts: 1}, err
 			})
 		if sendErr != nil {

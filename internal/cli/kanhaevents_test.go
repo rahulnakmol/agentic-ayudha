@@ -268,9 +268,9 @@ func TestBuildStopWhenKanhaStalls(t *testing.T) {
 	m := newMissionWorld(t)
 	m.ampMission(889, 37)
 	m.kanhaBuild(37, "amp")
-	was := kanhaSendTimeout
-	kanhaSendTimeout = 200 * time.Millisecond
-	t.Cleanup(func() { kanhaSendTimeout = was })
+	was := receiverTimeout
+	receiverTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { receiverTimeout = was })
 	exec := m.opts.DelegateExec
 	m.opts.DelegateExec = func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
 		if name == "amp" && len(args) > 1 && args[1] == "continue" {

@@ -768,3 +768,80 @@ func TestReceiverCLIWaitIsBounded(t *testing.T) {
 		t.Fatalf("a CLI that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
 	}
 }
+
+// Bug #1124: a story's Amp receiver whose CLI never answers. stall names the
+// call that stalls ("-ox" for the hand-off, "continue" for a follow-up); the
+// other calls answer as the amp CLI does.
+func ampDelegate(t *testing.T, stall string) (*fake.GitHub, map[string]string, Options, string, string) {
+	t.Helper()
+	g, env, opts, dir, bare := delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) {
+		if name == "amp" {
+			return "/usr/bin/amp", nil
+		}
+		return "", os.ErrNotExist
+	}
+	env["AMP_API_KEY"] = "amp-key"
+	if err := (agentenv.Records{Cloud: map[string]agentenv.Record{agentenv.Amp: {Method: "cloud", Project: "o/r"}}}).Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	opts.DelegateExec = func(ctx context.Context, _ string, _ []string, _, name string, args ...string) (string, error) {
+		if name != "amp" || len(args) < 2 {
+			return "", errors.New("unexpected " + name + " " + strings.Join(args, " "))
+		}
+		if args[0] == stall || args[1] == stall {
+			<-ctx.Done() // a CLI that never answers, then killed, as exec.CommandContext reports it
+			return "", errors.New("amp: signal: killed: ")
+		}
+		if args[0] == "-ox" {
+			return "Thread: https://ampcode.com/threads/T-01a17000-0000-7000-8000-000000000002\n", nil
+		}
+		return "", nil
+	}
+	was := receiverTimeout
+	receiverTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { receiverTimeout = was })
+	return g, env, opts, dir, bare
+}
+
+// Bug #1124, criterion 2: the hand-off of story #2 to amp never answers:
+// build ends within the time limit, and the state records why.
+func TestDelegateHandoffStalls(t *testing.T) {
+	_, env, opts, _, bare := ampDelegate(t, "-ox")
+	start := time.Now()
+	code, _, errOut := delegateRun(t, env, opts, "--delegate", "amp")
+	if code != ExitExternal || time.Since(start) > 30*time.Second || !strings.Contains(errOut, "build #2 --delegate amp: amp: context deadline exceeded") {
+		t.Fatalf("hand-off with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
+	}
+	var st delegate.State
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &st); err != nil ||
+		!slices.ContainsFunc(st.Events, func(ev delegate.Event) bool { return ev.Detail == "hand-off failed: amp: context deadline exceeded" }) {
+		t.Fatalf("delegate/2/state.json: %v %+v", err, st.Events)
+	}
+}
+
+// Bug #1124, criterion 1: inspect asks for fixes on story #2's PR, and the
+// follow-up to amp never answers: build ends within the time limit and says why.
+func TestDelegateFollowUpStalls(t *testing.T) {
+	g, env, opts, dir, _ := ampDelegate(t, "continue")
+	if code, _, errOut := delegateRun(t, env, opts, "--delegate", "amp"); code != 0 {
+		t.Fatalf("hand-off: exit %d: %s", code, errOut)
+	}
+	head := strings.Repeat("c", 40)
+	pr := g.AddPR("feat: show empty list", "Refs #2\n\nAmp's change.", "founder", "story/2-show-empty-list", head, "dev")
+	g.Mu.Lock()
+	pr.Diff = defectDiff
+	g.Mu.Unlock()
+	if code, res, errOut := delegateRun(t, env, opts, "--delegate", "amp"); code != 0 || res.Delegation.PR != pr.Number {
+		t.Fatalf("PR found: exit %d %+v: %s", code, res, errOut)
+	}
+	writeInspectPack(t, dir, pr.Number, head, nil)
+	if code, _, errOut := inspectRun(t, env, opts, &models.Fake{Replies: []models.Response{inspectReply("fix", "P1")}}, pr.Number); code != ExitBlocked {
+		t.Fatalf("inspect: exit %d: %s", code, errOut)
+	}
+	start := time.Now()
+	code, _, errOut := delegateRun(t, env, opts, "--delegate", "amp")
+	if code != ExitExternal || time.Since(start) > 30*time.Second || !strings.Contains(errOut, "follow-up to amp: amp: context deadline exceeded") {
+		t.Fatalf("follow-up with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
+	}
+}
