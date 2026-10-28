@@ -1,0 +1,53 @@
+{
+  "covered": 371,
+  "executable": 404,
+  "percent": 91.83168316831683,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/kanhalocal.go": [
+      109,
+      110,
+      112,
+      162,
+      163,
+      179,
+      180,
+      205,
+      206,
+      208,
+      209,
+      214,
+      215,
+      222,
+      223,
+      235,
+      236,
+      290,
+      303,
+      304
+    ],
+    "internal/cli/mission.go": [
+      1113,
+      1114
+    ],
+    "internal/cli/missionnext.go": [
+      116
+    ],
+    "internal/cli/missionwake.go": [
+      55,
+      56,
+      59,
+      60,
+      74,
+      75,
+      116,
+      117
+    ],
+    "internal/delegate/local.go": [
+      75,
+      95
+    ]
+  },
+  "format": "go coverprofile"
+}

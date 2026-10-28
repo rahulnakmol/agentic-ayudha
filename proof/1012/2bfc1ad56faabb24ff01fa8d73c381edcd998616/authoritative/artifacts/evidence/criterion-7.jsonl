@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalKanhaPausesWhileMachineOff"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalKanhaPausesWhileMachineOff","Output":"=== RUN   TestLocalKanhaPausesWhileMachineOff\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalKanhaPausesWhileMachineOff","Output":"--- PASS: TestLocalKanhaPausesWhileMachineOff (3.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLocalKanhaPausesWhileMachineOff"}

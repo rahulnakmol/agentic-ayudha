@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotCloudNeverCoordinates"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotCloudNeverCoordinates","Output":"=== RUN   TestCopilotCloudNeverCoordinates\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotCloudNeverCoordinates","Output":"--- PASS: TestCopilotCloudNeverCoordinates (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotCloudNeverCoordinates"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartLocalKanha"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartLocalKanha","Output":"=== RUN   TestMissionStartLocalKanha\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartLocalKanha","Output":"--- PASS: TestMissionStartLocalKanha (4.81s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartLocalKanha"}

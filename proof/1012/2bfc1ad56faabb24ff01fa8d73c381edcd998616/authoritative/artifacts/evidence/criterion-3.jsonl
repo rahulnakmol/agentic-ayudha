@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotResumeArgs"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotResumeArgs","Output":"=== RUN   TestCopilotResumeArgs\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotResumeArgs","Output":"--- PASS: TestCopilotResumeArgs (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/delegate","Test":"TestCopilotResumeArgs"}
