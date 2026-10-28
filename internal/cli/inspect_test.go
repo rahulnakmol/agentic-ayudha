@@ -860,6 +860,16 @@ func TestInspectAnswersAnIdleReopen(t *testing.T) {
 		if st := inspect.ParseState(lastInspect(t, g, prN)); st.Reopened != "" || len(st.Rounds) != judged {
 			t.Fatalf("%d judged: the reopen changed the window: %+v", judged, st)
 		}
+		// inspect's P1 643c24c7e5 on #1145: an edit of an answered reopen
+		// gets no second answer. Both reopenedAt and idleReopens read a
+		// comment's Updated time, so an edit counts the same in both.
+		now = now.Add(time.Hour)
+		g.Mu.Lock()
+		reopen.UpdatedAt = now
+		g.Mu.Unlock()
+		if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || len(idleAnswers(g, prN)) != 1 {
+			t.Fatalf("%d judged, the reopen edited: exit %d, answers %q %s", judged, code, idleAnswers(g, prN), errOut)
+		}
 	}
 }
 

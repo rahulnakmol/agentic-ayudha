@@ -75,10 +75,11 @@ build plan, the constraints, the contributing guide, the ethos, the glossary, th
 policy. A rename counts by both its old and new paths.
 
 **`aayudha/inspect-reply`** (the `reply` job) runs on `issue_comment` and `pull_request_review` events, never on
-`pull_request_target`. It checks out the default branch, holds `actions: write` and read access, and runs
+`pull_request_target`. It checks out the default branch, holds `actions: write`, `pull-requests: write`, and read access, and runs
 `aayudha inspect "$PR" --ci`. When the chosen reviewer has replied for the head, usable or not, and the head's gate
 run has a green `aayudha/merge-gate` and a red `aayudha/inspect`, it re-runs that run's failed jobs, so the inspect
-check on the head commit itself carries the verdict. Any other comment changes nothing.
+check on the head commit itself carries the verdict. A person's reopen before the round cap gets one answer
+comment with the judged rounds left. Any other comment changes nothing.
 
 **`aayudha/pack`** checks out the base branch, downloads the `aayudha-pack` artifact, and runs `aayudha proof comment`
 with the workflow token and `pull-requests: write`. It verifies the pack against the pull request's current head and
