@@ -1469,6 +1469,8 @@ func (m *inboxModel) enter() tea.Cmd {
 	case c.Command == "open":
 		m.open(it.URL)
 		m.status = "Opened " + it.URL
+	case c.Command == inboxLeave: // nothing to write: the card stays
+		m.status = it.button(c) + ": nothing was written, and the card stays in the inbox."
 	case c.Ask != "":
 		m.ask = &inboxAsk{title: fmt.Sprintf("%s #%d: %s", it.kind().Word, it.Number, it.button(c)), lines: []string{inboxEffect(it, c)}, jobs: []inboxJob{{it: it, a: c}}, prompt: c.Ask}
 		m.status = "Nothing is written until you type what you checked and press Enter."
@@ -2216,7 +2218,15 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 		top = append(top, inboxBold.Render(l))
 	}
 	top = append(top, wrapTo(kind.Line, w)...) // what it means, in the text colour: it is read, not skimmed
-	var whyLines, writes, details []string     // the list's why-it-waits column, in full; a write that stopped; d's facts
+	// The card's own words, such as what a mission's start locks.
+	for _, l := range it.Lines {
+		if ansi.StringWidth(l) <= w { // it fits: it keeps its spacing, so Locked, Open, and Ends line up
+			top = append(top, l)
+			continue
+		}
+		top = append(top, wrapTo(l, w)...)
+	}
+	var whyLines, writes, details []string // the list's why-it-waits column, in full; a write that stopped; d's facts
 	switch {
 	case it.Next != "": // nothing for the person yet: why, and who acts, in the text colour
 		whyLines = append([]string{""}, m.wrap(fmt.Sprintf("#%d %s", it.Number, it.Why), w)...)

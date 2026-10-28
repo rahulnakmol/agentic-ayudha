@@ -43,24 +43,30 @@ func init() { register("inbox", runInbox) }
 
 // Inbox kinds, in the order the inbox shows them.
 const (
-	InboxDecision    = "decision"     // an open Decision waiting for acceptance (a provisional one to ratify or revert)
-	InboxScope       = "scope"        // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
-	InboxMission     = "mission"      // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
-	InboxReady       = "ready"        // an open Story PR that ship refused only for the human pass, its gate green
-	InboxNotReady    = "not-ready"    // a PR ship left Ready to ship that cannot ship now (a conflict, a check, new commits): nothing for a person yet (Story #796)
-	InboxHumanReview = "human-review" // a PR whose merge gate waits at the human rung for its head (Story #675)
-	InboxCapped      = "capped"       // a PR whose review stopped at the round cap (step-back), waiting for a person
-	InboxUnshipped   = "unshipped"    // a Story whose PR merged into dev without a ship record
-	InboxFixed       = "fixed"        // an open Bug whose fix merged into dev
-	InboxReplaced    = "replaced"     // an open Story or Bug that another issue replaces
-	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
-	InboxMissionTime = "mission-time" // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
+	InboxDecision    = "decision"      // an open Decision waiting for acceptance (a provisional one to ratify or revert)
+	InboxScope       = "scope"         // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
+	InboxMission     = "mission"       // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
+	InboxStart       = "mission-start" // a Feature approved to build whose mission a person may start, which locks its issues (Story #1013)
+	InboxLocked      = "locked"        // an issue whose body changed while a mission locks it: it waits until a person keeps the edit (Story #1013)
+	InboxReady       = "ready"         // an open Story PR that ship refused only for the human pass, its gate green
+	InboxNotReady    = "not-ready"     // a PR ship left Ready to ship that cannot ship now (a conflict, a check, new commits): nothing for a person yet (Story #796)
+	InboxHumanReview = "human-review"  // a PR whose merge gate waits at the human rung for its head (Story #675)
+	InboxCapped      = "capped"        // a PR whose review stopped at the round cap (step-back), waiting for a person
+	InboxUnshipped   = "unshipped"     // a Story whose PR merged into dev without a ship record
+	InboxFixed       = "fixed"         // an open Bug whose fix merged into dev
+	InboxReplaced    = "replaced"      // an open Story or Bug that another issue replaces
+	InboxAudit       = "audit"         // a PR ship merged with no person's pass, sampled for a person's look after merge
+	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
+
+// inboxLeave is a choice that writes nothing and leaves the card in the
+// inbox: a mission's Not now, or Leave the issue waiting.
+const inboxLeave = "leave"
 
 // inboxKind is one kind of item as every surface shows it: the terminal
 // inbox, --plain, --list, and the approval batch (Story #586). It is the one
@@ -106,6 +112,18 @@ var inboxKinds = map[string]inboxKind{
 			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours it starts no new story, " +
 			"and the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
 		Terms: []string{"Work item"}},
+	InboxStart: {Icon: "🔒", Word: "Mission start", Seat: verbs.EngineeringManager,
+		Line: "A Feature is approved to build; starting its mission locks its issues until the last milestone.",
+		Explain: "A mission builds a Feature's stories and Bugs with agents, in milestones. Starting it is your decision, through GitHub's " +
+			"device flow, and it makes the Feature, its stories, and its open Bugs read-only: each body and its effort:, risk:, and priority: " +
+			"labels. Comments and status: labels stay open. If you leave it, nothing starts and nothing is locked.",
+		Terms: []string{"Work item", "Ready"}},
+	InboxLocked: {Icon: "📝", Word: "Changed while locked", Seat: verbs.EngineeringManager,
+		Line: "A person changed a body that a running mission locks; that issue waits for you.",
+		Explain: "A running mission builds its stories from the bodies it locked at the start, so an agent never builds a spec that moved. " +
+			"aayu never changes a body back: it holds the issue and asks you. Keeping the edit makes the lock take the new body, and the " +
+			"mission plans the issue again from it. If you leave it, the issue waits until the mission ends.",
+		Terms: []string{"Work item", "Ready"}},
 	InboxReady: {Icon: "🚢", Word: "Ready to ship", Seat: verbs.EngineeringManager,
 		Line: "Finished work with every check green; it touches a sensitive area, so it merges when you say so.",
 		Explain: "Most agent pull requests merge into dev on their own once every check is green and the proof shows they do what they say. " +
@@ -223,6 +241,8 @@ type InboxItem struct {
 	Head        string        `json:"head,omitempty"`        // the PR's head commit the card was read at, which a ship or an approval acts on
 	BodyHash    string        `json:"body_hash,omitempty"`   // a Decision's body as read (workitems.BodyHash): accepting it accepts that text
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
+	Lines       []string      `json:"lines,omitempty"`       // the card's own words under its title: a mission start's lock (Story #1013)
+	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
@@ -260,6 +280,10 @@ func (it InboxItem) short() string {
 			return "fix over budget"
 		}
 		return "gate stopped"
+	case InboxStart:
+		return "a person starts it"
+	case InboxLocked:
+		return "changed while locked"
 	case InboxReady:
 		return "green; needs your pass"
 	case InboxNotReady:
@@ -400,6 +424,9 @@ type inboxSource struct {
 	// pendingAudits, when set, lists the PRs whose audit entry still waits
 	// on the ledger: a card for each, also when its label is gone (#664).
 	pendingAudits func(ctx context.Context) ([]int, error)
+	// missions, when set, reads the mission plans on the ledger: a card to
+	// start each startable one, and one for each locked body a person changed.
+	missions func(ctx context.Context) ([]missionFacts, error)
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -674,6 +701,13 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			continue
 		}
 		out = append(out, it)
+	}
+	if s.missions != nil {
+		ms, err := s.missions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s.lockItems(ms)...)
 	}
 	for _, p := range open {
 		done++
@@ -950,6 +984,14 @@ func inboxCounsel(it InboxItem) string {
 		return fmt.Sprintf("What this is really about: Feature #%d's mission reached a step that only a person takes. The evidence: %s; the facts "+
 			"are under d. The gate is a fixed set of checks, and no model judged it. Decision #915 gives this call to you, so I make no "+
 			"recommendation here. Each choice reads the mission plan again before it writes. You decide.", n, f.problem)
+	case InboxStart:
+		return fmt.Sprintf("What this is really about: fixing what the mission of #%d builds before any agent starts. The evidence: its mission "+
+			"plan and approval on the ledger, and the lines above. Starting locks %s until the last milestone; comments and status: labels stay "+
+			"open. Decision #974 gives this call to you, so I make no recommendation. Not now locks nothing, and this card stays.", n, f.problem)
+	case InboxLocked:
+		return fmt.Sprintf("What this is really about: a person changed #%d after the mission of #%d locked it, so no agent builds it from a spec "+
+			"that moved. The evidence: its body hash differs from the one the lock on the ledger holds. aayu did not change it back. Only a person "+
+			"keeps an edit, so I make no recommendation. Leaving it keeps #%d waiting until the mission ends.", n, it.Feature, n)
 	case InboxScope:
 		return fmt.Sprintf("Release #%d: %s. A baseline is the plan we measure every later change against, so accept only the plan you see on "+
 			"the Release. Past the budget, accept only if the Decision says why this change beats moving it to the next release. Slipping "+
@@ -1100,6 +1142,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	if was.Kind == InboxDecision && was.BodyHash != now.BodyHash { // its options, evaluation, or recommendation: the text the person accepts
 		out = append(out, "its text changed")
 	}
+	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
+		out = append(out, "its body changed again")
+	}
 	return out
 }
 
@@ -1180,7 +1225,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 				return nil, "", err
 			}
 			src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-			src.pendingAudits = e.pendingAudits
+			src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
 			return src, login, nil
 		})
 	}
@@ -1189,7 +1234,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	src.pendingAudits = e.pendingAudits
+	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1361,6 +1406,13 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			k := it.kind()
 			fmt.Fprintf(w, "\n[%d/%d] %s #%d: %s\n", pos, total, k.Word, it.Number, it.Title)
 			say("  ", k.Line)
+			for _, l := range it.Lines { // a line that fits keeps its spacing: Locked, Open, and Ends line up
+				if width == 0 || len(l)+2 <= width {
+					fmt.Fprintln(w, "  "+l)
+					continue
+				}
+				say("  ", l)
+			}
 			if it.OneWay {
 				say("  ", "One-way door: hard to undo, so your pick is asked again.")
 			}
@@ -1415,6 +1467,12 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 				default:
 					say("  ", hint)
 					continue
+				}
+				if pick.Command == inboxLeave { // nothing to write: the card stays for a later session
+					say("  ", it.button(*pick)+": nothing was written, and the card stays in the inbox.")
+					skipped++
+					handled++
+					return false, nil
 				}
 				if pick.Ask != "" {
 					say("  ", inboxEffect(it, *pick)+" "+pick.Ask+" One line; an empty line goes back.")
@@ -1594,7 +1652,7 @@ func (e *Env) listInbox(ctx context.Context) error {
 		id = l.Config.Identity
 	}
 	src := newInboxSource(c, repo, e.devBranch(), id)
-	src.pendingAudits = e.pendingAudits
+	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1622,6 +1680,9 @@ func (e *Env) listInbox(ctx context.Context) error {
 				card.WriteString("\n---\n")
 			}
 			fmt.Fprintf(&card, "\n**%s %s [#%d](%s): %s**  \n_%s_", k.Icon, k.Word, it.Number, it.URL, mdText(it.Title), k.Line)
+			for _, l := range it.Lines {
+				fmt.Fprintf(&card, "  \n%s", mdText(l))
+			}
 			if it.OneWay {
 				card.WriteString(" _One-way door._")
 			}
@@ -1705,6 +1766,10 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	case InboxMission: // the mission step reads the plan again and asks for the device code where a person must be present
 		return e.missionAct(ctx, it, a)
+	case InboxLocked: // keep the edit: a person's, through the device flow (Leave writes nothing and never gets here)
+		return e.keepEdit(ctx, c, repo, it)
+	case InboxStart: // Start reads the plan again, and asks for the device code: the lock is the person's to confirm.
+		return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(it.Number)})
 	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
 		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
 	case InboxReady:

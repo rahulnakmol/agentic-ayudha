@@ -743,6 +743,7 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 	var budget float64
 	var basis string
 	var effect []string
+	var locked []*gh.Issue // the issues the start locks, as the card names them
 	if kanhaOnly {
 		effect = []string{
 			fmt.Sprintf("Starts the Kanha of #%d's mission: @%s started the mission at %s on %s, and it has no Kanha", f, plan.StartedBy, plan.StartedAt, tool),
@@ -766,16 +767,18 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 			budget, card = est.HighUSD, "the top of the range"
 			basis = fmt.Sprintf("the top of %s's range %s–%s (estimate %s)", est.Source, ready.USD(est.LowUSD), ready.USD(est.HighUSD), ready.USD(est.USD))
 		}
-		agents, agentsSource, err := e.missionAgents(ctx, c, repo, f, appr.Agents)
+		agents, _, err := e.missionAgents(ctx, c, repo, f, appr.Agents)
 		if err != nil {
 			return err
 		}
-		effect = []string{
-			fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions)),
-			fmt.Sprintf("It runs in %s, the tool you set for this repository; up to %d stories at once (%s)", tool, agents, agentsSource),
-			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
-			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis),
+		if locked, err = readLocked(ctx, c, repo, plan); err != nil {
+			return err
 		}
+		effect = append([]string{fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions))},
+			startCard(plan, issueNumbers(locked), tool, agents)...)
+		effect = append(effect,
+			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
+			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis))
 		for _, m := range plan.Missions {
 			if m.Estimate != nil {
 				effect = append(effect, fmt.Sprintf("MISSION %d %s", m.Number, m.Estimate.Basis))
@@ -806,7 +809,16 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 	rep := MissionStartReport{Repo: repo, Feature: f, Effect: effect, Plan: again, LedgerPath: MissionPlanPath(f), DryRun: c.DryRun()}
 	at := e.Now().UTC().Format(time.RFC3339) // the one time of this start: the plan's and its Kanha's (Bug #1099)
 	if !kanhaOnly {
+		// The lock holds each body and label as it is once the person confirmed, on the issues the card named.
+		now, err := readLocked(ctx, c, repo, again)
+		if err != nil {
+			return err
+		}
+		if !slices.Equal(issueNumbers(now), issueNumbers(locked)) {
+			return Errorf(ExitBlocked, "The issues the start of #%d locks changed while the code was waiting: now %s. Nothing was started.", f, issueRefs(issueNumbers(now)))
+		}
 		again.StartedBy, again.StartedAt, again.Tool, again.Budget, again.BudgetBasis = p.Login, at, tool, budget, basis
+		again.Lock = newLock(p.Login, at, now)
 		again.ToolSource = fmt.Sprintf("the user config of @%s for %s", p.Login, repo)
 		again.Controls = append(again.Controls, MissionControl{Action: "start", By: p.Login, Tool: tool, At: at, Presence: p.Via, Override: override, Reason: reason})
 		if !rep.DryRun {

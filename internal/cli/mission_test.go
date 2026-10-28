@@ -387,7 +387,7 @@ func TestMissionStartWritesPlan(t *testing.T) {
 	// Start: the effect before the device code, then the starter, the tool, and the budget.
 	n = m.commits()
 	code, out, errOut = m.mission(m.person, "rahulnakmol", "start", 889)
-	if code != 0 || m.codes() != 1 || !strings.Contains(errOut, "It runs in cursor, the tool you set for this repository; up to 5 stories at once") ||
+	if code != 0 || m.codes() != 1 || !strings.Contains(errOut, "It runs in Cursor, the tool you set for this repository.\n") ||
 		strings.Index(errOut, "BUDGET $240") > strings.Index(errOut, "/login/device") {
 		t.Fatalf("mission start 889: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
 	}

@@ -10,15 +10,18 @@ import (
 )
 
 // newGitHub builds the run's GitHub client (WP2.3) for a token: every write
-// goes through the actions log, stamped with ident.
+// goes through the actions log, stamped with ident, and through the lock of
+// each running mission, which refuses a locked body or label before the
+// request leaves (Story #1013).
 func (e *Env) newGitHub(tok identity.Token, ident, capability string) (*github.Client, error) {
 	log, err := e.Actions()
 	if err != nil {
 		return nil, err
 	}
+	guard := &lockGuard{next: e.HTTP.Transport, locks: e.missionLocks(tok, ident)}
 	// The run's HTTP timeout bounds each GitHub request too (Bug #822): the
 	// client builds its own http.Client from the transport alone.
-	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, Timeout: e.HTTP.Timeout, WriteGap: e.GitHubGap, Writes: e.writes}
+	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: guard, Timeout: e.HTTP.Timeout, WriteGap: e.GitHubGap, Writes: e.writes}
 	if e.GitHubGap < 0 {
 		o.ServerRetries = -1 // tests without write gaps inject one-shot 5xx failures and want them seen
 	}
