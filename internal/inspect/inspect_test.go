@@ -1080,8 +1080,19 @@ func TestJudgeCacheFollowsTheReading(t *testing.T) {
 	}
 	major := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Title: "Guard an empty total.", Detail: "d", Confidence: 1}
 	found := AppReply{Reply: Reply{Disposition: Fix, Summary: "1 finding(s)", Findings: []Finding{major}}, Head: in.Head, Reviewed: reviewed, Source: src}
-	if res, _, _ := (Runner{}).Judge(context.Background(), in, st, found); res.Cached || res.Disposition != Fix {
-		t.Fatalf("the same post read with a P1: cached %t, %s", res.Cached, res.Disposition)
+	res, st, _ := Runner{}.Judge(context.Background(), in, st, found)
+	if res.Cached || res.Disposition != Fix || st.Cycles != 1 {
+		t.Fatalf("the same post read with a P1: cached %t, %s, %d cycles", res.Cached, res.Disposition, st.Cycles)
+	}
+	// CodeRabbit's Major at b40796b: another reading of the same head is not
+	// a second fix cycle; a fix on a new head is.
+	found.Findings = append(found.Findings, Finding{Severity: "P2", Category: "bug", File: "LAYERS.md", Title: "Name the layer.", Detail: "d", Confidence: 1})
+	if res, st, _ = (Runner{}).Judge(context.Background(), in, st, found); res.Disposition != Fix || st.Cycles != 1 {
+		t.Fatalf("a second reading of the head: %s, %d cycles", res.Disposition, st.Cycles)
+	}
+	in.Head, in.Diff = strings.Repeat("b", 40), strings.Replace(in.Diff, "return 0", "return -1", 1)
+	if _, st, _ = (Runner{}).Judge(context.Background(), in, st, found); st.Cycles != 2 {
+		t.Fatalf("a fix on a new head: %d cycles", st.Cycles)
 	}
 }
 

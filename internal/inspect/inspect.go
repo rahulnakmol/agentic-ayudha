@@ -822,7 +822,9 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	sortFindings(res.Findings)
 	Enforce(&res, in.Pack)
 	st.DiffHash, st.Hashes = res.DiffHash, append(slices.Clone(prev.Hashes), res.DiffHash)
-	if res.Disposition != Merge {
+	// A fix cycle is one per head: another reading of a head already judged
+	// fix (a later review post, a parser change) is not a new cycle.
+	if res.Disposition != Merge && (in.Head == "" || !slices.ContainsFunc(prev.Rounds, func(r Round) bool { return r.Head == in.Head && r.Disposition != Merge })) {
 		st.Cycles++
 	}
 	res.Cycle = st.Cycles
