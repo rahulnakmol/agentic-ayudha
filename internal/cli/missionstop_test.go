@@ -80,11 +80,17 @@ func newThreads(t *testing.T) *threads {
 	return w
 }
 
-// run is story n in progress, built by a thread of receiver (cloud) with task and url.
+// run is story n in progress, built by a thread of receiver (cloud) with task and url,
+// started an hour before the test clock: the mission's clock counts from it (Story #1015).
 func (m *missionWorld) run(n int, receiver, task, url string) {
 	m.t.Helper()
 	m.status(n, "in-progress", "")
-	st := delegate.State{Story: n, Receiver: receiver, Mode: "cloud", Task: task, TaskURL: url, Status: dlgWorking, StartedAt: "2026-10-26T09:00:00Z"}
+	now := time.Now
+	if m.opts.Now != nil {
+		now = m.opts.Now
+	}
+	st := delegate.State{Story: n, Receiver: receiver, Mode: "cloud", Task: task, TaskURL: url, Status: dlgWorking,
+		StartedAt: now().Add(-time.Hour).UTC().Format(time.RFC3339)}
 	b, _ := json.Marshal(st)
 	putLedger(m.t, m.bare, delegate.LedgerPath(n), string(b))
 }
@@ -292,8 +298,20 @@ func TestMissionStopLeavesOtherMissionsAndLoops(t *testing.T) {
 
 // Criterion 5: resume, after the presence check, clears the stop, continues
 // each stopped story thread, and starts stories up to the agents.
-func TestMissionResumeContinues(t *testing.T) {
-	w := newThreads(t)
+func TestMissionResumeContinues(t *testing.T) { missionResumeContinues(t, newThreads(t)) }
+
+// The two controls tests hold with the clock ten years past every fixed date in them.
+func TestMissionControlsOnALaterClock(t *testing.T) {
+	for name, test := range map[string]func(*testing.T, *threads){"resume": missionResumeContinues, "stop one": missionStopOneStoryOrBug} {
+		t.Run(name, func(t *testing.T) {
+			w := newThreads(t)
+			w.opts.Now = func() time.Time { return time.Now().AddDate(10, 0, 0) }
+			test(t, w)
+		})
+	}
+}
+
+func missionResumeContinues(t *testing.T, w *threads) {
 	w.startedMission(889, []int{20, 21, 22, 23})
 	commitOnDev(w.g, ".aayudha/config.toml", "[build]\nagents = 3\n") // the cap is dev's [build] agents (#1000), not the plan's record
 	w.run(20, "amp", "T-01a00000-0000-0000-0000-000000000020", "https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000020")
@@ -468,8 +486,9 @@ func TestMissionControlRefusedOrDryRun(t *testing.T) {
 // its subagents and stop; the story keeps its claim, its PR, and its slot,
 // and the rest of the mission runs on. A Bug stops the same way. Resume of
 // the story continues only its thread, and show no longer lists it stopped.
-func TestMissionStopOneStoryOrBug(t *testing.T) {
-	w := newThreads(t)
+func TestMissionStopOneStoryOrBug(t *testing.T) { missionStopOneStoryOrBug(t, newThreads(t)) }
+
+func missionStopOneStoryOrBug(t *testing.T, w *threads) {
 	w.startedMission(889, []int{858, 859, 860, 941}, 941)
 	commitOnDev(w.g, ".aayudha/config.toml", "[build]\nagents = 3\n")
 	w.setPlan(889, func(p *MissionPlan) { p.Budget = 1000 })

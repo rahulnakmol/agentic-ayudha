@@ -172,7 +172,8 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r":          map[string]any{"owner": map[string]any{"type": "Organization"}},
 			"/repos/o/r/rulesets": []any{},
 			"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}},
-			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
+			// A live lease: the lease check reads the system clock, not the probe's Now.
+			"/repos/o/r/issues/9/comments?per_page=100": []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=" + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + " -->"}},
 			"/repos/o/r/issues?state=open&labels=type:feedback&per_page=100": []any{map[string]any{"number": 5, "title": "Feedback: a",
 				"labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "fix:check"}}}},
 			"/orgs/o/installations?per_page=100":        map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
