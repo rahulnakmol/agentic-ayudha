@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1003,
+  "pr": 1102,
+  "pr_head_sha": "6fb398ade041f17317403097987bb1cde1924ed2",
+  "base_sha": "a3c43bf3f9f14eb4b737f4ba95e34e0910346212",
+  "seat": "ai-native-engineer",
+  "host": "cli",
+  "model": "claude-opus-5-5",
+  "identity": "ci",
+  "authority": {
+    "kind": "authoritative",
+    "workflow": ".github/workflows/aayudha-merge-gate.yml",
+    "run_id": 40685567997,
+    "writer": "rahulnakmol (aayu ship)"
+  },
+  "completion_goal_hash": "e2c7ed6843df11c2b6c433de5375f278feae180282d66e6c35809cc23a86819b",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "evidence": [
+        "evidence/criterion-1.jsonl"
+      ]
+    },
+    {
+      "id": 2,
+      "evidence": [
+        "evidence/criterion-2.jsonl"
+      ]
+    },
+    {
+      "id": 3,
+      "evidence": [
+        "evidence/criterion-3.jsonl"
+      ]
+    },
+    {
+      "id": 4,
+      "evidence": [
+        "evidence/criterion-4.jsonl"
+      ]
+    },
+    {
+      "id": 5,
+      "evidence": [
+        "evidence/criterion-5.jsonl"
+      ]
+    },
+    {
+      "id": 6,
+      "evidence": [
+        "evidence/criterion-6.jsonl"
+      ]
+    },
+    {
+      "id": 7,
+      "evidence": [
+        "evidence/criterion-7.jsonl"
+      ]
+    },
+    {
+      "id": 8,
+      "evidence": [
+        "evidence/criterion-8.jsonl"
+      ]
+    },
+    {
+      "id": 9,
+      "evidence": [
+        "evidence/criterion-9.jsonl"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "coverage/diff.json",
+      "kind": "metric",
+      "sha256": "ce3cf8ee1ef96f933d0d5c39a4197503dc12630250fd1e230a239ac21b9257bd",
+      "size": 1006,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-1.jsonl",
+      "kind": "api-trace",
+      "sha256": "e93e88842d8d841b3c6e74cdcf7f15bc3a00ccd05ecef8628126efc6407d9e74",
+      "size": 2145,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-2.jsonl",
+      "kind": "api-trace",
+      "sha256": "e6fb8fbe4dc9d31733bfcf47ecd96cfbaeafb05168465fe119339240fd237d6d",
+      "size": 2748,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-3.jsonl",
+      "kind": "api-trace",
+      "sha256": "1b7e535dd7709af5917c3d68b5b864ae5e6365be8287ca6701567f378c8e95e5",
+      "size": 1654,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-4.jsonl",
+      "kind": "api-trace",
+      "sha256": "d3bd6876b21c5582a56fa6034e370acfe71e61f2255d81814afd218261b28890",
+      "size": 681,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-5.jsonl",
+      "kind": "api-trace",
+      "sha256": "2a443f28904a1d0509a3b0f498cb999fb7042b928530e0b92c8c61a2f3d8ce74",
+      "size": 597,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-6.jsonl",
+      "kind": "api-trace",
+      "sha256": "e4d34015a014e612db62874f7dcce9bd48c5941ee33187936708daea1cc789e2",
+      "size": 549,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-7.jsonl",
+      "kind": "api-trace",
+      "sha256": "9db47efc98502d2684d6c6d3fd68ecc974d567e4814e5796ae8735613050721d",
+      "size": 663,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-8.jsonl",
+      "kind": "api-trace",
+      "sha256": "e38030f48a4c3855e66438e48104327ec6893cbb6b3cf21a853e3ac6d385c103",
+      "size": 639,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-9.jsonl",
+      "kind": "api-trace",
+      "sha256": "14871dd3aaea94e0194bef73ef41776aa0e9ebf3515a475ef41aa83f44827e27",
+      "size": 627,
+      "store": "git"
+    },
+    {
+      "path": "reports/feature-map.json",
+      "kind": "report",
+      "sha256": "6b5500eabbb9c93ba25481adf5cba66cc2524c1a8f7a90d55cacf311e5910f6b",
+      "size": 1014,
+      "store": "git"
+    },
+    {
+      "path": "reports/gitleaks.json",
+      "kind": "report",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3,
+      "store": "git"
+    },
+    {
+      "path": "reports/osv-scanner.json",
+      "kind": "report",
+      "sha256": "f5aad51596612fdc0d352296c3c0e561d182b49d0aff1680c1e738bb9ab3baf2",
+      "size": 10541,
+      "store": "git"
+    },
+    {
+      "path": "reports/semgrep.json",
+      "kind": "report",
+      "sha256": "8032f4ca3e7c1605b8361952d62844ff4abea55f0aa8f4b0bacf0c4554712a80",
+      "size": 53254,
+      "store": "git"
+    },
+    {
+      "path": "reports/zap.json",
+      "kind": "report",
+      "sha256": "4e6bc2c1ec9e5cfc8d93cbde5340ed28104a0e702b3c225a1b6b01f0d107ccb5",
+      "size": 8775,
+      "store": "git"
+    }
+  ],
+  "checks": [
+    {
+      "floor": "coverage",
+      "result": "pass",
+      "value": 91.9,
+      "threshold": 90,
+      "tool": "aayudha diff coverage (go test -coverprofile)",
+      "version": "go1.25.14",
+      "detail": "791 of 860 changed executable lines covered (go coverprofile)",
+      "network": "isolated"
+    },
+    {
+      "floor": "sast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "semgrep",
+      "version": "1.180.0",
+      "detail": "p/golang p/javascript p/typescript p/python p/kotlin p/ruby p/php p/swift p/github-actions: 0 critical, 0 high, 3 medium, 0 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "secrets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "detail": "0 findings",
+      "network": "isolated"
+    },
+    {
+      "floor": "deps",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "osv-scanner",
+      "version": "2.6.0",
+      "detail": "go.mod pnpm-lock.yaml: 0 critical, 0 high, 0 medium, 0 low (3 more not called, by osv-scanner's call analysis)",
+      "network": "allowed"
+    },
+    {
+      "floor": "a11y",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no screenshot or recording criteria"
+    },
+    {
+      "floor": "perf",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no screenshot or recording criteria"
+    },
+    {
+      "floor": "screen-reader",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no-L01"
+    },
+    {
+      "floor": "dast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "zap",
+      "version": "2.17.0",
+      "detail": "active scan (rules 40012, 40014, 40018, 90020) of the app verify started under docker: 0 critical, 0 high, 0 medium, 3 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "api",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no k6 script ([verify.floors.api] script)"
+    },
+    {
+      "floor": "mobile",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no ios or android in [verify] platforms"
+    },
+    {
+      "floor": "feature-map",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha feature map",
+      "version": "1",
+      "detail": "in sync with the source"
+    },
+    {
+      "floor": "behaviour",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no behaviour check for this change (it touches no mapped feature, and no criterion maps a check)"
+    },
+    {
+      "floor": "parity",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no criterion runs `aayu survey --parity` or `--compat`"
+    }
+  ],
+  "cost": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "usd": 0
+  },
+  "links": {
+    "issue": "rahulnakmol/agentic-ayudha#1003",
+    "pr": "rahulnakmol/agentic-ayudha#1102",
+    "ready_snapshot": "specs/1003/ready.md"
+  },
+  "created_at": "2026-10-28T12:30:31Z"
+}

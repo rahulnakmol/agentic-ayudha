@@ -1,0 +1,14 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverIsIdempotent"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverIsIdempotent","Output":"=== RUN   TestMissionRecoverIsIdempotent\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverIsIdempotent","Output":"--- PASS: TestMissionRecoverIsIdempotent (2.96s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverIsIdempotent"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"=== RUN   TestMissionRecoverReattachesKeepsRestarts\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"    missionrecover_test.go:152: recover:\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"        @rahulnakmol recovered the mission of #889 on amp: aayu read the record and each host.\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"        #60  re-attached: its Amp thread lives (https://ampcode.com/threads/T-01a00000-0000-0000-0000-000000000060), under the Kanha https://ampcode.com/threads/T-01a17000-0000-7000-8000-000000000889\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"        #61  kept on its PR #6\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"        #62  restarted from story/62-item-62 and its brief: its Cursor task ended (run archived) with no PR (https://ampcode.com/threads/T-01a17000-0000-7000-8000-000000000889)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"          ledger missions/889/plan.json (eb2016c)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts","Output":"--- PASS: TestMissionRecoverReattachesKeepsRestarts (3.29s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesKeepsRestarts"}

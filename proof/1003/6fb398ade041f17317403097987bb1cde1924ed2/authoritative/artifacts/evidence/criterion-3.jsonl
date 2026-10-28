@@ -1,0 +1,9 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"=== RUN   TestMissionRecoverMarksUnreadable\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"    missionrecover_test.go:315: recover:\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"        @rahulnakmol recovered the mission of #889 on codex: aayu read the record and each host.\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"        #70  unreadable: codex task list (401): aayu starts nothing for it\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"        #71  unreadable: codex task list (401): aayu starts nothing for it\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"          ledger missions/889/plan.json (3087f13)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable","Output":"--- PASS: TestMissionRecoverMarksUnreadable (2.21s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverMarksUnreadable"}
