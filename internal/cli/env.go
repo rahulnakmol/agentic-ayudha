@@ -112,8 +112,8 @@ type Options struct {
 	// WorkingHours is #886's working hours per effort size (Story #1015; nil: no estimate in hours).
 	WorkingHours func(ctx context.Context) (*WorkingHours, error)
 	// LocalKanha starts a mission's local Kanha on the starter's machine with the brief, in the checkout dir, and
-	// returns its session (ST13: codex, copilot, or opencode; #1012 builds it; Story #1004's tests: a stub). nil:
-	// none is built, so Start refuses those tools before anything is written.
+	// returns its session (ST13: codex, copilot, opencode, or cursor with no API key; tests: a stub). nil: the
+	// tool's own CLI through DelegateExec (Story #1012).
 	LocalKanha func(ctx context.Context, tool, dir, brief string) (string, error)
 	// GateVerify and GateEvals replace the milestone gate's runners (Story #1001; tests: their stubs). nil runs
 	// `aayu verify --check all` in a worktree of the dev tip, and reads evals.yml's results for it.
@@ -167,6 +167,9 @@ type Env struct {
 
 	work    *WorkList // set by mission resume: mission next's list goes here, not to the output (#1002)
 	restart bool      // set by mission recover and retry: a fresh hand-off continues on the story's branch (#1003)
+	// keepEvents is set by mission wake on an event host: mission next leaves the plan's events_cursor, as the
+	// Kanha has not read those events (Story #1012).
+	keepEvents bool
 
 	telemetry *telemetry.Telemetry
 	span      trace.Span

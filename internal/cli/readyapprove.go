@@ -153,7 +153,7 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 				}
 			}
 		}
-		plan.EventsCursor, plan.Wakes = old2.EventsCursor, old2.Wakes // they move while the code waits (Story #1009)
+		plan.EventsCursor, plan.Wakes, plan.HostWakes = old2.EventsCursor, old2.Wakes, old2.HostWakes // they move while the code waits (Stories #1009, #1012)
 	}
 	if prev2 != nil { // and its Kanha (Story #1004): a new approval starts no second one
 		got.Parent = prev2.Parent

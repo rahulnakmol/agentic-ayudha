@@ -1192,6 +1192,9 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	if !e.isTerminal(e.In) {
 		return WithNext(Errorf(ExitBlocked, "inbox is human-only and asks for one keypress per step, so it needs a terminal; `aayu inbox --list` shows what waits without one"), "aayu inbox --list")
 	}
+	for _, note := range e.checkHere(ctx) { // a local Kanha here takes its events at once (Story #1012)
+		fmt.Fprintln(e.Err, note)
+	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err

@@ -110,6 +110,14 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	case plan.Pause != nil:
 		return Errorf(ExitBlocked, "The mission of #%d is paused: %s. Nothing starts.", f, plan.Pause.Reason)
 	}
+	// A local Kanha's machine that is off holds the mission: nothing gives it its events (Story #1012).
+	if p := appr.Parent; p != nil && p.Mode == "local" && !localHere(p) {
+		if _, paused, err := e.kanhaLine(ctx, w, f, plan, p); err != nil {
+			return err
+		} else if paused != "" {
+			return Errorf(ExitBlocked, "%s. Nothing starts.", paused)
+		}
+	}
 	// Each mission's clock (Story #1015): ended stories' working totals go into the plan, and the time cards to the inbox.
 	l, err := e.Config()
 	if err != nil {
@@ -134,7 +142,7 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, true); err != nil {
 		return err
 	}
-	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun()) // after the list and its claims: the cursor moves only now
+	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun() || e.keepEvents) // after the list and its claims: the cursor moves only now
 	return emitWorkList(e, list)
 }
 

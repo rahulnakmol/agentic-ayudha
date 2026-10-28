@@ -1,6 +1,9 @@
 package delegate
 
 import (
+	"cmp"
+	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +18,10 @@ var LocalBins = map[string][]string{
 	Cursor: {"cursor-agent", "agent"},
 	Claude: {"claude"},
 	Amp:    {"amp"},
+	// OpenCode's CLI runs its stories and its Kanha; Copilot's only its
+	// Kanha (Story #1012).
+	OpenCode: {"opencode"},
+	Copilot:  {"copilot"},
 }
 
 // LocalArgs is the headless command that runs a receiver's CLI on the brief
@@ -36,8 +43,94 @@ func LocalArgs(receiver, bin, wt, prompt string) []string {
 		return []string{"-p", "--allowedTools", "Bash", "--permission-mode", "acceptEdits", "--output-format", "text", prompt}
 	case Amp:
 		return []string{"-x", prompt}
+	case OpenCode:
+		return []string{"run", prompt}
 	}
 	return nil
+}
+
+// LocalKanha are the tools whose mission Kanha runs as a local session of
+// their CLI on the starter's machine (Story #1012, Y9 and K1 A): a cloud task
+// of Codex's or Copilot's takes no follow-up, and OpenCode has no cloud
+// agent. A Copilot cloud task never coordinates a mission.
+var LocalKanha = []string{Codex, Copilot, OpenCode}
+
+// KanhaStart is the headless command that starts a local Kanha session on
+// the brief. Copilot takes id, the session ID aayu picks (a UUID); Codex and
+// OpenCode print theirs as JSON (KanhaSession); Cursor's is a new empty chat,
+// which KanhaResume then gives the brief. The flags let each run aayu and
+// reach GitHub without a prompt; aayu's own lane marker refuses it every
+// human-only step.
+func KanhaStart(tool, id, brief string) []string {
+	switch tool {
+	case Codex:
+		return append([]string{"exec", "--json"}, append(codexKanha, brief)...)
+	case Copilot:
+		return []string{"-p", brief, "--session-id=" + id, "--allow-all-tools"}
+	case OpenCode:
+		return []string{"run", "--format", "json", brief}
+	case Cursor:
+		return []string{"create-chat"}
+	}
+	return nil
+}
+
+// KanhaResume is the headless command that resumes local Kanha session id
+// with one event's text. Only the event text reaches it, never issue text.
+// The forms are the CLIs' own (checked against their sources, 2026-10-27):
+// Codex takes its sandbox on each run, before `resume`; Copilot's -p takes the
+// prompt as its value, so `-p --resume <id> "<event>"` does not parse; Cursor
+// runs commands headless only with --force.
+func KanhaResume(tool, id, event string) []string {
+	switch tool {
+	case Codex:
+		return append(append([]string{"exec"}, codexKanha...), "resume", id, event)
+	case Copilot:
+		return []string{"-p", event, "--resume=" + id, "--allow-all-tools"}
+	case OpenCode:
+		return []string{"run", "--session", id, event}
+	case Cursor:
+		return []string{"-p", "--resume=" + id, "--force", "--trust", event}
+	}
+	return nil
+}
+
+// NewSessionID is a random UUID (version 4): the session ID aayu picks for a
+// Copilot Kanha, which Copilot takes only as a UUID.
+func NewSessionID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// codexKanha lets a Codex Kanha write in the checkout and reach the network
+// (aayu talks to GitHub); exec never asks for approval.
+var codexKanha = []string{"--sandbox", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
+
+// KanhaSession is the session ID in a KanhaStart command's output: Codex's
+// thread.started thread_id, OpenCode's first sessionID, and Cursor's chat ID
+// (create-chat prints only it). "" when there is none.
+func KanhaSession(tool, out string) string {
+	if tool == Cursor {
+		if id := strings.TrimSpace(out); id != "" && !strings.ContainsAny(id, " \t\n") {
+			return id
+		}
+		return ""
+	}
+	for _, line := range strings.Split(out, "\n") {
+		var ev struct {
+			ThreadID  string `json:"thread_id"`
+			SessionID string `json:"sessionID"`
+		}
+		if json.Unmarshal([]byte(strings.TrimSpace(line)), &ev) != nil {
+			continue
+		}
+		if id := cmp.Or(ev.ThreadID, ev.SessionID); id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 // OwnKey reports whether the receiver's own CLI variable is set, which lets

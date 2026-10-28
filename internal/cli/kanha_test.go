@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -243,12 +244,13 @@ func TestMissionStartLocalKanha(t *testing.T) {
 		if got != want || !slices.Equal(m.callLog(), []string{"local " + tool + " <brief>"}) {
 			t.Fatalf("%s: parent %+v, calls %q", tool, got, m.callLog())
 		}
-		if line := fmt.Sprintf("the Kanha of #%d runs on this machine; while it is off, #%d pauses at the next merge", f, f); !strings.Contains(out, line) {
+		if line := fmt.Sprintf("the Kanha of #%d runs on this machine; while it is off, #%d pauses at the next merge. It takes its events when `aayu mission wake %d` runs here", f, f, f); !strings.Contains(out, line) {
 			t.Fatalf("%s: start's report: %s", tool, out)
 		}
 		checkKanhaBrief(t, m.briefs[len(m.briefs)-1], f, tool)
 	}
-	// Until #1012 builds the local Kanha, Start refuses those tools before the device code, and writes nothing.
+	// With no stub, Start runs the tool's own CLI: one that is not on this machine's PATH is refused before the
+	// device code, and nothing is written (Story #1012).
 	m.featureWith(901, 60)
 	if code, out, errOut := m.approve(901); code != 0 {
 		t.Fatalf("approve 901: exit %d: %s%s", code, out, errOut)
@@ -257,8 +259,23 @@ func TestMissionStartLocalKanha(t *testing.T) {
 	n := m.commits()
 	code, _, errOut := m.mission(m.person, "rahulnakmol", "start", 901)
 	if code != ExitBlocked || m.codes() != 0 || m.commits() != n ||
-		!strings.Contains(errOut, "Start begins the mission's Kanha on opencode, and a local Kanha on opencode is not built yet (#1012). Nothing was started.") {
+		!strings.Contains(errOut, "Start begins the mission's Kanha on opencode, and a local Kanha on opencode needs OpenCode's CLI on this machine's PATH. Nothing was started.") {
 		t.Fatalf("start with no local Kanha: exit %d, device codes %d: %s", code, m.codes(), errOut)
+	}
+	// Copilot's own CLI takes the session ID that aayu picks, a UUID, and Start records that ID.
+	m.featureWith(902, 61)
+	m.opts.LookPath = func(name string) (string, error) {
+		if name == "copilot" {
+			return "copilot", nil
+		}
+		return "", os.ErrNotExist
+	}
+	m.calls = nil
+	m.start(902, "rahulnakmol", "copilot")
+	p := m.parent(902)
+	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(p.Session) ||
+		!slices.Equal(m.callLog(), []string{"copilot -p <brief> --session-id=" + p.Session + " --allow-all-tools"}) {
+		t.Fatalf("copilot: session %q, calls %q", p.Session, m.callLog())
 	}
 }
 

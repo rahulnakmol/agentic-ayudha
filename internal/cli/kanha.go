@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,24 +21,34 @@ import (
 // A Feature mission's Kanha (Story #1004, Decision #915 M1, Y9 and K1 A):
 // a person's Start begins it, on the tool the plan records, and never aayu on
 // its own. Amp, Claude Code, and Cursor run a cloud Kanha; Codex, Copilot,
-// and OpenCode run a local one on the starter's machine (ST13, #1012). The
+// and OpenCode run a local one on the starter's machine (ST13, #1012), and
+// so does Cursor on a machine with no Cursor API key. The
 // Kanha's session is the `parent` in specs/<f>/approved.json, and each story
 // thread it starts names it in delegate/<n>/state.json.
-
-// localKanhaTools run their Kanha on the starter's machine: a cloud task of
-// theirs takes no follow-up from the CLI (receivers.go, CodexCloud.FollowUp).
-var localKanhaTools = []string{"codex", "copilot", "opencode"}
 
 // kanhaCanStart says why the Kanha cannot start on tool here, or "", before
 // anything is written.
 func (e *Env) kanhaCanStart(tool string) string {
 	switch {
-	case slices.Contains(localKanhaTools, tool) && e.LocalKanha == nil:
-		return fmt.Sprintf("a local Kanha on %s is not built yet (#1012)", tool)
-	case !slices.Contains(localKanhaTools, tool) && !slices.Contains([]string{delegate.Amp, delegate.Claude, delegate.Cursor}, tool):
+	case e.localKanha(tool):
+		if _, ok := delegate.LookLocal(tool, e.lookPath()); !ok && e.LocalKanha == nil {
+			return fmt.Sprintf("a local Kanha on %s needs %s's CLI on this machine's PATH", tool, delegate.Names[tool])
+		}
+	case !slices.Contains([]string{delegate.Amp, delegate.Claude, delegate.Cursor}, tool):
 		return fmt.Sprintf("aayu starts no Kanha on %s", tool)
 	}
 	return ""
+}
+
+// localKanha reports whether the Kanha on tool runs as a local session here:
+// on Codex, Copilot, and OpenCode always, and on Cursor when this machine
+// has no Cursor API key and has its CLI (Story #1012).
+func (e *Env) localKanha(tool string) bool {
+	if tool == delegate.Cursor {
+		l, _ := e.Config() // loaded and checked by the presence check before this
+		return e.cursorLocal(l.Config.Delegate)
+	}
+	return slices.Contains(delegate.LocalKanha, tool)
 }
 
 // startKanha starts the Kanha of Feature f's mission on the plan's tool and
@@ -55,10 +64,9 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 	brief := delegate.KanhaBrief(repo, f, tool, plan.Release != 0)
 	how := "new"
 	start := func(ctx context.Context) error {
-		if slices.Contains(localKanhaTools, tool) {
-			host, _ := os.Hostname()
-			p.Mode, p.Machine = "local", login+"@"+host
-			id, err := e.LocalKanha(ctx, tool, root, brief)
+		if e.localKanha(tool) {
+			p.Mode, p.Machine = "local", login+"@"+thisMachine()
+			id, err := e.startLocalKanha(ctx, tool, root, brief)
 			p.Session = id
 			return err
 		}
@@ -100,7 +108,8 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 	words := fmt.Sprintf("the Kanha of #%d runs on %s: %s", f, tool, p.URL)
 	switch {
 	case p.Mode == "local":
-		words = fmt.Sprintf("the Kanha of #%d runs on this machine; while it is off, #%d pauses at the next merge", f, f)
+		words = fmt.Sprintf("the Kanha of #%d runs on this machine; while it is off, #%d pauses at the next merge. "+
+			"It takes its events when `aayu mission wake %d` runs here (schedule it every [mission] check_minutes) or `aayu inbox` opens", f, f, f)
 	case how == "drafting":
 		words = fmt.Sprintf("the Kanha of #%d is the thread that drafted its intent, %s: it has its brief", f, p.URL)
 	}
@@ -168,7 +177,7 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 	}
 	st := delegate.State{Story: n, Feature: f, Kanha: p.Session, KanhaURL: p.URL} // a story no subthread runs has no state yet
 	if _, err = readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err == nil {
-		st.Events = append(st.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: "kanha", Detail: text + " (" + how + ")"})
+		st.Events = append(st.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: "kanha", Detail: text + " (" + how + ")", Text: text})
 		b, _ := json.MarshalIndent(st, "", "  ")
 		_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: #%d tells the Kanha of #%d", n, f), Files: map[string][]byte{delegate.LedgerPath(n): append(b, '\n')}})
 	}

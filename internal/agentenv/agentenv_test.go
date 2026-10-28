@@ -529,7 +529,7 @@ func TestDetect(t *testing.T) {
 	_ = RecordCloud(root, Amp, Record{Fingerprint: "sha256:x", Project: "o/r"})
 	p.Root, p.Repo = root, "o/r"
 	for _, a := range Detect(context.Background(), p) {
-		if !a.Cloud {
+		if !a.Cloud && a.Name != "opencode" { // OpenCode has no cloud agent (Story #1012)
 			t.Errorf("%s should be cloud-capable now: %+v", a.Name, a)
 		}
 	}
