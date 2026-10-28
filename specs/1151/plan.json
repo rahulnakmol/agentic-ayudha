@@ -1,0 +1,38 @@
+{
+  "story": 1151,
+  "body_hash": "37e20467d078bfd6e053b0b3ebb75d53fa47d017ced6bd55b05f9fb0c6205844",
+  "footprint": [
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L09",
+      "title": "The build and integration jobs in ci.yml give go test a 30-minute timeout",
+      "contracts": [
+        ".github/workflows/ci.yml job build, step \"Build, vet, test\": `go test -timeout 30m -coverprofile=coverage.out ./...`",
+        ".github/workflows/ci.yml job integration: `go test -race -count=1 -timeout 30m -tags integration ./...`",
+        "No permission, secret, environment, trigger, or action pin changes; only these two run lines"
+      ],
+      "tests": [
+        "TestCIBuildGoTestHasTimeout",
+        "TestWorkflowGoTestsOfWholePackagesSetTimeout"
+      ],
+      "instrumentation": [
+        "The build job's go test output: the time of internal/cli (576 s on dev run 40710734386)"
+      ],
+      "rollback": "Revert the squash commit; the two go test commands return to go test's 10-minute default.",
+      "criteria": [
+        1,
+        2
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-28T19:48:53Z",
+  "planned_by": "human-fallback"
+}
