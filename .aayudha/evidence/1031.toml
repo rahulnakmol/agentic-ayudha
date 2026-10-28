@@ -7,8 +7,8 @@ id = 1 # solo mode, a never-layer path with no CODEOWNER: the refusal and the co
 tests = ["internal/cli:TestShipPassRules", "internal/cli:TestInboxShipsReadyPRs"]
 
 [[criterion]]
-id = 2 # a story labelled L02 and L07 plans an L04 checkpoint: the plan passes, layer:L04 is added, em_review lists L04 and L07, and --approve records the review
-tests = ["internal/cli:TestPlanApprove", "internal/cli:TestPlan"]
+id = 2 # a story labelled L02 and L07 plans an L04 checkpoint: the plan passes, layer:L04 is added, em_review lists L04 and L07, --approve records the review, and ship accepts that review for a PR that changes CONSTRAINTS.md
+tests = ["internal/cli:TestPlanApprove", "internal/cli:TestPlan", "internal/cli:TestShipPassRules"]
 
 [[criterion]]
 id = 3 # "Story #990 …" above "Refs #2": the pack is for #2; two different Refs, Closes, or Fixes stories fail verify with "keep one"

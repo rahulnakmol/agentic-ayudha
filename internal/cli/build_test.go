@@ -373,8 +373,17 @@ func TestShipPassRules(t *testing.T) {
 			t.Fatalf("solo-mode Ready to ship with a never-layer path that has no CODEOWNER: %d\n%s\ncomment:\n%s", code, out, ready)
 		}
 	}
+	// Bug #1031 criterion 2: the PR also changes CONSTRAINTS.md (L04), and
+	// the ledger holds the plan-time review that `aayu plan --approve` records
+	// for a plan with an added L04 checkpoint (TestPlanApprove): ship accepts it.
+	rec.Footprint, rec.Review.Layers = []string{"L02", "L04", "L07"}, []string{"L04", "L07"}
+	b, _ = json.Marshal(rec)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
+		t.Fatal(err)
+	}
 	g.Mu.Lock()
-	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n/CONSTRAINTS.md @reviewer2\n"
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, "CONSTRAINTS.md")
 	g.Mu.Unlock()
 	g.Reset()
 	if code, out := ship(); code != 0 || !strings.Contains(out, "human pass: review by reviewer2") {
@@ -385,7 +394,8 @@ func TestShipPassRules(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
+	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L04,L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
+		strings.Join(sr.PlanReview.Layers, ",") != "L04,L07" ||
 		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || sr.Streak.Skipped != "the human pass is settled: review" {
 		t.Fatalf("ship record: %+v", sr)
 	}
