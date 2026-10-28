@@ -847,6 +847,11 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 		t.Fatalf("recover: exit %d, #98 hand-offs %d: %s%s", code, m.handoffs(98), out, errOut)
 	}
 
+	// #88's host could not be read after a retry that succeeded: its agent may run, and its attempts stay.
+	m.setPlan(889, func(p *MissionPlan) {
+		ss := p.storyState(88)
+		ss.State, ss.Attempts = "unreadable: Amp threads (503)", []MissionAttempt{{Kind: "start", At: "2026-10-26T09:00:00Z", Error: "e1", CostUSD: 1}, {Kind: "retry", At: "2026-10-26T09:10:00Z", CostUSD: 1}}
+	})
 	commits = m.commits()
 	for _, c := range []struct {
 		args []string
@@ -858,6 +863,7 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 		{[]string{"--story", "90"}, ExitBlocked, "#90 is stopped (wrong approach): resume it first. Nothing changed."},
 		{[]string{"--story", "94"}, ExitBlocked, "#94 runs on claude, the tool of @carol, who started it: run this there"},
 		{[]string{"--story", "200"}, ExitBlocked, "#200 is not a story or Bug of #889. Nothing changed."},
+		{[]string{"--story", "88"}, ExitBlocked, "#88 has no failed step in the mission of #889: nothing to retry. Nothing changed."},
 	} {
 		if code, _, errOut := m.mission(m.person, "rahulnakmol", "retry", 889, c.args...); code != c.code || !strings.Contains(errOut, c.want) {
 			t.Errorf("retry %v: exit %d: %s", c.args, code, errOut)

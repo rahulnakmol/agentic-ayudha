@@ -838,8 +838,10 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	}
 	pr := r.openPR(story, st)
 	was := st // what the person approves a retry of
-	ss := plan.stateOf(story)
-	if st.Status != dlgFailed && st.Status != dlgMaybe && (ss == nil || ss.State == "" || len(ss.Attempts) == 0) {
+	// Only a failed step, or a start that got no answer, retries: a story whose
+	// agent may still run (working, handed off, or a host recover could not
+	// read) never gets a second one, whatever attempts its plan state keeps.
+	if st.Status != dlgFailed && st.Status != dlgMaybe {
 		return Errorf(ExitBlocked, "#%d has no failed step in the mission of #%d: nothing to retry. Nothing changed.", story, f)
 	}
 	step := fmt.Sprintf("hands #%d off again on %s, from its branch and its brief", story, tool)
