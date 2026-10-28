@@ -523,21 +523,27 @@ func codexNative(c Choice, posts []Post, head string, criteria []workitems.Crite
 var (
 	greptileReceipt = regexp.MustCompile(`(?s)<!-- greptile_summary -->.*Last reviewed commit:.*?/commit/([0-9a-f]{7,40})`)
 	greptileBadge   = regexp.MustCompile(`<img alt="(P[0-3])"`)
-	coderabbitBadge = regexp.MustCompile(`(🔴 Critical|🟠 Major|🟡 Minor|🔵 Trivial|⚪ Info)`)
+	coderabbitBadge = regexp.MustCompile(coderabbitLevel)
 	serviceTitle    = regexp.MustCompile(`(?m)^(?:<a href="#"><img[^>]*></a>\s*)?\*\*([^*\n]+)\*\*\s*$`)
 	serviceNoise    = regexp.MustCompile(`(?s)<details>.*|<!--.*?-->|<[^>]+>`)
 )
 
-// coderabbitSeverity maps CodeRabbit's severity levels to inspect's.
+// coderabbitLevel is CodeRabbit's severity badge, its level word captured:
+// an emoji (`🟠 Major`) or, since 2026-10-25, its icon image (`<picture><img
+// src=".../review-comment-icons-v1/major-16.svg" …></picture> Major`). The
+// icon's file does not name the level (Minor's is amber-16.svg); the word does.
+const coderabbitLevel = `(?:🔴|🟠|🟡|🔵|⚪|<picture><img [^>]*coderabbit_public_assets/review-comment-icons-v1/[^>]*></picture>) (Critical|Major|Minor|Trivial|Info)\b`
+
 // coderabbitBodyFinding is one finding in a CodeRabbit review's body:
 // severity, title, the file and line its summary names, and the block's text.
-var coderabbitBodyFinding = regexp.MustCompile(`(?s)<summary><strong>(🔴 Critical|🟠 Major|🟡 Minor|🔵 Trivial|⚪ Info)</strong> · (.+?) · <code>([^<:]+):(\d+)[^<]*</code></summary>(.*?)</details>`)
+var coderabbitBodyFinding = regexp.MustCompile(`(?s)<summary><strong>` + coderabbitLevel + `</strong> · (.+?) · <code>([^<:]+):(\d+)[^<]*</code></summary>(.*?)</details>`)
 
 // backtickPath is a `path:line` reference: the full path a body finding's
 // block gives for the file its summary names by base name.
 var backtickPath = regexp.MustCompile("`([^`\\s]+):(\\d+)(?:-\\d+)?`")
 
-var coderabbitSeverity = map[string]string{"🔴 Critical": "P0", "🟠 Major": "P1", "🟡 Minor": "P2", "🔵 Trivial": "P3", "⚪ Info": "P3"}
+// coderabbitSeverity maps CodeRabbit's severity levels to inspect's.
+var coderabbitSeverity = map[string]string{"Critical": "P0", "Major": "P1", "Minor": "P2", "Trivial": "P3", "Info": "P3"}
 
 // serviceNative reads CodeRabbit's or Greptile's own review of head, as
 // codexNative reads Codex's: a receipt proves the review ran on this exact

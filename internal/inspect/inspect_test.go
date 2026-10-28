@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -1060,6 +1062,40 @@ func TestJudgeCarriesClassInstances(t *testing.T) {
 	}
 }
 
+// CodeRabbit's Major on #1135: the same post read with a new finding (a
+// parser fix) is judged again; a cached merge from the old reading does not
+// stand. The same reading still hits the cache.
+func TestJudgeCacheFollowsTheReading(t *testing.T) {
+	in := testInput("")
+	in.Head = strings.Repeat("a", 40)
+	reviewed := []string{"internal/report/percent.go", "LAYERS.md"}
+	src := "review 5668710694 by coderabbitai[bot]"
+	clean := AppReply{Reply: Reply{Disposition: Merge, Summary: "0 finding(s)", Findings: []Finding{}}, Head: in.Head, Reviewed: reviewed, Source: src}
+	_, st, err := Runner{}.Judge(context.Background(), in, State{}, clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res, _, _ := (Runner{}).Judge(context.Background(), in, st, clean); !res.Cached {
+		t.Fatalf("the same reading: not cached")
+	}
+	major := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Title: "Guard an empty total.", Detail: "d", Confidence: 1}
+	found := AppReply{Reply: Reply{Disposition: Fix, Summary: "1 finding(s)", Findings: []Finding{major}}, Head: in.Head, Reviewed: reviewed, Source: src}
+	res, st, _ := Runner{}.Judge(context.Background(), in, st, found)
+	if res.Cached || res.Disposition != Fix || st.Cycles != 1 {
+		t.Fatalf("the same post read with a P1: cached %t, %s, %d cycles", res.Cached, res.Disposition, st.Cycles)
+	}
+	// CodeRabbit's Major at b40796b: another reading of the same head is not
+	// a second fix cycle; a fix on a new head is.
+	found.Findings = append(found.Findings, Finding{Severity: "P2", Category: "bug", File: "LAYERS.md", Title: "Name the layer.", Detail: "d", Confidence: 1})
+	if res, st, _ = (Runner{}).Judge(context.Background(), in, st, found); res.Disposition != Fix || st.Cycles != 1 {
+		t.Fatalf("a second reading of the head: %s, %d cycles", res.Disposition, st.Cycles)
+	}
+	in.Head, in.Diff = strings.Repeat("b", 40), strings.Replace(in.Diff, "return 0", "return -1", 1)
+	if _, st, _ = (Runner{}).Judge(context.Background(), in, st, found); st.Cycles != 2 {
+		t.Fatalf("a fix on a new head: %d cycles", st.Cycles)
+	}
+}
+
 // CodeRabbit's and Greptile's own reviews of the head are read
 // deterministically (Story #635): the receipt, then each inline comment on the
 // head with a severity badge is a finding; a thread reply, a comment on another
@@ -1129,5 +1165,64 @@ func TestReadServiceReply(t *testing.T) {
 	}
 	if _, err := ReadReply(choice(AppGreptile), greptilePosts, old, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
 		t.Fatalf("greptile's summary of another head: %v", err)
+	}
+}
+
+// Bug #1130: since 2026-10-25 CodeRabbit's severity badge is an icon image
+// and the level word, not an emoji. The fixtures are its real comments: the
+// inline Major of review 5668710694 on #1096 at b6a66dc, and the outside-diff
+// Major in the body of review 5661577947 on #1120 at 4dcc80f.
+func TestReadCodeRabbitIconBadges(t *testing.T) {
+	head := "b6a66dcc748416305dad860cd1c9259959115fab"
+	at := time.Date(2026, 10, 27, 14, 27, 0, 0, time.UTC)
+	const rabbit = "coderabbitai[bot]"
+	fixture := func(name string) string {
+		b, err := os.ReadFile(filepath.Join("testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	inline := fixture("coderabbit-inline-icon-1096.txt")
+	icon := `<picture><img src="https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/major-16.svg" width="16" height="16" align="absmiddle" alt=""></picture> Major`
+	if !strings.Contains(inline, icon) {
+		t.Fatal("the #1096 fixture lost its icon badge")
+	}
+	read := func(posts ...Post) AppReply {
+		t.Helper()
+		posts = append([]Post{{Kind: "review", ID: 5668710694, Login: rabbit, Commit: head, Body: "**Actionable comments posted: 1**", Updated: at}}, posts...)
+		r, err := ReadReply(ChooseReviewer(AppCodeRabbit, []string{AppCodeRabbit}, nil, Builder{}, ""), posts, head, time.Time{}, nil, nil, []string{"internal/cli/ship.go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	finding := func(body string) Post {
+		return Post{Kind: "inline", ID: 4389883890, Login: rabbit, Commit: head, Path: "internal/cli/ship.go", Body: body, Updated: at}
+	}
+	const title = "Fall back to the Outcome comment when the lock guard cannot read the locks."
+	// Criteria 1 and 2: the icon form and the emoji form give the same P1.
+	for form, body := range map[string]string{"icon": inline, "emoji": strings.Replace(inline, icon, "🟠 Major", 1)} {
+		r := read(finding(body))
+		if r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/cli/ship.go" || r.Findings[0].Title != title {
+			t.Errorf("%s badge: %s %+v", form, r.Disposition, r.Findings)
+		}
+	}
+	// Criterion 3: the word after the icon decides the level, whatever the
+	// icon's file; a reply with no badge (criterion 5) is no finding.
+	want := map[string]string{"Critical": "P0", "Major": "P1", "Minor": "P2", "Trivial": "P3", "Info": "P3"}
+	for level, sev := range want {
+		r := read(finding(strings.Replace(inline, icon, strings.TrimSuffix(icon, "Major")+level, 1)),
+			Post{Kind: "inline", ID: 1, Login: rabbit, Commit: head, Path: "internal/cli/ship.go", Body: "<!-- coderabbit-ai-generated:v1 -->\n\n`@rahulnakmol`, thanks: the Major above is fixed in the next head.", Updated: at})
+		if len(r.Findings) != 1 || r.Findings[0].Severity != sev {
+			t.Errorf("icon %s: %+v", level, r.Findings)
+		}
+	}
+	// Criterion 4: the outside-diff block of #1120's review body.
+	r, err := ReadReply(ChooseReviewer(AppCodeRabbit, []string{AppCodeRabbit}, nil, Builder{}, ""),
+		[]Post{{Kind: "review", ID: 5661577947, Login: rabbit, Commit: head, Body: fixture("coderabbit-review-icon-1120.txt"), Updated: at}}, head, time.Time{}, nil, nil, nil)
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/cli/missiongate.go" || r.Findings[0].Line != 902 ||
+		r.Findings[0].Title != "Require the named eval before shipping a listed eval fix." {
+		t.Fatalf("#1120's outside-diff Major: %v %+v", err, r)
 	}
 }

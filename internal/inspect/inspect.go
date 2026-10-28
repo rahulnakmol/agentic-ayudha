@@ -669,7 +669,13 @@ func partCriteria(a, b []Verdict) []Verdict {
 // cycle count, and rule 7 as a model's reply. The files the reply says it
 // reviewed seal the manifest. No model is called.
 func (r Runner) Judge(ctx context.Context, in Input, prev State, rep AppReply) (Result, State, error) {
-	res, st, err := r.begin(ctx, &in, prev, rep.Source)
+	// The salt is the post and what was read from it: the same review read
+	// another way (a parser fix, Bug #1130) is judged again, never cached.
+	read, _ := json.Marshal(struct {
+		Reply    Reply
+		Reviewed []string
+	}{rep.Reply, rep.Reviewed})
+	res, st, err := r.begin(ctx, &in, prev, rep.Source+"\x00"+string(read))
 	if err != nil || res.Disposition == Skipped || res.Disposition == StepBack || res.Cached {
 		return res, st, err
 	}
@@ -816,7 +822,9 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	sortFindings(res.Findings)
 	Enforce(&res, in.Pack)
 	st.DiffHash, st.Hashes = res.DiffHash, append(slices.Clone(prev.Hashes), res.DiffHash)
-	if res.Disposition != Merge {
+	// A fix cycle is one per head: another reading of a head already judged
+	// fix (a later review post, a parser change) is not a new cycle.
+	if res.Disposition != Merge && (in.Head == "" || !slices.ContainsFunc(prev.Rounds, func(r Round) bool { return r.Head == in.Head && r.Disposition != Merge })) {
 		st.Cycles++
 	}
 	res.Cycle = st.Cycles
