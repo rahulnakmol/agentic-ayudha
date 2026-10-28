@@ -1,0 +1,9 @@
+# Which tests prove Bug #1151's Completion Goal.
+
+[[criterion]]
+id = 1 # ci.yml build job: go test -timeout 30m -coverprofile=coverage.out ./...
+tests = ["TestCIBuildGoTestHasTimeout"]
+
+[[criterion]]
+id = 2 # every workflow go test with no -run filter sets -timeout (build and integration in ci.yml)
+tests = ["TestWorkflowGoTestsOfWholePackagesSetTimeout"]

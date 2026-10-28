@@ -90,7 +90,8 @@ jobs:
       # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/,
       # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
-        run: go build ./... && go vet ./... && go test -coverprofile=coverage.out ./...
+        # internal/cli takes close to go test's 10-minute default here (576 s on dev, Bug #1151), as on a 2-core orb.
+        run: go build ./... && go vet ./... && go test -timeout 30m -coverprofile=coverage.out ./...
       # Appendix B S-4.3r (research P7, this repository only in 0.2): the coverage floor in ratchets.toml only tightens.
       # Coverage below floor - margin fails; coverage at floor + 2 * margin or more fails until the PR tightens the floor
       # with -update; a floor lower than the base's needs a new floor waiver a human accepted, which this reads from
@@ -472,7 +473,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: false
       - name: Integration tests (build tag integration, race detector)
-        run: go test -race -count=1 -tags integration ./...
+        # With -race, internal/cli runs longer than in build, past go test's 10-minute default (Bug #1151).
+        run: go test -race -count=1 -timeout 30m -tags integration ./...
 
   benchmarks:
     name: benchmarks

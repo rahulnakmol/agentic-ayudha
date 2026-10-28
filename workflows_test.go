@@ -1001,3 +1001,79 @@ func truthy(v any) bool {
 	}
 	return true
 }
+
+// goTests are the go test commands of the workflows' steps, by "<file>: job <job>". A step's script is split at
+// &&, ||, |, ; and new lines, so `go build ./... && go test ./...` gives its go test.
+func goTests(t *testing.T) map[string][][]string {
+	t.Helper()
+	files, _ := filepath.Glob(".github/workflows/*.yml")
+	if len(files) < 10 {
+		t.Fatalf("found only %d workflow files", len(files))
+	}
+	out := map[string][][]string{}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wf struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Run string `yaml:"run"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(b, &wf); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for name, job := range wf.Jobs {
+			for _, s := range job.Steps {
+				for _, part := range regexp.MustCompile(`&&|\|\||[|;\n]`).Split(s.Run, -1) {
+					fields := strings.Fields(part)
+					for i := 0; i+1 < len(fields); i++ {
+						if fields[i] == "go" && fields[i+1] == "test" {
+							key := fmt.Sprintf("%s: job %s", f, name)
+							out[key] = append(out[key], fields[i:])
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+func hasFlag(cmd []string, flag string) bool {
+	return slices.ContainsFunc(cmd, func(a string) bool { return a == flag || strings.HasPrefix(a, flag+"=") })
+}
+
+// Bug #1151, criterion 1: the build job's go test runs with -timeout 30m. internal/cli took 576 s of go test's
+// 600 s default on dev (run 40710734386), and #1147's build timed out at 600 s (run 40711235561, attempt 1).
+func TestCIBuildGoTestHasTimeout(t *testing.T) {
+	cmds := goTests(t)[".github/workflows/ci.yml: job build"]
+	want := "go test -timeout 30m -coverprofile=coverage.out ./..."
+	if !slices.ContainsFunc(cmds, func(c []string) bool { return strings.Join(c, " ") == want }) {
+		t.Fatalf("ci.yml job build runs %q; want %q", cmds, want)
+	}
+}
+
+// Bug #1151, criterion 2: each workflow go test that runs every test of its packages (no -run filter) sets
+// -timeout, so no step uses go test's 10-minute default.
+func TestWorkflowGoTestsOfWholePackagesSetTimeout(t *testing.T) {
+	n := 0
+	for where, cmds := range goTests(t) {
+		for _, c := range cmds {
+			if hasFlag(c, "-run") {
+				continue
+			}
+			n++
+			if !hasFlag(c, "-timeout") {
+				t.Errorf("%s: %q runs every test of its packages with go test's 10-minute default: add -timeout", where, strings.Join(c, " "))
+			}
+		}
+	}
+	if n < 3 {
+		t.Fatalf("found only %d go test commands with no -run filter", n)
+	}
+}
