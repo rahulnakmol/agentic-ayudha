@@ -131,13 +131,35 @@ func TestLocalKanhaFailures(t *testing.T) {
 		t.Fatalf("a wake with the inbox opened during its resume: exit %d, calls %q: %q%s\ninbox: %s", code, m.callLog(), out, errOut, said)
 	}
 	during = nil
-	// A lock left by a check that died (older than the local limit) does not hold the next check.
-	lock := filepath.Join(m.dir, ".aayudha", "state", "kanha", "889.json.lock")
-	if err := os.WriteFile(lock, nil, 0o600); err != nil {
-		t.Fatal(err)
+	// The parent's write fails after a resume: the next check gives the events again and records them, so
+	// last_check never stays behind and holds the Feature.
+	now = now.Add(30 * time.Minute)
+	m.kanhaEvent(889, 20, now.Add(-25*time.Minute), "merged #21 (PR #42): run aayu mission next 889")
+	m.kanhaEvent(889, 20, now.Add(-time.Minute), "blocked #22: run aayu mission next 889")
+	approval := func(delta int) {
+		var a ready.Approval
+		_ = json.Unmarshal([]byte(git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889))), &a)
+		a.Version += delta
+		data, _ := json.MarshalIndent(a, "", "  ")
+		putLedger(t, m.bare, ready.ApprovalPath(889), string(data))
 	}
-	if err := os.Chtimes(lock, time.Now().Add(-2*time.Hour), time.Now().Add(-2*time.Hour)); err != nil {
-		t.Fatal(err)
+	during = func() { during = nil; approval(+1) } // a new approval lands while the Kanha runs
+	if code, out, errOut := m.wake(889); code != ExitExternal || !strings.Contains(errOut, "took 2 event(s), and this check is not recorded") || !strings.Contains(errOut, "is not there to record its Kanha") {
+		t.Fatalf("a wake whose parent write fails: exit %d: %s%s", code, out, errOut)
+	}
+	approval(-1)
+	now = now.Add(5 * time.Minute)
+	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "resumed Codex session s-123 with 2 event(s)") || len(m.callLog()) != 1 ||
+		m.parent(889).LastCheck != now.Add(-6*time.Minute).UTC().Format(time.RFC3339) {
+		t.Fatalf("the check after a failed parent write: exit %d, calls %q, last_check %q: %q%s", code, m.callLog(), m.parent(889).LastCheck, out, errOut)
+	}
+	// An event stamped before the last one given, whose write landed after that check, is given, and
+	// last_check never moves back.
+	recorded := m.parent(889).LastCheck
+	m.kanhaEvent(889, 20, now.Add(-8*time.Minute), "answered: #20 resumes")
+	now = now.Add(5 * time.Minute)
+	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "with 1 event(s)") || m.parent(889).LastCheck != recorded {
+		t.Fatalf("a late event: exit %d, last_check %q, want %q: %q%s", code, m.parent(889).LastCheck, recorded, out, errOut)
 	}
 	// The resume fails: the wake says so, the check records nothing, and the inbox names the mission.
 	now = now.Add(5 * time.Minute)
@@ -157,6 +179,18 @@ func TestLocalKanhaFailures(t *testing.T) {
 		t.Fatalf("a resume with no CLI: exit %d: %s%s", code, out, errOut)
 	}
 	m.opts.LookPath = look
+	// A check that cannot take its lock fails and resumes nothing.
+	lock := filepath.Join(m.dir, ".aayudha", "state", "kanha", "889.json.lock")
+	if err := os.Remove(lock); err != nil || os.Mkdir(lock, 0o700) != nil {
+		t.Fatalf("make the lock unusable: %v", err)
+	}
+	now = now.Add(5 * time.Minute)
+	if code, out, errOut := m.wake(889); code != ExitExternal || !strings.Contains(errOut, "889.json.lock") || len(m.callLog()) != 0 {
+		t.Fatalf("a check with no lock: exit %d, calls %q: %s%s", code, m.callLog(), out, errOut)
+	}
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
 	// An event host on codex, with Codex cloud connected, while the Kanha's laptop is off and an event waits: the mission is paused, so it records only.
 	m.setMachine(889, laptop)
 	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "#889 wake: recorded only: mission next: #889 paused: its Kanha runs on "+laptop+", which is off") || len(m.callLog()) != 0 {

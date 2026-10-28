@@ -34,7 +34,7 @@ plan lists in §2; the rest are pulled in by them.
 | `filippo.io/age` | v1.3.2 | BSD-3-Clause | Encrypted secrets file (WP1.3) and token broker hand-over (WP1.4), direct | <https://github.com/FiloSottile/age> |
 | `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | <https://github.com/FiloSottile/hpke> |
 | `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://github.com/golang/crypto> |
-| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://github.com/golang/sys> |
+| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Direct: the local Kanha check lock on Windows; also via go-keyring and age | <https://github.com/golang/sys> |
 | `go.opentelemetry.io/otel` | v1.46.0 | Apache-2.0 | Traces of verb runs (WP1.8), direct; with `otel/sdk` and `otel/trace` | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/sdk` | v1.46.0 | Apache-2.0 | Tracer provider (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
 | `go.opentelemetry.io/otel/trace` | v1.46.0 | Apache-2.0 | Trace API (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |

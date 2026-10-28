@@ -64,7 +64,7 @@ func missionWake(ctx context.Context, e *Env, f int) error {
 	rep := MissionWakeReport{Repo: repo, Feature: f, Ledger: MissionPlanPath(f)}
 	if p := appr.Parent; p != nil && localHere(p) {
 		rep.Result = hostWakeChecked
-		if rep.Note, err = e.checkLocalKanha(ctx, c, w, repo, f, plan, appr, false); err != nil {
+		if rep.Note, err = e.checkLocalKanha(ctx, c, w, repo, f, false); err != nil {
 			return err
 		}
 		return emitWake(e, rep)

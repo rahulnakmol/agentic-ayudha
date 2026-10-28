@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,26 +155,21 @@ func (e *Env) writeLocalCheck(f int, c localCheck) error {
 
 // lockLocalCheck holds f's check on this machine for one resume, so a wake
 // or the inbox never resumes the Kanha's session while another check runs
-// in it. held is when the running check began; a lock older than the local
-// limit is from a check that died, and is taken over.
+// in it. held is when the running check began.
 func (e *Env) lockLocalCheck(f int) (unlock func(), held time.Time, err error) {
 	p := e.kanhaCheckPath(f) + ".lock"
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return nil, time.Time{}, err
 	}
-	fh, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		if st, serr := os.Stat(p); serr == nil && time.Since(st.ModTime()) < e.localLimit()+time.Minute {
-			return nil, st.ModTime(), nil
-		}
-		_ = os.Remove(p) // a check that died left it
-		fh, err = os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	}
+	fh, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	_ = fh.Close()
-	return func() { _ = os.Remove(p) }, time.Time{}, nil
+	if ok, err := tryLock(fh); !ok {
+		_ = fh.Close()
+		return nil, e.readLocalCheck(f).At, err // the running check wrote its start
+	}
+	return func() { _ = fh.Close() }, time.Time{}, nil
 }
 
 // checkMinutes is [mission] check_minutes.
@@ -191,8 +185,7 @@ func (e *Env) checkMinutes() time.Duration {
 // once check_minutes passed since the last one, or at once (now), it resumes
 // the Kanha's session with the events since its last check, one per line,
 // and records that check in the parent. It says what it did.
-func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval, now bool) (string, error) {
-	p := appr.Parent
+func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, now bool) (string, error) {
 	at := e.Now().UTC()
 	chk := e.readLocalCheck(f)
 	if last := chk.At; !now && !last.IsZero() && at.Before(last.Add(e.checkMinutes())) {
@@ -206,7 +199,16 @@ func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.W
 		return fmt.Sprintf("the Kanha of #%d: a check here runs since %s; this one resumes nothing", f, held.UTC().Format(time.RFC3339)), nil
 	}
 	defer unlock()
-	chk = e.readLocalCheck(f) // the check that held the lock may have written it
+	// Read under the lock: a check that held it may have moved last_check and Sent.
+	plan, appr, _, err := readMission(ctx, w, f)
+	if err != nil {
+		return "", err
+	}
+	if plan == nil || appr == nil || appr.Parent == nil || !localHere(appr.Parent) {
+		return fmt.Sprintf("the Kanha of #%d no longer runs on this machine", f), nil
+	}
+	p := appr.Parent
+	chk = e.readLocalCheck(f)
 	chk.At = at
 	if err := e.writeLocalCheck(f, chk); err != nil {
 		return "", Wrap(ExitExternal, err)
@@ -240,24 +242,17 @@ func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.W
 	if err != nil {
 		return "", Wrap(ExitExternal, fmt.Errorf("the Kanha of #%d on %s: %w", f, p.Machine, err))
 	}
-	// Every event read is now given: those within kanhaSettle of the new last check are kept as sent.
+	// The parent first: if its write fails, Sent stays, and the next check gives these events again and
+	// writes the parent then. A repeated event is safe; a last_check left behind holds the Feature.
 	q.LastCheck = max(p.LastCheck, evs[len(evs)-1].At)
-	floor := q.LastCheck
-	if last, perr := time.Parse(time.RFC3339, q.LastCheck); perr == nil {
-		floor = last.Add(-kanhaSettle).UTC().Format(time.RFC3339)
-	}
-	var sent []string
-	for _, ev := range all {
-		if ev.At > floor {
-			sent = append(sent, sentKey(ev))
-		}
-	}
-	chk.Sent = sent
-	_ = e.writeLocalCheck(f, chk) // lost, it gives these events once more at the next check
-
 	if err := e.writeParent(ctx, w, f, appr.Version, &q); err != nil {
-		return "", err
+		return "", Errorf(ExitExternal, "the Kanha of #%d took %d event(s), and this check is not recorded, so the next check gives them again: %s", f, len(evs), oneLineErr(err))
 	}
+	chk.Sent = nil // every event read is now given, and kept as sent until a later check no longer reads it
+	for _, ev := range all {
+		chk.Sent = append(chk.Sent, sentKey(ev))
+	}
+	_ = e.writeLocalCheck(f, chk) // lost, it gives these events once more at the next check
 	return fmt.Sprintf("the Kanha of #%d: resumed %s session %s with %d event(s)", f, delegate.Names[p.Host], p.Session, len(evs)), nil
 }
 
@@ -319,7 +314,7 @@ func (e *Env) checkHere(ctx context.Context) []string {
 		if err != nil || plan == nil || plan.StartedBy == "" || plan.Pause != nil || appr == nil || appr.Parent == nil || !localHere(appr.Parent) {
 			continue
 		}
-		note, err := e.checkLocalKanha(ctx, c, w, repo, f, plan, appr, true)
+		note, err := e.checkLocalKanha(ctx, c, w, repo, f, true)
 		if err != nil {
 			note = fmt.Sprintf("the Kanha of #%d: not checked: %s", f, oneLineErr(err))
 		}
