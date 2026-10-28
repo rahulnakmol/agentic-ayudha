@@ -239,9 +239,10 @@ type Release struct {
 
 // ArtifactZip is a run artifact with its zip bytes.
 type ArtifactZip struct {
-	ID   int64
-	Name string
-	Zip  []byte
+	ID      int64
+	Name    string
+	Zip     []byte
+	Expired bool // GitHub no longer keeps it
 }
 
 // Request is one recorded request.
@@ -1057,14 +1058,26 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(201, is)
 	case m == "GET" && reCheckRuns.MatchString(p):
-		// GitHub lists only the newest run of each name unless filter=all.
-		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[string]int64{}
+		// GitHub lists only the newest run of each name in each check suite
+		// unless filter=all.
+		type key struct {
+			name  string
+			suite int64
+		}
+		suite := func(c CheckRun) int64 {
+			if c.Suite == nil {
+				return 0
+			}
+			return c.Suite.ID
+		}
+		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[key]int64{}
 		for _, c := range all {
-			newest[c.Name] = max(newest[c.Name], c.ID)
+			k := key{c.Name, suite(c)}
+			newest[k] = max(newest[k], c.ID)
 		}
 		runs := []CheckRun{}
 		for _, c := range all {
-			if r.URL.Query().Get("filter") == "all" || c.ID == newest[c.Name] {
+			if r.URL.Query().Get("filter") == "all" || c.ID == newest[key{c.Name, suite(c)}] {
 				runs = append(runs, c)
 			}
 		}
@@ -1163,7 +1176,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
-			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": false})
+			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": a.Expired})
 		}
 		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
 	case m == "GET" && reJobLogs.MatchString(p):

@@ -46,8 +46,8 @@ aayu proof <action> [<story>]
 
 | Input | Required | What it does |
 |---|---|---|
-| `<action>` | yes | Proof operation: push an advisory pack, get, verify, or list packs, or (merge gate only) comment: check the run's pack and keep its PR comment. One of: `push`, `get`, `verify`, `list`, `comment`. |
-| `<story>` | no | Story whose pack to operate on. |
+| `<action>` | yes | Proof operation: push an advisory pack, get, verify, or list packs; land: for a PR merged outside aayu ship, land the merge gate's own aayudha-pack artifact for the merged head as the authoritative pack, after the checks ship makes; or (merge gate only) comment: check the run's pack and keep its PR comment. One of: `push`, `get`, `verify`, `list`, `comment`, `land`. |
+| `<story>` | no | Story whose pack to operate on; with land, the merged pull request. |
 | `--media` | no | Include proof media; needs a bucket in [proof] media, since media never go to the ledger or Git LFS. |
 
 <!-- END GENERATED: skill-usage -->

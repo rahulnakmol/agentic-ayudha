@@ -818,12 +818,12 @@ var Verbs = []Command{
 	},
 	{
 		Name: "proof", WP: "WP4.2", Stage: StageProve,
-		Summary: "Push, get, verify, or list proof packs on the ledger branch; comment is the merge gate's pack check.",
+		Summary: "Push, get, verify, or list proof packs on the ledger branch; land a merged PR's gate pack; comment is the merge gate's pack check.",
 		Reader:  "Stores, fetches, and checks the proof packs that hold the evidence for each change.",
 		Seat:    QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
-			readOnlyWith(enumIn("action", true, true, "Proof operation: push an advisory pack, get, verify, or list packs, or (merge gate only) comment: check the run's pack and keep its PR comment.", "push", "get", "verify", "list", "comment"), "get", "verify", "list"),
-			optPos("story", TypeIssue, "Story whose pack to operate on."),
+			readOnlyWith(enumIn("action", true, true, "Proof operation: push an advisory pack, get, verify, or list packs; land: for a PR merged outside aayu ship, land the merge gate's own aayudha-pack artifact for the merged head as the authoritative pack, after the checks ship makes; or (merge gate only) comment: check the run's pack and keep its PR comment.", "push", "get", "verify", "list", "comment", "land"), "get", "verify", "list"),
+			optPos("story", TypeIssue, "Story whose pack to operate on; with land, the merged pull request."),
 			flag("media", TypeBool, "Include proof media; needs a bucket in [proof] media, since media never go to the ledger or Git LFS."),
 		},
 		Outputs:  []string{"pack", "verification-report"},

@@ -351,6 +351,28 @@ func TestShipPassRules(t *testing.T) {
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "does not cover never layer(s) L07: a CODEOWNER of internal/config/x.go, internal/ledger/x.go must approve (owners: owner1), whatever the streak") {
 		t.Fatalf("approver who is no CODEOWNER of the never layer: %d %s", code, out)
 	}
+	// Bug #1031 criterion 1: in solo mode a never-layer path with no
+	// CODEOWNER leaves no common owner; the refusal and the Ready to ship
+	// comment name the approver and the Solo-mode bypass, and the path.
+	g.Mu.Lock()
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @reviewer2\n"
+	g.Mu.Unlock()
+	code, out = ship()
+	g.Mu.Lock()
+	ready := ""
+	for _, c := range g.Issues[prN].Comments {
+		if strings.HasPrefix(c.Body, ReadyToShipMarker) {
+			ready = c.Body
+		}
+	}
+	g.Mu.Unlock()
+	solo := "aayu ship " + strconv.Itoa(prN) + " --solo-bypass"
+	for _, text := range []string{out, ready} {
+		if code != ExitBlocked || !strings.Contains(text, "@reviewer2") || !strings.Contains(text, solo) || !strings.Contains(text, "internal/ledger/x.go have no CODEOWNER") ||
+			strings.Contains(strings.ToLower(text), "nobody configured") {
+			t.Fatalf("solo-mode Ready to ship with a never-layer path that has no CODEOWNER: %d\n%s\ncomment:\n%s", code, out, ready)
+		}
+	}
 	g.Mu.Lock()
 	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Mu.Unlock()

@@ -493,6 +493,37 @@ func TestPlanApprove(t *testing.T) {
 	if code, out, errOut := run(t, human, opts, "plan", "2", "--approve", "--repo", "o/r", "--set", "autonomy.approver=founder"); code != 0 || !strings.Contains(out, "recorded by founder (as approver)") {
 		t.Fatalf("approve by the [autonomy] approver: %d %s %s", code, out, errOut)
 	}
+
+	// Bug #1031 criterion 2: a story labelled L02 and L07 whose change
+	// regenerates CONSTRAINTS.md plans a checkpoint for L04, a never layer
+	// ship finds from the files. The plan passes, adds layer:L04, and its
+	// review covers L04 and L07; --approve records it.
+	both := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L07") // #4
+	both.Parent, feature.Subs = feature.Number, append(feature.Subs, both.Number)
+	d := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) {
+		d.Story = both.Number
+		for _, l := range []string{"L02", "L04"} {
+			c := d.Checkpoints[0]
+			c.Layer, c.Criteria = l, nil
+			d.Checkpoints = append(d.Checkpoints, c)
+		}
+	})
+	code, out, errOut := run(t, agent, opts, "plan", "4", "--repo", "o/r", "--draft", d, "--create", "--json")
+	var res PlanResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || !res.Pass || strings.Join(res.Footprint, ",") != "L02,L04,L07" ||
+		strings.Join(res.Added, ",") != "L04" || strings.Join(res.Review.Layers, ",") != "L04,L07" {
+		t.Fatalf("plan with a never-layer checkpoint beyond the labels: %d %v %s %s", code, err, out, errOut)
+	}
+	if labels := g.LabelNames(4); !contains(labels, "layer:L04") || !contains(labels, "layer:L02") {
+		t.Fatalf("the added never layer was not written as a label: %v", labels)
+	}
+	if code, out, errOut := run(t, human, opts, "plan", "4", "--approve", "--repo", "o/r", "--set", "autonomy.approver=founder"); code != 0 || !strings.Contains(out, "recorded by founder (as approver)") {
+		t.Fatalf("approve the plan with the added never layer: %d %s %s", code, out, errOut)
+	}
+	rec = PlanRecord{}
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/4/plan.json")), &rec); err != nil || rec.Review.ApprovedBy != "founder" || !contains(rec.Review.Layers, "L04") {
+		t.Fatalf("plan record after the review: %v %+v", err, rec.Review)
+	}
 }
 
 // Feature #874 story #991: plan takes a Feature and writes its technical

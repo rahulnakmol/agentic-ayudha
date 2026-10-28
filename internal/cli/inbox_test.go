@@ -581,7 +581,8 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 		}
 	}
 	// The author's own review never counts: when the author is the only
-	// approver, the comment offers only the inbox, never a review.
+	// approver, the comment offers the inbox and, in solo mode, the
+	// Solo-mode bypass (Bug #1031), never a review.
 	g.Mu.Lock()
 	author := g.Pulls[prA].User.Login
 	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"" + author + "\"\n"
@@ -591,7 +592,7 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	}
 	g.Mu.Lock()
 	for _, c := range g.Issues[prA].Comments {
-		if c.User.Login != "mallory" && strings.HasPrefix(c.Body, ReadyToShipMarker) && (!strings.Contains(c.Body, "@"+author+" ships it from `aayu inbox`.") || strings.Contains(c.Body, "approves the head")) {
+		if c.User.Login != "mallory" && strings.HasPrefix(c.Body, ReadyToShipMarker) && (!strings.Contains(c.Body, "@"+author+" ships it from `aayu inbox`, or posts a comment starting \"Solo-mode bypass:\" that names the head and runs `aayu ship "+strconv.Itoa(prA)+" --solo-bypass`.") || strings.Contains(c.Body, "approves the head")) {
 			t.Errorf("the author as the only approver is asked to review: %s", c.Body)
 		}
 	}

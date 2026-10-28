@@ -206,7 +206,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// 1. The pack the merge gate built for this head, from the artifact of a
 	// run of the base branch's workflow (S-4.2b): never a pack on the ledger,
 	// a preview, or an artifact another workflow uploaded.
-	gp, err := e.gatePack(ctx, c, owner, name, pr, story)
+	gp, err := e.gatePack(ctx, c, owner, name, "ship", pr, story)
 	if err != nil {
 		return err
 	}
@@ -435,6 +435,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			if len(why) == 0 {
 				why = append(why, "no approving review")
 			}
+			if len(rec.Pass.NoOwner) > 0 {
+				why = append(why, fmt.Sprintf("never-layer path(s) %s have no CODEOWNER, so no review covers them", strings.Join(rec.Pass.NoOwner, ", ")))
+			}
 			refusal := fmt.Sprintf("ship #%d: no human pass: %s (bot reviews and the author's own never count)", n, strings.Join(why, "; "))
 			if c.DryRun() {
 				return Errorf(ExitBlocked, "%s", refusal)
@@ -447,12 +450,20 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			if strings.EqualFold(who, "@"+pr.GetUser().GetLogin()) {
 				review = ""
 			}
+			// Solo mode: the [autonomy] approver ships it with the Solo-mode
+			// bypass, CODEOWNER or not (Bug #1031).
+			bypass := ""
+			if a := pol.Config.Autonomy.Approver; rec.Pass.As == "approver" && soloMode(pol.Config, a, "ship") == nil {
+				who = "@" + a
+				review = fmt.Sprintf(", or posts a comment starting %q that names the head and runs `aayu ship %d --solo-bypass`", SoloBypassPrefix, n)
+				bypass = review
+			}
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
 				"%s ships it from `aayu inbox`%s.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), review)
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}
-			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s", refusal, who), "aayu inbox ("+who+")")
+			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s%s", refusal, who, bypass), "aayu inbox ("+who+")")
 		}
 		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config)
 		switch {
@@ -693,7 +704,7 @@ type gatePackRun struct {
 // no preview, and no artifact uploaded by another workflow or by the pull
 // request's own copy of the gate counts; a refusal lists every run it passed
 // over and why.
-func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, story int) (gatePackRun, error) {
+func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb string, pr *gh.PullRequest, story int) (gatePackRun, error) {
 	n, head, path := pr.GetNumber(), pr.GetHead().GetSHA(), ".github/workflows/"+MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{Branch: pr.GetHead().GetRef(), ListOptions: gh.ListOptions{PerPage: 50}})
 	if err != nil {
@@ -731,7 +742,7 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name string
 	if len(why) > 6 {
 		why = append(why[:6], fmt.Sprintf("%d older run(s)", len(why)-6))
 	}
-	return gatePackRun{}, Errorf(ExitBlocked, "ship #%d: no merge gate pack for the head %s: %s", n, short(head), strings.Join(why, "; "))
+	return gatePackRun{}, Errorf(ExitBlocked, "%s #%d: no merge gate pack for the head %s: %s", verb, n, short(head), strings.Join(why, "; "))
 }
 
 // unpackGateRun downloads a merge gate run's aayudha-pack artifact and checks

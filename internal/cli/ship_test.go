@@ -953,6 +953,30 @@ func TestShipOnProof(t *testing.T) {
 	g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == "early-build" })
 	g.Mu.Unlock()
 
+	// Bug #1031 criterion 5: a concurrency group cancels one run of a
+	// required check and a later run on the same head passes (PR #1085). The
+	// latest completed run counts; a cancelled run alone, a later failure, and
+	// a later run still in progress decide as before.
+	cancelled := fake.CheckRun{ID: 121613879571, Name: "build", Status: "completed", Conclusion: "cancelled", App: actions, Suite: &fake.Suite{ID: 50},
+		StartedAt: "2026-10-27T13:55:40Z", CompletedAt: "2026-10-27T13:55:54Z"}
+	later := func(status, conclusion string) fake.CheckRun {
+		return fake.CheckRun{ID: 121613890736, Name: "build", Status: status, Conclusion: conclusion, App: actions, Suite: &fake.Suite{ID: 51}, StartedAt: "2026-10-27T13:55:59Z"}
+	}
+	g.Mu.Lock()
+	runsBefore = slices.Clone(g.CheckRuns[head])
+	g.CheckRuns[head] = append([]fake.CheckRun{cancelled}, runsBefore...)
+	g.Mu.Unlock()
+	refused("required check build is cancelled on " + short(head))
+	for _, l := range []fake.CheckRun{later("completed", "failure"), later("in_progress", "")} {
+		g.Mu.Lock()
+		g.CheckRuns[head] = append([]fake.CheckRun{l, cancelled}, runsBefore...)
+		g.Mu.Unlock()
+		refused("required check build is " + or(l.Conclusion, l.Status) + " on " + short(head))
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = append([]fake.CheckRun{later("completed", "success"), cancelled}, runsBefore...)
+	g.Mu.Unlock()
+
 	// The audit's label goes on before the merge: when it cannot, nothing
 	// merges, so no merge on proof escapes the look after merge.
 	g.Mu.Lock()
@@ -1582,5 +1606,73 @@ func TestShipSendsNothingOnRefusal(t *testing.T) {
 	defer s.g.Mu.Unlock()
 	if s.g.Pulls[s.prN].Merged {
 		t.Fatal("merged although inspect says fix")
+	}
+}
+
+// Bug #1031 criterion 4: `aayu proof land <pr>` lands the merge gate's own
+// pack of a PR merged outside ship, after the checks ship makes on the
+// merged head, as one authoritative ledger commit naming the gate's run and
+// the person; then the audit counts the story as covered. An open PR, a gate
+// run on another head, and an expired artifact each exit 4 with the reason.
+func TestProofLand(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	land := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "proof", "land", strconv.Itoa(prN), "--repo", "o/r")
+		return code, out + errOut
+	}
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR is open, not merged") {
+		t.Fatalf("proof land of an open PR: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Merged, g.Pulls[prN].State = true, "closed"
+	good := g.Runs[len(g.Runs)-1]
+	arts := g.Artifacts[good.ID]
+	g.Artifacts[good.ID] = []fake.ArtifactZip{{ID: arts[0].ID, Name: arts[0].Name, Zip: arts[0].Zip, Expired: true}}
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("proof land #%d: no merge gate pack for the head %s: run %d: its aayudha-pack artifact %d expired", prN, short(head), good.ID, arts[0].ID)) {
+		t.Fatalf("proof land with an expired artifact: %d %s", code, out)
+	}
+	other := strings.Repeat("e", 40)
+	g.Mu.Lock()
+	g.Artifacts[good.ID] = arts
+	g.Runs = []fake.WorkflowRun{good}
+	g.Runs[0].HeadSHA = other
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "proves "+short(other)+", not the head "+short(head)) {
+		t.Fatalf("proof land with a gate run on another head: %d %s", code, out)
+	}
+	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
+		t.Fatalf("a refused proof land landed a pack:\n%s", got)
+	}
+	g.Mu.Lock()
+	g.Runs[0].HeadSHA = head
+	g.Mu.Unlock()
+	// The audit's inputs: the merged PR delivered #2, and it is uncovered.
+	g.Mu.Lock()
+	g.Static = map[string]any{"/repos/o/r/rulesets/rule-suites": jsonOf(t, "[]"), "/repos/o/r/commits": jsonOf(t, "[]"), "/repos/o/r/actions/runs": jsonOf(t, `{"total_count":0,"workflow_runs":[]}`),
+		"/repos/o/r/actions/workflows/release.yml/runs":       jsonOf(t, `{"total_count":0,"workflow_runs":[]}`),
+		"/repos/o/r/actions/workflows/aayudha-merge-gate.yml": jsonOf(t, `{"id":1,"path":".github/workflows/aayudha-merge-gate.yml","created_at":"2026-10-01T00:00:00Z"}`),
+		"/repos/o/r/issues/2/timeline":                        jsonOf(t, `[{"event":"labeled","actor":{"login":"founder"},"created_at":"2026-10-02T00:00:00Z","label":{"name":"type:story"}}]`)}
+	g.Pulls[prN].MergedAt = time.Now().UTC().Add(-time.Hour)
+	g.Mu.Unlock()
+	if code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run"); code != 0 || !strings.Contains(out, "proof coverage 0/1; merged without proof: pre-gate 0, post-gate 1") {
+		t.Fatalf("audit before proof land: %d %s %s", code, out, errOut)
+	}
+	before := git(t, bare, "rev-list", "--count", "ledger")
+	if code, out := land(); code != 0 || !strings.Contains(out, fmt.Sprintf("from artifact %d of run %d", arts[0].ID, good.ID)) {
+		t.Fatalf("proof land: %d %s", code, out)
+	}
+	if n, _ := strconv.Atoi(before); git(t, bare, "rev-list", "--count", "ledger") != strconv.Itoa(n+1) {
+		t.Fatalf("proof land did not make exactly one ledger commit after %s", before)
+	}
+	var p proof.Pack
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/pack.json")), &p); err != nil ||
+		p.Authority != (proof.Authority{Kind: proof.Authoritative, Workflow: ".github/workflows/aayudha-merge-gate.yml", RunID: good.ID, Writer: "founder (aayu proof land)"}) {
+		t.Fatalf("landed pack: %v %+v", err, p.Authority)
+	}
+	code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run")
+	if code != 0 || !strings.Contains(out, "proof coverage 1/1; merged without proof: pre-gate 0, post-gate 0") {
+		t.Fatalf("audit after proof land: %d %s %s", code, out, errOut)
 	}
 }

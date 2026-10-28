@@ -37,6 +37,7 @@ type PassRule struct {
 	Never     []string `json:"never_layers,omitempty"`
 	Owners    []string `json:"codeowners,omitempty"` // logins that own every never-layer path
 	NeverPath []string `json:"never_paths,omitempty"`
+	NoOwner   []string `json:"never_paths_no_owner,omitempty"` // never-layer paths CODEOWNERS gives no owner (Bug #1031)
 }
 
 func passRule(cfg *config.Config) PassRule {
@@ -84,9 +85,9 @@ func (p PassRule) allows(login string) error {
 	return nil
 }
 
-// neverOwners fills in the never-layer paths of a PR's files and the logins
-// that are CODEOWNERS of all of them, by the base branch's layers and
-// CODEOWNERS at the policy's tip.
+// neverOwners fills in the never-layer paths of a PR's files, those with no
+// CODEOWNER, and the logins that are CODEOWNERS of all of them, by the base
+// branch's layers and CODEOWNERS at the policy's tip.
 func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, name string, files []string, pol *shipPolicy) error {
 	for _, f := range files {
 		for _, l := range pol.Layers.Footprint([]string{f}) {
@@ -105,6 +106,9 @@ func (p *PassRule) neverOwners(ctx context.Context, c *github.Client, owner, nam
 	rules := identity.ParseCodeowners(text)
 	for i, path := range p.NeverPath {
 		owners, _, _ := identity.Owners(rules, path)
+		if len(owners) == 0 {
+			p.NoOwner = append(p.NoOwner, path)
+		}
 		if i == 0 {
 			p.Owners = owners
 			continue

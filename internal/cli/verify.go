@@ -31,7 +31,11 @@ import (
 func init() { register("verify", runVerify) }
 
 var (
-	storyRef     = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves|story:?)\s+#([0-9]+)\b`)
+	// storyRef is a PR body's Refs, Closes, Fixes, or Resolves line; it
+	// decides the story. storyLine ("Story #n") is read only when there is
+	// none: a body may name a parent or sibling story in prose (Bug #1031).
+	storyRef     = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
+	storyLine    = regexp.MustCompile(`(?im)^\s*story:?\s+#([0-9]+)\b`)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
@@ -205,10 +209,13 @@ func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
 }
 
 // StoryOf finds the story a change serves: "Refs #n" (or Closes/Fixes) in the
-// PR body, else an Aayudha-Story trailer on the head commit, else a
-// story/<n>-… branch name.
+// PR body, else a "Story #n" line, else an Aayudha-Story trailer on the head
+// commit, else a story/<n>-… branch name.
 func StoryOf(body, headMessage, branch string) int {
 	if m := storyRef.FindStringSubmatch(body); m != nil {
+		return issueNumber(m[1])
+	}
+	if m := storyLine.FindStringSubmatch(body); m != nil {
 		return issueNumber(m[1])
 	}
 	if m := storyTrailer.FindStringSubmatch(headMessage); m != nil {
@@ -306,6 +313,15 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
+	// The gate proves one story: a body whose Refs, Closes, or Fixes lines
+	// name two is refused, never resolved by a silent pick (Bug #1031).
+	if refs := storiesOf(body, ""); len(refs) > 1 {
+		names := make([]string, len(refs))
+		for i, n := range refs {
+			names[i] = fmt.Sprintf("#%d", n)
+		}
+		return Errorf(ExitBlocked, "verify %d: the PR body refers to stories %s and %s: keep one", res.PR, strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
+	}
 	res.Story = StoryOf(body, msg, branch)
 	// The merge gate proves stories; a PR that serves no story has no pack to
 	// prove, but its feature-map floors still run: the drift check, and the

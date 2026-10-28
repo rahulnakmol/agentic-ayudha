@@ -192,12 +192,24 @@ func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatu
 	// first), and every suite's must pass: a run of another workflow or
 	// event, a dispatch that skips the job say, cannot stand in for a
 	// failing one.
+	// A cancelled run that a later completed run of the same name and app
+	// replaced does not count: a workflow's concurrency group cancels one run
+	// and starts another on the same head (Bug #1031).
+	replaced := func(r *gh.CheckRun) bool {
+		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(runs, func(o *gh.CheckRun) bool {
+			return o.GetName() == r.GetName() && o.GetApp().GetID() == r.GetApp().GetID() && o.GetStatus() == "completed" &&
+				o.GetConclusion() != "cancelled" && o.GetStartedAt().After(r.GetStartedAt().Time)
+		})
+	}
 	state, seen := "missing", map[int64]bool{}
 	for _, r := range runs {
 		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID || seen[r.GetCheckSuite().GetID()] {
 			continue
 		}
 		seen[r.GetCheckSuite().GetID()] = true
+		if replaced(r) {
+			continue
+		}
 		st := r.GetConclusion()
 		switch {
 		case r.GetStatus() != "completed":
