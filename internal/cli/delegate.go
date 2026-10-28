@@ -516,9 +516,11 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		}
 		var task delegate.Task
 		err := e.act(ctx, d, "delegate.handoff", map[string]any{"brief_sha256": d.state.BriefHash}, func(ctx context.Context) error {
-			var err error
-			task, err = d.adapter.Handoff(ctx, delegate.Handoff{Repo: d.repo, Base: d.dev, Story: d.story, Title: d.title, Brief: d.brief, Branch: d.branch})
-			return err
+			return withReceiverTimeout(ctx, d.receiver, func(ctx context.Context) error {
+				var err error
+				task, err = d.adapter.Handoff(ctx, delegate.Handoff{Repo: d.repo, Base: d.dev, Story: d.story, Title: d.title, Brief: d.brief, Branch: d.branch})
+				return err
+			})
 		})
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
@@ -737,11 +739,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			return e.localWriter(d, msg), false, nil
 		}
 		if err := e.act(ctx, d, "delegate.follow-up", map[string]any{"pr": d.state.PR, "head": head, "cycle": round, "checks": names}, func(ctx context.Context) error {
-			t, err := d.adapter.FollowUp(ctx, d.state, msg)
-			if err == nil && t.ID != "" {
-				d.state.Task = t.ID
-			}
-			return err
+			return d.followUp(ctx, msg)
 		}); err != nil {
 			return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 		}
@@ -813,17 +811,25 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return e.localWriter(d, msg), false, nil
 	}
 	err = e.act(ctx, d, "delegate.follow-up", map[string]any{"pr": d.state.PR, "head": head, "cycle": st.Cycles, "findings": ids}, func(ctx context.Context) error {
-		t, err := d.adapter.FollowUp(ctx, d.state, msg)
-		if err == nil && t.ID != "" {
-			d.state.Task = t.ID
-		}
-		return err
+		return d.followUp(ctx, msg)
 	})
 	if err != nil {
 		return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 	}
 	res.Next = fmt.Sprintf("%d finding(s) sent to %s; sync again after its new commits", len(ids), d.receiver)
 	return nil, true, e.saveDelegation(ctx, d)
+}
+
+// followUp sends msg to the receiver within receiverTimeout (Bug #1124),
+// and keeps the task it reports.
+func (d *delegation) followUp(ctx context.Context, msg string) error {
+	return withReceiverTimeout(ctx, d.receiver, func(ctx context.Context) error {
+		t, err := d.adapter.FollowUp(ctx, d.state, msg)
+		if err == nil && t.ID != "" {
+			d.state.Task = t.ID
+		}
+		return err
+	})
 }
 
 // localWriter runs the receiver's CLI on prompt in the worktree, with a

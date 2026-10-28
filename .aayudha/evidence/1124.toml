@@ -1,0 +1,13 @@
+# Which tests prove Bug #1124's Completion Goal.
+
+[[criterion]]
+id = 1 # inspect asks for fixes and amp threads continue never returns: build exits 5 in the limit, "follow-up to amp: amp: context deadline exceeded"
+tests = ["internal/cli:TestDelegateFollowUpStalls"]
+
+[[criterion]]
+id = 2 # the hand-off's amp -ox never returns: build exits 5 in the limit, event "hand-off failed: amp: context deadline exceeded"
+tests = ["internal/cli:TestDelegateHandoffStalls"]
+
+[[criterion]]
+id = 3 # mission start on amp, the new Kanha's amp -ox never returns: Start exits in the limit, says why, no parent recorded
+tests = ["internal/cli:TestMissionStartWhenKanhaHandoffStalls"]
