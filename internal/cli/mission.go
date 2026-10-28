@@ -106,6 +106,10 @@ type MissionPlan struct {
 	EventsCursor string `json:"events_cursor,omitempty"`
 	// Wakes are the safety tick's newest wakes of the Kanha, at most keptWakes (Story #1009).
 	Wakes []MissionWake `json:"wakes,omitempty"`
+	// StoryStates are what mission recover and retry found and did for a story
+	// or Bug (Story #1003); Sources are the hosts recover reads, each with its cursor.
+	StoryStates []MissionStoryState `json:"story_states,omitempty"`
+	Sources     []MissionSource     `json:"sources,omitempty"`
 }
 
 // MissionStopped is one story or Bug a person stopped, and why.
@@ -697,6 +701,10 @@ func runMission(ctx context.Context, e *Env, in Values) error {
 		return missionGate(ctx, e, f, in)
 	case action == "budget":
 		return missionBudget(ctx, e, f, in)
+	case action == "recover":
+		return missionRecover(ctx, e, f)
+	case action == "retry":
+		return missionRetry(ctx, e, f, in)
 	}
 	return missionShow(ctx, e, f)
 }
@@ -1102,6 +1110,8 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 			st := state[n]
 			if s := plan.stopped(n); s != nil && !merged[n] {
 				st = fmt.Sprintf("stopped (%s)", s.Reason)
+			} else if ss := plan.stateOf(n); ss != nil && ss.State != "" && !merged[n] { // what recover read last (#1003)
+				st = ss.summary()
 			}
 			ms.Stories = append(ms.Stories, StoryStateEntry{Number: n, State: st})
 			if merged[n] {
@@ -1154,6 +1164,9 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		fmt.Fprintln(w, rep.State)
 		if plan.Tool != "" {
 			fmt.Fprintf(w, "tool      %s (%s: the tool of @%s, who started it)\n", plan.Tool, rep.LedgerPath, plan.StartedBy)
+		}
+		for _, s := range plan.Sources {
+			fmt.Fprintf(w, "source    %s\n", s.summary())
 		}
 		for _, m := range rep.Milestones {
 			parts := make([]string, len(m.Stories))

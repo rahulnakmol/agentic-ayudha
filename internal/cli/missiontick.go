@@ -177,7 +177,8 @@ func tickInputs(ctx context.Context, w *ledger.Writer) ([]int, map[int]delegate.
 }
 
 // tickMission wakes Feature f's Kanha when its mission has a free agent and a
-// story that can start, and nobody told the Kanha anything in the last tick.
+// story that can start, and nobody told the Kanha anything in the last tick,
+// or when a failed story's retry came due after the Kanha was last told.
 // It says why it did not wake it, or "" (also for a mission not started).
 func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, states map[int]delegate.State, rep *TickReport) string {
 	plan, appr, _, err := readMission(ctx, w, f)
@@ -196,8 +197,10 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 		return fmt.Sprintf("its Kanha is local, on %s, and takes events at its own next check (#1012)", appr.Parent.Machine)
 	}
 	now := e.Now()
-	if at := lastTold(f, plan, appr, states); now.Sub(at) < tickPeriod {
-		return fmt.Sprintf("its Kanha was told at %s, since the last tick", at.UTC().Format(time.RFC3339))
+	told := lastTold(f, plan, appr, states)
+	due := dueRetries(plan, told, now)
+	if now.Sub(told) < tickPeriod && len(due) == 0 {
+		return fmt.Sprintf("its Kanha was told at %s, since the last tick", told.UTC().Format(time.RFC3339))
 	}
 	changed, err := (&approveRun{e: e, c: c, w: w, n: f}).featureChanges(ctx, repo, *appr)
 	if err == nil && len(changed) > 0 {
@@ -223,17 +226,20 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	}
 	var starts, waits []string
 	for _, it := range list.Items {
-		if it.Action == "start" {
+		if it.Action == "start" && now.Sub(told) >= tickPeriod {
 			starts = append(starts, it.Key)
 		} else if !slices.Contains(waits, it.Reason) {
 			waits = append(waits, it.Reason)
 		}
 	}
-	if len(starts) == 0 {
+	if len(starts) == 0 && len(due) == 0 {
 		return "nothing can start: " + orDefault(strings.Join(waits, "; "), list.note)
 	}
 	p := appr.Parent
 	msg := fmt.Sprintf("tick: %s can start, and no event reached the Kanha since the last tick: run aayu mission next %d", strings.Join(starts, ", "), f)
+	if len(due) > 0 { // only recover runs a due retry (#1003), and the Kanha has no clock of its own
+		msg = fmt.Sprintf("tick: the retry of %s is due, and no event reached the Kanha since: run aayu mission recover %d, then aayu mission next %d", strings.Join(due, ", "), f, f)
+	}
 	wake := TickWake{Feature: f, Kanha: orDefault(p.URL, p.Session), Event: msg, Status: "dry run: not sent"}
 	if c.DryRun() {
 		rep.Woken = append(rep.Woken, wake)
@@ -245,12 +251,13 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	at := now.UTC().Format(time.RFC3339)
 	held := ""
 	ok, err := updatePlan(ctx, w, f, fmt.Sprintf("missions: the tick wakes the Kanha of #%d", f), func(p *MissionPlan) bool {
+		told := lastTold(f, p, appr, states)
 		switch {
 		case p.State != "":
 			held = p.State
 		case p.Pause != nil:
 			held = "paused: " + p.Pause.Reason
-		case now.Sub(lastTold(f, p, appr, states)) < tickPeriod:
+		case now.Sub(told) < tickPeriod && len(dueRetries(p, told, now)) == 0:
 			held = "another tick woke its Kanha"
 		default:
 			p.Wakes = append(p.Wakes, MissionWake{At: at, Event: msg, Status: wakeSending})
@@ -291,6 +298,20 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	}
 	rep.Woken = append(rep.Woken, wake)
 	return ""
+}
+
+// dueRetries are the stories whose failed step's retry was due at now and
+// came due after the Kanha was last told: only recover runs a retry, and
+// only on a Kanha wake (#1003), so the tick wakes for it.
+func dueRetries(p *MissionPlan, told, now time.Time) []string {
+	var due []string
+	for _, ss := range p.StoryStates {
+		at, err := time.Parse(time.RFC3339, ss.RetryAt)
+		if ss.State == "failed" && err == nil && !at.After(now) && at.After(told) {
+			due = append(due, "#"+strconv.Itoa(ss.Number))
+		}
+	}
+	return due
 }
 
 // lastTold is when the Kanha of Feature f was last told anything: its brief

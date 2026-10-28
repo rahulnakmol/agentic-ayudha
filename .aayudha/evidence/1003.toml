@@ -1,0 +1,37 @@
+# Which tests prove Story #1003's Completion Goal.
+
+[[criterion]]
+id = 1 # the Kanha's orb was lost: re-attach #60 (live Amp thread), keep #61 on its PR, restart #62 (archived Cursor agent, no PR) from its branch and brief; one line per story
+tests = ["internal/cli:TestMissionRecoverReattachesKeepsRestarts"]
+
+[[criterion]]
+id = 2 # recover twice in a row: the second run changes nothing, and no story has two live agents
+tests = ["internal/cli:TestMissionRecoverIsIdempotent", "internal/cli:TestMissionRecoverReattachesKeepsRestarts"]
+
+[[criterion]]
+id = 3 # a Codex task list answers 401: unreadable: codex task list (401), the cursor kept, nothing started, show says unreadable, not quiet
+tests = ["internal/cli:TestMissionRecoverMarksUnreadable"]
+
+[[criterion]]
+id = 4 # a start with no answer before the timeout and a codex task with no PR: maybe started, and the next wake checks the host and GitHub first
+tests = ["internal/cli:TestMissionMaybeStartedCheckedBeforeRestart"]
+
+[[criterion]]
+id = 5 # a host error: retry after retry_backoff_minutes (10), then 20; after retry_max (2) retries it waits on @rahulnakmol with the errors
+tests = ["internal/cli:TestMissionRetryBackoffAndMax"]
+
+[[criterion]]
+id = 6 # mission retry --story for a story and a failed Bug: one more attempt each, counted and costed
+tests = ["internal/cli:TestMissionRetryStory"]
+
+[[criterion]]
+id = 7 # a retry of a story whose PR has a judged inspect review on its head does not run that review again
+tests = ["internal/cli:TestMissionRetryDoesNotRerunJudgedReview"]
+
+[[criterion]]
+id = 8 # @carol on cursor: recover and retry of #874 (codex) are refused with the tool and its starter, and the record does not change
+tests = ["internal/cli:TestMissionRecoverRefusedOnOtherTool"]
+
+[[criterion]]
+id = 9 # @dana on codex retries #950 of @bob's #874: controls names retry, dana, codex, and the time
+tests = ["internal/cli:TestMissionRetryByTeammateRecorded"]

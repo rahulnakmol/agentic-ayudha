@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 )
@@ -53,6 +56,49 @@ type Task struct {
 	PRURL  string `json:"pr_url,omitempty"`
 	Diff   string `json:"-"` // Codex: the change, which aayu applies and commits (diff return)
 	Detail string `json:"detail,omitempty"`
+	Title  string `json:"title,omitempty"` // a listed task's title (Lister)
+}
+
+// Lister is a receiver that lists its recent tasks: mission recover reads
+// the list to find the task of a start that got no answer (Story #1003).
+type Lister interface {
+	List(ctx context.Context) ([]Task, error)
+}
+
+// storyHeading is the brief's first line, "# Delegated story #64: …", which
+// is a listed task's title.
+var storyHeading = regexp.MustCompile(`(?i)\bstory #(\d+):`)
+
+// MayRun reports whether a listed task may hold story n's agent: one that can
+// still run (not failed) whose title's first heading names n, so a story #65
+// titled "Follow-up to #64" is not #64's. A task that runs and whose title
+// names no story could be n's, so the list cannot rule n out: that is an
+// error, never "no task" (Story #1003: recover starts no second agent).
+func MayRun(tasks []Task, n int) (bool, error) {
+	var unclear *Task
+	for i, t := range tasks {
+		m := storyHeading.FindStringSubmatch(t.Title)
+		switch {
+		case t.Status == TaskFailed:
+		case m != nil && m[1] == strconv.Itoa(n):
+			return true, nil
+		case m == nil && t.Status == TaskWorking && unclear == nil:
+			unclear = &tasks[i]
+		}
+	}
+	if unclear != nil {
+		return false, fmt.Errorf("task %s runs, and its title names no story: %q", unclear.ID, clip(unclear.Title, 60))
+	}
+	return false, nil
+}
+
+// NoAnswer reports whether err is a request whose answer aayu did not get:
+// its timeout passed, or a person cancelled the command while it waited. The
+// request may have reached the host, so the work may have started (Story
+// #1003, "maybe started").
+func NoAnswer(err error) bool {
+	var ne net.Error
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.As(err, &ne) && ne.Timeout()
 }
 
 // Adapter is one receiver's transport. Every adapter sends the same brief;
@@ -165,7 +211,7 @@ func (c CursorAPI) Status(ctx context.Context, st State) (Task, error) {
 	switch r.Status {
 	case "FINISHED":
 		t.Status = TaskDone
-	case "ERROR", "CANCELLED", "EXPIRED":
+	case "ERROR", "CANCELLED", "EXPIRED", "ARCHIVED": // an archived agent runs no more
 		t.Status = TaskFailed
 	}
 	for _, b := range r.Git.Branches {
@@ -389,10 +435,15 @@ func (c CodexCloud) bin() string {
 	return c.Bin
 }
 
+// SubmitTimeout is how long `codex cloud exec` may take to submit a task.
+const SubmitTimeout = 2 * time.Minute
+
 func (c CodexCloud) submit(ctx context.Context, branch, prompt string) (Task, error) {
 	if c.EnvID == "" {
 		return Task{}, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
 	}
+	ctx, cancel := context.WithTimeout(ctx, SubmitTimeout) // past it, the task may exist: "maybe started" (NoAnswer)
+	defer cancel()
 	out, err := c.Exec(ctx, "", c.Env, "", c.bin(), "cloud", "exec", "--env", c.EnvID, "--branch", branch, prompt)
 	if err != nil {
 		return Task{}, fmt.Errorf("codex: %w", err)
@@ -435,6 +486,64 @@ func (c CodexCloud) Status(ctx context.Context, st State) (Task, error) {
 // FollowUp submits a new task on the PR's branch with the findings.
 func (c CodexCloud) FollowUp(ctx context.Context, st State, msg string) (Task, error) {
 	return c.submit(ctx, st.Branch, msg)
+}
+
+// codexListPages bounds the pages List reads: a list longer than that is one
+// it cannot finish, so it fails rather than miss a task.
+const codexListPages = 50
+
+// List reads the environment's cloud tasks (`codex cloud list --json`), page
+// by page until Codex returns no cursor: each task's ID, URL, title, and
+// status. A task on a later page still counts, so a list it cannot finish is
+// an error, never a short list (#1003: recover starts no second agent): a
+// page with no tasks array, a task with no id or a running one with no title, a cursor that
+// repeats, or too many pages.
+func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
+	if c.EnvID == "" {
+		return nil, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
+	}
+	var tasks []Task
+	cursor, seen := "", map[string]bool{}
+	for range codexListPages {
+		args := []string{"cloud", "list", "--env", c.EnvID, "--json", "--limit", "20"}
+		if cursor != "" {
+			args = append(args, "--cursor", cursor)
+		}
+		out, err := c.Exec(ctx, "", c.Env, "", c.bin(), args...)
+		if err != nil {
+			return nil, fmt.Errorf("codex: %w", err)
+		}
+		var r struct {
+			Tasks  *[]struct{ ID, URL, Title, Status string } `json:"tasks"`
+			Cursor string                                     `json:"cursor"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil || r.Tasks == nil {
+			return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
+		}
+		for _, t := range *r.Tasks {
+			task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
+			switch {
+			case codexFailed.MatchString(t.Status):
+				task.Status = TaskFailed
+			case codexDone.MatchString(t.Status):
+				task.Status = TaskDone
+			}
+			// recover matches a running story by id, and a running task to its story by
+			// title; an ended task holds no story, so it needs no title.
+			if strings.TrimSpace(t.ID) == "" || task.Status == TaskWorking && strings.TrimSpace(t.Title) == "" {
+				return nil, fmt.Errorf("codex: cloud list: a task with no id or no title: %s", clip(fmt.Sprintf("%+v", t), 120))
+			}
+			tasks = append(tasks, task)
+		}
+		switch {
+		case r.Cursor == "":
+			return tasks, nil
+		case seen[r.Cursor]:
+			return nil, fmt.Errorf("codex: cloud list: the cursor %s repeats", clip(r.Cursor, 40))
+		}
+		cursor, seen[r.Cursor] = r.Cursor, true
+	}
+	return nil, fmt.Errorf("codex: cloud list: more than %d pages of tasks", codexListPages)
 }
 
 func clip(s string, n int) string {

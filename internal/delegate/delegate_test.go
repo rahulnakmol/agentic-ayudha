@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -107,6 +109,21 @@ func TestBriefShipsOnProof(t *testing.T) {
 	}
 	if strings.Contains(b, "A human merges with `aayu ship`") || strings.Contains(b, "no force-push") || strings.Contains(b, "If you cannot open a pull request") {
 		t.Errorf("the brief of a receiver that ships still hands the merge to a human:\n%s", b)
+	}
+}
+
+// Story #1003: a restart continues on the story's branch, and a receiver
+// that ships still owns the story to its merge.
+func TestBriefContinuesBranch(t *testing.T) {
+	in := briefInput()
+	in.Continue = true
+	cont := "Continue on its branch `story/2-show-empty-list`: start from its last commit on origin, or from `dev` when it is not on origin."
+	if b := Brief(in); !strings.Contains(b, cont) || !strings.Contains(b, "If you cannot open a pull request, push the branch: aayu opens it.") || strings.Contains(b, "on a new branch") {
+		t.Fatalf("a restart's brief:\n%s", b)
+	}
+	in.Ships = true
+	if b := Brief(in); !strings.Contains(b, cont) || !strings.Contains(b, "You own story #2 to its merge") || strings.Contains(b, "If you cannot open a pull request") {
+		t.Fatalf("a restart's brief for a receiver that ships:\n%s", b)
 	}
 }
 
@@ -256,6 +273,128 @@ func TestCodexCloud(t *testing.T) {
 	}
 	if _, err := (CodexCloud{Exec: c.Exec}).Handoff(ctx, Handoff{}); !errors.Is(err, ErrNotConnected) {
 		t.Fatalf("no environment: %v", err)
+	}
+	// Story #1003: the task list that mission recover reads, each task with its title and status.
+	out["cloud list"] = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item", "status": "running"},
+		{"id": "task_e_65", "title": "# Delegated story #65: Item", "status": "completed"}, {"id": "task_e_66", "title": "# Delegated story #640: Item", "status": "error"}], "cursor": null}`
+	tasks, err := c.List(ctx)
+	if err != nil || len(tasks) != 3 || !slices.Equal(calls[len(calls)-1].args, []string{"codex", "cloud", "list", "--env", "env_123", "--json", "--limit", "20"}) ||
+		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed {
+		t.Fatalf("list: %v %+v", err, tasks)
+	}
+	// MayRun: only a task that can run and whose first heading names the story holds it; a running
+	// task whose title names no story could be any story's, so the list cannot rule one out.
+	listed := func(title, st string) Task { return Task{ID: "task_x", Title: title, Status: st} }
+	for _, tc := range []struct {
+		name  string
+		tasks []Task
+		n     int
+		runs  bool
+		clear bool
+	}{
+		{"its task runs", tasks, 64, true, true},
+		{"its task is done", tasks, 65, true, true},
+		{"only a failed task for #640", tasks, 640, false, true},
+		{"#64 is not #640's", tasks[:1], 640, false, true},
+		{"a follow-up that names #64 is #65's", []Task{listed("# Delegated story #65: Follow-up to #64", TaskWorking)}, 64, false, true},
+		{"a heading without the #", []Task{listed("Delegated story #64: Item", TaskWorking)}, 64, true, true},
+		{"a running task that names no story", []Task{listed("Fix the cart total", TaskWorking)}, 64, false, false},
+		{"a done task that names no story", []Task{listed("Fix the cart total", TaskDone)}, 64, false, true},
+		{"its task beside an unclear one", []Task{listed("Fix the cart total", TaskWorking), listed("# Delegated story #64: Item", TaskWorking)}, 64, true, true},
+	} {
+		if runs, err := MayRun(tc.tasks, tc.n); runs != tc.runs || (err == nil) != tc.clear {
+			t.Errorf("MayRun %s: %v, %v", tc.name, runs, err)
+		}
+	}
+	// A story's task on a later page counts: List follows each cursor, and a page it cannot read fails the whole list.
+	pages := map[string]string{
+		"":   `{"tasks": [{"id": "task_e_1", "title": "# Delegated story #1: Item", "status": "running"}], "cursor": "p2"}`,
+		"p2": `{"tasks": [{"id": "task_e_64", "title": "# Delegated story #64: Item", "status": "running"}], "cursor": null}`,
+	}
+	var cursors []string
+	paged := CodexCloud{EnvID: "env_123", Exec: func(_ context.Context, _ string, _ []string, _, _ string, args ...string) (string, error) {
+		cur := ""
+		if i := slices.Index(args, "--cursor"); i >= 0 {
+			cur = args[i+1]
+		}
+		cursors = append(cursors, cur)
+		if p, ok := pages[cur]; ok {
+			return p, nil
+		}
+		return "", errors.New("exit status 1: 502 Bad Gateway")
+	}}
+	if tasks, err := paged.List(ctx); err != nil || len(tasks) != 2 || tasks[1].ID != "task_e_64" || !slices.Equal(cursors, []string{"", "p2"}) {
+		t.Fatalf("a list of two pages: %v %+v, cursors %q", err, tasks, cursors)
+	}
+	pages["p2"] = `{"tasks": [], "cursor": "p3"}`
+	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("a page that fails: %v %+v", err, tasks)
+	}
+	// A page with no tasks array is no list: an error object or null must not read as "no task for the story".
+	for _, page := range []string{`{}`, `{"tasks": null, "cursor": null}`, `{"error": "rate limited"}`} {
+		pages["p2"] = page
+		if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "not a task list") {
+			t.Fatalf("a page %s: %v %+v", page, err, tasks)
+		}
+	}
+	// A task aayu cannot match to a story or a delegation (no title, no id) fails the list.
+	for _, page := range []string{`{"tasks": [{"id": "task_e_64", "status": "running"}], "cursor": null}`,
+		`{"tasks": [{"id": "task_e_64", "title": "  ", "status": "running"}], "cursor": null}`,
+		`{"tasks": [{"title": "# Delegated story #64: Item", "status": "running"}], "cursor": null}`} {
+		pages["p2"] = page
+		if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "a task with no id or no title") {
+			t.Fatalf("a page %s: %v %+v", page, err, tasks)
+		}
+	}
+	// An ended task holds no story, so it needs no title: it does not fail the list.
+	pages["p2"] = `{"tasks": [{"id": "task_e_9", "status": "completed"}, {"id": "task_e_8", "title": "", "status": "error"}], "cursor": null}`
+	if tasks, err := paged.List(ctx); err != nil || len(tasks) != 3 {
+		t.Fatalf("ended tasks with no title: %v %+v", err, tasks)
+	}
+	// A cursor that repeats fails at once, not after 50 pages.
+	pages["p2"], cursors = `{"tasks": [], "cursor": "p2"}`, nil
+	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "the cursor p2 repeats") || len(cursors) != 2 {
+		t.Fatalf("a cursor that repeats: %v %+v, cursors %q", err, tasks, cursors)
+	}
+	// A list that never ends, each cursor new, fails after 50 pages.
+	reads := 0
+	never := CodexCloud{EnvID: "env_123", Exec: func(context.Context, string, []string, string, string, ...string) (string, error) {
+		reads++
+		return fmt.Sprintf(`{"tasks": [], "cursor": "c%d"}`, reads), nil
+	}}
+	if tasks, err := never.List(ctx); err == nil || !strings.Contains(err.Error(), "more than 50 pages") || reads != 50 {
+		t.Fatalf("a list that never ends: %v %+v", err, tasks)
+	}
+	out["cloud list"] = "Error: 401 Unauthorized"
+	if _, err := c.List(ctx); err == nil || !strings.Contains(err.Error(), "not a task list") {
+		t.Fatalf("list that is not JSON: %v", err)
+	}
+	delete(out, "cloud list")
+	if _, err := c.List(ctx); err == nil || !strings.HasPrefix(err.Error(), "codex: unexpected command") {
+		t.Fatalf("list that fails: %v", err)
+	}
+	if _, err := (CodexCloud{Exec: c.Exec}).List(ctx); !errors.Is(err, ErrNotConnected) {
+		t.Fatalf("list with no environment: %v", err)
+	}
+}
+
+// NoAnswer is a request whose answer aayu did not get: a deadline, a network
+// timeout, or a person's cancel while it waited. Any other error is a plain failure.
+func TestNoAnswer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { select {} }))
+	defer srv.CloseClientConnections()
+	resp, err := (&http.Client{Timeout: 50 * time.Millisecond}).Get(srv.URL)
+	if err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("the server answered")
+	}
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{{fmt.Errorf("codex: %w", context.DeadlineExceeded), true}, {err, true}, {errors.New("exit status 1: 503"), false}, {fmt.Errorf("codex: %w", context.Canceled), true}} {
+		if NoAnswer(c.err) != c.want {
+			t.Errorf("NoAnswer(%v) = %t", c.err, !c.want)
+		}
 	}
 }
 

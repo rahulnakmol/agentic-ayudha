@@ -71,7 +71,8 @@ func delegateRun(t *testing.T, env map[string]string, opts Options, args ...stri
 type fakeCursor struct {
 	mu       sync.Mutex
 	reqs     []map[string]any
-	finished int // the PR number the finished run reports; 0 while running
+	finished int    // the PR number the finished run reports; 0 while running
+	status   string // when set, every run reports this status, as an archived agent's does (Story #1003)
 }
 
 func (f *fakeCursor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +88,8 @@ func (f *fakeCursor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "POST" && r.URL.Path == "/v1/agents":
 		_, _ = io.WriteString(w, read("create.json"))
+	case r.Method == "GET" && f.status != "":
+		_, _ = fmt.Fprintf(w, `{"id": "run-01", "status": %q, "git": {"branches": []}}`, f.status)
 	case r.Method == "GET" && f.finished == 0:
 		_, _ = io.WriteString(w, read("run-running.json"))
 	case r.Method == "GET":

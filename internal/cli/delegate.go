@@ -50,6 +50,7 @@ type delegation struct {
 	receiver string
 	local    bool
 	fresh    bool // this run hands off: a new branch and, locally, a new worktree
+	cont     bool // a restart continues on the story's branch (mission recover and retry)
 	handoff  int  // which hand-off of the story this is (from 1)
 	reason   string
 	adapter  delegate.Adapter
@@ -82,7 +83,8 @@ const (
 	dlgCapped    = "capped"
 	dlgFailed    = "failed"
 	dlgMerged    = "merged"
-	dlgPaused    = "paused" // the local receiver hit its subscription usage limit
+	dlgPaused    = "paused"        // the local receiver hit its subscription usage limit
+	dlgMaybe     = "maybe-started" // the hand-off got no answer before its timeout: the task may exist (Story #1003)
 )
 
 const delegateMarker = "<!-- aayudha:delegate -->"
@@ -106,6 +108,9 @@ func (e *Env) delegateExec() delegate.Exec {
 		out, err := cmd.CombinedOutput()
 		if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil {
 			err = nil // it exited 0, and only a child it left keeps the output open
+		}
+		if err != nil && ctx.Err() != nil { // killed at its deadline: the host gave no answer in time
+			return string(out), fmt.Errorf("%s: %w: %s", name, ctx.Err(), clipText(actions.RedactString(string(out)), 400))
 		}
 		if err != nil {
 			return string(out), fmt.Errorf("%s: %w: %s", name, err, clipText(actions.RedactString(string(out)), 400))
@@ -305,6 +310,9 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 			d.handoff++
 		}
 		d.branch = delegate.Branch(n, slug(chk.Title), d.handoff)
+		if e.restart && !d.local && d.state.Branch != "" { // mission recover and retry restart a story on its branch
+			d.branch, d.cont = d.state.Branch, true
+		}
 	}
 	return d, nil
 }
@@ -337,7 +345,7 @@ func (e *Env) taken(ctx context.Context, root, wt, branch string) bool {
 // writeBrief renders the story's brief from the Ready snapshot on the
 // ledger, the plan, AGENTS.md, and CODEOWNERS.
 func (e *Env) writeBrief(ctx context.Context, d *delegation, chk ready.Result) error {
-	in := delegate.BriefInput{Repo: d.repo, Base: d.dev, Story: d.story, Title: d.title, Branch: d.branch, CycleCap: inspect.MaxCycles, Local: d.local}
+	in := delegate.BriefInput{Repo: d.repo, Base: d.dev, Story: d.story, Title: d.title, Branch: d.branch, Continue: d.cont, CycleCap: inspect.MaxCycles, Local: d.local}
 	if l, err := e.Config(); err == nil {
 		in.Checks = l.Config.Delegate.Checks
 	}
@@ -522,16 +530,47 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 				return err
 			})
 		})
+		// A hand-off that failed or got no answer is recorded even when a person
+		// cancelled the command: the record is what recover reads, so it is
+		// written on a context of its own.
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		if err != nil && delegate.NoAnswer(err) && d.feature != 0 { // only a started mission's recover checks the host again
+			// The request may have reached the host: the story may run there now, so
+			// nothing starts it again until mission recover checks the host and GitHub.
+			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
+			if serr := e.saveDelegation(rctx, d); serr != nil {
+				// Only a maybe start on the ledger holds the story for recover; one only
+				// in memory would hold it with nothing to check it, so it fails as a start.
+				var saved delegate.State
+				if _, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
+					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
+					return nil, true, serr
+				}
+			}
+			if !d.c.DryRun() {
+				if _, perr := writePlan(rctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
+					p.storyState(d.story).State = stateMaybe
+					return nil
+				}); perr != nil {
+					return nil, true, perr
+				}
+			}
+			return nil, true, WithNext(Errorf(ExitExternal, "build #%d --delegate %s: %s gave no answer before the timeout, so #%d may have started there: %v", d.story, d.receiver, delegate.Names[d.receiver], d.story, err),
+				fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d before it starts it again", d.feature, delegate.Names[d.receiver], d.story))
+		}
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
-			_ = e.saveDelegation(ctx, d)
+			if serr := e.saveDelegation(rctx, d); serr != nil {
+				return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v; and its failed record was not saved: %v", d.story, d.receiver, err, serr)
+			}
 			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err)
 		}
 		d.state.Task, d.state.TaskURL = task.ID, task.URL
 		d.event(now, dlgHandedOff, "brief sent")
 		report()
 		res.Next = fmt.Sprintf("%s works on #%d; `aayu build %d --delegate %s` again to sync: it finds the PR (Refs #%d) and forwards inspect's findings", d.receiver, d.story, d.story, d.receiver, d.story)
-		return nil, true, e.saveDelegation(ctx, d)
+		return nil, true, e.saveDelegation(rctx, d) // the host has the work: its record must land even after a cancel
 	}
 
 	// Sync.

@@ -45,7 +45,7 @@ func TestSkillLint(t *testing.T) {
 }
 
 // TestMissionSkillProtocolSection (Story #1005): the mission skill holds Kanha's protocol, which every tool's Kanha
-// and #911's skill follow. On each event it runs the list, builds each start once on the mission's tool, reports one
+// and #911's skill follow. On each event it runs recover (Story #1003), then the list, builds each start once on the mission's tool, reports one
 // line, and stops; with the list's error it starts nothing. It names ship, merge, and approval only as never-steps.
 func TestMissionSkillProtocolSection(t *testing.T) {
 	b, err := fs.ReadFile(Assets, "skills/mission/SKILL.md")
@@ -59,8 +59,8 @@ func TestMissionSkillProtocolSection(t *testing.T) {
 	if next := strings.Index(section, "\n## "); next >= 0 {
 		section = section[:next]
 	}
-	steps := []string{"1. Run `aayu mission next <f>`.", "run `aayu build <n> --delegate <tool>` once for each line `start #<n>`",
-		"3. Report one line, then stop.", "If `next` exits with an error, start nothing.", "Exit 4: the repository is halted",
+	steps := []string{"1. Run `aayu mission recover <f>`.", "2. Run `aayu mission next <f>`.", "run `aayu build <n> --delegate <tool>` once for each line `start #<n>`",
+		"4. Report one line, then stop.", "If `recover` or `next` exits with an error, start nothing.", "Exit 4: the repository is halted",
 		"In a Tatkal Feature", "Start only what the list marks `start`, each once."}
 	for i, s := range steps {
 		at := strings.Index(section, s)

@@ -26,6 +26,12 @@ func run(t *testing.T, env map[string]string, opts Options, args ...string) (cod
 // runIn is run with stdin.
 func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
+	return runCtx(t, context.Background(), env, opts, stdin, args...)
+}
+
+// runCtx is runIn on ctx, which a test may cancel as a person's Ctrl-C does.
+func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Options, stdin string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
 	var out, errb bytes.Buffer
 	opts.Getenv = func(k string) string { return env[k] }
 	for k, v := range env {
@@ -58,7 +64,7 @@ func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args
 			return "", errors.New("git credentials disabled in tests")
 		}
 	}
-	code = Run(context.Background(), args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
+	code = Run(ctx, args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
 }
 
