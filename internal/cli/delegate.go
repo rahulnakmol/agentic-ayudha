@@ -325,8 +325,7 @@ func (e *Env) receiverAdapter(cfg config.Delegate, r string, c *github.Client, r
 	ex := e.delegateExec()
 	switch r {
 	case delegate.Cursor:
-		key, _, _ := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key"))
-		return delegate.CursorAPI{BaseURL: orDefault(cfg.CursorAPI, "https://api.cursor.com"), Key: key, Model: cfg.CursorModel, HTTP: e.HTTP}
+		return delegate.CursorAPI{BaseURL: orDefault(cfg.CursorAPI, "https://api.cursor.com"), Key: e.cursorKey(cfg), Model: cfg.CursorModel, HTTP: e.HTTP}
 	case delegate.Amp:
 		return delegate.AmpCLI{Exec: ex, OrbSize: cfg.AmpOrbSize, Env: delegate.ScrubEnv(e.Environ, delegate.Amp, os.TempDir())}
 	case delegate.Claude:

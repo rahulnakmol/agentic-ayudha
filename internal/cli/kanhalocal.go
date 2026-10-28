@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,10 +45,17 @@ func localHere(p *ready.Parent) bool {
 	return p.Mode == "local" && ok && host == thisMachine()
 }
 
+// cursorKey is this machine's Cursor API key: aayu's secret, else
+// CURSOR_API_KEY, the two that agentenv.Detect takes as Cursor's cloud agent.
+func (e *Env) cursorKey(cfg config.Delegate) string {
+	key, _, _ := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key"))
+	return cmp.Or(key, e.Getenv("CURSOR_API_KEY"))
+}
+
 // cursorLocal reports whether a Cursor Kanha runs locally here: this
 // machine has no Cursor API key, and the Cursor CLI is on its PATH.
 func (e *Env) cursorLocal(cfg config.Delegate) bool {
-	if key, _, _ := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key")); key != "" {
+	if e.cursorKey(cfg) != "" {
 		return false
 	}
 	_, ok := delegate.LookLocal(delegate.Cursor, e.lookPath())
@@ -59,10 +70,7 @@ func (e *Env) startLocalKanha(ctx context.Context, tool, dir, brief string) (str
 	if e.LocalKanha != nil {
 		return e.LocalKanha(ctx, tool, dir, brief)
 	}
-	bin, ok := delegate.LookLocal(tool, e.lookPath())
-	if !ok {
-		return "", fmt.Errorf("%s's CLI is not on this machine's PATH", delegate.Names[tool])
-	}
+	bin, _ := delegate.LookLocal(tool, e.lookPath()) // Start's kanhaCanStart checked it is on the PATH
 	id := ""
 	if tool == delegate.Copilot { // Copilot takes the session ID aayu picks
 		id = delegate.NewSessionID()
@@ -120,24 +128,54 @@ func (e *Env) kanhaCheckPath(f int) string {
 	return filepath.Join(e.stateDir(), "state", "kanha", strconv.Itoa(f)+".json")
 }
 
-// lastLocalCheck is the time of this machine's last check of f's Kanha.
-func (e *Env) lastLocalCheck(f int) time.Time {
-	var c struct {
-		At time.Time `json:"at"`
-	}
+// localCheck is this machine's record of f's Kanha checks: the last check,
+// and the events it gave the Kanha within kanhaSettle of its last check.
+type localCheck struct {
+	At   time.Time `json:"at"`
+	Sent []string  `json:"sent,omitempty"`
+}
+
+// kanhaSettle is how far before the last check a check reads events again:
+// an event is stamped before its ledger write lands, so one stamped earlier
+// can arrive after the check. Sent keeps a check from giving one twice.
+const kanhaSettle = 10 * time.Minute
+
+func (e *Env) readLocalCheck(f int) localCheck {
+	var c localCheck
 	if b, err := os.ReadFile(e.kanhaCheckPath(f)); err == nil {
 		_ = json.Unmarshal(b, &c)
 	}
-	return c.At
+	return c
 }
 
-func (e *Env) markLocalCheck(f int, at time.Time) error {
-	p := e.kanhaCheckPath(f)
+// writeLocalCheck writes f's check record, under the lock, which made its directory.
+func (e *Env) writeLocalCheck(f int, c localCheck) error {
+	b, _ := json.Marshal(c)
+	return os.WriteFile(e.kanhaCheckPath(f), b, 0o600)
+}
+
+// lockLocalCheck holds f's check on this machine for one resume, so a wake
+// or the inbox never resumes the Kanha's session while another check runs
+// in it. held is when the running check began; a lock older than the local
+// limit is from a check that died, and is taken over.
+func (e *Env) lockLocalCheck(f int) (unlock func(), held time.Time, err error) {
+	p := e.kanhaCheckPath(f) + ".lock"
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return err
+		return nil, time.Time{}, err
 	}
-	b, _ := json.Marshal(map[string]time.Time{"at": at})
-	return os.WriteFile(p, b, 0o600)
+	fh, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		if st, serr := os.Stat(p); serr == nil && time.Since(st.ModTime()) < e.localLimit()+time.Minute {
+			return nil, st.ModTime(), nil
+		}
+		_ = os.Remove(p) // a check that died left it
+		fh, err = os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	}
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	_ = fh.Close()
+	return func() { _ = os.Remove(p) }, time.Time{}, nil
 }
 
 // checkMinutes is [mission] check_minutes.
@@ -156,15 +194,34 @@ func (e *Env) checkMinutes() time.Duration {
 func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f int, plan *MissionPlan, appr *ready.Approval, now bool) (string, error) {
 	p := appr.Parent
 	at := e.Now().UTC()
-	if last := e.lastLocalCheck(f); !now && !last.IsZero() && at.Before(last.Add(e.checkMinutes())) {
+	chk := e.readLocalCheck(f)
+	if last := chk.At; !now && !last.IsZero() && at.Before(last.Add(e.checkMinutes())) {
 		return fmt.Sprintf("the Kanha of #%d: not due; its next check is at %s", f, last.Add(e.checkMinutes()).Format(time.RFC3339)), nil
 	}
-	if err := e.markLocalCheck(f, at); err != nil {
+	unlock, held, err := e.lockLocalCheck(f)
+	if err != nil {
 		return "", Wrap(ExitExternal, err)
 	}
-	evs, err := kanhaEvents(ctx, w, f, plan, p)
-	if err != nil || len(evs) == 0 {
-		return fmt.Sprintf("the Kanha of #%d: no event since its last check", f), err
+	if unlock == nil {
+		return fmt.Sprintf("the Kanha of #%d: a check here runs since %s; this one resumes nothing", f, held.UTC().Format(time.RFC3339)), nil
+	}
+	defer unlock()
+	chk = e.readLocalCheck(f) // the check that held the lock may have written it
+	chk.At = at
+	if err := e.writeLocalCheck(f, chk); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	q := *p
+	if last, perr := time.Parse(time.RFC3339, p.LastCheck); perr == nil {
+		q.LastCheck = last.Add(-kanhaSettle).UTC().Format(time.RFC3339)
+	}
+	all, err := kanhaEvents(ctx, w, f, plan, &q)
+	if err != nil {
+		return "", err
+	}
+	evs := slices.DeleteFunc(slices.Clone(all), func(ev delegate.Event) bool { return slices.Contains(chk.Sent, sentKey(ev)) })
+	if len(evs) == 0 {
+		return fmt.Sprintf("the Kanha of #%d: no event since its last check", f), nil
 	}
 	lines := make([]string, len(evs))
 	for i, ev := range evs {
@@ -183,12 +240,31 @@ func (e *Env) checkLocalKanha(ctx context.Context, c *github.Client, w *ledger.W
 	if err != nil {
 		return "", Wrap(ExitExternal, fmt.Errorf("the Kanha of #%d on %s: %w", f, p.Machine, err))
 	}
-	q := *p
-	q.LastCheck = evs[len(evs)-1].At
+	// Every event read is now given: those within kanhaSettle of the new last check are kept as sent.
+	q.LastCheck = max(p.LastCheck, evs[len(evs)-1].At)
+	floor := q.LastCheck
+	if last, perr := time.Parse(time.RFC3339, q.LastCheck); perr == nil {
+		floor = last.Add(-kanhaSettle).UTC().Format(time.RFC3339)
+	}
+	var sent []string
+	for _, ev := range all {
+		if ev.At > floor {
+			sent = append(sent, sentKey(ev))
+		}
+	}
+	chk.Sent = sent
+	_ = e.writeLocalCheck(f, chk) // lost, it gives these events once more at the next check
+
 	if err := e.writeParent(ctx, w, f, appr.Version, &q); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("the Kanha of #%d: resumed %s session %s with %d event(s)", f, delegate.Names[p.Host], p.Session, len(evs)), nil
+}
+
+// sentKey names one Kanha event for this machine's record of what it gave the Kanha.
+func sentKey(ev delegate.Event) string {
+	sum := sha256.Sum256([]byte(ev.At + "\x00" + ev.Text))
+	return hex.EncodeToString(sum[:8])
 }
 
 // kanhaPrompt is the events for a local Kanha's resume, marked as data: an

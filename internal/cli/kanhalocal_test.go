@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -45,6 +46,14 @@ func (m *missionWorld) kanhaEvent(f, n int, at time.Time, text string) {
 	putLedger(m.t, m.bare, delegate.LedgerPath(n), string(data))
 }
 
+// laptop is a machine that is never the one the tests run on: the Kanha's machine when it runs elsewhere.
+var laptop = func() string {
+	if h, _ := os.Hostname(); h == "laptop" {
+		return "rahulnakmol@laptop-2"
+	}
+	return "rahulnakmol@laptop"
+}()
+
 func (m *missionWorld) wake(f int) (int, string, string) {
 	m.t.Helper()
 	m.calls = nil
@@ -80,9 +89,13 @@ func TestLocalKanhaFailures(t *testing.T) {
 	m.opts.LocalKanha = nil // Codex's own CLI, through the faked exec
 	m.setTool("codex")
 	codexOut, codexErr := "", error(nil)
+	var during func() // runs while a codex call is in progress
 	ex := m.opts.DelegateExec
 	m.opts.DelegateExec = func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
 		if name == "/usr/bin/codex" {
+			if during != nil {
+				during()
+			}
 			_, _ = ex(ctx, dir, env, stdin, "agent", args...) // records the call; "agent" answers ""
 			return codexOut, codexErr
 		}
@@ -109,13 +122,32 @@ func TestLocalKanhaFailures(t *testing.T) {
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 || m.parent(889).Session != "s-123" {
 		t.Fatalf("start: exit %d, parent %+v: %s%s", code, m.parent(889), out, errOut)
 	}
-	// The resume fails: the wake says so, the check records nothing, and the inbox names the mission.
+	// While a wake resumes the Kanha, the inbox opens: it resumes nothing, so the session runs one turn at a time.
 	m.kanhaEvent(889, 20, now.Add(-10*time.Minute), "merged #20 (PR #41): run aayu mission next 889")
+	said := ""
+	during = func() { during = nil; _, _, said = runIn(t, m.person, m.opts, "q", "inbox", "--repo", "o/r") }
+	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "resumed Codex session s-123 with 1 event(s)") || len(m.callLog()) != 1 ||
+		!strings.Contains(said, "the Kanha of #889: a check here runs since ") || !strings.Contains(said, "; this one resumes nothing") {
+		t.Fatalf("a wake with the inbox opened during its resume: exit %d, calls %q: %q%s\ninbox: %s", code, m.callLog(), out, errOut, said)
+	}
+	during = nil
+	// A lock left by a check that died (older than the local limit) does not hold the next check.
+	lock := filepath.Join(m.dir, ".aayudha", "state", "kanha", "889.json.lock")
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(lock, time.Now().Add(-2*time.Hour), time.Now().Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// The resume fails: the wake says so, the check records nothing, and the inbox names the mission.
+	now = now.Add(5 * time.Minute)
+	last := m.parent(889).LastCheck
+	m.kanhaEvent(889, 20, now.Add(-time.Minute), "merged #20 (PR #41): run aayu mission next 889")
 	codexErr = errors.New("codex: exit status 1: session s-123 not found")
-	if code, out, errOut := m.wake(889); code != ExitExternal || !strings.Contains(errOut, "session s-123 not found") || m.parent(889).LastCheck != "" {
+	if code, out, errOut := m.wake(889); code != ExitExternal || !strings.Contains(errOut, "session s-123 not found") || m.parent(889).LastCheck != last {
 		t.Fatalf("a failed resume: exit %d, last_check %q: %s%s", code, m.parent(889).LastCheck, out, errOut)
 	}
-	if said := m.inbox(); !strings.Contains(said, "the Kanha of #889: not checked: ") || !strings.Contains(said, "session s-123 not found") || m.parent(889).LastCheck != "" {
+	if said := m.inbox(); !strings.Contains(said, "the Kanha of #889: not checked: ") || !strings.Contains(said, "session s-123 not found") || m.parent(889).LastCheck != last {
 		t.Fatalf("inbox open with a failed resume: %s", said)
 	}
 	look := m.opts.LookPath
@@ -126,8 +158,8 @@ func TestLocalKanhaFailures(t *testing.T) {
 	}
 	m.opts.LookPath = look
 	// An event host on codex, with Codex cloud connected, while the Kanha's laptop is off and an event waits: the mission is paused, so it records only.
-	m.setMachine(889, "rahulnakmol@laptop")
-	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "#889 wake: recorded only: mission next: #889 paused: its Kanha runs on rahulnakmol@laptop, which is off") || len(m.callLog()) != 0 {
+	m.setMachine(889, laptop)
+	if code, out, errOut := m.wake(889); code != 0 || !strings.Contains(out, "#889 wake: recorded only: mission next: #889 paused: its Kanha runs on "+laptop+", which is off") || len(m.callLog()) != 0 {
 		t.Fatalf("wake with the laptop off: exit %d, calls %q: %q%s", code, m.callLog(), out, errOut)
 	}
 	// An event host on codex with no Codex cloud environment records the wake only.
@@ -204,13 +236,17 @@ func TestLocalKanhaPausesWhileMachineOff(t *testing.T) {
 	if code, out, _ := m.wake(889); code != 0 || !strings.Contains(out, "no event since its last check") || len(m.callLog()) != 0 {
 		t.Fatalf("the check after: calls %q: %q", m.callLog(), out)
 	}
-	// Opening the inbox checks at once, 2 minutes after the last check.
+	// Opening the inbox checks at once, 2 minutes after the last check. It also gives an event stamped in
+	// the second of the last one given, whose write landed after that check read the ledger.
 	blocked := "blocked #21: spec unclear: run aayu mission next 889"
+	late := "answered: #20 resumes"
+	m.kanhaEvent(889, 20, t0.Add(time.Minute), late)
 	m.kanhaEvent(889, 21, t0.Add(11*time.Minute), blocked)
 	now = t0.Add(12 * time.Minute)
-	if said := m.inbox(); !strings.HasPrefix(said, "the Kanha of #889: resumed Cursor session c-456 with 1 event(s)\n") ||
-		!slices.Equal(m.callLog(), []string{"agent -p --resume=c-456 --force --trust <brief>"}) || !strings.Contains(m.briefs[len(m.briefs)-1], "\n"+blocked+"\n") {
-		t.Fatalf("inbox open: calls %q: %s", m.callLog(), said)
+	if said := m.inbox(); !strings.HasPrefix(said, "the Kanha of #889: resumed Cursor session c-456 with 2 event(s)\n") ||
+		!slices.Equal(m.callLog(), []string{"agent -p --resume=c-456 --force --trust <brief>"}) || !strings.Contains(m.briefs[len(m.briefs)-1], "\n"+late+"\n"+blocked+"\n") ||
+		strings.Contains(m.briefs[len(m.briefs)-1], merged) {
+		t.Fatalf("inbox open: calls %q: %s\n%s", m.callLog(), said, m.briefs[len(m.briefs)-1])
 	}
 	show := func() string {
 		t.Helper()
@@ -229,11 +265,11 @@ func TestLocalKanhaPausesWhileMachineOff(t *testing.T) {
 	}
 
 	// Criteria 7 and 8: the Kanha runs on his laptop, which is off when #20's PR merges.
-	m.setMachine(889, "rahulnakmol@laptop")
+	m.setMachine(889, laptop)
 	m.status(21, "ready", "")
 	now = t0.Add(17 * time.Minute) // within one check: not yet paused
-	local := "#889's Kanha is local: it pauses while rahulnakmol@laptop is off\n"
-	paused := "#889 paused: its Kanha runs on rahulnakmol@laptop, which is off; it resumes at the next check"
+	local := "#889's Kanha is local: it pauses while " + laptop + " is off\n"
+	paused := "#889 paused: its Kanha runs on " + laptop + ", which is off; it resumes at the next check"
 	if out := show(); !strings.Contains(out, local) || strings.Contains(out, paused) || !strings.Contains(out, "running: started by @rahulnakmol") {
 		t.Fatalf("show within one check:\n%s", out)
 	}
@@ -245,6 +281,22 @@ func TestLocalKanhaPausesWhileMachineOff(t *testing.T) {
 	if code, out, errOut := run(t, m.person, m.opts, "mission", "next", "889", "--repo", "o/r"); code != ExitBlocked ||
 		!strings.Contains(errOut, paused+". Nothing starts.") || m.commits() != n || len(m.claims(889)) != 0 {
 		t.Fatalf("mission next with the laptop off: exit %d, claims %v: %s%s", code, m.claims(889), out, errOut)
+	}
+
+	// With CURSOR_API_KEY set and no key in aayu's store, Cursor's cloud agent is connected here: the
+	// Kanha is a cloud agent, and its calls carry that key.
+	m.featureWith(890, 30)
+	m.person["CURSOR_API_KEY"] = "env-key"
+	m.calls = nil
+	m.start(890, "rahulnakmol", "cursor")
+	var auth any
+	m.cursor.mu.Lock()
+	if n := len(m.cursor.reqs); n > 0 {
+		auth = m.cursor.reqs[n-1]["auth"]
+	}
+	m.cursor.mu.Unlock()
+	if p := m.parent(890); p.Mode != "cloud" || p.Session != cursorKanhaAgent || auth != "Bearer env-key" || len(m.callLog()) != 0 {
+		t.Fatalf("start with CURSOR_API_KEY: parent %+v, auth %q, CLI calls %q", p, auth, m.callLog())
 	}
 }
 
@@ -261,7 +313,7 @@ func TestMissionWakeStartsOrRecordsOnly(t *testing.T) {
 	m.start(889, "rahulnakmol", "codex")
 	// The wakes come a minute after Start: the Kanha's events are those after its start's second.
 	m.opts.Now = func() time.Time { return t0.Add(time.Minute) }
-	m.setMachine(889, "rahulnakmol@laptop") // the local Kanha is elsewhere: this is an event host
+	m.setMachine(889, laptop) // the local Kanha is elsewhere: this is an event host
 	m.readyStory(20)
 	code, out, errOut := m.wake(889)
 	if code != 0 || out != "#889 wake: started #20\n" || !slices.ContainsFunc(m.callLog(), func(c string) bool { return strings.HasPrefix(c, "codex cloud exec --env env-1") }) {
