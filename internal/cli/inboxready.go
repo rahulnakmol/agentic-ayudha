@@ -160,9 +160,13 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 		}
 		judge(want, st)
 	}
+	wf, err := suiteWorkflows(ctx, s.c, s.owner, s.name, head, runs)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	person := false // the protected-paths check failed: the reason the card waits for a person at all
 	for _, sc := range required {
-		st := checkState(runs, statuses, sc)
+		st := checkState(runs, statuses, wf, sc)
 		if sc.Context == seats.GateCheck && st == "failure" {
 			st, person = "success", true // only its finished failure is accepted, as ship's proofPass does
 		}

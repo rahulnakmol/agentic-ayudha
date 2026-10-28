@@ -458,6 +458,10 @@ func (e *Env) gateRequired(ctx context.Context, c *github.Client, repo, dev, sha
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
+	wf, err := suiteWorkflows(ctx, c, owner, name, sha, runs)
+	if err != nil {
+		return nil, err
+	}
 	var out []GateCheck
 	for _, sc := range required {
 		key := "check:" + sc.Context
@@ -465,7 +469,7 @@ func (e *Env) gateRequired(ctx context.Context, c *github.Client, repo, dev, sha
 			continue
 		}
 		ck := GateCheck{Check: key, Result: gatePass}
-		st := checkState(runs, statuses, sc)
+		st := checkState(runs, statuses, wf, sc)
 		i := slices.IndexFunc(runs, func(r *gh.CheckRun) bool { return r.GetName() == sc.Context })
 		why := ""
 		switch {

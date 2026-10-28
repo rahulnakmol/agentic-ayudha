@@ -215,6 +215,8 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 	Attempt    int    `json:"run_attempt,omitempty"`
 	HTMLURL    string `json:"html_url,omitempty"`
+	// CheckSuiteID is the check suite that holds the run's check runs.
+	CheckSuiteID int64 `json:"check_suite_id,omitempty"`
 	// PullRequests are the pull requests the run is for, with their bases,
 	// as GitHub lists them for a same-repository pull request.
 	PullRequests []RunPR `json:"pull_requests,omitempty"`
@@ -462,7 +464,7 @@ func (g *GitHub) nextSHA(v any) string {
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
 	reStatuses  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/statuses$`)
-	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
+	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions(?:/workflows/([^/]+))?/runs$`) // one workflow's runs, or every workflow's
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
@@ -1101,7 +1103,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
 		out := []WorkflowRun{}
 		for _, run := range g.Runs {
-			if strings.HasSuffix(run.Path, "/"+file) && (q.Get("head_sha") == "" || q.Get("head_sha") == run.HeadSHA) && (q.Get("event") == "" || q.Get("event") == run.Event) {
+			if (file == "" || strings.HasSuffix(run.Path, "/"+file)) && (q.Get("head_sha") == "" || q.Get("head_sha") == run.HeadSHA) && (q.Get("event") == "" || q.Get("event") == run.Event) {
 				out = append(out, run)
 			}
 		}

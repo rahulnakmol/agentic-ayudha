@@ -165,8 +165,12 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 	if err != nil {
 		return nil, "", Wrap(ExitExternal, err)
 	}
+	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs)
+	if err != nil {
+		return nil, "", err
+	}
 	for _, sc := range checks {
-		state := checkState(runs, statuses, sc)
+		state := checkState(runs, statuses, wf, sc)
 		switch {
 		case sc.Context == seats.GateCheck: // every rule that requires it counts: the worst state wins
 			if gate == "" || gate == "success" || state != "success" && state != "failure" {
@@ -181,24 +185,48 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 	return want, gate, nil
 }
 
+// suiteWorkflows maps the check suite of each Actions run on sha to its
+// workflow file, which checkState needs to judge a cancelled run's
+// replacement; nil, and no read, when no run is cancelled.
+func suiteWorkflows(ctx context.Context, c *github.Client, owner, name, sha string, runs []*gh.CheckRun) (map[int64]string, error) {
+	if !slices.ContainsFunc(runs, func(r *gh.CheckRun) bool { return r.GetConclusion() == "cancelled" }) {
+		return nil, nil
+	}
+	wfs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
+		r, resp, err := c.REST.Actions.ListRepositoryWorkflowRuns(ctx, owner, name, &gh.ListWorkflowRunsOptions{HeadSHA: sha, ListOptions: o})
+		return r.GetWorkflowRuns(), resp, err
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	out := map[int64]string{}
+	for _, w := range wfs {
+		out[w.GetCheckSuiteID()] = w.GetPath()
+	}
+	return out, nil
+}
+
 // checkState is the state of a required check: its newest check run from
 // its app (any app when the rule names none), with skipped and neutral
 // counted as success as GitHub counts them, and, for a rule that names no app, the newest
 // commit status of the same name, which must pass too; "missing" when there
 // is neither.
-func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatusCheck) string {
+func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, wf map[int64]string, sc *gh.RuleStatusCheck) string {
 	// The newest run of the name in each check suite counts (a rerun's
 	// success replaces a failure in its suite; the API lists the newest
 	// first), and every suite's must pass: a run of another workflow or
 	// event, a dispatch that skips the job say, cannot stand in for a
 	// failing one.
-	// A cancelled run that a later completed run of the same name and app
-	// replaced does not count: a workflow's concurrency group cancels one run
-	// and starts another on the same head (Bug #1031).
+	// A cancelled run that a later completed run of the same name, app, and
+	// workflow file (wf, by check suite) replaced does not count: a
+	// workflow's concurrency group cancels one run and starts another on the
+	// same head (Bug #1031). Another workflow's job of the same name, pages'
+	// build for ci's say, replaces nothing.
 	replaced := func(r *gh.CheckRun) bool {
-		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(runs, func(o *gh.CheckRun) bool {
-			return o.GetName() == r.GetName() && o.GetApp().GetID() == r.GetApp().GetID() && o.GetStatus() == "completed" &&
-				o.GetConclusion() != "cancelled" && o.GetStartedAt().After(r.GetStartedAt().Time)
+		path := wf[r.GetCheckSuite().GetID()]
+		return r.GetConclusion() == "cancelled" && path != "" && slices.ContainsFunc(runs, func(o *gh.CheckRun) bool {
+			return o.GetName() == r.GetName() && o.GetApp().GetID() == r.GetApp().GetID() && wf[o.GetCheckSuite().GetID()] == path &&
+				o.GetStatus() == "completed" && o.GetConclusion() != "cancelled" && o.GetStartedAt().After(r.GetStartedAt().Time)
 		})
 	}
 	state, seen := "missing", map[int64]bool{}

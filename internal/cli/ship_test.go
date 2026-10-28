@@ -962,16 +962,37 @@ func TestShipOnProof(t *testing.T) {
 	later := func(status, conclusion string) fake.CheckRun {
 		return fake.CheckRun{ID: 121613890736, Name: "build", Status: status, Conclusion: conclusion, App: actions, Suite: &fake.Suite{ID: 51}, StartedAt: "2026-10-27T13:55:59Z"}
 	}
+	// Suites 49, 50, and 51 are three runs of ci.yml (49 started before the
+	// cancelled one); suite 52 is pages.yml, whose job is also called build and
+	// replaces nothing of ci's, though its failure still counts.
+	earlier := fake.CheckRun{ID: 121613870000, Name: "build", Status: "completed", Conclusion: "success", App: actions, Suite: &fake.Suite{ID: 49}, StartedAt: "2026-10-27T13:50:00Z"}
+	pages := func(conclusion string) fake.CheckRun {
+		return fake.CheckRun{ID: 121613890999, Name: "build", Status: "completed", Conclusion: conclusion, App: actions, Suite: &fake.Suite{ID: 52}, StartedAt: "2026-10-27T13:56:10Z"}
+	}
 	g.Mu.Lock()
 	runsBefore = slices.Clone(g.CheckRuns[head])
-	g.CheckRuns[head] = append([]fake.CheckRun{cancelled}, runsBefore...)
+	g.Runs = append(g.Runs,
+		fake.WorkflowRun{ID: 7049, Path: ".github/workflows/ci.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success", CheckSuiteID: 49},
+		fake.WorkflowRun{ID: 7050, Path: ".github/workflows/ci.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "cancelled", CheckSuiteID: 50},
+		fake.WorkflowRun{ID: 7051, Path: ".github/workflows/ci.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success", CheckSuiteID: 51},
+		fake.WorkflowRun{ID: 7052, Path: ".github/workflows/pages.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success", CheckSuiteID: 52})
 	g.Mu.Unlock()
-	refused("required check build is cancelled on " + short(head))
-	for _, l := range []fake.CheckRun{later("completed", "failure"), later("in_progress", "")} {
+	for _, c := range []struct {
+		runs []fake.CheckRun
+		want string
+	}{
+		{[]fake.CheckRun{cancelled}, "cancelled"},                                                // no replacement
+		{[]fake.CheckRun{later("completed", "failure"), cancelled}, "failure"},                   // replaced by a failure
+		{[]fake.CheckRun{later("in_progress", ""), cancelled}, "in_progress"},                    // a replacement still running replaces nothing yet
+		{[]fake.CheckRun{later("completed", "cancelled"), cancelled}, "cancelled"},               // cancelled again
+		{[]fake.CheckRun{cancelled, earlier}, "cancelled"},                                       // a run of the workflow from before the cancel
+		{[]fake.CheckRun{pages("success"), cancelled}, "cancelled"},                              // another workflow's job of the same name
+		{[]fake.CheckRun{pages("failure"), later("completed", "success"), cancelled}, "failure"}, // replaced, but another suite failed
+	} {
 		g.Mu.Lock()
-		g.CheckRuns[head] = append([]fake.CheckRun{l, cancelled}, runsBefore...)
+		g.CheckRuns[head] = append(slices.Clone(c.runs), runsBefore...)
 		g.Mu.Unlock()
-		refused("required check build is " + or(l.Conclusion, l.Status) + " on " + short(head))
+		refused("required check build is " + c.want + " on " + short(head))
 	}
 	g.Mu.Lock()
 	g.CheckRuns[head] = append([]fake.CheckRun{later("completed", "success"), cancelled}, runsBefore...)

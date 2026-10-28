@@ -34,8 +34,10 @@ var (
 	// storyRef is a PR body's Refs, Closes, Fixes, or Resolves line; it
 	// decides the story. storyLine ("Story #n") is read only when there is
 	// none: a body may name a parent or sibling story in prose (Bug #1031).
-	storyRef  = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
-	storyLine = regexp.MustCompile(`(?im)^\s*story:?\s+#([0-9]+)\b`)
+	// Each sits on one line, as refStories reads them: [ \t], not \s, which
+	// would cross a newline.
+	storyRef  = regexp.MustCompile(`(?im)^[ \t]*(?:refs|closes|fixes|resolves)[ \t]+#([0-9]+)\b`)
+	storyLine = regexp.MustCompile(`(?im)^[ \t]*story:?[ \t]+#([0-9]+)\b`)
 	// refOnLine is each reference on a line that storyRef starts: one line may
 	// name several ("Fixes #2, fixes #3").
 	refOnLine    = regexp.MustCompile(`(?i)\b(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)

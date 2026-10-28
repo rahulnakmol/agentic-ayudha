@@ -126,6 +126,9 @@ func TestStoryOf(t *testing.T) {
 		{"see #5 for context", "", "feat/x", 0},
 		{"Story #990 (Feature #874) is the parent\n\nRefs #992", "", "story/990-x", 992},
 		{"Story: #21", "", "story/44-empty-list", 21},
+		// A reference sits on one line: "Refs" then "#2" on the next is no reference.
+		{"Refs\n#2\nRefs #3", "", "", 3},
+		{"Story\n#2\nStory #3", "", "", 3},
 	} {
 		if got := StoryOf(c.body, c.msg, c.branch); got != c.want {
 			t.Errorf("StoryOf(%q, %q, %q) = %d, want %d", c.body, c.msg, c.branch, got, c.want)
