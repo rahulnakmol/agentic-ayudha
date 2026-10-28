@@ -188,10 +188,13 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 // suiteWorkflows maps the check suite of each Actions run on sha to its
 // workflow file, which checkState needs to judge a cancelled run's
 // replacement; nil, and no read, when no required check has a cancelled run
-// (a token may read checks but not Actions).
+// that checkState would judge, from the app its rule pins (a token may read
+// checks but not Actions).
 func suiteWorkflows(ctx context.Context, c *github.Client, owner, name, sha string, runs []*gh.CheckRun, required []*gh.RuleStatusCheck) (map[int64]string, error) {
 	if !slices.ContainsFunc(runs, func(r *gh.CheckRun) bool {
-		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(required, func(sc *gh.RuleStatusCheck) bool { return sc.Context == r.GetName() })
+		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(required, func(sc *gh.RuleStatusCheck) bool {
+			return sc.Context == r.GetName() && (sc.IntegrationID == nil || r.GetApp().GetID() == *sc.IntegrationID)
+		})
 	}) {
 		return nil, nil
 	}

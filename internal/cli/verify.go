@@ -30,17 +30,23 @@ import (
 
 func init() { register("verify", runVerify) }
 
+// storyRefKey is a reference keyword and what follows it up to the issue
+// number: Refs, or GitHub's closing keywords (close, closes, closed, fix,
+// fixes, fixed, resolve, resolves, resolved) in any case, then spaces or a
+// colon. An issue number starts 1-9: "#0" names no story.
+const storyRefKey = `(?:refs|close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?::[ \t]*|[ \t]+)#([1-9][0-9]*)\b`
+
 var (
-	// storyRef is a PR body's Refs, Closes, Fixes, or Resolves line; it
-	// decides the story. storyLine ("Story #n") is read only when there is
-	// none: a body may name a parent or sibling story in prose (Bug #1031).
-	// Each sits on one line, as refStories reads them: [ \t], not \s, which
-	// would cross a newline. An issue number starts 1-9: "#0" names no story.
-	storyRef  = regexp.MustCompile(`(?im)^[ \t]*(?:refs|closes|fixes|resolves)[ \t]+#([1-9][0-9]*)\b`)
+	// storyRef is a PR body's reference line (storyRefKey); it decides the
+	// story. storyLine ("Story #n") is read only when there is none: a body
+	// may name a parent or sibling story in prose (Bug #1031). Each sits on
+	// one line, as refStories reads them: [ \t], not \s, which would cross a
+	// newline.
+	storyRef  = regexp.MustCompile(`(?im)^[ \t]*` + storyRefKey)
 	storyLine = regexp.MustCompile(`(?im)^[ \t]*story:?[ \t]+#([1-9][0-9]*)\b`)
 	// refOnLine is each reference on a line that storyRef starts: one line may
 	// name several ("Fixes #2, fixes #3").
-	refOnLine    = regexp.MustCompile(`(?i)\b(?:refs|closes|fixes|resolves)\s+#([1-9][0-9]*)\b`)
+	refOnLine    = regexp.MustCompile(`(?i)\b` + storyRefKey)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)

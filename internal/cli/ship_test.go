@@ -994,11 +994,13 @@ func TestShipOnProof(t *testing.T) {
 		g.Mu.Unlock()
 		refused("required check build is " + c.want + " on " + short(head))
 	}
-	// A cancelled check that no rule requires needs no Actions read (a token
-	// may read checks but not Actions): the required check decides.
+	// A cancelled check that no rule requires, or a cancelled build from an app
+	// the rule does not pin, needs no Actions read (a token may read checks
+	// but not Actions): the required check decides.
 	g.Mu.Lock()
 	g.CheckRuns[head] = append([]fake.CheckRun{later("completed", "failure"),
-		{ID: 121613890998, Name: "screen-reader", Status: "completed", Conclusion: "cancelled", App: actions, Suite: &fake.Suite{ID: 53}}}, runsBefore...)
+		{ID: 121613890998, Name: "screen-reader", Status: "completed", Conclusion: "cancelled", App: actions, Suite: &fake.Suite{ID: 53}},
+		{ID: 121613890997, Name: "build", Status: "completed", Conclusion: "cancelled", App: &fake.App{ID: 999}, Suite: &fake.Suite{ID: 54}}}, runsBefore...)
 	g.Fail, g.FailAfter = "GET /repos/o/r/actions/runs", 0
 	g.Mu.Unlock()
 	refused("required check build is failure on " + short(head))
@@ -1674,7 +1676,7 @@ func TestProofLand(t *testing.T) {
 	}
 	// A body that names two stories is refused, as the gate refuses it.
 	g.Mu.Lock()
-	g.Pulls[prN].Body = "Refs #2\nFixes #3"
+	g.Pulls[prN].Body = "Refs #2\nFixes: #3"
 	g.Mu.Unlock()
 	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR body refers to stories #2 and #3: keep one") {
 		t.Fatalf("proof land with two stories in the body: %d %s", code, out)

@@ -138,6 +138,35 @@ func TestStoryOf(t *testing.T) {
 	}
 }
 
+// Bug #1031: a reference line is Refs or any of GitHub's closing keywords, in
+// any case, with or without a colon. Each one decides the story over a Story
+// line, and a second one on another line or the same line makes two stories.
+// A word that is not a keyword ("Fixing", "Refer", "Prefix") is no reference.
+func TestStoryRefGrammar(t *testing.T) {
+	keywords := []string{"Refs", "close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"}
+	for _, kw := range keywords {
+		for _, form := range []string{kw, strings.ToUpper(kw), strings.ToLower(kw)} {
+			for _, sep := range []string{" ", ": ", ":", "\t"} {
+				ref := form + sep + "#3"
+				if got := StoryOf("Story #2\n"+ref, "", ""); got != 3 {
+					t.Errorf("StoryOf(%q) = %d, want 3", "Story #2\n"+ref, got)
+				}
+				if got := twoStories("Refs #2\n" + ref); !strings.Contains(got, "stories #2 and #3: keep one") {
+					t.Errorf("twoStories(%q) = %q, want #2 and #3", "Refs #2\n"+ref, got)
+				}
+				if got := twoStories("Refs #2, " + ref); !strings.Contains(got, "stories #2 and #3: keep one") {
+					t.Errorf("twoStories(%q) = %q, want #2 and #3", "Refs #2, "+ref, got)
+				}
+			}
+		}
+	}
+	for _, not := range []string{"Fixing #3", "Refer #3", "Prefix #3", "Closer #3", "Ref #3", "Fixes #0", "Fixes#3", "see fixes #3"} {
+		if got := StoryOf("Story #2\n"+not, "", ""); got != 2 {
+			t.Errorf("StoryOf(%q) = %d, want 2: %q is no reference line", "Story #2\n"+not, got, not)
+		}
+	}
+}
+
 // WP4.5 accept: a capture against a URL whose config marks it production
 // exits 4 with no artifacts written (and seeds nothing).
 func TestVerifyRefusesProduction(t *testing.T) {
