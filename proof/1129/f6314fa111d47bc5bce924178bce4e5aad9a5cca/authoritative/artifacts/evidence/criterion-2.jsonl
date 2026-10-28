@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaBuildsWhatTheListMarked"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaBuildsWhatTheListMarked","Output":"=== RUN   TestKanhaBuildsWhatTheListMarked\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaBuildsWhatTheListMarked","Output":"--- PASS: TestKanhaBuildsWhatTheListMarked (5.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestKanhaBuildsWhatTheListMarked"}
