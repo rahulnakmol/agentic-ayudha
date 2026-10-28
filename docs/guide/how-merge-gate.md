@@ -139,7 +139,7 @@ CodeRabbit and Greptile are dedicated review services. Their review counts as di
 family. The founder decided this on 2026-10-18: "When CodeRabbit or Greptile is used for code review we don't need to
 worry about model family, as they are more robust." It is a deliberate exception to the family rule. aayu reads their
 own review of the head: its inline comments on the head commit, with CodeRabbit's Critical, Major, Minor, and Trivial
-as P0 to P3, and Greptile's P0 to P2 badges. A high-risk pull request still gets this one reviewer, never two. `aayu doctor`'s
+as P0 to P3 (read from the word after the badge, an emoji or an icon image), and Greptile's P0 to P2 badges. A high-risk pull request still gets this one reviewer, never two. `aayu doctor`'s
 `review-rung` row shows the rung this checkout's builds get, from the detected host's build lane and the listed
 apps, and names the apps that would move it up; it calls no model.
 

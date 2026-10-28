@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -1129,5 +1131,64 @@ func TestReadServiceReply(t *testing.T) {
 	}
 	if _, err := ReadReply(choice(AppGreptile), greptilePosts, old, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
 		t.Fatalf("greptile's summary of another head: %v", err)
+	}
+}
+
+// Bug #1130: since 2026-10-25 CodeRabbit's severity badge is an icon image
+// and the level word, not an emoji. The fixtures are its real comments: the
+// inline Major of review 5668710694 on #1096 at b6a66dc, and the outside-diff
+// Major in the body of review 5661577947 on #1120 at 4dcc80f.
+func TestReadCodeRabbitIconBadges(t *testing.T) {
+	head := "b6a66dcc748416305dad860cd1c9259959115fab"
+	at := time.Date(2026, 10, 27, 14, 27, 0, 0, time.UTC)
+	const rabbit = "coderabbitai[bot]"
+	fixture := func(name string) string {
+		b, err := os.ReadFile(filepath.Join("testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	inline := fixture("coderabbit-inline-icon-1096.txt")
+	icon := `<picture><img src="https://storage.googleapis.com/coderabbit_public_assets/review-comment-icons-v1/major-16.svg" width="16" height="16" align="absmiddle" alt=""></picture> Major`
+	if !strings.Contains(inline, icon) {
+		t.Fatal("the #1096 fixture lost its icon badge")
+	}
+	read := func(posts ...Post) AppReply {
+		t.Helper()
+		posts = append([]Post{{Kind: "review", ID: 5668710694, Login: rabbit, Commit: head, Body: "**Actionable comments posted: 1**", Updated: at}}, posts...)
+		r, err := ReadReply(ChooseReviewer(AppCodeRabbit, []string{AppCodeRabbit}, nil, Builder{}, ""), posts, head, time.Time{}, nil, nil, []string{"internal/cli/ship.go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	finding := func(body string) Post {
+		return Post{Kind: "inline", ID: 4389883890, Login: rabbit, Commit: head, Path: "internal/cli/ship.go", Body: body, Updated: at}
+	}
+	const title = "Fall back to the Outcome comment when the lock guard cannot read the locks."
+	// Criteria 1 and 2: the icon form and the emoji form give the same P1.
+	for form, body := range map[string]string{"icon": inline, "emoji": strings.Replace(inline, icon, "🟠 Major", 1)} {
+		r := read(finding(body))
+		if r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/cli/ship.go" || r.Findings[0].Title != title {
+			t.Errorf("%s badge: %s %+v", form, r.Disposition, r.Findings)
+		}
+	}
+	// Criterion 3: the word after the icon decides the level, whatever the
+	// icon's file; a reply with no badge (criterion 5) is no finding.
+	want := map[string]string{"Critical": "P0", "Major": "P1", "Minor": "P2", "Trivial": "P3", "Info": "P3"}
+	for level, sev := range want {
+		r := read(finding(strings.Replace(inline, icon, strings.TrimSuffix(icon, "Major")+level, 1)),
+			Post{Kind: "inline", ID: 1, Login: rabbit, Commit: head, Path: "internal/cli/ship.go", Body: "<!-- coderabbit-ai-generated:v1 -->\n\n`@rahulnakmol`, thanks: the Major above is fixed in the next head.", Updated: at})
+		if len(r.Findings) != 1 || r.Findings[0].Severity != sev {
+			t.Errorf("icon %s: %+v", level, r.Findings)
+		}
+	}
+	// Criterion 4: the outside-diff block of #1120's review body.
+	r, err := ReadReply(ChooseReviewer(AppCodeRabbit, []string{AppCodeRabbit}, nil, Builder{}, ""),
+		[]Post{{Kind: "review", ID: 5661577947, Login: rabbit, Commit: head, Body: fixture("coderabbit-review-icon-1120.txt"), Updated: at}}, head, time.Time{}, nil, nil, nil)
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/cli/missiongate.go" || r.Findings[0].Line != 902 ||
+		r.Findings[0].Title != "Require the named eval before shipping a listed eval fix." {
+		t.Fatalf("#1120's outside-diff Major: %v %+v", err, r)
 	}
 }
