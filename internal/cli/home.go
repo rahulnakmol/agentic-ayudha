@@ -174,7 +174,7 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 		if s.Gates {
 			gate = "pending"
 			if runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, pr.GetHead().GetSHA(), &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}}); err == nil {
-				if suites, err := gateSuites(ctx, c, owner, name, pr.GetHead().GetSHA()); err == nil {
+				if suites, err := gateSuites(ctx, c, owner, name, pr.GetHead().GetSHA(), pr.GetNumber()); err == nil {
 					gate = gateState(runs.CheckRuns, suites)
 				}
 			}
@@ -184,11 +184,21 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	return journey.GitHubOK
 }
 
-// gateSuites is the check suites of the merge gate's own runs on head: the
-// pull_request_target runs of aayudha-merge-gate.yml, whose workflow file is
-// the base branch's, so the pull request cannot have edited it (gatePack). A
-// re-run of a run's failed jobs stays in its suite.
-func gateSuites(ctx context.Context, c *github.Client, owner, name, head string) (map[int64]bool, error) {
+// gateRunOf reports whether r is the merge gate's own run for pull request pr
+// on head: a pull_request_target run of aayudha-merge-gate.yml, whose workflow
+// file is the base branch's, so the pull request cannot have edited it
+// (gatePack), and that GitHub lists for pr alone. Two pull requests can share
+// a head, so the head alone does not say whose run it is. GitHub lists no pull
+// request for a run from a fork, so a fork's gate fails closed.
+func gateRunOf(r *gh.WorkflowRun, head string, pr int) bool {
+	prs := r.PullRequests
+	return r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head &&
+		len(prs) == 1 && prs[0].GetNumber() == pr
+}
+
+// gateSuites is the check suites of the merge gate's own runs for pull request
+// pr on head (gateRunOf). A re-run of a run's failed jobs stays in its suite.
+func gateSuites(ctx context.Context, c *github.Client, owner, name, head string, pr int) (map[int64]bool, error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
 		r, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: o})
 		return r.GetWorkflowRuns(), resp, err
@@ -198,7 +208,7 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string)
 	}
 	out := map[int64]bool{}
 	for _, r := range runs {
-		if r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
+		if gateRunOf(r, head, pr) {
 			out[r.GetCheckSuiteID()] = true
 		}
 	}

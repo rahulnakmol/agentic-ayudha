@@ -118,7 +118,7 @@ func joinWords(ws []string) string {
 // or missing, it is not ready like any other. It returns the checks by
 // state, and for the card's details every check by name and result,
 // grouped by result with anything not green first.
-func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, missing, running, details []string, err error) {
+func (s *inboxSource) checksOf(ctx context.Context, base, head string, pr int) (failed, missing, running, details []string, err error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
 		r, resp, err := s.c.REST.Checks.ListCheckRunsForRef(ctx, s.owner, s.name, head, &gh.ListCheckRunsOptions{ListOptions: o})
 		return r.GetCheckRuns(), resp, err
@@ -136,7 +136,7 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	suites, err := gateSuites(ctx, s.c, s.owner, s.name, head)
+	suites, err := gateSuites(ctx, s.c, s.owner, s.name, head, pr)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -271,7 +271,7 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, marks ma
 	failed, missing, running := []string(nil), []string(nil), []string(nil)
 	if marked == head { // read every time: a re-run turns a green check red on the same head
 		var details []string
-		if failed, missing, running, details, err = s.checksOf(ctx, p.GetBase().GetRef(), head); err != nil {
+		if failed, missing, running, details, err = s.checksOf(ctx, p.GetBase().GetRef(), head, p.GetNumber()); err != nil {
 			return nil, err
 		}
 		it.Details = append(it.Details, "Checks on "+short(head)+": "+strings.Join(details, " · "))

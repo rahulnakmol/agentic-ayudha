@@ -19,13 +19,13 @@ const tailLines = 60
 // of each, with the tail of its Actions job log: the merge gate's checks and
 // [verify] upstream_checks, but never protected-paths (it fails by design) or
 // inspect (its findings have their own follow-up).
-func failedRequired(ctx context.Context, c *github.Client, owner, name, head string, upstream []string) ([]delegate.FailedCheck, error) {
+func failedRequired(ctx context.Context, c *github.Client, owner, name, head string, pr int, upstream []string) ([]delegate.FailedCheck, error) {
 	required := slices.DeleteFunc(append(slices.Clone(gateChecks), upstream...), func(n string) bool { return n == "aayudha/inspect" })
 	rs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{Filter: gh.Ptr("latest"), ListOptions: gh.ListOptions{PerPage: 100}})
 	if err != nil {
 		return nil, err
 	}
-	suites, err := gateSuites(ctx, c, owner, name, head)
+	suites, err := gateSuites(ctx, c, owner, name, head, pr)
 	if err != nil {
 		return nil, err
 	}

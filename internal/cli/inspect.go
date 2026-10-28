@@ -504,7 +504,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		suites, err := gateSuites(ctx, c, owner, name, head)
+		suites, err := gateSuites(ctx, c, owner, name, head, n)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}

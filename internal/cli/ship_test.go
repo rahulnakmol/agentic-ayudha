@@ -207,6 +207,26 @@ func TestShipRefusals(t *testing.T) {
 	g.Mu.Lock()
 	g.CheckRuns[head] = gateOwn
 	g.Mu.Unlock()
+	// Two pull requests can share a head. The gate's run for the other one, or
+	// a run GitHub lists for both, is not this PR's gate: its newer green check
+	// does not hide this PR's own red one.
+	twin := g.AddPR("feat: twin", "Refs #2", "founder", "story/2-twin", head, "dev")
+	for _, prs := range [][]fake.RunPR{{{Number: twin.Number}}, {{Number: twin.Number}, {Number: prN}}} {
+		gateRun(t, g, dir, prN, head, coverageHolds)
+		g.Mu.Lock()
+		g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9800, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+			CheckSuiteID: 79, PullRequests: prs})
+		g.CheckRuns[head] = append([]fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 79}},
+			{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "failure"}}, g.CheckRuns[head][1:]...)
+		g.Mu.Unlock()
+		if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {
+			t.Fatalf("ship with a green gate run for PRs %v on the same head above this PR's red one: %d %s", prs, code, out)
+		}
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head], twin.State = gateOwn, "closed"
+	g.Runs = slices.DeleteFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.ID == 9800 })
+	g.Mu.Unlock()
 	// A review on the PR runs the merge gate for its reply job only (#690, #643):
 	// that run's skipped gate checks, newer than the gate's own, hide nothing,
 	// and ship goes on to the human pass. A newer gate run's red check still refuses.
@@ -228,7 +248,8 @@ func TestShipRefusals(t *testing.T) {
 		t.Fatalf("ship with a reply run's skipped checks newer than the gate's green ones: %d %s", code, out)
 	}
 	g.Mu.Lock()
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9700, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 3})
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9700, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 3,
+		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
 	g.CheckRuns[head] = append(suite(3, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "skipped"}), append(reply, gate...)...)
 	g.Mu.Unlock()
 	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {
@@ -775,7 +796,8 @@ func TestShipOnProof(t *testing.T) {
 	prs := g.Runs[gate].PullRequests
 	g.Runs[gate].PullRequests = nil
 	g.Mu.Unlock()
-	refused(fmt.Sprintf("no merge on proof: the review rung at the head is unproven: the pack's run %d is not listed as for PR #%d into dev", g.Runs[gate].ID, prN))
+	// A gate run GitHub lists for no PR is not this PR's gate: its checks are missing before the rung is read.
+	refused("aayudha/merge-gate is missing on " + short(head))
 	g.Mu.Lock()
 	g.Runs[gate].PullRequests = prs
 	g.Mu.Unlock()

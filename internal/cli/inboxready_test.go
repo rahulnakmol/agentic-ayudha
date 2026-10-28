@@ -52,7 +52,14 @@ func TestInboxNotReady(t *testing.T) {
 		}
 		g.CheckRuns[head] = runs
 		if !slices.ContainsFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.CheckSuiteID == 1 }) { // the gate's own run, suite 1
-			g.Runs = append(g.Runs, fake.WorkflowRun{ID: int64(8000 + len(g.Runs)), Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", CheckSuiteID: 1})
+			var prs []fake.RunPR // the pull request on that head, as GitHub lists it
+			for _, p := range g.Pulls {
+				if p.Head.SHA == head {
+					prs = append(prs, fake.RunPR{Number: p.Number})
+				}
+			}
+			g.Runs = append(g.Runs, fake.WorkflowRun{ID: int64(8000 + len(g.Runs)), Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", CheckSuiteID: 1,
+				PullRequests: prs})
 		}
 	}
 	yes, no := true, false

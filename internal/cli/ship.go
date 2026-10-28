@@ -715,7 +715,7 @@ func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, 
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	suites, err := gateSuites(ctx, c, owner, name, head)
+	suites, err := gateSuites(ctx, c, owner, name, head, n)
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}

@@ -756,7 +756,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	if l, err := e.Config(); err == nil {
 		upstream = l.Config.Verify.UpstreamChecks
 	}
-	if fails, err := failedRequired(ctx, d.c, owner, name, head, upstream); err != nil {
+	if fails, err := failedRequired(ctx, d.c, owner, name, head, d.state.PR, upstream); err != nil {
 		res.Notes = append(res.Notes, "required checks not read: "+oneLineErr(err))
 	} else if len(fails) > 0 && !sentFor {
 		var names []string
