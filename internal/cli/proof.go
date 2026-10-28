@@ -507,6 +507,9 @@ func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
 	if !pr.GetMerged() {
 		return Errorf(ExitBlocked, "proof land #%d: the PR is %s, not merged; `aayu ship %d` lands the pack of an open PR", n, pr.GetState(), n)
 	}
+	if two := twoStories(pr.GetBody()); two != "" {
+		return Errorf(ExitBlocked, "proof land #%d: %s", n, two)
+	}
 	story := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
 	if story == 0 {
 		return Errorf(ExitBlocked, "proof land #%d: no story (Refs #n in the PR body)", n)

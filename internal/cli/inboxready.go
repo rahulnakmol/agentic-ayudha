@@ -160,7 +160,7 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 		}
 		judge(want, st)
 	}
-	wf, err := suiteWorkflows(ctx, s.c, s.owner, s.name, head, runs)
+	wf, err := suiteWorkflows(ctx, s.c, s.owner, s.name, head, runs, required)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

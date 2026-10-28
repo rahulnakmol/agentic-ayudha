@@ -165,7 +165,7 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 	if err != nil {
 		return nil, "", Wrap(ExitExternal, err)
 	}
-	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs)
+	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs, checks)
 	if err != nil {
 		return nil, "", err
 	}
@@ -187,9 +187,12 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 
 // suiteWorkflows maps the check suite of each Actions run on sha to its
 // workflow file, which checkState needs to judge a cancelled run's
-// replacement; nil, and no read, when no run is cancelled.
-func suiteWorkflows(ctx context.Context, c *github.Client, owner, name, sha string, runs []*gh.CheckRun) (map[int64]string, error) {
-	if !slices.ContainsFunc(runs, func(r *gh.CheckRun) bool { return r.GetConclusion() == "cancelled" }) {
+// replacement; nil, and no read, when no required check has a cancelled run
+// (a token may read checks but not Actions).
+func suiteWorkflows(ctx context.Context, c *github.Client, owner, name, sha string, runs []*gh.CheckRun, required []*gh.RuleStatusCheck) (map[int64]string, error) {
+	if !slices.ContainsFunc(runs, func(r *gh.CheckRun) bool {
+		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(required, func(sc *gh.RuleStatusCheck) bool { return sc.Context == r.GetName() })
+	}) {
 		return nil, nil
 	}
 	wfs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
@@ -221,12 +224,14 @@ func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, wf map[int64]str
 	// workflow file (wf, by check suite) replaced does not count: a
 	// workflow's concurrency group cancels one run and starts another on the
 	// same head (Bug #1031). Another workflow's job of the same name, pages'
-	// build for ci's say, replaces nothing.
+	// build for ci's say, replaces nothing. GitHub's times have whole seconds,
+	// so of two runs that started in the same second the higher ID is later.
 	replaced := func(r *gh.CheckRun) bool {
-		path := wf[r.GetCheckSuite().GetID()]
+		path, at := wf[r.GetCheckSuite().GetID()], r.GetStartedAt().Time
 		return r.GetConclusion() == "cancelled" && path != "" && slices.ContainsFunc(runs, func(o *gh.CheckRun) bool {
+			later := o.GetStartedAt().After(at) || o.GetStartedAt().Time.Equal(at) && o.GetID() > r.GetID()
 			return o.GetName() == r.GetName() && o.GetApp().GetID() == r.GetApp().GetID() && wf[o.GetCheckSuite().GetID()] == path &&
-				o.GetStatus() == "completed" && o.GetConclusion() != "cancelled" && o.GetStartedAt().After(r.GetStartedAt().Time)
+				o.GetStatus() == "completed" && o.GetConclusion() != "cancelled" && later
 		})
 	}
 	state, seen := "missing", map[int64]bool{}

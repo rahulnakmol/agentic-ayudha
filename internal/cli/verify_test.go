@@ -129,6 +129,8 @@ func TestStoryOf(t *testing.T) {
 		// A reference sits on one line: "Refs" then "#2" on the next is no reference.
 		{"Refs\n#2\nRefs #3", "", "", 3},
 		{"Story\n#2\nStory #3", "", "", 3},
+		// "#0" names no story: the Story line decides.
+		{"Story #2\nRefs #0", "", "", 2},
 	} {
 		if got := StoryOf(c.body, c.msg, c.branch); got != c.want {
 			t.Errorf("StoryOf(%q, %q, %q) = %d, want %d", c.body, c.msg, c.branch, got, c.want)

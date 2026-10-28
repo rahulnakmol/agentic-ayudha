@@ -35,12 +35,12 @@ var (
 	// decides the story. storyLine ("Story #n") is read only when there is
 	// none: a body may name a parent or sibling story in prose (Bug #1031).
 	// Each sits on one line, as refStories reads them: [ \t], not \s, which
-	// would cross a newline.
-	storyRef  = regexp.MustCompile(`(?im)^[ \t]*(?:refs|closes|fixes|resolves)[ \t]+#([0-9]+)\b`)
-	storyLine = regexp.MustCompile(`(?im)^[ \t]*story:?[ \t]+#([0-9]+)\b`)
+	// would cross a newline. An issue number starts 1-9: "#0" names no story.
+	storyRef  = regexp.MustCompile(`(?im)^[ \t]*(?:refs|closes|fixes|resolves)[ \t]+#([1-9][0-9]*)\b`)
+	storyLine = regexp.MustCompile(`(?im)^[ \t]*story:?[ \t]+#([1-9][0-9]*)\b`)
 	// refOnLine is each reference on a line that storyRef starts: one line may
 	// name several ("Fixes #2, fixes #3").
-	refOnLine    = regexp.MustCompile(`(?i)\b(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
+	refOnLine    = regexp.MustCompile(`(?i)\b(?:refs|closes|fixes|resolves)\s+#([1-9][0-9]*)\b`)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
@@ -232,6 +232,20 @@ func StoryOf(body, headMessage, branch string) int {
 	return 0
 }
 
+// twoStories says why a body names more than one story ("" when it names at
+// most one): the gate, and proof land, prove one story, never a silent pick.
+func twoStories(body string) string {
+	refs := refStories(body)
+	if len(refs) < 2 {
+		return ""
+	}
+	names := make([]string, len(refs))
+	for i, n := range refs {
+		names[i] = fmt.Sprintf("#%d", n)
+	}
+	return fmt.Sprintf("the PR body refers to stories %s and %s: keep one", strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
+}
+
 // refStories is every story a body's Refs, Closes, Fixes, or Resolves lines
 // name, in order, each once; a line may name several.
 func refStories(body string) []int {
@@ -337,12 +351,8 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	// The gate proves one story: a body whose Refs, Closes, or Fixes lines
 	// name two is refused, never resolved by a silent pick (Bug #1031).
-	if refs := refStories(body); len(refs) > 1 {
-		names := make([]string, len(refs))
-		for i, n := range refs {
-			names[i] = fmt.Sprintf("#%d", n)
-		}
-		return Errorf(ExitBlocked, "verify %d: the PR body refers to stories %s and %s: keep one", res.PR, strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
+	if two := twoStories(body); two != "" {
+		return Errorf(ExitBlocked, "verify %d: %s", res.PR, two)
 	}
 	res.Story = StoryOf(body, msg, branch)
 	// The merge gate proves stories; a PR that serves no story has no pack to

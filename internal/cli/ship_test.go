@@ -994,8 +994,21 @@ func TestShipOnProof(t *testing.T) {
 		g.Mu.Unlock()
 		refused("required check build is " + c.want + " on " + short(head))
 	}
+	// A cancelled check that no rule requires needs no Actions read (a token
+	// may read checks but not Actions): the required check decides.
 	g.Mu.Lock()
-	g.CheckRuns[head] = append([]fake.CheckRun{later("completed", "success"), cancelled}, runsBefore...)
+	g.CheckRuns[head] = append([]fake.CheckRun{later("completed", "failure"),
+		{ID: 121613890998, Name: "screen-reader", Status: "completed", Conclusion: "cancelled", App: actions, Suite: &fake.Suite{ID: 53}}}, runsBefore...)
+	g.Fail, g.FailAfter = "GET /repos/o/r/actions/runs", 0
+	g.Mu.Unlock()
+	refused("required check build is failure on " + short(head))
+	// The replacement started in the same second as the cancelled run (GitHub's
+	// times have whole seconds): the higher run ID is the later run.
+	same := later("completed", "success")
+	same.StartedAt = cancelled.StartedAt
+	g.Mu.Lock()
+	g.Fail = ""
+	g.CheckRuns[head] = append([]fake.CheckRun{same, cancelled}, runsBefore...)
 	g.Mu.Unlock()
 
 	// The audit's label goes on before the merge: when it cannot, nothing
@@ -1658,6 +1671,13 @@ func TestProofLand(t *testing.T) {
 	g.Mu.Unlock()
 	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR body refers to story #3, but its branch story/2-show-empty-list is story #2's") {
 		t.Fatalf("proof land with a body story that is not the branch's: %d %s", code, out)
+	}
+	// A body that names two stories is refused, as the gate refuses it.
+	g.Mu.Lock()
+	g.Pulls[prN].Body = "Refs #2\nFixes #3"
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR body refers to stories #2 and #3: keep one") {
+		t.Fatalf("proof land with two stories in the body: %d %s", code, out)
 	}
 	g.Mu.Lock()
 	g.Pulls[prN].Body = "Refs #2"

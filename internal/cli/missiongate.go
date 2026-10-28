@@ -458,7 +458,7 @@ func (e *Env) gateRequired(ctx context.Context, c *github.Client, repo, dev, sha
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	wf, err := suiteWorkflows(ctx, c, owner, name, sha, runs)
+	wf, err := suiteWorkflows(ctx, c, owner, name, sha, runs, required)
 	if err != nil {
 		return nil, err
 	}
