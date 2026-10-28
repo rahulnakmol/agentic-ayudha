@@ -669,7 +669,13 @@ func partCriteria(a, b []Verdict) []Verdict {
 // cycle count, and rule 7 as a model's reply. The files the reply says it
 // reviewed seal the manifest. No model is called.
 func (r Runner) Judge(ctx context.Context, in Input, prev State, rep AppReply) (Result, State, error) {
-	res, st, err := r.begin(ctx, &in, prev, rep.Source)
+	// The salt is the post and what was read from it: the same review read
+	// another way (a parser fix, Bug #1130) is judged again, never cached.
+	read, _ := json.Marshal(struct {
+		Reply    Reply
+		Reviewed []string
+	}{rep.Reply, rep.Reviewed})
+	res, st, err := r.begin(ctx, &in, prev, rep.Source+"\x00"+string(read))
 	if err != nil || res.Disposition == Skipped || res.Disposition == StepBack || res.Cached {
 		return res, st, err
 	}

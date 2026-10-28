@@ -1062,6 +1062,29 @@ func TestJudgeCarriesClassInstances(t *testing.T) {
 	}
 }
 
+// CodeRabbit's Major on #1135: the same post read with a new finding (a
+// parser fix) is judged again; a cached merge from the old reading does not
+// stand. The same reading still hits the cache.
+func TestJudgeCacheFollowsTheReading(t *testing.T) {
+	in := testInput("")
+	in.Head = strings.Repeat("a", 40)
+	reviewed := []string{"internal/report/percent.go", "LAYERS.md"}
+	src := "review 5668710694 by coderabbitai[bot]"
+	clean := AppReply{Reply: Reply{Disposition: Merge, Summary: "0 finding(s)", Findings: []Finding{}}, Head: in.Head, Reviewed: reviewed, Source: src}
+	_, st, err := Runner{}.Judge(context.Background(), in, State{}, clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res, _, _ := (Runner{}).Judge(context.Background(), in, st, clean); !res.Cached {
+		t.Fatalf("the same reading: not cached")
+	}
+	major := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Title: "Guard an empty total.", Detail: "d", Confidence: 1}
+	found := AppReply{Reply: Reply{Disposition: Fix, Summary: "1 finding(s)", Findings: []Finding{major}}, Head: in.Head, Reviewed: reviewed, Source: src}
+	if res, _, _ := (Runner{}).Judge(context.Background(), in, st, found); res.Cached || res.Disposition != Fix {
+		t.Fatalf("the same post read with a P1: cached %t, %s", res.Cached, res.Disposition)
+	}
+}
+
 // CodeRabbit's and Greptile's own reviews of the head are read
 // deterministically (Story #635): the receipt, then each inline comment on the
 // head with a severity badge is a finding; a thread reply, a comment on another
