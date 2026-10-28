@@ -9,6 +9,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
@@ -192,4 +194,27 @@ func voiceOf(t *testing.T, files map[string]string, command string) ui.Voice {
 	}
 	e, _ := newEnv(IO{}, Options{Assets: fsys, Getenv: func(string) string { return "" }, Dir: t.TempDir()})
 	return e.voice(verbs.EngineeringManager, command)
+}
+
+// Bug #1031: the home view and the inbox read the merge gate as ship does:
+// only from the gate's own check suites, so a newer green check of the same
+// name from another suite does not hide the gate's red one.
+func TestGateStateOwnSuites(t *testing.T) {
+	run := func(name, concl string, suite int64) *gh.CheckRun {
+		return &gh.CheckRun{Name: gh.Ptr(name), Status: gh.Ptr("completed"), Conclusion: gh.Ptr(concl), CheckSuite: &gh.CheckSuite{ID: gh.Ptr(suite)}}
+	}
+	own := map[int64]bool{1: true}
+	green := []*gh.CheckRun{run("aayudha/merge-gate", "success", 1), run("aayudha/inspect", "success", 1), run("aayudha/pack", "success", 1)}
+	for _, c := range []struct {
+		runs []*gh.CheckRun
+		want string
+	}{
+		{green, "passed"},
+		{append([]*gh.CheckRun{run("aayudha/merge-gate", "success", 2), run("aayudha/merge-gate", "failure", 1)}, green...), "failed"},
+		{[]*gh.CheckRun{run("aayudha/merge-gate", "success", 2), run("aayudha/inspect", "success", 2), run("aayudha/pack", "success", 2)}, "pending"},
+	} {
+		if got := gateState(c.runs, own); got != c.want {
+			t.Errorf("gateState = %q, want %q", got, c.want)
+		}
+	}
 }

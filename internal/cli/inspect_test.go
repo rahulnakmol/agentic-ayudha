@@ -1058,8 +1058,8 @@ func TestInspectThroughApp(t *testing.T) {
 	// On an issue_comment the gate re-runs its own failed inspect job.
 	reruns := 0
 	g.Mu.Lock()
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 501, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure"})
-	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/inspect", Status: "completed", Conclusion: "failure"}, {Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}}
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 501, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 1})
+	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/inspect", Status: "completed", Conclusion: "failure", Suite: &fake.Suite{ID: 1}}, {Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 1}}}
 	g.OnRerun = func(r *fake.WorkflowRun) { reruns++ }
 	g.Mu.Unlock()
 	ev := maps.Clone(env)
@@ -1409,6 +1409,9 @@ func TestInspectWithoutStory(t *testing.T) {
 func TestInspectPaidReviewer(t *testing.T) {
 	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
+		g.Mu.Lock() // the gate's own run on the head, whose suite its checks are in
+		g.Runs = append(g.Runs, fake.WorkflowRun{ID: 400, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: g.Pulls[prN].Head.SHA, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+		g.Mu.Unlock()
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
 		cfg := "version = 1\n\n[inspect]\nreviewer = \"ci\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {

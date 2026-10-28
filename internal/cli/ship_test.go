@@ -179,6 +179,34 @@ func TestShipRefusals(t *testing.T) {
 			t.Fatalf("ship with %s %s/%s: %d %s", gate.Name, gate.Status, gate.Conclusion, code, out)
 		}
 	}
+	// Bug #1031: a check of a gate check's name from outside the gate's own
+	// suites stands in for nothing. A newer success of that name, from another
+	// workflow or from the PR's own copy of the gate on a review event, does not
+	// hide the gate's red run; and with no run of the gate's own the check is missing.
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9600, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_review", Status: "completed", Conclusion: "success", CheckSuiteID: 78})
+	gateOwn := g.CheckRuns[head]
+	g.CheckRuns[head] = append([]fake.CheckRun{
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 77}},
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 78}},
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "failure"}}, gateOwn...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {
+		t.Fatalf("ship with a same-name green check from another suite above the gate's red one: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 77}},
+		{Name: "aayudha/inspect", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 77}},
+		{Name: "aayudha/pack", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 77}}}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is missing on "+short(head)) {
+		t.Fatalf("ship with gate checks only from another suite: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = gateOwn
+	g.Mu.Unlock()
 	// A review on the PR runs the merge gate for its reply job only (#690, #643):
 	// that run's skipped gate checks, newer than the gate's own, hide nothing,
 	// and ship goes on to the human pass. A newer gate run's red check still refuses.
@@ -190,6 +218,7 @@ func TestShipRefusals(t *testing.T) {
 		return runs
 	}
 	g.Mu.Lock()
+	g.Runs[len(g.Runs)-1].CheckSuiteID = 1 // the gate's run; suite 2 is a review event's reply run
 	gate := suite(1, append(g.CheckRuns[head], fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "skipped"})...)
 	reply := suite(2, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "skipped"},
 		fake.CheckRun{Name: "aayudha/inspect", Conclusion: "skipped"}, fake.CheckRun{Name: "aayudha/pack", Conclusion: "skipped"})
@@ -199,6 +228,7 @@ func TestShipRefusals(t *testing.T) {
 		t.Fatalf("ship with a reply run's skipped checks newer than the gate's green ones: %d %s", code, out)
 	}
 	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9700, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 3})
 	g.CheckRuns[head] = append(suite(3, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "skipped"}), append(reply, gate...)...)
 	g.Mu.Unlock()
 	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {

@@ -51,6 +51,9 @@ func TestInboxNotReady(t *testing.T) {
 			runs = append(runs, r)
 		}
 		g.CheckRuns[head] = runs
+		if !slices.ContainsFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.CheckSuiteID == 1 }) { // the gate's own run, suite 1
+			g.Runs = append(g.Runs, fake.WorkflowRun{ID: int64(8000 + len(g.Runs)), Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", CheckSuiteID: 1})
+		}
 	}
 	yes, no := true, false
 	var a, b, c *fake.PR

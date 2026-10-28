@@ -136,7 +136,11 @@ func (s *inboxSource) checksOf(ctx context.Context, base, head string) (failed, 
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	gate := gateCheckRuns(runs)
+	suites, err := gateSuites(ctx, s.c, s.owner, s.name, head)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	gate := gateCheckRuns(runs, suites)
 	var names []string
 	state := map[string]string{}
 	judge := func(name, st string) {

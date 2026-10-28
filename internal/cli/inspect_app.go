@@ -428,7 +428,11 @@ func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head st
 	if err != nil {
 		return first, fmt.Errorf("the inspect job needs checks: read (%s)", oneLineErr(err))
 	}
-	for _, r := range runs {
+	suites, err := gateSuites(ctx, c, owner, name, head)
+	if err != nil {
+		return first, fmt.Errorf("the inspect job needs actions: read (%s)", oneLineErr(err))
+	}
+	for _, r := range gateCheckRuns(runs, suites) { // the gate's own inspect runs, not a check of that name from elsewhere
 		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && !at.Before(floor) && (first.IsZero() || at.Before(first)) {
 			first = at
 		}
@@ -742,8 +746,8 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 			return Wrap(ExitExternal, err)
 		}
 		state := map[string]string{}
-		for _, r := range gateCheckRuns(checks.CheckRuns) {
-			if _, seen := state[r.GetName()]; !seen { // newest first, reply runs dropped
+		for _, r := range gateCheckRuns(checks.CheckRuns, map[int64]bool{run.GetCheckSuiteID(): true}) {
+			if _, seen := state[r.GetName()]; !seen { // newest first, in this run's suite
 				state[r.GetName()] = r.GetConclusion()
 			}
 		}

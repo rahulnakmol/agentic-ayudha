@@ -704,8 +704,9 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 }
 
 // gateGreen reads every check run on head and requires the merge gate's
-// checks to be green there: the newest run of each, so an older green run
-// never stands in for a newer red one.
+// checks to be green there: the newest run of each in the gate's own suites
+// (gateSuites), so an older green run never stands in for a newer red one, nor
+// a check of the same name from another workflow or app for the gate's.
 func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, n int, head string) ([]*gh.CheckRun, error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
 		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
@@ -714,9 +715,13 @@ func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, 
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
+	suites, err := gateSuites(ctx, c, owner, name, head)
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
 	for _, want := range gateChecks {
 		concl := "missing"
-		for _, r := range gateCheckRuns(runs) {
+		for _, r := range gateCheckRuns(runs, suites) {
 			if r.GetName() == want {
 				concl = r.GetStatus()
 				if r.GetStatus() == "completed" {

@@ -25,11 +25,16 @@ func failedRequired(ctx context.Context, c *github.Client, owner, name, head str
 	if err != nil {
 		return nil, err
 	}
+	suites, err := gateSuites(ctx, c, owner, name, head)
+	if err != nil {
+		return nil, err
+	}
 	var out []delegate.FailedCheck
 	seen := map[string]bool{}
 	for _, r := range rs.CheckRuns {
 		n := r.GetName()
-		if seen[n] || n == "protected-paths" || !slices.Contains(required, n) {
+		// A merge gate check counts only from the gate's own suites (gateSuites).
+		if seen[n] || n == "protected-paths" || !slices.Contains(required, n) || slices.Contains(gateChecks, n) && !suites[r.GetCheckSuite().GetID()] {
 			continue
 		}
 		seen[n] = true

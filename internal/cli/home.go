@@ -174,7 +174,9 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 		if s.Gates {
 			gate = "pending"
 			if runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, pr.GetHead().GetSHA(), &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}}); err == nil {
-				gate = gateState(runs.CheckRuns)
+				if suites, err := gateSuites(ctx, c, owner, name, pr.GetHead().GetSHA()); err == nil {
+					gate = gateState(runs.CheckRuns, suites)
+				}
 			}
 		}
 		s.AwaitingHuman = append(s.AwaitingHuman, journey.Item{Number: pr.GetNumber(), Title: pr.GetTitle(), Story: story, Gate: gate})
@@ -182,22 +184,35 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	return journey.GitHubOK
 }
 
-// gateCheckRuns drops, from a head's check runs (newest first), those of the
-// merge gate's reply runs (#690, #643). A comment or review on the PR runs the
-// workflow with only aayudha/inspect-reply, and its skipped merge-gate,
-// inspect, and pack checks must not hide the gate's own: a check suite is a
-// reply run when its aayudha/inspect-reply check was not skipped, which the
-// gate's pull_request_target run always skips.
-func gateCheckRuns(runs []*gh.CheckRun) []*gh.CheckRun {
-	reply := map[int64]bool{}
+// gateSuites is the check suites of the merge gate's own runs on head: the
+// pull_request_target runs of aayudha-merge-gate.yml, whose workflow file is
+// the base branch's, so the pull request cannot have edited it (gatePack). A
+// re-run of a run's failed jobs stays in its suite.
+func gateSuites(ctx context.Context, c *github.Client, owner, name, head string) (map[int64]bool, error) {
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
+		r, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: o})
+		return r.GetWorkflowRuns(), resp, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64]bool{}
 	for _, r := range runs {
-		if r.GetName() == "aayudha/inspect-reply" && r.GetConclusion() != "skipped" {
-			reply[r.GetCheckSuite().GetID()] = true
+		if r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
+			out[r.GetCheckSuiteID()] = true
 		}
 	}
+	return out, nil
+}
+
+// gateCheckRuns keeps, of a head's check runs (newest first), those in the
+// merge gate's own suites (gateSuites): a check of the same name from another
+// workflow or app, or from the gate's reply runs on a comment or review (#690,
+// #643), never stands in for the gate's own (Bug #1031).
+func gateCheckRuns(runs []*gh.CheckRun, suites map[int64]bool) []*gh.CheckRun {
 	var kept []*gh.CheckRun
 	for _, r := range runs {
-		if !reply[r.GetCheckSuite().GetID()] {
+		if suites[r.GetCheckSuite().GetID()] {
 			kept = append(kept, r)
 		}
 	}
@@ -205,10 +220,10 @@ func gateCheckRuns(runs []*gh.CheckRun) []*gh.CheckRun {
 }
 
 // gateState is the merge gate as ship reads it (gateChecks, the newest run of
-// each name first, reply runs dropped): passed when every gate check succeeded,
-// failed when one finished otherwise, else pending.
-func gateState(runs []*gh.CheckRun) string {
-	state, runs := "passed", gateCheckRuns(runs)
+// each name first, in the gate's own suites): passed when every gate check
+// succeeded, failed when one finished otherwise, else pending.
+func gateState(runs []*gh.CheckRun, suites map[int64]bool) string {
+	state, runs := "passed", gateCheckRuns(runs, suites)
 	for _, want := range gateChecks {
 		concl := "pending"
 		for _, r := range runs {
