@@ -415,9 +415,17 @@ func TestPlanFootprint(t *testing.T) {
 		strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "specs/") {
 		t.Fatalf("plan whose label write fails: %d %s", code, errOut)
 	}
+	// The footprint comes from the plan: its features are listed (CodeRabbit, PR #1147).
+	fm := filepath.Join(dir, ".agents", "skills", "verify-notes", "features")
+	_ = os.MkdirAll(fm, 0o755)
+	for _, f := range []string{"README.md", "store.md"} {
+		b, _ := os.ReadFile(filepath.Join("..", "..", "examples", "notes", ".agents", "skills", "verify-notes", "features", f))
+		_ = os.WriteFile(filepath.Join(fm, f), b, 0o644)
+	}
 	code, out, errOut = run(t, env, opts, "plan", "3", "--repo", "o/r", "--draft", draft(3), "--create", "--json")
 	res = PlanResult{}
-	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || !res.FromPlan || strings.Join(res.Footprint, ",") != "L07" || res.Ledger != "specs/3/plan.json" {
+	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || !res.FromPlan || strings.Join(res.Footprint, ",") != "L07" || res.Ledger != "specs/3/plan.json" ||
+		len(res.Features) != 1 || res.Features[0].ID != "store" {
 		t.Fatalf("plan of a story without layer labels: %d %v %s %s", code, err, out, errOut)
 	}
 	if labels := g.LabelNames(3); !contains(labels, "layer:L07") {

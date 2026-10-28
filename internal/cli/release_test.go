@@ -682,6 +682,7 @@ func TestStoriesOfEveryRefsLine(t *testing.T) {
 		// Refs line, when there is one, decides alone.
 		{"Story #2\nStory #3\n", "feat/x", []int{2, 3}},
 		{"Story #990 (Feature #874) is the parent.\n\nRefs #992", "feat/x", []int{992}},
+		{"Fixes #2, fixes #3\nThis fixes #9 in prose.", "feat/x", []int{2, 3}},
 	} {
 		if got := storiesOf(c.body, c.branch); !slices.Equal(got, c.want) {
 			t.Errorf("storiesOf(%q, %q) = %v, want %v", c.body, c.branch, got, c.want)

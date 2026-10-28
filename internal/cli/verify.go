@@ -34,8 +34,11 @@ var (
 	// storyRef is a PR body's Refs, Closes, Fixes, or Resolves line; it
 	// decides the story. storyLine ("Story #n") is read only when there is
 	// none: a body may name a parent or sibling story in prose (Bug #1031).
-	storyRef     = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
-	storyLine    = regexp.MustCompile(`(?im)^\s*story:?\s+#([0-9]+)\b`)
+	storyRef  = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
+	storyLine = regexp.MustCompile(`(?im)^\s*story:?\s+#([0-9]+)\b`)
+	// refOnLine is each reference on a line that storyRef starts: one line may
+	// name several ("Fixes #2, fixes #3").
+	refOnLine    = regexp.MustCompile(`(?i)\b(?:refs|closes|fixes|resolves)\s+#([0-9]+)\b`)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
@@ -227,6 +230,23 @@ func StoryOf(body, headMessage, branch string) int {
 	return 0
 }
 
+// refStories is every story a body's Refs, Closes, Fixes, or Resolves lines
+// name, in order, each once; a line may name several.
+func refStories(body string) []int {
+	var out []int
+	for _, line := range strings.Split(body, "\n") {
+		if !storyRef.MatchString(line) {
+			continue
+		}
+		for _, m := range refOnLine.FindAllStringSubmatch(line, -1) {
+			if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
+
 func (e *Env) devBranch() string {
 	if l, err := e.Config(); err == nil && l.Config.Branches.Dev != "" {
 		return l.Config.Branches.Dev
@@ -315,13 +335,11 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	// The gate proves one story: a body whose Refs, Closes, or Fixes lines
 	// name two is refused, never resolved by a silent pick (Bug #1031).
-	var names []string
-	for _, m := range storyRef.FindAllStringSubmatch(body, -1) {
-		if n := fmt.Sprintf("#%d", issueNumber(m[1])); !slices.Contains(names, n) {
-			names = append(names, n)
+	if refs := refStories(body); len(refs) > 1 {
+		names := make([]string, len(refs))
+		for i, n := range refs {
+			names[i] = fmt.Sprintf("#%d", n)
 		}
-	}
-	if len(names) > 1 {
 		return Errorf(ExitBlocked, "verify %d: the PR body refers to stories %s and %s: keep one", res.PR, strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
 	}
 	res.Story = StoryOf(body, msg, branch)

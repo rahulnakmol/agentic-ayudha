@@ -1666,6 +1666,26 @@ func TestProofLand(t *testing.T) {
 	}
 	g.Mu.Lock()
 	g.Runs = []fake.WorkflowRun{good}
+	gateRuns := g.CheckRuns[head]
+	// The head's checks now, as ship reads them: a newer red gate run, and a
+	// red required check, refuse; a red protected-paths, which a solo-mode
+	// bypass merges past, does not.
+	g.CheckRuns[head] = append([]fake.CheckRun{{ID: 99, Name: "aayudha/pack", Status: "completed", Conclusion: "failure"}}, gateRuns...)
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "proof land #"+strconv.Itoa(prN)+": aayudha/pack is failure on "+short(head)) {
+		t.Fatalf("proof land with a newer red gate run: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.RequiredChecks = []string{"build", "protected-paths"}
+	g.CheckRuns[head] = append(slices.Clone(gateRuns), fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
+		fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "proof land #"+strconv.Itoa(prN)+": required check build is failure on "+short(head)) {
+		t.Fatalf("proof land with a red required check: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = append(slices.Clone(gateRuns), fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
+		fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Mu.Unlock()
 	// The audit's inputs: the merged PR delivered #2, and it is uncovered.
 	g.Mu.Lock()

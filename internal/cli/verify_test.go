@@ -101,6 +101,12 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the PR body refers to stories #990 and #2: keep one") {
 		t.Fatalf("verify of a body that refers to two stories: %d %s", code, errOut)
 	}
+	g.Mu.Lock()
+	pr.Body = "Fixes #2, fixes #3"
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the PR body refers to stories #2 and #3: keep one") {
+		t.Fatalf("verify of a line that refers to two stories: %d %s", code, errOut)
+	}
 	// A checkout that is not the PR head is refused.
 	git(t, dir, "checkout", "--quiet", "dev")
 	if code, _, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "check out the PR head") {

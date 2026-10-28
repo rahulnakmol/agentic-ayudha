@@ -519,11 +519,22 @@ func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(gp.tmp) }()
+	// The head's checks now, as ship reads them: the merge gate's newest runs
+	// green, and every required check but the CODEOWNERS gate, which a
+	// solo-mode bypass merges past (CodeRabbit, PR #1147).
+	head := pr.GetHead().GetSHA()
+	runs, err := gateGreen(ctx, c, owner, name, "proof land", n, head)
+	if err != nil {
+		return err
+	}
+	if _, _, err := requiredChecks(ctx, c, owner, name, "proof land", n, pr.GetBase().GetRef(), head, runs); err != nil {
+		return err
+	}
 	s, err := e.proofStore(ctx, c, tok, "human", "")
 	if err != nil {
 		return err
 	}
-	if err := verifyGatePack(ctx, s, "proof land", n, story, pr.GetHead().GetSHA(), gp, nil); err != nil {
+	if err := verifyGatePack(ctx, s, "proof land", n, story, head, gp, nil); err != nil {
 		return err
 	}
 	res, err := s.Push(ctx, gp.dir, s.Bucket != nil, proof.Authority{Kind: proof.Authoritative,

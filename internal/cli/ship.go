@@ -214,27 +214,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	rec.GateRun, rec.Artifact, rec.PackSHA256 = gp.run.GetID(), gp.artifact, gp.sha256
 
 	// 2. The merge gate's checks are green on the head.
-	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
-		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
-		return r.GetCheckRuns(), resp, err
-	})
+	runs, err := gateGreen(ctx, c, owner, name, "ship", n, head)
 	if err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	for _, want := range gateChecks {
-		concl := "missing"
-		for _, r := range gateCheckRuns(runs) {
-			if r.GetName() == want {
-				concl = r.GetStatus()
-				if r.GetStatus() == "completed" {
-					concl = r.GetConclusion()
-				}
-				break // the API lists the newest run of a name first
-			}
-		}
-		if concl != "success" {
-			return Errorf(ExitBlocked, "ship #%d: %s is %s on %s; the merge gate must be green", n, want, concl, short(head))
-		}
+		return err
 	}
 
 	// The pack verifies against the head and the Ready snapshot, and its floors hold.
@@ -251,7 +233,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// Every required check of the base branch is green too, whoever passes it.
-	required, gateState, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs)
+	required, gateState, err := requiredChecks(ctx, c, owner, name, "ship", n, pr.GetBase().GetRef(), head, runs)
 	if err != nil {
 		return err
 	}
@@ -719,6 +701,35 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 		why = append(why[:6], fmt.Sprintf("%d older run(s)", len(why)-6))
 	}
 	return gatePackRun{}, Errorf(ExitBlocked, "%s #%d: no merge gate pack for the head %s: %s", verb, n, short(head), strings.Join(why, "; "))
+}
+
+// gateGreen reads every check run on head and requires the merge gate's
+// checks to be green there: the newest run of each, so an older green run
+// never stands in for a newer red one.
+func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, n int, head string) ([]*gh.CheckRun, error) {
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
+		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
+		return r.GetCheckRuns(), resp, err
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	for _, want := range gateChecks {
+		concl := "missing"
+		for _, r := range gateCheckRuns(runs) {
+			if r.GetName() == want {
+				concl = r.GetStatus()
+				if r.GetStatus() == "completed" {
+					concl = r.GetConclusion()
+				}
+				break // the API lists the newest run of a name first
+			}
+		}
+		if concl != "success" {
+			return nil, Errorf(ExitBlocked, "%s #%d: %s is %s on %s; the merge gate must be green", verb, n, want, concl, short(head))
+		}
+	}
+	return runs, nil
 }
 
 // verifyGatePack checks the merge gate's pack against the head and the

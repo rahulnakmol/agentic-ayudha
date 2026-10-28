@@ -171,7 +171,7 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	res.PlanReport = planning.CheckPlan(story, footprint, never, d)
-	if len(res.Added) > 0 { // the never layers the plan added map features too
+	if len(res.Added) > 0 || res.FromPlan { // the layers the plan gave the story map features too
 		res.Features, known = planFeatures(ctx, config.RepoRoot(e.Dir), res.Footprint)
 	}
 	if defs, _, err := readSLOs(config.RepoRoot(e.Dir)); err != nil {

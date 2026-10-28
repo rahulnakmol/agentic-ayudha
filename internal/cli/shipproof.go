@@ -140,7 +140,7 @@ func shipFiles(ctx context.Context, c *github.Client, owner, name string, pr *gh
 // read, and the CODEOWNERS check's state ("" when it is not required; the
 // worst of its states when several rules require it), which only proofPass
 // may accept red.
-func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
+func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
 	var checks []*gh.RuleStatusCheck
 	for rule, err := range c.REST.Repositories.ListRulesForBranchIter(ctx, owner, name, base, &gh.ListOptions{PerPage: 100}) {
 		if err != nil {
@@ -173,7 +173,7 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 				gate = state
 			}
 		case state != "success":
-			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, sc.Context, state, short(head))
+			return nil, "", Errorf(ExitBlocked, "%s #%d: required check %s is %s on %s; never merge with a red required check", verb, n, sc.Context, state, short(head))
 		case !slices.Contains(want, sc.Context):
 			want = append(want, sc.Context)
 		}
