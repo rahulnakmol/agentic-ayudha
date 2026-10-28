@@ -500,6 +500,14 @@ func TestPlanApprove(t *testing.T) {
 	// review covers L04 and L07; --approve records it.
 	both := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02", "layer:L07") // #4
 	both.Parent, feature.Subs = feature.Number, append(feature.Subs, both.Number)
+	// A feature mapped only to L04 is listed once the plan adds L04.
+	fm := filepath.Join(dir, ".agents", "skills", "verify-notes", "features")
+	_ = os.MkdirAll(fm, 0o755)
+	src := filepath.Join("..", "..", "examples", "notes", ".agents", "skills", "verify-notes", "features")
+	readme, _ := os.ReadFile(filepath.Join(src, "README.md"))
+	store, _ := os.ReadFile(filepath.Join(src, "store.md"))
+	_ = os.WriteFile(filepath.Join(fm, "README.md"), readme, 0o644)
+	_ = os.WriteFile(filepath.Join(fm, "store.md"), []byte(strings.Replace(string(store), `"layers": ["L07"]`, `"layers": ["L04"]`, 1)), 0o644)
 	d := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) {
 		d.Story = both.Number
 		for _, l := range []string{"L02", "L04"} {
@@ -511,7 +519,7 @@ func TestPlanApprove(t *testing.T) {
 	code, out, errOut := run(t, agent, opts, "plan", "4", "--repo", "o/r", "--draft", d, "--create", "--json")
 	var res PlanResult
 	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || !res.Pass || strings.Join(res.Footprint, ",") != "L02,L04,L07" ||
-		strings.Join(res.Added, ",") != "L04" || strings.Join(res.Review.Layers, ",") != "L04,L07" {
+		strings.Join(res.Added, ",") != "L04" || strings.Join(res.Review.Layers, ",") != "L04,L07" || len(res.Features) != 1 || res.Features[0].ID != "store" {
 		t.Fatalf("plan with a never-layer checkpoint beyond the labels: %d %v %s %s", code, err, out, errOut)
 	}
 	if labels := g.LabelNames(4); !contains(labels, "layer:L04") || !contains(labels, "layer:L02") {

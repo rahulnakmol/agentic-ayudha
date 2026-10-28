@@ -315,11 +315,13 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	// The gate proves one story: a body whose Refs, Closes, or Fixes lines
 	// name two is refused, never resolved by a silent pick (Bug #1031).
-	if refs := storiesOf(body, ""); len(refs) > 1 {
-		names := make([]string, len(refs))
-		for i, n := range refs {
-			names[i] = fmt.Sprintf("#%d", n)
+	var names []string
+	for _, m := range storyRef.FindAllStringSubmatch(body, -1) {
+		if n := fmt.Sprintf("#%d", issueNumber(m[1])); !slices.Contains(names, n) {
+			names = append(names, n)
 		}
+	}
+	if len(names) > 1 {
 		return Errorf(ExitBlocked, "verify %d: the PR body refers to stories %s and %s: keep one", res.PR, strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
 	}
 	res.Story = StoryOf(body, msg, branch)

@@ -712,9 +712,14 @@ func rangeStories(ctx context.Context, c *github.Client, repo string, shas []str
 // (one Refs line each), and a release must stamp all of them, not only the first.
 func storiesOf(body, branch string) []int {
 	var out []int
-	for _, m := range storyRef.FindAllStringSubmatch(body, -1) {
-		if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
-			out = append(out, n)
+	for _, re := range []*regexp.Regexp{storyRef, storyLine} { // "Story #n" lines only without a Refs line (Bug #1031)
+		for _, m := range re.FindAllStringSubmatch(body, -1) {
+			if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+		if len(out) > 0 {
+			break
 		}
 	}
 	if len(out) == 0 {

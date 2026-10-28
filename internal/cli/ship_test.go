@@ -1629,6 +1629,14 @@ func TestProofLand(t *testing.T) {
 	good := g.Runs[len(g.Runs)-1]
 	arts := g.Artifacts[good.ID]
 	g.Artifacts[good.ID] = []fake.ArtifactZip{{ID: arts[0].ID, Name: arts[0].Name, Zip: arts[0].Zip, Expired: true}}
+	// The body's story must be the branch's, as ship requires.
+	g.Pulls[prN].Body = "Refs #3"
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR body refers to story #3, but its branch story/2-show-empty-list is story #2's") {
+		t.Fatalf("proof land with a body story that is not the branch's: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Body = "Refs #2"
 	g.Mu.Unlock()
 	if code, out := land(); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("proof land #%d: no merge gate pack for the head %s: run %d: its aayudha-pack artifact %d expired", prN, short(head), good.ID, arts[0].ID)) {
 		t.Fatalf("proof land with an expired artifact: %d %s", code, out)

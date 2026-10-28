@@ -514,6 +514,9 @@ func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
 	if story == 0 {
 		return Errorf(ExitBlocked, "proof land #%d: no story (Refs #n in the PR body)", n)
 	}
+	if b := StoryOf("", "", pr.GetHead().GetRef()); b != 0 && b != story {
+		return Errorf(ExitBlocked, "proof land #%d: the PR body refers to story #%d, but its branch %s is story #%d's", n, story, pr.GetHead().GetRef(), b)
+	}
 	gp, err := e.gatePack(ctx, c, owner, name, "proof land", pr, story)
 	if err != nil {
 		return err
