@@ -1,0 +1,24 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails (0.95s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_fails"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls (1.09s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_amp_CLI_stalls"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check (0.89s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/a_local_Kanha_takes_it_at_its_next_check"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge (0.77s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/GitHub_fails_the_read_of_#2's_Feature_after_the_merge"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger","Output":"=== RUN   TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger (0.89s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached/the_message's_record_misses_the_ledger"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached","Output":"--- PASS: TestShipMergeStandsWhenKanhaUnreached (4.59s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestShipMergeStandsWhenKanhaUnreached"}
