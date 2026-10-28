@@ -283,6 +283,34 @@ func TestCodexCloud(t *testing.T) {
 		ForStory("# Delegated story #65: Follow-up to #64", 64) || !ForStory("Delegated story #64: Item", 64) {
 		t.Fatalf("list: %v %+v", err, tasks)
 	}
+	// A story's task on a later page counts: List follows each cursor, and a page it cannot read fails the whole list.
+	pages := map[string]string{
+		"":   `{"tasks": [{"id": "task_e_1", "title": "# Delegated story #1: Item", "status": "running"}], "cursor": "p2"}`,
+		"p2": `{"tasks": [{"id": "task_e_64", "title": "# Delegated story #64: Item", "status": "running"}], "cursor": null}`,
+	}
+	var cursors []string
+	paged := CodexCloud{EnvID: "env_123", Exec: func(_ context.Context, _ string, _ []string, _, _ string, args ...string) (string, error) {
+		cur := ""
+		if i := slices.Index(args, "--cursor"); i >= 0 {
+			cur = args[i+1]
+		}
+		cursors = append(cursors, cur)
+		if p, ok := pages[cur]; ok {
+			return p, nil
+		}
+		return "", errors.New("exit status 1: 502 Bad Gateway")
+	}}
+	if tasks, err := paged.List(ctx); err != nil || len(tasks) != 2 || tasks[1].ID != "task_e_64" || !slices.Equal(cursors, []string{"", "p2"}) {
+		t.Fatalf("a list of two pages: %v %+v, cursors %q", err, tasks, cursors)
+	}
+	pages["p2"] = `{"tasks": [], "cursor": "p3"}`
+	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("a page that fails: %v %+v", err, tasks)
+	}
+	pages["p3"] = `{"tasks": [], "cursor": "p3"}`
+	if tasks, err := paged.List(ctx); err == nil || !strings.Contains(err.Error(), "more than 50 pages") {
+		t.Fatalf("a list that never ends: %v %+v", err, tasks)
+	}
 	out["cloud list"] = "Error: 401 Unauthorized"
 	if _, err := c.List(ctx); err == nil || !strings.Contains(err.Error(), "not a task list") {
 		t.Fatalf("list that is not JSON: %v", err)

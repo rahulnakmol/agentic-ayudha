@@ -466,34 +466,52 @@ func (c CodexCloud) FollowUp(ctx context.Context, st State, msg string) (Task, e
 	return c.submit(ctx, st.Branch, msg)
 }
 
-// List reads the environment's recent cloud tasks (`codex cloud list
-// --json`): each task's ID, URL, title, and status.
+// codexListPages bounds the pages List reads: a list longer than that is one
+// it cannot finish, so it fails rather than miss a task.
+const codexListPages = 50
+
+// List reads the environment's cloud tasks (`codex cloud list --json`), page
+// by page until Codex returns no cursor: each task's ID, URL, title, and
+// status. A task on a later page still counts, so a list it cannot finish is
+// an error, never a short list (#1003: recover starts no second agent).
 func (c CodexCloud) List(ctx context.Context) ([]Task, error) {
 	if c.EnvID == "" {
 		return nil, fmt.Errorf("codex: %w: no cloud environment ([delegate] codex_env)", ErrNotConnected)
 	}
-	out, err := c.Exec(ctx, "", c.Env, "", c.bin(), "cloud", "list", "--env", c.EnvID, "--json", "--limit", "20")
-	if err != nil {
-		return nil, fmt.Errorf("codex: %w", err)
-	}
-	var r struct {
-		Tasks []struct{ ID, URL, Title, Status string } `json:"tasks"`
-	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil {
-		return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
-	}
-	tasks := make([]Task, 0, len(r.Tasks))
-	for _, t := range r.Tasks {
-		task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
-		switch {
-		case codexFailed.MatchString(t.Status):
-			task.Status = TaskFailed
-		case codexDone.MatchString(t.Status):
-			task.Status = TaskDone
+	var tasks []Task
+	cursor := ""
+	for range codexListPages {
+		args := []string{"cloud", "list", "--env", c.EnvID, "--json", "--limit", "20"}
+		if cursor != "" {
+			args = append(args, "--cursor", cursor)
 		}
-		tasks = append(tasks, task)
+		out, err := c.Exec(ctx, "", c.Env, "", c.bin(), args...)
+		if err != nil {
+			return nil, fmt.Errorf("codex: %w", err)
+		}
+		var r struct {
+			Tasks  []struct{ ID, URL, Title, Status string } `json:"tasks"`
+			Cursor string                                    `json:"cursor"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &r); err != nil {
+			return nil, fmt.Errorf("codex: cloud list: not a task list: %s", clip(out, 200))
+		}
+		for _, t := range r.Tasks {
+			task := Task{ID: t.ID, URL: t.URL, Title: t.Title, Status: TaskWorking, Detail: t.Status}
+			switch {
+			case codexFailed.MatchString(t.Status):
+				task.Status = TaskFailed
+			case codexDone.MatchString(t.Status):
+				task.Status = TaskDone
+			}
+			tasks = append(tasks, task)
+		}
+		if r.Cursor == "" {
+			return tasks, nil
+		}
+		cursor = r.Cursor
 	}
-	return tasks, nil
+	return nil, fmt.Errorf("codex: cloud list: more than %d pages of tasks", codexListPages)
 }
 
 func clip(s string, n int) string {

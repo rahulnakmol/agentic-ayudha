@@ -534,7 +534,18 @@ func TestMissionRetryBackoffAndMax(t *testing.T) {
 	if code, out, errOut := run(t, m.agent, m.opts, "mission", "next", "889", "--repo", "o/r"); code != 0 || !strings.HasPrefix(out, "waits #63: failed (1 attempts, ") {
 		t.Fatalf("mission next before the retry: exit %d: %s%s", code, out, errOut)
 	}
+	// In a quiet mission no event reaches the Kanha, and only recover runs a retry: the tick wakes it once the retry is due.
+	if code, r, errOut := m.tick(clk.now()); code != 0 || len(r.Woken) != 0 {
+		t.Fatalf("tick before the retry is due: exit %d, woken %+v: %s", code, r.Woken, errOut)
+	}
 	clk.add(5 * time.Minute) // +10: the first retry
+	wake := "tick: the retry of #63 is due, and no event reached the Kanha since: run aayu mission recover 889, then aayu mission next 889"
+	if code, r, errOut := m.tick(clk.now()); code != 0 || len(r.Woken) != 1 || r.Woken[0].Event != wake || r.Woken[0].Status != wakeSent {
+		t.Fatalf("tick when the retry is due: exit %d, woken %+v, held %+v: %s", code, r.Woken, r.Held, errOut)
+	}
+	if code, r, errOut := m.tick(clk.now().Add(time.Minute)); code != 0 || len(r.Woken) != 0 {
+		t.Fatalf("a second tick woke the Kanha for the same retry: exit %d, woken %+v: %s", code, r.Woken, errOut)
+	}
 	code, out, errOut = m.recover(889, "")
 	if code != 0 || !strings.Contains(out, "#63  retried (1 of 2): ") || !strings.Contains(out, "retry 2 of 2 at "+at(30*time.Minute)) || m.handoffs(63) != 2 {
 		t.Fatalf("recover at +10: exit %d, hand-offs %d: %s%s", code, m.handoffs(63), out, errOut)
