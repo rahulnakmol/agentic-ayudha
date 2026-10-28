@@ -522,8 +522,15 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 	if err != nil {
 		return Wrap(ExitExternal, ignoreMissing(err))
 	}
-	var path string
-	var claim loopClaim
+	// Each mission whose list claimed n. A claim of a mission n has left is stale: build releases it, and judges n
+	// by the claim of the mission it is still under (Bug #1129).
+	type listed struct {
+		path  string
+		claim loopClaim
+		plan  MissionPlan
+		ok    bool
+	}
+	var all []listed
 	for _, p := range paths {
 		if !strings.HasSuffix(p, "/claims.jsonl") {
 			continue
@@ -534,19 +541,29 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 		lines := e.liveClaims(raw, nil)
 		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
-			path, claim = p, lines[i]
+			l := listed{path: p, claim: lines[i]}
+			raw, err := t.File(ctx, strings.TrimSuffix(p, "claims.jsonl")+"plan.json")
+			l.ok = err == nil && json.Unmarshal(raw, &l.plan) == nil
+			all = append(all, l)
 		}
 	}
-	var plan MissionPlan
-	planOK := false
-	if path != "" {
-		raw, err := t.File(ctx, strings.TrimSuffix(path, "claims.jsonl")+"plan.json")
-		planOK = err == nil && json.Unmarshal(raw, &plan) == nil
+	if len(all) == 0 {
+		return nil // no list marked it start: build's own Ready checks apply
 	}
+	release := map[string][]byte{}
+	cur := all[len(all)-1]
+	for _, l := range all {
+		if l.ok && movedOut(chk, &l.plan) {
+			l.claim.Release = true
+			b, _ := json.Marshal(l.claim)
+			release[l.path] = append(b, '\n')
+		} else {
+			cur = l
+		}
+	}
+	plan, planOK := cur.plan, cur.ok
 	now := ""
 	switch {
-	case path == "":
-		return nil // no list marked it start: build's own Ready checks apply
 	case plan.Pause != nil:
 		now = "its mission is paused: " + plan.Pause.Reason
 	case plan.stopped(n) != nil:
@@ -563,16 +580,24 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		now = storyState(is)
 	case !chk.Pass:
 		now = "not Ready"
-	default:
-		*claimed = planOK
-		return nil
 	}
-	if !dryRun {
-		claim.Release = true
-		b, _ := json.Marshal(claim)
-		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now), Append: map[string][]byte{path: append(b, '\n')}}); err != nil {
+	if now != "" {
+		cur.claim.Release = true
+		b, _ := json.Marshal(cur.claim)
+		release[cur.path] = append(b, '\n')
+	}
+	if len(release) > 0 && !dryRun {
+		msg := fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now)
+		if now == "" {
+			msg = fmt.Sprintf("missions: #%d left the Feature of a list that claimed it; that claim is released", n)
+		}
+		if _, err := w.Write(ctx, ledger.Commit{Message: msg, Append: release}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
+	}
+	if now == "" {
+		*claimed = planOK
+		return nil
 	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
 }

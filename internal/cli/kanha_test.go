@@ -786,7 +786,7 @@ func TestMissionStartKanhaOnlyStartTime(t *testing.T) {
 // person's own words.
 func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 	m := newMissionWorld(t)
-	m.featureWith(889, 60, 61)
+	m.featureWith(889, 60, 61, 62)
 	m.start(889, "rahulnakmol", "cursor")
 	m.agent = maps.Clone(m.agent) // the Kanha runs on cursor
 	delete(m.agent, "AMP_THREAD_ID")
@@ -843,6 +843,27 @@ func TestKanhaBuildsWhatTheListMarked(t *testing.T) {
 		if code, _, errOut := run(t, m.agent, m.opts, "build", "61", "--delegate", "cursor", "--repo", "o/r"); code != ExitBlocked ||
 			!strings.Contains(errOut, "#61 changed since the list: now "+to.now+"; not started") || m.claims(889)[61] != 0 {
 			t.Fatalf("build 61 after the move to %d: exit %d: %s (claims %v)", to.parent, code, errOut, m.claims(889))
+		}
+	}
+	// Both lists claimed the story, and it is under one of the two Features now: build judges it by that Feature's
+	// claim and releases the other, whichever claims path sorts last (CodeRabbit on PR #1131).
+	plan977, _ := m.plan(889)
+	plan977.Feature = 977
+	b, _ := json.Marshal(plan977)
+	putLedger(t, m.bare, MissionPlanPath(977), string(b))
+	m.setPlan(889, func(p *MissionPlan) { p.Agents = 9 })
+	m.readyStory(62)
+	m.move(61, 889)
+	if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "start #61\n") || !strings.Contains(out, "start #62\n") {
+		t.Fatalf("mission next 889 for #61 and #62: exit %d: %s%s", code, out, errOut)
+	}
+	for _, c := range []struct{ n, from, to int }{{61, 889, 977}, {62, 977, 889}} {
+		claim, _ := json.Marshal(loopClaim{Story: c.n, Token: fmt.Sprintf("977-%d", c.n), At: time.Now().UTC().Format(time.RFC3339)})
+		putLedger(t, m.bare, MissionClaimsPath(977), string(claim)+"\n")
+		m.move(c.n, c.to)
+		code, out, errOut := run(t, m.agent, m.opts, "build", fmt.Sprint(c.n), "--delegate", "cursor", "--repo", "o/r")
+		if code != 0 || m.claims(c.from)[c.n] != 0 {
+			t.Fatalf("build %d under #%d, listed by #889 and #977: exit %d: %s%s (claims of #%d: %v)", c.n, c.to, code, out, errOut, c.from, m.claims(c.from))
 		}
 	}
 }
