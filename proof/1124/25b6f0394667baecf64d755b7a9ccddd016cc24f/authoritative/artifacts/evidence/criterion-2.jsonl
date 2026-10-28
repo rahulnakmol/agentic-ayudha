@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateHandoffStalls"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateHandoffStalls","Output":"=== RUN   TestDelegateHandoffStalls\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateHandoffStalls","Output":"--- PASS: TestDelegateHandoffStalls (0.54s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateHandoffStalls"}
