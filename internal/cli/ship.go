@@ -242,32 +242,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	t, err := s.Ledger.Read(ctx)
-	if err != nil {
-		return ledgerErr(err)
-	}
-	exp := proof.Expect{HeadSHA: head}
-	if b, err := t.File(ctx, ready.LedgerPath(story)); err == nil {
-		snap, err := ready.ParseSnapshot(string(b))
-		if err != nil {
-			t.Close()
-			return err
-		}
-		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
-	}
-	t.Close()
-	if fix != nil { // a listed gate fix rests on the approved record, not a Ready snapshot (Decision #974)
-		exp.CompletionGoalHash, exp.Criteria = fix.Approval.SHA256, nil
-	}
-	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
-	if exp.CompletionGoalHash == "" {
-		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
-	}
-	if len(rep.Problems) > 0 {
-		return Errorf(ExitBlocked, "ship #%d: the merge gate's pack does not verify: %s", n, strings.Join(rep.Problems, "; "))
-	}
-	if !gp.pack.FloorsHold() {
-		return Errorf(ExitBlocked, "ship #%d: floors do not hold in the merge gate's pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", n, failing(gp.pack.Checks), story)
+	if err := verifyGatePack(ctx, s, "ship", n, story, head, gp, fix); err != nil {
+		return err
 	}
 	for _, ck := range gp.pack.Checks {
 		if ck.Waiver != "" {
@@ -743,6 +719,40 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 		why = append(why[:6], fmt.Sprintf("%d older run(s)", len(why)-6))
 	}
 	return gatePackRun{}, Errorf(ExitBlocked, "%s #%d: no merge gate pack for the head %s: %s", verb, n, short(head), strings.Join(why, "; "))
+}
+
+// verifyGatePack checks the merge gate's pack against the head and the
+// story's Ready snapshot on the ledger (a listed gate fix's against its
+// Feature's approved record), and that its floors hold.
+func verifyGatePack(ctx context.Context, s *proof.Store, verb string, n, story int, head string, gp gatePackRun, fix *GateFix) error {
+	t, err := s.Ledger.Read(ctx)
+	if err != nil {
+		return ledgerErr(err)
+	}
+	exp := proof.Expect{HeadSHA: head}
+	if b, err := t.File(ctx, ready.LedgerPath(story)); err == nil {
+		snap, err := ready.ParseSnapshot(string(b))
+		if err != nil {
+			t.Close()
+			return err
+		}
+		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
+	}
+	t.Close()
+	if fix != nil { // a listed gate fix rests on the approved record, not a Ready snapshot (Decision #974)
+		exp.CompletionGoalHash, exp.Criteria = fix.Approval.SHA256, nil
+	}
+	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
+	if exp.CompletionGoalHash == "" {
+		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
+	}
+	if len(rep.Problems) > 0 {
+		return Errorf(ExitBlocked, "%s #%d: the merge gate's pack does not verify: %s", verb, n, strings.Join(rep.Problems, "; "))
+	}
+	if !gp.pack.FloorsHold() {
+		return Errorf(ExitBlocked, "%s #%d: floors do not hold in the merge gate's pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", verb, n, failing(gp.pack.Checks), story)
+	}
+	return nil
 }
 
 // unpackGateRun downloads a merge gate run's aayudha-pack artifact and checks

@@ -491,9 +491,6 @@ func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool)
 // floors holding, landed authoritative in one ledger commit. It never reads a
 // local pack.
 func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
-	if e.CI {
-		return Errorf(ExitUsage, "proof land --ci: CI writes nothing to the ledger")
-	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return err
@@ -526,32 +523,8 @@ func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
 	if err != nil {
 		return err
 	}
-	t, err := s.Ledger.Read(ctx)
-	if err != nil {
-		return ledgerErr(err)
-	}
-	exp := proof.Expect{HeadSHA: pr.GetHead().GetSHA()}
-	b, err := t.File(ctx, ready.LedgerPath(story))
-	t.Close()
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return Wrap(ExitExternal, err)
-	}
-	if err == nil {
-		snap, err := ready.ParseSnapshot(string(b))
-		if err != nil {
-			return err
-		}
-		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
-	}
-	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
-	if exp.CompletionGoalHash == "" {
-		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
-	}
-	if len(rep.Problems) > 0 {
-		return Errorf(ExitBlocked, "proof land #%d: the merge gate's pack does not verify: %s", n, strings.Join(rep.Problems, "; "))
-	}
-	if !gp.pack.FloorsHold() {
-		return Errorf(ExitBlocked, "proof land #%d: floors do not hold in the merge gate's pack: %s", n, failing(gp.pack.Checks))
+	if err := verifyGatePack(ctx, s, "proof land", n, story, pr.GetHead().GetSHA(), gp, nil); err != nil {
+		return err
 	}
 	res, err := s.Push(ctx, gp.dir, s.Bucket != nil, proof.Authority{Kind: proof.Authoritative,
 		Workflow: ".github/workflows/" + MergeGateWorkflow, RunID: gp.run.GetID(), Writer: me.Login + " (aayu proof land)"})

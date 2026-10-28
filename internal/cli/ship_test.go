@@ -1624,6 +1624,9 @@ func TestProofLand(t *testing.T) {
 	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "the PR is open, not merged") {
 		t.Fatalf("proof land of an open PR: %d %s", code, out)
 	}
+	if code, out, errOut := run(t, env, opts, "proof", "land", "999", "--repo", "o/r"); code != ExitExternal || !strings.Contains(out+errOut, "404") {
+		t.Fatalf("proof land of a PR that does not exist: %d %s %s", code, out, errOut)
+	}
 	g.Mu.Lock()
 	g.Pulls[prN].Merged, g.Pulls[prN].State = true, "closed"
 	good := g.Runs[len(g.Runs)-1]
@@ -1653,8 +1656,16 @@ func TestProofLand(t *testing.T) {
 	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
 		t.Fatalf("a refused proof land landed a pack:\n%s", got)
 	}
+	// A gate pack whose floors do not hold is refused, as ship refuses it.
 	g.Mu.Lock()
 	g.Runs[0].HeadSHA = head
+	g.Mu.Unlock()
+	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "coverage", Result: proof.Fail, Value: 50, Threshold: 90, Tool: "aayudha", Version: "1"}})
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("proof land #%d: floors do not hold in the merge gate's pack: coverage", prN)) {
+		t.Fatalf("proof land of a pack whose floors fail: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Runs = []fake.WorkflowRun{good}
 	g.Mu.Unlock()
 	// The audit's inputs: the merged PR delivered #2, and it is uncovered.
 	g.Mu.Lock()
