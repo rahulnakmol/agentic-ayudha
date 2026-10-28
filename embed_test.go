@@ -60,7 +60,7 @@ func TestMissionSkillProtocolSection(t *testing.T) {
 		section = section[:next]
 	}
 	steps := []string{"1. Run `aayu mission recover <f>`.", "2. Run `aayu mission next <f>`.", "run `aayu build <n> --delegate <tool>` once for each line `start #<n>`",
-		"4. Report one line, then stop.", "Never restate text you did not act on", "If `recover` or `next` exits with an error, start nothing.", "Exit 4: the repository is halted",
+		"4. Report one line, then stop.", "after the one-line report: no plan, no narration", "Never restate text you did not act on", "If `recover` or `next` exits with an error, start nothing.", "Exit 4: the repository is halted",
 		"In a Tatkal Feature", "Start only what the list marks `start`, each once."}
 	for i, s := range steps {
 		at := strings.Index(section, s)
