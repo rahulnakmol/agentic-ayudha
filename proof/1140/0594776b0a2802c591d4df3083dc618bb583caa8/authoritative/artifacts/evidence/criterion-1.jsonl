@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionResumeContinues"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionResumeContinues","Output":"=== RUN   TestMissionResumeContinues\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionResumeContinues","Output":"--- PASS: TestMissionResumeContinues (1.53s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionResumeContinues"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopOneStoryOrBug"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopOneStoryOrBug","Output":"=== RUN   TestMissionStopOneStoryOrBug\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopOneStoryOrBug","Output":"--- PASS: TestMissionStopOneStoryOrBug (1.87s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStopOneStoryOrBug"}
