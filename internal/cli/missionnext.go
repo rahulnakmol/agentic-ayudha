@@ -508,9 +508,10 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // when its live state changed since (Story #998, J4 rule 3): build reads the
 // issue first, and releases the claim so its agent is free again. A story a
 // build already moved to in progress is not a change. A paused or ended
-// mission, or a story stopped alone, is one (Story #1005). claimed is set when a live claim of an unpaused mission
+// mission, or a story stopped alone, is one (Story #1005), and so is a story
+// a person moved out of the mission's Feature (Bug #1129). claimed is set when a live claim of an unpaused mission
 // marks n start; a plan it cannot read leaves it unset.
-func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, pass bool, labels []string, dryRun bool, claimed *bool) error {
+func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, chk ready.Result, labels []string, dryRun bool, claimed *bool) error {
 	n := is.GetNumber()
 	t, err := w.Read(ctx)
 	if err != nil {
@@ -521,8 +522,15 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 	if err != nil {
 		return Wrap(ExitExternal, ignoreMissing(err))
 	}
-	var path string
-	var claim loopClaim
+	// Each mission whose list claimed n. A claim of a mission n has left is stale: build releases it, and judges n
+	// by the claim of the mission it is still under (Bug #1129).
+	type listed struct {
+		path  string
+		claim loopClaim
+		plan  MissionPlan
+		ok    bool
+	}
+	var all []listed
 	for _, p := range paths {
 		if !strings.HasSuffix(p, "/claims.jsonl") {
 			continue
@@ -533,45 +541,82 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 		lines := e.liveClaims(raw, nil)
 		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
-			path, claim = p, lines[i]
+			l := listed{path: p, claim: lines[i]}
+			raw, err := t.File(ctx, strings.TrimSuffix(p, "claims.jsonl")+"plan.json")
+			l.ok = err == nil && json.Unmarshal(raw, &l.plan) == nil
+			all = append(all, l)
 		}
 	}
-	var plan MissionPlan
-	planOK := false
-	if path != "" {
-		raw, err := t.File(ctx, strings.TrimSuffix(path, "claims.jsonl")+"plan.json")
-		planOK = err == nil && json.Unmarshal(raw, &plan) == nil
+	if len(all) == 0 {
+		return nil // no list marked it start: build's own Ready checks apply
 	}
+	release := map[string][]byte{}
+	cur := all[len(all)-1]
+	for _, l := range all {
+		if l.ok && movedOut(chk, &l.plan) {
+			l.claim.Release = true
+			b, _ := json.Marshal(l.claim)
+			release[l.path] = append(b, '\n')
+		} else {
+			cur = l
+		}
+	}
+	plan, planOK := cur.plan, cur.ok
 	now := ""
 	switch {
-	case path == "":
-		return nil // no list marked it start: build's own Ready checks apply
 	case plan.Pause != nil:
 		now = "its mission is paused: " + plan.Pause.Reason
 	case plan.stopped(n) != nil:
 		now = "a person stopped it: " + plan.stopped(n).Reason
 	case plan.State != "":
 		now = "its mission is " + plan.State
+	case planOK && movedOut(chk, &plan):
+		now = fmt.Sprintf("under %s, not #%d", parentRef(chk.Parent), plan.Feature)
 	case is.GetState() != "open":
 		now = "closed"
 	case contains(labels, "status:blocked"):
 		now = "blocked"
 	case !contains(labels, ready.LabelReady) && !contains(labels, labelInProgress):
 		now = storyState(is)
-	case !pass:
+	case !chk.Pass:
 		now = "not Ready"
-	default:
-		*claimed = planOK
-		return nil
 	}
-	if !dryRun {
-		claim.Release = true
-		b, _ := json.Marshal(claim)
-		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now), Append: map[string][]byte{path: append(b, '\n')}}); err != nil {
+	if now != "" {
+		cur.claim.Release = true
+		b, _ := json.Marshal(cur.claim)
+		release[cur.path] = append(b, '\n')
+	}
+	if len(release) > 0 && !dryRun {
+		msg := fmt.Sprintf("missions: #%d changed since the list (%s); its claim is released", n, now)
+		if now == "" {
+			msg = fmt.Sprintf("missions: #%d left the Feature of a list that claimed it; that claim is released", n)
+		}
+		if _, err := w.Write(ctx, ledger.Commit{Message: msg, Append: release}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 	}
+	if now == "" {
+		*claimed = planOK
+		return nil
+	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
+}
+
+// movedOut reports whether the item chk read is no longer under the plan's
+// Feature. A Bug that a Tatkal list starts keeps its own parent (Decision #915).
+func movedOut(chk ready.Result, plan *MissionPlan) bool {
+	if plan.Release != 0 && chk.Type == "bug" {
+		return false
+	}
+	return chk.Parent == nil || chk.Parent.Number != plan.Feature
+}
+
+// parentRef names a parent for a refusal: "#920", or "no Feature".
+func parentRef(p *workitems.Ref) string {
+	if p == nil {
+		return "no Feature"
+	}
+	return fmt.Sprintf("#%d", p.Number)
 }
 
 // heldBy is the clock of story n's mission when it reached its time limit, else nil.
