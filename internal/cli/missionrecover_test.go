@@ -625,6 +625,29 @@ func TestMissionRetryBackoffAndMax(t *testing.T) {
 	}
 }
 
+// A failed delegation with no failed event: the first recover sets its retry
+// time, a later one keeps it and writes nothing, and the retry runs when due.
+func TestMissionRetryWithNoFailedEvent(t *testing.T) {
+	m := newMissionWorld(t)
+	m.ampConnected()
+	clk := m.withClock()
+	m.startedMission(889, []int{66})
+	m.delegated(delegate.State{Story: 66, Receiver: "amp", Mode: "cloud", Task: "T-01a00000-0000-0000-0000-000000000066", Branch: "story/66-item-66", Status: dlgFailed})
+	at := clk.now().Add(10 * time.Minute).Truncate(time.Second).Local().Format("15:04")
+	if code, out, errOut := m.recover(889, ""); code != 0 || !strings.Contains(out, "retry 1 of 2 at "+at) {
+		t.Fatalf("first recover: exit %d: %s%s", code, out, errOut)
+	}
+	clk.add(5 * time.Minute)
+	commits := m.commits()
+	if code, out, _ := m.recover(889, ""); code != 0 || !strings.Contains(out, "retry 1 of 2 at "+at) || m.commits() != commits {
+		t.Fatalf("recover at +5 moved the retry or wrote: commits %s → %s: %s", commits, m.commits(), out)
+	}
+	clk.add(5 * time.Minute)
+	if code, out, errOut := m.recover(889, ""); code != 0 || !strings.Contains(out, "#66  retried (1 of 2)") {
+		t.Fatalf("recover at +10: exit %d: %s%s", code, out, errOut)
+	}
+}
+
 // Criterion 6: after that, a person's `aayu mission retry 889 --story 63`,
 // and one for a failed Bug #941: one more attempt each, counted and costed
 // in the record, and the retry is a control in the plan.

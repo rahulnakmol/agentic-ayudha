@@ -386,9 +386,11 @@ func (r *recovery) schedule(ss *MissionStoryState) {
 		ss.State, ss.RetryAt = stateWaits+r.plan.starter(ss.Number), ""
 		return
 	}
-	last := r.now // a failed delegation with no failed event aayu wrote: the backoff runs from now
+	last := r.now // a failed delegation with no failed event aayu wrote: the backoff runs from the first run that saw it
 	if len(ss.Attempts) > 0 {
 		last, _ = time.Parse(time.RFC3339, ss.Attempts[len(ss.Attempts)-1].At)
+	} else if _, err := time.Parse(time.RFC3339, ss.RetryAt); err == nil && ss.State == "failed" {
+		return // its retry time is set: a later run keeps it, so the retry comes due
 	}
 	ss.State, ss.RetryAt = "failed", last.Add(backoff<<k).UTC().Format(time.RFC3339)
 }
