@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockEndsAtLastMilestone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockEndsAtLastMilestone","Output":"=== RUN   TestLockEndsAtLastMilestone\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockEndsAtLastMilestone","Output":"--- PASS: TestLockEndsAtLastMilestone (2.06s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestLockEndsAtLastMilestone"}
