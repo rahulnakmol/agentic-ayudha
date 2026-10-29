@@ -276,28 +276,32 @@ The first line of its evidence for criterion 1, from
 
 ## Invariants
 
-1. Evidence comes only from this run: a criterion gets a test artifact only if every mapped test ran and passed
+1. Test evidence comes only from this run: a criterion gets a test artifact only if every mapped test ran and passed
    in the same `go test -json` run. Enforced in [internal/verify/evidence.go](../../internal/verify/evidence.go),
    `TestTestEvidence`.
-2. Only `ship` lands an authoritative pack, and only from the `aayudha-pack` artifact of a successful
+2. Eval evidence comes only from the head commit: a mapped eval case counts only from the `evals.yml` results for the
+   pull request head, with all k runs passing, no error, and the mean at the bar, and only when the change leaves the
+   harness alone. Enforced by `evalLine` in [internal/verify/evidence.go](../../internal/verify/evidence.go),
+   `TestEvalEvidence` and `TestVerifyWritesPackForStory`.
+3. Only `ship` lands an authoritative pack, and only from the `aayudha-pack` artifact of a successful
    `pull_request_target` run of the merge gate on the exact head, with every hash matching. A run of the pull
    request's own copy of the gate, a run on another commit, a failed run, or a tampered artifact is refused, and a
    refused ship lands nothing. Enforced by `gatePack` in [internal/cli/ship.go](../../internal/cli/ship.go),
    `TestShipRefusals` and `TestBuildAndShip`.
-3. Every other push is advisory, CI never pushes, and an advisory comment never replaces the gate's. Enforced in
+4. Every other push is advisory, CI never pushes, and an advisory comment never replaces the gate's. Enforced in
    [internal/cli/proof.go](../../internal/cli/proof.go), `TestProofPushVerifyCLI` and `TestProofCommentInMergeGate`.
-4. The gate's `aayudha/pack` check fails when the pack does not verify or a floor does not hold, and writes nothing to
+5. The gate's `aayudha/pack` check fails when the pack does not verify or a floor does not hold, and writes nothing to
    the ledger. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
    `TestProofCommentInMergeGate`.
-5. Every stored artifact matches its hash and size, every Ready criterion has evidence, and the pack matches the
+6. Every stored artifact matches its hash and size, every Ready criterion has evidence, and the pack matches the
    pull request head and the Ready Completion Goal hash. Enforced by `Verify` and `VerifyLocal` in
    [internal/proof](../../internal/proof), `TestVerifyDetects`.
-6. Media never reach the ledger or Git LFS; without a bucket they are refused. Enforced by `Push` in
+7. Media never reach the ledger or Git LFS; without a bucket they are refused. Enforced by `Push` in
    [internal/proof/ledger.go](../../internal/proof/ledger.go), `TestMediaNeedABucket` and `TestPushVerifyBucket`.
-7. The run artifact is kept `[proof] retention_days`, never more than the repository allows. Enforced by
+8. The run artifact is kept `[proof] retention_days`, never more than the repository allows. Enforced by
    `ArtifactRetention` in [internal/proof/pack.go](../../internal/proof/pack.go), `TestArtifactRetention`.
-8. Packs from before 0.2 still verify, including LFS media and tombstones. `TestVerifyReadsPacksFromBefore02`.
-9. Every pack validates against the JSON Schema of its `schema_version`. Enforced by `Decode` in
+9. Packs from before 0.2 still verify, including LFS media and tombstones. `TestVerifyReadsPacksFromBefore02`.
+10. Every pack validates against the JSON Schema of its `schema_version`. Enforced by `Decode` in
    [internal/proof/pack.go](../../internal/proof/pack.go), `TestSchemaValidatesSamples`.
 
 ## Where it lives in the code
