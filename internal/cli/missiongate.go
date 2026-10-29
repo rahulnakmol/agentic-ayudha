@@ -458,6 +458,12 @@ func (e *Env) gateRequired(ctx context.Context, c *github.Client, repo, dev, sha
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
+	// The CODEOWNERS check is not the gate's to judge (below), so its cancelled runs need no Actions read.
+	judged := slices.DeleteFunc(slices.Clone(required), func(sc *gh.RuleStatusCheck) bool { return sc.Context == seats.GateCheck })
+	wf, err := suiteWorkflows(ctx, c, owner, name, sha, runs, judged)
+	if err != nil {
+		return nil, err
+	}
 	var out []GateCheck
 	for _, sc := range required {
 		key := "check:" + sc.Context
@@ -465,7 +471,7 @@ func (e *Env) gateRequired(ctx context.Context, c *github.Client, repo, dev, sha
 			continue
 		}
 		ck := GateCheck{Check: key, Result: gatePass}
-		st := checkState(runs, statuses, sc)
+		st := checkState(runs, statuses, wf, sc)
 		i := slices.IndexFunc(runs, func(r *gh.CheckRun) bool { return r.GetName() == sc.Context })
 		why := ""
 		switch {

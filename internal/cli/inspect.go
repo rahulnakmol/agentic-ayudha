@@ -510,8 +510,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
+		suites, err := gateSuites(ctx, c, owner, name, head, n)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
 		var latest *gh.CheckRun
-		for _, r := range checks.CheckRuns {
+		for _, r := range gateCheckRuns(checks.CheckRuns, suites) { // the gate's own inspect check
 			// The newest run by ID: a queued run has no start time yet.
 			if r.GetName() == "aayudha/inspect" && (latest == nil || r.GetID() > latest.GetID()) {
 				latest = r

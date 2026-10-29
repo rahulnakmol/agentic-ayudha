@@ -171,6 +171,9 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	res.PlanReport = planning.CheckPlan(story, footprint, never, d)
+	if len(res.Added) > 0 || res.FromPlan { // the layers the plan gave the story map features too
+		res.Features, known = planFeatures(ctx, config.RepoRoot(e.Dir), res.Footprint)
+	}
 	if defs, _, err := readSLOs(config.RepoRoot(e.Dir)); err != nil {
 		return Wrap(ExitUsage, err)
 	} else if defs != nil {
@@ -210,9 +213,13 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		res.DryRun = c.DryRun()
 		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Rollout: d.Rollout, Review: res.Review,
 			PlannedAt: e.Now().UTC().Format(time.RFC3339), PlannedBy: c.Identity()}
-		if res.FromPlan && !res.DryRun {
-			add := make([]string, 0, len(res.Footprint))
-			for _, x := range res.Footprint {
+		if (res.FromPlan || len(res.Added) > 0) && !res.DryRun {
+			layers := res.Added
+			if res.FromPlan {
+				layers = res.Footprint
+			}
+			add := make([]string, 0, len(layers))
+			for _, x := range layers {
 				add = append(add, planning.LayerLabel+x)
 			}
 			owner, name, _ := github.SplitRepo(repo)

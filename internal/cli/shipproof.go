@@ -140,7 +140,7 @@ func shipFiles(ctx context.Context, c *github.Client, owner, name string, pr *gh
 // read, and the CODEOWNERS check's state ("" when it is not required; the
 // worst of its states when several rules require it), which only proofPass
 // may accept red.
-func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
+func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
 	var checks []*gh.RuleStatusCheck
 	for rule, err := range c.REST.Repositories.ListRulesForBranchIter(ctx, owner, name, base, &gh.ListOptions{PerPage: 100}) {
 		if err != nil {
@@ -165,15 +165,19 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 	if err != nil {
 		return nil, "", Wrap(ExitExternal, err)
 	}
+	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs, checks)
+	if err != nil {
+		return nil, "", err
+	}
 	for _, sc := range checks {
-		state := checkState(runs, statuses, sc)
+		state := checkState(runs, statuses, wf, sc)
 		switch {
 		case sc.Context == seats.GateCheck: // every rule that requires it counts: the worst state wins
 			if gate == "" || gate == "success" || state != "success" && state != "failure" {
 				gate = state
 			}
 		case state != "success":
-			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, sc.Context, state, short(head))
+			return nil, "", Errorf(ExitBlocked, "%s #%d: required check %s is %s on %s; never merge with a red required check", verb, n, sc.Context, state, short(head))
 		case !slices.Contains(want, sc.Context):
 			want = append(want, sc.Context)
 		}
@@ -181,23 +185,67 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 	return want, gate, nil
 }
 
+// suiteWorkflows maps the check suite of each Actions run on sha to its
+// workflow file, which checkState needs to judge a cancelled run's
+// replacement; nil, and no read, when no required check has a cancelled run
+// that checkState would judge, from the app its rule pins (a token may read
+// checks but not Actions).
+func suiteWorkflows(ctx context.Context, c *github.Client, owner, name, sha string, runs []*gh.CheckRun, required []*gh.RuleStatusCheck) (map[int64]string, error) {
+	if !slices.ContainsFunc(runs, func(r *gh.CheckRun) bool {
+		return r.GetConclusion() == "cancelled" && slices.ContainsFunc(required, func(sc *gh.RuleStatusCheck) bool {
+			return sc.Context == r.GetName() && (sc.IntegrationID == nil || r.GetApp().GetID() == *sc.IntegrationID)
+		})
+	}) {
+		return nil, nil
+	}
+	wfs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
+		r, resp, err := c.REST.Actions.ListRepositoryWorkflowRuns(ctx, owner, name, &gh.ListWorkflowRunsOptions{HeadSHA: sha, ListOptions: o})
+		return r.GetWorkflowRuns(), resp, err
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	out := map[int64]string{}
+	for _, w := range wfs {
+		out[w.GetCheckSuiteID()] = w.GetPath()
+	}
+	return out, nil
+}
+
 // checkState is the state of a required check: its newest check run from
 // its app (any app when the rule names none), with skipped and neutral
 // counted as success as GitHub counts them, and, for a rule that names no app, the newest
 // commit status of the same name, which must pass too; "missing" when there
 // is neither.
-func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatusCheck) string {
+func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, wf map[int64]string, sc *gh.RuleStatusCheck) string {
 	// The newest run of the name in each check suite counts (a rerun's
 	// success replaces a failure in its suite; the API lists the newest
 	// first), and every suite's must pass: a run of another workflow or
 	// event, a dispatch that skips the job say, cannot stand in for a
 	// failing one.
+	// A cancelled run that a later completed run of the same name, app, and
+	// workflow file (wf, by check suite) replaced does not count: a
+	// workflow's concurrency group cancels one run and starts another on the
+	// same head (Bug #1031). Another workflow's job of the same name, pages'
+	// build for ci's say, replaces nothing. GitHub's times have whole seconds,
+	// so of two runs that started in the same second the higher ID is later.
+	replaced := func(r *gh.CheckRun) bool {
+		path, at := wf[r.GetCheckSuite().GetID()], r.GetStartedAt().Time
+		return r.GetConclusion() == "cancelled" && path != "" && slices.ContainsFunc(runs, func(o *gh.CheckRun) bool {
+			later := o.GetStartedAt().After(at) || o.GetStartedAt().Time.Equal(at) && o.GetID() > r.GetID()
+			return o.GetName() == r.GetName() && o.GetApp().GetID() == r.GetApp().GetID() && wf[o.GetCheckSuite().GetID()] == path &&
+				o.GetStatus() == "completed" && o.GetConclusion() != "cancelled" && later
+		})
+	}
 	state, seen := "missing", map[int64]bool{}
 	for _, r := range runs {
 		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID || seen[r.GetCheckSuite().GetID()] {
 			continue
 		}
 		seen[r.GetCheckSuite().GetID()] = true
+		if replaced(r) {
+			continue
+		}
 		st := r.GetConclusion()
 		switch {
 		case r.GetStatus() != "completed":

@@ -918,10 +918,25 @@ func TestGateRerunsRunnerErrorOnce(t *testing.T) {
 	if rep := g.gateJSON(); !slices.Equal(reruns, []int64{70, 70}) || !strings.Contains(rep.Milestones[0].Detail, "runner error: its log names a 5xx from GitHub") {
 		t.Fatalf("5xx in the log: reruns %v: %+v", reruns, rep.Milestones[0])
 	}
-	g.edit(func() { g.g.CheckRuns[g.sha][0].ID, g.g.CheckRuns[g.sha][0].Conclusion = 74, "success" })
+	// A token that cannot read Actions passes when no cancelled run needs the
+	// read: protected-paths, which the gate does not judge, and a check no rule
+	// requires are cancelled; a lint run from an app the rule does not pin is too.
+	g.edit(func() {
+		g.g.CheckRuns[g.sha][0].ID, g.g.CheckRuns[g.sha][0].Conclusion = 74, "success"
+		g.g.CheckRuns[g.sha][2].Conclusion = "cancelled"
+		g.g.CheckRuns[g.sha] = append(g.g.CheckRuns[g.sha], fake.CheckRun{ID: 75, Name: "screen-reader", Status: "completed", Conclusion: "cancelled", Suite: &fake.Suite{ID: 3}},
+			fake.CheckRun{ID: 76, Name: "lint", Status: "completed", Conclusion: "cancelled", App: &fake.App{ID: 999}, Suite: &fake.Suite{ID: 4}})
+		g.g.RequiredChecks = []string{"build", "lint@0", "protected-paths"}
+		g.g.Hook = func(method, path string) { // every Actions read fails, as for a token without Actions read
+			if path == "/repos/o/r/actions/runs" {
+				g.g.Fail, g.g.FailAfter = method+" "+path, 0
+			}
+		}
+	})
 	if rep := g.gateJSON(); rep.Milestones[0].State != GatePassed {
-		t.Fatalf("pass after the rerun: %+v", rep.Milestones[0])
+		t.Fatalf("pass after the rerun, with no Actions read: %+v", rep.Milestones[0])
 	}
+	g.edit(func() { g.g.Hook, g.g.Fail, g.g.RequiredChecks = nil, "", []string{"build", "lint", "protected-paths"} })
 	// A failure whose log names no 5xx is the code's: no rerun, and the gate fails.
 	g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
 	g.tip(strings.Repeat("e", 40), "failure")

@@ -304,7 +304,7 @@ func runProof(ctx context.Context, e *Env, in Values) error {
 			return Errorf(ExitBlocked, "proof push --media: %v", proof.ErrMediaRefused)
 		}
 	}
-	if story == 0 && (action == "push" || action == "get" || action == "verify" || action == "comment") {
+	if story == 0 && (action == "push" || action == "get" || action == "verify" || action == "comment" || action == "land") {
 		return Errorf(ExitUsage, "proof %s needs a story", action)
 	}
 	repo, err := e.RepoName(ctx)
@@ -316,6 +316,8 @@ func runProof(ctx context.Context, e *Env, in Values) error {
 		return e.proofPush(ctx, repo, story, in.Bool("media"))
 	case "comment":
 		return e.proofComment(ctx, repo, story)
+	case "land":
+		return e.proofLand(ctx, repo, story)
 	}
 	// get, list, verify read the ledger with the human's token.
 	c, tok, err := e.HumanGitHub(ctx)
@@ -480,6 +482,73 @@ func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool)
 			fmt.Fprintf(w, "  retention: %s\n", res.LifecycleNote)
 		}
 		return nil
+	})
+}
+
+// proofLand lands the merge gate's own pack of a PR merged outside ship
+// (Bug #1031): the same artifact checks ship makes (gatePack), on the head
+// the PR merged at, then the pack verified against the Ready snapshot with its
+// floors holding, landed authoritative in one ledger commit. It never reads a
+// local pack.
+func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return err
+	}
+	me, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
+	if err != nil {
+		return Wrap(ExitBlocked, err)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if !pr.GetMerged() {
+		return Errorf(ExitBlocked, "proof land #%d: the PR is %s, not merged; `aayu ship %d` lands the pack of an open PR", n, pr.GetState(), n)
+	}
+	if two := twoStories(pr.GetBody()); two != "" {
+		return Errorf(ExitBlocked, "proof land #%d: %s", n, two)
+	}
+	story := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
+	if story == 0 {
+		return Errorf(ExitBlocked, "proof land #%d: no story (Refs #n in the PR body)", n)
+	}
+	if b := StoryOf("", "", pr.GetHead().GetRef()); b != 0 && b != story {
+		return Errorf(ExitBlocked, "proof land #%d: the PR body refers to story #%d, but its branch %s is story #%d's", n, story, pr.GetHead().GetRef(), b)
+	}
+	gp, err := e.gatePack(ctx, c, owner, name, "proof land", pr, story)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(gp.tmp) }()
+	// The head's checks now, as ship reads them: the merge gate's newest runs
+	// green, and every required check but the CODEOWNERS gate, which a
+	// solo-mode bypass merges past (CodeRabbit, PR #1147).
+	head := pr.GetHead().GetSHA()
+	runs, err := gateGreen(ctx, c, owner, name, "proof land", n, head)
+	if err != nil {
+		return err
+	}
+	if _, _, err := requiredChecks(ctx, c, owner, name, "proof land", n, pr.GetBase().GetRef(), head, runs); err != nil {
+		return err
+	}
+	s, err := e.proofStore(ctx, c, tok, "human", "")
+	if err != nil {
+		return err
+	}
+	if err := verifyGatePack(ctx, s, "proof land", n, story, head, gp, nil); err != nil {
+		return err
+	}
+	res, err := s.Push(ctx, gp.dir, s.Bucket != nil, proof.Authority{Kind: proof.Authoritative,
+		Workflow: ".github/workflows/" + MergeGateWorkflow, RunID: gp.run.GetID(), Writer: me.Login + " (aayu proof land)"})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	return e.Emit(res, func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "proof land #%d: the %s pack of #%d at %s, from artifact %d of run %d, landed at ledger %s (%s)\n",
+			n, res.Authority, story, short(res.HeadSHA), gp.artifact, gp.run.GetID(), res.Path, short(res.Commit))
+		return err
 	})
 }
 

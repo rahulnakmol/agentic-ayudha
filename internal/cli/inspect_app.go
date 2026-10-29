@@ -224,7 +224,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 				if a.prev.Stopped == head && runs.IsZero() {
 					runs = a.in.Reopened
 				}
-				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, runs)
+				since, sinceErr = firstInspectRun(ctx, a.c, owner, name, head, n, runs)
 			}
 		}
 		if !own.IsZero() {
@@ -418,7 +418,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 // after floor (a reopen) started. An error says why there is no such start:
 // the runs cannot be read, or none started in the window (inspect's P1 on
 // #724), so the wait cannot be timed and a person reviews.
-func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string, floor time.Time) (time.Time, error) {
+func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head string, pr int, floor time.Time) (time.Time, error) {
 	var first time.Time
 	// filter=all: by default GitHub lists only the newest run, a rerun's.
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) {
@@ -428,7 +428,11 @@ func firstInspectRun(ctx context.Context, c *github.Client, owner, name, head st
 	if err != nil {
 		return first, fmt.Errorf("the inspect job needs checks: read (%s)", oneLineErr(err))
 	}
-	for _, r := range runs {
+	suites, err := gateSuites(ctx, c, owner, name, head, pr)
+	if err != nil {
+		return first, fmt.Errorf("the inspect job needs actions: read (%s)", oneLineErr(err))
+	}
+	for _, r := range gateCheckRuns(runs, suites) { // the gate's own inspect runs, not a check of that name from elsewhere
 		if at := r.GetStartedAt().Time; r.GetName() == "aayudha/inspect" && !at.IsZero() && !at.Before(floor) && (first.IsZero() || at.Before(first)) {
 			first = at
 		}
@@ -712,7 +716,6 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 	if errors.Is(rerr, inspect.ErrNoReply) {
 		return say("no %s for this head; nothing to re-run", why)
 	}
-	path := ".github/workflows/" + MergeGateWorkflow
 	for deadline := e.Now().Add(10 * time.Minute); ; {
 		runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
 		if err != nil {
@@ -720,7 +723,7 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 		}
 		var run *gh.WorkflowRun
 		for _, r := range runs.WorkflowRuns {
-			if r.GetPath() == path && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
+			if gateRunOf(r, head, n) {
 				run = r
 				break // newest first
 			}
@@ -742,8 +745,8 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 			return Wrap(ExitExternal, err)
 		}
 		state := map[string]string{}
-		for _, r := range gateCheckRuns(checks.CheckRuns) {
-			if _, seen := state[r.GetName()]; !seen { // newest first, reply runs dropped
+		for _, r := range gateCheckRuns(checks.CheckRuns, map[int64]bool{run.GetCheckSuiteID(): true}) {
+			if _, seen := state[r.GetName()]; !seen { // newest first, in this run's suite
 				state[r.GetName()] = r.GetConclusion()
 			}
 		}

@@ -711,10 +711,12 @@ func rangeStories(ctx context.Context, c *github.Client, repo string, shas []str
 // storiesOf is every story a merged pull request serves: one PR may deliver several
 // (one Refs line each), and a release must stamp all of them, not only the first.
 func storiesOf(body, branch string) []int {
-	var out []int
-	for _, m := range storyRef.FindAllStringSubmatch(body, -1) {
-		if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
-			out = append(out, n)
+	out := refStories(body)
+	if len(out) == 0 { // "Story #n" lines count only without a Refs line (Bug #1031)
+		for _, m := range storyLine.FindAllStringSubmatch(body, -1) {
+			if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
 		}
 	}
 	if len(out) == 0 {

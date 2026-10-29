@@ -206,7 +206,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// 1. The pack the merge gate built for this head, from the artifact of a
 	// run of the base branch's workflow (S-4.2b): never a pack on the ledger,
 	// a preview, or an artifact another workflow uploaded.
-	gp, err := e.gatePack(ctx, c, owner, name, pr, story)
+	gp, err := e.gatePack(ctx, c, owner, name, "ship", pr, story)
 	if err != nil {
 		return err
 	}
@@ -214,27 +214,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	rec.GateRun, rec.Artifact, rec.PackSHA256 = gp.run.GetID(), gp.artifact, gp.sha256
 
 	// 2. The merge gate's checks are green on the head.
-	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
-		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
-		return r.GetCheckRuns(), resp, err
-	})
+	runs, err := gateGreen(ctx, c, owner, name, "ship", n, head)
 	if err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	for _, want := range gateChecks {
-		concl := "missing"
-		for _, r := range gateCheckRuns(runs) {
-			if r.GetName() == want {
-				concl = r.GetStatus()
-				if r.GetStatus() == "completed" {
-					concl = r.GetConclusion()
-				}
-				break // the API lists the newest run of a name first
-			}
-		}
-		if concl != "success" {
-			return Errorf(ExitBlocked, "ship #%d: %s is %s on %s; the merge gate must be green", n, want, concl, short(head))
-		}
+		return err
 	}
 
 	// The pack verifies against the head and the Ready snapshot, and its floors hold.
@@ -242,32 +224,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	t, err := s.Ledger.Read(ctx)
-	if err != nil {
-		return ledgerErr(err)
-	}
-	exp := proof.Expect{HeadSHA: head}
-	if b, err := t.File(ctx, ready.LedgerPath(story)); err == nil {
-		snap, err := ready.ParseSnapshot(string(b))
-		if err != nil {
-			t.Close()
-			return err
-		}
-		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
-	}
-	t.Close()
-	if fix != nil { // a listed gate fix rests on the approved record, not a Ready snapshot (Decision #974)
-		exp.CompletionGoalHash, exp.Criteria = fix.Approval.SHA256, nil
-	}
-	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
-	if exp.CompletionGoalHash == "" {
-		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
-	}
-	if len(rep.Problems) > 0 {
-		return Errorf(ExitBlocked, "ship #%d: the merge gate's pack does not verify: %s", n, strings.Join(rep.Problems, "; "))
-	}
-	if !gp.pack.FloorsHold() {
-		return Errorf(ExitBlocked, "ship #%d: floors do not hold in the merge gate's pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", n, failing(gp.pack.Checks), story)
+	if err := verifyGatePack(ctx, s, "ship", n, story, head, gp, fix); err != nil {
+		return err
 	}
 	for _, ck := range gp.pack.Checks {
 		if ck.Waiver != "" {
@@ -275,7 +233,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// Every required check of the base branch is green too, whoever passes it.
-	required, gateState, err := requiredChecks(ctx, c, owner, name, n, pr.GetBase().GetRef(), head, runs)
+	required, gateState, err := requiredChecks(ctx, c, owner, name, "ship", n, pr.GetBase().GetRef(), head, runs)
 	if err != nil {
 		return err
 	}
@@ -435,6 +393,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			if len(why) == 0 {
 				why = append(why, "no approving review")
 			}
+			if len(rec.Pass.NoOwner) > 0 {
+				why = append(why, fmt.Sprintf("never-layer path(s) %s have no CODEOWNER, so no review covers them", strings.Join(rec.Pass.NoOwner, ", ")))
+			}
 			refusal := fmt.Sprintf("ship #%d: no human pass: %s (bot reviews and the author's own never count)", n, strings.Join(why, "; "))
 			if c.DryRun() {
 				return Errorf(ExitBlocked, "%s", refusal)
@@ -447,12 +408,20 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			if strings.EqualFold(who, "@"+pr.GetUser().GetLogin()) {
 				review = ""
 			}
+			// Solo mode: the [autonomy] approver ships it with the Solo-mode
+			// bypass, CODEOWNER or not (Bug #1031).
+			bypass := ""
+			if a := pol.Config.Autonomy.Approver; rec.Pass.As == "approver" && soloMode(pol.Config, a, "ship") == nil {
+				who = "@" + a
+				review = fmt.Sprintf(", or posts a comment starting %q that names the head and runs `aayu ship %d --solo-bypass`", SoloBypassPrefix, n)
+				bypass = review
+			}
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
 				"%s ships it from `aayu inbox`%s.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), review)
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}
-			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s", refusal, who), "aayu inbox ("+who+")")
+			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s%s", refusal, who, bypass), "aayu inbox ("+who+")")
 		}
 		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config)
 		switch {
@@ -693,7 +662,7 @@ type gatePackRun struct {
 // no preview, and no artifact uploaded by another workflow or by the pull
 // request's own copy of the gate counts; a refusal lists every run it passed
 // over and why.
-func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, story int) (gatePackRun, error) {
+func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb string, pr *gh.PullRequest, story int) (gatePackRun, error) {
 	n, head, path := pr.GetNumber(), pr.GetHead().GetSHA(), ".github/workflows/"+MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{Branch: pr.GetHead().GetRef(), ListOptions: gh.ListOptions{PerPage: 50}})
 	if err != nil {
@@ -731,7 +700,75 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name string
 	if len(why) > 6 {
 		why = append(why[:6], fmt.Sprintf("%d older run(s)", len(why)-6))
 	}
-	return gatePackRun{}, Errorf(ExitBlocked, "ship #%d: no merge gate pack for the head %s: %s", n, short(head), strings.Join(why, "; "))
+	return gatePackRun{}, Errorf(ExitBlocked, "%s #%d: no merge gate pack for the head %s: %s", verb, n, short(head), strings.Join(why, "; "))
+}
+
+// gateGreen reads every check run on head and requires the merge gate's
+// checks to be green there: the newest run of each in the gate's own suites
+// (gateSuites), so an older green run never stands in for a newer red one, nor
+// a check of the same name from another workflow or app for the gate's.
+func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, n int, head string) ([]*gh.CheckRun, error) {
+	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
+		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
+		return r.GetCheckRuns(), resp, err
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	suites, err := gateSuites(ctx, c, owner, name, head, n)
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	for _, want := range gateChecks {
+		concl := "missing"
+		for _, r := range gateCheckRuns(runs, suites) {
+			if r.GetName() == want {
+				concl = r.GetStatus()
+				if r.GetStatus() == "completed" {
+					concl = r.GetConclusion()
+				}
+				break // the API lists the newest run of a name first
+			}
+		}
+		if concl != "success" {
+			return nil, Errorf(ExitBlocked, "%s #%d: %s is %s on %s; the merge gate must be green", verb, n, want, concl, short(head))
+		}
+	}
+	return runs, nil
+}
+
+// verifyGatePack checks the merge gate's pack against the head and the
+// story's Ready snapshot on the ledger (a listed gate fix's against its
+// Feature's approved record), and that its floors hold.
+func verifyGatePack(ctx context.Context, s *proof.Store, verb string, n, story int, head string, gp gatePackRun, fix *GateFix) error {
+	t, err := s.Ledger.Read(ctx)
+	if err != nil {
+		return ledgerErr(err)
+	}
+	exp := proof.Expect{HeadSHA: head}
+	if b, err := t.File(ctx, ready.LedgerPath(story)); err == nil {
+		snap, err := ready.ParseSnapshot(string(b))
+		if err != nil {
+			t.Close()
+			return err
+		}
+		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
+	}
+	t.Close()
+	if fix != nil { // a listed gate fix rests on the approved record, not a Ready snapshot (Decision #974)
+		exp.CompletionGoalHash, exp.Criteria = fix.Approval.SHA256, nil
+	}
+	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
+	if exp.CompletionGoalHash == "" {
+		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
+	}
+	if len(rep.Problems) > 0 {
+		return Errorf(ExitBlocked, "%s #%d: the merge gate's pack does not verify: %s", verb, n, strings.Join(rep.Problems, "; "))
+	}
+	if !gp.pack.FloorsHold() {
+		return Errorf(ExitBlocked, "%s #%d: floors do not hold in the merge gate's pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", verb, n, failing(gp.pack.Checks), story)
+	}
+	return nil
 }
 
 // unpackGateRun downloads a merge gate run's aayudha-pack artifact and checks

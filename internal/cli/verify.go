@@ -30,8 +30,23 @@ import (
 
 func init() { register("verify", runVerify) }
 
+// storyRefKey is a reference keyword and what follows it up to the issue
+// number: Refs, or GitHub's closing keywords (close, closes, closed, fix,
+// fixes, fixed, resolve, resolves, resolved) in any case, then spaces or a
+// colon. An issue number starts 1-9: "#0" names no story.
+const storyRefKey = `(?:refs|close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?::[ \t]*|[ \t]+)#([1-9][0-9]*)\b`
+
 var (
-	storyRef     = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves|story:?)\s+#([0-9]+)\b`)
+	// storyRef is a PR body's reference line (storyRefKey); it decides the
+	// story. storyLine ("Story #n") is read only when there is none: a body
+	// may name a parent or sibling story in prose (Bug #1031). Each sits on
+	// one line, as refStories reads them: [ \t], not \s, which would cross a
+	// newline.
+	storyRef  = regexp.MustCompile(`(?im)^[ \t]*` + storyRefKey)
+	storyLine = regexp.MustCompile(`(?im)^[ \t]*story:?[ \t]+#([1-9][0-9]*)\b`)
+	// refOnLine is each reference on a line that storyRef starts: one line may
+	// name several ("Fixes #2, fixes #3").
+	refOnLine    = regexp.MustCompile(`(?i)\b` + storyRefKey)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
@@ -205,10 +220,13 @@ func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
 }
 
 // StoryOf finds the story a change serves: "Refs #n" (or Closes/Fixes) in the
-// PR body, else an Aayudha-Story trailer on the head commit, else a
-// story/<n>-… branch name.
+// PR body, else a "Story #n" line, else an Aayudha-Story trailer on the head
+// commit, else a story/<n>-… branch name.
 func StoryOf(body, headMessage, branch string) int {
 	if m := storyRef.FindStringSubmatch(body); m != nil {
+		return issueNumber(m[1])
+	}
+	if m := storyLine.FindStringSubmatch(body); m != nil {
 		return issueNumber(m[1])
 	}
 	if m := storyTrailer.FindStringSubmatch(headMessage); m != nil {
@@ -218,6 +236,37 @@ func StoryOf(body, headMessage, branch string) int {
 		return issueNumber(m[1])
 	}
 	return 0
+}
+
+// twoStories says why a body names more than one story ("" when it names at
+// most one): the gate, and proof land, prove one story, never a silent pick.
+func twoStories(body string) string {
+	refs := refStories(body)
+	if len(refs) < 2 {
+		return ""
+	}
+	names := make([]string, len(refs))
+	for i, n := range refs {
+		names[i] = fmt.Sprintf("#%d", n)
+	}
+	return fmt.Sprintf("the PR body refers to stories %s and %s: keep one", strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
+}
+
+// refStories is every story a body's Refs, Closes, Fixes, or Resolves lines
+// name, in order, each once; a line may name several.
+func refStories(body string) []int {
+	var out []int
+	for _, line := range strings.Split(body, "\n") {
+		if !storyRef.MatchString(line) {
+			continue
+		}
+		for _, m := range refOnLine.FindAllStringSubmatch(line, -1) {
+			if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 func (e *Env) devBranch() string {
@@ -306,6 +355,11 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
+	// The gate proves one story: a body whose Refs, Closes, or Fixes lines
+	// name two is refused, never resolved by a silent pick (Bug #1031).
+	if two := twoStories(body); two != "" {
+		return Errorf(ExitBlocked, "verify %d: %s", res.PR, two)
+	}
 	res.Story = StoryOf(body, msg, branch)
 	// The merge gate proves stories; a PR that serves no story has no pack to
 	// prove, but its feature-map floors still run: the drift check, and the

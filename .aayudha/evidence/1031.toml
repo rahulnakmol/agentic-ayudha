@@ -1,0 +1,23 @@
+# Which tests prove Bug #1031's Completion Goal: five ship gaps of 0.4.0. The Ready to ship text in solo mode, a plan
+# that names a never layer ship finds from the files, the story from the Refs line, `aayu proof land` for a PR merged
+# outside ship, and the latest completed run of a required check.
+
+[[criterion]]
+id = 1 # solo mode, a never-layer path with no CODEOWNER: the refusal and the comment name the approver and `aayu ship <n> --solo-bypass`, and the path; never "nobody configured"
+tests = ["internal/cli:TestShipPassRules", "internal/cli:TestInboxShipsReadyPRs"]
+
+[[criterion]]
+id = 2 # a story labelled L02 and L07 plans an L04 checkpoint: the plan passes, layer:L04 is added, em_review lists L04 and L07, --approve records the review, and ship accepts that review for a PR that changes CONSTRAINTS.md
+tests = ["internal/cli:TestPlanApprove", "internal/cli:TestPlan", "internal/cli:TestShipPassRules"]
+
+[[criterion]]
+id = 3 # "Story #990 …" above "Refs #2": the pack is for #2; two stories named by Refs or any GitHub closing keyword fail verify with "keep one"
+tests = ["internal/cli:TestVerifyWritesPackForStory", "internal/cli:TestStoryOf", "internal/cli:TestStoryRefGrammar"]
+
+[[criterion]]
+id = 4 # proof land: one authoritative ledger commit from the gate's artifact, writer "<login> (aayu proof land)"; audit covers the story; open PR, another head, and an expired artifact exit 4
+tests = ["internal/cli:TestProofLand"]
+
+[[criterion]]
+id = 5 # a cancelled run replaced by a later completed run of the same check, app, and head does not count; alone, a later failure, or a later run in progress still decide
+tests = ["internal/cli:TestShipOnProof"]

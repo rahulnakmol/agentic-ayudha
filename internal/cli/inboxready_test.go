@@ -51,6 +51,16 @@ func TestInboxNotReady(t *testing.T) {
 			runs = append(runs, r)
 		}
 		g.CheckRuns[head] = runs
+		if !slices.ContainsFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.CheckSuiteID == 1 }) { // the gate's own run, suite 1
+			var prs []fake.RunPR // the pull request on that head, as GitHub lists it
+			for _, p := range g.Pulls {
+				if p.Head.SHA == head {
+					prs = append(prs, fake.RunPR{Number: p.Number})
+				}
+			}
+			g.Runs = append(g.Runs, fake.WorkflowRun{ID: int64(8000 + len(g.Runs)), Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", CheckSuiteID: 1,
+				PullRequests: prs})
+		}
 	}
 	yes, no := true, false
 	var a, b, c *fake.PR
@@ -452,7 +462,8 @@ func TestInboxNotReady(t *testing.T) {
 
 	// A read that fails says so and makes no card from half of it.
 	for _, path := range []string{"GET /repos/o/r/pulls/" + strconv.Itoa(a.Number), "GET /repos/o/r/commits/" + heads["a2"] + "/check-runs",
-		"GET /repos/o/r/commits/" + heads["a2"] + "/statuses", "GET /repos/o/r/rules/branches/dev", "GET /repos/o/r/branches/dev", "GET /repos/o/r/collaborators/o/permission"} {
+		"GET /repos/o/r/commits/" + heads["a2"] + "/statuses", "GET /repos/o/r/rules/branches/dev", "GET /repos/o/r/branches/dev", "GET /repos/o/r/collaborators/o/permission",
+		"GET /repos/o/r/actions/workflows/aayudha-merge-gate.yml/runs"} {
 		once, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
 		if err != nil {
 			t.Fatal(err)

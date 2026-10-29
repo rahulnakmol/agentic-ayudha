@@ -351,8 +351,39 @@ func TestShipPassRules(t *testing.T) {
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "does not cover never layer(s) L07: a CODEOWNER of internal/config/x.go, internal/ledger/x.go must approve (owners: owner1), whatever the streak") {
 		t.Fatalf("approver who is no CODEOWNER of the never layer: %d %s", code, out)
 	}
+	// Bug #1031 criterion 1: in solo mode a never-layer path with no
+	// CODEOWNER leaves no common owner; the refusal and the Ready to ship
+	// comment name the approver and the Solo-mode bypass, and the path.
 	g.Mu.Lock()
-	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @reviewer2\n"
+	g.Mu.Unlock()
+	code, out = ship()
+	g.Mu.Lock()
+	ready := ""
+	for _, c := range g.Issues[prN].Comments {
+		if strings.HasPrefix(c.Body, ReadyToShipMarker) {
+			ready = c.Body
+		}
+	}
+	g.Mu.Unlock()
+	solo := "aayu ship " + strconv.Itoa(prN) + " --solo-bypass"
+	for _, text := range []string{out, ready} {
+		if code != ExitBlocked || !strings.Contains(text, "@reviewer2") || !strings.Contains(text, solo) || !strings.Contains(text, "internal/ledger/x.go have no CODEOWNER") ||
+			strings.Contains(strings.ToLower(text), "nobody configured") {
+			t.Fatalf("solo-mode Ready to ship with a never-layer path that has no CODEOWNER: %d\n%s\ncomment:\n%s", code, out, ready)
+		}
+	}
+	// Bug #1031 criterion 2: the PR also changes CONSTRAINTS.md (L04), and
+	// the ledger holds the plan-time review that `aayu plan --approve` records
+	// for a plan with an added L04 checkpoint (TestPlanApprove): ship accepts it.
+	rec.Footprint, rec.Review.Layers = []string{"L02", "L04", "L07"}, []string{"L04", "L07"}
+	b, _ = json.Marshal(rec)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Mu.Lock()
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n/CONSTRAINTS.md @reviewer2\n"
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, "CONSTRAINTS.md")
 	g.Mu.Unlock()
 	g.Reset()
 	if code, out := ship(); code != 0 || !strings.Contains(out, "human pass: review by reviewer2") {
@@ -363,7 +394,8 @@ func TestShipPassRules(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
+	if sr.HumanPass.ReviewID == 0 || sr.Pass.As != "approver" || strings.Join(sr.Pass.Never, ",") != "L04,L07" || sr.PlanReview == nil || sr.PlanReview.ApprovedBy != "founder" ||
+		strings.Join(sr.PlanReview.Layers, ",") != "L04,L07" ||
 		sr.Streak.Threshold != 20 || sr.Streak.Autonomous || sr.Streak.Skipped != "the human pass is settled: review" {
 		t.Fatalf("ship record: %+v", sr)
 	}

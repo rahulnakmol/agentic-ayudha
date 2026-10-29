@@ -678,6 +678,11 @@ func TestStoriesOfEveryRefsLine(t *testing.T) {
 		{"Refs #12\ncloses #12", "", []int{12}},
 		{"see #5 for context", "story/44-empty-list", []int{44}},
 		{"no ref", "feat/x", nil},
+		// Bug #1031: older bodies name their stories on "Story #n" lines; a
+		// Refs line, when there is one, decides alone.
+		{"Story #2\nStory #3\n", "feat/x", []int{2, 3}},
+		{"Story #990 (Feature #874) is the parent.\n\nRefs #992", "feat/x", []int{992}},
+		{"Fixes #2, fixes #3\nThis fixes #9 in prose.", "feat/x", []int{2, 3}},
 	} {
 		if got := storiesOf(c.body, c.branch); !slices.Equal(got, c.want) {
 			t.Errorf("storiesOf(%q, %q) = %v, want %v", c.body, c.branch, got, c.want)

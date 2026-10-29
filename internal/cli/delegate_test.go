@@ -322,6 +322,14 @@ func TestDelegateCIRepair(t *testing.T) {
 			{ID: 901, Name: "aayudha/inspect", Status: "completed", Conclusion: "failure"},
 			{ID: job, Name: "aayudha/merge-gate", Status: "completed", Conclusion: "failure", HTMLURL: "https://github.com/o/r/actions/runs/1/job/" + strconv.FormatInt(job, 10)},
 		}
+		var prs []fake.RunPR // the pull request on that head, as GitHub lists it
+		for _, p := range g.Pulls {
+			if p.Head.SHA == head {
+				prs = append(prs, fake.RunPR{Number: p.Number})
+			}
+		}
+		g.Runs = append(g.Runs, fake.WorkflowRun{ID: job + 50000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure",
+			PullRequests: prs}) // the gate's own run
 		if g.JobLogs == nil {
 			g.JobLogs = map[int64]string{}
 		}

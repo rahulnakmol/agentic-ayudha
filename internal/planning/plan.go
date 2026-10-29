@@ -97,7 +97,10 @@ type PlanReport struct {
 	Footprint []string `json:"footprint"`
 	// FromPlan is true when the story carried no layer labels and the plan's
 	// layers become its footprint.
-	FromPlan bool     `json:"footprint_from_plan,omitempty"`
+	FromPlan bool `json:"footprint_from_plan,omitempty"`
+	// Added are the never layers the plan has a checkpoint for beyond the
+	// story's layer labels: plan adds their labels (Bug #1031).
+	Added    []string `json:"layers_added,omitempty"`
 	Review   Review   `json:"em_review"`
 	Problems []string `json:"problems"`
 	Pass     bool     `json:"pass"`
@@ -162,10 +165,16 @@ func CheckPlan(story workitems.Item, footprint, never []string, d PlanDraft) Pla
 			}
 		}
 		for _, l := range layers {
-			if !slices.Contains(footprint, l) {
+			switch {
+			case slices.Contains(footprint, l):
+			case slices.Contains(never, l): // a never layer ship will find from the files: the plan names it, and its review covers it (Bug #1031)
+				r.Footprint = append(slices.Clone(r.Footprint), l)
+				r.Added = append(r.Added, l)
+			default:
 				add("checkpoint for %s is outside the story's footprint (%s); re-slice, or plan within it", l, strings.Join(footprint, ", "))
 			}
 		}
+		slices.Sort(r.Footprint)
 	}
 	if r.Footprint == nil {
 		r.Footprint = []string{}

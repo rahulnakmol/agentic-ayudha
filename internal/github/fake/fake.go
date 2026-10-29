@@ -215,6 +215,8 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 	Attempt    int    `json:"run_attempt,omitempty"`
 	HTMLURL    string `json:"html_url,omitempty"`
+	// CheckSuiteID is the check suite that holds the run's check runs.
+	CheckSuiteID int64 `json:"check_suite_id,omitempty"`
 	// PullRequests are the pull requests the run is for, with their bases,
 	// as GitHub lists them for a same-repository pull request.
 	PullRequests []RunPR `json:"pull_requests,omitempty"`
@@ -239,9 +241,10 @@ type Release struct {
 
 // ArtifactZip is a run artifact with its zip bytes.
 type ArtifactZip struct {
-	ID   int64
-	Name string
-	Zip  []byte
+	ID      int64
+	Name    string
+	Zip     []byte
+	Expired bool // GitHub no longer keeps it
 }
 
 // Request is one recorded request.
@@ -461,7 +464,7 @@ func (g *GitHub) nextSHA(v any) string {
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
 	reStatuses  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/statuses$`)
-	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
+	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions(?:/workflows/([^/]+))?/runs$`) // one workflow's runs, or every workflow's
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
@@ -1057,14 +1060,26 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(201, is)
 	case m == "GET" && reCheckRuns.MatchString(p):
-		// GitHub lists only the newest run of each name unless filter=all.
-		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[string]int64{}
+		// GitHub lists only the newest run of each name in each check suite
+		// unless filter=all.
+		type key struct {
+			name  string
+			suite int64
+		}
+		suite := func(c CheckRun) int64 {
+			if c.Suite == nil {
+				return 0
+			}
+			return c.Suite.ID
+		}
+		all, newest := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]], map[key]int64{}
 		for _, c := range all {
-			newest[c.Name] = max(newest[c.Name], c.ID)
+			k := key{c.Name, suite(c)}
+			newest[k] = max(newest[k], c.ID)
 		}
 		runs := []CheckRun{}
 		for _, c := range all {
-			if r.URL.Query().Get("filter") == "all" || c.ID == newest[c.Name] {
+			if r.URL.Query().Get("filter") == "all" || c.ID == newest[key{c.Name, suite(c)}] {
 				runs = append(runs, c)
 			}
 		}
@@ -1088,7 +1103,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
 		out := []WorkflowRun{}
 		for _, run := range g.Runs {
-			if strings.HasSuffix(run.Path, "/"+file) && (q.Get("head_sha") == "" || q.Get("head_sha") == run.HeadSHA) && (q.Get("event") == "" || q.Get("event") == run.Event) {
+			if (file == "" || strings.HasSuffix(run.Path, "/"+file)) && (q.Get("head_sha") == "" || q.Get("head_sha") == run.HeadSHA) && (q.Get("event") == "" || q.Get("event") == run.Event) {
 				out = append(out, run)
 			}
 		}
@@ -1163,7 +1178,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
-			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": false})
+			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": a.Expired})
 		}
 		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
 	case m == "GET" && reJobLogs.MatchString(p):

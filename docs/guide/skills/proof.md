@@ -26,6 +26,7 @@ on the ledger: the files that tie each of a story's promises to its evidence, fo
 - You want to see every pack on the ledger, and whether its floors hold: `aayu proof list`.
 - You want to check that a story's pack still matches what was agreed at Ready: `aayu proof verify <story>`.
 - An agent wants to share its own preview as a record: `aayu proof push <story>` lands an advisory pack.
+- A PR merged outside `aayu ship` and its story has no authoritative pack: `aayu proof land <pr>`.
 
 Want to produce the evidence in the first place? Run [`verify`](verify.md).
 
@@ -46,8 +47,8 @@ aayu proof <action> [<story>]
 
 | Input | Required | What it does |
 |---|---|---|
-| `<action>` | yes | Proof operation: push an advisory pack, get, verify, or list packs, or (merge gate only) comment: check the run's pack and keep its PR comment. One of: `push`, `get`, `verify`, `list`, `comment`. |
-| `<story>` | no | Story whose pack to operate on. |
+| `<action>` | yes | Proof operation: push an advisory pack, get, verify, or list packs; land: for a PR merged outside aayu ship, land the merge gate's own aayudha-pack artifact for the merged head as the authoritative pack, after the checks ship makes; or (merge gate only) comment: check the run's pack and keep its PR comment. One of: `push`, `get`, `verify`, `list`, `comment`, `land`. |
+| `<story>` | no | Story whose pack to operate on; with land, the merged pull request. |
 | `--media` | no | Include proof media; needs a bucket in [proof] media, since media never go to the ledger or Git LFS. |
 
 <!-- END GENERATED: skill-usage -->
@@ -85,8 +86,9 @@ The registry reserves no step of this verb for a person.
 
 <!-- END GENERATED: skill-human -->
 
-A person still makes the pack count. Only `aayu ship`, run by a person, lands the merge gate's pack on the ledger as
-authoritative, after checking it came from the gate's own run on the exact head.
+A person still makes the pack count. Only `aayu ship`, and `aayu proof land <pr>` for a PR that merged outside
+ship, land the merge gate's pack on the ledger as authoritative. Both check that it came from the gate's own run on the
+exact head.
 
 ## What's next
 
