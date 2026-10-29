@@ -371,6 +371,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			ins.Dismissed = readDismissed(ctx, w)
 		}
 		ins.Pack, ins.Evidence, _ = e.packFor(ctx, c, ins.Story, pr.GetHead().GetSHA())
+	} else if tok, err := e.Resolver().Human(ctx); err == nil {
+		// A PR with no story reads the repository's dismissals too, so a
+		// person's dismissal clears a carried finding on it (Bug #1155).
+		if w, err := e.Ledger(ctx, tok, "human", ""); err == nil {
+			ins.Dismissed = readDismissed(ctx, w)
+		}
 	}
 	cfg := l.Config.Inspect
 	ins.Voice = InspectVoice(e.Assets)

@@ -1,0 +1,13 @@
+# Which tests prove Bug #1155's Completion Goal.
+
+[[criterion]]
+id = 1 # a PR with no Story, its carried P1 dismissed by a person on the ledger: merge, with the P1 dropped as dismissed
+tests = ["internal/cli:TestInspectDismissalWithoutStory"]
+
+[[criterion]]
+id = 2 # the same PR and heads with no dismissal: fix on the carried P1, as today
+tests = ["internal/cli:TestInspectDismissalWithoutStory"]
+
+[[criterion]]
+id = 3 # a Story PR with a dismissed P1: the dismissal applies, as today
+tests = ["internal/cli:TestInspectDismissAndPeer"]
