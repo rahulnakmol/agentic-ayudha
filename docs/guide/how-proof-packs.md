@@ -39,7 +39,8 @@ The flow for one pull request:
    case's group results from the `evals.yml` run on the head commit, and from no other commit. The case must run all
    k runs with no error, pass every run, and hold a mean at the bar in `evals/eval.toml`. Its line goes into the same
    artifact: the case, the commit, the runs, pass^k, the mean, and the run. A change to the files the harness builds or
-   reads (a Go file that is not a test, `go.mod`, `go.sum`, `evals/`, or `evals.yml`) makes the results not count.
+   reads makes the results not count: a Go file that is not a test, `go.mod`, `go.sum`, `evals/`, `evals.yml`, or the
+   browser floors under `packages/` with their pnpm files.
 5. Web floors add screenshots and recordings for screenshot and recording criteria (`screens/N.png`,
    `recordings/N.webm`), and every scanner adds its report.
 6. `verify.Pack` assembles the pack and `proof.WriteLocal` writes it to `.aayudha/proof/<story>/` (git-ignored).

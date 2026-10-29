@@ -83,11 +83,13 @@ type EvalCase struct {
 // evalHarness reports the first changed path that the tier-2 harness builds
 // or reads, or "". An evals.yml run on a PR head uses the PR's own workflow
 // and harness, so its results prove nothing once the PR changes them: any Go
-// file that is not a test, the module files, evals/, or the workflow.
+// file that is not a test, the module files, evals/, the workflow, or the
+// browser floors the ux group installs (packages/ and the pnpm files).
 func evalHarness(changed []string) string {
 	for _, f := range changed {
 		if strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") || f == "go.mod" || f == "go.sum" ||
-			strings.HasPrefix(f, "evals/") || f == ".github/workflows/evals.yml" {
+			strings.HasPrefix(f, "evals/") || f == ".github/workflows/evals.yml" ||
+			strings.HasPrefix(f, "packages/") || f == "package.json" || f == "pnpm-lock.yaml" || f == "pnpm-workspace.yaml" {
 			return f
 		}
 	}

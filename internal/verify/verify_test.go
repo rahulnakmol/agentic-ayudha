@@ -572,7 +572,7 @@ func TestEvalEvidence(t *testing.T) {
 
 	// A change to what the harness builds or reads: the results prove nothing,
 	// and they are not read.
-	for _, f := range []string{"internal/evals/tier2.go", "go.mod", "evals/cases/mission/x.toml", ".github/workflows/evals.yml"} {
+	for _, f := range []string{"internal/evals/tier2.go", "go.mod", "evals/cases/mission/x.toml", ".github/workflows/evals.yml", "packages/floors/package.json", "pnpm-lock.yaml"} {
 		r.Changed = []string{"skills/mission/SKILL.md", f}
 		ev, problems := read(good(), nil)
 		if len(ev) != 0 || len(problems) != 2 || !strings.Contains(problems[0], "this change edits "+f+", which the eval harness builds or reads") || len(groups) != 0 {
