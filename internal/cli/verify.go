@@ -382,20 +382,18 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 				}
 				runs = append([]*gh.WorkflowRun{}, rs.WorkflowRuns...)
 			}
-			b, run, waiting, _, err := e.evalResultsFile(ctx, client, owner, name, head, group, runs)
-			switch {
-			case err != nil:
+			got, waiting, _, err := e.evalResults(ctx, client, owner, name, head, group, runs)
+			if err == nil && waiting != "" {
+				err = errors.New(waiting)
+			}
+			if err != nil || got == nil {
 				return nil, err
-			case waiting != "":
-				return nil, errors.New(waiting)
-			case b == nil:
-				return nil, nil
 			}
 			var er verify.EvalResults
-			if err := json.Unmarshal(b, &er); err != nil {
+			if err := json.Unmarshal(got.raw, &er); err != nil {
 				return nil, fmt.Errorf("eval-results-%s-%s: %w", short(head), group, err)
 			}
-			er.Run = run
+			er.Run = got.run
 			return &er, nil
 		}
 	}

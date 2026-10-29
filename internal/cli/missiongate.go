@@ -703,37 +703,26 @@ type evalResult struct {
 		Mean   float64 `json:"mean"`
 		NotRun string  `json:"not_run"`
 	} `json:"cases"`
+	raw []byte // the file as it is, and the run that left it (verify reads it, Bug #1157)
+	run string
 }
 
 // evalResults reads group's results for sha from its evals.yml runs: the
 // artifact eval-results-<sha>-<group>; else why the gate waits (a run still
 // runs), or whether a dispatched run finished with none.
 func (e *Env) evalResults(ctx context.Context, c *github.Client, owner, name, sha, group string, runs []*gh.WorkflowRun) (*evalResult, string, bool, error) {
-	b, _, waiting, dispatched, err := e.evalResultsFile(ctx, c, owner, name, sha, group, runs)
-	if b == nil || err != nil {
-		return nil, waiting, dispatched, err
-	}
-	var res evalResult
-	if err := json.Unmarshal(b, &res); err != nil {
-		return nil, "", false, Errorf(ExitExternal, "eval-results-%s-%s: %v", short(sha), group, err)
-	}
-	return &res, "", true, nil
-}
-
-// evalResultsFile is evalResults' file as it is, and the run that left it.
-func (e *Env) evalResultsFile(ctx context.Context, c *github.Client, owner, name, sha, group string, runs []*gh.WorkflowRun) ([]byte, string, string, bool, error) {
 	dispatched := false
 	for _, r := range runs {
 		if r.GetHeadSHA() != sha {
 			continue
 		}
 		if r.GetStatus() != "completed" {
-			return nil, "", fmt.Sprintf("%s run %s is %s", evalsWorkflow, r.GetHTMLURL(), r.GetStatus()), false, nil
+			return nil, fmt.Sprintf("%s run %s is %s", evalsWorkflow, r.GetHTMLURL(), r.GetStatus()), false, nil
 		}
 		dispatched = dispatched || r.GetEvent() == "workflow_dispatch"
 		arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, r.GetID(), &gh.ListOptions{PerPage: 100})
 		if err != nil {
-			return nil, "", "", false, Wrap(ExitExternal, err)
+			return nil, "", false, Wrap(ExitExternal, err)
 		}
 		for _, a := range arts.Artifacts {
 			if a.GetName() != "eval-results-"+sha+"-"+group || a.GetExpired() {
@@ -741,21 +730,21 @@ func (e *Env) evalResultsFile(ctx context.Context, c *github.Client, owner, name
 			}
 			u, _, err := c.REST.Actions.DownloadArtifact(ctx, owner, name, a.GetID(), 3)
 			if err != nil {
-				return nil, "", "", false, Wrap(ExitExternal, err)
+				return nil, "", false, Wrap(ExitExternal, err)
 			}
 			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 			resp, err := e.HTTP.Do(req)
 			if err != nil {
-				return nil, "", "", false, Wrap(ExitExternal, err)
+				return nil, "", false, Wrap(ExitExternal, err)
 			}
 			zipped, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 			_ = resp.Body.Close()
 			if err != nil || resp.StatusCode != http.StatusOK {
-				return nil, "", "", false, Errorf(ExitExternal, "download artifact %d: HTTP %d %v", a.GetID(), resp.StatusCode, err)
+				return nil, "", false, Errorf(ExitExternal, "download artifact %d: HTTP %d %v", a.GetID(), resp.StatusCode, err)
 			}
 			zr, err := zip.NewReader(bytes.NewReader(zipped), int64(len(zipped)))
 			if err != nil {
-				return nil, "", "", false, Errorf(ExitExternal, "artifact %d: %v", a.GetID(), err)
+				return nil, "", false, Errorf(ExitExternal, "artifact %d: %v", a.GetID(), err)
 			}
 			for _, zf := range zr.File {
 				if !strings.HasSuffix(zf.Name, ".json") {
@@ -763,18 +752,23 @@ func (e *Env) evalResultsFile(ctx context.Context, c *github.Client, owner, name
 				}
 				rc, err := zf.Open()
 				if err != nil {
-					return nil, "", "", false, Errorf(ExitExternal, "artifact %d: %v", a.GetID(), err)
+					return nil, "", false, Errorf(ExitExternal, "artifact %d: %v", a.GetID(), err)
 				}
-				b, err := io.ReadAll(io.LimitReader(rc, 32<<20))
+				var res evalResult
+				res.raw, err = io.ReadAll(io.LimitReader(rc, 32<<20))
 				_ = rc.Close()
-				if err != nil {
-					return nil, "", "", false, Errorf(ExitExternal, "artifact %d: %s: %v", a.GetID(), zf.Name, err)
+				if err == nil {
+					err = json.Unmarshal(res.raw, &res)
 				}
-				return b, r.GetHTMLURL(), "", true, nil
+				if err != nil {
+					return nil, "", false, Errorf(ExitExternal, "artifact %d: %s: %v", a.GetID(), zf.Name, err)
+				}
+				res.run = r.GetHTMLURL()
+				return &res, "", true, nil
 			}
 		}
 	}
-	return nil, "", "", dispatched, nil
+	return nil, "", dispatched, nil
 }
 
 // gateRuns reads missions/<f>/gates.jsonl.

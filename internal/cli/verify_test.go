@@ -145,7 +145,13 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 		t.Fatalf("verify with results for the base only: %+v %q", res, ev)
 	}
 	g.Mu.Lock()
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 702, Path: ".github/workflows/evals.yml", HeadSHA: head, Event: "workflow_dispatch", Status: "completed", Conclusion: "success", HTMLURL: "https://github.com/o/r/actions/runs/702"})
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 702, Path: ".github/workflows/evals.yml", HeadSHA: head, Event: "workflow_dispatch", Status: "in_progress", HTMLURL: "https://github.com/o/r/actions/runs/702"})
+	g.Mu.Unlock()
+	if res, ev := verifyEvals(); !slices.Contains(res.Unmapped, 1) || ev != "" || !strings.Contains(strings.Join(res.Problems, "\n"), "evals.yml run https://github.com/o/r/actions/runs/702 is in_progress") {
+		t.Fatalf("verify with the head's run in progress: %+v %q", res, ev)
+	}
+	g.Mu.Lock()
+	g.Runs[len(g.Runs)-1].Status, g.Runs[len(g.Runs)-1].Conclusion = "completed", "success"
 	g.Artifacts[702] = []fake.ArtifactZip{{ID: 802, Name: "eval-results-" + head + "-mission", Zip: evalsZip(head)}}
 	g.Mu.Unlock()
 	if res, ev := verifyEvals(); slices.Contains(res.Unmapped, 1) || !strings.Contains(ev, `"eval":"mission/stays-in-list"`) || !strings.Contains(ev, `"run":"https://github.com/o/r/actions/runs/702"`) {

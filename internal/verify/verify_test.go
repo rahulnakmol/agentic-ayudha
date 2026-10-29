@@ -570,6 +570,26 @@ func TestEvalEvidence(t *testing.T) {
 		}
 	}
 
+	// Without a GitHub client there are no results to read.
+	r.EvalResults = nil
+	if ev, problems, err := TestEvidence(r); err != nil || len(ev) != 0 || !strings.Contains(strings.Join(problems, "\n"), "criterion 1: eval mission/stays-in-list: evals.yml results are not read in this run (no GitHub client)") {
+		t.Errorf("no client: %+v %q %v", ev, problems, err)
+	}
+	// An unreadable evals/eval.toml fails closed, as an unreadable evidence map
+	// does: verify stops before it writes a pack.
+	for _, c := range []struct{ toml, want string }{{"min_mean = [\n", "evals/eval.toml: "}, {"", "the evidence map names eval cases: "}} {
+		toml := filepath.Join(root, "evals", "eval.toml")
+		if c.toml == "" {
+			_ = os.Remove(toml)
+		} else {
+			_ = os.WriteFile(toml, []byte(c.toml), 0o644)
+		}
+		if ev, _, err := TestEvidence(r); err == nil || ev != nil || !strings.HasPrefix(err.Error(), c.want) {
+			t.Errorf("eval.toml %q: %+v %v", c.toml, ev, err)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(root, "evals", "eval.toml"), []byte("min_mean = 3.5\n\n[[groups]]\nname = \"rest\"\n\n[[groups]]\nname = \"mission\"\nprefixes = [\"mission/\"]\n"), 0o644)
+
 	// A change to what the harness builds or reads: the results prove nothing,
 	// and they are not read.
 	for _, f := range []string{"internal/evals/tier2.go", "go.mod", "evals/cases/mission/x.toml", ".github/workflows/evals.yml", "packages/floors/package.json", "pnpm-lock.yaml"} {
