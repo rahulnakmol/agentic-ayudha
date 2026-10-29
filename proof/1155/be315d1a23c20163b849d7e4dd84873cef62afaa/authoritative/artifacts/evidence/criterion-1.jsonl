@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectDismissalWithoutStory"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectDismissalWithoutStory","Output":"=== RUN   TestInspectDismissalWithoutStory\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectDismissalWithoutStory","Output":"--- PASS: TestInspectDismissalWithoutStory (0.70s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectDismissalWithoutStory"}
