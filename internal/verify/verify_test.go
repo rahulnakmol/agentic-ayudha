@@ -2,6 +2,8 @@ package verify
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -484,6 +486,98 @@ func TestTestEvidence(t *testing.T) {
 	ev, problems, _ = TestEvidence(r)
 	if len(ev) != 1 || !slices.Equal(ev[0].Criteria, []int{1}) || !slices.Equal(problems, []string{"criterion 2: test ./mathx:TestSum/negative did not pass in this run"}) {
 		t.Fatalf("./ path and subtests: %+v %q", ev, problems)
+	}
+}
+
+// Bug #1157: a criterion proved by tier-2 eval cases reads the evals.yml
+// results for the head commit, and only those; a case that did not hold
+// every run at the bar, or results the PR's own harness could have made,
+// leave the criterion unmapped with the reason.
+func TestEvalEvidence(t *testing.T) {
+	root := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(root, ".aayudha", "evidence"), 0o755)
+	_ = os.MkdirAll(filepath.Join(root, "evals"), 0o755)
+	// The case ID matches the mission group's prefix, not the rest group's
+	// first: the results are read for the group the harness runs it in.
+	_ = os.WriteFile(filepath.Join(root, "evals", "eval.toml"), []byte("min_mean = 3.5\n\n[[groups]]\nname = \"rest\"\n\n[[groups]]\nname = \"mission\"\nprefixes = [\"mission/\"]\n"), 0o644)
+	_ = os.WriteFile(EvidencePath(root, 7), []byte("[[criterion]]\nid = 1\nevals = [\"mission/stays-in-list\"]\n\n[[criterion]]\nid = 2\ntests = [\"TestGood\"]\nevals = [\"mission/halted\"]\n"), 0o644)
+	head, other := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	five := []json.RawMessage{json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`), json.RawMessage(`{}`)}
+	good := func() *EvalResults {
+		return &EvalResults{SHA: head, K: 5, Run: "https://github.com/o/r/actions/runs/9", Cases: []EvalCase{
+			{Case: "mission/stays-in-list", Runs: five, PassK: 1, Mean: 4.6},
+			{Case: "mission/halted", Runs: five, PassK: 1, Mean: 3.5},
+		}}
+	}
+	var groups []string
+	r := &Run{Root: root, Story: 7, Head: head, Changed: []string{"skills/mission/SKILL.md", "internal/x/x_test.go"},
+		TestEvents: []byte(`{"Action":"pass","Package":"m/pkg/a","Test":"TestGood"}` + "\n"),
+		Criteria:   []workitems.Criterion{{N: 1, Evidence: "metric"}, {N: 2, Evidence: "metric"}}}
+	read := func(res *EvalResults, err error) ([]Evidence, []string) {
+		t.Helper()
+		groups = nil
+		r.EvalResults = func(group string) (*EvalResults, error) { groups = append(groups, group); return res, err }
+		ev, problems, err := TestEvidence(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ev, problems
+	}
+
+	ev, problems := read(good(), nil)
+	if len(problems) != 0 || len(ev) != 2 || !slices.Equal(groups, []string{"mission"}) {
+		t.Fatalf("results for the head: %+v %q, groups read %v", ev, problems, groups)
+	}
+	var line map[string]any
+	if err := json.Unmarshal(ev[0].Data, &line); err != nil || line["eval"] != "mission/stays-in-list" || line["sha"] != head || line["runs"] != 5.0 ||
+		line["pass_k"] != 1.0 || line["mean"] != 4.6 || line["min_mean"] != 3.5 || line["run"] != "https://github.com/o/r/actions/runs/9" {
+		t.Fatalf("criterion 1 evidence: %s %v", ev[0].Data, err)
+	}
+	if !strings.Contains(string(ev[1].Data), `"Test":"TestGood"`) || !strings.Contains(string(ev[1].Data), `"eval":"mission/halted"`) {
+		t.Fatalf("criterion 2 evidence has the test and the eval: %s", ev[1].Data)
+	}
+	p, _ := Pack(r, Report{Artifacts: ev}, proof.Pack{})
+	if un := Unmapped(r, p); len(un) != 0 {
+		t.Fatalf("unmapped with results for the head: %v", un)
+	}
+
+	for _, c := range []struct {
+		name string
+		res  func(*EvalResults) *EvalResults
+		err  error
+		want string
+	}{
+		{"another commit", func(e *EvalResults) *EvalResults { e.SHA = other; return e }, nil, "the group mission results are for bbbbbbb, not the head aaaaaaa"},
+		{"no results", func(*EvalResults) *EvalResults { return nil }, nil, "no evals.yml run of group mission left results for aaaaaaa"},
+		{"a run still running", func(*EvalResults) *EvalResults { return nil }, errors.New("evals.yml run https://github.com/o/r/actions/runs/9 is in_progress"), "is in_progress"},
+		{"the case is missing", func(e *EvalResults) *EvalResults { e.Cases = e.Cases[1:]; return e }, nil, "have no case mission/stays-in-list"},
+		{"not run", func(e *EvalResults) *EvalResults {
+			e.Cases[0] = EvalCase{Case: "mission/stays-in-list", NotRun: "pin"}
+			return e
+		}, nil, "did not run in"},
+		{"a failed run", func(e *EvalResults) *EvalResults { e.Cases[0].PassK = 0; return e }, nil, "pass^k 0.00"},
+		{"an errored run", func(e *EvalResults) *EvalResults { e.Cases[0].Errors, e.Cases[0].Runs = 1, five[:4]; return e }, nil, "4 of 5 runs, 1 with an error"},
+		{"fewer runs than k", func(e *EvalResults) *EvalResults { e.Cases[0].Runs = five[:3]; return e }, nil, "3 of 5 runs"},
+		{"a mean under the bar", func(e *EvalResults) *EvalResults { e.Cases[0].Mean = 3.49; return e }, nil, "mean 3.49 against the bar 3.50"},
+	} {
+		ev, problems := read(c.res(good()), c.err)
+		if len(problems) == 0 || !strings.HasPrefix(problems[0], "criterion 1: eval mission/stays-in-list: ") || !strings.Contains(problems[0], c.want) {
+			t.Errorf("%s: problems %q, want %q", c.name, problems, c.want)
+		}
+		p, _ := Pack(r, Report{Artifacts: ev}, proof.Pack{})
+		if un := Unmapped(r, p); !slices.Contains(un, 1) {
+			t.Errorf("%s: criterion 1 is mapped: %v", c.name, un)
+		}
+	}
+
+	// A change to what the harness builds or reads: the results prove nothing,
+	// and they are not read.
+	for _, f := range []string{"internal/evals/tier2.go", "go.mod", "evals/cases/mission/x.toml", ".github/workflows/evals.yml"} {
+		r.Changed = []string{"skills/mission/SKILL.md", f}
+		ev, problems := read(good(), nil)
+		if len(ev) != 0 || len(problems) != 2 || !strings.Contains(problems[0], "this change edits "+f+", which the eval harness builds or reads") || len(groups) != 0 {
+			t.Errorf("harness change %s: %+v %q, groups read %v", f, ev, problems, groups)
+		}
 	}
 }
 

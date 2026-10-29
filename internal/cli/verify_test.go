@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -107,6 +110,49 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the PR body refers to stories #2 and #3: keep one") {
 		t.Fatalf("verify of a line that refers to two stories: %d %s", code, errOut)
 	}
+	// Bug #1157: criterion 1 is proved by a tier-2 eval case. verify reads the
+	// group's results from the evals.yml run on the head, and only that run.
+	g.Mu.Lock()
+	pr.Body = "Refs #2"
+	g.Mu.Unlock()
+	_ = os.MkdirAll(filepath.Join(dir, "evals"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "evals", "eval.toml"), []byte("min_mean = 3.5\n\n[[groups]]\nname = \"mission\"\nprefixes = [\"mission/\"]\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "evidence"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "evidence", "2.toml"), []byte("[[criterion]]\nid = 1\nevals = [\"mission/stays-in-list\"]\n"), 0o644)
+	evalsZip := func(sha string) []byte {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		f, _ := zw.Create(sha + "-mission.json")
+		_, _ = fmt.Fprintf(f, `{"sha": %q, "k": 2, "cases": [{"case": "mission/stays-in-list", "runs": [{}, {}], "pass_k": 1, "mean": 4.5}]}`, sha)
+		_ = zw.Close()
+		return buf.Bytes()
+	}
+	verifyEvals := func() (VerifyResult, string) {
+		t.Helper()
+		code, out, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--floor", "coverage", "--repo", "o/r", "--json")
+		res := VerifyResult{}
+		if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 {
+			t.Fatalf("verify with eval evidence: %d %s %s", code, out, errOut)
+		}
+		ev, _ := os.ReadFile(filepath.Join(proof.LocalDir(dir, 2), "artifacts", "evidence", "criterion-1.jsonl"))
+		return res, string(ev)
+	}
+	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 701, Path: ".github/workflows/evals.yml", HeadSHA: base, Event: "workflow_dispatch", Status: "completed", Conclusion: "success", HTMLURL: "https://github.com/o/r/actions/runs/701"})
+	g.Artifacts[701] = []fake.ArtifactZip{{ID: 801, Name: "eval-results-" + base + "-mission", Zip: evalsZip(base)}}
+	g.Mu.Unlock()
+	if res, ev := verifyEvals(); !slices.Contains(res.Unmapped, 1) || ev != "" || !strings.Contains(strings.Join(res.Problems, "\n"), "no evals.yml run of group mission left results for "+head[:7]) {
+		t.Fatalf("verify with results for the base only: %+v %q", res, ev)
+	}
+	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 702, Path: ".github/workflows/evals.yml", HeadSHA: head, Event: "workflow_dispatch", Status: "completed", Conclusion: "success", HTMLURL: "https://github.com/o/r/actions/runs/702"})
+	g.Artifacts[702] = []fake.ArtifactZip{{ID: 802, Name: "eval-results-" + head + "-mission", Zip: evalsZip(head)}}
+	g.Mu.Unlock()
+	if res, ev := verifyEvals(); slices.Contains(res.Unmapped, 1) || !strings.Contains(ev, `"eval":"mission/stays-in-list"`) || !strings.Contains(ev, `"run":"https://github.com/o/r/actions/runs/702"`) {
+		t.Fatalf("verify with results for the head: %+v %q", res, ev)
+	}
+	_ = os.RemoveAll(filepath.Join(dir, ".aayudha", "evidence"))
+
 	// A checkout that is not the PR head is refused.
 	git(t, dir, "checkout", "--quiet", "dev")
 	if code, _, errOut := run(t, env, opts, "verify", strconv.Itoa(pr.Number), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "check out the PR head") {

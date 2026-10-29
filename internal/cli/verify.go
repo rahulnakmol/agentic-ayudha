@@ -371,6 +371,34 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if r.Changed, r.Lines, err = verify.Changes(ctx, root, res.Base, head); err != nil {
 		return Wrap(ExitUsage, err)
 	}
+	if client != nil { // a criterion the evidence map proves with eval cases reads the head's evals.yml results (Bug #1157)
+		owner, name, _ := github.SplitRepo(repo)
+		var runs []*gh.WorkflowRun
+		r.EvalResults = func(group string) (*verify.EvalResults, error) {
+			if runs == nil {
+				rs, _, err := client.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, ListOptions: gh.ListOptions{PerPage: evalsResultsMinRuns}})
+				if err != nil {
+					return nil, fmt.Errorf("%s runs on %s: %s", evalsWorkflow, short(head), oneLineErr(err))
+				}
+				runs = append([]*gh.WorkflowRun{}, rs.WorkflowRuns...)
+			}
+			b, run, waiting, _, err := e.evalResultsFile(ctx, client, owner, name, head, group, runs)
+			switch {
+			case err != nil:
+				return nil, err
+			case waiting != "":
+				return nil, errors.New(waiting)
+			case b == nil:
+				return nil, nil
+			}
+			var er verify.EvalResults
+			if err := json.Unmarshal(b, &er); err != nil {
+				return nil, fmt.Errorf("eval-results-%s-%s: %w", short(head), group, err)
+			}
+			er.Run = run
+			return &er, nil
+		}
+	}
 	r.Footprint = verify.ReadLayers(root).Footprint(r.Changed)
 	res.Footprint = r.Footprint
 	if res.Footprint == nil {

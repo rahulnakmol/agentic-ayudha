@@ -1,0 +1,13 @@
+# Which tests prove Bug #1157's Completion Goal.
+
+[[criterion]]
+id = 1 # results for the head with the case at the bar: the criterion's evidence names the case, commit, runs, pass^k, mean, and run
+tests = ["internal/verify:TestEvalEvidence", "internal/cli:TestVerifyWritesPackForStory"]
+
+[[criterion]]
+id = 2 # results for another commit, missing, running, failed, errored, short, or under the bar: no evidence, and the reason
+tests = ["internal/verify:TestEvalEvidence", "internal/cli:TestVerifyWritesPackForStory"]
+
+[[criterion]]
+id = 3 # the PR changes a non-test Go file, go.mod, evals/, or evals.yml: the results do not count, and verify says why
+tests = ["internal/verify:TestEvalEvidence"]

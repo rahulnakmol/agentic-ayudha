@@ -38,6 +38,9 @@ type Run struct {
 	// TestEvents is the `go test -json` stream of the coverage floor's run,
 	// which TestEvidence maps to criteria.
 	TestEvents []byte
+	// EvalResults reads a tier-2 group's evals.yml results for Head (Bug #1157):
+	// nil when no run on Head left any. Nil when verify has no GitHub client.
+	EvalResults func(group string) (*EvalResults, error)
 
 	// Checks selects behaviour checks (--check): <feature>, <feature>.<check>,
 	// or "all"; empty runs those the change touches and the criteria map.

@@ -69,6 +69,7 @@ jobs:
       contents: read
       pull-requests: read
       issues: read
+      actions: read # verify reads the head's evals.yml results for criteria proved by eval cases (Bug #1157)
     outputs:
       story: ${{ steps.verify.outputs.story }}
       retention: ${{ steps.verify.outputs.retention }}
