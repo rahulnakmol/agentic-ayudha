@@ -1,0 +1,52 @@
+{
+  "covered": 284,
+  "executable": 310,
+  "percent": 91.61290322580645,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/cirepair.go": [
+      30,
+      31
+    ],
+    "internal/cli/home.go": [
+      177,
+      178,
+      179
+    ],
+    "internal/cli/inboxready.go": [
+      169,
+      170
+    ],
+    "internal/cli/inspect.go": [
+      509,
+      510
+    ],
+    "internal/cli/inspect_app.go": [
+      433,
+      434
+    ],
+    "internal/cli/proof.go": [
+      496,
+      497,
+      500,
+      501,
+      515,
+      516,
+      538,
+      539,
+      546,
+      547
+    ],
+    "internal/cli/ship.go": [
+      752,
+      753,
+      754
+    ],
+    "internal/cli/shipproof.go": [
+      170,
+      171
+    ]
+  },
+  "format": "go coverprofile"
+}
