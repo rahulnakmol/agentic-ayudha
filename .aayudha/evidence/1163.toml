@@ -1,0 +1,17 @@
+# Which tests prove Bug #1163's Completion Goal.
+
+[[criterion]]
+id = 1 # rung B gives fix with no finding and only unclear criteria, and the approver approved the exact head: merge, and the comment names the approval and the accepted criteria
+tests = ["internal/cli:TestInspectPaidReviewer"]
+
+[[criterion]]
+id = 2 # a rung-B finding gives fix, with or without an approval
+tests = ["internal/cli:TestInspectPaidReviewer"]
+
+[[criterion]]
+id = 3 # an approval of another head counts for nothing: fix
+tests = ["internal/cli:TestInspectPaidReviewer"]
+
+[[criterion]]
+id = 4 # no approval: fix, as today
+tests = ["internal/cli:TestInspectPaidReviewer"]

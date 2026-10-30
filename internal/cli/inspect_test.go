@@ -1619,6 +1619,71 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("another PR's session spend: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
 	}
 
+	// Bug #1163: the [autonomy] approver's `aayu inspect --approve` of the
+	// exact head lifts a rung-B fix whose only gap is unclear criteria, and
+	// nothing else: not a finding, an unmet criterion, a floor that does not
+	// hold, another head's approval, or another person's.
+	const unclearCriteria = `[{"id":1,"verdict":"unclear","evidence":"the pack has no tier-2 result"},{"id":2,"verdict":"met","evidence":"e"}]`
+	finding := `[{"severity":"P2","category":"bug","file":"internal/report/percent.go","line":2,"quote":"return float64(covered) / float64(total) * 100","title":"Percent divides by zero","detail":"total == 0 returns NaN","fix":"return 0 when total == 0","confidence":0.9,"criterion":1}]`
+	for _, tc := range []struct {
+		name, findings, criteria, by string
+		otherHead, failFloor, lift   bool
+	}{
+		{name: "an approval of the head", findings: "[]", criteria: unclearCriteria, by: "lead", lift: true},
+		{name: "an approval written @Lead", findings: "[]", criteria: unclearCriteria, by: "Lead", lift: true},
+		{name: "a finding", findings: finding, criteria: unclearCriteria, by: "lead"},
+		{name: "an unmet criterion", findings: "[]", criteria: strings.Replace(unclearCriteria, `"met"`, `"unmet"`, 1), by: "lead"},
+		{name: "a floor that does not hold", findings: "[]", criteria: unclearCriteria, by: "lead", failFloor: true},
+		{name: "every criterion met", findings: "[]", criteria: strings.Replace(unclearCriteria, `"unclear"`, `"met"`, 1), by: "lead"},
+		{name: "an approval of another head", findings: "[]", criteria: unclearCriteria, by: "lead", otherHead: true},
+		{name: "another person's approval", findings: "[]", criteria: unclearCriteria, by: "mallory"},
+		{name: "no approval", findings: "[]", criteria: unclearCriteria},
+	} {
+		g, env, opts, prN, model := setup(`"claude"`, "google-key")
+		cfg, _ := os.ReadFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"))
+		_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), append([]byte("version = 1\n\n[autonomy]\napprover = \"@lead\"\n"), []byte(strings.TrimPrefix(string(cfg), "version = 1\n"))...), 0o644)
+		model.Replies[0].Text = `{"disposition":"fix","summary":"s","findings":` + tc.findings + `,"criteria":` + tc.criteria + `}`
+		head := g.Pulls[prN].Head.SHA
+		if tc.failFloor {
+			writeInspectPack(t, opts.Dir, prN, head, []proof.Check{{Floor: "coverage", Result: proof.Fail, Value: 50, Threshold: 90, Tool: "aayudha", Version: "1"}})
+		}
+		if tc.by != "" {
+			at := head
+			if tc.otherHead {
+				at = strings.Repeat("d", 40)
+			}
+			b, _ := json.Marshal(headApproval{PR: prN, Head: at, By: tc.by, At: "2026-10-12T09:00:00Z", Reason: "read the tier-2 run on dev"})
+			putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), ApprovedPath, string(b)+"\n")
+		}
+		code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+		body := lastInspect(t, g, prN)
+		note := "fix lifted to merge: rung B raised no finding and marked only criteria 1 unclear; @" + tc.by + " accepted them with `aayu inspect " + strconv.Itoa(prN) +
+			" --approve` of `ccccccc` at 2026-10-12T09:00:00Z (\"read the tier-2 run on dev\"), recorded on the ledger (`inspect/approved.jsonl`)"
+		if tc.lift && (code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungB || !strings.Contains(body, "### inspect: merge") || !strings.Contains(body, note) || strings.Contains(body, "Next: fix this PR") || inspect.ParseState(body).Result.Next != "") {
+			t.Fatalf("rung-B fix with %s: exit %d %s rung %q %s\n%s", tc.name, code, res.Disposition, res.Rung, errOut, body)
+		}
+		if !tc.lift && (code != ExitBlocked || res.Disposition != inspect.Fix || strings.Contains(body, "fix lifted to merge")) {
+			t.Fatalf("rung-B fix with %s: exit %d %s %s\n%s", tc.name, code, res.Disposition, errOut, body)
+		}
+		if tc.by == "" {
+			// An approval recorded after the review lifts the stored fix at the
+			// same head, with no second review (PR #1146 at 734b107).
+			b, _ := json.Marshal(headApproval{PR: prN, Head: head, By: "lead", At: "2026-10-12T09:00:00Z", Reason: "read the tier-2 run on dev"})
+			putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), ApprovedPath, string(b)+"\n")
+			code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+			if body = lastInspect(t, g, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 1 || !strings.Contains(body, "### inspect: merge") || !strings.Contains(body, strings.Replace(note, "@ ", "@lead ", 1)) {
+				t.Fatalf("a stored rung-B fix, then an approval of the head: exit %d %s cached %v, %d model calls %s\n%s", code, res.Disposition, res.Cached, len(model.Requests), errOut, body)
+			}
+		}
+		if !tc.lift {
+			continue
+		}
+		// The next run at the head reads the stored merge, with no second review.
+		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 1 {
+			t.Fatalf("rung-B fix with %s, run again: exit %d %s cached %v, %d model calls %s", tc.name, code, res.Disposition, res.Cached, len(model.Requests), errOut)
+		}
+	}
+
 	// An author without write access gets no paid review, whatever GitHub's
 	// author association says (an organization member may only read).
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
