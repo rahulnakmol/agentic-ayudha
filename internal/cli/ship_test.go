@@ -1841,6 +1841,16 @@ func TestProofLand(t *testing.T) {
 		setRun(c.prs, c.branch, c.repo, c.at)
 		missing(c.what)
 	}
+	// A red gate run re-run green after the merge: the re-run keeps its
+	// created_at, but its latest attempt started after the merge.
+	setRun(nil, branch, "o/r", ran)
+	g.Mu.Lock()
+	g.Runs[0].RunStartedAt, g.Runs[0].Attempt = time.Now().UTC(), 2
+	g.Mu.Unlock()
+	missing("a re-run started after the merge")
+	g.Mu.Lock()
+	g.Runs[0].RunStartedAt, g.Runs[0].Attempt = time.Time{}, 0
+	g.Mu.Unlock()
 	// A second pull request from the same branch at the same head: the run
 	// could be either one's, so it is neither's.
 	setRun(nil, branch, "O/R", ran)

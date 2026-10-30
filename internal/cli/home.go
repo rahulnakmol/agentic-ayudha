@@ -233,11 +233,12 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 
 // mergedRunOf reports, for a gate run on head that lists no pull request,
 // whether it is merged pull request pr's: on pr's head branch in this
-// repository (names compare without case, as GitHub's do), started between
-// pr's opening and its merge, and no other pull request from that branch has
-// head as its head, as a second pull request open from the same branch would.
-// A run after the merge, from a later pull request on a reused branch, is
-// not pr's.
+// repository (names compare without case, as GitHub's do), created after pr
+// opened, with its latest attempt (run_started_at) started before pr merged,
+// and no other pull request from that branch has head as its head, as a second
+// pull request open from the same branch would. A run after the merge, from a
+// later pull request on a reused branch, is not pr's; nor is a re-run started
+// after the merge, so a red gate re-run green then reads as missing.
 func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string, pr int) (func(*gh.WorkflowRun) bool, error) {
 	none := func(*gh.WorkflowRun) bool { return false }
 	p, _, err := c.REST.PullRequests.Get(ctx, owner, name, pr)
@@ -262,8 +263,11 @@ func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string
 	}
 	opened, merged := p.GetCreatedAt().Time, p.GetMergedAt().Time
 	return func(r *gh.WorkflowRun) bool {
-		at := r.GetCreatedAt().Time
-		return r.GetHeadBranch() == ref && strings.EqualFold(r.GetHeadRepository().GetFullName(), repo) && !at.Before(opened) && !at.After(merged)
+		created, started := r.GetCreatedAt().Time, r.GetRunStartedAt().Time
+		if started.IsZero() {
+			started = created
+		}
+		return r.GetHeadBranch() == ref && strings.EqualFold(r.GetHeadRepository().GetFullName(), repo) && !created.Before(opened) && !started.After(merged)
 	}, nil
 }
 
