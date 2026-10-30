@@ -1,0 +1,140 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 1170,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#1172",
+      "hash": "51ddac87d9ea9751dc5660939c990ecea8475762268d00c822cffe2500dd20a4",
+      "story": {
+        "number": 1172,
+        "title": "A waiting baseline draft is an inbox card, approved under the session's one device code",
+        "completion_goal_hash": "787006b329b4ccb23454535dd94264ca9adbfdfdebab01817c5323700b7eae3d",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1173",
+      "hash": "f85359f9b49a42de0c7f34684ca076dc8b03af90b68647e497d670519d754b62",
+      "story": {
+        "number": 1173,
+        "title": "Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries",
+        "completion_goal_hash": "82eba705be56965bb244c6465d868d442b4434ed0bb16c173846d808a6de3e52",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1172
+        ]
+      }
+    },
+    {
+      "ref": "#1174",
+      "hash": "73b94eccdf8f8f994b7e56912522779db114f513864fb94f70f693361aae234f",
+      "story": {
+        "number": 1174,
+        "title": "Bugs come last: a mission ends with a BUGS milestone, and a Bug filed during the mission joins it",
+        "completion_goal_hash": "913ca6c56a1246ae41c5ce741a3c83044b129a17346167d58580c0278600ae1f",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1175",
+      "hash": "23172daf410a0d12aafdba0f82fff76890150282b0a2a334c514734a32705930",
+      "story": {
+        "number": 1175,
+        "title": "The morning is set: the inbox orders the day's cards and ends with the day's plan",
+        "completion_goal_hash": "0951e4eb9d78a6c88712d9600f903a4fde92791dbc874f4e80672399523eef4f",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1172,
+          1173
+        ]
+      }
+    },
+    {
+      "ref": "#1176",
+      "hash": "813c23842a708f7a7b6105c73f973fdd188679dbb099d094c80c65da97669823",
+      "story": {
+        "number": 1176,
+        "title": "The evening review: each story agreed this morning, with each criterion next to its evidence",
+        "completion_goal_hash": "f053138cb555831e0aec9bc614300c30ffc290d020809ef3a509ab6491ab72a7",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1177",
+      "hash": "b6d294a9c0d401d4dae5da9852200498ff9a183773f17c7e25f9de5752e8a644",
+      "story": {
+        "number": 1177,
+        "title": "The day is proven: the evening says it only when every agreed criterion has its evidence",
+        "completion_goal_hash": "22b2ccc7e484f5f0b507c1a1b077e94938c64c1891b4276b300c57d0790deaa1",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1176
+        ]
+      }
+    },
+    {
+      "ref": "#1178",
+      "hash": "458e5f64fdc0389b0e66850319ce0cbd39b48700e0cf55c789f97704020f7a49",
+      "story": {
+        "number": 1178,
+        "title": "The overnight card: the person sets what runs overnight, bounded in hours and cost",
+        "completion_goal_hash": "aae6614a8e4d8bd5d38b5ac9c1def48e4133e947b57d7c66063a1ef66de2bd45",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1176
+        ]
+      }
+    },
+    {
+      "ref": "#1179",
+      "hash": "a530a2e15974d30097bcd5bb2795c38854b8defb0052b88346e47dbe02f569c2",
+      "story": {
+        "number": 1179,
+        "title": "aayu grill edits a filed body before Ready, and checks link targets as Ready does",
+        "completion_goal_hash": "655c09a3b029d46d39cc074268de030c21445e23fde8801cbb4b76080bec898f",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1170 stories",
+      "hash": "bda1cdcb84871b7233f86e2f7216005e88d87d3a5859311bf60503a5c587b77d"
+    }
+  ],
+  "hash": "4b5eb1153bdae7aad9ab67fbf7177d40eee0e5ba6102c2d09aade96aff53bc2f",
+  "summary": "A founder decides each morning in one `aayu inbox` session, and sees each agreed Feature built and proven by evening. The morning has a card for each baseline and for Approve to build, next to the mission start card that exists. The evening has a card for each story agreed that morning, with each criterion next to its evidence, and says the day is proven only when all of it is. Agents prepare tomorrow's Feature overnight, and each Feature's Bugs come last. This is the 0.4 experience (Decision #1168): every day the founder sees what they made.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:47:11Z"
+}
