@@ -1,0 +1,469 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 889,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#997",
+      "hash": "76e2cbe373155cc5a488b0508c8fc446247562576f042d2bbce3417028329b53",
+      "story": {
+        "number": 997,
+        "title": "Approve to build writes the mission plan, and Start records the starter, the tool, and the budget",
+        "completion_goal_hash": "2ac0768f2850d7669320abe62fb32b629cbf498c7fe9369347e9eaa2fef426c7",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#998",
+      "hash": "264fa0a10f1787ed4906ef74c93ea80fec2c1573cab3c8e57a5cfc3457f0d0b6",
+      "story": {
+        "number": 998,
+        "title": "aayu mission next \u003cf\u003e lists the mission's startable stories in order, with no model call",
+        "completion_goal_hash": "991e8804ceaf51f22ef0bad7b155dacfdd821eef11985e115e71c177ccfbe06e",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": [
+          997
+        ]
+      }
+    },
+    {
+      "ref": "#999",
+      "hash": "d9f0234b07d4fb125b43d63b5bbde6c826ba6b397581736b916f265044c4714b",
+      "story": {
+        "number": 999,
+        "title": "The runnable list holds back a story whose depends-on target is still open",
+        "completion_goal_hash": "2204da36c54d7093cf13fced627a10d6d494edef9d0fbb564d1720c3661aef69",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1000",
+      "hash": "d313afe16411eb52cb1ec5ff29eb184d0741b4115f3ce5b65fd72027fe03af6c",
+      "story": {
+        "number": 1000,
+        "title": "[build] agents = 5 per Kanha, and the mission limits are config keys",
+        "completion_goal_hash": "fd1cc14431dfa892ae2c7924b4eed4f59809f6144d8321e51f87d1ead6164f04",
+        "effort": "S",
+        "layers": [
+          "L02",
+          "L07"
+        ],
+        "depends_on": [
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1001",
+      "hash": "95b50c54325b7d908288547271becd622d3786f972900500c05694325b47db6a",
+      "story": {
+        "number": 1001,
+        "title": "A milestone gate checks the dev tip, and each failed check gets one pre-authorised fix PR",
+        "completion_goal_hash": "f563727fc513fc88513b6ea2912d5feda97ea638db93a9b257a68e50559d435f",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997,
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1002",
+      "hash": "8d0b5a3a58ff0a76fee5d9aaa2168346a1f574f63adc4847585cbf08dd2635bf",
+      "story": {
+        "number": 1002,
+        "title": "aayu mission stop brings a mission or one story to a safe stop, resume continues it, and ship merges milestones in order",
+        "completion_goal_hash": "aaa199515da760f8f7d6e12564af285d1db2d12c2ec3acfaa1292507dea54291",
+        "effort": "L",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997,
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1003",
+      "hash": "b2001085d5a7b8993c3e6cece4f76fa3494a6fb1b2d0bf72f5383f74a496bca9",
+      "story": {
+        "number": 1003,
+        "title": "aayu mission recover re-attaches what lives, and a failed step retries up to retry_max",
+        "completion_goal_hash": "e2c7ed6843df11c2b6c433de5375f278feae180282d66e6c35809cc23a86819b",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997,
+          1002
+        ]
+      }
+    },
+    {
+      "ref": "#1004",
+      "hash": "fb9e02e0e47693edc764ae086273eec146b3124be72204e9066d245eccad5345",
+      "story": {
+        "number": 1004,
+        "title": "Start on the mission start card starts the mission's Kanha on the tool recorded in the plan",
+        "completion_goal_hash": "9df3f4e99a25127b2bd81d0b9e545dad3ff9d9b821204a08517c3df78047f6bf",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997,
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1005",
+      "hash": "89fe554897c3a3f72d7053d6d5a78d993480ee8e35a4ca1b9aa637877eceab37",
+      "story": {
+        "number": 1005,
+        "title": "The mission skill: on each event, Kanha asks aayu what can run and starts one subthread per start",
+        "completion_goal_hash": "aeaf14ca47f07a80b8d30e0a8ba503227a0c1d56be97a97faf70fa7c59054319",
+        "effort": "M",
+        "layers": [
+          "L03",
+          "L05"
+        ],
+        "depends_on": [
+          997,
+          998,
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1006",
+      "hash": "8223a5bd15a2afbc186f1373ee775b68ad8bc25d0366eee1dec93876667980fe",
+      "story": {
+        "number": 1006,
+        "title": "A story subthread owns one story, may use subagents, and ships it on proof",
+        "completion_goal_hash": "dde785bac056a9fa35cdff7ed2ef37be525ce0eac0ede8187abc9610ccd54c84",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1007",
+      "hash": "b627fc30d8eecf1a8e356a5b1df8829c1c06cd7801f405f1067b609e8f52e5f0",
+      "story": {
+        "number": 1007,
+        "title": "ship tells the story's Kanha after each merge, in the same process",
+        "completion_goal_hash": "d912f5036ebc5cc21a212a2c8b106cfea2a6b56191d2f155d5d28e651968d403",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1008",
+      "hash": "733f6cf78ee290edd98b3f63db0caf8bab17aa242d864239d5872f527d25e028",
+      "story": {
+        "number": 1008,
+        "title": "A stop, a block, a failed start, or an answered ask tells the Kanha",
+        "completion_goal_hash": "c5ea809f3689d93ab2430d6b15f95421ea0afaf0dfa8afb34f48ff4fd5e2b251",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1009",
+      "hash": "d3798fb27e36b4ba3763da335f44f7ae85f6e5bb46f99acc80082d9f907b08fb",
+      "story": {
+        "number": 1009,
+        "title": "An hourly safety tick wakes each Kanha that missed an event, and syncs cloud PRs",
+        "completion_goal_hash": "57e93346388bfe1ba701b23257fd83feb0bbca1485c284c65679a068a023f7d5",
+        "effort": "S",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": [
+          998,
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1010",
+      "hash": "80b3811dec1ffb3441435132f9e12132b888d58bbd3bb043b18d353f3e5de727",
+      "story": {
+        "number": 1010,
+        "title": "Every build event of a Feature goes to delivery/\u003cf\u003e/events.jsonl and one progress comment",
+        "completion_goal_hash": "9a887becc7c4e5d0fa42a8adf82273519fc00ddc9713c6bce2754d43152a0016",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1011",
+      "hash": "f6f584c61a6aa4d7a7de28c300631572a2c014c7dd5680e573daef67ba767b51",
+      "story": {
+        "number": 1011,
+        "title": "@rahulnakmol is paged only at a milestone end, a block, and the mission's end",
+        "completion_goal_hash": "892c1937463e49a85a7b664a6405a2c4ee5067b86393f9456e6acac13aa2cccd",
+        "effort": "S",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          1001,
+          1010
+        ]
+      }
+    },
+    {
+      "ref": "#1012",
+      "hash": "28ead91f7df93ecfd5a215d273f2cc3f96b6ad1eafdd10e941f644f56e910105",
+      "story": {
+        "number": 1012,
+        "title": "A stateless wake on GitHub events, and a local Kanha for Codex, Copilot, and OpenCode",
+        "completion_goal_hash": "3220959c80d23c2bd7f3239ac01cc2457c8efed5b00ec2e51d49ff2b9f4309c3",
+        "effort": "L",
+        "layers": [
+          "L02",
+          "L07"
+        ],
+        "depends_on": [
+          1004
+        ]
+      }
+    },
+    {
+      "ref": "#1013",
+      "hash": "9a6e4e8c4c15397a8c45c895142aa91ff39ac4e54893faa6d2b67d41c0241045",
+      "story": {
+        "number": 1013,
+        "title": "Kanha's lock at mission start: the bodies and the size, risk, and priority labels of the Feature, its stories, and its Bugs become read-only",
+        "completion_goal_hash": "d8eb0349ee413a9284e6638abdd821409eed83f60fb266935ca005a1bb07629e",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997
+        ]
+      }
+    },
+    {
+      "ref": "#1014",
+      "hash": "df7401328339e4501a4eec563495d99b4449e04a65ce85f30341fdfcc9b45cef",
+      "story": {
+        "number": 1014,
+        "title": "Kanha's feedback pass at mission end turns people's comments into new stories that @rahulnakmol approves once",
+        "completion_goal_hash": "f0b14c10112d74b91842333097e53542b2bc75e781a3ba0cc2b2c2e96582a325",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": [
+          1001,
+          1010,
+          1013
+        ]
+      }
+    },
+    {
+      "ref": "#1015",
+      "hash": "744c8d12327042c8d2c8034bf31e5972691144e1e26ce0b976d38726cf11d95d",
+      "story": {
+        "number": 1015,
+        "title": "Mission time limits: warn at 24 hours, hold new starts at 48 hours, and a person's reason to start or extend past them",
+        "completion_goal_hash": "440de60664610acd4757437174b6fa45f36f81c160c127ff261c1f3eef6e6a74",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          997,
+          998
+        ]
+      }
+    },
+    {
+      "ref": "#1030",
+      "hash": "a01911555d5c0aca29a2a8fc30be59274902f7fb390d5ebcf34db804c0f5f463",
+      "story": {
+        "number": 1030,
+        "title": "Inside an approved mission, ship merges on proof and holds only what the person must see",
+        "completion_goal_hash": "120d1ab914da026d92b0f6c9025de2ef8f1f4d393635aa92854e6fc94fc6298a",
+        "effort": "L",
+        "layers": [],
+        "depends_on": [
+          997,
+          1028,
+          1029,
+          1083
+        ]
+      }
+    },
+    {
+      "ref": "#1104",
+      "hash": "fb533f4ffb26b6805196d19f147a5212ec49be629b75bc38c0d0b6c710bb8e82",
+      "story": {
+        "number": 1104,
+        "title": "The story subthread brief carries the 10-step build loop, and an eval fails when a step is missing",
+        "completion_goal_hash": "28bf51e8ebfe41e5149c0765634031f856407156dd2d59481e4af413e03171ef",
+        "effort": "S",
+        "layers": [],
+        "depends_on": [
+          1003,
+          1006
+        ]
+      }
+    },
+    {
+      "ref": "#1109",
+      "hash": "e8948b96fd76fa74707754be3a01bdcea9980d5363ebd0da5f334a91485c6041",
+      "story": {
+        "number": 1109,
+        "title": "Proof packs record the red run of each test, and a missing red run warns",
+        "completion_goal_hash": "133d7de711ff4bba22c6d536c71a7c076812f1f99f05934e74dd2e9687730c2a",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          1104
+        ]
+      }
+    },
+    {
+      "ref": "#1110",
+      "hash": "fc4b09a98013d44de169368f88a2c0489e1b3acb91d0bbcb474d7d142b27cdbf",
+      "story": {
+        "number": 1110,
+        "title": "Real-run journeys on the built binary prove each story, and the milestone gate re-runs them at the dev tip",
+        "completion_goal_hash": "15cf53cdfb0321a66a49fa90a53684bfe069ca2bcfdb57beecda4723858adf0e",
+        "effort": "L",
+        "layers": [],
+        "depends_on": [
+          1001,
+          1104
+        ]
+      }
+    },
+    {
+      "ref": "#1111",
+      "hash": "05b6bdeaec07485d7da2db7769afbbc0b8078d3bf22dcc28cbbc7797f20289f3",
+      "story": {
+        "number": 1111,
+        "title": "Inspect flags function beyond the story's ask, and each milestone records whether its work will matter",
+        "completion_goal_hash": "2e4b40457cfbe5e1385d50049776d669f7e98921ef1716296735f5bf0333bc2a",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          985,
+          1001,
+          1104
+        ]
+      }
+    },
+    {
+      "ref": "#1112",
+      "hash": "daab6fed58723053d16d9a5dc86dcc28272876ce45f1782a3923131141d253d3",
+      "story": {
+        "number": 1112,
+        "title": "Each milestone's findings propose the order of the next milestone's stories",
+        "completion_goal_hash": "af8debc13684cc7fd28e611b985d00355554325c4b986fe7e5a7349516331469",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          1001,
+          1014
+        ]
+      }
+    },
+    {
+      "ref": "#1126",
+      "hash": "054fca260c34211aa705d67a1f851ad36cbcfb97b203948d1150ce72b9a3f359",
+      "story": {
+        "number": 1126,
+        "title": "The local Kanha's machine runs aayu mission wake every check_minutes, set up by aayu install --loops",
+        "completion_goal_hash": "0503c5e0fa172515857790697ba6258ec4b12bf65811c15c57143e73b666db8a",
+        "effort": "S",
+        "layers": [],
+        "depends_on": [
+          1012,
+          1103
+        ]
+      }
+    },
+    {
+      "ref": "#1134",
+      "hash": "b72acfd6f3dbebc04be0aad9998980527ae30decae2e2611e455d92765b6aa79",
+      "story": {
+        "number": 1134,
+        "title": "The mission lock ends when the last milestone's gate passes, not when every story merges",
+        "completion_goal_hash": "d2ea72ec12fb59023fea7f776540dab555f8bf20c55a3944f2459613b16cc272",
+        "effort": "S",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1154",
+      "hash": "616beb66b7de7d29e64c622a61e7af61acfffaca71e7b98efff7182878035b16",
+      "story": {
+        "number": 1154,
+        "title": "internal/cli's tests run well below go test's 10-minute default",
+        "completion_goal_hash": "2ddcfa890b63915fd6574a11ce2eb9fe1d54de1427413bd3b3804bf5f165f3c5",
+        "effort": "M",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#889 stories",
+      "hash": "d6d53eb29e9f5bf40e5f90e661b8795694d676c350c36a8a997c51436662f2aa"
+    }
+  ],
+  "hash": "a208bfcbcffa8a413b95b3fb8b2e453b00feb7a9b2d89116f879b873cbbf1ad8",
+  "summary": "`aayu build --next --dispatch` fills every free slot by handing each story to a new thread, and `ship` dispatches again after each merge. This is step S20 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:28:47Z"
+}
