@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 874,
+  "part": "intent",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#874 body",
+      "hash": "5f052d2259d64b66ea4f875e68f695f7f397bad77c680b1ece08e1afa2683a9f"
+    }
+  ],
+  "hash": "914c5edd93d52be1e72c69aa130e3acb6dec7f1b089cd92ec0a6bba7eee69526",
+  "summary": "Intent, spec, technical design, and UX design each get a baseline: an agent drafts it, a person approves it, and later edits show as drift. This is step S5 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:27:57Z"
+}
