@@ -223,6 +223,28 @@ func (e *Env) readApprovals(ctx context.Context) []headApproval {
 // the lift, and the pack binds it to the head, so a cached review is not
 // lifted twice.
 func (e *Env) approvedUnclear(ctx context.Context, res *inspect.Result, p *proof.Pack, approver string) bool {
+	// A stored lift is judged again on every run: the cache keys on the PR's
+	// content, not on the approver or the ledger, so a cached merge stands
+	// only while the current approver's approval of the head does (CodeRabbit
+	// on #1164). The PR description check and the early-build hold run after
+	// this and decide again, so the review's own fix is restored here.
+	was := res.Disposition
+	if i := slices.IndexFunc(res.Notes, func(s string) bool { return strings.HasPrefix(s, liftNote) }); i >= 0 {
+		res.Notes = slices.Delete(slices.Clone(res.Notes), i, i+1)
+		res.Disposition, res.Reviewed, res.Overridden, res.Next = inspect.Fix, "", "", fixNext
+	}
+	e.liftUnclear(ctx, res, p, approver)
+	return res.Disposition != was
+}
+
+// liftNote starts the note a lift writes; fixNext is the step a fix names.
+const (
+	liftNote = "fix lifted to merge: rung B raised no finding and marked only criteria "
+	fixNext  = "fix this PR (the builder, or the delegated agent through `build --delegate`). Then the merge gate runs inspect again on the new head"
+)
+
+// liftUnclear makes the lift approvedUnclear describes, and reports whether it did.
+func (e *Env) liftUnclear(ctx context.Context, res *inspect.Result, p *proof.Pack, approver string) bool {
 	var unclear []string // an unmet criterion fails the floors below
 	for _, v := range res.Criteria {
 		if v.Verdict == "unclear" {
@@ -253,7 +275,7 @@ func (e *Env) approvedUnclear(ctx context.Context, res *inspect.Result, p *proof
 	}
 	a := approvals[i]
 	res.Disposition, res.Next = inspect.Merge, ""
-	res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: rung B raised no finding and marked only criteria %s unclear; @%s accepted them with `aayu inspect %d --approve` of `%s` at %s (%q), recorded on the ledger (`%s`)",
+	res.Notes = append(res.Notes, fmt.Sprintf(liftNote+"%s unclear; @%s accepted them with `aayu inspect %d --approve` of `%s` at %s (%q), recorded on the ledger (`%s`)",
 		strings.Join(unclear, ", "), a.By, res.PR, short(res.Head), a.At, a.Reason, ApprovedPath))
 	return true
 }

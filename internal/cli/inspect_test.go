@@ -1685,6 +1685,14 @@ func TestInspectPaidReviewer(t *testing.T) {
 		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 1 {
 			t.Fatalf("rung-B fix with %s, run again: exit %d %s cached %v, %d model calls %s", tc.name, code, res.Disposition, res.Cached, len(model.Requests), errOut)
 		}
+		// The stored lift is judged again: once another person is the
+		// approver, the cached review is a fix again (CodeRabbit on #1164).
+		cfg, _ = os.ReadFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"))
+		_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(strings.Replace(string(cfg), `approver = "@lead"`, `approver = "@other"`, 1)), 0o644)
+		code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+		if body = lastInspect(t, g, prN); code != ExitBlocked || res.Disposition != inspect.Fix || !res.Cached || len(model.Requests) != 1 || !strings.Contains(body, "### inspect: fix") || strings.Contains(body, "fix lifted to merge") || !strings.Contains(body, "Next: fix this PR") {
+			t.Fatalf("rung-B fix with %s, another approver: exit %d %s cached %v, %d model calls %s\n%s", tc.name, code, res.Disposition, res.Cached, len(model.Requests), errOut, body)
+		}
 	}
 
 	// An author without write access gets no paid review, whatever GitHub's
