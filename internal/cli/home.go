@@ -198,10 +198,12 @@ func gateRunOf(r *gh.WorkflowRun, head string, pr int) bool {
 
 // gateSuites is the check suites of the merge gate's own runs for pull request
 // pr on head (gateRunOf). A re-run of a run's failed jobs stays in its suite.
-// Once pr merges, GitHub lists no pull request for its runs any more: then a
-// run that lists none is pr's when pr is merged and the run is for pr's head
-// branch in this repository (Bug #1159), so proof land can read a merged PR's
-// gate. A run that lists another pull request is never pr's.
+// Once pr merges, GitHub lists no pull request for its runs any more, so a run
+// that lists none can be pr's (Bug #1159), and proof land can read a merged
+// PR's gate. It is pr's only when pr is merged, the run is on pr's head commit
+// and branch in this repository, it started while pr was open, and no other
+// pull request ever had that branch at that commit (mergedRunOf). A run that
+// lists another pull request is never pr's.
 func gateSuites(ctx context.Context, c *github.Client, owner, name, head string, pr int) (map[int64]bool, error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
 		r, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: o})
@@ -211,24 +213,58 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 		return nil, err
 	}
 	out := map[int64]bool{}
-	var merged *gh.PullRequest // read once, for the first run that lists no pull request
+	var own func(*gh.WorkflowRun) bool // read once, for the first run that lists no pull request
 	for _, r := range runs {
-		own := gateRunOf(r, head, pr)
-		if !own && len(r.PullRequests) == 0 && r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
-			if merged == nil {
-				if merged, _, err = c.REST.PullRequests.Get(ctx, owner, name, pr); err != nil {
+		mine := gateRunOf(r, head, pr)
+		if !mine && len(r.PullRequests) == 0 && r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
+			if own == nil {
+				if own, err = mergedRunOf(ctx, c, owner, name, head, pr); err != nil {
 					return nil, err
 				}
 			}
-			repo := owner + "/" + name
-			own = merged.GetMerged() && merged.GetHead().GetSHA() == head && merged.GetHead().GetRef() == r.GetHeadBranch() &&
-				merged.GetHead().GetRepo().GetFullName() == repo && r.GetHeadRepository().GetFullName() == repo
+			mine = own(r)
 		}
-		if own {
+		if mine {
 			out[r.GetCheckSuiteID()] = true
 		}
 	}
 	return out, nil
+}
+
+// mergedRunOf reports, for a gate run on head that lists no pull request,
+// whether it is merged pull request pr's: on pr's head branch in this
+// repository (names compare without case, as GitHub's do), started between
+// pr's opening and its merge, and no other pull request from that branch has
+// head as its head, as a second pull request open from the same branch would.
+// A run after the merge, from a later pull request on a reused branch, is
+// not pr's.
+func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string, pr int) (func(*gh.WorkflowRun) bool, error) {
+	none := func(*gh.WorkflowRun) bool { return false }
+	p, _, err := c.REST.PullRequests.Get(ctx, owner, name, pr)
+	if err != nil {
+		return nil, err
+	}
+	repo := owner + "/" + name
+	if !p.GetMerged() || p.GetMergedAt().IsZero() || p.GetHead().GetSHA() != head || !strings.EqualFold(p.GetHead().GetRepo().GetFullName(), repo) {
+		return none, nil
+	}
+	ref := p.GetHead().GetRef()
+	same, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "all", Head: owner + ":" + ref, ListOptions: o})
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range same {
+		if o.GetNumber() != pr && o.GetHead().GetSHA() == head {
+			return none, nil
+		}
+	}
+	opened, merged := p.GetCreatedAt().Time, p.GetMergedAt().Time
+	return func(r *gh.WorkflowRun) bool {
+		at := r.GetCreatedAt().Time
+		return r.GetHeadBranch() == ref && strings.EqualFold(r.GetHeadRepository().GetFullName(), repo) && !at.Before(opened) && !at.After(merged)
+	}, nil
 }
 
 // gateCheckRuns keeps, of a head's check runs (newest first), those in the

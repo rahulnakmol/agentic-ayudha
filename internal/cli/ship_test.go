@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -1808,26 +1809,47 @@ func TestProofLand(t *testing.T) {
 	}
 	// Bug #1159: once the PR merges, GitHub lists no pull request for its gate
 	// runs. A run with none counts only on the PR's head branch, in this
-	// repository; a run that lists another pull request never counts.
-	setRun := func(prs []fake.RunPR, branch, repo string) {
+	// repository, started while the PR was open, when no other pull request
+	// from that branch has the head; a run that lists another pull request
+	// never counts.
+	opened, ran := time.Now().UTC().Add(-3*time.Hour), time.Now().UTC().Add(-2*time.Hour)
+	setRun := func(prs []fake.RunPR, branch, repo string, at time.Time) {
 		g.Mu.Lock()
-		g.Runs[0].PullRequests, g.Runs[0].HeadBranch, g.Runs[0].HeadRepository = prs, branch, &fake.HeadRepo{FullName: repo}
+		g.Pulls[prN].CreatedAt = opened
+		g.Runs[0].PullRequests, g.Runs[0].HeadBranch, g.Runs[0].HeadRepository, g.Runs[0].CreatedAt = prs, branch, &fake.HeadRepo{FullName: repo}, at
 		g.Mu.Unlock()
 	}
-	for _, c := range []struct {
-		prs          []fake.RunPR
-		branch, repo string
-	}{
-		{[]fake.RunPR{{Number: prN + 1}}, "story/2-show-empty-list", "o/r"},
-		{nil, "story/9-other", "o/r"},
-		{nil, "story/2-show-empty-list", "fork/r"},
-	} {
-		setRun(c.prs, c.branch, c.repo)
+	missing := func(what string) {
+		t.Helper()
 		if code, out := land(); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is missing on "+short(head)) {
-			t.Fatalf("proof land with the gate run of %+v on %s in %s: %d %s", c.prs, c.branch, c.repo, code, out)
+			t.Fatalf("proof land with %s: %d %s", what, code, out)
 		}
 	}
-	setRun(nil, "story/2-show-empty-list", "o/r")
+	branch := g.Pulls[prN].Head.Ref
+	for _, c := range []struct {
+		what         string
+		prs          []fake.RunPR
+		branch, repo string
+		at           time.Time
+	}{
+		{"a run that lists another PR", []fake.RunPR{{Number: prN + 1}}, branch, "o/r", ran},
+		{"another branch", nil, "story/9-other", "o/r", ran},
+		{"a fork's run", nil, branch, "fork/r", ran},
+		{"a run after the merge", nil, branch, "o/r", time.Now().UTC()},
+		{"a run before the PR opened", nil, branch, "o/r", opened.Add(-time.Minute)},
+	} {
+		setRun(c.prs, c.branch, c.repo, c.at)
+		missing(c.what)
+	}
+	// A second pull request from the same branch at the same head: the run
+	// could be either one's, so it is neither's.
+	setRun(nil, branch, "O/R", ran)
+	twin := g.AddPR("Show empty list again", "Refs #2", "founder", branch, head, "rolling")
+	missing("a second PR from the branch at the head")
+	g.Mu.Lock()
+	twin.Head.SHA = strings.Repeat("f", 40)
+	g.Mu.Unlock()
+	// The repository's name compares without case, as GitHub's does.
 	before := git(t, bare, "rev-list", "--count", "ledger")
 	if code, out := land(); code != 0 || !strings.Contains(out, fmt.Sprintf("from artifact %d of run %d", arts[0].ID, good.ID)) {
 		t.Fatalf("proof land: %d %s", code, out)
@@ -1843,5 +1865,18 @@ func TestProofLand(t *testing.T) {
 	code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run")
 	if code != 0 || !strings.Contains(out, "proof coverage 1/1; merged without proof: pre-gate 0, post-gate 0") {
 		t.Fatalf("audit after proof land: %d %s %s", code, out, errOut)
+	}
+	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
+	c, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls"} {
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = fail, 0
+		g.Mu.Unlock()
+		if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err == nil {
+			t.Errorf("gateSuites with %s failing: %v", fail, suites)
+		}
 	}
 }

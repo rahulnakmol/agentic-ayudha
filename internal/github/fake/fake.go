@@ -222,6 +222,7 @@ type WorkflowRun struct {
 	PullRequests []RunPR `json:"pull_requests,omitempty"`
 	// HeadRepository is the repository of the run's head branch.
 	HeadRepository *HeadRepo `json:"head_repository,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitzero"`
 }
 
 // RunPR is a pull request a workflow run is for.
