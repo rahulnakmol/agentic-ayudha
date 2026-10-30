@@ -1,0 +1,9 @@
+# Which tests prove Bug #1148's Completion Goal.
+
+[[criterion]]
+id = 1 # #64 maybe started, its Codex task completed with no PR: recover records the task's ID and URL, the next sync opens the PR from its diff, and no second task starts
+tests = ["internal/cli:TestMissionRecoverReattachesDoneTask"]
+
+[[criterion]]
+id = 2 # #64 maybe started, its Codex task running: recover records the task's ID and URL, starts nothing, and the next sync reads that task by ID
+tests = ["internal/cli:TestMissionMaybeStartedCheckedBeforeRestart"]

@@ -69,27 +69,25 @@ type Lister interface {
 // is a listed task's title.
 var storyHeading = regexp.MustCompile(`(?i)\bstory #(\d+):`)
 
-// MayRun reports whether a listed task may hold story n's agent: one that can
-// still run (not failed) whose title's first heading names n, so a story #65
-// titled "Follow-up to #64" is not #64's. A task that runs and whose title
-// names no story could be n's, so the list cannot rule n out: that is an
-// error, never "no task" (Story #1003: recover starts no second agent).
-func MayRun(tasks []Task, n int) (bool, error) {
-	var unclear *Task
-	for i, t := range tasks {
+// Holding returns the listed tasks that may hold story n's agent: those that
+// can still run (not failed) whose title's first heading names n, so a story
+// #65 titled "Follow-up to #64" is not #64's. A task that runs and whose title
+// names no story could be n's, so the list can neither rule n out nor say
+// which task is n's: that is an error, never an answer (Story #1003: recover
+// starts no second agent; Bug #1148: it re-attaches only a task it can tell is n's).
+func Holding(tasks []Task, n int) ([]Task, error) {
+	var held []Task
+	for _, t := range tasks {
 		m := storyHeading.FindStringSubmatch(t.Title)
 		switch {
 		case t.Status == TaskFailed:
 		case m != nil && m[1] == strconv.Itoa(n):
-			return true, nil
-		case m == nil && t.Status == TaskWorking && unclear == nil:
-			unclear = &tasks[i]
+			held = append(held, t)
+		case m == nil && t.Status == TaskWorking:
+			return nil, fmt.Errorf("task %s runs, and its title names no story: %q", t.ID, clip(t.Title, 60))
 		}
 	}
-	if unclear != nil {
-		return false, fmt.Errorf("task %s runs, and its title names no story: %q", unclear.ID, clip(unclear.Title, 60))
-	}
-	return false, nil
+	return held, nil
 }
 
 // NoAnswer reports whether err is a request whose answer aayu did not get:
