@@ -5,7 +5,7 @@ id = 1 # a merged PR's gate run with empty pull_requests, its head branch, and t
 tests = ["internal/cli:TestProofLand"]
 
 [[criterion]]
-id = 2 # the run lists another PR, or has another head branch or head repository: "aayudha/merge-gate is missing", nothing landed
+id = 2 # the run lists another PR, or has another head branch or head repository, or started outside the PR's open window (a re-run after the merge too), or a twin PR has the head: "aayudha/merge-gate is missing", nothing landed; a post-merge run's own pack never lands
 tests = ["internal/cli:TestProofLand"]
 
 [[criterion]]

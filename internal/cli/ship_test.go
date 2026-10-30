@@ -53,11 +53,12 @@ func zipOf(files map[string]string) []byte {
 }
 
 // gateArtifact records a green merge gate for head whose only run carries
-// arts as its artifacts.
-func gateArtifact(g *fake.GitHub, head string, arts ...fake.ArtifactZip) {
+// arts as its artifacts, a run of pull request pr.
+func gateArtifact(g *fake.GitHub, pr int, head string, arts ...fake.ArtifactZip) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
-	g.Runs = []fake.WorkflowRun{{ID: 8000, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"}}
+	g.Runs = []fake.WorkflowRun{{ID: 8000, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: []fake.RunPR{{Number: pr, Base: fake.Branch{Ref: "dev"}}}}}
 	g.Artifacts = map[int64][]fake.ArtifactZip{8000: arts}
 	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
@@ -142,7 +143,7 @@ func TestShipRefusals(t *testing.T) {
 		{"no pack for the story", []fake.ArtifactZip{pack(8004, map[string]string{"README.txt": "nothing here"})}, ExitBlocked, "run 8000: its aayudha-pack artifact 8004 holds no pack for #2"},
 	}
 	for _, tt := range tests {
-		gateArtifact(g, head, tt.arts...)
+		gateArtifact(g, prN, head, tt.arts...)
 		if code, out := ship(prN); code != tt.code || !strings.Contains(out, tt.want) {
 			t.Errorf("ship with %s: %d %s", tt.name, code, out)
 		}
@@ -1858,6 +1859,20 @@ func TestProofLand(t *testing.T) {
 	missing("a second PR from the branch at the head")
 	g.Mu.Lock()
 	twin.Head.SHA = strings.Repeat("f", 40)
+	g.Mu.Unlock()
+	// A newer green gate run with its own pack, started by an event after the
+	// merge (an edit of the body): it ran the base branch that now holds the
+	// PR's code, so neither its checks nor its pack count. proof land takes
+	// the pack of the PR's own run from before the merge.
+	g.Mu.Lock()
+	checks := slices.Clone(g.CheckRuns[head])
+	g.Mu.Unlock()
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	late := &g.Runs[len(g.Runs)-1]
+	late.PullRequests, late.HeadBranch, late.HeadRepository, late.CheckSuiteID = nil, branch, &fake.HeadRepo{FullName: "o/r"}, 77
+	late.CreatedAt, late.RunStartedAt = time.Now().UTC(), time.Now().UTC()
+	g.CheckRuns[head] = checks
 	g.Mu.Unlock()
 	// The repository's name compares without case, as GitHub's does.
 	before := git(t, bare, "rev-list", "--count", "ledger")

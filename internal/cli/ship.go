@@ -669,6 +669,15 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
 	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
+	// One rule for the checks and the pack: the pack comes only from a run
+	// whose suite gateSuites accepts as this pull request's own gate. After a
+	// merge, a run started by a later event uses the base branch that now
+	// holds the pull request's own code, so its pack is not independent of it
+	// (Bug #1159).
+	own, err := gateSuites(ctx, c, owner, name, head, n)
+	if err != nil {
+		return gatePackRun{}, Wrap(ExitExternal, err)
+	}
 	var why []string
 	refuse := func(r *gh.WorkflowRun, format string, args ...any) {
 		why = append(why, fmt.Sprintf("run %d: ", r.GetID())+fmt.Sprintf(format, args...))
@@ -683,6 +692,8 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 			refuse(r, "proves %s, not the head %s", short(r.GetHeadSHA()), short(head))
 		case r.GetStatus() != "completed" || r.GetConclusion() != "success":
 			refuse(r, "is %s on the head", or(r.GetConclusion(), r.GetStatus()))
+		case !own[r.GetCheckSuiteID()]:
+			refuse(r, "is not this pull request's own gate run (it lists another pull request, or it started outside the pull request's open window), so aayudha/merge-gate is missing on %s", short(head))
 		default:
 			g, err := e.unpackGateRun(ctx, c, owner, name, r, n, story, head)
 			if err == nil {
