@@ -1,0 +1,128 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 874,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#990",
+      "hash": "6a1dcd2bfe783c9218c37147f992ddfa531a1a0e31258d20cc4e17bd4b3811f5",
+      "story": {
+        "number": 990,
+        "title": "An agent drafts a Feature baseline, and only a person approves it at the hash they saw",
+        "completion_goal_hash": "ba8fe3e1c170a4dd8eeb2aab193b8f72f399f1fd8fa223735142096193bb05df",
+        "effort": "L",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#991",
+      "hash": "cf73bc0996a7307410302936f1aa15ba62d292940149dc724a3dfd7c44a3c778",
+      "story": {
+        "number": 991,
+        "title": "aayu plan writes a Feature's technical design, and each story plan stays inside it",
+        "completion_goal_hash": "724722654670495defcfdfaad82c9edfa24ae003067f5a26c1737cb6d8961ec8",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#992",
+      "hash": "79ff12ef2035ba6824553151921ca452579301cedd02fffbb2bafe725572817e",
+      "story": {
+        "number": 992,
+        "title": "Each baseline part pins what it owns: the spec's stories, the technical design, and the UX stages",
+        "completion_goal_hash": "13b2adcc3f4736017b796436c47fe8015af8f13ba1ac211477f77bde8a5476cf",
+        "effort": "M",
+        "layers": [
+          "L02"
+        ],
+        "depends_on": [
+          990,
+          991
+        ]
+      }
+    },
+    {
+      "ref": "#993",
+      "hash": "1c6c7644039a186ab7c343e3a2ffe63747e6f7adb669c97d007f0525919aa8b1",
+      "story": {
+        "number": 993,
+        "title": "A drift after a baseline shows at once, and a new version says what changed, why it matters, and the need behind it",
+        "completion_goal_hash": "96d5ae311f5ae7475c7c60d78639160e2b591080747dab5837a9ae762a9a6625",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03",
+          "L07"
+        ],
+        "depends_on": [
+          992
+        ]
+      }
+    },
+    {
+      "ref": "#994",
+      "hash": "7991b1c34d0c78d4b204746fe0fd8a60cee0cc4df6e3503dd7e8285a348eef99",
+      "story": {
+        "number": 994,
+        "title": "A person approves one early build before Approve to build, and sees its budget",
+        "completion_goal_hash": "d8aab46337227b586969d8d19b300fefa21a6ce5def5effbbdaa56ceef4f8c17",
+        "effort": "S",
+        "layers": [
+          "L02",
+          "L03",
+          "L07"
+        ],
+        "depends_on": [
+          990
+        ]
+      }
+    },
+    {
+      "ref": "#1028",
+      "hash": "9063accf6b44f35114c87fea93d334c255eedff478d21b4af0681d951d09a8d2",
+      "story": {
+        "number": 1028,
+        "title": "Each story plan lists its high-risk changes in a risk register",
+        "completion_goal_hash": "5899aaa071cb9c90fb2ce6aa6207e9cf0f58f6e6deefa380c20a39af602c5778",
+        "effort": "M",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1106",
+      "hash": "92c628ff4f705555839d84a5e6850d64b15e26b9ca2d642e772adbe29943c2de",
+      "story": {
+        "number": 1106,
+        "title": "A state-changing high-risk story plans its failure modes, and its open questions age like asks",
+        "completion_goal_hash": "b22812bd6370cb5da99b9c25df75e70d005ff55bffe87a1b270823d9bf3f56ad",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          883,
+          1028
+        ]
+      }
+    },
+    {
+      "ref": "#874 stories",
+      "hash": "732fc292a5edb02fd0070b4556f36106a3548d4e7a95f569a787a758176d798b"
+    }
+  ],
+  "hash": "387053ead9e2ede8821e1b50a02b784437fa67e6975af7570828f2c11d3369a6",
+  "summary": "Intent, spec, technical design, and UX design each get a baseline: an agent drafts it, a person approves it, and later edits show as drift. This is step S5 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:28:03Z"
+}
