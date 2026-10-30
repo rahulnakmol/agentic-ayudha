@@ -75,10 +75,12 @@ build plan, the constraints, the contributing guide, the ethos, the glossary, th
 policy. A rename counts by both its old and new paths.
 
 **`aayudha/inspect-reply`** (the `reply` job) runs on `issue_comment` and `pull_request_review` events, never on
-`pull_request_target`. It checks out the default branch, holds `actions: write` and read access, and runs
+`pull_request_target`. It checks out the default branch, holds `actions: write`, `pull-requests: write`, and read access, and runs
 `aayudha inspect "$PR" --ci`. When the chosen reviewer has replied for the head, usable or not, and the head's gate
 run has a green `aayudha/merge-gate` and a red `aayudha/inspect`, it re-runs that run's failed jobs, so the inspect
-check on the head commit itself carries the verdict. Any other comment changes nothing.
+check on the head commit itself carries the verdict. A reopen before the round cap, by a person with write or
+admin access, gets one answer comment with the judged rounds left. A reopen that a later judged round passed gets
+no answer. Any other comment changes nothing.
 
 **`aayudha/pack`** checks out the base branch, downloads the `aayudha-pack` artifact, and runs `aayudha proof comment`
 with the workflow token and `pull-requests: write`. It verifies the pack against the pull request's current head and
@@ -260,7 +262,7 @@ State drives three limits:
   head gets no review request and no judged reply: the disposition is `step-back`, inspect exits 4, and the builder
   reconsiders the approach. A comment whose first line is `/aayu review again`, from a person with write or admin
   access to the repository, reopens review for three more rounds and re-runs the head's inspect job at once, with no
-  push; a bot's or a read-only account's does not (the reply job starts only for an owner, member, or collaborator, and aayu checks the author's access before it re-runs anything), and while the re-run reviews it the inbox lists the PR as not ready yet. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
+  push; a bot's or a read-only account's does not (the reply job starts only for an owner, member, or collaborator, and aayu checks the author's access before it re-runs anything), and while the re-run reviews it the inbox lists the PR as not ready yet. A reopen before the cap reopens nothing; the reply job answers it with a comment that says how many judged rounds remain in the window. From round 2 the request asks only for `git diff <last head>..<head>` plus any P0, and
   lists the earlier findings under "do not repeat". A reply that repeats an earlier P2 or P3 in the same file and
   class has it dropped as `repeat`; a repeated P0 or P1 still blocks but is not posted inline again. A finding that
   names a `class` lists every instance and asks for all of them to be fixed.

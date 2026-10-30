@@ -1012,6 +1012,25 @@ deleted file mode 100644
 	}
 }
 
+// Bug #1133, criterion 2: #1103's real history. The 03:27Z reopen found one
+// judged round, so it reopened nothing (#583's rule, unchanged); the fourth
+// head stepped back, and the 15:40Z reopen, after three rounds, counts.
+func TestReopenBeforeTheCapCountsNothing(t *testing.T) {
+	ts := func(s string) time.Time { v, _ := time.Parse(time.RFC3339, s); return v }
+	early, late := ts("2026-10-27T03:27:24Z"), ts("2026-10-27T15:40:34Z")
+	st := State{Rounds: []Round{{Head: "173e579", At: "2026-10-27T02:29:15Z", Disposition: Merge}}}
+	if r := st.Reopen([]time.Time{early}); !r.IsZero() {
+		t.Fatalf("the early reopen counted: %s", r)
+	}
+	st.Rounds = append(st.Rounds, Round{Head: "ff606f2", At: "2026-10-27T14:11:00Z", Disposition: Merge}, Round{Head: "97f1ffc", At: "2026-10-27T15:03:18Z", Disposition: Merge})
+	if r := st.Reopen([]time.Time{early}); !r.IsZero() || !st.Capped("8d22a48", r) {
+		t.Fatalf("8d22a48: reopen %s, capped %t", r, st.Capped("8d22a48", r))
+	}
+	if r := st.Reopen([]time.Time{early, late}); !r.Equal(late) || st.Capped("8d22a48", r) {
+		t.Fatalf("the 15:40Z reopen: %s", r)
+	}
+}
+
 // Story #568: a blocker found on a head before a reopen still carries when
 // the branch returns to that head and patch after the reopen; only this
 // head's round in the current window is replaced by the new reply.

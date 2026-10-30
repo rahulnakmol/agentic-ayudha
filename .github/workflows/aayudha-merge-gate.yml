@@ -309,7 +309,7 @@ jobs:
       actions: write
       checks: read
       contents: read
-      pull-requests: read
+      pull-requests: write # the answer to a reopen that reopens nothing (Bug #1133)
       issues: read
     steps:
       - name: Halt check (aayu halt, WP5.7)

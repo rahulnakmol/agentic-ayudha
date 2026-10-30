@@ -111,7 +111,18 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
 	// The round cap (Decision #544): past MaxRounds rounds on distinct heads
 	// inspect requests no review and reads no reply until a person reopens it.
-	a.in.Head, a.in.At, a.in.Reopened = head, e.Now(), reopenedAt(posts, mayReopen(ctx, a.c, a.repo, bots), a.prev)
+	may := mayReopen(ctx, a.c, a.repo, bots)
+	a.in.Head, a.in.At, a.in.Reopened = head, e.Now(), reopenedAt(posts, may, a.prev)
+	if replyEvent { // a person's reopen before the cap reopens nothing: say so (Bug #1133)
+		for _, p := range idleReopens(posts, may, a.prev, a.in.Reopened) {
+			left := inspect.MaxRounds - a.prev.Since(a.in.Reopened)
+			body := fmt.Sprintf("%s\n`%s` from @%s reopens nothing: the review is not stopped. %d of %d judged rounds remain in this window. A reopen counts only after the review stops at the round cap.\n",
+				reopenIdleMarker(p.ID), inspect.ReopenCommand, p.Login, left, inspect.MaxRounds)
+			if _, err := a.c.UpsertComment(ctx, a.repo, n, reopenIdleMarker(p.ID), body, actions.Action{Kind: "github.comment.inspect-reopen"}); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+		}
+	}
 	// On a comment, a review stopped at this head re-runs only on a person's
 	// reopen, which starts no gate run itself (#800); a reviewer's reply
 	// counts for nothing until then.
@@ -476,6 +487,27 @@ func reopenedAt(posts []inspect.Post, may func(login, typ string) bool, st inspe
 	}
 	return st.Reopen(cmds)
 }
+
+// idleReopens are the reopen comments, by an account may allows, that came
+// after the last reopen that counted (reopened, zero for none) and so
+// reopened nothing (State.Reopen), with no round judged since them, and that
+// the gate has not answered yet. A reopen a later round passed is history:
+// what the window held when it came is gone.
+func idleReopens(posts []inspect.Post, may func(login, typ string) bool, st inspect.State, reopened time.Time) []inspect.Post {
+	var out []inspect.Post
+	for _, p := range posts {
+		first, _, _ := strings.Cut(strings.TrimSpace(p.Body), "\n")
+		if p.Kind != "comment" || strings.TrimSpace(first) != inspect.ReopenCommand || !p.Updated.After(reopened) || st.Since(p.Updated) > 0 ||
+			slices.ContainsFunc(posts, func(q inspect.Post) bool { return strings.Contains(q.Body, reopenIdleMarker(p.ID)) }) || !may(p.Login, p.Type) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// reopenIdleMarker marks the gate's answer to reopen comment id.
+func reopenIdleMarker(id int64) string { return fmt.Sprintf("<!-- aayudha:reopen-idle %d -->", id) }
 
 // reopenPending reports whether a person's reopen at reopened (reopenedAt)
 // is newer than the one the stopped review last recorded, so no review has

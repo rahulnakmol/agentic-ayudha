@@ -772,8 +772,8 @@ func TestInspectConverges(t *testing.T) {
 	g.Permissions = map[string]string{"founder": "write"}
 	g.Mu.Unlock()
 	comment("founder", "User", inspect.ReopenCommand+"\nthe approach changed")
-	if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || reruns != 1 {
-		t.Fatalf("a person's reopen, on its comment: exit %d, %d reruns %s", code, reruns, errOut)
+	if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || reruns != 1 || idleAnswers(g, prN) != nil {
+		t.Fatalf("a person's reopen, on its comment: exit %d, %d reruns, idle answers %q %s", code, reruns, idleAnswers(g, prN), errOut)
 	}
 	now = now.Add(time.Minute)
 	if code, res, _ = inspectApp(t, env, opts, prN); res.Disposition == inspect.StepBack || len(requests()) != n+1 || !strings.Contains(requests()[n], "This is review round 1 of 3.") {
@@ -806,6 +806,71 @@ func TestInspectConverges(t *testing.T) {
 	at("a")
 	if code, res, _ = inspectApp(t, env, opts, prN); res.Disposition == inspect.StepBack {
 		t.Fatalf("a new head after the reopen and H1: exit %d %s", code, res.Disposition)
+	}
+}
+
+// idleAnswers are the gate's answers to reopens that reopened nothing.
+func idleAnswers(g *fake.GitHub, n int) []string {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	var out []string
+	for _, c := range g.Issues[n].Comments {
+		if strings.Contains(c.Body, "<!-- aayudha:reopen-idle ") {
+			out = append(out, c.Body)
+		}
+	}
+	return out
+}
+
+// Bug #1133: a person's /aayu review again before the round cap reopens
+// nothing (#583), and the gate's reply job says so, with the judged rounds
+// left in the window, once per reopen comment.
+func TestInspectAnswersAnIdleReopen(t *testing.T) {
+	for _, judged := range []int{1, 0} {
+		g, env, opts, prN := inspectFixture(t, defectDiff, "Refs #2")
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Date(2026, 10, 27, 2, 29, 0, 0, time.UTC)
+		opts.Now = func() time.Time { return now }
+		if judged == 1 { // #1103: one judged round, at merge, then the reopen
+			addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", replyWith(strings.Repeat("c", 40), "merge"))
+			if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Round != 1 {
+				t.Fatalf("round 1: exit %d round %d %s", code, res.Round, errOut)
+			}
+		}
+		now = now.Add(58 * time.Minute)
+		g.Mu.Lock()
+		g.Permissions = map[string]string{"founder": "write"}
+		reopen := &fake.Comment{ID: 6433000707, Body: inspect.ReopenCommand, CreatedAt: now, UpdatedAt: now}
+		reopen.User.Login, reopen.User.Type = "founder", "User"
+		g.Issues[prN].Comments = append(g.Issues[prN].Comments, reopen)
+		g.Mu.Unlock()
+		onComment := maps.Clone(env)
+		onComment["GITHUB_EVENT_NAME"] = "issue_comment"
+		for range 2 { // a rerun of the reply job on the same comment answers it once
+			if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 {
+				t.Fatalf("%d judged: exit %d %s", judged, code, errOut)
+			}
+		}
+		want := fmt.Sprintf("`/aayu review again` from @founder reopens nothing: the review is not stopped. %d of 3 judged rounds remain in this window.", 3-judged)
+		if a := idleAnswers(g, prN); len(a) != 1 || !strings.Contains(a[0], want) || !strings.Contains(a[0], "<!-- aayudha:reopen-idle 6433000707 -->") {
+			t.Fatalf("%d judged: answers %q", judged, a)
+		}
+		if st := inspect.ParseState(lastInspect(t, g, prN)); st.Reopened != "" || len(st.Rounds) != judged {
+			t.Fatalf("%d judged: the reopen changed the window: %+v", judged, st)
+		}
+		// inspect's P1 643c24c7e5 on #1145: an edit of an answered reopen
+		// gets no second answer. Both reopenedAt and idleReopens read a
+		// comment's Updated time, so an edit counts the same in both.
+		now = now.Add(time.Hour)
+		g.Mu.Lock()
+		reopen.UpdatedAt = now
+		g.Mu.Unlock()
+		if code, _, errOut := inspectApp(t, onComment, opts, prN, "--ci"); code != 0 || len(idleAnswers(g, prN)) != 1 {
+			t.Fatalf("%d judged, the reopen edited: exit %d, answers %q %s", judged, code, idleAnswers(g, prN), errOut)
+		}
 	}
 }
 
