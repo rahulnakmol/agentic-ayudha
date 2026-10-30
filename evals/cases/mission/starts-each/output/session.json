@@ -1,13 +1,19 @@
 [
  {
   "turn": {
-   "say": "Running the mission's list for #889.",
+   "say": "Running recover, then the mission's list for #889.",
    "commands": [
+    "aayu mission recover 889",
     "aayu mission next 889"
    ],
    "done": false
   },
   "results": [
+   {
+    "command": "aayu mission recover 889",
+    "code": 0,
+    "out": "@rahulnakmol recovered the mission of #889 on amp: aayu read the record and each host.\n#23  re-attached: its Amp thread lives (https://ampcode.com/threads/T-0000023)\n  nothing changed"
+   },
    {
     "command": "aayu mission next 889",
     "code": 0,

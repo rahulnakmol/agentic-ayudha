@@ -1,9 +1,18 @@
 # The world of the mission starts-each case (Story #1005). Feature #889's mission runs on amp, started by
-# @rahulnakmol, with three agents. After #40 merged, `aayu mission next 889` marks #20 and #21 start; #22 waits. The
-# list and the hand-offs are recorded as the verbs print them (internal/cli/missionnext.go, internal/cli/delegate.go):
-# an eval cannot claim on the ledger or start a cloud agent. No person is in the session.
+# @rahulnakmol, with three agents; #23 runs. `aayu mission recover 889`, the protocol's first step, finds #23's
+# thread alive and changes nothing (Bug #1166). After #40 merged, `aayu mission next 889` marks #20 and #21 start;
+# #22 waits. The list and the hand-offs are recorded as the verbs print them (internal/cli/missionnext.go,
+# internal/cli/delegate.go): an eval cannot claim on the ledger or start a cloud agent.
+# No person is in the session.
 max_turns = 4
 files = ""
+
+[[reply]] # recover, as `aayu mission recover` prints it (emitRecover): #23's thread lives, nothing is lost
+match = '^aayu mission recover #?889\s*$'
+code = 0
+out = '''@rahulnakmol recovered the mission of #889 on amp: aayu read the record and each host.
+#23  re-attached: its Amp thread lives (https://ampcode.com/threads/T-0000023)
+  nothing changed'''
 
 [[reply]] # the list, as `aayu mission next` prints it (emitWorkList)
 match = '^aayu mission next #?889\s*$'
@@ -43,7 +52,7 @@ match = '^aayu mission show #?889\s*$'
 code = 0
 out = '''Mission of #889 · missions/889/plan.json · approval 1 by @rahulnakmol
 tool      amp (missions/889/plan.json: the tool of @rahulnakmol, who started it)
-MS1       running · #20, #21, #22, #40
+MS1       running · #20, #21, #22, #23, #40
 agents    3 ([build] agents)'''
 
 [[reply]] # the hand-off of #20 to amp: a new thread for the story
