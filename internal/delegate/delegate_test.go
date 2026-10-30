@@ -282,8 +282,8 @@ func TestCodexCloud(t *testing.T) {
 		tasks[0].Status != TaskWorking || tasks[1].Status != TaskDone || tasks[2].Status != TaskFailed {
 		t.Fatalf("list: %v %+v", err, tasks)
 	}
-	// MayRun: only a task that can run and whose first heading names the story holds it; a running
-	// task whose title names no story could be any story's, so the list cannot rule one out.
+	// Holding: only a task that can run and whose first heading names the story holds it; a running
+	// task whose title names no story could be any story's, so the list cannot rule one out, nor say which is the story's.
 	listed := func(title, st string) Task { return Task{ID: "task_x", Title: title, Status: st} }
 	for _, tc := range []struct {
 		name  string
@@ -300,10 +300,11 @@ func TestCodexCloud(t *testing.T) {
 		{"a heading without the #", []Task{listed("Delegated story #64: Item", TaskWorking)}, 64, true, true},
 		{"a running task that names no story", []Task{listed("Fix the cart total", TaskWorking)}, 64, false, false},
 		{"a done task that names no story", []Task{listed("Fix the cart total", TaskDone)}, 64, false, true},
-		{"its task beside an unclear one", []Task{listed("Fix the cart total", TaskWorking), listed("# Delegated story #64: Item", TaskWorking)}, 64, true, true},
+		{"its task beside an unclear one", []Task{listed("# Delegated story #64: Item", TaskWorking), listed("Fix the cart total", TaskWorking)}, 64, false, false},
+		{"two tasks for #64", []Task{listed("# Delegated story #64: Item", TaskDone), listed("# Delegated story #64: Item", TaskWorking)}, 64, true, true},
 	} {
-		if runs, err := MayRun(tc.tasks, tc.n); runs != tc.runs || (err == nil) != tc.clear {
-			t.Errorf("MayRun %s: %v, %v", tc.name, runs, err)
+		if held, err := Holding(tc.tasks, tc.n); len(held) > 0 != tc.runs || (err == nil) != tc.clear {
+			t.Errorf("Holding %s: %v, %v", tc.name, held, err)
 		}
 	}
 	// A story's task on a later page counts: List follows each cursor, and a page it cannot read fails the whole list.

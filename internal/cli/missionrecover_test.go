@@ -251,6 +251,8 @@ type codexWorld struct {
 	lists   int
 	submit  func(brief string) error // fails a `codex cloud exec`
 	status  error                    // fails a `codex cloud status`
+	done    string                   // task_e_64's diff: its `codex cloud status` says completed, and `codex cloud diff` returns it
+	onList  func(k int)              // runs as the k-th `codex cloud list` answers
 }
 
 func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
@@ -259,8 +261,14 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 	m.opts.DelegateExec = func(ctx context.Context, dir string, env []string, stdin, name string, args ...string) (string, error) {
 		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "list" {
 			w.mu.Lock()
-			defer w.mu.Unlock()
 			w.lists++
+			k, on := w.lists, w.onList
+			w.mu.Unlock()
+			if on != nil {
+				on(k)
+			}
+			w.mu.Lock()
+			defer w.mu.Unlock()
 			return w.list, w.listErr
 		}
 		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "status" {
@@ -270,6 +278,16 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 			if err != nil {
 				return "", err
 			}
+		}
+		w.mu.Lock()
+		done := w.done
+		w.mu.Unlock()
+		if name == "codex" && len(args) > 1 && args[0] == "cloud" && (args[1] == "status" || args[1] == "diff") && done != "" && args[2] == "task_e_64" {
+			_, _ = m.exec(ctx, dir, env, stdin, name, args...)
+			if args[1] == "diff" {
+				return done, nil
+			}
+			return "Status: completed\n", nil
 		}
 		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "exec" {
 			w.mu.Lock()
@@ -293,6 +311,97 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 		m.readyStory(n)
 	}
 	return w
+}
+
+// Bug #1148, criterion 1: the start of #64 got no answer, and its Codex task
+// is done with no PR. Recover records the task's ID and URL on #64's
+// delegation; the next sync opens the PR from the task's diff, and no second
+// task starts. A done task of a story handed off before may be that earlier
+// hand-off's: recover leaves it to a person.
+func TestMissionRecoverReattachesDoneTask(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.delegated(delegate.State{Story: 64, Feature: 889, Receiver: "codex", Mode: "cloud", Branch: "story/64-item-64", Status: dlgMaybe, Handoffs: 2,
+		Events: []delegate.Event{{At: time.Now().UTC().Format(time.RFC3339), Status: dlgMaybe, Detail: "no answer before the timeout"}}})
+	w.setPlan(889, func(p *MissionPlan) { p.storyState(64).State = stateMaybe })
+	w.list = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "completed"}], "cursor": null}`
+	code, out, errOut := w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  maybe started: a codex task task_e_64 exists for #64 and no PR, and #64 was handed off 2 times: it may be an earlier hand-off's") || w.state(64).Task != "" {
+		t.Fatalf("recover of a done task after two hand-offs: exit %d: %s%s", code, out, errOut)
+	}
+	first := w.state(64)
+	first.Handoffs = 1
+	w.delegated(first)
+	// Another run hands #64 off again while recover reads the host: the re-attach writes nothing.
+	w.onList = func(k int) {
+		if k == 3 { // the re-attach's own read of the list
+			again := first
+			again.Handoffs, again.StartedAt = 2, "2026-10-26T10:00:00Z"
+			w.delegated(again)
+		}
+	}
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  another run changed its delegation while recover read the host: recover leaves it") || w.state(64).Task != "" || w.state(64).Handoffs != 2 {
+		t.Fatalf("recover while another run hands #64 off: exit %d, %+v: %s%s", code, w.state(64), out, errOut)
+	}
+	// Another run re-attaches #64 while this one finds no task and restarts it: the restart writes nothing over it, and starts nothing.
+	w.list = `{"tasks": [], "cursor": null}`
+	w.onList = func(int) {
+		other := first
+		other.Task, other.Status = "task_e_64", dlgHandedOff
+		w.delegated(other)
+	}
+	code, out, errOut = w.recover(889, "codex")
+	if st := w.state(64); code != 0 || !strings.Contains(out, "#64  no codex task and no PR for #64: another run changed its delegation") ||
+		st.Task != "task_e_64" || st.Status != dlgHandedOff || w.handoffs(64) != 0 {
+		t.Fatalf("a restart over another run's re-attach: exit %d, %+v, hand-offs %d: %s%s", code, st, w.handoffs(64), out, errOut)
+	}
+	// The same for a person's retry: it is refused, and nothing changes.
+	w.delegated(first)
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
+		!strings.Contains(errOut, "#64 changed while the retry ran: another run acted on it, so the retry starts nothing.") || w.state(64).Task != "task_e_64" || w.handoffs(64) != 0 {
+		t.Fatalf("a retry over another run's re-attach: exit %d, %+v: %s", code, w.state(64), errOut)
+	}
+	w.onList = nil
+	done := `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "completed"}], "cursor": null}`
+	w.list = done
+	w.delegated(first)
+	w.setPlan(889, func(p *MissionPlan) { p.storyState(64).State = stateMaybe })
+	// --dry-run says what it would re-attach, and writes nothing.
+	commits := w.commits()
+	code, out, errOut = run(t, w.agent, w.opts, "mission", "recover", "889", "--repo", "o/r", "--host", "codex", "--dry-run")
+	if code != 0 || !strings.Contains(out, "#64  re-attached: its Codex task https://chatgpt.com/codex/tasks/task_e_64 (completed) holds it, and it has no PR yet; --dry-run: the delegation is not updated") ||
+		w.commits() != commits || w.state(64).Task != "" {
+		t.Fatalf("a dry-run re-attach: exit %d, commits %s → %s: %s%s", code, commits, w.commits(), out, errOut)
+	}
+	// A second task for #64 appears while recover reads the list again: it picks none.
+	base := w.lists
+	w.onList = func(k int) {
+		if k == base+2 {
+			w.list = `{"tasks": [{"id": "task_e_64", "title": "# Delegated story #64: Item 64", "status": "completed"}, {"id": "task_e_64y", "title": "# Delegated story #64: Item 64", "status": "running"}], "cursor": null}`
+		}
+	}
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  maybe started: its Codex task https://chatgpt.com/codex/tasks/task_e_64 (completed) held it, and the host's list changed while recover read it") || w.state(64).Task != "" {
+		t.Fatalf("a list that changes during the re-attach: exit %d: %s%s", code, out, errOut)
+	}
+	w.onList, w.list = nil, done
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  re-attached: its Codex task https://chatgpt.com/codex/tasks/task_e_64 (completed) holds it, and it has no PR yet; the next sync reads it\n") {
+		t.Fatalf("recover of a done task: exit %d: %s%s", code, out, errOut)
+	}
+	if st := w.state(64); st.Task != "task_e_64" || st.TaskURL != "https://chatgpt.com/codex/tasks/task_e_64" || st.Status != dlgHandedOff {
+		t.Fatalf("#64's delegation after the re-attach: %+v", st)
+	}
+	w.done = "diff --git a/empty.txt b/empty.txt\nnew file mode 100644\n--- /dev/null\n+++ b/empty.txt\n@@ -0,0 +1 @@\n+Your cart is empty\n"
+	calls := len(w.callLog())
+	w.opts.CheckpointVerify = holds
+	git(t, w.dir, "config", "user.name", "Builder") // the sync commits the task's diff
+	git(t, w.dir, "config", "user.email", "builder@example.com")
+	code, out, errOut = run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission recover re-attached it")
+	got := w.state(64)
+	if code != 0 || got.PR == 0 || got.Applied != "task_e_64" || w.handoffs(64) != 0 || !slices.Contains(w.callLog()[calls:], "codex cloud diff task_e_64") {
+		t.Fatalf("the sync after the re-attach: exit %d, %+v, calls %q: %s%s", code, got, w.callLog()[calls:], out, errOut)
+	}
 }
 
 // Criterion 3: the Codex task list answers 401. Recover marks those stories
@@ -382,30 +491,66 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		t.Fatalf("plan.json does not mark #64 maybe started:\n%s", raw)
 	}
 	w.submit = nil
-	w.list = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"}], "cursor": null}`
+	maybe := w.state(64)
 	tries := w.handoffs(64)
-	code, out, errOut = w.recover(889, "codex")
-	if code != 0 || !strings.Contains(out, "#64  maybe started: a codex task exists for #64 but no PR yet; aayu does not start it again\n") || w.handoffs(64) != tries {
-		t.Fatalf("recover: exit %d, hand-offs %d → %d: %s%s", code, tries, w.handoffs(64), out, errOut)
-	}
-	// mission next holds it too: it waits, and holds its slot.
-	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || !strings.Contains(out, "waits #64: maybe started") {
-		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
-	}
-	// A person's retry finds the task on the host too: it starts nothing.
-	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
-		!strings.Contains(errOut, "a codex task for #64 exists: #64 may run there, so the retry starts nothing.") || w.handoffs(64) != tries {
-		t.Fatalf("retry of #64 with its task on the host: exit %d, hand-offs %d → %d: %s", code, tries, w.handoffs(64), errOut)
+	// A sync has no task to read: it writes nothing, so it never overwrites what recover records.
+	commits := w.commits()
+	if code, _, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "sync"); code != ExitBlocked ||
+		!strings.Contains(errOut, "aayu knows no task of it to sync") || !strings.Contains(errOut, "aayu mission recover 889") || w.commits() != commits || w.state(64).Status != dlgMaybe {
+		t.Fatalf("a sync of a maybe start: exit %d, commits %s → %s: %s", code, commits, w.commits(), errOut)
 	}
 	// A running task whose title names no story could be #64's: recover and retry start nothing.
-	w.list = `{"tasks": [{"id": "task_e_x", "title": "Fix the cart total", "status": "running"}], "cursor": null}`
+	w.list = `{"tasks": [{"id": "task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"}, {"id": "task_e_x", "title": "Fix the cart total", "status": "running"}], "cursor": null}`
 	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "#64  unreadable: codex task list (task task_e_x runs, and its title names no story") || w.handoffs(64) != tries {
 		t.Fatalf("recover with an unclear task: hand-offs %d: %s", w.handoffs(64), out)
 	}
 	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitExternal || !strings.Contains(errOut, "its task list cannot be read") || w.handoffs(64) != tries {
 		t.Fatalf("retry with an unclear task: exit %d, hand-offs %d: %s", code, w.handoffs(64), errOut)
 	}
-	w.setPlan(889, func(p *MissionPlan) { p.stateOf(64).State = "maybe started" })
+	// Two tasks for #64: recover picks none, and holds the story.
+	w.list = `{"tasks": [{"id": "task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"}, {"id": "task_e_64z", "title": "# Delegated story #64: Item 64", "status": "completed"}], "cursor": null}`
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  maybe started: 2 codex tasks exist for #64 (task_e_64, task_e_64z) and no PR: a person picks one, and aayu does not start it again\n") || w.handoffs(64) != tries || w.state(64).Task != "" {
+		t.Fatalf("recover with two tasks: exit %d, hand-offs %d → %d: %s%s", code, tries, w.handoffs(64), out, errOut)
+	}
+	// mission next holds it too: it waits, and holds its slot.
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || !strings.Contains(out, "waits #64: maybe started") {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	// A person's retry finds the tasks on the host too: it starts nothing.
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
+		!strings.Contains(errOut, "a codex task for #64 exists: #64 may run there, so the retry starts nothing.") || w.handoffs(64) != tries {
+		t.Fatalf("retry of #64 with its task on the host: exit %d, hand-offs %d → %d: %s", code, tries, w.handoffs(64), errOut)
+	}
+	// Bug #1148, criterion 2: one running task for #64. Recover records its ID and URL, and starts nothing.
+	w.list = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"}], "cursor": null}`
+	code, out, errOut = w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  re-attached: its Codex task https://chatgpt.com/codex/tasks/task_e_64 (running) holds it, and it has no PR yet; the next sync reads it\n") ||
+		!strings.Contains(out, "next: aayu build 64 --delegate codex") || w.handoffs(64) != tries {
+		t.Fatalf("recover with its running task: exit %d, hand-offs %d → %d: %s%s", code, tries, w.handoffs(64), out, errOut)
+	}
+	if st := w.state(64); st.Task != "task_e_64" || st.TaskURL != "https://chatgpt.com/codex/tasks/task_e_64" || st.Status != dlgHandedOff || st.Branch != maybe.Branch {
+		t.Fatalf("#64's delegation after the re-attach: %+v", st)
+	}
+	if p, raw := w.plan(889); p.stateOf(64) != nil && p.stateOf(64).State != "" {
+		t.Fatalf("#64 is still marked after its re-attach:\n%s", raw)
+	}
+	// The next sync reads that task by its ID, and starts no second one.
+	calls := len(w.callLog())
+	if code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "sync"); code != 0 || w.handoffs(64) != tries ||
+		!slices.Contains(w.callLog()[calls:], "codex cloud status task_e_64") {
+		t.Fatalf("the sync after the re-attach: exit %d, hand-offs %d, calls %q: %s%s", code, w.handoffs(64), w.callLog()[calls:], out, errOut)
+	}
+	// The next wake finds it running: no write, and nothing starts; a retry has no failed step.
+	commits = w.commits()
+	if code, out, _ := w.recover(889, "codex"); code != 0 || !strings.Contains(out, "#64  re-attached: its Codex thread lives") || w.commits() != commits || w.handoffs(64) != tries {
+		t.Fatalf("the wake after the re-attach: commits %s → %s: %s", commits, w.commits(), out)
+	}
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked || !strings.Contains(errOut, "nothing to retry") || w.handoffs(64) != tries {
+		t.Fatalf("retry after the re-attach: exit %d: %s", code, errOut)
+	}
+	w.delegated(maybe)
+	w.setPlan(889, func(p *MissionPlan) { p.storyState(64).State = "maybe started" })
 	// The next wake: no task for #64 that can still run on the host, and no PR on GitHub, so it starts again, once.
 	w.list = `{"tasks": [{"id": "task_e_old", "title": "# Delegated story #64: Item 64", "status": "error"}], "cursor": null}`
 	code, out, errOut = w.recover(889, "codex")

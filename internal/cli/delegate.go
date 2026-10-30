@@ -576,6 +576,11 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	}
 
 	// Sync.
+	if d.state.Status == dlgMaybe && d.state.Task == "" && d.state.PR == 0 {
+		// No task to read: only mission recover, which lists the host, may change this record (Bug #1148).
+		return nil, true, WithNext(Errorf(ExitBlocked, "build #%d --delegate %s: #%d may have started on %s, and aayu knows no task of it to sync", d.story, d.receiver, d.story, delegate.Names[d.receiver]),
+			fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d", d.state.Feature, delegate.Names[d.receiver], d.story))
+	}
 	var task delegate.Task
 	if !d.local {
 		if task, err = d.adapter.Status(ctx, d.state); err != nil {

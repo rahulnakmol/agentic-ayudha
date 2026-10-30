@@ -395,6 +395,67 @@ func (r *recovery) schedule(ss *MissionStoryState) {
 	ss.State, ss.RetryAt = "failed", last.Add(backoff<<k).UTC().Format(time.RFC3339)
 }
 
+// errMoved is a delegation another run changed after this run read it.
+var errMoved = errors.New("another run changed its delegation")
+
+// reattach records t, the one listed task that holds story n, on n's
+// delegation of a first start that got no answer (Bug #1148): the next sync
+// reads that task by its ID, and opens the PR from a done task's diff. It
+// starts nothing. The run's list may be older than n's delegation, so it
+// reads the list again, and it writes nothing when another run changed the
+// delegation since recover read it.
+func (r *recovery) reattach(ctx context.Context, n int, st delegate.State, t delegate.Task) RecoverStory {
+	out := RecoverStory{Story: n, State: "re-attached"}
+	what := fmt.Sprintf("its %s task %s (%s)", delegate.Names[st.Receiver], or(t.URL, t.ID), or(t.Detail, t.Status))
+	if r.c.DryRun() {
+		r.touch(n).State = stateMaybe
+		out.Line = fmt.Sprintf("re-attached: %s holds it, and it has no PR yet; --dry-run: the delegation is not updated", what)
+		return out
+	}
+	tasks, err := r.adapter(st.Receiver).(delegate.Lister).List(ctx)
+	var held []delegate.Task
+	if err == nil {
+		held, err = delegate.Holding(tasks, n)
+	}
+	if err != nil || len(held) != 1 || held[0].ID != t.ID {
+		r.touch(n).State = stateMaybe
+		out.State, out.Line = "maybe started", fmt.Sprintf("maybe started: %s held it, and the host's list changed while recover read it; aayu does not start it again", what)
+		return out
+	}
+	p := r.kanha()
+	err = r.setDelegation(ctx, n, func(s *delegate.State) error {
+		if !sameStart(*s, st) {
+			return errMoved
+		}
+		s.Task, s.TaskURL, s.Status = t.ID, t.URL, dlgHandedOff
+		if p != nil {
+			s.Kanha, s.KanhaURL = p.Session, p.URL
+		}
+		s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: dlgHandedOff, Detail: fmt.Sprintf("re-attached to %s task %s by aayu mission recover", delegate.Names[st.Receiver], t.ID)})
+		return nil
+	})
+	switch {
+	case errors.Is(err, errMoved):
+		out.State, out.Line = "left", "another run changed its delegation while recover read the host: recover leaves it"
+		return out
+	case err != nil:
+		r.touch(n).State = stateMaybe
+		out.State, out.Line = "maybe started", fmt.Sprintf("maybe started: %s holds it, and its re-attach was not recorded (%s); aayu does not start it again", what, oneLineErr(err))
+		return out
+	}
+	r.note(st.Receiver, nil, true)
+	r.clear(n)
+	out.Next = fmt.Sprintf("aayu build %d --delegate %s", n, st.Receiver)
+	out.Line = fmt.Sprintf("re-attached: %s holds it, and it has no PR yet; the next sync reads it", what)
+	return out
+}
+
+// sameStart reports whether delegation s is still the hand-off was: no run
+// changed its status, task, or hand-off since was was read.
+func sameStart(s, was delegate.State) bool {
+	return s.Status == was.Status && s.Task == was.Task && s.Handoffs == was.Handoffs && s.StartedAt == was.StartedAt
+}
+
 // starter is who started story n: the mission's starter, or a Tatkal story's.
 func (p *MissionPlan) starter(n int) string {
 	if i := slices.IndexFunc(p.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }); i >= 0 {
@@ -411,9 +472,10 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 	tool := r.plan.storyTool(n)
 	started := r.now.UTC().Format(time.RFC3339)
 	if pr != 0 && (st.PR != pr || st.Status == dlgFailed || st.Status == dlgMaybe) { // the sync syncs this PR, and never hands off afresh
-		if err := r.setDelegation(ctx, n, func(s *delegate.State) {
+		if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
 			s.PR, s.Status = pr, dlgPROpen
 			s.Events = append(s.Events, delegate.Event{At: started, Status: dlgPROpen, Detail: fmt.Sprintf("PR #%d found by aayu mission %s", pr, r.verb)})
+			return nil
 		}); err != nil {
 			return st, notRun{err}
 		}
@@ -441,9 +503,13 @@ func (r *recovery) attempt(ctx context.Context, n int, st delegate.State, pr int
 			_, _ = r.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: the %s of #%d is on its delegation; its claim is released", kind, n), Append: map[string][]byte{path: append(b, '\n')}})
 		}()
 		if st.Status != dlgFailed { // build hands off afresh only after a failed one
-			if err := r.setDelegation(ctx, n, func(s *delegate.State) {
+			if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
+				if !sameStart(*s, st) { // another run re-attached or restarted it since: it owns the story now
+					return errMoved
+				}
 				s.Status = dlgFailed
 				s.Events = append(s.Events, delegate.Event{At: started, Status: dlgFailed, Detail: why + " (aayu mission " + r.verb + ")"})
+				return nil
 			}); err != nil {
 				return st, notRun{err}
 			}
@@ -503,8 +569,9 @@ func (r *recovery) spentClaims(ctx context.Context, path string, n int, st deleg
 	return spent, err
 }
 
-// setDelegation edits delegate/<n>/state.json at the ledger tip.
-func (r *recovery) setDelegation(ctx context.Context, n int, edit func(*delegate.State)) error {
+// setDelegation edits delegate/<n>/state.json at the ledger tip; an edit
+// that returns an error writes nothing.
+func (r *recovery) setDelegation(ctx context.Context, n int, edit func(*delegate.State) error) error {
 	for range 3 {
 		t, err := r.w.Read(ctx)
 		if err != nil {
@@ -517,7 +584,9 @@ func (r *recovery) setDelegation(ctx context.Context, n int, edit func(*delegate
 		if err != nil || json.Unmarshal(b, &st) != nil {
 			return Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote for #%d", delegate.LedgerPath(n), n)
 		}
-		edit(&st)
+		if err := edit(&st); err != nil {
+			return err
+		}
 		data, _ := json.MarshalIndent(st, "", "  ")
 		_, err = r.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: mission %s of #%d", r.verb, n), Files: map[string][]byte{delegate.LedgerPath(n): append(data, '\n')}, Base: tip})
 		if !errors.Is(err, ledger.ErrMoved) {
@@ -555,9 +624,10 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 			if r.c.DryRun() {
 				return say("kept", fmt.Sprintf("kept on its PR #%d (--dry-run: the delegation is not updated)", pr))
 			}
-			if err := r.setDelegation(ctx, n, func(s *delegate.State) {
+			if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
 				s.PR, s.Status = pr, dlgPROpen
 				s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: dlgPROpen, Detail: fmt.Sprintf("PR #%d found by aayu mission recover", pr)})
+				return nil
 			}); err != nil {
 				return say("failed", "its PR could not be recorded: "+oneLineErr(err))
 			}
@@ -576,21 +646,33 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 		}
 		tasks, err := r.list(ctx, st.Receiver)
 		r.note(st.Receiver, err, false)
-		runs := false
+		var held []delegate.Task
 		if err == nil {
-			runs, err = delegate.MayRun(tasks, n) // a task aayu cannot match is no proof of "no task"
+			held, err = delegate.Holding(tasks, n) // a task aayu cannot match is no proof of "no task"
 		}
 		if err != nil {
 			r.touch(n).State = fmt.Sprintf("%s%s (%s)", stateUnreadable, src, unreadable(err))
 			return say("unreadable", r.next.stateOf(n).State+": aayu starts nothing for it")
 		}
-		if runs {
+		switch len(held) {
+		case 0:
+			got := r.restart(ctx, n, st, fmt.Sprintf("no %s task and no PR for #%d", st.Receiver, n), "restart")
+			r.note(st.Receiver, nil, got.State != "left") // a restart another run holds tells recover nothing new
+			return got
+		case 1:
+			if st.Handoffs <= 1 {
+				return r.reattach(ctx, n, st, held[0])
+			}
+			// The list says no start time: after an earlier hand-off, the task may be that one's, not this start's.
 			r.touch(n).State = stateMaybe
-			return say("maybe started", fmt.Sprintf("maybe started: a %s task exists for #%d but no PR yet; aayu does not start it again", st.Receiver, n))
+			return say("maybe started", fmt.Sprintf("maybe started: a %s task %s exists for #%d and no PR, and #%d was handed off %d times: it may be an earlier hand-off's, so a person checks it, and aayu does not start it again", st.Receiver, held[0].ID, n, n, st.Handoffs))
 		}
-		got := r.restart(ctx, n, st, fmt.Sprintf("no %s task and no PR for #%d", st.Receiver, n), "restart")
-		r.note(st.Receiver, nil, got.State != "left") // a restart another run holds tells recover nothing new
-		return got
+		ids := make([]string, len(held))
+		for i, t := range held {
+			ids[i] = t.ID
+		}
+		r.touch(n).State = stateMaybe
+		return say("maybe started", fmt.Sprintf("maybe started: %d %s tasks exist for #%d (%s) and no PR: a person picks one, and aayu does not start it again", len(held), st.Receiver, n, strings.Join(ids, ", ")))
 	case st.Status == dlgFailed:
 		_, why := lastFailure(st)
 		ss := r.counted(n, st)
@@ -627,9 +709,10 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 		if r.c.DryRun() {
 			return say("re-attached", fmt.Sprintf("re-attached: its %s thread lives (%s); --dry-run: its Kanha is not updated", name, where))
 		}
-		if err := r.setDelegation(ctx, n, func(s *delegate.State) {
+		if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
 			s.Kanha, s.KanhaURL = p.Session, p.URL
 			s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: s.Status, Detail: "re-attached to the Kanha " + or(p.URL, p.Session) + " by aayu mission recover"})
+			return nil
 		}); err != nil {
 			return say("failed", "it lives, and its re-attach was not recorded: "+oneLineErr(err))
 		}
@@ -653,7 +736,7 @@ func (r *recovery) restart(ctx context.Context, n int, st delegate.State, why, k
 	ss := r.next.stateOf(n)
 	var nr notRun
 	switch {
-	case errors.Is(err, errClaimed):
+	case errors.Is(err, errClaimed), errors.Is(err, errMoved):
 		out.State, out.Line = "left", why+": "+err.Error()
 	case errors.As(err, &nr):
 		out.State, out.Line = "failed", fmt.Sprintf("%s; nothing restarted: %s", why, oneLineErr(err))
@@ -904,14 +987,14 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	}
 	if _, lister := r.adapter(st.Receiver).(delegate.Lister); pr == 0 && st.Status == dlgMaybe && lister {
 		tasks, err := r.list(ctx, st.Receiver)
-		runs := false
+		var held []delegate.Task
 		if err == nil {
-			runs, err = delegate.MayRun(tasks, story)
+			held, err = delegate.Holding(tasks, story)
 		}
 		if err != nil {
 			return Errorf(ExitExternal, "#%d may have started on %s, and its task list cannot be read (%s): the retry starts nothing. Nothing changed.", story, delegate.Names[st.Receiver], unreadable(err))
 		}
-		if runs {
+		if len(held) > 0 {
 			return Errorf(ExitBlocked, "a %s task for #%d exists: #%d may run there, so the retry starts nothing. Nothing changed.", st.Receiver, story, story)
 		}
 	}
@@ -923,6 +1006,8 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 	got := r.next.stateOf(story)
 	var nr notRun
 	switch {
+	case errors.Is(err, errMoved):
+		return Errorf(ExitBlocked, "#%d changed while the retry ran: another run acted on it, so the retry starts nothing. Nothing changed.", story)
 	case errors.As(err, &nr): // nothing ran: there is no attempt to record
 		return err
 	case errors.Is(err, errClaimed):
