@@ -1,0 +1,9 @@
+# Which tests prove Bug #1149's Completion Goal.
+
+[[criterion]]
+id = 1 # #64 handed off under Codex environment A, codex_env now B: the delegation records A, recover lists A's tasks, holds #64, and starts no second task
+tests = ["internal/cli:TestMissionRecoverListsTheHandoffsEnvironment"]
+
+[[criterion]]
+id = 2 # #64's delegation records no environment: recover holds #64 as unreadable, names the missing environment, and starts nothing
+tests = ["internal/cli:TestMissionRecoverHoldsAStartWithNoEnvironment"]
