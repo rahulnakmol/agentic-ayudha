@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 1170,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/1170/design.json",
+      "hash": "c02df960b1713ce27f7c7f62768e520b700a0935dfddcd77169d7b7b42599ffa"
+    }
+  ],
+  "hash": "8f5f368efa987a5d28cf47c00f4fce5978b1a9f74b09dd15cd456601fa7f01d4",
+  "summary": "A founder decides each morning in one `aayu inbox` session, and sees each agreed Feature built and proven by evening. The morning has a card for each baseline and for Approve to build, next to the mission start card that exists. The evening has a card for each story agreed that morning, with each criterion next to its evidence, and says the day is proven only when all of it is. Agents prepare tomorrow's Feature overnight, and each Feature's Bugs come last. This is the 0.4 experience (Decision #1168): every day the founder sees what they made.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:47:15Z"
+}
