@@ -636,11 +636,11 @@ func TestMissionNextHoldsOpenDependsOn(t *testing.T) {
 	}
 }
 
-// Criterion 2: once #10 merges, #11 starts. Ship leaves #10 open with
-// status:merged until its release closes it (Bug #1169, criterion 1).
+// Criterion 2: once #10 closes as merged, #11 starts.
 func TestMissionNextStartsAfterDependsOnMerges(t *testing.T) {
 	m := dependsOnWorld(t)
 	m.status(10, "merged", "")
+	m.closeIssue(10)
 	if code, out, errOut := m.next(889); code != 0 || out != "start #11\n" || m.claims(889)[11] != 1 {
 		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
 	}

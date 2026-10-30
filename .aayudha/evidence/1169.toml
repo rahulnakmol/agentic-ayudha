@@ -1,0 +1,21 @@
+# Which tests prove Bug #1169's Completion Goal.
+
+[[criterion]]
+id = 1 # Ready #11 has depends-on #10, and #10 is open with status:merged: mission next marks #11 start
+tests = ["internal/cli:TestMissionNextMergedOpenStoryFreesItsDependent"]
+
+[[criterion]]
+id = 2 # #10 is open with status:in-progress: waits #11: depends-on #10 is open, as today
+tests = ["internal/cli:TestMissionNextHoldsOpenDependsOn"]
+
+[[criterion]]
+id = 3 # #11 depends on #40 of another Feature, open with status:merged: mission 1 at Approve to build, and start
+tests = ["internal/cli:TestMissionMergedOpenOutsideDependsOn"]
+
+[[criterion]]
+id = 4 # #10 is open with status:merged and not Ready: mission next never lists #10 as a start
+tests = ["internal/cli:TestMissionNextMergedOpenStoryFreesItsDependent"]
+
+[[criterion]]
+id = 5 # #10 was closed as not planned: waits #11: depends-on #10 was cancelled, and #11 never starts
+tests = ["internal/cli:TestMissionNextCancelledDependsOnHolds"]
