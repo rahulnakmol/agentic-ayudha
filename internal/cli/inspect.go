@@ -214,6 +214,50 @@ func (e *Env) readApprovals(ctx context.Context) []headApproval {
 	return out
 }
 
+// approvedUnclear lifts a rung-B fix to merge when its only gap is criteria
+// the review marked unclear (no finding, no unmet criterion, and the fix is the
+// reviewer's own, not a floor's) and the [autonomy] approver recorded `aayu
+// inspect --approve` for this exact head on the ledger: the person accepts what
+// the review could not see, such as a tier-2 eval result that cannot run on a
+// PR head (Bug #1163). The floors still hold (rule 7). The stored result keeps
+// the lift, and the pack binds it to the head, so a cached review is not
+// lifted twice.
+func (e *Env) approvedUnclear(ctx context.Context, res *inspect.Result, p *proof.Pack, approver string) bool {
+	var unclear []string // an unmet criterion fails the floors below
+	for _, v := range res.Criteria {
+		if v.Verdict == "unclear" {
+			unclear = append(unclear, fmt.Sprint(v.ID))
+		}
+	}
+	// A finding the noise rules dropped (low confidence, a nit, a repeat) is
+	// still the reviewer's finding, and may be what the fix rests on: only one
+	// shown wrong or judged elsewhere, as liftFix counts them, does not block.
+	dropped := slices.ContainsFunc(res.Dropped, func(d inspect.Dropped) bool {
+		return !slices.Contains([]string{inspect.DropRefuted, inspect.DropDismissed, inspect.DropTestGap, inspect.DropTestValue, inspect.DropPreExisting, inspect.DropDuplicate}, d.Why)
+	})
+	approver = strings.TrimPrefix(strings.TrimSpace(approver), "@")
+	if res.Rung != inspect.RungB || res.Disposition != inspect.Fix || res.Overridden != "" || res.Reviewed != "" || len(res.Findings) > 0 || dropped || len(unclear) == 0 || approver == "" {
+		return false
+	}
+	floors := *res
+	floors.Disposition = inspect.Merge
+	if inspect.Enforce(&floors, p); floors.Disposition != inspect.Merge {
+		return false
+	}
+	approvals := e.readApprovals(ctx)
+	i := slices.IndexFunc(approvals, func(a headApproval) bool {
+		return a.PR == res.PR && a.Head == res.Head && strings.EqualFold(a.By, approver)
+	})
+	if i < 0 {
+		return false
+	}
+	a := approvals[i]
+	res.Disposition, res.Next = inspect.Merge, ""
+	res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: rung B raised no finding and marked only criteria %s unclear; @%s accepted them with `aayu inspect %d --approve` of `%s` at %s (%q), recorded on the ledger (`%s`)",
+		strings.Join(unclear, ", "), a.By, res.PR, short(res.Head), a.At, a.Reason, ApprovedPath))
+	return true
+}
+
 // reviewers picks inspect's reviewers: the review lane's model, then in peer
 // mode the configured peer model or the first registry candidate of another
 // family. A registry default whose family equals the builder's is replaced
@@ -641,14 +685,15 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			res.Notes = append(res.Notes, note)
 		}
 	}
+	lifted := err == nil && e.approvedUnclear(ctx, &res, ins.Pack, l.Config.Autonomy.Approver)
 	// As in the app path, a cached review's rung follows the builder as
 	// declared now, and a changed label rewrites the record ship reads, as
 	// does a change in what the PR description check blocks.
 	relabel := e.prBodyFloor(&res, pr, prev.Result)
 	relabel = earlyBuildHold(&res, pr, early, prev.Result) || relabel
 	if st.Result != nil {
-		relabel = relabel || st.Result.Review != res.Review
-		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
+		relabel = relabel || lifted || st.Result.Review != res.Review
+		st.Result.Notes, st.Result.Head, st.Result.Builder, st.Result.Next = res.Notes, res.Head, res.Builder, res.Next
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 		keepFloor(&st, res)
 	}
