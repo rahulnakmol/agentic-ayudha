@@ -1,0 +1,18 @@
+{
+  "covered": 73,
+  "executable": 79,
+  "percent": 92.40506329113924,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/halt.go": [
+      336,
+      337,
+      341,
+      342,
+      354,
+      355
+    ]
+  },
+  "format": "go coverprofile"
+}

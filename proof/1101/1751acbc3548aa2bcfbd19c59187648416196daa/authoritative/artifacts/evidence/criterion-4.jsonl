@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestHaltReleasesMissionClaims"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestHaltReleasesMissionClaims","Output":"=== RUN   TestHaltReleasesMissionClaims\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestHaltReleasesMissionClaims","Output":"--- PASS: TestHaltReleasesMissionClaims (3.49s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestHaltReleasesMissionClaims"}
