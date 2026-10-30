@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -201,6 +202,9 @@ type haltReport struct {
 	Paged   string `json:"paged,omitempty"`
 	Pause   string `json:"budget_pause_cleared,omitempty"`
 	DryRun  bool   `json:"dry_run,omitempty"`
+	// The stories whose mission claims the halt released, or why it could not (Bug #1101).
+	Released    []int  `json:"released_claims,omitempty"`
+	ClaimsError string `json:"claims_not_released,omitempty"`
 }
 
 // variable sets (value != "") or deletes the halt variable through actions.
@@ -292,10 +296,90 @@ func runHalt(ctx context.Context, e *Env, in Values) error {
 	if changed && !e.DryRun {
 		r.Paged = e.page(ctx, notify.Page{Key: "halt:" + repo, Urgent: true, Subject: "aayudha halted " + repo, Body: value + "\n\nEvery agent lane, verb, and aayudha workflow stops until a human runs `aayu resume`."})
 	}
+	// After the halt is set, so a claim that cannot be released never blocks the halt.
+	if r.Released, err = e.releaseMissionClaims(ctx, c, tok, repo); err != nil {
+		r.ClaimsError = fmt.Sprintf("%s; they expire within %d minutes", oneLineErr(err), int(pickLockTTL.Minutes()))
+	}
 	return e.Emit(r, func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "%s halted: %s\nEvery workflow and verb refuses to run, and running verbs stop within %s. `aayu resume` clears it.\n", repo, value, e.haltPoll())
+		if err == nil && len(r.Released) > 0 {
+			refs := make([]string, len(r.Released))
+			for i, n := range r.Released {
+				refs[i] = fmt.Sprintf("#%d", n)
+			}
+			verb := "released"
+			if e.DryRun {
+				verb = "would release"
+			}
+			_, err = fmt.Fprintf(w, "%s %d mission %s (%s)\n", verb, len(refs), plural(len(refs), "claim", "claims"), strings.Join(refs, ", "))
+		}
+		if err == nil && r.ClaimsError != "" {
+			_, err = fmt.Fprintf(w, "mission claims not released: %s\n", r.ClaimsError)
+		}
 		return err
 	})
+}
+
+// releaseMissionClaims releases each live mission claim of a story with no
+// running thread (Bug #1101), so after `aayu resume` a mission list claims it
+// again after the checks of any start, and a build that held the old claim
+// refuses (changedSinceList). A story whose thread runs keeps its claim, and so
+// does one it cannot read (the error names it). A gate fix's claim (a negative
+// key) is not a story's and expires on its own.
+func (e *Env) releaseMissionClaims(ctx context.Context, c *github.Client, tok identity.Token, repo string) ([]int, error) {
+	w, err := e.Ledger(ctx, tok, "human", "")
+	if err != nil {
+		return nil, err
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return nil, ignoreMissing(err)
+	}
+	defer t.Close()
+	paths, err := t.List(ctx, "missions")
+	if err != nil {
+		return nil, err
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	at := e.Now().UTC().Format(time.RFC3339)
+	release := map[string][]byte{}
+	var stories []int
+	var unread []string // a story it cannot read keeps its claim; the others are still released
+	for _, p := range paths {
+		if !strings.HasSuffix(p, "/claims.jsonl") {
+			continue
+		}
+		raw, err := t.File(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		for _, cl := range e.liveClaims(raw, nil) {
+			if cl.Story <= 0 {
+				continue
+			}
+			is, _, err := c.REST.Issues.Get(ctx, owner, name, cl.Story)
+			if err != nil {
+				unread = append(unread, fmt.Sprintf("#%d: %s", cl.Story, oneLineErr(err)))
+				continue
+			}
+			if labels := github.IssueLabels(is); contains(labels, labelInProgress) || contains(labels, "status:validation") {
+				continue
+			}
+			cl.Release, cl.HaltedAt = true, at
+			b, _ := json.Marshal(cl)
+			release[p] = append(release[p], append(b, '\n')...)
+			stories = append(stories, cl.Story)
+		}
+	}
+	if len(release) > 0 && !c.DryRun() {
+		if _, err := w.Write(ctx, ledger.Commit{Message: "missions: aayu halt releases the claims of stories that do not run yet", Append: release}); err != nil {
+			return nil, err
+		}
+	}
+	if len(unread) > 0 {
+		return stories, fmt.Errorf("could not read %s", strings.Join(unread, "; "))
+	}
+	return stories, nil
 }
 
 // runResume clears the halt variable and the [budget] breaker's pause file.

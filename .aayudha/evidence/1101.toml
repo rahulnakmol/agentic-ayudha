@@ -1,0 +1,21 @@
+# Which tests prove Bug #1101's Completion Goal.
+
+[[criterion]]
+id = 1 # live claims of #20 (#889) and #930 (#920), no thread started: `aayu halt` releases both and says "released 2 mission claims (#20, #930)"
+tests = ["internal/cli:TestHaltReleasesMissionClaims"]
+
+[[criterion]]
+id = 2 # `aayu resume`, then `aayu mission next 889`: #20 is marked start with a new claim line
+tests = ["internal/cli:TestHaltReleasesMissionClaims"]
+
+[[criterion]]
+id = 3 # `aayu build 20 --delegate amp` with the claim from before the halt: refused with "the claim of #20 was released by aayu halt at 10:05: run aayu mission next 889", nothing started
+tests = ["internal/cli:TestHaltReleasesMissionClaims"]
+
+[[criterion]]
+id = 4 # #21's thread ran when the halt came: it keeps its claim, and after resume `aayu mission next 889` never starts it again
+tests = ["internal/cli:TestHaltReleasesMissionClaims"]
+
+[[criterion]]
+id = 5 # the ledger cannot be written: AAYUDHA_HALT is still set, and the report says "mission claims not released: <reason>; they expire within 15 minutes"
+tests = ["internal/cli:TestHaltReleasesMissionClaims"]

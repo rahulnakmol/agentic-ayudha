@@ -252,6 +252,9 @@ type loopClaim struct {
 	Token   string `json:"token"`
 	At      string `json:"at"`
 	Release bool   `json:"release,omitempty"`
+	// HaltedAt is when `aayu halt` released this claim (Bug #1101): a build
+	// that held it refuses until a mission list claims the story again.
+	HaltedAt string `json:"halted_at,omitempty"`
 }
 
 // admitClaim reserves a slot for story n on the ledger, in LoopClaimsPath
