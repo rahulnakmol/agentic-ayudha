@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMeasureFounderMinutesPerPR"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMeasureFounderMinutesPerPR","Output":"=== RUN   TestMeasureFounderMinutesPerPR\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMeasureFounderMinutesPerPR","Output":"--- PASS: TestMeasureFounderMinutesPerPR (0.23s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMeasureFounderMinutesPerPR"}
