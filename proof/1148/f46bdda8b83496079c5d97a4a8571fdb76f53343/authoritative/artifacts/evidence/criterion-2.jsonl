@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCheckedBeforeRestart"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCheckedBeforeRestart","Output":"=== RUN   TestMissionMaybeStartedCheckedBeforeRestart\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCheckedBeforeRestart","Output":"--- PASS: TestMissionMaybeStartedCheckedBeforeRestart (6.96s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCheckedBeforeRestart"}

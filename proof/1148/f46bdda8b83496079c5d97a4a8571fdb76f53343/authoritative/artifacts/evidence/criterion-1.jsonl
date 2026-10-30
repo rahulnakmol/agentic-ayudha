@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesDoneTask"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesDoneTask","Output":"=== RUN   TestMissionRecoverReattachesDoneTask\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesDoneTask","Output":"--- PASS: TestMissionRecoverReattachesDoneTask (3.37s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverReattachesDoneTask"}
