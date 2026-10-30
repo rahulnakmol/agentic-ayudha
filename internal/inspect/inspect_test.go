@@ -1115,6 +1115,41 @@ func TestJudgeCacheFollowsTheReading(t *testing.T) {
 	}
 }
 
+// Bug #1150: when the review falls to a person, their `/aayu` command
+// comments (the reopen of PR 1147, comment 6471958245) are not their reply;
+// any other post with no reply block still fails closed, and a reply after
+// the command is read.
+func TestReadHumanReplySkipsCommands(t *testing.T) {
+	head := strings.Repeat("a", 40)
+	at := time.Date(2026, 10, 28, 14, 38, 0, 0, time.UTC)
+	human := Choice{Human: "rahulnakmol", Rung: "human"}
+	person := func(login, typ string) bool { return typ == "User" }
+	post := func(id int64, body string, d time.Duration) Post {
+		return Post{Kind: "comment", ID: id, Login: "rahulnakmol", Type: "User", Body: body, Updated: at.Add(d)}
+	}
+	since := at.Add(-time.Hour)
+	for _, cmd := range []string{ReopenCommand, "\n  /aayu review again\r\n", "/aayu approve all 3f2a9c1", "/aayu skip 2 3f2a9c1"} {
+		if _, err := ReadReply(human, []Post{post(6471958245, cmd, 0)}, head, since, person, nil, nil); !errors.Is(err, ErrNoReply) {
+			t.Fatalf("%q read as the reply: %v", cmd, err)
+		}
+	}
+	// Only a first line that is a command: a mention, or another word, still fails closed.
+	for _, prose := range []string{"Looks fine; no need for /aayu review again.", "/aayudha looks fine"} {
+		if _, err := ReadReply(human, []Post{post(6471958245, prose, 0)}, head, since, person, nil, nil); !errors.Is(err, ErrMalformed) {
+			t.Fatalf("%q: %v", prose, err)
+		}
+	}
+	stray := []Post{post(6471958245, ReopenCommand, 0), post(6471958300, "Looks fine to me.", time.Minute)}
+	if _, err := ReadReply(human, stray, head, since, person, nil, nil); !errors.Is(err, ErrMalformed) || !strings.Contains(err.Error(), "6471958300") {
+		t.Fatalf("a stray comment after the reopen: %v", err)
+	}
+	reply := "Reviewed.\n\n```" + ReplyFence + "\n" + `{"head":"` + head + `","disposition":"merge","summary":"read it","reviewed":[],"findings":[],"criteria":[]}` + "\n```\n"
+	r, err := ReadReply(human, []Post{post(6471958245, ReopenCommand, 0), post(6471958400, reply, time.Minute)}, head, since, person, nil, nil)
+	if err != nil || r.Disposition != Merge || !strings.Contains(r.Source, "6471958400") {
+		t.Fatalf("a reply after the reopen: %+v %v", r, err)
+	}
+}
+
 // CodeRabbit's and Greptile's own reviews of the head are read
 // deterministically (Story #635): the receipt, then each inline comment on the
 // head with a severity badge is a finding; a thread reply, a comment on another

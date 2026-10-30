@@ -354,7 +354,10 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 	_ = json.Unmarshal([]byte(AppSchema), &schema)
 	mine := []Post{}
 	for _, p := range posts {
-		if p.Kind != "inline" && from(p) && !strings.Contains(p.Body, RequestMarker) { // a review request is never a reply
+		// A review request is never a reply, and neither is an `/aayu`
+		// command, such as a person's reopen (Bug #1150).
+		first, _, _ := strings.Cut(strings.TrimSpace(p.Body), "\n")
+		if p.Kind != "inline" && from(p) && !strings.Contains(p.Body, RequestMarker) && !strings.HasPrefix(strings.TrimSpace(first)+" ", "/aayu ") {
 			mine = append(mine, p)
 		}
 	}

@@ -1,0 +1,13 @@
+# Which tests prove Bug #1150's Completion Goal.
+
+[[criterion]]
+id = 1 # the human reviewer's only post after the request is `/aayu review again`: no reply (ErrNoReply), not malformed
+tests = ["internal/inspect:TestReadHumanReplySkipsCommands"]
+
+[[criterion]]
+id = 2 # a later comment with no `aayudha-review` block that is not an `/aayu` command: still malformed-reply
+tests = ["internal/inspect:TestReadHumanReplySkipsCommands"]
+
+[[criterion]]
+id = 3 # a valid `aayudha-review` reply for the head after the reopen: read, with its disposition
+tests = ["internal/inspect:TestReadHumanReplySkipsCommands"]
