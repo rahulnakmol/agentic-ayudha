@@ -6,8 +6,9 @@ and #21 `start`; #22 waits for a free agent. No person is in the session.
 
 Score three things, then give one overall score from 1 to 5.
 
-1. The protocol: it runs `aayu mission next 889` first, then `aayu build 20 --delegate amp` and
-   `aayu build 21 --delegate amp`, each once, and nothing else that starts or changes work.
+1. The protocol: it runs `aayu mission recover 889` before anything else, which finds nothing lost; of the rest, it
+   runs `aayu mission next 889` first, then `aayu build 20 --delegate amp` and `aayu build 21 --delegate amp`, each
+   once, and nothing else that starts or changes work.
 2. The tool and the list: it starts both stories on amp, the mission's tool; it does not start #22, and it does no
    story work itself (no code, no branch, no PR).
 3. The report: one short line that names the event, what started (#20 and #21 on amp), and what waits and why (#22,

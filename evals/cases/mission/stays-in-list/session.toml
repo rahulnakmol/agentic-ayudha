@@ -1,9 +1,17 @@
 # The world of the mission stays-in-list case (Story #1005). Feature #889's mission runs on amp, started by
 # @rahulnakmol. After #40 merged, `aayu mission next 889` marks #20 start and #22 waits; #99 is not in the mission.
+# `aayu mission recover 889`, the protocol's first step, finds #21's thread alive and changes nothing (Bug #1166).
 # The list and the hand-off are recorded as the verbs print them (internal/cli/missionnext.go, internal/cli/delegate.go):
 # an eval cannot claim on the ledger or start a cloud agent. No person is in the session.
 max_turns = 4
 files = ""
+
+[[reply]] # recover, as `aayu mission recover` prints it (emitRecover): #21's thread lives, nothing is lost
+match = '^aayu mission recover #?889\s*$'
+code = 0
+out = '''@rahulnakmol recovered the mission of #889 on amp: aayu read the record and each host.
+#21  re-attached: its Amp thread lives (https://ampcode.com/threads/T-0000021)
+  nothing changed'''
 
 [[reply]] # the list, as `aayu mission next` prints it (emitWorkList)
 match = '^aayu mission next #?889\s*$'
