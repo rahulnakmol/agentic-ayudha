@@ -1,0 +1,32 @@
+{
+  "feature": 874,
+  "body_hash": "5f052d2259d64b66ea4f875e68f695f7f397bad77c680b1ece08e1afa2683a9f",
+  "footprint": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "contracts": [
+    "specs/\u003cf\u003e/baselines/\u003cpart\u003e-v\u003ck\u003e.json and .draft.json (merged, #990-#994): unchanged",
+    "specs/\u003cstory\u003e/plan.json gains a risk register (#1028): one entry per change a revert of the squash does not undo, each with its kind, what it changes, creates or destroys, its paths, and its rollback; aayu plan checks it like a Completion Goal",
+    "the risk: label of a story is set by aayu plan from its register: risk:high with an entry, else risk:low (Decision #1027)",
+    "v0.4.1: the failure-modes table of a state-changing high-risk story (#1106)"
+  ],
+  "layers": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "story_order": [
+    990,
+    991,
+    992,
+    993,
+    994,
+    1028,
+    1106
+  ],
+  "rollback": "The register is a new optional field of plan.json; a revert of #1028 stops writing it, and a plan written with it still loads, since readers ignore an unknown field. No ledger record is rewritten. The risk: label stays as last written until the next aayu plan.",
+  "planned_at": "2026-10-30T18:27:52Z",
+  "planned_by": "human-fallback"
+}
