@@ -1,0 +1,59 @@
+{
+  "feature": 889,
+  "body_hash": "b52f22407f76ea17dce6d68ce593275f227019feee3cdec040cd725afa0d7080",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L05",
+    "L07"
+  ],
+  "contracts": [
+    "missions/\u003cf\u003e/plan.json and approved.json (merged): the mission plan, its milestones, and agents",
+    "delivery/\u003cf\u003e/events.jsonl: one append-only record of every build event of a Feature, and one progress comment (#1010); paging reads it (#1011)",
+    "aayu ship inside an approved mission merges on proof and holds only a PR the person marked review, an undeclared high-risk diff, an authority change, or a failed floor (#1030, Decision #1027 option 2)",
+    "the story subthread brief names the 10-step build loop, including the local gate and a subagent review before each push, and an eval fails when a step is missing (#1104)",
+    "the feedback pass at mission end turns comments into stories (#1014); aayu install --loops adds the local wake loop (#1126); the lock ends at the last gate (#1134)",
+    "v0.4.1: red runs in proof packs (#1109), real-run journeys (#1110), function beyond the ask (#1111), milestone findings order the next milestone (#1112)"
+  ],
+  "layers": [
+    "L02",
+    "L03",
+    "L04",
+    "L05",
+    "L07"
+  ],
+  "story_order": [
+    997,
+    998,
+    999,
+    1000,
+    1001,
+    1002,
+    1003,
+    1004,
+    1005,
+    1006,
+    1007,
+    1008,
+    1009,
+    1012,
+    1013,
+    1015,
+    1104,
+    1010,
+    1011,
+    1030,
+    1014,
+    1126,
+    1134,
+    1154,
+    1109,
+    1110,
+    1111,
+    1112
+  ],
+  "rollback": "Ledger files are append-only or versioned; a revert stops new writes and leaves records readable. A revert of #1030 returns ship to today's rule: the narrow set and plan-time reviews need a person per PR. A revert of #1126 leaves wake loops that do nothing until aayu install --loops runs again.",
+  "planned_at": "2026-10-30T18:28:37Z",
+  "planned_by": "human-fallback"
+}
