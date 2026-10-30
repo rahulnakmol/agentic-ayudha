@@ -1632,6 +1632,9 @@ func TestInspectPaidReviewer(t *testing.T) {
 		{name: "an approval of the head", findings: "[]", criteria: unclearCriteria, by: "lead", lift: true},
 		{name: "an approval written @Lead", findings: "[]", criteria: unclearCriteria, by: "Lead", lift: true},
 		{name: "a finding", findings: finding, criteria: unclearCriteria, by: "lead"},
+		// The noise rules drop these, but the fix may rest on them (CodeRabbit on #1164).
+		{name: "a low-confidence finding", findings: strings.Replace(finding, `"confidence":0.9`, `"confidence":0.1`, 1), criteria: unclearCriteria, by: "lead"},
+		{name: "a nit", findings: strings.Replace(finding, `"P2"`, `"P3"`, 1), criteria: unclearCriteria, by: "lead"},
 		{name: "an unmet criterion", findings: "[]", criteria: strings.Replace(unclearCriteria, `"met"`, `"unmet"`, 1), by: "lead"},
 		{name: "a floor that does not hold", findings: "[]", criteria: unclearCriteria, by: "lead", failFloor: true},
 		{name: "every criterion met", findings: "[]", criteria: strings.Replace(unclearCriteria, `"unclear"`, `"met"`, 1), by: "lead"},

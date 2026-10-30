@@ -229,8 +229,14 @@ func (e *Env) approvedUnclear(ctx context.Context, res *inspect.Result, p *proof
 			unclear = append(unclear, fmt.Sprint(v.ID))
 		}
 	}
+	// A finding the noise rules dropped (low confidence, a nit, a repeat) is
+	// still the reviewer's finding, and may be what the fix rests on: only one
+	// shown wrong or judged elsewhere, as liftFix counts them, does not block.
+	dropped := slices.ContainsFunc(res.Dropped, func(d inspect.Dropped) bool {
+		return !slices.Contains([]string{inspect.DropRefuted, inspect.DropDismissed, inspect.DropTestGap, inspect.DropTestValue, inspect.DropPreExisting, inspect.DropDuplicate}, d.Why)
+	})
 	approver = strings.TrimPrefix(strings.TrimSpace(approver), "@")
-	if res.Rung != inspect.RungB || res.Disposition != inspect.Fix || res.Overridden != "" || res.Reviewed != "" || len(res.Findings) > 0 || len(unclear) == 0 || approver == "" {
+	if res.Rung != inspect.RungB || res.Disposition != inspect.Fix || res.Overridden != "" || res.Reviewed != "" || len(res.Findings) > 0 || dropped || len(unclear) == 0 || approver == "" {
 		return false
 	}
 	floors := *res
