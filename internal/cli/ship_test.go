@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -52,11 +53,12 @@ func zipOf(files map[string]string) []byte {
 }
 
 // gateArtifact records a green merge gate for head whose only run carries
-// arts as its artifacts.
-func gateArtifact(g *fake.GitHub, head string, arts ...fake.ArtifactZip) {
+// arts as its artifacts, a run of pull request pr.
+func gateArtifact(g *fake.GitHub, pr int, head string, arts ...fake.ArtifactZip) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
-	g.Runs = []fake.WorkflowRun{{ID: 8000, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"}}
+	g.Runs = []fake.WorkflowRun{{ID: 8000, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: []fake.RunPR{{Number: pr, Base: fake.Branch{Ref: "dev"}}}}}
 	g.Artifacts = map[int64][]fake.ArtifactZip{8000: arts}
 	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
@@ -141,7 +143,7 @@ func TestShipRefusals(t *testing.T) {
 		{"no pack for the story", []fake.ArtifactZip{pack(8004, map[string]string{"README.txt": "nothing here"})}, ExitBlocked, "run 8000: its aayudha-pack artifact 8004 holds no pack for #2"},
 	}
 	for _, tt := range tests {
-		gateArtifact(g, head, tt.arts...)
+		gateArtifact(g, prN, head, tt.arts...)
 		if code, out := ship(prN); code != tt.code || !strings.Contains(out, tt.want) {
 			t.Errorf("ship with %s: %d %s", tt.name, code, out)
 		}
@@ -794,12 +796,15 @@ func TestShipOnProof(t *testing.T) {
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	prs := g.Runs[gate].PullRequests
-	g.Runs[gate].PullRequests = nil
+	// The PR's own head branch and repository, as a fork's run on a branch of
+	// the same name would show them: only a merged PR's run counts without a
+	// listed pull request (Bug #1159).
+	g.Runs[gate].PullRequests, g.Runs[gate].HeadBranch, g.Runs[gate].HeadRepository = nil, g.Pulls[prN].Head.Ref, &fake.HeadRepo{FullName: "o/r"}
 	g.Mu.Unlock()
-	// A gate run GitHub lists for no PR is not this PR's gate: its checks are missing before the rung is read.
+	// A gate run GitHub lists for no PR is not this open PR's gate: its checks are missing before the rung is read.
 	refused("aayudha/merge-gate is missing on " + short(head))
 	g.Mu.Lock()
-	g.Runs[gate].PullRequests = prs
+	g.Runs[gate].PullRequests, g.Runs[gate].HeadBranch, g.Runs[gate].HeadRepository = prs, "", nil
 	g.Mu.Unlock()
 	g.Mu.Lock()
 	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".github/workflows/lint.yml")
@@ -1803,6 +1808,73 @@ func TestProofLand(t *testing.T) {
 	if code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run"); code != 0 || !strings.Contains(out, "proof coverage 0/1; merged without proof: pre-gate 0, post-gate 1") {
 		t.Fatalf("audit before proof land: %d %s %s", code, out, errOut)
 	}
+	// Bug #1159: once the PR merges, GitHub lists no pull request for its gate
+	// runs. A run with none counts only on the PR's head branch, in this
+	// repository, started while the PR was open, when no other pull request
+	// from that branch has the head; a run that lists another pull request
+	// never counts.
+	opened, ran := time.Now().UTC().Add(-3*time.Hour), time.Now().UTC().Add(-2*time.Hour)
+	setRun := func(prs []fake.RunPR, branch, repo string, at time.Time) {
+		g.Mu.Lock()
+		g.Pulls[prN].CreatedAt = opened
+		g.Runs[0].PullRequests, g.Runs[0].HeadBranch, g.Runs[0].HeadRepository, g.Runs[0].CreatedAt = prs, branch, &fake.HeadRepo{FullName: repo}, at
+		g.Mu.Unlock()
+	}
+	missing := func(what string) {
+		t.Helper()
+		if code, out := land(); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is missing on "+short(head)) {
+			t.Fatalf("proof land with %s: %d %s", what, code, out)
+		}
+	}
+	branch := g.Pulls[prN].Head.Ref
+	for _, c := range []struct {
+		what         string
+		prs          []fake.RunPR
+		branch, repo string
+		at           time.Time
+	}{
+		{"a run that lists another PR", []fake.RunPR{{Number: prN + 1}}, branch, "o/r", ran},
+		{"another branch", nil, "story/9-other", "o/r", ran},
+		{"a fork's run", nil, branch, "fork/r", ran},
+		{"a run after the merge", nil, branch, "o/r", time.Now().UTC()},
+		{"a run before the PR opened", nil, branch, "o/r", opened.Add(-time.Minute)},
+	} {
+		setRun(c.prs, c.branch, c.repo, c.at)
+		missing(c.what)
+	}
+	// A red gate run re-run green after the merge: the re-run keeps its
+	// created_at, but its latest attempt started after the merge.
+	setRun(nil, branch, "o/r", ran)
+	g.Mu.Lock()
+	g.Runs[0].RunStartedAt, g.Runs[0].Attempt = time.Now().UTC(), 2
+	g.Mu.Unlock()
+	missing("a re-run started after the merge")
+	g.Mu.Lock()
+	g.Runs[0].RunStartedAt, g.Runs[0].Attempt = time.Time{}, 0
+	g.Mu.Unlock()
+	// A second pull request from the same branch at the same head: the run
+	// could be either one's, so it is neither's.
+	setRun(nil, branch, "O/R", ran)
+	twin := g.AddPR("Show empty list again", "Refs #2", "founder", branch, head, "rolling")
+	missing("a second PR from the branch at the head")
+	g.Mu.Lock()
+	twin.Head.SHA = strings.Repeat("f", 40)
+	g.Mu.Unlock()
+	// A newer green gate run with its own pack, started by an event after the
+	// merge (an edit of the body): it ran the base branch that now holds the
+	// PR's code, so neither its checks nor its pack count. proof land takes
+	// the pack of the PR's own run from before the merge.
+	g.Mu.Lock()
+	checks := slices.Clone(g.CheckRuns[head])
+	g.Mu.Unlock()
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	late := &g.Runs[len(g.Runs)-1]
+	late.PullRequests, late.HeadBranch, late.HeadRepository, late.CheckSuiteID = nil, branch, &fake.HeadRepo{FullName: "o/r"}, 77
+	late.CreatedAt, late.RunStartedAt = time.Now().UTC(), time.Now().UTC()
+	g.CheckRuns[head] = checks
+	g.Mu.Unlock()
+	// The repository's name compares without case, as GitHub's does.
 	before := git(t, bare, "rev-list", "--count", "ledger")
 	if code, out := land(); code != 0 || !strings.Contains(out, fmt.Sprintf("from artifact %d of run %d", arts[0].ID, good.ID)) {
 		t.Fatalf("proof land: %d %s", code, out)
@@ -1818,5 +1890,18 @@ func TestProofLand(t *testing.T) {
 	code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run")
 	if code != 0 || !strings.Contains(out, "proof coverage 1/1; merged without proof: pre-gate 0, post-gate 0") {
 		t.Fatalf("audit after proof land: %d %s %s", code, out, errOut)
+	}
+	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
+	c, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls"} {
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = fail, 0
+		g.Mu.Unlock()
+		if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err == nil {
+			t.Errorf("gateSuites with %s failing: %v", fail, suites)
+		}
 	}
 }

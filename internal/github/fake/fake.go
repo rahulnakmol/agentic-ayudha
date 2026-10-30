@@ -220,6 +220,11 @@ type WorkflowRun struct {
 	// PullRequests are the pull requests the run is for, with their bases,
 	// as GitHub lists them for a same-repository pull request.
 	PullRequests []RunPR `json:"pull_requests,omitempty"`
+	// HeadRepository is the repository of the run's head branch.
+	HeadRepository *HeadRepo `json:"head_repository,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitzero"`
+	// RunStartedAt is when the run's latest attempt started.
+	RunStartedAt time.Time `json:"run_started_at,omitzero"`
 }
 
 // RunPR is a pull request a workflow run is for.
