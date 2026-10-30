@@ -1,0 +1,9 @@
+# Which tests prove Bug #1186's Completion Goal.
+
+[[criterion]]
+id = 1 # the clock stands at hh:mm:59 in another minute than the wall clock: the test passes, because the end comment and the expected time read one clock
+tests = ["internal/cli:TestMissionEndOnlyByStarter"]
+
+[[criterion]]
+id = 2 # the end comment names a time other than the clock's: the test fails at "#951's comment"
+tests = ["internal/cli:TestMissionEndOnlyByStarter"]

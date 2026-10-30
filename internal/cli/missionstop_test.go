@@ -693,6 +693,11 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	}
 
 	w.as("bob", "codex")
+	// bob's runs read a fixed clock, and the end comment is checked against it, never against the wall clock,
+	// whose minute can change during the runs (Bug #1186). The clock is in another minute than the wall clock,
+	// so a comment written from the wall clock fails, and within pickLockTTL of #952's claim, so it stays live.
+	clock := time.Now().Truncate(time.Minute).Add(5*time.Minute + 59*time.Second)
+	w.opts.Now = func() time.Time { return clock }
 	// GitHub goes first, and each step is safe to run again: a run that fails
 	// at any step leaves the mission running, and the next run goes on from it.
 	for _, fail := range []string{"GET /user", "GET /repos/o/r/issues/874/sub_issues", "GET /repos/o/r/pulls", "PATCH /repos/o/r/issues/comments/8951", "POST /repos/o/r/issues/951/labels",
@@ -731,7 +736,7 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	w.g.Mu.Lock()
 	at := w.g.Issues[951].Comments[len(w.g.Issues[951].Comments)-1].Body
 	w.g.Mu.Unlock()
-	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", time.Now().Format("15:04"), prN)
+	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", clock.Local().Format("15:04"), prN)
 	if !strings.HasSuffix(at, want) {
 		t.Fatalf("#951's comment:\n%s\nwant:\n%s", at, want)
 	}
