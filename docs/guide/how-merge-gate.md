@@ -243,7 +243,8 @@ untrusted data.
    new skip, removed CI steps, `continue-on-error`, a looser threshold) are flagged, not blocked: a pull request may
    edit its own checks, and a human decides.
 5. **Fail closed.** No reply for the head is disposition `no-reply`; a reply in neither format, or a block that fails
-   the schema, is `malformed-reply`. Both exit 4, so the check stays red; neither counts as a fix cycle.
+   the schema, is `malformed-reply`. Both exit 4, so the check stays red; neither counts as a fix cycle. A comment
+   or review that starts with an `/aayu` command, such as `/aayu review again`, is never a reply.
 6. **Comment.** inspect keeps one comment on the pull request, marked `<!-- aayudha:inspect -->`, and replaces it in
    place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, the review rounds, and the
    coverage manifest. Anyone can post the marker, so the state counts only from a comment by the merge gate's identity
