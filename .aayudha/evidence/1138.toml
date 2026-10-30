@@ -1,0 +1,13 @@
+# Which tests prove Bug #1138's Completion Goal.
+
+[[criterion]]
+id = 1 # a failed start's receiver output reaches the cloud Kanha only inside an untrusted block
+tests = ["internal/cli:TestFailedStartTellsKanhaOutputAsData"]
+
+[[criterion]]
+id = 2 # a block reason with </untrusted> stays in one block, escaped; "run aayu mission next 889" follows the block
+tests = ["internal/cli:TestBuildStopTellsKanhaWordsAsData"]
+
+[[criterion]]
+id = 3 # ship's merge message keeps "run aayu mission next" outside any block, and the ledger event is unchanged
+tests = ["internal/cli:TestShipTellsKanhaAfterMerge"]

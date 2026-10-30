@@ -262,10 +262,12 @@ func sentKey(ev delegate.Event) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// kanhaPrompt is the events for a local Kanha's resume, marked as data: an
-// event can carry a builder's stop words or a receiver CLI's error output.
+// kanhaPrompt is events for a Kanha, marked as data: a local Kanha's resume
+// and a cloud Kanha's follow-up (tellKanhaData). An event can carry a
+// builder's stop words or a receiver CLI's error output. Every "<" is
+// escaped, so no spelling of a closing tag (</UNTRUSTED >) ends the block.
 func kanhaPrompt(events string) string {
-	return triage.Untrusted("aayu: the events of your mission since your last check", events)
+	return triage.Untrusted("aayu: the events of your mission since your last check", strings.ReplaceAll(events, "<", "&lt;"))
 }
 
 // resumeLocalKanha resumes the local session p with the prompt. A turn ends
