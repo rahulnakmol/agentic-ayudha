@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 877,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/877/design.json",
+      "hash": "b6e8ea4de52118ce43db5ae87d1b2104374c644bf727fa3e47bae16de5b4c227"
+    }
+  ],
+  "hash": "9fe90f2ecc4cb4ad94cafab94f5912671412b5fddc2ac7a571a208a001c09972",
+  "summary": "`aayu ready \u003cfeature\u003e` (human-only) is Approve to build. One approval per Feature agrees its baselines, its budget, and every story listed then (Decision #903). A story is Ready only while that approval covers it. A story added or changed later needs a person's acknowledgment, `aayu ready \u003cfeature\u003e --ack \u003cstories\u003e`. This is steps S8 and S9 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21). This Feature replaces #878, which #903 folds into it.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:28:29Z"
+}
