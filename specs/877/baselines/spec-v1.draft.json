@@ -1,0 +1,100 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 877,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#995",
+      "hash": "9b65cab3cd6605f61341869edbbf8328d0569515b93bc7a3132ee1be928b967a",
+      "story": {
+        "number": 995,
+        "title": "A person approves a Feature to build, and the ledger keeps what was agreed",
+        "completion_goal_hash": "63730f1ee9f19d0a22596f6543c8780d9f44448ab7b49faa7ee3218db02cbea0",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03",
+          "L07"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#996",
+      "hash": "e734508ab2bc32abf4660ca4a5ce82cb877c803ab35ab6d744c72a41a2fb9ee7",
+      "story": {
+        "number": 996,
+        "title": "A story is Ready only while its Feature's approval covers it",
+        "completion_goal_hash": "5cc9c5bd31991a7b690d265cfe353ad9fb52266d489b543c6f659152ba3bf599",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03",
+          "L06"
+        ],
+        "depends_on": [
+          995
+        ]
+      }
+    },
+    {
+      "ref": "#1029",
+      "hash": "011aa2724402ba58092272059bb43131b75bbc7f1c763c169c29c50695e0a24c",
+      "story": {
+        "number": 1029,
+        "title": "Approve to build shows the high-risk changes by story, and records a choice for each",
+        "completion_goal_hash": "63448134de20fea710e9a6254aea27ce1726d5adffbc118f383e6c58b37e2fe0",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          995,
+          1028,
+          1083
+        ]
+      }
+    },
+    {
+      "ref": "#1082",
+      "hash": "864ea89a396b8a8c7a98746a704ce85614c47119237abe91682ff4b0f8e81899",
+      "story": {
+        "number": 1082,
+        "title": "A story added or changed after Approve to build needs its own acknowledgment",
+        "completion_goal_hash": "6a01cfe104c36ad77268c49c29e7c35e8294c95e8d38290065b1ea217ff73ead",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          995,
+          996
+        ]
+      }
+    },
+    {
+      "ref": "#1083",
+      "hash": "9c28c5bfa4c3998dda2ed2e4a8702ac3adba9a5cccc28e772fd29fe17ac17159",
+      "story": {
+        "number": 1083,
+        "title": "An approval record counts only with a receipt that GitHub shows its person wrote (threat T23)",
+        "completion_goal_hash": "d536f14276e20fe6d2f9d09958e82d6d91c1dd41bcfc6868751d54cb39a92c27",
+        "effort": "L",
+        "layers": [],
+        "depends_on": [
+          994,
+          995,
+          996,
+          1082
+        ]
+      }
+    },
+    {
+      "ref": "#877 stories",
+      "hash": "7b359a583d5dc0ca711023662501b5766a216f2df0db40ed042324623138f9b7"
+    }
+  ],
+  "hash": "e33ab327cbaa81fb199a4c39302888ebf7f7989c7e5f4a7bc0c7fc349d0f80b1",
+  "summary": "`aayu ready \u003cfeature\u003e` (human-only) is Approve to build. One approval per Feature agrees its baselines, its budget, and every story listed then (Decision #903). A story is Ready only while that approval covers it. A story added or changed later needs a person's acknowledgment, `aayu ready \u003cfeature\u003e --ack \u003cstories\u003e`. This is steps S8 and S9 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21). This Feature replaces #878, which #903 folds into it.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:28:24Z"
+}
