@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverHoldsAStartWithNoEnvironment"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverHoldsAStartWithNoEnvironment","Output":"=== RUN   TestMissionRecoverHoldsAStartWithNoEnvironment\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverHoldsAStartWithNoEnvironment","Output":"--- PASS: TestMissionRecoverHoldsAStartWithNoEnvironment (1.56s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverHoldsAStartWithNoEnvironment"}

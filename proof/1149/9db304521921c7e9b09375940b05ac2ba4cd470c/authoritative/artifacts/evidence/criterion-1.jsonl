@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverListsTheHandoffsEnvironment"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverListsTheHandoffsEnvironment","Output":"=== RUN   TestMissionRecoverListsTheHandoffsEnvironment\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverListsTheHandoffsEnvironment","Output":"--- PASS: TestMissionRecoverListsTheHandoffsEnvironment (2.69s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionRecoverListsTheHandoffsEnvironment"}
