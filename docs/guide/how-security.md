@@ -134,8 +134,12 @@ variable. Only a human clears it, with `aayu resume`, which agents are refused. 
         run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
 ```
 
-Halt also releases each mission claim of a story whose thread has not started. After `aayu resume`, `aayu mission
-next` claims it again, and a build with the old claim refuses. A story whose thread runs keeps its claim.
+Halt also releases each mission claim of a story whose thread has not started. A story whose thread runs
+(`status:in-progress` or `status:validation`) keeps its claim. If the ledger cannot be written, the halt stays set
+and the report says the claims were not released.
+
+After `aayu resume`, `aayu mission next` claims the story again. Until then, a build from the old claim refuses, but
+only for 15 minutes after that claim was made. A story with `status:in-progress` skips this check.
 
 Halt does not cancel runs already past their first step, and it cannot stop a compromised binary that ignores it.
 The tool-incident plan in [SECURITY.md](../../SECURITY.md) covers the rest: cancel runs, revoke tokens, yank the
@@ -173,6 +177,9 @@ The full table has 18 threats and the residual risks. Its status column was last
 8. A halted repository runs no verb and no gated workflow job (`internal/cli/halt.go`, `TestHaltStopsRunningLoop`,
    `TestHaltFromWorkflowAndHook`); every job of every workflow and `init --gates` template starts with the halt step
    (`TestEveryWorkflowJobStartsWithHaltCheck` in `workflows_test.go`).
+9. A halt releases the mission claims of stories that do not run yet. If the ledger write fails, the halt stays
+   set. A build from a released claim refuses at most 15 minutes after that claim was made (`internal/cli/halt.go`,
+   `changedSinceList` in `internal/cli/missionnext.go`, `TestHaltReleasesMissionClaims`).
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, and it runs in solo mode with one
 > human. Until an App exists, agent lanes fall back to the human's own token and every write they make is tagged
