@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 889,
+  "part": "intent",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#889 body",
+      "hash": "b52f22407f76ea17dce6d68ce593275f227019feee3cdec040cd725afa0d7080"
+    }
+  ],
+  "hash": "9a05c58e8b08b0bcb9adca90d022b12796b38fddbcc986f2627a32570531239e",
+  "summary": "`aayu build --next --dispatch` fills every free slot by handing each story to a new thread, and `ship` dispatches again after each merge. This is step S20 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-30T18:28:41Z"
+}
