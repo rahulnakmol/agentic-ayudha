@@ -1,0 +1,604 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"=== RUN   TestTier1\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/release-candidate artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/release-candidate schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/release-candidate ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/release-candidate ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/wrong-checkout artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/wrong-checkout schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/wrong-checkout ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        baseline/wrong-checkout ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/eli5-explain artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/eli5-explain schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/eli5-explain ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/eli5-explain scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/eli5-explain brief: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/engineer-ideate artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/engineer-ideate schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/engineer-ideate ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/engineer-ideate scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/engineer-ideate brief: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/regulatory-close artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/regulatory-close schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/regulatory-close ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/regulatory-close scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/regulatory-close brief: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/ste-explain artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/ste-explain schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/ste-explain ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/ste-explain scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/ste-explain brief: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/unmapped-criterion artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/unmapped-criterion schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/unmapped-criterion ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        brief/unmapped-criterion brief: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/small-story artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/small-story schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/small-story ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/small-story session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/unasked-pickup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/unasked-pickup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/unasked-pickup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        build/unasked-pickup session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/ai-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/ai-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/ai-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/ai-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/data-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/data-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/data-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        chart/data-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/pr-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/pr-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/pr-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/pr-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/question-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/question-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/question-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        counsel/question-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/architect-tombstone-kind artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/architect-tombstone-kind schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/architect-tombstone-kind ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/architect-tombstone-kind pack: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/em-split-or-replan artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/em-split-or-replan schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/em-split-or-replan ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/em-split-or-replan pack: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/founder-build-or-buy artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/founder-build-or-buy schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/founder-build-or-buy ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/founder-build-or-buy pack: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/qa-coverage-waiver artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/qa-coverage-waiver schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/qa-coverage-waiver ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        decide/qa-coverage-waiver pack: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-concrete calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-motion calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-terms calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bakery-ux calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bug-status-stale artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bug-status-stale schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bug-status-stale ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/bug-status-stale calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/decision-list-pagination artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/decision-list-pagination schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/decision-list-pagination ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/decision-list-pagination calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/experiment-checklist artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/experiment-checklist schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/experiment-checklist ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/experiment-checklist calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feature-claims-list artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feature-claims-list schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feature-claims-list ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feature-claims-list calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feedback-export artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feedback-export schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feedback-export ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/feedback-export calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/goal-first-claim artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/goal-first-claim schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/goal-first-claim ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/goal-first-claim calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/incident-login artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/incident-login schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/incident-login ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/incident-login calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/initiative-guided-start artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/initiative-guided-start schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/initiative-guided-start ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/initiative-guided-start calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/quotes-fast calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/release-claims-list artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/release-claims-list schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/release-claims-list ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/release-claims-list calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/search-fast calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/slugkit-simple calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/story-empty-claims artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/story-empty-claims schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/story-empty-claims ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/story-empty-claims scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/story-empty-claims calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple concrete: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        grill/tally-simple calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/clean-retry-backoff review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/clean-settings-default review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/clean-slug review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/clean-snapshot-locked review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/em-review artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/em-review schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/em-review ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/em-review persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/ignored-rename-error review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/inverted-admin-check review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/leak-response-body review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/nil-map-store review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/offbyone-pagination review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/race-snapshot review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/sql-injection-search review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/token-in-log review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        inspect/two-defects-invoice review-case: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/tiebreak-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/tiebreak-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/tiebreak-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/tiebreak-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/upstream-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/upstream-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/upstream-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        investigate/upstream-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/refused-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/refused-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/refused-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/refused-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/target-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/target-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/target-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        measure/target-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/halted artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/halted schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/halted ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/halted session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/starts-each artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/starts-each schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/starts-each ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/starts-each session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/stays-in-list artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/stays-in-list schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/stays-in-list ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mission/stays-in-list session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/delivery-window artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/delivery-window schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/delivery-window ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/delivery-window ux: n/a\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/orders-status artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/orders-status schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/orders-status ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        mockup/orders-status ux: n/a\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/config-migration artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/config-migration schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/config-migration ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/config-migration scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/config-migration calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/purge-kind-flag artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/purge-kind-flag schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/purge-kind-flag ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        plan/purge-kind-flag calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/orders-toolbar artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/orders-toolbar schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/orders-toolbar ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/orders-toolbar ux: n/a\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/planted-preferences artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/planted-preferences schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/planted-preferences ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        polish/planted-preferences ux: n/a\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-enterprise artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-enterprise schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-enterprise ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-enterprise persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        proof/qa-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/delivery-window artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/delivery-window schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/delivery-window ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/delivery-window ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/orders-status artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/orders-status schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/orders-status ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        prototype/orders-status ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/readback-pass artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/readback-pass schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/readback-pass ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/readback-pass session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/refuse-unready artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/refuse-unready schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/refuse-unready ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/refuse-unready session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/refuse-unready no-writes: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/story-ready artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/story-ready schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/story-ready ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        ready/story-ready calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/delivery-window artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/delivery-window schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/delivery-window ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/delivery-window ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/orders-status artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/orders-status schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/orders-status ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        research/orders-status ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/tiebreak-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/tiebreak-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/tiebreak-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/tiebreak-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/upstream-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/upstream-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/upstream-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        respond/upstream-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-enterprise artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-enterprise schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-enterprise ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-enterprise persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        retro/em-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/clean-preferences artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/clean-preferences schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/clean-preferences ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/clean-preferences ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/planted-preferences artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/planted-preferences schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/planted-preferences ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        review/planted-preferences ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/ask-errors-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/ask-errors-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/ask-errors-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/ask-errors-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/upstream-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/upstream-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/upstream-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        runbook/upstream-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/grill-followups-3-layer artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/grill-followups-3-layer schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/grill-followups-3-layer ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/grill-followups-3-layer calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/proof-retention-6-layer artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/proof-retention-6-layer schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/proof-retention-6-layer ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/proof-retention-6-layer scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/proof-retention-6-layer calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/xl-story artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/xl-story schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/xl-story ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slice/xl-story calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/benefits-startup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/benefits-startup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/benefits-startup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/benefits-startup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/claims-scaleup artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/claims-scaleup schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/claims-scaleup ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        slo/claims-scaleup persona: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/csv-export artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/csv-export schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/csv-export ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/csv-export scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/injection artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/injection schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/injection ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/injection calls: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        stub/injection no-writes: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-backlog artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-backlog schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-backlog ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-backlog scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-backlog survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-compat artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-compat schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-compat ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-compat scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/maruku-compat survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-manual artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-manual schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-manual ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-manual scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-manual survey: n/a\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-traps artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-traps schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-traps ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-traps scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/minpack-traps survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/parsedown-modern-php artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/parsedown-modern-php schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/parsedown-modern-php ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/parsedown-modern-php scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/parsedown-modern-php survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-backlog artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-backlog schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-backlog ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-backlog scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-backlog survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-rust artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-rust schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-rust ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-rust scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        survey/tinyjs-rust survey: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/guide-export artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/guide-export schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/guide-export ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/guide-export tell: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/launch-saved-filters artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/launch-saved-filters schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/launch-saved-filters ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/launch-saved-filters scope: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/launch-saved-filters tell: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/release-notes artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/release-notes schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/release-notes ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        tell/release-notes tell: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/map-drift artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/map-drift schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/map-drift ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/map-drift session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/preview-honest artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/preview-honest schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/preview-honest ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        verify/preview-honest session: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/delivery-window artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/delivery-window schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/delivery-window ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/delivery-window ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"    evals_test.go:41: \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/orders-status artifacts: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/orders-status schemas: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/orders-status ready: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        wireframe/orders-status ux: pass\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"        \n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1","Output":"--- PASS: TestTier1 (39.17s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/evals","Test":"TestTier1"}
