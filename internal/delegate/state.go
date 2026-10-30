@@ -66,6 +66,7 @@ type State struct {
 	Family    verbs.Family `json:"family"`
 	Task      string       `json:"task,omitempty"` // the receiver's ID: Cursor agent, Amp thread, Codex task
 	TaskURL   string       `json:"task_url,omitempty"`
+	Env       string       `json:"env,omitempty"` // the cloud environment of the latest hand-off or restart (a follow-up keeps it): Codex's [delegate] codex_env (Bug #1149)
 	Branch    string       `json:"branch,omitempty"`
 	PR        int          `json:"pr,omitempty"`
 	PRURL     string       `json:"pr_url,omitempty"`

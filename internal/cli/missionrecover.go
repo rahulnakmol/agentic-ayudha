@@ -262,14 +262,31 @@ func (r *recovery) adapter(receiver string) delegate.Adapter {
 	return r.e.receiverAdapter(r.cfg, receiver, r.c, r.repo, config.RepoRoot(r.e.Dir))
 }
 
-// list reads receiver's task list once per run.
-func (r *recovery) list(ctx context.Context, receiver string) ([]delegate.Task, error) {
-	if l, ok := r.lists[receiver]; ok {
+// list reads the task list of st's receiver once per run: for Codex, the list
+// of the environment st's hand-off went to, never the one [delegate] codex_env
+// names now (Bug #1149). A hand-off that recorded no environment has no list
+// that can show its task is gone.
+func (r *recovery) list(ctx context.Context, st delegate.State) ([]delegate.Task, error) {
+	key := st.Receiver + " " + st.Env
+	if l, ok := r.lists[key]; ok {
 		return l.tasks, l.err
 	}
-	tasks, err := r.adapter(receiver).(delegate.Lister).List(ctx)
-	r.lists[receiver] = listRead{tasks, err}
+	tasks, err := r.listNow(ctx, st)
+	r.lists[key] = listRead{tasks, err}
 	return tasks, err
+}
+
+// listNow reads the task list of st's receiver, as list does, with no cache.
+func (r *recovery) listNow(ctx context.Context, st delegate.State) ([]delegate.Task, error) {
+	ad := r.adapter(st.Receiver)
+	if c, ok := ad.(delegate.CodexCloud); ok {
+		if st.Env == "" && c.EnvID != "" {
+			return nil, errNoEnv // [delegate] codex_env may have changed since its hand-off: no list can show its task is gone
+		}
+		c.EnvID = or(st.Env, c.EnvID)
+		ad = c
+	}
+	return ad.(delegate.Lister).List(ctx)
 }
 
 // read asks st's receiver whether its task lives: lost says why it is gone,
@@ -286,7 +303,11 @@ func (r *recovery) read(ctx context.Context, st delegate.State) (delegate.Task, 
 		}
 		return t, "", aerr
 	case delegate.Codex:
-		tasks, lerr := r.list(ctx, st.Receiver)
+		// The list only finds the task by its ID, and its status by ID answers when
+		// the list does not, so a running story reads today's environment's list.
+		ls := st
+		ls.Env = r.cfg.CodexEnv
+		tasks, lerr := r.list(ctx, ls)
 		if lerr != nil {
 			return t, "", lerr
 		}
@@ -395,6 +416,15 @@ func (r *recovery) schedule(ss *MissionStoryState) {
 	ss.State, ss.RetryAt = "failed", last.Add(backoff<<k).UTC().Format(time.RFC3339)
 }
 
+// errNoEnv is a Codex hand-off that recorded no environment: a fault of the
+// record, not of the host, so the source's own state is left as it is.
+var errNoEnv = errors.New("its delegation records no Codex environment")
+
+// noEnvNext is a person's way out for story n held by errNoEnv.
+func noEnvNext(f, n int) string {
+	return fmt.Sprintf("a person looks for #%d's task in each Codex environment: open its PR (Refs #%d), or stop it: aayu mission stop %d --story %d --reason \"…\"", n, n, f, n)
+}
+
 // errMoved is a delegation another run changed after this run read it.
 var errMoved = errors.New("another run changed its delegation")
 
@@ -412,7 +442,7 @@ func (r *recovery) reattach(ctx context.Context, n int, st delegate.State, t del
 		out.Line = fmt.Sprintf("re-attached: %s holds it, and it has no PR yet; --dry-run: the delegation is not updated", what)
 		return out
 	}
-	tasks, err := r.adapter(st.Receiver).(delegate.Lister).List(ctx)
+	tasks, err := r.listNow(ctx, st)
 	var held []delegate.Task
 	if err == nil {
 		held, err = delegate.Holding(tasks, n)
@@ -644,14 +674,19 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 			out.Next = retryNext
 			return say("maybe started", fmt.Sprintf("maybe started: %s lists no tasks, so aayu cannot see whether #%d started there; a person checks %s, and aayu does not start it again", name, n, name))
 		}
-		tasks, err := r.list(ctx, st.Receiver)
-		r.note(st.Receiver, err, false)
+		tasks, err := r.list(ctx, st)
+		if !errors.Is(err, errNoEnv) {
+			r.note(st.Receiver, err, false)
+		}
 		var held []delegate.Task
 		if err == nil {
 			held, err = delegate.Holding(tasks, n) // a task aayu cannot match is no proof of "no task"
 		}
 		if err != nil {
 			r.touch(n).State = fmt.Sprintf("%s%s (%s)", stateUnreadable, src, unreadable(err))
+			if errors.Is(err, errNoEnv) {
+				out.Next = noEnvNext(r.f, n)
+			}
 			return say("unreadable", r.next.stateOf(n).State+": aayu starts nothing for it")
 		}
 		switch len(held) {
@@ -986,10 +1021,13 @@ func missionRetry(ctx context.Context, e *Env, f int, in Values) error {
 		return Errorf(ExitBlocked, "#%d's PR changed while the code waited (now %s): run the retry again. Nothing changed.", story, open)
 	}
 	if _, lister := r.adapter(st.Receiver).(delegate.Lister); pr == 0 && st.Status == dlgMaybe && lister {
-		tasks, err := r.list(ctx, st.Receiver)
+		tasks, err := r.list(ctx, st)
 		var held []delegate.Task
 		if err == nil {
 			held, err = delegate.Holding(tasks, story)
+		}
+		if errors.Is(err, errNoEnv) {
+			return WithNext(Errorf(ExitBlocked, "#%d may have started on %s, and %s: the retry starts nothing. Nothing changed.", story, delegate.Names[st.Receiver], err), noEnvNext(f, story))
 		}
 		if err != nil {
 			return Errorf(ExitExternal, "#%d may have started on %s, and its task list cannot be read (%s): the retry starts nothing. Nothing changed.", story, delegate.Names[st.Receiver], unreadable(err))

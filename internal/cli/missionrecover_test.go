@@ -253,6 +253,7 @@ type codexWorld struct {
 	status  error                    // fails a `codex cloud status`
 	done    string                   // task_e_64's diff: its `codex cloud status` says completed, and `codex cloud diff` returns it
 	onList  func(k int)              // runs as the k-th `codex cloud list` answers
+	envList map[string]string        // what the list of a Codex environment answers, when not list
 }
 
 func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
@@ -269,6 +270,11 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 			}
 			w.mu.Lock()
 			defer w.mu.Unlock()
+			if i := slices.Index(args, "--env"); i >= 0 && i+1 < len(args) {
+				if l, ok := w.envList[args[i+1]]; ok {
+					return l, w.listErr
+				}
+			}
 			return w.list, w.listErr
 		}
 		if name == "codex" && len(args) > 1 && args[0] == "cloud" && args[1] == "status" {
@@ -320,7 +326,7 @@ func newCodexWorld(t *testing.T, f int, stories ...int) *codexWorld {
 // hand-off's: recover leaves it to a person.
 func TestMissionRecoverReattachesDoneTask(t *testing.T) {
 	w := newCodexWorld(t, 889, 64)
-	w.delegated(delegate.State{Story: 64, Feature: 889, Receiver: "codex", Mode: "cloud", Branch: "story/64-item-64", Status: dlgMaybe, Handoffs: 2,
+	w.delegated(delegate.State{Story: 64, Feature: 889, Receiver: "codex", Mode: "cloud", Env: "env-1", Branch: "story/64-item-64", Status: dlgMaybe, Handoffs: 2,
 		Events: []delegate.Event{{At: time.Now().UTC().Format(time.RFC3339), Status: dlgMaybe, Detail: "no answer before the timeout"}}})
 	w.setPlan(889, func(p *MissionPlan) { p.storyState(64).State = stateMaybe })
 	w.list = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "completed"}], "cursor": null}`
@@ -401,6 +407,89 @@ func TestMissionRecoverReattachesDoneTask(t *testing.T) {
 	got := w.state(64)
 	if code != 0 || got.PR == 0 || got.Applied != "task_e_64" || w.handoffs(64) != 0 || !slices.Contains(w.callLog()[calls:], "codex cloud diff task_e_64") {
 		t.Fatalf("the sync after the re-attach: exit %d, %+v, calls %q: %s%s", code, got, w.callLog()[calls:], out, errOut)
+	}
+}
+
+// Bug #1149, criterion 1: the start of #64 went to Codex environment env-1
+// and got no answer; then a person changes [delegate] codex_env to env-2.
+// Recover and retry read env-1's list, where #64's task is, and start no
+// second task.
+func TestMissionRecoverListsTheHandoffsEnvironment(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start"); code == 0 || w.state(64).Status != dlgMaybe {
+		t.Fatalf("the start of #64: exit %d: %s", code, errOut)
+	}
+	if st := w.state(64); st.Env != "env-1" {
+		t.Fatalf("#64's delegation does not record its environment: %+v", st)
+	}
+	w.submit = nil
+	maybe := w.state(64)
+	for _, env := range []map[string]string{w.agent, w.person} {
+		env["AAYU_DELEGATE__CODEX_ENV"] = "env-2"
+	}
+	w.list = `{"tasks": [], "cursor": null}` // env-2 has no task for #64
+	w.envList = map[string]string{"env-1": `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"},
+		{"id": "task_e_64x", "title": "# Delegated story #64: Item 64", "status": "running"}], "cursor": null}`}
+	tries, calls := w.handoffs(64), len(w.callLog())
+	code, out, errOut := w.recover(889, "codex")
+	if code != 0 || !strings.Contains(out, "#64  maybe started: 2 codex tasks exist for #64 (task_e_64, task_e_64x)") || w.handoffs(64) != tries {
+		t.Fatalf("recover after codex_env changed: exit %d, hand-offs %d → %d: %s%s", code, tries, w.handoffs(64), out, errOut)
+	}
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
+		!strings.Contains(errOut, "a codex task for #64 exists") || w.handoffs(64) != tries {
+		t.Fatalf("retry after codex_env changed: exit %d: %s", code, errOut)
+	}
+	// One task in env-1: recover re-attaches it (Bug #1148) and records it with env-1.
+	w.envList["env-1"] = `{"tasks": [{"id": "task_e_64", "url": "https://chatgpt.com/codex/tasks/task_e_64", "title": "# Delegated story #64: Item 64", "status": "running"}], "cursor": null}`
+	code, out, errOut = w.recover(889, "codex")
+	if st := w.state(64); code != 0 || !strings.Contains(out, "#64  re-attached: its Codex task https://chatgpt.com/codex/tasks/task_e_64 (running) holds it") ||
+		st.Task != "task_e_64" || st.Env != "env-1" || w.handoffs(64) != tries {
+		t.Fatalf("recover with one task in env-1: exit %d, %+v: %s%s", code, st, out, errOut)
+	}
+	for _, c := range w.callLog()[calls:] {
+		if strings.HasPrefix(c, "codex cloud list") && !strings.Contains(c, "--env env-1") {
+			t.Fatalf("recover listed another environment than #64's: %q", c)
+		}
+	}
+	// No task in env-1: recover restarts #64, and the new hand-off records env-2, where it goes.
+	w.delegated(maybe)
+	w.envList["env-1"] = `{"tasks": [], "cursor": null}`
+	code, out, errOut = w.recover(889, "codex")
+	if st := w.state(64); code != 0 || !strings.Contains(out, "#64  restarted from story/64-") || st.Env != "env-2" || w.handoffs(64) != tries+1 {
+		t.Fatalf("restart after codex_env changed: exit %d, %+v: %s%s", code, st, out, errOut)
+	}
+}
+
+// Bug #1149, criterion 2: a maybe start whose delegation records no Codex
+// environment (written before aayu recorded one). Recover cannot tell which
+// list holds its task: it holds #64 as unreadable, names the missing
+// environment, and starts nothing; retry starts nothing either.
+func TestMissionRecoverHoldsAStartWithNoEnvironment(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.delegated(delegate.State{Story: 64, Feature: 889, Receiver: "codex", Mode: "cloud", Branch: "story/64-item-64", Status: dlgMaybe, Handoffs: 1,
+		Events: []delegate.Event{{At: time.Now().UTC().Format(time.RFC3339), Status: dlgMaybe, Detail: "no answer before the timeout"}}})
+	w.setPlan(889, func(p *MissionPlan) { p.storyState(64).State = stateMaybe })
+	tries := w.handoffs(64)
+	code, out, errOut := w.recover(889, "codex")
+	want := "#64  unreadable: codex task list (its delegation records no Codex environment): aayu starts nothing for it\n"
+	if code != 0 || !strings.Contains(out, want) || w.handoffs(64) != tries || w.lists != 0 {
+		t.Fatalf("recover of a start with no environment: exit %d, hand-offs %d, lists %d: %s%s", code, w.handoffs(64), w.lists, out, errOut)
+	}
+	if p, raw := w.plan(889); p.stateOf(64) == nil || !strings.HasPrefix(p.stateOf(64).State, "unreadable: codex task list (its delegation records no Codex environment") ||
+		slices.ContainsFunc(p.Sources, func(s MissionSource) bool { return s.Unreadable != "" }) {
+		t.Fatalf("plan.json after recover:\n%s", raw)
+	}
+	if !strings.Contains(out, "next: a person looks for #64's task in each Codex environment") {
+		t.Fatalf("recover names no way out: %s", out)
+	}
+	if code, _, errOut := w.mission(w.person, "rahulnakmol", "retry", 889, "--story", "64"); code != ExitBlocked ||
+		!strings.Contains(errOut, "#64 may have started on Codex, and its delegation records no Codex environment: the retry starts nothing.") ||
+		!strings.Contains(errOut, "aayu mission stop 889 --story 64 --reason") || w.handoffs(64) != tries {
+		t.Fatalf("retry of a start with no environment: exit %d: %s", code, errOut)
 	}
 }
 
@@ -561,7 +650,7 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 		t.Fatalf("#64 is still marked after its restart:\n%s", raw)
 	}
 	// A restart that gets no answer either is maybe started again, and the list that cannot be read stops the next check.
-	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64b", Branch: "story/64-item-64", Status: dlgMaybe,
+	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Env: "env-1", Task: "task_e_64b", Branch: "story/64-item-64", Status: dlgMaybe,
 		Events: []delegate.Event{{At: time.Now().UTC().Format(time.RFC3339), Status: dlgMaybe, Detail: "no answer before the timeout"}}})
 	w.list = `{"tasks": [], "cursor": null}`
 	w.submit = func(string) error { return fmt.Errorf("codex: %w", context.DeadlineExceeded) }
@@ -593,7 +682,7 @@ func TestMissionMaybeStartedCheckedBeforeRestart(t *testing.T) {
 	}
 	w.submit = nil
 	// A PR opens while a person enters the code of a retry: the retry starts nothing.
-	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Task: "task_e_64", Status: dlgMaybe})
+	w.delegated(delegate.State{Story: 64, Receiver: "codex", Mode: "cloud", Env: "env-1", Task: "task_e_64", Status: dlgMaybe})
 	w.device("rahulnakmol")
 	prc := make(chan *fake.PR, 1)
 	w.edit(func() {
@@ -985,7 +1074,7 @@ func TestMissionRecoverIsIdempotent(t *testing.T) {
 	}
 	w.delegated(delegate.State{Story: 83, Receiver: "codex", Mode: "cloud", Task: "task_e_83", TaskURL: "https://chatgpt.com/codex/tasks/task_e_83", Status: dlgWorking}) // older than the list: its status says
 	w.delegated(delegate.State{Story: 80, Receiver: "codex", Mode: "cloud", Task: "task_e_80", Status: dlgWorking})
-	w.delegated(delegate.State{Story: 81, Receiver: "codex", Mode: "cloud", Task: "task_e_81", Status: dlgMaybe})
+	w.delegated(delegate.State{Story: 81, Receiver: "codex", Mode: "cloud", Env: "env-1", Task: "task_e_81", Status: dlgMaybe})
 	w.delegated(delegate.State{Story: 82, Receiver: "codex", Mode: "cloud", Task: "task_e_82", Branch: "story/82-item-82", Status: dlgWorking})
 	w.list = `{"tasks": [{"id": "task_e_80", "title": "# Delegated story #80: Item 80", "status": "running"},
 		{"id": "task_e_81", "title": "# Delegated story #81: Item 81", "status": "running"},

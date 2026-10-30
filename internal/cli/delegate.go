@@ -514,6 +514,9 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		if d.kanha != nil {
 			d.state.Kanha, d.state.KanhaURL = d.kanha.Session, d.kanha.URL
 		}
+		if c, ok := d.adapter.(delegate.CodexCloud); ok && !d.local {
+			d.state.Env = c.EnvID // recover lists this environment's tasks, whatever codex_env says later
+		}
 		if d.local {
 			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver, d.handoff)))
 			report()
