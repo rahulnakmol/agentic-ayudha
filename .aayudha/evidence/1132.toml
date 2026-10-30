@@ -1,0 +1,12 @@
+# Which tests prove Bug #1132's Completion Goal. Both criteria are tier 2 results of the advisory mission group, which
+# runs only on dev (evals.yml dispatch with group mission) after the merge. In the PR, the skill text holds the rule
+# (TestMissionSkillProtocolSection), and the recorded sessions of every mission case replay in tier 1 (TestTier1)
+# with the eval files unchanged.
+
+[[criterion]]
+id = 1 # mission/stays-in-list passes all 5 runs with a mean of at least 3.50; eval.toml and evals/cases/mission unchanged
+tests = [".:TestMissionSkillProtocolSection", "internal/evals:TestTier1"]
+
+[[criterion]]
+id = 2 # mission/halted and mission/starts-each still pass all 5 runs
+tests = ["internal/evals:TestTier1"]
