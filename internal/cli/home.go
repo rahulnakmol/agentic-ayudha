@@ -198,6 +198,10 @@ func gateRunOf(r *gh.WorkflowRun, head string, pr int) bool {
 
 // gateSuites is the check suites of the merge gate's own runs for pull request
 // pr on head (gateRunOf). A re-run of a run's failed jobs stays in its suite.
+// Once pr merges, GitHub lists no pull request for its runs any more: then a
+// run that lists none is pr's when pr is merged and the run is for pr's head
+// branch in this repository (Bug #1159), so proof land can read a merged PR's
+// gate. A run that lists another pull request is never pr's.
 func gateSuites(ctx context.Context, c *github.Client, owner, name, head string, pr int) (map[int64]bool, error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
 		r, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: o})
@@ -207,8 +211,20 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 		return nil, err
 	}
 	out := map[int64]bool{}
+	var merged *gh.PullRequest // read once, for the first run that lists no pull request
 	for _, r := range runs {
-		if gateRunOf(r, head, pr) {
+		own := gateRunOf(r, head, pr)
+		if !own && len(r.PullRequests) == 0 && r.GetPath() == ".github/workflows/"+MergeGateWorkflow && r.GetEvent() == "pull_request_target" && r.GetHeadSHA() == head {
+			if merged == nil {
+				if merged, _, err = c.REST.PullRequests.Get(ctx, owner, name, pr); err != nil {
+					return nil, err
+				}
+			}
+			repo := owner + "/" + name
+			own = merged.GetMerged() && merged.GetHead().GetSHA() == head && merged.GetHead().GetRef() == r.GetHeadBranch() &&
+				merged.GetHead().GetRepo().GetFullName() == repo && r.GetHeadRepository().GetFullName() == repo
+		}
+		if own {
 			out[r.GetCheckSuiteID()] = true
 		}
 	}

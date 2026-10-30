@@ -1,0 +1,13 @@
+# Which tests prove Bug #1159's Completion Goal.
+
+[[criterion]]
+id = 1 # a merged PR's gate run with empty pull_requests, its head branch, and this repository: proof land lands the pack, one ledger commit
+tests = ["internal/cli:TestProofLand"]
+
+[[criterion]]
+id = 2 # the run lists another PR, or has another head branch or head repository: "aayudha/merge-gate is missing", nothing landed
+tests = ["internal/cli:TestProofLand"]
+
+[[criterion]]
+id = 3 # an open PR whose gate run lists no pull request, on its own branch and repository: the gate checks still read as missing
+tests = ["internal/cli:TestShipOnProof"]

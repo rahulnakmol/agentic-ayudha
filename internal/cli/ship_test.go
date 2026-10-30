@@ -794,12 +794,15 @@ func TestShipOnProof(t *testing.T) {
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	prs := g.Runs[gate].PullRequests
-	g.Runs[gate].PullRequests = nil
+	// The PR's own head branch and repository, as a fork's run on a branch of
+	// the same name would show them: only a merged PR's run counts without a
+	// listed pull request (Bug #1159).
+	g.Runs[gate].PullRequests, g.Runs[gate].HeadBranch, g.Runs[gate].HeadRepository = nil, g.Pulls[prN].Head.Ref, &fake.HeadRepo{FullName: "o/r"}
 	g.Mu.Unlock()
-	// A gate run GitHub lists for no PR is not this PR's gate: its checks are missing before the rung is read.
+	// A gate run GitHub lists for no PR is not this open PR's gate: its checks are missing before the rung is read.
 	refused("aayudha/merge-gate is missing on " + short(head))
 	g.Mu.Lock()
-	g.Runs[gate].PullRequests = prs
+	g.Runs[gate].PullRequests, g.Runs[gate].HeadBranch, g.Runs[gate].HeadRepository = prs, "", nil
 	g.Mu.Unlock()
 	g.Mu.Lock()
 	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".github/workflows/lint.yml")
@@ -1803,6 +1806,28 @@ func TestProofLand(t *testing.T) {
 	if code, out, errOut := run(t, env, opts, "audit", "--repo", "o/r", "--dry-run"); code != 0 || !strings.Contains(out, "proof coverage 0/1; merged without proof: pre-gate 0, post-gate 1") {
 		t.Fatalf("audit before proof land: %d %s %s", code, out, errOut)
 	}
+	// Bug #1159: once the PR merges, GitHub lists no pull request for its gate
+	// runs. A run with none counts only on the PR's head branch, in this
+	// repository; a run that lists another pull request never counts.
+	setRun := func(prs []fake.RunPR, branch, repo string) {
+		g.Mu.Lock()
+		g.Runs[0].PullRequests, g.Runs[0].HeadBranch, g.Runs[0].HeadRepository = prs, branch, &fake.HeadRepo{FullName: repo}
+		g.Mu.Unlock()
+	}
+	for _, c := range []struct {
+		prs          []fake.RunPR
+		branch, repo string
+	}{
+		{[]fake.RunPR{{Number: prN + 1}}, "story/2-show-empty-list", "o/r"},
+		{nil, "story/9-other", "o/r"},
+		{nil, "story/2-show-empty-list", "fork/r"},
+	} {
+		setRun(c.prs, c.branch, c.repo)
+		if code, out := land(); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is missing on "+short(head)) {
+			t.Fatalf("proof land with the gate run of %+v on %s in %s: %d %s", c.prs, c.branch, c.repo, code, out)
+		}
+	}
+	setRun(nil, "story/2-show-empty-list", "o/r")
 	before := git(t, bare, "rev-list", "--count", "ledger")
 	if code, out := land(); code != 0 || !strings.Contains(out, fmt.Sprintf("from artifact %d of run %d", arts[0].ID, good.ID)) {
 		t.Fatalf("proof land: %d %s", code, out)
