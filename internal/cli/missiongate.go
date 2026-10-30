@@ -232,7 +232,7 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		merged[it.Number] = is.GetState() == "closed"
+		merged[it.Number] = depState(is) != depOpen // merged or cancelled (Bug #1169)
 		for _, l := range github.IssueLabels(is) {
 			if v, ok := strings.CutPrefix(l, "layer:"); ok {
 				layers[it.Number] = append(layers[it.Number], v)
@@ -1076,8 +1076,9 @@ func (e *Env) committed(ctx context.Context, c *github.Client, w *ledger.Writer,
 		if err != nil {
 			return nil, nil, Wrap(ExitExternal, err)
 		}
-		closed[it.Number] = is.GetState() == "closed"
-		if closed[it.Number] {
+		st := depState(is) // Bug #1169: merged while open until its release
+		closed[it.Number] = st != depOpen
+		if st == depMerged { // a cancelled story is not charged as merged
 			merged++
 		}
 	}

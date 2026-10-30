@@ -216,14 +216,15 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	spent += fixes
 	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
-	states := map[int]string{} // each listed item's state: a depends-on target in the list needs no read
+	read := map[int]*gh.Issue{} // each listed item: a depends-on target in the list needs no read
 	for _, is := range append(slices.Clone(subs), extra...) {
-		states[is.GetNumber()] = is.GetState()
+		read[is.GetNumber()] = is
 	}
 	for i, is := range append(slices.Clone(subs), extra...) {
 		n, labels := is.GetNumber(), github.IssueLabels(is)
 		spent += costs[n] // the measured spend of every story and Bug, merged ones too
-		if is.GetState() != "open" {
+		// Merged (open until its release, Bug #1169) or cancelled: never started again.
+		if depState(is) != depOpen {
 			continue
 		}
 		kind, _ := workitems.TypeOf(is.GetType().GetName(), labels)
@@ -261,16 +262,19 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		case !contains(labels, ready.LabelReady):
 			en.item.Reason, en.item.detail = "not Ready", storyState(is)
 		default:
-			open, err := openDeps(ctx, c, owner, name, is.GetBody(), states)
+			open, cancelled, err := heldDeps(ctx, c, owner, name, is.GetBody(), read)
 			if err != nil {
 				return err
 			}
-			if len(open) > 0 { // F19: never start before the target merges
-				verb := "is"
-				if len(open) > 1 {
-					verb = "are"
+			if len(open)+len(cancelled) > 0 { // F19: never start before the target merges
+				var why []string
+				if len(open) > 0 {
+					why = append(why, fmt.Sprintf("depends-on %s %s open", strings.Join(open, ", "), plural(len(open), "is", "are")))
 				}
-				en.item.Reason = fmt.Sprintf("depends-on %s %s open", strings.Join(open, ", "), verb)
+				if len(cancelled) > 0 {
+					why = append(why, fmt.Sprintf("depends-on %s %s cancelled", strings.Join(cancelled, ", "), plural(len(cancelled), "was", "were")))
+				}
+				en.item.Reason = strings.Join(why, "; ")
 				break
 			}
 			en.free = true
@@ -353,15 +357,16 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 // dependsOnWord finds the link kind in any case, at offsets into the line itself.
 var dependsOnWord = regexp.MustCompile(`(?i)depends-on`)
 
-// openDeps are the depends-on targets in a Ready story's Links that are still
-// open (Story #999, F19): "#10", one per target. The body is the one Ready
-// froze, as the Ready guard removes status:ready when it drifts. A target in
-// states has its state from there; aayu reads the others. A target it cannot
-// read counts as open: one in another repository, a link line that ParseLinks
-// misses, or an issue that is gone.
-func openDeps(ctx context.Context, c *github.Client, owner, name, body string, states map[int]string) ([]string, error) {
+// heldDeps are the depends-on targets in a Ready story's Links that hold it
+// (Story #999, F19): "#10", one per target, those not merged yet (open) and
+// those cancelled, which never merge (Bug #1169). A target merges when
+// depState says so: closed as completed, or open with status:merged. The body
+// is the one Ready froze, as the Ready guard removes status:ready when it
+// drifts. A target in read is taken from there; aayu reads the others. A
+// target it cannot read counts as open: one in another repository, a link
+// line that ParseLinks misses, or an issue that is gone.
+func heldDeps(ctx context.Context, c *github.Client, owner, name, body string, read map[int]*gh.Issue) (open, cancelled []string, err error) {
 	_, fields := workitems.Sections(body)
-	var open []string
 	for _, line := range strings.Split(fields["Links"], "\n") {
 		links, _ := workitems.ParseLinks(line)
 		switch {
@@ -374,20 +379,28 @@ func openDeps(ctx context.Context, c *github.Client, owner, name, body string, s
 		case len(links) == 0 || links[0].Kind != "depends-on":
 		default:
 			n := links[0].Number
-			st, ok := states[n]
+			is, ok := read[n]
 			if !ok {
-				is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+				is, _, err = c.REST.Issues.Get(ctx, owner, name, n)
 				if err != nil && !github.NotFound(err) {
-					return nil, Wrap(ExitExternal, err)
+					return nil, nil, Wrap(ExitExternal, err)
 				}
-				st, states[n] = is.GetState(), is.GetState()
+				read[n] = is
 			}
-			if key := "#" + strconv.Itoa(n); st != "closed" && !slices.Contains(open, key) {
-				open = append(open, key)
+			key := "#" + strconv.Itoa(n)
+			switch depState(is) {
+			case depOpen:
+				if !slices.Contains(open, key) {
+					open = append(open, key)
+				}
+			case depCancelled:
+				if !slices.Contains(cancelled, key) {
+					cancelled = append(cancelled, key)
+				}
 			}
 		}
 	}
-	return open, nil
+	return open, cancelled, nil
 }
 
 func emitWorkList(e *Env, list WorkList) error {
@@ -454,10 +467,10 @@ func readyAt(ctx context.Context, c *github.Client, owner, name string, is *gh.I
 }
 
 // missionDone reports whether every story and Bug of the plan's graph has
-// merged (closed), so the mission has nothing left to start.
+// merged or was cancelled (depState), so the mission has nothing left to start.
 func missionDone(plan *MissionPlan, subs []*gh.Issue) bool {
 	return !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool {
-		return slices.ContainsFunc(subs, func(is *gh.Issue) bool { return is.GetNumber() == it.Number && is.GetState() == "open" })
+		return slices.ContainsFunc(subs, func(is *gh.Issue) bool { return is.GetNumber() == it.Number && depState(is) == depOpen })
 	})
 }
 

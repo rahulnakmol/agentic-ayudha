@@ -584,10 +584,21 @@ func (e *Env) storyRunOf(ctx context.Context, c *github.Client, t *ledger.Tree, 
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	if is.GetState() == "closed" {
+	ended, end := is.GetState() == "closed", is.GetClosedAt().Time
+	if depState(is) == depMerged && st != nil && st.PR != 0 {
+		// Ship leaves the story open, and a release closes it later (Bug #1169): its run ends when its PR merged.
+		pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, st.PR)
+		if err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+		if at := pr.GetMergedAt().Time; !at.IsZero() {
+			ended, end = true, at
+		}
+	}
+	if ended {
 		r.ended = true
-		if at := is.GetClosedAt().Time; !at.IsZero() {
-			r.end = at
+		if !end.IsZero() {
+			r.end = end
 		}
 	}
 	r.end = maxTime(r.end, r.start)

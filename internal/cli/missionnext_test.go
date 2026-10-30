@@ -636,12 +636,63 @@ func TestMissionNextHoldsOpenDependsOn(t *testing.T) {
 	}
 }
 
-// Criterion 2: once #10 closes as merged, #11 starts.
+// Criterion 2: once #10 merges, #11 starts. Ship leaves #10 open with
+// status:merged until its release closes it (Bug #1169, criterion 1).
 func TestMissionNextStartsAfterDependsOnMerges(t *testing.T) {
 	m := dependsOnWorld(t)
 	m.status(10, "merged", "")
-	m.closeIssue(10)
 	if code, out, errOut := m.next(889); code != 0 || out != "start #11\n" || m.claims(889)[11] != 1 {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Bug #1169, criteria 1 and 4: #10, in the same Feature, merged and is open
+// with status:merged: #11 starts, and #10 is never listed again.
+func TestMissionNextMergedOpenStoryFreesItsDependent(t *testing.T) {
+	m := newMissionWorld(t)
+	m.links = map[int]string{11: "depends-on #10"}
+	m.startedMission(889, []int{10, 11})
+	m.status(10, "merged", "")
+	m.status(11, "ready", "")
+	if code, out, errOut := m.next(889); code != 0 || out != "start #11\n" {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); got[11] != 1 || len(got) != 1 {
+		t.Fatalf("claims: %v", got)
+	}
+	if ms := m.show(889).Milestones[0]; ms.State != "building: 1 of 2 merged; the gate runs when its last story merges" {
+		t.Fatalf("show: %+v", ms)
+	}
+	// Both merged and still open: the mission is done, before any release.
+	m.status(11, "merged", "")
+	if code, out, errOut := m.next(889); code != 0 || !strings.HasPrefix(out, "The mission of #889 is done") {
+		t.Fatalf("mission next 889 with both merged: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Bug #1169, criterion 5: #10 was closed as not planned. It never merges, so
+// #11 waits with the reason, and is not claimed; the same with only the label.
+func TestMissionNextCancelledDependsOnHolds(t *testing.T) {
+	for _, closed := range []bool{true, false} {
+		m := dependsOnWorld(t)
+		m.status(10, "cancelled", "")
+		if closed {
+			m.edit(func() { m.g.Issues[10].State, m.g.Issues[10].StateReason = "closed", "not_planned" })
+		}
+		if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on #10 was cancelled\n" || len(m.claims(889)) != 0 {
+			t.Fatalf("closed %v: mission next 889: exit %d: %q%s", closed, code, out, errOut)
+		}
+	}
+	// Closed as not planned with no label, beside an open target: both hold #11.
+	m := newMissionWorld(t)
+	m.issue(888, "Other Feature", "feature", 0, "")
+	m.issue(10, "Story 10", "story", 888, "")
+	m.issue(12, "Story 12", "story", 888, "")
+	m.edit(func() { m.g.Issues[10].State, m.g.Issues[10].StateReason = "closed", "not_planned" })
+	m.links = map[int]string{11: "depends-on #10\ndepends-on #12"}
+	m.startedMission(889, []int{11})
+	m.status(11, "ready", "")
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #11: depends-on #12 is open; depends-on #10 was cancelled\n" {
 		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
 	}
 }

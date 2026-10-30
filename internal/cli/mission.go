@@ -362,7 +362,7 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 				it.Milestone = m.Name
 			}
 		}
-		done[it.Number] = si.GetState() == "closed"
+		done[it.Number] = depState(si) != depOpen // merged or cancelled: it holds no mission back
 		for _, d := range dependsOn(si.GetBody()) {
 			if slices.Contains(nums, d) {
 				it.DependsOn = append(it.DependsOn, d)
@@ -373,7 +373,7 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 				return p, nil, nil, err
 			}
 			it.Outside = append(it.Outside, dep.MissionDep)
-			done[d] = dep.closed
+			done[d] = dep.merged
 		}
 		p.Graph = append(p.Graph, it)
 	}
@@ -502,18 +502,18 @@ func dependsOn(body string) []int {
 
 type outside struct {
 	MissionDep
-	closed bool
+	merged bool
 }
 
 // outsideDep reads a depends-on target outside the Feature: whether it has
-// merged (closed), and its Feature (its parent, or itself when it is one).
+// merged (depState: a cancelled one never has), and its Feature (its parent, or itself when it is one).
 func outsideDep(ctx context.Context, c *github.Client, owner, name string, n int) (outside, error) {
 	d := outside{MissionDep: MissionDep{Number: n}}
 	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
 	if err != nil {
 		return d, Wrap(ExitExternal, err)
 	}
-	d.closed = is.GetState() == "closed"
+	d.merged = depState(is) == depMerged
 	if t, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); t == "feature" {
 		d.Feature = n
 		return d, nil
@@ -1074,19 +1074,23 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 	}
 	// Each story's state now, and whether each depends-on target merged.
 	owner, name, _ := github.SplitRepo(repo)
-	state, merged := map[int]string{}, map[int]bool{}
+	state, merged, mergedN := map[int]string{}, map[int]bool{}, 0
 	for _, it := range plan.Graph {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		state[it.Number], merged[it.Number] = storyState(is), is.GetState() == "closed"
+		// A cancelled story holds no milestone, and only a merged one is charged (missionUsed).
+		state[it.Number], merged[it.Number] = storyState(is), depState(is) != depOpen
+		if depState(is) == depMerged {
+			mergedN++
+		}
 		for _, d := range it.Outside {
 			dep, _, err := c.REST.Issues.Get(ctx, owner, name, d.Number)
 			if err != nil {
 				return Wrap(ExitExternal, err)
 			}
-			merged[d.Number] = dep.GetState() == "closed"
+			merged[d.Number] = depState(dep) == depMerged
 		}
 	}
 	approved := 0
@@ -1115,7 +1119,7 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 			rep.State = orDefault(paused, rep.State)
 		}
 	}
-	mergedN, before := 0, ""
+	before := ""
 	for _, m := range plan.Milestones {
 		ms := MilestoneState{Name: m.Name}
 		k := 0
@@ -1131,7 +1135,6 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 				k++
 			}
 		}
-		mergedN += k
 		ms.State = fmt.Sprintf("building: %d of %d merged; the gate runs when its last story merges", k, len(m.Stories))
 		switch g := m.Gate; {
 		case g.State == GatePassed:
@@ -1334,10 +1337,41 @@ func missionsNow(plan *MissionPlan, merged func(int) bool) []MissionState {
 	return out
 }
 
-// storyState is a story's or Bug's state: merged once closed, else its status label.
+// What a story, Bug, or depends-on target is for a mission (Bug #1169).
+const (
+	depOpen      = "open"
+	depMerged    = "merged"
+	depCancelled = "cancelled"
+)
+
+// mergedStatus are the statuses of an issue whose PR merged: ship sets
+// status:merged and leaves the issue open until a release closes it.
+var mergedStatus = []string{"status:merged", "status:released", "status:measured", "status:done"}
+
+// depState is the one reading of whether an issue is done (Bug #1169):
+// merged when it closed as completed or is open with a shipped status;
+// cancelled when it closed as not planned or a duplicate, or has
+// status:cancelled; else open. An issue aayu could not read (nil) is open.
+// Only merged lets a dependent start: a cancelled target holds it.
+func depState(is *gh.Issue) string {
+	if is == nil {
+		return depOpen
+	}
+	labels := github.IssueLabels(is)
+	switch why := is.GetStateReason(); {
+	case slices.Contains(labels, "status:cancelled"),
+		is.GetState() == "closed" && (why == "not_planned" || why == "duplicate"):
+		return depCancelled
+	case is.GetState() == "closed", slices.ContainsFunc(labels, func(l string) bool { return slices.Contains(mergedStatus, l) }):
+		return depMerged
+	}
+	return depOpen
+}
+
+// storyState is a story's or Bug's state: merged or cancelled once closed, else its status label.
 func storyState(is *gh.Issue) string {
 	if is.GetState() == "closed" {
-		return "merged"
+		return depState(is)
 	}
 	for _, l := range github.IssueLabels(is) {
 		if s, ok := strings.CutPrefix(l, "status:"); ok {

@@ -532,11 +532,14 @@ func TestMissionShowPrintsSourcesAndPausedRow(t *testing.T) {
 		t.Fatalf("start: exit %d: %s%s", code, out, errOut)
 	}
 	m.closeIssue(20)
+	// #22 was cancelled: it holds no milestone, and it is not charged as merged (Bug #1169).
+	m.status(22, "cancelled", "")
+	m.edit(func() { m.g.Issues[22].State, m.g.Issues[22].StateReason = "closed", "not_planned" })
 	code, out, errOut := m.mission(m.person, "", "show", 889)
 	for _, want := range []string{
 		"running: started by @rahulnakmol at ",
 		"MS1       building: 1 of 2 merged; the gate runs when its last story merges · #20 merged, #21 in-progress",
-		"MS2       building: 0 of 2 merged; the gate runs when its last story merges; its PRs merge after MS1's gate passes · #22 open, #23 open",
+		"MS2       building: 1 of 2 merged; the gate runs when its last story merges; its PRs merge after MS1's gate passes · #22 cancelled, #23 open",
 		"agents    5 ([build] agents on dev)",
 		"budget    $660 (the top of #886's range $360–$660 (estimate $420), locked at Start)",
 		"used      $60 (1 merged x $60 (the per-story cap of approval 1), until #872 measures spend)",
@@ -684,6 +687,38 @@ func TestMissionSplitsOnOpenExternalDependsOn(t *testing.T) {
 	}
 }
 
+// Bug #1169, criterion 3: #22 depends on #950, a story of #874 that merged
+// and is open with status:merged. Approve to build puts #22 in mission 1,
+// and mission next starts it. Once #950 is cancelled instead, #22 waits.
+func TestMissionMergedOpenOutsideDependsOn(t *testing.T) {
+	m := newMissionWorld(t)
+	m.scenario889(map[int]string{22: "depends-on #950"})
+	m.status(950, "merged", "")
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); len(p.Missions) != 1 || len(p.Missions[0].Stories) != 4 {
+		t.Fatalf("missions with #950 merged and open:\n%s", raw)
+	}
+	m.mu.Lock()
+	m.tool = "amp" // the Kanha runs mission next in Amp
+	m.mu.Unlock()
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
+		t.Fatalf("start: exit %d: %s%s", code, out, errOut)
+	}
+	m.status(22, "ready", "")
+	if code, out, errOut := m.next(889); code != 0 || !strings.Contains(out, "\nstart #22\n") || m.claims(889)[22] != 1 {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	m = newMissionWorld(t)
+	m.scenario889(map[int]string{22: "depends-on #950"})
+	m.status(950, "cancelled", "")
+	m.edit(func() { m.g.Issues[950].State, m.g.Issues[950].StateReason = "closed", "not_planned" })
+	if code, out, errOut := m.approve(889); code != 0 || !strings.Contains(errOut, "#22 waits for mission 2: waits on #950 (#874)") {
+		t.Fatalf("approve with #950 cancelled: exit %d: %s%s", code, out, errOut)
+	}
+}
+
 // Criterion 8: when #950 merges, mission 2 starts with #22 and every waiting
 // story whose depends-on outside #889 merged, under the approval and on the
 // tool in plan.json, with no new Approve to build; one still held waits for
@@ -706,7 +741,7 @@ func TestMissionTwoStartsWhenDependsOnMerges(t *testing.T) {
 	m.tool = "claude" // his tool changed since he started: mission 2 still runs on the plan's
 	m.mu.Unlock()
 	n, approved, planned := m.commits(), git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889)), git(t, m.bare, "show", "ledger:"+MissionPlanPath(889))
-	m.closeIssue(950)
+	m.status(950, "merged", "") // ship leaves #950 open until its release (Bug #1169)
 	code, out, errOut := m.mission(m.person, "", "show", 889)
 	if code != 0 || m.codes() != 0 || !strings.Contains(out, "mission 1 running · #20, #21\n") ||
 		!strings.Contains(out, "mission 2 running: started under approval 1 on cursor, with no new Approve to build · #22\n") ||
