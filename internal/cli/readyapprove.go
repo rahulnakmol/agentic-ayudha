@@ -16,7 +16,6 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
-	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -36,20 +35,21 @@ type ApproveReport struct {
 	DryRun       bool            `json:"dry_run,omitempty"`
 }
 
-// approveRefusal refuses Approve to build for an agent lane: a host's agent
-// marker, aayu's own agent lanes (AAYU_AGENT=1: MCP and the loops), or CI.
-// It is checked before anything is written.
+// approveRefusal refuses Approve to build for aayu's own agent lanes and CI,
+// as laneRefusal says. It is checked before any ledger setup or write.
 func (e *Env) approveRefusal() error {
 	return e.laneRefusal("Approve to build (aayu ready on a Feature)")
 }
 
-// laneRefusal refuses what, a person's decision, for an agent lane, naming
-// the lane's variable but never its value; nil for a person.
+// laneRefusal refuses what, a person's decision, for aayu's own agent lanes
+// (AAYU_AGENT=1: MCP and the loops, which run unattended) and CI, before
+// any ledger setup or write; nil otherwise. A shell with only a host's agent marker
+// goes on to presenceCheck, as ready --part and ship --solo-bypass do: an
+// orb's Terminal tab inherits AMP_THREAD_ID, and the device code proves the
+// person, because an agent never enters or relays it (Bug #1182).
 func (e *Env) laneRefusal(what string) error {
 	lane := ""
-	switch m := hosts.AgentMarker(e.Getenv); {
-	case m != "":
-		lane, _, _ = strings.Cut(m, "=") // the variable, never its value
+	switch {
 	case e.Getenv("AAYU_AGENT") == "1":
 		lane = "AAYU_AGENT=1"
 	case e.CI:

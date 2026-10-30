@@ -148,8 +148,8 @@ func TestMissionStartReason(t *testing.T) {
 	m.feature1015(889, chain1015(20, "L", "L")...)
 	m.approved(889)
 	n := m.commits()
-	code, _, errOut := m.mission(m.agent, "rahulnakmol", "start", 889, "--reason", "one migration")
-	if want := "aayu: mission start is a person's decision and is refused for an agent lane (AMP_THREAD_ID)"; code != ExitBlocked || !strings.Contains(errOut, want) || m.commits() != n || m.codes() != 0 {
+	code, _, errOut := m.mission(m.lane, "rahulnakmol", "start", 889, "--reason", "one migration")
+	if want := "aayu: mission start is a person's decision and is refused for an agent lane (AAYU_AGENT=1)"; code != ExitBlocked || !strings.Contains(errOut, want) || m.commits() != n || m.codes() != 0 {
 		t.Fatalf("agent start: exit %d: %s", code, errOut)
 	}
 	code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--reason", "one migration")
@@ -456,8 +456,8 @@ func TestMissionExtend(t *testing.T) {
 		t.Fatalf("at 48 h: exit %d: %q", code, out)
 	}
 	n := m.commits()
-	code, _, errOut := m.mission(m.agent, "rahulnakmol", "extend", 889, "--reason", "two stories left")
-	if want := "aayu: mission extend is a person's decision and is refused for an agent lane (AMP_THREAD_ID)"; code != ExitBlocked || !strings.Contains(errOut, want) ||
+	code, _, errOut := m.mission(m.lane, "rahulnakmol", "extend", 889, "--reason", "two stories left")
+	if want := "aayu: mission extend is a person's decision and is refused for an agent lane (AAYU_AGENT=1)"; code != ExitBlocked || !strings.Contains(errOut, want) ||
 		m.commits() != n || m.codes() != 0 {
 		t.Fatalf("agent extend: exit %d: %s", code, errOut)
 	}

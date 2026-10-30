@@ -32,6 +32,7 @@ type missionWorld struct {
 	dir, bare string
 	person    map[string]string
 	agent     map[string]string
+	lane      map[string]string // aayu's own agent lane (AAYU_AGENT=1): refused every person's decision (Bug #1182)
 	opts      Options
 	mu        sync.Mutex
 	tool      string
@@ -120,7 +121,8 @@ func newMissionWorld(t *testing.T) *missionWorld {
 	state := m.dir + "/state"
 	m.person = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}
 	m.agent = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
-	for _, env := range []map[string]string{m.person, m.agent} {
+	m.lane = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
+	for _, env := range []map[string]string{m.person, m.agent, m.lane} {
 		env["AAYU_SECRET_CURSOR_API_KEY"], env["AAYU_DELEGATE__CURSOR_API"], env["AAYU_DELEGATE__CODEX_ENV"] = "cursor-key", srv.URL, "env-1"
 	}
 	m.opts = Options{IsTerminal: stdinTTY, GitHubAPI: m.g.URL(), GitHubGap: -1, Dir: m.dir, DevicePoll: 10 * time.Millisecond,
@@ -286,8 +288,10 @@ func (m *missionWorld) scenario889(links map[int]string) {
 	m.feature(889, 20, 21, 22, 23)
 }
 
-// Criterion 10: an agent lane's `aayu mission start` is refused before
-// anything is read, with no device code, and nothing is written.
+// Criterion 10: aayu's own agent lane (AAYU_AGENT=1) and CI are refused
+// `aayu mission start` before anything is read, with no device code, and
+// nothing is written. A shell with only a host's marker (an orb's Terminal
+// tab) asks for the device code and starts after the person's code (Bug #1182).
 func TestMissionStartRefusedForAgentLane(t *testing.T) {
 	m := newMissionWorld(t)
 	m.scenario889(nil)
@@ -295,17 +299,27 @@ func TestMissionStartRefusedForAgentLane(t *testing.T) {
 		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
 	}
 	before, raw := m.commits(), git(t, m.bare, "show", "ledger:"+MissionPlanPath(889))
-	m.g.Reset()
-	code, out, errOut := m.mission(m.agent, "rahulnakmol", "start", 889)
-	want := "aayu: mission start is a person's decision and is refused for an agent lane (AMP_THREAD_ID)"
-	if code != ExitBlocked || !strings.Contains(errOut, want) || m.codes() != 0 || m.commits() != before || len(m.g.Writes()) != 0 ||
-		git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != raw {
-		t.Fatalf("agent mission start: exit %d, device codes %d, commits %s → %s: %s%s", code, m.codes(), before, m.commits(), out, errOut)
+	for _, c := range []struct {
+		env  map[string]string
+		args []string
+		lane string
+	}{
+		{m.lane, nil, "AAYU_AGENT=1"},
+		{m.person, []string{"--ci"}, "--ci"},
+	} {
+		m.g.Reset()
+		code, out, errOut := m.mission(c.env, "rahulnakmol", "start", 889, c.args...)
+		writes := len(m.g.Writes())
+		want := "aayu: mission start is a person's decision and is refused for an agent lane (" + c.lane + ")"
+		if code != ExitBlocked || !strings.Contains(errOut, want) || m.codes() != 0 || writes != 0 || m.commits() != before ||
+			git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != raw {
+			t.Fatalf("%s mission start: exit %d, device codes %d, GitHub writes %d, commits %s → %s: %s%s", c.lane, code, m.codes(), writes, before, m.commits(), out, errOut)
+		}
 	}
-	// AAYU_AGENT=1 (MCP and aayu's loops) is an agent lane too.
-	code, _, errOut = m.mission(map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, "rahulnakmol", "start", 889)
-	if code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane (AAYU_AGENT=1)") || m.commits() != before {
-		t.Fatalf("AAYU_AGENT=1 mission start: exit %d: %s", code, errOut)
+	// The host's marker alone: the device code, then the start.
+	code, out, errOut := m.mission(m.agent, "rahulnakmol", "start", 889)
+	if p, _ := m.plan(889); code != 0 || m.codes() != 1 || !strings.Contains(errOut, "/login/device") || p.StartedBy != "rahulnakmol" {
+		t.Fatalf("mission start in a marked shell: exit %d, device codes %d, started by %q: %s%s", code, m.codes(), p.StartedBy, out, errOut)
 	}
 }
 

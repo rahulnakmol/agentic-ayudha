@@ -1342,6 +1342,10 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 		if !slices.ContainsFunc(plan.GateFixes, func(fx GateFix) bool { return fx.PR == n && fx.Waits != "" }) {
 			return Errorf(ExitBlocked, "#%d is no gate fix of #%d that waits for the budget", n, f)
 		}
+		// A shell with a host's agent marker passes laneRefusal: the device code proves the person (Bug #1182).
+		if err := e.requireHuman(ctx, "mission budget --keep", AccessWrite); err != nil {
+			return err
+		}
 		if err := e.closeAsk(ctx, c, repo, f, budgetAskID(n), fmt.Sprintf("#%d keeps waiting: the budget stays %s.", n, ready.USD(plan.Budget))); err != nil {
 			return err
 		}

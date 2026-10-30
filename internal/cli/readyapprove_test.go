@@ -55,8 +55,9 @@ func TestReadyApproveToBuild(t *testing.T) {
 	}
 	dir, bare := ledgerCheckout(t)
 	state := filepath.Join(dir, "state")
-	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
-	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state} // a terminal with no agent marker
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}                   // a host's marker only: an orb's Terminal tab
+	lane := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state} // aayu's own agent lane
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": state}                                                     // a terminal with no agent marker
 	var mu sync.Mutex
 	var crit ready.Critique // #876's critique.State, faked until #876 merges
 	setCrit := func(f func(c *ready.Critique)) { mu.Lock(); f(&crit); mu.Unlock() }
@@ -146,15 +147,32 @@ func TestReadyApproveToBuild(t *testing.T) {
 	request("tech")
 	approveByHand("tech", 1)
 
-	// 1. An agent lane (AMP_THREAD_ID) and an MCP client are refused with exit 4, and nothing is written.
-	refused := "Approve to build (aayu ready on a Feature) is a person's decision and is refused for an agent lane (AMP_THREAD_ID)"
+	// 1. aayu's own agent lane (AAYU_AGENT=1) and an MCP client are refused with exit 4, with no device code, and nothing is written.
+	refused := "Approve to build (aayu ready on a Feature) is a person's decision and is refused for an agent lane (AAYU_AGENT=1)"
 	n := commits()
 	device("approve", nil)
 	nothing("the agent lane", n, func() {
-		if code, out, errOut := readyRun(agent); code != ExitBlocked || !strings.Contains(errOut, refused) || started() != 0 {
+		if code, out, errOut := readyRun(lane); code != ExitBlocked || !strings.Contains(errOut, refused) || started() != 0 {
 			t.Fatalf("agent ready 840: exit %d, device codes %d: %s%s", code, started(), out, errOut)
 		}
 	})
+	// Bug #1182: a shell with only a host's marker asks for the device code. A code that expires, or one
+	// that another account enters, writes nothing.
+	for _, c := range []struct {
+		flow fake.DeviceFlow
+		want string
+	}{
+		{fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", ExpiresIn: 1}, "was not approved: the code expired; nothing was done"},
+		{fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "mallory", Outcome: "approve"}, "approved by @mallory, but aayu acts as @rahulnakmol"},
+	} {
+		edit(func() { flow := c.flow; g.Device = &flow })
+		nothing(c.want, n, func() {
+			if code, out, errOut := readyRun(agent); code != ExitBlocked || !strings.Contains(errOut, c.want) || started() != 1 {
+				t.Fatalf("marked shell, want %q: exit %d, device codes %d: %s%s", c.want, code, started(), out, errOut)
+			}
+		})
+	}
+	device("approve", nil)
 	cs := serveMCPWith(t, Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1}, agent, "--repo", "o/r", "--set", "mcp.expose_writes=true")
 	nothing("the MCP call", n, func() {
 		out, isErr := call(t, cs, "ready", map[string]any{"issue": "840"})
@@ -171,9 +189,10 @@ func TestReadyApproveToBuild(t *testing.T) {
 	}{
 		{map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "XDG_STATE_HOME": state}, nil, ExitBlocked, "refused for an agent lane (AAYU_AGENT=1)"},
 		{person, []string{"--ci"}, ExitBlocked, "refused for an agent lane (--ci)"}, // with no bot token: the refusal comes first
+		{agent, []string{"--ci"}, ExitBlocked, "refused for an agent lane (--ci)"},  // a host's marker in CI too
 	} {
 		nothing(c.want, n, func() {
-			if code, out, errOut := readyRun(c.env, c.args...); code != c.code || !strings.Contains(errOut, c.want) {
+			if code, out, errOut := readyRun(c.env, c.args...); code != c.code || !strings.Contains(errOut, c.want) || started() != 0 {
 				t.Fatalf("ready 840 %v: exit %d: %s%s", c.args, code, out, errOut)
 			}
 		})
@@ -187,7 +206,7 @@ func TestReadyApproveToBuild(t *testing.T) {
 		t.Fatalf("ready 840 outside a checkout: exit %d", code)
 	}
 	// An agent lane outside a checkout is refused as an agent lane, before any ledger setup.
-	if code, out, errOut := run(t, agent, away, "ready", "840", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, refused) {
+	if code, out, errOut := run(t, lane, away, "ready", "840", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, refused) {
 		t.Fatalf("agent ready 840 outside a checkout: exit %d: %s%s", code, out, errOut)
 	}
 	// A story's Ready is not refused for the lane, but for its Feature, which no person has approved to build (Story #996).
@@ -269,7 +288,8 @@ func TestReadyApproveToBuild(t *testing.T) {
 	device("approve", nil)
 
 	// 2. A person in a terminal: the effect before the device code, then one presence check and the record.
-	code, out, errOut := readyRun(person)
+	// The shell has a host's marker, as an orb's Terminal tab has: the code proves the person (Bug #1182).
+	code, out, errOut := readyRun(agent)
 	effect := "Approving: Approves #840 to build: 6 stories (#851-#856), intent v1, spec v2, technical design v1, budget up to $360 (6 x $60, [budget] per_story_usd)\n"
 	at, enter := strings.Index(errOut, effect), strings.Index(errOut, "/login/device")
 	if code != 0 || at < 0 || enter < at || started() != 1 {
