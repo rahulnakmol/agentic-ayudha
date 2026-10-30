@@ -1,0 +1,34 @@
+{
+  "feature": 1170,
+  "body_hash": "530158d10965f2e9575f32e2fbb2123676eeb43489a66ec0cdbdd973cbb3c5e1",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "contracts": [
+    "aayu grill \u003ctype\u003e --edit \u003cn\u003e --body \u003cfile\u003e [--title]: writes a checked body through the actions log, only before Ready and outside a mission lock; grill checks link targets as Ready does, and planning.Paths reads comma-separated paths (#1179)",
+    "inbox card kinds baseline and approve-to-build (inboxKinds, internal/cli/inbox.go): each approves through partRun.approve or approveToBuild unchanged, under the inbox session's one presence check (#1172, #1173)",
+    "missions/\u003cf\u003e/plan.json: a final BUGS milestone holds every open Bug by default; a Bug filed during the mission joins it; the BUGS gate needs a proof pack per Bug on the ledger (#1174)",
+    "the morning order (decisions, baselines, Approve to build, mission start) and the closing line The day is set (#1175)",
+    "evening card kind: one per story agreed that morning, each criterion next to its evidence from proof/\u003cn\u003e/\u003csha\u003e/; accept or comment, recorded in missions/\u003cf\u003e/reviews.jsonl (#1176)",
+    "The day is proven, only with full evidence, through inboxCheer and the milestone hook day-proven (#1177)",
+    "overnight card: missions/overnight/\u003cdate\u003e.json records each run and its bounds; aayu mission next starts no story outside [time] business_hours (#1178)"
+  ],
+  "layers": [
+    "L02",
+    "L03"
+  ],
+  "story_order": [
+    1179,
+    1172,
+    1173,
+    1174,
+    1175,
+    1176,
+    1177,
+    1178
+  ],
+  "rollback": "Each card kind and the --edit flag go away with a revert of its story. New ledger files (reviews.jsonl, overnight/\u003cdate\u003e.json) stay readable and unused. A BUGS milestone is an ordinary milestone name, so a reverted binary runs it as any other. No record is rewritten.",
+  "planned_at": "2026-10-30T18:47:02Z",
+  "planned_by": "human-fallback"
+}
