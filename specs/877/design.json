@@ -1,0 +1,32 @@
+{
+  "feature": 877,
+  "body_hash": "da388787554534ff2ef7b4c92ce1a25fff36c772c26f1b6daa76b992f0741773",
+  "footprint": [
+    "L02",
+    "L03",
+    "L04",
+    "L07",
+    "L09"
+  ],
+  "contracts": [
+    "specs/\u003cf\u003e/approved.json (merged, #995): unchanged fields; it gains, per high-risk entry of each story's register, the person's choice: auto-merge, review the PR, or review before build (#1029)",
+    "aayu ready \u003cf\u003e --ack \u003cstory\u003e: a person acknowledges a story added or changed after Approve to build, with what changed and why (#1082)",
+    "an approval record counts for Ready only with a receipt that GitHub shows its person wrote (#1083, threat T23); a record with no receipt reads as no approval",
+    "storyCovered (internal/cli/readycover.go, #996): unchanged rule, reads the receipt"
+  ],
+  "layers": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "story_order": [
+    995,
+    996,
+    1082,
+    1083,
+    1029
+  ],
+  "rollback": "Each record is versioned on the ledger and never rewritten. New fields are optional: a reverted binary reads a record with choices or a receipt as before. A revert of #1083 makes Ready trust records without receipts again, which is today's rule.",
+  "planned_at": "2026-10-30T18:28:15Z",
+  "planned_by": "human-fallback"
+}
