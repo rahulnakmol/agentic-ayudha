@@ -1685,8 +1685,19 @@ func TestInspectPaidReviewer(t *testing.T) {
 		if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 1 {
 			t.Fatalf("rung-B fix with %s, run again: exit %d %s cached %v, %d model calls %s", tc.name, code, res.Disposition, res.Cached, len(model.Requests), errOut)
 		}
-		// The stored lift is judged again: once another person is the
-		// approver, the cached review is a fix again (CodeRabbit on #1164).
+		// The stored lift is judged again: when the new approver approved
+		// the head too, it stays merge and credits the new approver
+		// (CodeRabbit on #1167); with no approval of theirs, the cached review
+		// is a fix again (CodeRabbit on #1164).
+		cfg, _ = os.ReadFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"))
+		_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(strings.Replace(string(cfg), `approver = "@lead"`, `approver = "@next"`, 1)), 0o644)
+		b, _ := json.Marshal(headApproval{PR: prN, Head: head, By: "next", At: "2026-10-12T09:30:00Z", Reason: "read it again"})
+		putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), ApprovedPath, string(b)+"\n")
+		code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+		if body = lastInspect(t, g, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 1 || !strings.Contains(body, "@next accepted them") || strings.Contains(body, "@"+tc.by+" accepted them") {
+			t.Fatalf("rung-B fix with %s, a new approver who approved the head: exit %d %s cached %v, %d model calls %s\n%s", tc.name, code, res.Disposition, res.Cached, len(model.Requests), errOut, body)
+		}
+		_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), cfg, 0o644)
 		cfg, _ = os.ReadFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"))
 		_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(strings.Replace(string(cfg), `approver = "@lead"`, `approver = "@other"`, 1)), 0o644)
 		code, res, errOut = inspectApp(t, env, opts, prN, "--ci")

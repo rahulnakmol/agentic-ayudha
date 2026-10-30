@@ -228,13 +228,20 @@ func (e *Env) approvedUnclear(ctx context.Context, res *inspect.Result, p *proof
 	// only while the current approver's approval of the head does (CodeRabbit
 	// on #1164). The PR description check and the early-build hold run after
 	// this and decide again, so the review's own fix is restored here.
-	was := res.Disposition
-	if i := slices.IndexFunc(res.Notes, func(s string) bool { return strings.HasPrefix(s, liftNote) }); i >= 0 {
-		res.Notes = slices.Delete(slices.Clone(res.Notes), i, i+1)
+	note := func() string {
+		if i := slices.IndexFunc(res.Notes, func(s string) bool { return strings.HasPrefix(s, liftNote) }); i >= 0 {
+			return res.Notes[i]
+		}
+		return ""
+	}
+	was, wasNote := res.Disposition, note()
+	if wasNote != "" {
+		res.Notes = slices.DeleteFunc(slices.Clone(res.Notes), func(s string) bool { return s == wasNote })
 		res.Disposition, res.Reviewed, res.Overridden, res.Next = inspect.Fix, "", "", fixNext
 	}
 	e.liftUnclear(ctx, res, p, approver)
-	return res.Disposition != was
+	// A lift that now credits another approval rewrites the comment too.
+	return res.Disposition != was || note() != wasNote
 }
 
 // liftNote starts the note a lift writes; fixNext is the step a fix names.
