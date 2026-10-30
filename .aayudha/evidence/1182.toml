@@ -1,7 +1,7 @@
 # Which tests prove Bug #1182's Completion Goal.
 
 [[criterion]]
-id = 1 # AMP_THREAD_ID only: aayu ready 874 --agents 10 asks for the device code and writes approved.json as in a plain terminal
+id = 1 # AMP_THREAD_ID only: aayu ready <f> --agents 10 asks for the device code and writes approved.json as in a plain terminal
 tests = ["internal/cli:TestReadyApproveToBuild"]
 
 [[criterion]]

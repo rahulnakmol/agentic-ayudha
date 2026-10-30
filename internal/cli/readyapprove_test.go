@@ -289,7 +289,7 @@ func TestReadyApproveToBuild(t *testing.T) {
 
 	// 2. A person in a terminal: the effect before the device code, then one presence check and the record.
 	// The shell has a host's marker, as an orb's Terminal tab has: the code proves the person (Bug #1182).
-	code, out, errOut := readyRun(agent)
+	code, out, errOut := readyRun(agent, "--agents", "10")
 	effect := "Approving: Approves #840 to build: 6 stories (#851-#856), intent v1, spec v2, technical design v1, budget up to $360 (6 x $60, [budget] per_story_usd)\n"
 	at, enter := strings.Index(errOut, effect), strings.Index(errOut, "/login/device")
 	if code != 0 || at < 0 || enter < at || started() != 1 {
@@ -317,7 +317,7 @@ func TestReadyApproveToBuild(t *testing.T) {
 	if a.Schema != ready.ApprovalSchema || a.Feature != 840 || a.Version != 1 || a.By != "rahulnakmol" || a.At == "" ||
 		a.Presence != (ready.Presence{Login: "rahulnakmol", Via: "device-flow", Permission: "admin", ActionsRecord: presence.Hash}) || presence.Hash == "" ||
 		!slices.Equal(a.Baselines, []ready.ApprovedBaseline{base("intent", 1), base("spec", 2), base("tech", 1)}) ||
-		!slices.Equal(a.Stories, want) || a.Budget != (ready.Budget{PerStoryUSD: 60, Stories: 6, TotalUSD: 360}) ||
+		!slices.Equal(a.Stories, want) || a.Budget != (ready.Budget{PerStoryUSD: 60, Stories: 6, TotalUSD: 360}) || a.Agents != 10 ||
 		!strings.Contains(raw, `"dismissals": []`) {
 		t.Fatalf("approved.json:\n%s\npresence record %q", raw, presence.Hash)
 	}

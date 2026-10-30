@@ -182,7 +182,7 @@ factor. aayu then checks the approving account, and refuses unless all of these 
 - it has the repository access the command needs: admin for the bypasses, `init`, `uninit`, `seat`,
   `install --apply`, and `upgrade --apply`; write for `decide --accept`, `inbox`, `resume`, `plan --approve`,
   `inspect --dismiss`, `inspect --approve`, `tell --publish`, Approve to build (`aayu ready <feature>`), each person's
-  mission step (`mission start`, `stop`, `resume`, `extend`, `budget --to`, `retry`, `gate --once-more`), and the
+  mission step (`mission start`, `stop`, `resume`, `extend`, `budget --to`, `budget --keep`, `retry`, `gate --once-more`), and the
   stable-release yes of `release --to main`.
   `auth set-secret` and `self-update` need only a person, so a fresh runner with no token yet can still store its
   first one.
