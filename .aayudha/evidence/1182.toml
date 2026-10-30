@@ -1,0 +1,25 @@
+# Which tests prove Bug #1182's Completion Goal.
+
+[[criterion]]
+id = 1 # AMP_THREAD_ID only: aayu ready 874 --agents 10 asks for the device code and writes approved.json as in a plain terminal
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 2 # the same shell: aayu mission start asks for the device code and starts the mission
+tests = ["internal/cli:TestMissionStartRefusedForAgentLane"]
+
+[[criterion]]
+id = 3 # AAYU_AGENT=1: Approve to build is refused before any write, as today
+tests = ["internal/cli:TestReadyApproveToBuild", "internal/cli:TestMissionStartRefusedForAgentLane"]
+
+[[criterion]]
+id = 4 # --ci: refused before any write, as today
+tests = ["internal/cli:TestReadyApproveToBuild", "internal/cli:TestMissionStartRefusedForAgentLane"]
+
+[[criterion]]
+id = 5 # AMP_THREAD_ID and the code expires: nothing is written, and it says the code expired
+tests = ["internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 6 # AMP_THREAD_ID and another account enters the code: nothing is written
+tests = ["internal/cli:TestReadyApproveToBuild"]
