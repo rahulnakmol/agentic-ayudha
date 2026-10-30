@@ -134,6 +134,9 @@ variable. Only a human clears it, with `aayu resume`, which agents are refused. 
         run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
 ```
 
+Halt also releases each mission claim of a story whose thread has not started. After `aayu resume`, `aayu mission
+next` claims it again, and a build with the old claim refuses. A story whose thread runs keeps its claim.
+
 Halt does not cancel runs already past their first step, and it cannot stop a compromised binary that ignores it.
 The tool-incident plan in [SECURITY.md](../../SECURITY.md) covers the rest: cancel runs, revoke tokens, yank the
 release, pull a bad skill, open an advisory. Report a vulnerability privately as SECURITY.md describes.

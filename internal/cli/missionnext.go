@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -543,6 +544,8 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		ok    bool
 	}
 	var all []listed
+	var halted *loopClaim // the halt release that is the newest line for n in its claims file (Bug #1101)
+	haltedIn := ""
 	for _, p := range paths {
 		if !strings.HasSuffix(p, "/claims.jsonl") {
 			continue
@@ -551,6 +554,17 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
+		var last loopClaim
+		for _, l := range bytes.Split(raw, []byte("\n")) {
+			var c loopClaim
+			if json.Unmarshal(l, &c) == nil && c.Story == n {
+				last = c
+			}
+		}
+		// Only while the released claim would still be live: after that it would have expired anyway.
+		if at, err := time.Parse(time.RFC3339, last.At); last.HaltedAt != "" && err == nil && e.Now().Sub(at) <= pickLockTTL {
+			halted, haltedIn = &last, p
+		}
 		lines := e.liveClaims(raw, nil)
 		if i := slices.IndexFunc(lines, func(c loopClaim) bool { return c.Story == n }); i >= 0 {
 			l := listed{path: p, claim: lines[i]}
@@ -558,6 +572,11 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 			l.ok = err == nil && json.Unmarshal(raw, &l.plan) == nil
 			all = append(all, l)
 		}
+	}
+	if len(all) == 0 && halted != nil && !contains(labels, labelInProgress) {
+		at, _ := time.Parse(time.RFC3339, halted.HaltedAt)
+		f := strings.TrimSuffix(strings.TrimPrefix(haltedIn, "missions/"), "/claims.jsonl")
+		return Errorf(ExitBlocked, "the claim of #%d was released by aayu halt at %s: run aayu mission next %s", n, at.In(time.Local).Format("15:04"), f)
 	}
 	if len(all) == 0 {
 		return nil // no list marked it start: build's own Ready checks apply

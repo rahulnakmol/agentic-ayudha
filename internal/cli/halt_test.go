@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -143,6 +145,94 @@ func TestHaltFromWorkflowAndHook(t *testing.T) {
 	g.Reset()
 	if code, _, _ := run(t, env, opts, "hook", "pre-tool", "--host", "claude", "--repo", "o/r"); code != 2 || len(g.Requests) != 0 {
 		t.Errorf("cached pre-tool: exit %d, %d requests", code, len(g.Requests))
+	}
+}
+
+// Bug #1101: a halt releases the mission claim of each story that does not
+// run yet, in every mission, so after resume a list claims it again and a
+// build with the old claim refuses; a story that runs keeps its claim; and a
+// ledger that cannot be written never blocks the halt.
+func TestHaltReleasesMissionClaims(t *testing.T) {
+	m := newMissionWorld(t)
+	now := time.Date(2026, 10, 30, 10, 0, 0, 0, time.Local)
+	m.opts.Now = func() time.Time { return now }
+	m.startedMission(889, []int{20, 21})
+	m.startedMission(920, []int{930})
+	for _, n := range []int{20, 21, 930} {
+		m.status(n, "ready", "")
+	}
+	if code, out, errOut := m.next(889); code != 0 || out != "start #20\nstart #21\n" {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if code, out, errOut := m.next(920); code != 0 || out != "start #930\n" {
+		t.Fatalf("mission next 920: exit %d: %q%s", code, out, errOut)
+	}
+	m.status(21, "in-progress", "") // #21's thread started before the halt
+	// A gate fix's claim (a negative key) is not a story's: the halt leaves it to expire.
+	fix := fmt.Sprintf(`{"story":-5,"token":"fix-5","at":%q}`, now.UTC().Format(time.RFC3339))
+	putLedger(t, m.bare, MissionClaimsPath(889), git(t, m.bare, "show", "ledger:"+MissionClaimsPath(889))+"\n"+fix+"\n")
+
+	// Criterion 1: the halt at 10:05 releases #20 and #930, each in its own mission; a dry run only says it would.
+	now = now.Add(5 * time.Minute)
+	// A dry run writes nothing; a story it cannot read (#930, gone here) keeps its claim, and the others are still released.
+	n, gone := m.commits(), m.g.Issues[930]
+	m.edit(func() { delete(m.g.Issues, 930) })
+	if code, out, errOut := run(t, m.person, m.opts, "halt", "--reason", "release cut", "--repo", "o/r", "--dry-run"); code != 0 || m.commits() != n ||
+		!strings.Contains(out, "would release 1 mission claim (#20)\nmission claims not released: could not read #930: ") {
+		t.Fatalf("halt --dry-run with #930 unreadable: exit %d: %q%s", code, out, errOut)
+	}
+	m.edit(func() { m.g.Issues[930] = gone })
+	code, out, errOut := run(t, m.person, m.opts, "halt", "--reason", "release cut", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "released 2 mission claims (#20, #930)\n") || strings.Contains(out, "not released") {
+		t.Fatalf("halt: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); len(got) != 2 || got[21] != 1 || got[-5] != 1 {
+		t.Fatalf("claims of #889 after the halt: %v (criterion 4: #21 runs and keeps its claim; the gate fix keeps its own)", got)
+	}
+	if got := m.claims(920); len(got) != 0 {
+		t.Fatalf("claims of #920 after the halt: %v", got)
+	}
+
+	// Criterion 3: after resume at 10:08, a build with the 10:00 claim refuses and starts nothing.
+	now = now.Add(3 * time.Minute)
+	if code, _, errOut := run(t, m.person, m.opts, "resume", "--repo", "o/r"); code != 0 {
+		t.Fatalf("resume: exit %d: %s", code, errOut)
+	}
+	m.g.Reset()
+	code, _, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r")
+	if code != ExitBlocked || !strings.Contains(errOut, "the claim of #20 was released by aayu halt at 10:05: run aayu mission next 889") ||
+		slices.ContainsFunc(m.g.Writes(), func(r fake.Request) bool { return strings.Contains(r.Path, "/issues/20") }) {
+		t.Fatalf("build 20 with the old claim: exit %d: %s", code, errOut)
+	}
+	// Once the old claim would have expired (10:16), the release no longer refuses: build's own checks apply.
+	now = now.Add(8 * time.Minute)
+	if _, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--dry-run"); strings.Contains(errOut, "released by aayu halt") {
+		t.Fatalf("build 20 after the old claim expired: %s", errOut)
+	}
+
+	// Criteria 2 and 4: the list claims #20 again with a new claim, and never starts #21, which runs.
+	if code, out, errOut := m.next(889); code != 0 || out != "start #20\n" {
+		t.Fatalf("mission next 889 after resume: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.claims(889); len(got) != 3 || got[20] != 1 || got[21] != 1 {
+		t.Fatalf("claims of #889 after the new list: %v", got)
+	}
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--dry-run"); strings.Contains(errOut, "released by aayu halt") {
+		t.Fatalf("build 20 with the new claim: exit %d: %s", code, errOut)
+	}
+
+	// Criterion 5: with the ledger unwritable, the halt is still set and says the claims were not released.
+	hooks := t.TempDir()
+	if err := os.WriteFile(filepath.Join(hooks, "pre-receive"), []byte("#!/bin/sh\necho ledger is read-only >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, m.bare, "config", "core.hooksPath", hooks) // the repository's own setting wins over a global hooksPath
+	code, out, errOut = run(t, m.person, m.opts, "halt", "--reason", "release cut", "--repo", "o/r")
+	m.g.Mu.Lock()
+	halted := m.g.Variables[HaltVariable]
+	m.g.Mu.Unlock()
+	if code != 0 || halted == "" || !strings.Contains(out, "mission claims not released: ") || !strings.HasSuffix(out, "; they expire within 15 minutes\n") {
+		t.Fatalf("halt with the ledger unwritable: exit %d, %s=%q: %q%s", code, HaltVariable, halted, out, errOut)
 	}
 }
 
