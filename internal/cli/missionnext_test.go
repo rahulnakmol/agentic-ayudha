@@ -430,6 +430,7 @@ func tatkalWorld(t *testing.T) *missionWorld {
 	m.setPlan(920, func(p *MissionPlan) { p.Budget = 600 }) // its ad hoc budget
 	m.edit(func() { m.g.Issues[874].Milestone = m.g.Milestones[0] })
 	m.closeIssue(950)
+	m.setPlan(874, func(p *MissionPlan) { p.Milestones[len(p.Milestones)-1].Gate.State = GatePassed }) // #874's mission is done
 	return m
 }
 
@@ -507,8 +508,14 @@ func TestMissionNextDoneFeatureBugGoesToTatkal(t *testing.T) {
 	if code, out, _ := m.next(920); code != 0 || strings.Contains(out, "#94") {
 		t.Fatalf("mission next 920 with #874 not done: exit %d: %q", code, out)
 	}
-	// With #874 done again but no milestone for the Release's version, no Feature is in the Release.
+	// Every story of #874 merged, but its last milestone has not passed its gate: its Bugs stay with it.
 	m.closeIssue(950)
+	m.setPlan(874, func(p *MissionPlan) { p.Milestones[len(p.Milestones)-1].Gate.State = GateWaits })
+	if code, out, _ := m.next(920); code != 0 || strings.Contains(out, "#94") {
+		t.Fatalf("mission next 920 before #874's last gate: exit %d: %q", code, out)
+	}
+	m.setPlan(874, func(p *MissionPlan) { p.Milestones[len(p.Milestones)-1].Gate.State = GatePassed })
+	// With #874 done again but no milestone for the Release's version, no Feature is in the Release.
 	m.edit(func() { m.g.Milestones[0].Title = "v0.5.0" })
 	if code, out, _ := m.next(920); code != 0 || out != "waits #930: not Ready (open)\n" {
 		t.Fatalf("mission next 920 with no v0.4.0 milestone: exit %d: %q", code, out)
@@ -663,8 +670,12 @@ func TestMissionNextMergedOpenStoryFreesItsDependent(t *testing.T) {
 	if ms := m.show(889).Milestones[0]; ms.State != "building: 1 of 2 merged; the gate runs when its last story merges" {
 		t.Fatalf("show: %+v", ms)
 	}
-	// Both merged and still open: the mission is done, before any release.
+	// Both merged and still open: once MS1 passes its gate, the mission is done, before any release.
 	m.status(11, "merged", "")
+	if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "is done") {
+		t.Fatalf("mission next 889 before MS1's gate: exit %d: %q%s", code, out, errOut)
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate.State = GatePassed })
 	if code, out, errOut := m.next(889); code != 0 || !strings.HasPrefix(out, "The mission of #889 is done") {
 		t.Fatalf("mission next 889 with both merged: exit %d: %q%s", code, out, errOut)
 	}

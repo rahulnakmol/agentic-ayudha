@@ -160,7 +160,7 @@ func (e *Env) workList(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	var extra []*gh.Issue
 	switch {
 	case release == 0 && missionDone(plan, subs):
-		// Every story and Bug merged, so the last milestone of the last mission is done, and its lock ends (Story #1013).
+		// Every story and Bug merged, and the last milestone of the last mission passed its gate: its lock ends (Story #1013).
 		if err := endLock(ctx, c, w, f, plan, e.Now().UTC().Format(time.RFC3339)); err != nil {
 			return err
 		}
@@ -467,11 +467,22 @@ func readyAt(ctx context.Context, c *github.Client, owner, name string, is *gh.I
 }
 
 // missionDone reports whether every story and Bug of the plan's graph has
-// merged or was cancelled (depState), so the mission has nothing left to start.
+// merged or was cancelled (depState), and the last milestone of the last
+// mission passed its gate (lastGatePassed), so the mission has nothing left
+// to do.
 func missionDone(plan *MissionPlan, subs []*gh.Issue) bool {
-	return !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool {
+	return lastGatePassed(plan) && !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool {
 		return slices.ContainsFunc(subs, func(is *gh.Issue) bool { return is.GetNumber() == it.Number && depState(is) == depOpen })
 	})
+}
+
+// lastGatePassed reports whether the last milestone of the last mission
+// passed its gate; true for a plan with no milestones. A story merges before
+// its release closes it (Bug #1169), so every story can be merged while that
+// gate still has to run (Story #1013, criterion 7).
+func lastGatePassed(plan *MissionPlan) bool {
+	ms := plan.Milestones
+	return len(ms) == 0 || ms[len(ms)-1].Gate.State == GatePassed
 }
 
 // tatkalBugs are the open Bugs, under the Features of Release r other than
