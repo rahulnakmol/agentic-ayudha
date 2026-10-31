@@ -55,7 +55,7 @@ func TestPrecedence(t *testing.T) {
 		wantLayer  string
 		wantSource string
 	}{
-		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd=5"},
+		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd"},
 		{"env beats local", merge(user, repo, local), env, nil, 4, LayerEnv, "AAYU_BUDGET__PER_DAY_USD"},
 		{"local beats repo", merge(user, repo, local), nil, nil, 3, LayerLocal, "config.local.toml"},
 		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, filepath.Join(".aayudha", "config.toml")},
@@ -120,7 +120,7 @@ func TestRejects(t *testing.T) {
 		{"auth on a non-cloud integration", nil, nil, []string{"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.auth=oidc"}, "only [integrations.azure]"},
 		{"approvals door", nil, nil, []string{"approvals.device_for=two-way"}, `[approvals] device_for "two-way": want one-way or all`},
 		{"approvals login", nil, nil, []string{"approvals.approvers=founder b"}, `[approvals] approvers "founder b": want a GitHub login`},
-		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret = ""`},
+		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret is not set: want the name of a secret`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -132,7 +132,63 @@ func TestRejects(t *testing.T) {
 			}
 		})
 	}
-	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 9\n"})
+	// A config error never shows a pasted key, or any 4-character run of it: a
+	// secret field names the field and its rule, a --set layer is named by its
+	// keys, and a url refusal does not show the url (Bug #1198).
+	key := strings.Join([]string{"sk", "live", "AbC123xyz9QrS"}, "-") // built at run time, so the secret scan sees no key
+	for _, tc := range []struct {
+		sets []string
+		want string
+	}{
+		{[]string{"models.gateway.secret=" + key, "models.gateway.base_url=https://gw.example/v1"}, "[models.gateway] secret: want the name of a secret"},
+		{[]string{"models.gateway.secret=" + key}, "[models.gateway] secret: want the name of a secret"},
+		{[]string{"integrations.posthog.secret=" + key, "integrations.posthog.scope=read"}, "[integrations.posthog] secret: want the name of a secret"},
+		{[]string{"identity.machine_user_secret=" + key, "identity.machine_user=aayu-bot"}, "[identity] machine_user_secret: want the name of a secret"},
+		{[]string{"identity.machine_user_secret=" + key}, "[identity] machine_user_secret: want the name of a secret"},
+		{[]string{"models.gateway.secret=" + key, "models.gateway.secrte=x"}, "--set models.gateway.secret --set models.gateway.secrte"},
+		{[]string{"budget.per_day_usd=5", key}, "--set entry 2: want key=value"},
+		{[]string{key + "=="}, "--set entry 1: want key=value"},
+		{[]string{"budget.per_day_usd=5", "eyJhbGci." + key + ".c2ln=="}, "--set entry 2: want key=value"},
+		{[]string{"ab.cd." + key + "="}, "--set entry 1: want key=value"},
+		{[]string{"ab.cd." + strings.ToLower(key) + "="}, "--set entry 1: want key=value"},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://gw.example/hooks/" + key}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=" + key}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://gw.example/v1?api_key=" + key}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://bob:" + key + "@gw.example/v1"}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://" + key}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=" + key + "://gw.example"}, "[models.gateway] base_url: want an https:// URL. This message does not show the value."},
+		{[]string{"integrations.sentry.secret=sentry", "integrations.sentry.scope=read", "integrations.sentry.url=http://" + key + ".example"}, "[integrations.sentry] url: want an https:// URL. This message does not show the value."},
+		{[]string{"integrations.sentry.secret=sentry", "integrations.sentry.scope=read", "integrations.sentry.url=http://" + key + "@sentry.example"}, "[integrations.sentry] url: want an https:// URL. This message does not show the value."},
+	} {
+		src := fixture(t, nil)
+		src.Sets = tc.sets
+		_, err := Load(src)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("--set %v: err = %v, want it to mention %q", tc.sets, err, tc.want)
+			continue
+		}
+		for i := 0; i+4 <= len(key); i++ {
+			if strings.Contains(err.Error(), key[i:i+4]) {
+				t.Errorf("--set %v: err = %v shows %q of the key", tc.sets, err, key[i:i+4])
+				break
+			}
+		}
+	}
+	// A --set key below its section may hold a layer ID, and a secret name
+	// with no consumer on is valid.
+	src := fixture(t, nil)
+	src.Sets = []string{"decisions.authority.L01=founder", "verify.environments.preview/foo.url=https://example.com", "models.gateway.secret=ai-gateway", "identity.machine_user_secret=bot-token"}
+	if l, err := Load(src); err != nil || l.Config.Decisions.Authority["L01"] != "founder" || l.Config.Verify.Environments["preview/foo"].URL != "https://example.com" {
+		t.Fatalf("--set %v: err = %v", src.Sets, err)
+	}
+	// The boundary: a value of only lowercase letters, digits, - and _ is a
+	// secret name, whatever it holds; no rule can tell it from a pasted key.
+	src = fixture(t, nil)
+	src.Sets = []string{"models.gateway.secret=" + strings.Join([]string{"sk", "live", "0123456789abcdef"}, "-"), "models.gateway.base_url=https://gw.example/v1"}
+	if _, err := Load(src); err != nil {
+		t.Fatalf("a lowercase secret name: err = %v", err)
+	}
+	src = fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 9\n"})
 	if _, err := Load(src); !errors.Is(err, ErrNewerSchema) {
 		t.Fatalf("err = %v, want ErrNewerSchema", err)
 	}
@@ -351,6 +407,11 @@ func TestIntegrationURLFromCheckout(t *testing.T) {
 			}
 		}
 	}
+	// The refusal does not show the url: its host, path, or user can be a key (Bug #1198).
+	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": section("posthog", "https://bob:Pw4Leak@collector.example.com/t/Tok4Leak?k=Key4Leak")})); err == nil ||
+		!strings.Contains(err.Error(), "[integrations.posthog] url: a checkout names only") || strings.Contains(err.Error(), "4Leak") || strings.Contains(err.Error(), "collector") {
+		t.Errorf("checkout url with credentials: err = %v", err)
+	}
 	for _, c := range [][2]string{{"posthog", "https://eu.posthog.com"}, {"sentry", "https://de.sentry.io"}, {"sentry", "https://acme.sentry.io/"}} {
 		l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": section(c[0], c[1])}))
 		if err != nil || l.Config.Integrations[c[0]].URL != c[1] {
@@ -511,9 +572,16 @@ func TestActiveScanKey(t *testing.T) {
 		tt.files["repo/.aayudha/config.toml"] = "version = 1\n" + key
 		src := fixture(t, tt.files)
 		src.Environ, src.Sets = tt.env, tt.set
-		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), `[verify.environments.staging] url "https://victim.example.test": active_scan = true approves only the url`) {
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "[verify.environments.staging] url: active_scan = true approves only the url") {
 			t.Errorf("%s: err = %v", tt.name, err)
 		}
+	}
+	// The refusal shows neither url: a host, path, or user can be a key (Bug #1198).
+	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://ok:Pw4Leak@staging.example.test/a/Tok4Leak\"\nactive_scan = true\n"})
+	src.Sets = []string{"verify.environments.staging.url=https://bob:Pw5Leak@victim.example.test/b/Tok5Leak?k=Key5Leak"}
+	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "[verify.environments.staging] url: active_scan = true approves only the url") ||
+		strings.Contains(err.Error(), "Leak") || strings.Contains(err.Error(), "example.test") {
+		t.Errorf("active_scan url with credentials: err = %v", err)
 	}
 	// An approval with no url of its own approves nothing, whichever layer supplies one.
 	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify.environments.staging]\nactive_scan = true\n",

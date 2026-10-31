@@ -565,7 +565,7 @@ func (c *Config) Validate() error {
 	}
 	if g := c.Models.Gateway; g.BaseURL != "" {
 		if !strings.HasPrefix(g.BaseURL, "https://") && !strings.HasPrefix(g.BaseURL, "http://localhost") && !strings.HasPrefix(g.BaseURL, "http://127.0.0.1") {
-			bad("[models.gateway] base_url = %q: want an https:// URL", g.BaseURL)
+			bad("[models.gateway] base_url: want an https:// URL. %s", notShown)
 		}
 		if !slices.Contains(apiStyles, g.APIStyle) {
 			bad("[models.gateway] api_style = %q: want messages, responses, or chat", g.APIStyle)
@@ -576,9 +576,11 @@ func (c *Config) Validate() error {
 				bad("[models.gateway] styles entry %q: want \"<model-id or family>=messages|responses|chat\"", st)
 			}
 		}
-		if !secretName.MatchString(g.Secret) {
-			bad("[models.gateway] secret = %q: want the name of a secret (lowercase letters, digits, - and _), never the key", g.Secret)
-		}
+	}
+	// A secret field is checked whenever it holds a value, and an empty one
+	// only when its consumer is on (Bug #1198).
+	if g := c.Models.Gateway; (g.Secret != "" || g.BaseURL != "") && !secretName.MatchString(g.Secret) {
+		bad("%s", secretRule("[models.gateway] secret", g.Secret, "key"))
 	}
 	for key, layers := range map[string][]string{"[autonomy] never": c.Autonomy.Never, "[verify.floors.screen_reader] layers": c.Verify.Floors.ScreenReader.Layers} {
 		for _, l := range layers {
@@ -670,20 +672,20 @@ func (c *Config) Validate() error {
 			bad("[integrations.%s]: identity, federation, and region are for the cloud integrations (azure, aws, gcp)", name)
 		}
 		if (in.Secret != "" || in.StoredKey()) && !secretName.MatchString(in.Secret) {
-			bad("[integrations.%s] secret = %q: want the name of a secret (lowercase letters, digits, - and _), never the key", name, in.Secret)
+			bad("%s", secretRule("[integrations."+name+"] secret", in.Secret, "key"))
 		}
 		if in.Scope != "read" && in.Scope != "write" {
 			bad("[integrations.%s] scope = %q: want read or write", name, in.Scope)
 		}
 		if in.URL != "" && !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://localhost") && !strings.HasPrefix(in.URL, "http://127.0.0.1") {
-			bad("[integrations.%s] url = %q: want an https:// URL", name, in.URL)
+			bad("[integrations.%s] url: want an https:// URL. %s", name, notShown)
 		}
 		if in.Transport != "" && (name != "figma" || (in.Transport != "rest" && in.Transport != "mcp")) {
 			bad("[integrations.%s] transport = %q: only [integrations.figma] takes transport, rest or mcp", name, in.Transport)
 		}
 	}
-	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {
-		bad("[identity] machine_user_secret = %q: want the name of a secret holding the machine user's token", id.MachineUserSecret)
+	if id := c.Identity; (id.MachineUserSecret != "" || id.MachineUser != "") && !secretName.MatchString(id.MachineUserSecret) {
+		bad("%s", secretRule("[identity] machine_user_secret", id.MachineUserSecret, "token"))
 	}
 	if id := c.Identity; id.AppID != 0 && id.AppSlug == "" {
 		bad("[identity] app_id needs app_slug")
@@ -698,3 +700,19 @@ func (c *Config) Validate() error {
 	}
 	return errors.Join(errs...)
 }
+
+// secretRule is Validate's refusal of a secret field whose value does not
+// match the secret-name syntax, which is what a pasted key usually looks
+// like. It never shows the value (Bug #1198). A key made only of lowercase
+// letters, digits, - and _ matches the syntax, and no rule can tell it apart.
+func secretRule(field, value, what string) string {
+	if value == "" {
+		return field + " is not set: want the name of a secret (lowercase letters, digits, - and _)"
+	}
+	return field + ": want the name of a secret (lowercase letters, digits, - and _), never the " + what + ". " + notShown
+}
+
+// notShown ends a refusal of a value that can hold a pasted key or token:
+// a secret field or a url, whose host, path, or user can be the key itself
+// (Bug #1198).
+const notShown = "This message does not show the value."
