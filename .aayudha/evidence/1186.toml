@@ -6,4 +6,4 @@ tests = ["internal/cli:TestMissionEndOnlyByStarter"]
 
 [[criterion]]
 id = 2 # the end comment names a time other than the clock's: the test fails at "#951's comment"
-tests = ["internal/cli:TestMissionEndOnlyByStarter"]
+tests = ["internal/cli:TestMissionEndCommentOtherTimeFails"]

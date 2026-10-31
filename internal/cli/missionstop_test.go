@@ -733,12 +733,8 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 		p.Controls[len(p.Controls)-1].Action != "end" || p.Controls[len(p.Controls)-1].By != "bob" {
 		t.Fatalf("plan.json after --end:\n%s", raw)
 	}
-	w.g.Mu.Lock()
-	at := w.g.Issues[951].Comments[len(w.g.Issues[951].Comments)-1].Body
-	w.g.Mu.Unlock()
-	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", clk.now().Local().Format("15:04"), prN)
-	if !strings.HasSuffix(at, want) {
-		t.Fatalf("#951's comment:\n%s\nwant:\n%s", at, want)
+	if err := endComment951(w, clk.now(), prN); err != nil {
+		t.Fatal(err)
 	}
 	for k, tail := range map[int]string{874: "#874 is no longer read-only.", 950: "#950 is no longer read-only.", 952: "#952 is no longer read-only. The story is Ready again."} {
 		w.g.Mu.Lock()
@@ -761,6 +757,41 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	n = w.commits()
 	if code, _, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded"); code != ExitBlocked || w.commits() != n || !strings.Contains(errOut, "The mission of #874 ended (superseded). Nothing changed.") {
 		t.Fatalf("a second --end: exit %d: %s", code, errOut)
+	}
+}
+
+// endComment951 checks #951's end comment against the time at: it names at's
+// HH:MM, @bob, the reason, and the closed PR prN.
+func endComment951(w *threads, at time.Time, prN int) error {
+	w.g.Mu.Lock()
+	got := w.g.Issues[951].Comments[len(w.g.Issues[951].Comments)-1].Body
+	w.g.Mu.Unlock()
+	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", at.Local().Format("15:04"), prN)
+	if !strings.HasSuffix(got, want) {
+		return fmt.Errorf("#951's comment:\n%s\nwant:\n%s", got, want)
+	}
+	return nil
+}
+
+// Bug #1186, criterion 2: when #951's end comment names a time other than
+// aayu's clock's, the check of TestMissionEndOnlyByStarter fails at "#951's
+// comment". The clock moves on one minute after @bob's --end.
+func TestMissionEndCommentOtherTimeFails(t *testing.T) {
+	w, prN := bobs(t)
+	clk := w.withClock()
+	w.setPlan(874, func(p *MissionPlan) {
+		p.Lock = &MissionLock{State: "active", ConfirmedBy: "bob", StartedAt: p.StartedAt, Issues: []LockedIssue{{Number: 874}, {Number: 950}, {Number: 951}, {Number: 952}}}
+	})
+	w.as("bob", "codex")
+	if code, out, errOut := w.control("bob", "stop", 874, "--end", "--reason", "superseded"); code != 0 {
+		t.Fatalf("bob's --end: exit %d: %s%s", code, out, errOut)
+	}
+	if err := endComment951(w, clk.now(), prN); err != nil {
+		t.Fatalf("at the clock's time: %v", err)
+	}
+	clk.add(time.Minute)
+	if err := endComment951(w, clk.now(), prN); err == nil || !strings.HasPrefix(err.Error(), "#951's comment:") {
+		t.Fatalf("a minute later: %v, want a failure at #951's comment", err)
 	}
 }
 
