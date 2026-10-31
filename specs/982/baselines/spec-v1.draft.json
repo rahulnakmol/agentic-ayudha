@@ -1,0 +1,95 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 982,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#984",
+      "hash": "9efa445da9a0e05d9f90ee092c2c1a317179b8ed0584e7888f87447d04a4106a",
+      "story": {
+        "number": 984,
+        "title": "A Feature names the customer outcome it serves, or says why it has none",
+        "completion_goal_hash": "5ce987d22bcfb8abacb54d65433292b978df794988311fc40e17afadd5831bfc",
+        "effort": "M",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#985",
+      "hash": "abcfbfb860f82bcee38d28a3d23a06d000837d87246314c065d23bb07a091eec",
+      "story": {
+        "number": 985,
+        "title": "Approve to build shows the Feature's outcome next to its budget, time and cost",
+        "completion_goal_hash": "70e9791a5bfe6bc1ab17bbbf37273c5909bb8b5b3a16d7673b0d65221c700f44",
+        "effort": "S",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#986",
+      "hash": "beea5c10b33d4131776da8327cb075f4533647275cf3e5bc59cf00cfbfd5f3a0",
+      "story": {
+        "number": 986,
+        "title": "Did it move? An outcome card some days after a Feature ships",
+        "completion_goal_hash": "bbdffa9e081c3efb5efc820116c43d707af3b1912f9962a3ffac4dfd32669e8a",
+        "effort": "M",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#987",
+      "hash": "a734db081c6f4b050719196137250e9f7f9171cebaf51ebe63f1ae4ed27b1bdf",
+      "story": {
+        "number": 987,
+        "title": "Releases and a weekly retro show outcomes beside counts, and the retro ends with a next step",
+        "completion_goal_hash": "00662a792b627b5cabe704a18739168b0cb619f8ea9e08d6e25d2fa2a42466ef",
+        "effort": "M",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#988",
+      "hash": "782a2ebf74fad18e2ea6a5ac38a725d8d5275f95532bfacfdb3888fb67939cc7",
+      "story": {
+        "number": 988,
+        "title": "A Goal states what we do best, and new work is checked against it",
+        "completion_goal_hash": "f459cb04377ae215370a09fbef7528bda1fda69ad911d432efb662ed101fe83b",
+        "effort": "S",
+        "layers": [],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#989",
+      "hash": "6ff7770f20a2f0cc51b0762f2ac3f3db037763aa955ceb70fc8f6b9f46e5f6bc",
+      "story": {
+        "number": 989,
+        "title": "Measure founder minutes per merged PR",
+        "completion_goal_hash": "0c8ff6dc657e01105cbb06184b920382b0eb3c7dca36707487edc76ec34dbdf8",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03",
+          "L04",
+          "L07"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#982 stories",
+      "hash": "31a839e7cb53cf420496a11cb6ec62765ecf98974ad90d623270f5fc93c9e220"
+    }
+  ],
+  "hash": "c6587582963aecaa14e31e841f514ee7338800acfa29573d5cdc65393813bd4d",
+  "summary": "Every Feature names the customer outcome it serves, aayu asks \"did it move?\" after it ships, and releases and retros show outcomes next to counts. Each Goal states what the team does best, so new work is checked against it. As agents raise capacity from a few things a quarter to hundreds, the founder can see which of them made customers better off.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T14:05:29Z"
+}
