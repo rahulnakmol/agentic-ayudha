@@ -1,0 +1,87 @@
+{
+  "schema": "aayudha.feature.approved/v1",
+  "feature": 1170,
+  "version": 1,
+  "by": "rahulnakmol",
+  "at": "2026-10-31T09:47:17Z",
+  "presence": {
+    "login": "rahulnakmol",
+    "via": "device-flow",
+    "permission": "admin",
+    "actions_record": "79772379cdbd2e060cd9e6acd9ea7d0dcdd1f10c88596ab4d3907e522e8e67c5"
+  },
+  "baselines": [
+    {
+      "part": "intent",
+      "version": 1,
+      "hash": "a27461029cba16ddd104982c0c785b4905881db1ef9f81b98396901fff799207"
+    },
+    {
+      "part": "spec",
+      "version": 1,
+      "hash": "4b5eb1153bdae7aad9ab67fbf7177d40eee0e5ba6102c2d09aade96aff53bc2f"
+    },
+    {
+      "part": "tech",
+      "version": 1,
+      "hash": "8f5f368efa987a5d28cf47c00f4fce5978b1a9f74b09dd15cd456601fa7f01d4"
+    }
+  ],
+  "stories": [
+    {
+      "number": 1172,
+      "title": "A waiting baseline draft is an inbox card, approved under the session's one device code",
+      "effort": "M",
+      "completion_goal_hash": "787006b329b4ccb23454535dd94264ca9adbfdfdebab01817c5323700b7eae3d"
+    },
+    {
+      "number": 1173,
+      "title": "Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries",
+      "effort": "M",
+      "completion_goal_hash": "82eba705be56965bb244c6465d868d442b4434ed0bb16c173846d808a6de3e52"
+    },
+    {
+      "number": 1174,
+      "title": "Bugs come last: a mission ends with a BUGS milestone, and a Bug filed during the mission joins it",
+      "effort": "M",
+      "completion_goal_hash": "913ca6c56a1246ae41c5ce741a3c83044b129a17346167d58580c0278600ae1f"
+    },
+    {
+      "number": 1175,
+      "title": "The morning is set: the inbox orders the day's cards and ends with the day's plan",
+      "effort": "S",
+      "completion_goal_hash": "0951e4eb9d78a6c88712d9600f903a4fde92791dbc874f4e80672399523eef4f"
+    },
+    {
+      "number": 1176,
+      "title": "The evening review: each story agreed this morning, with each criterion next to its evidence",
+      "effort": "M",
+      "completion_goal_hash": "f053138cb555831e0aec9bc614300c30ffc290d020809ef3a509ab6491ab72a7"
+    },
+    {
+      "number": 1177,
+      "title": "The day is proven: the evening says it only when every agreed criterion has its evidence",
+      "effort": "S",
+      "completion_goal_hash": "22b2ccc7e484f5f0b507c1a1b077e94938c64c1891b4276b300c57d0790deaa1"
+    },
+    {
+      "number": 1178,
+      "title": "The overnight card: the person sets what runs overnight, bounded in hours and cost",
+      "effort": "M",
+      "completion_goal_hash": "aae6614a8e4d8bd5d38b5ac9c1def48e4133e947b57d7c66063a1ef66de2bd45"
+    },
+    {
+      "number": 1179,
+      "title": "aayu grill edits a filed body before Ready, and checks link targets as Ready does",
+      "effort": "M",
+      "completion_goal_hash": "655c09a3b029d46d39cc074268de030c21445e23fde8801cbb4b76080bec898f"
+    }
+  ],
+  "budget": {
+    "per_story_usd": 60,
+    "stories": 8,
+    "total_usd": 480
+  },
+  "dismissals": [],
+  "agents": 10
+}

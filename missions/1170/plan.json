@@ -1,0 +1,207 @@
+{
+  "schema": "aayudha.mission.plan/v1",
+  "feature": 1170,
+  "approval": 1,
+  "approved_by": "rahulnakmol",
+  "approved_at": "2026-10-31T09:47:17Z",
+  "graph": [
+    {
+      "number": 1172,
+      "kind": "story",
+      "title": "A waiting baseline draft is an inbox card, approved under the session's one device code",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1173,
+      "kind": "story",
+      "title": "Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [
+        1172
+      ],
+      "outside": []
+    },
+    {
+      "number": 1174,
+      "kind": "story",
+      "title": "Bugs come last: a mission ends with a BUGS milestone, and a Bug filed during the mission joins it",
+      "milestone": "MS2",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1175,
+      "kind": "story",
+      "title": "The morning is set: the inbox orders the day's cards and ends with the day's plan",
+      "milestone": "MS2",
+      "effort": "S",
+      "depends_on": [
+        1172,
+        1173
+      ],
+      "outside": []
+    },
+    {
+      "number": 1176,
+      "kind": "story",
+      "title": "The evening review: each story agreed this morning, with each criterion next to its evidence",
+      "milestone": "MS2",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1177,
+      "kind": "story",
+      "title": "The day is proven: the evening says it only when every agreed criterion has its evidence",
+      "milestone": "MS2",
+      "effort": "S",
+      "depends_on": [
+        1176
+      ],
+      "outside": []
+    },
+    {
+      "number": 1178,
+      "kind": "story",
+      "title": "The overnight card: the person sets what runs overnight, bounded in hours and cost",
+      "milestone": "MS2",
+      "effort": "M",
+      "depends_on": [
+        1176
+      ],
+      "outside": []
+    },
+    {
+      "number": 1179,
+      "kind": "story",
+      "title": "aayu grill edits a filed body before Ready, and checks link targets as Ready does",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1182,
+      "kind": "bug",
+      "title": "Approve to build and mission start refuse a person in an orb Terminal instead of asking for the device code",
+      "milestone": "MS1",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1191,
+      "kind": "bug",
+      "title": "aayu's loop agents carry AAYU_AGENT=1 only in their prompt, so a loop command without it reaches the device flow",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [
+        1182
+      ],
+      "outside": []
+    },
+    {
+      "number": 1192,
+      "kind": "bug",
+      "title": "ship asks for a second code after a person approved the head with inspect --approve",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    }
+  ],
+  "milestones": [
+    {
+      "name": "MS1",
+      "stories": [
+        1172,
+        1173,
+        1179,
+        1182
+      ],
+      "gate": {
+        "state": "waits"
+      }
+    },
+    {
+      "name": "MS2",
+      "stories": [
+        1174,
+        1175,
+        1176,
+        1177,
+        1178
+      ],
+      "gate": {
+        "state": "waits"
+      }
+    },
+    {
+      "name": "BUGS",
+      "stories": [
+        1191,
+        1192
+      ],
+      "gate": {
+        "state": "waits"
+      }
+    }
+  ],
+  "feature_done": "BUGS",
+  "complete_when": "BUGS passes its gate",
+  "agents": 10,
+  "agents_source": "aayu ready 1170 --agents 10 at Approve to build",
+  "estimate": {
+    "runs": 17,
+    "stories": 11,
+    "milestones": 3,
+    "basis": "runs ≥ 11 stories and Bugs + 2 × 3 milestones = 17"
+  },
+  "missions": [
+    {
+      "number": 1,
+      "stories": [
+        {
+          "number": 1172
+        },
+        {
+          "number": 1173
+        },
+        {
+          "number": 1174
+        },
+        {
+          "number": 1175
+        },
+        {
+          "number": 1176
+        },
+        {
+          "number": 1177
+        },
+        {
+          "number": 1178
+        },
+        {
+          "number": 1179
+        },
+        {
+          "number": 1182
+        },
+        {
+          "number": 1191
+        },
+        {
+          "number": 1192
+        }
+      ]
+    }
+  ],
+  "controls": []
+}
