@@ -55,7 +55,7 @@ func TestPrecedence(t *testing.T) {
 		wantLayer  string
 		wantSource string
 	}{
-		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd=5"},
+		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd"},
 		{"env beats local", merge(user, repo, local), env, nil, 4, LayerEnv, "AAYU_BUDGET__PER_DAY_USD"},
 		{"local beats repo", merge(user, repo, local), nil, nil, 3, LayerLocal, "config.local.toml"},
 		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, filepath.Join(".aayudha", "config.toml")},
@@ -114,7 +114,7 @@ func TestRejects(t *testing.T) {
 		{"auth on a non-cloud integration", nil, nil, []string{"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.auth=oidc"}, "only [integrations.azure]"},
 		{"approvals door", nil, nil, []string{"approvals.device_for=two-way"}, `[approvals] device_for "two-way": want one-way or all`},
 		{"approvals login", nil, nil, []string{"approvals.approvers=founder b"}, `[approvals] approvers "founder b": want a GitHub login`},
-		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret = ""`},
+		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret is not set: want the name of a secret`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -125,6 +125,39 @@ func TestRejects(t *testing.T) {
 				t.Fatalf("err = %v, want it to mention %q", err, tt.want)
 			}
 		})
+	}
+	// A config error never shows a pasted key, or any 4-character run of it: a
+	// secret field names the field and its rule, a --set layer is named by its
+	// keys, and a URL hides its password (Bug #1198).
+	key := strings.Join([]string{"sk", "live", "AbC123xyz9QrS"}, "-") // built at run time, so the secret scan sees no key
+	for _, tc := range []struct {
+		sets []string
+		want string
+	}{
+		{[]string{"models.gateway.secret=" + key, "models.gateway.base_url=https://gw.example/v1"}, "[models.gateway] secret: want the name of a secret"},
+		{[]string{"integrations.posthog.secret=" + key, "integrations.posthog.scope=read"}, "[integrations.posthog] secret: want the name of a secret"},
+		{[]string{"identity.machine_user_secret=" + key, "identity.machine_user=aayu-bot"}, "[identity] machine_user_secret: want the name of a secret"},
+		{[]string{"models.gateway.secret=" + key, "models.gateway.secrte=x"}, "--set models.gateway.secret --set models.gateway.secrte"},
+		{[]string{"budget.per_day_usd=5", key}, "--set entry 2: want key=value"},
+		{[]string{key + "=="}, "--set entry 1: want key=value"},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=" + key}, "[models.gateway] base_url = \"(not a URL)\": want an https:// URL"},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://gw.example/v1?api_key=" + key}, "[models.gateway] base_url = \"http://gw.example/v1\": want an https:// URL"},
+		{[]string{"models.gateway.secret=ai-gateway", "models.gateway.base_url=http://bob:" + key + "@gw.example/v1"}, "[models.gateway] base_url = \"http://xxxxx@gw.example/v1\": want an https:// URL"},
+		{[]string{"integrations.sentry.secret=sentry", "integrations.sentry.scope=read", "integrations.sentry.url=http://" + key + "@sentry.example"}, "[integrations.sentry] url = \"http://xxxxx@sentry.example\": want an https:// URL"},
+	} {
+		src := fixture(t, nil)
+		src.Sets = tc.sets
+		_, err := Load(src)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("--set %v: err = %v, want it to mention %q", tc.sets, err, tc.want)
+			continue
+		}
+		for i := 0; i+4 <= len(key); i++ {
+			if strings.Contains(err.Error(), key[i:i+4]) {
+				t.Errorf("--set %v: err = %v shows %q of the key", tc.sets, err, key[i:i+4])
+				break
+			}
+		}
 	}
 	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 9\n"})
 	if _, err := Load(src); !errors.Is(err, ErrNewerSchema) {

@@ -1,0 +1,13 @@
+# Which tests prove Bug #1198's Completion Goal.
+
+[[criterion]]
+id = 1 # [models.gateway] secret holds a pasted key: refused by name and rule, the value never shown
+tests = ["internal/config:TestRejects"]
+
+[[criterion]]
+id = 2 # [integrations.<name>] secret holds a pasted key: refused by name and rule, the value never shown
+tests = ["internal/config:TestRejects"]
+
+[[criterion]]
+id = 3 # [identity] machine_user_secret holds a pasted token: refused by name and rule, the value never shown
+tests = ["internal/config:TestRejects"]

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -544,7 +545,7 @@ func (c *Config) Validate() error {
 	}
 	if g := c.Models.Gateway; g.BaseURL != "" {
 		if !strings.HasPrefix(g.BaseURL, "https://") && !strings.HasPrefix(g.BaseURL, "http://localhost") && !strings.HasPrefix(g.BaseURL, "http://127.0.0.1") {
-			bad("[models.gateway] base_url = %q: want an https:// URL", g.BaseURL)
+			bad("[models.gateway] base_url = %q: want an https:// URL", redactURL(g.BaseURL))
 		}
 		if !slices.Contains(apiStyles, g.APIStyle) {
 			bad("[models.gateway] api_style = %q: want messages, responses, or chat", g.APIStyle)
@@ -556,7 +557,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		if !secretName.MatchString(g.Secret) {
-			bad("[models.gateway] secret = %q: want the name of a secret (lowercase letters, digits, - and _), never the key", g.Secret)
+			bad("%s", secretRule("[models.gateway] secret", g.Secret, "key"))
 		}
 	}
 	for key, layers := range map[string][]string{"[autonomy] never": c.Autonomy.Never, "[verify.floors.screen_reader] layers": c.Verify.Floors.ScreenReader.Layers} {
@@ -635,20 +636,20 @@ func (c *Config) Validate() error {
 			bad("[integrations.%s]: identity, federation, and region are for the cloud integrations (azure, aws, gcp)", name)
 		}
 		if (in.Secret != "" || in.StoredKey()) && !secretName.MatchString(in.Secret) {
-			bad("[integrations.%s] secret = %q: want the name of a secret (lowercase letters, digits, - and _), never the key", name, in.Secret)
+			bad("%s", secretRule("[integrations."+name+"] secret", in.Secret, "key"))
 		}
 		if in.Scope != "read" && in.Scope != "write" {
 			bad("[integrations.%s] scope = %q: want read or write", name, in.Scope)
 		}
 		if in.URL != "" && !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://localhost") && !strings.HasPrefix(in.URL, "http://127.0.0.1") {
-			bad("[integrations.%s] url = %q: want an https:// URL", name, in.URL)
+			bad("[integrations.%s] url = %q: want an https:// URL", name, redactURL(in.URL))
 		}
 		if in.Transport != "" && (name != "figma" || (in.Transport != "rest" && in.Transport != "mcp")) {
 			bad("[integrations.%s] transport = %q: only [integrations.figma] takes transport, rest or mcp", name, in.Transport)
 		}
 	}
 	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {
-		bad("[identity] machine_user_secret = %q: want the name of a secret holding the machine user's token", id.MachineUserSecret)
+		bad("%s", secretRule("[identity] machine_user_secret", id.MachineUserSecret, "token"))
 	}
 	if id := c.Identity; id.AppID != 0 && id.AppSlug == "" {
 		bad("[identity] app_id needs app_slug")
@@ -662,4 +663,33 @@ func (c *Config) Validate() error {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// secretRule is Validate's refusal of a secret field that holds no secret
+// name. It never shows the value: the rule fails exactly when a person
+// pasted the key itself (Bug #1198).
+func secretRule(field, value, what string) string {
+	if value == "" {
+		return field + " is not set: want the name of a secret (lowercase letters, digits, - and _)"
+	}
+	return field + ": want the name of a secret (lowercase letters, digits, - and _), never the " + what + ". This message does not show the value."
+}
+
+// redactURL is u for an error message, with its user and password, which
+// can hold a token, shown as "xxxxx", and its query and fragment dropped
+// (Bug #1198). A value with no scheme and host, such as a pasted key, is not
+// shown.
+func redactURL(u string) string {
+	if u == "" {
+		return ""
+	}
+	p, err := url.Parse(u)
+	if err != nil || p.Scheme == "" || p.Host == "" {
+		return "(not a URL)"
+	}
+	if p.User != nil {
+		p.User = url.User("xxxxx")
+	}
+	p.RawQuery, p.Fragment = "", ""
+	return p.String()
 }
