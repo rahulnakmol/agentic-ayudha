@@ -1,0 +1,93 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 875,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#919",
+      "hash": "a33ee94b4375bb6df0957f53396d9d77ba1739722512272ac832c9b1b9898f99",
+      "story": {
+        "number": 919,
+        "title": "The reviewer table and one finding type are in the registry, and every review timing is a config key",
+        "completion_goal_hash": "9b09feafbb01e0ced50d17f83ec79c5994e52dfd777fc2f063da7ba1fbfb4444",
+        "effort": "S",
+        "layers": [],
+        "depends_on": [
+          874
+        ]
+      }
+    },
+    {
+      "ref": "#920",
+      "hash": "229ffff95ffb9503576eb7ec262ab5ec324c054f3e4e20cf70595a2899802cd5",
+      "story": {
+        "number": 920,
+        "title": "aayu critique records one review per seat and refuses a review that is not independent",
+        "completion_goal_hash": "434c189f872f0f5c8f6254f1f5695d1c32315604d08eeba1404d891e5e7f1b97",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          874,
+          919
+        ]
+      }
+    },
+    {
+      "ref": "#921",
+      "hash": "4e321231927b36d245b5df47df0056a0de887beb776d3dbb3911db62a304f293",
+      "story": {
+        "number": 921,
+        "title": "An approved baseline starts one review session for each reviewing seat on the approver's agent tool",
+        "completion_goal_hash": "6ccb09772beacbe67ced640c906fa66eaa1cbee0d57dc818e25c71c144f95cec",
+        "effort": "M",
+        "layers": [],
+        "depends_on": [
+          874,
+          920
+        ]
+      }
+    },
+    {
+      "ref": "#922",
+      "hash": "a287a1415ca3d3fb9bdd00d4461178f1e613f66af915306d9af32b7869a227f5",
+      "story": {
+        "number": 922,
+        "title": "A slow tick starts each missed review, and the review window closes on time",
+        "completion_goal_hash": "74509b3f5e73b9c037b1d207005f7eedccf20730f6d47c2a8dc7b029c3f52dbb",
+        "effort": "S",
+        "layers": [],
+        "depends_on": [
+          874,
+          921
+        ]
+      }
+    },
+    {
+      "ref": "#923",
+      "hash": "22526e25238a6d37f72c58c9bf8d9705f5a83f45d8df711f27e22fdec05129f1",
+      "story": {
+        "number": 923,
+        "title": "A local agent CLI runs a review session, and aayu critique records it when the session ends",
+        "completion_goal_hash": "e837bc06e0f0224772767fffcd79b1c2af764271e1df4df69cc7e56f9a74db0e",
+        "effort": "S",
+        "layers": [],
+        "depends_on": [
+          874,
+          920,
+          921
+        ]
+      }
+    },
+    {
+      "ref": "#875 stories",
+      "hash": "32a0e4e23e374ffc448b58dbd8f2b28fd60df10534cf9065f4f04d54d5840873"
+    }
+  ],
+  "hash": "33dad95ba3ea597981044b8f5abe8e2e0194282b48e51e2360994735d267d8f6",
+  "summary": "A new `aayu critique` verb posts one structured review per seat, and a host-scheduled loop runs one fresh session per reviewing seat. This is step S6 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T12:05:36Z"
+}
