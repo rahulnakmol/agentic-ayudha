@@ -356,5 +356,6 @@
       "at": "2026-10-31T14:24:15Z",
       "presence": "device-flow"
     }
-  ]
+  ],
+  "events_cursor": "2026-10-31T14:26:12Z"
 }
