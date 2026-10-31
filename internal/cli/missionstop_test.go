@@ -675,6 +675,11 @@ func TestMissionControlsRecordWho(t *testing.T) {
 // issue; running it again changes nothing.
 func TestMissionEndOnlyByStarter(t *testing.T) {
 	w, prN := bobs(t)
+	// The end comment names the time from aayu's clock (Bug #1186). The clock
+	// stands at the last second of the minute before the wall clock's, so the
+	// comment's HH:MM is never the wall clock's, however long the run takes.
+	clk := w.withClock()
+	clk.add(-clk.now().Sub(clk.now().Truncate(time.Minute)) - time.Second)
 	w.setPlan(874, func(p *MissionPlan) {
 		p.Lock = &MissionLock{State: "active", ConfirmedBy: "bob", StartedAt: p.StartedAt, Issues: []LockedIssue{{Number: 874}, {Number: 950}, {Number: 951}, {Number: 952}}}
 	})
@@ -731,7 +736,7 @@ func TestMissionEndOnlyByStarter(t *testing.T) {
 	w.g.Mu.Lock()
 	at := w.g.Issues[951].Comments[len(w.g.Issues[951].Comments)-1].Body
 	w.g.Mu.Unlock()
-	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", time.Now().Format("15:04"), prN)
+	want := fmt.Sprintf("The mission of #874 ended (superseded) at %s, by @bob: “superseded”. #951 is no longer read-only. Its PR #%d is closed; the story is Ready again.", clk.now().Local().Format("15:04"), prN)
 	if !strings.HasSuffix(at, want) {
 		t.Fatalf("#951's comment:\n%s\nwant:\n%s", at, want)
 	}
