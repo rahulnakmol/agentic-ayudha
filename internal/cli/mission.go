@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -609,13 +611,27 @@ func (e *Env) tatkalRelease(ctx context.Context, f int) (int, error) {
 	return 0, nil
 }
 
-// repoTool is the person's tool for repo from their user config's entry for
-// it (R9). Until that entry lands it is not set (tests set Options.RepoTool).
+// repoTool is the person's tool for repo from their user config's [hosts]
+// repos entry for it (R9, Bug #1193), or "" (tests may set Options.RepoTool).
 func (e *Env) repoTool(ctx context.Context, repo string) (string, error) {
 	if e.RepoTool != nil {
 		return e.RepoTool(ctx, repo)
 	}
-	return "", nil
+	l, err := e.Config()
+	if err != nil {
+		return "", err
+	}
+	return l.Config.Hosts.RepoTool(repo), nil
+}
+
+// noRepoTool is Start's refusal when the person set no tool for repo: it names the key.
+func (e *Env) noRepoTool(repo string) error {
+	file := "your user config"
+	if dir := config.DefaultSources(e.Getenv, e.Dir, nil, nil).UserDir; dir != "" {
+		file += " (" + filepath.Join(dir, "config.toml") + ")"
+	}
+	return WithNext(Errorf(ExitBlocked, "Start records your tool for %s from [hosts] repos, and no entry there names %s. AAYU_HOSTS__REPOS and --set hosts.repos replace that list. Nothing was started.", repo, repo),
+		fmt.Sprintf("add %q to `[hosts] repos` in %s, with tool one of %s; or, for one run, add --set hosts.repos=%s=<tool>", repo+"=<tool>", file, strings.Join(config.RepoTools(), ", "), repo))
 }
 
 // callerTool is the tool this run is on (R9, Story #1002): the host aayu
@@ -766,7 +782,7 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 			return Wrap(ExitExternal, err)
 		}
 		if tool == "" {
-			return Errorf(ExitBlocked, "Start records your tool for %s from your user config, and none is set there. Nothing was started.", repo)
+			return e.noRepoTool(repo)
 		}
 		est, err := e.costEstimate(ctx, f)
 		if err != nil {
@@ -787,7 +803,7 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 			return err
 		}
 		effect = append([]string{fmt.Sprintf("Starts the mission of #%d, approval %d: %s", f, plan.Approval, missionsLine(plan.Missions))},
-			startCard(plan, issueNumbers(locked), tool, agents)...)
+			startCard(plan, issueNumbers(locked), tool, false, agents)...)
 		effect = append(effect,
 			fmt.Sprintf("BUDGET %s · %s, locked when you start", ready.USD(budget), card),
 			fmt.Sprintf("ESTIMATE %s", plan.Estimate.Basis))
@@ -899,7 +915,7 @@ func storyStart(ctx context.Context, e *Env, repo string, c *github.Client, w *l
 		return Wrap(ExitExternal, err)
 	}
 	if tool == "" {
-		return Errorf(ExitBlocked, "Start records your tool for %s from your user config, and none is set there. Nothing was started.", repo)
+		return e.noRepoTool(repo)
 	}
 	effect := []string{
 		fmt.Sprintf("Starts #%d of Tatkal Feature #%d on %s, the tool you set for this repository", n, f, tool),

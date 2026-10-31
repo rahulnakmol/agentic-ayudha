@@ -102,6 +102,12 @@ func TestRejects(t *testing.T) {
 		{"fleet outside the user config", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[fleet]\nrepos = [\"a/b\"]\n"}, nil, nil, "user-level only"},
 		{"gateway endpoint from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://evil.example/v1\"\n"}, nil, nil, "never from the checkout"},
 		{"Cursor plan from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[hosts.cursor]\nplan = \"legacy\"\n"}, nil, nil, "[hosts.cursor] plan is read only from the user config"},
+		{"repository tools from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[hosts]\nrepos = [\"o/r=amp\"]\n"}, nil, nil, "[hosts] repos (your tool for each repository) is read only from the user config"},
+		{"repository tools from a local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[hosts]\nrepos = [\"o/r=amp\"]\n"}, nil, nil, "never from the checkout"},
+		{"repository tool not a host", nil, nil, []string{"hosts.repos=o/r=vim"}, `[hosts] repos entry "o/r=vim" (user config, AAYU_HOSTS__REPOS, or --set): want owner/name=tool, with tool one of amp, cursor, claude, codex, copilot`},
+		{"repository tool with no repository", nil, nil, []string{"hosts.repos=amp"}, `[hosts] repos entry "amp"`},
+		{"repository tool with a space in the repository", nil, nil, []string{"hosts.repos=o / r=amp"}, `[hosts] repos entry "o / r=amp"`},
+		{"repository named twice", nil, nil, []string{"hosts.repos=o/r=amp,O/R=cursor"}, "[hosts] repos names O/R twice"},
 		{"gateway secret from a committed local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[models.gateway]\nsecret = \"github-token\"\n"}, nil, nil, "never from the checkout"},
 		{"Copilot route opt-in from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n"}, nil, nil, "never from the checkout"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
@@ -134,6 +140,22 @@ func TestRejects(t *testing.T) {
 	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://gw.example/v1\"\nsecret = \"ai-gateway\"\n"})
 	if l, err := Load(src); err != nil || l.Config.Models.Gateway.BaseURL != "https://gw.example/v1" {
 		t.Fatalf("gateway from the user config: %v", err)
+	}
+	// The person's tool for a repository: from their user config, an AAYU_ variable, or --set,
+	// with a dot in the repository's name and whatever the case of owner/name (Bug #1193).
+	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[hosts]\nrepos = [\"vercel/next.js=codex\", \"o/r=amp\"]\n"})
+	if l, err := Load(src); err != nil || l.Config.Hosts.RepoTool("Vercel/Next.js") != "codex" || l.Config.Hosts.RepoTool("o/r") != "amp" || l.Config.Hosts.RepoTool("o/other") != "" {
+		t.Fatalf("repository tools from the user config: %v", err)
+	}
+	src = fixture(t, nil)
+	src.Environ = []string{"AAYU_HOSTS__REPOS=o/r=cursor,a/b=claude"}
+	if l, err := Load(src); err != nil || l.Config.Hosts.RepoTool("a/b") != "claude" || l.Config.Hosts.RepoTool("o/r") != "cursor" {
+		t.Fatalf("repository tools from AAYU_HOSTS__REPOS: %v", err)
+	}
+	src = fixture(t, nil)
+	src.Sets = []string{"hosts.repos=o/r=copilot"}
+	if l, err := Load(src); err != nil || l.Config.Hosts.RepoTool("o/r") != "copilot" {
+		t.Fatalf("repository tools from --set: %v", err)
 	}
 	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n",
 		"repo/.aayudha/config.toml": "version = 1\n[models.review.copilot]\nmodel = \"auto:intelligence\"\n"})

@@ -77,14 +77,17 @@ func lockNumbers(plan *MissionPlan, open func(n int) bool) []int {
 // startCard is the start card of plan's mission (baseline v44, tui-start):
 // the issues its start locks, what the lock holds and leaves open, when it
 // ends, the tool, and how many stories run at once (missionAgents).
-func startCard(plan *MissionPlan, locked []int, tool string, agents int) []string {
+func startCard(plan *MissionPlan, locked []int, tool string, unread bool, agents int) []string {
 	last := ""
 	if len(plan.Milestones) > 0 {
 		last = plan.Milestones[len(plan.Milestones)-1].Name
 	}
 	runs := fmt.Sprintf("It runs in %s, the tool you set for this repository.", orDefault(delegate.Names[tool], tool))
-	if tool == "" {
-		runs = "It runs in the tool you set for this repository, and none is set there yet: Start refuses until you set one."
+	switch {
+	case unread: // the config error stays out of the card: it can quote a pasted secret
+		runs = "It runs in the tool you set for this repository, which cannot be read: your config does not load. Run aayu config validate to see why."
+	case tool == "":
+		runs = "It runs in the tool you set for this repository, and none is set yet: Start refuses until you set [hosts] repos in your user config."
 	}
 	return []string{
 		fmt.Sprintf("Starting the mission makes %d %s read-only until its last milestone: %s", len(locked), plural(len(locked), "issue", "issues"), issueRefs(locked)),
@@ -634,7 +637,8 @@ type missionFacts struct {
 	plan      *MissionPlan
 	startable bool
 	tool      string
-	agents    int // how many stories it would run at once
+	unread    bool // the config did not load, so the tool is unknown
+	agents    int  // how many stories it would run at once
 }
 
 // startAndLockCards reads the mission plans on the ledger for the inbox: the
@@ -649,7 +653,7 @@ func (e *Env) startAndLockCards(ctx context.Context) ([]missionFacts, error) {
 		return nil, err
 	}
 	var out []missionFacts
-	tool, read := "", false
+	tool, read, unread := "", false, false
 	for _, p := range plans {
 		mf := missionFacts{plan: p}
 		if p.StartedBy == "" {
@@ -665,12 +669,11 @@ func (e *Env) startAndLockCards(ctx context.Context) ([]missionFacts, error) {
 			}
 		}
 		if mf.startable && !read {
-			if tool, err = e.repoTool(ctx, repo); err != nil {
-				return nil, err
-			}
-			read = true
+			var err error
+			tool, err = e.repoTool(ctx, repo)
+			unread, read = err != nil, true
 		}
-		mf.tool = tool
+		mf.tool, mf.unread = tool, unread
 		if mf.startable || p.Lock != nil && p.Lock.State == LockActive {
 			out = append(out, mf)
 		}
@@ -693,7 +696,7 @@ func (s *inboxSource) lockItems(ms []missionFacts) []InboxItem {
 		if m.startable {
 			locked := lockNumbers(p, func(n int) bool { return s.issues[n] == nil || s.issues[n].GetState() == "open" })
 			it := InboxItem{Kind: InboxStart, Number: f, Title: fmt.Sprintf("Start the mission of #%d", f), URL: feature.GetHTMLURL(),
-				Seat: verbs.EngineeringManager, Evidence: feature.GetHTMLURL(), Updated: feature.GetUpdatedAt().Time, Lines: startCard(p, locked, m.tool, m.agents),
+				Seat: verbs.EngineeringManager, Evidence: feature.GetHTMLURL(), Updated: feature.GetUpdatedAt().Time, Lines: startCard(p, locked, m.tool, m.unread, m.agents),
 				Why: fmt.Sprintf("#%d is approved to build (approval %d), and its mission has not started.", f, p.Approval),
 				Options: []InboxAction{
 					{N: 1, Label: "Start the mission", Command: fmt.Sprintf("aayu mission start %d", f)},
