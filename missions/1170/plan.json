@@ -216,5 +216,145 @@
       ]
     }
   ],
-  "controls": []
+  "started_by": "rahulnakmol",
+  "started_at": "2026-10-31T14:24:15Z",
+  "tool": "amp",
+  "tool_source": "the user config of @rahulnakmol for rahulnakmol/agentic-ayudha",
+  "budget": 480,
+  "budget_basis": "the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
+  "lock": {
+    "state": "active",
+    "confirmed_by": "rahulnakmol",
+    "started_at": "2026-10-31T14:24:15Z",
+    "ended_at": null,
+    "end_reason": null,
+    "issues": [
+      {
+        "number": 1170,
+        "body_sha256": "530158d10965f2e9575f32e2fbb2123676eeb43489a66ec0cdbdd973cbb3c5e1",
+        "labels": {
+          "effort": "effort:L",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1172,
+        "body_sha256": "687c63d34142a4e37600954f14cc197c020b4c33a9884bd61d5118f56765969f",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1173,
+        "body_sha256": "76015b9e42f6f31711a0dabbbe7009f4f5e66b80c29e2fa54315309e92d2f622",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1174,
+        "body_sha256": "3438c77281326c355b8ac7e1a3dd43095c208c6b8b172c21c419d363b022b97a",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1175,
+        "body_sha256": "1e36799ba990c04b56b66d39fc3613d5305e65bff7f53080fb829ae9aaecdd7e",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:low"
+        }
+      },
+      {
+        "number": 1176,
+        "body_sha256": "948f84fe551a347acaf5f8ff27ca04c58faec2bc978a4015fb9b073a5d47d583",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1177,
+        "body_sha256": "c24f991e211d5f957081d1561ddaf56545cff60f547da0ef17781efa0bccdc46",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:low"
+        }
+      },
+      {
+        "number": 1178,
+        "body_sha256": "dcf995a45d2b7d7d82d3e10138881530f829176e1b5cb01545227eb7283ddd33",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1179,
+        "body_sha256": "05f328a7488ac6b4f7fed138c7de265a17d565d4e7ba5ee412c5e4c561c21b2a",
+        "labels": {
+          "effort": "effort:M",
+          "priority": "priority:P1",
+          "risk": "risk:medium"
+        }
+      },
+      {
+        "number": 1182,
+        "body_sha256": "ca7f5e1f11ffaf282f583a2dd7a2ccfddd56c095145cbb5bb86687bcc6521c43",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:high"
+        }
+      },
+      {
+        "number": 1191,
+        "body_sha256": "4725e80bcbbc8751a3e11579be32dcfd83a46c33b808f87f1af73cd63faf1491",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:high"
+        }
+      },
+      {
+        "number": 1192,
+        "body_sha256": "cfcb727da06a78b78fdaf814b33ae580a62f81e21f7a36093dfa6c6e9a8a8df0",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:high"
+        }
+      },
+      {
+        "number": 1193,
+        "body_sha256": "bd0b4a769dc90db9f1a9d7a84cc58627299aa1fbd106dc5d33bc9e3431880661",
+        "labels": {
+          "effort": "effort:S",
+          "priority": "priority:P1",
+          "risk": "risk:low"
+        }
+      }
+    ]
+  },
+  "controls": [
+    {
+      "control": "start",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-10-31T14:24:15Z",
+      "presence": "device-flow"
+    }
+  ]
 }
