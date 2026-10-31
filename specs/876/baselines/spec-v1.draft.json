@@ -1,0 +1,69 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 876,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#1114",
+      "hash": "105a5fc2ce272d18f33598f22667ec5cdc26e86268eecbd84bb62f69327a502c",
+      "story": {
+        "number": 1114,
+        "title": "An open review gap keeps Approve to build off until a later approved baseline fixes it, and grill lists each finding",
+        "completion_goal_hash": "c922589b9aec74ba839d8a65a3fa3572754b94dd6c7da10cc4a1d6373d84a9c5",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1115",
+      "hash": "5928c184134ca6480cc536d0bba9a5cde04e9ad4e62a5b1c30e7e6bba91797ea",
+      "story": {
+        "number": 1115,
+        "title": "A person dismisses a review gap with a reason, and Approve to build ratifies it",
+        "completion_goal_hash": "6122d2fdcb0e41b507b59daf8179771476ed6eb25345f4f3c5bbeceed7d5dd5d",
+        "effort": "S",
+        "layers": [
+          "L02",
+          "L03",
+          "L07"
+        ],
+        "depends_on": [
+          1114
+        ]
+      }
+    },
+    {
+      "ref": "#1116",
+      "hash": "7b225bd6ffbcd0018d602efe0fa7f41144b530b48536ae65f045cde932a72b4c",
+      "story": {
+        "number": 1116,
+        "title": "In the grill session, the agent walks each open gap with the founder, and never dismisses one itself",
+        "completion_goal_hash": "14d6826e388a5da510a30dd520bcd322a0afc2e1f104896d52b48e5e5521d73c",
+        "effort": "S",
+        "layers": [
+          "L03",
+          "L05"
+        ],
+        "depends_on": [
+          1114,
+          1115
+        ]
+      }
+    },
+    {
+      "ref": "#876 stories",
+      "hash": "7dc52e62136f52d3c5e7f8fdcfac6fe8bd6be8b0dc84390b72c553a10fb40a46"
+    }
+  ],
+  "hash": "5f69d4833129d37201de6fb01f639ec6e896caa23d54cff71baa0299a5697d30",
+  "summary": "`aayu grill feature \u003cf\u003e --findings` walks the open findings with the founder in the owner's thread, and each resolution is recorded. This is step S7 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T10:05:56Z"
+}
