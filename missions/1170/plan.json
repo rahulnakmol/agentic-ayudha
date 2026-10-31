@@ -220,8 +220,8 @@
   "started_at": "2026-10-31T14:24:15Z",
   "tool": "amp",
   "tool_source": "the user config of @rahulnakmol for rahulnakmol/agentic-ayudha",
-  "budget": 480,
-  "budget_basis": "the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
+  "budget": 660,
+  "budget_basis": "raised from $480 to $660 by @rahulnakmol at 2026-10-31T23:35:00Z: Bugs #1206, #1207 and #1210 join BUGS; before: the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
   "lock": {
     "state": "active",
     "confirmed_by": "rahulnakmol",
@@ -355,6 +355,13 @@
       "tool": "amp",
       "at": "2026-10-31T14:24:15Z",
       "presence": "device-flow"
+    },
+    {
+      "control": "budget",
+      "by": "rahulnakmol",
+      "at": "2026-10-31T23:35:00Z",
+      "presence": "device-flow",
+      "reason": "Bugs #1206, #1207 and #1210 join BUGS"
     }
   ],
   "events_cursor": "2026-10-31T16:06:24Z"
