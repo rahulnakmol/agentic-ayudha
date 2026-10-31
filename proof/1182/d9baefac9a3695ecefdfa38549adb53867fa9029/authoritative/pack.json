@@ -1,0 +1,290 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1182,
+  "pr": 1188,
+  "pr_head_sha": "d9baefac9a3695ecefdfa38549adb53867fa9029",
+  "base_sha": "53b7a8aafbff53212168bfaad7aa31a6aff9176d",
+  "seat": "ai-native-engineer",
+  "host": "cli",
+  "model": "claude-opus-5-5",
+  "identity": "ci",
+  "authority": {
+    "kind": "authoritative",
+    "workflow": ".github/workflows/aayudha-merge-gate.yml",
+    "run_id": 41137238816,
+    "writer": "rahulnakmol (aayu ship)"
+  },
+  "completion_goal_hash": "12370eecd9c1d4941d865dfac56591e4c3b66d1d734fa231d41199a09e9a0770",
+  "footprint": [
+    "L02"
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "evidence": [
+        "evidence/criterion-1.jsonl"
+      ]
+    },
+    {
+      "id": 2,
+      "evidence": [
+        "evidence/criterion-2.jsonl"
+      ]
+    },
+    {
+      "id": 3,
+      "evidence": [
+        "evidence/criterion-3.jsonl"
+      ]
+    },
+    {
+      "id": 4,
+      "evidence": [
+        "evidence/criterion-4.jsonl"
+      ]
+    },
+    {
+      "id": 5,
+      "evidence": [
+        "evidence/criterion-5.jsonl"
+      ]
+    },
+    {
+      "id": 6,
+      "evidence": [
+        "evidence/criterion-6.jsonl"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "coverage/diff.json",
+      "kind": "metric",
+      "sha256": "30558cc6b93b5262068b2510c937d1f5197968b94ff4a35ae1f5f147f0d1bf24",
+      "size": 141,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-1.jsonl",
+      "kind": "api-trace",
+      "sha256": "2463befff6e6e25a5c17d065c27951b2eabc45995f54023d9d49639efc164641",
+      "size": 561,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-2.jsonl",
+      "kind": "api-trace",
+      "sha256": "59c080c54728e1fe40bc3ddec76330fc998bb907c95eea7679c2195d319db8ee",
+      "size": 633,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-3.jsonl",
+      "kind": "api-trace",
+      "sha256": "27dbbcf833bdf0e9077806fa2e0062864e7506b950107c76affb1e080579dab7",
+      "size": 1194,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-4.jsonl",
+      "kind": "api-trace",
+      "sha256": "27dbbcf833bdf0e9077806fa2e0062864e7506b950107c76affb1e080579dab7",
+      "size": 1194,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-5.jsonl",
+      "kind": "api-trace",
+      "sha256": "2463befff6e6e25a5c17d065c27951b2eabc45995f54023d9d49639efc164641",
+      "size": 561,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-6.jsonl",
+      "kind": "api-trace",
+      "sha256": "2463befff6e6e25a5c17d065c27951b2eabc45995f54023d9d49639efc164641",
+      "size": 561,
+      "store": "git"
+    },
+    {
+      "path": "reports/feature-map.json",
+      "kind": "report",
+      "sha256": "aa400a5d7ba59fd6b4b7552892c431ab60e768882083ed747a7a0c86cd3f73f5",
+      "size": 1014,
+      "store": "git"
+    },
+    {
+      "path": "reports/gitleaks.json",
+      "kind": "report",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3,
+      "store": "git"
+    },
+    {
+      "path": "reports/osv-scanner.json",
+      "kind": "report",
+      "sha256": "f5aad51596612fdc0d352296c3c0e561d182b49d0aff1680c1e738bb9ab3baf2",
+      "size": 10541,
+      "store": "git"
+    },
+    {
+      "path": "reports/semgrep.json",
+      "kind": "report",
+      "sha256": "e8890d256cd70cb74295aaa96ac0bf58b41866bac050e072ccd0d1c2bbc009c5",
+      "size": 53374,
+      "store": "git"
+    },
+    {
+      "path": "reports/zap.json",
+      "kind": "report",
+      "sha256": "b84735fd0913dda88280a8eb43150e2ca1f51f2c39bcc4b490c85b3c188d6a89",
+      "size": 8771,
+      "store": "git"
+    }
+  ],
+  "checks": [
+    {
+      "floor": "coverage",
+      "result": "pass",
+      "value": 100,
+      "threshold": 90,
+      "tool": "aayudha diff coverage (go test -coverprofile)",
+      "version": "go1.25.14",
+      "detail": "4 of 4 changed executable lines covered (go coverprofile)",
+      "network": "isolated"
+    },
+    {
+      "floor": "sast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "semgrep",
+      "version": "1.180.0",
+      "detail": "p/golang p/javascript p/typescript p/python p/kotlin p/ruby p/php p/swift p/github-actions: 0 critical, 0 high, 3 medium, 0 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "secrets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "detail": "0 findings",
+      "network": "isolated"
+    },
+    {
+      "floor": "deps",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "osv-scanner",
+      "version": "2.6.0",
+      "detail": "go.mod pnpm-lock.yaml: 0 critical, 0 high, 0 medium, 0 low (3 more not called, by osv-scanner's call analysis)",
+      "network": "allowed"
+    },
+    {
+      "floor": "a11y",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no screenshot or recording criteria"
+    },
+    {
+      "floor": "perf",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no screenshot or recording criteria"
+    },
+    {
+      "floor": "screen-reader",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no-L01"
+    },
+    {
+      "floor": "dast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "zap",
+      "version": "2.17.0",
+      "detail": "active scan (rules 40012, 40014, 40018, 90020) of the app verify started under docker: 0 critical, 0 high, 0 medium, 3 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "api",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no k6 script ([verify.floors.api] script)"
+    },
+    {
+      "floor": "mobile",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no ios or android in [verify] platforms"
+    },
+    {
+      "floor": "feature-map",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha feature map",
+      "version": "1",
+      "detail": "in sync with the source"
+    },
+    {
+      "floor": "behaviour",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no behaviour check for this change (it touches no mapped feature, and no criterion maps a check)"
+    },
+    {
+      "floor": "parity",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no criterion runs `aayu survey --parity` or `--compat`"
+    },
+    {
+      "floor": "red-on-base",
+      "result": "pass",
+      "value": 6,
+      "threshold": 6,
+      "tool": "aayudha red-on-base (go test -json on the base)",
+      "version": "1",
+      "detail": "criterion 1: red on base; criterion 2: red on base; criterion 3: red on base; criterion 4: red on base; criterion 5: red on base; criterion 6: red on base (base 53b7a8a)"
+    }
+  ],
+  "cost": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "usd": 0
+  },
+  "links": {
+    "issue": "rahulnakmol/agentic-ayudha#1182",
+    "pr": "rahulnakmol/agentic-ayudha#1188",
+    "ready_snapshot": "specs/1182/ready.md"
+  },
+  "created_at": "2026-10-30T22:38:01Z"
+}
