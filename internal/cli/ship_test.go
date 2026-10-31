@@ -1898,6 +1898,15 @@ func TestProofLand(t *testing.T) {
 		g.Mu.Unlock()
 		missing(c.what)
 	}
+	// GitHub can leave out created_at. A PR from the branch with none, closed
+	// while the PR was open, is still read: a zero time is never after the
+	// merge, and its close is not before the open. It had the head, so the
+	// run is not the PR's (inspect ba9b6c4d00 on #1183).
+	g.Mu.Lock()
+	twin.CreatedAt, twin.ClosedAt = time.Time{}, ran
+	g.Static[twinCommits], g.Static[twinTimeline] = shas(head, twin.Head.SHA), []any{}
+	g.Mu.Unlock()
+	missing("a PR from the branch with no created_at, closed while the PR was open, that had the head")
 	// The PR from the branch closed while the PR was open and never had the
 	// head; its only force-push came before the PR opened. The run is the
 	// PR's own.
