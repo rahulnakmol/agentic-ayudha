@@ -257,9 +257,13 @@ type AmpCLI struct {
 
 var ampThread = regexp.MustCompile(`https://ampcode\.com/threads/(T-[0-9a-f-]{36})`)
 
+// AmpTitle is the title of the Amp thread of hand-off h: the CLI's, and the
+// one a host hand-off asks the host to give the thread it creates (Bug #1208).
+func AmpTitle(h Handoff) string { return fmt.Sprintf("aayu %s: %s", h.ref(), h.Title) }
+
 // Handoff starts the orb thread with the brief.
 func (a AmpCLI) Handoff(ctx context.Context, h Handoff) (Task, error) {
-	args := []string{"-ox", h.Brief, "--project", h.Repo, "--title", fmt.Sprintf("aayu %s: %s", h.ref(), h.Title)}
+	args := []string{"-ox", h.Brief, "--project", h.Repo, "--title", AmpTitle(h)}
 	if a.OrbSize != "" {
 		args = append(args, "--orb-size", a.OrbSize)
 	}
