@@ -70,7 +70,7 @@ type State struct {
 	Branch    string       `json:"branch,omitempty"`
 	PR        int          `json:"pr,omitempty"`
 	PRURL     string       `json:"pr_url,omitempty"`
-	Status    string       `json:"status"` // handed-off, working, pr-open, fix-requested, merge-ready, capped, failed
+	Status    string       `json:"status"` // handed-off, host-handoff, lapsed, working, pr-open, fix-requested, merge-ready, capped, failed
 	BriefHash string       `json:"brief_sha256"`
 	StartedAt string       `json:"started_at"`
 	Handoffs  int          `json:"handoffs,omitempty"` // hand-offs of this story so far; each gets a fresh branch and worktree

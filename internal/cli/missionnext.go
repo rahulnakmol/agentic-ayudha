@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -235,6 +236,29 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		} else if b != nil && json.Unmarshal(b, &st) == nil && st != nil {
 			en.item.Subthread = st.Task
 		}
+		// A host hand-off that got no thread within its claim's life lapses (Bug #1208): its claim, lease, and
+		// status:in-progress are released, so it is listed like any Ready story. A release that stopped half-way
+		// runs again. A story a person moved on since (blocked, say) keeps its labels.
+		if st != nil && (e.hostLapsed(*st) || st.Status == dlgLapsed) && contains(labels, labelInProgress) {
+			var freed bool
+			if claim && !c.DryRun() {
+				freed, err = e.lapseHost(ctx, c, w, repo, f, n, labels, *st)
+			} else { // a preview shows the release the next claiming run makes
+				var newer bool
+				newer, err = e.leasedSince(ctx, c, repo, n, *st)
+				freed = !newer
+			}
+			if err != nil {
+				return err
+			}
+			if freed {
+				labels = append(slices.DeleteFunc(slices.Clone(labels), func(l string) bool { return strings.HasPrefix(l, "status:") || l == LeaseLabel }), ready.LabelReady)
+			}
+		} else if st != nil && e.hostLapsed(*st) && claim && !c.DryRun() {
+			if _, err := e.markLapsed(ctx, w, n, *st); err != nil {
+				return err
+			}
+		}
 		running := contains(labels, labelInProgress) || contains(labels, "status:validation")
 		if running {
 			busy[n] = true
@@ -352,6 +376,79 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		list.note = fmt.Sprintf("Nothing to list: every open story and Bug of #%d runs, or none is open.", f)
 	}
 	return nil
+}
+
+// lapseHost releases story n's host hand-off st that got no thread (Bug
+// #1208), and reports whether it did. It first marks the delegation lapsed on
+// the ledger tip where the hand-off still waits, so a thread recorded since
+// wins. Then its claim lines, its lease, and status:in-progress go, and the
+// next build hands it off afresh. A lapse whose release stopped half-way is
+// released again, unless a newer build took the lease since.
+func (e *Env) lapseHost(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f, n int, labels []string, st delegate.State) (bool, error) {
+	why := fmt.Sprintf("its host hand-off of %s got no thread within %d minutes", st.StartedAt, int(pickLockTTL.Minutes()))
+	if st.Status == dlgHost {
+		ok, err := e.markLapsed(ctx, w, n, st)
+		if !ok || err != nil {
+			return false, err
+		}
+	} else if newer, err := e.leasedSince(ctx, c, repo, n, st); newer || err != nil {
+		return false, err // a build after the lapse holds it
+	}
+	if err := e.releaseStart(ctx, c, w, repo, f, n, labels, "the host hand-off of #%d got no thread", why); err != nil {
+		return false, Wrap(ExitExternal, err)
+	}
+	return true, nil
+}
+
+// leasedSince reports whether story n's live lease was taken after its
+// lapsed host hand-off st lapsed: a build after the lapse holds it. A host
+// hand-off that waits has no lapse, so any lease is older.
+func (e *Env) leasedSince(ctx context.Context, c *github.Client, repo string, n int, st delegate.State) (bool, error) {
+	if st.Status != dlgLapsed {
+		return false, nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	lease, err := readLease(ctx, c, owner, name, n)
+	if err != nil {
+		return false, Wrap(ExitExternal, err)
+	}
+	at, _ := time.Parse(time.RFC3339, lastEvent(st, dlgLapsed))
+	return lease != nil && lease.Expires.Add(-LeaseTTL).After(at), nil
+}
+
+// markLapsed marks story n's host hand-off st lapsed on the ledger tip where it
+// still waits for its thread; it reports false when the tip moved on.
+func (e *Env) markLapsed(ctx context.Context, w *ledger.Writer, n int, st delegate.State) (bool, error) {
+	t, err := w.Read(ctx)
+	if err != nil {
+		return false, Wrap(ExitExternal, err)
+	}
+	b, err := t.File(ctx, delegate.LedgerPath(n))
+	tip := t.Tip
+	t.Close()
+	var cur delegate.State
+	if err != nil || json.Unmarshal(b, &cur) != nil || cur.Status != dlgHost || cur.Task != "" || cur.StartedAt != st.StartedAt {
+		return false, nil
+	}
+	cur.Status = dlgLapsed
+	cur.Events = append(cur.Events, delegate.Event{At: e.Now().UTC().Format(time.RFC3339), Status: dlgLapsed,
+		Detail: fmt.Sprintf("its host hand-off of %s got no thread within %d minutes, so it lapsed", st.StartedAt, int(pickLockTTL.Minutes()))})
+	data, _ := json.MarshalIndent(cur, "", "  ")
+	_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: the host hand-off of #%d lapsed", n), Files: map[string][]byte{delegate.LedgerPath(n): append(data, '\n')}, Base: tip})
+	if errors.Is(err, ledger.ErrMoved) {
+		return false, nil
+	}
+	return err == nil, Wrap(ExitExternal, err)
+}
+
+// lastEvent is the time of st's last event of status, or "".
+func lastEvent(st delegate.State, status string) string {
+	for i := len(st.Events) - 1; i >= 0; i-- {
+		if st.Events[i].Status == status {
+			return st.Events[i].At
+		}
+	}
+	return ""
 }
 
 // dependsOnWord finds the link kind in any case, at offsets into the line itself.
