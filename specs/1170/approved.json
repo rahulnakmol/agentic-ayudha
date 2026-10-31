@@ -83,5 +83,15 @@
     "total_usd": 480
   },
   "dismissals": [],
-  "agents": 10
+  "agents": 10,
+  "parent": {
+    "scope": "feature",
+    "key": "1170",
+    "host": "amp",
+    "session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+    "url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+    "mode": "cloud",
+    "started_by": "rahulnakmol",
+    "started_at": "2026-10-31T14:24:15Z"
+  }
 }
