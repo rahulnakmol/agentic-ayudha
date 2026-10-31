@@ -941,7 +941,7 @@ func TestMissionRetryStory(t *testing.T) {
 		t.Fatalf("controls: %+v", p.Controls)
 	}
 	// An agent lane's retry is refused: a retry is a person's decision.
-	if code, _, errOut := m.mission(m.agent, "rahulnakmol", "retry", 889, "--story", "63"); code != ExitBlocked || !strings.Contains(errOut, "mission retry is a person's decision") {
+	if code, _, errOut := m.mission(m.lane, "rahulnakmol", "retry", 889, "--story", "63"); code != ExitBlocked || !strings.Contains(errOut, "mission retry is a person's decision") {
 		t.Fatalf("agent retry: exit %d: %s", code, errOut)
 	}
 }

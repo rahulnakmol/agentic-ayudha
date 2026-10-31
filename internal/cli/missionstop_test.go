@@ -357,14 +357,14 @@ func TestMissionStopRefusedForAgentLane(t *testing.T) {
 	m.startedMission(889, []int{20})
 	n, raw := m.commits(), git(t, m.bare, "show", "ledger:"+MissionPlanPath(889))
 	m.g.Reset()
-	code, out, errOut := m.mission(m.agent, "rahulnakmol", "stop", 889)
+	code, out, errOut := m.mission(m.lane, "rahulnakmol", "stop", 889)
 	if code != ExitBlocked || m.codes() != 0 || m.commits() != n || len(m.g.Writes()) != 0 || git(t, m.bare, "show", "ledger:"+MissionPlanPath(889)) != raw ||
-		!strings.Contains(errOut, "aayu: mission stop is a person's decision and is refused for an agent lane (AMP_THREAD_ID)\n") ||
+		!strings.Contains(errOut, "aayu: mission stop is a person's decision and is refused for an agent lane (AAYU_AGENT=1)\n") ||
 		!strings.Contains(errOut, "next: a person runs it in their own terminal, or presses Stop in aayu inbox") {
 		t.Fatalf("agent mission stop: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
 	}
-	if code, _, errOut := m.mission(m.agent, "rahulnakmol", "resume", 889); code != ExitBlocked || m.commits() != n ||
-		!strings.Contains(errOut, "mission resume is a person's decision and is refused for an agent lane (AMP_THREAD_ID)") {
+	if code, _, errOut := m.mission(m.lane, "rahulnakmol", "resume", 889); code != ExitBlocked || m.commits() != n ||
+		!strings.Contains(errOut, "mission resume is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("agent mission resume: exit %d: %s", code, errOut)
 	}
 }

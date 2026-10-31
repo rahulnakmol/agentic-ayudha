@@ -634,6 +634,12 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 		c[0].Options[0].Recommended || c[0].Options[1].Recommended {
 		t.Fatalf("budget card: %+v", c)
 	}
+	// A shell with a host's agent marker asks for the device code (Bug #1182): another account's code keeps the card open.
+	g.device("mallory")
+	if code, _, errOut := run(t, g.agent, g.opts, "mission", "budget", "889", "--keep", "982", "--repo", "o/r"); code != ExitBlocked || g.codes() != 1 ||
+		!strings.Contains(errOut, "approved by @mallory, but aayu acts as @rahulnakmol") || len(cards()) != 1 {
+		t.Fatalf("budget --keep in a marked shell: exit %d, device codes %d: %s", code, g.codes(), errOut)
+	}
 	// Keep #982 waiting: its card closes, and it still waits.
 	g.eachRequestFails(func() (int, string, string) {
 		return run(t, g.person, g.opts, "mission", "budget", "889", "--keep", "982", "--repo", "o/r")
@@ -649,8 +655,8 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 			t.Errorf("budget %s: exit %d: %s", args, code, errOut)
 		}
 	}
-	if code, _, errOut := run(t, g.agent, g.opts, "mission", "budget", "889", "--to", "720", "--reason", "x", "--repo", "o/r"); code != ExitBlocked ||
-		!strings.Contains(errOut, "mission budget is a person's decision and is refused for an agent lane (AMP_THREAD_ID)") {
+	if code, _, errOut := run(t, g.lane, g.opts, "mission", "budget", "889", "--to", "720", "--reason", "x", "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "mission budget is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("agent budget raise: exit %d: %s", code, errOut)
 	}
 	g.eachRequestFails(func() (int, string, string) {
@@ -789,7 +795,8 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	if err := (&Env{}).missionAct(t.Context(), cards[0], InboxAction{N: 1, Command: "aayu ship 1"}); err == nil || !strings.Contains(err.Error(), `"aayu ship 1" is not a mission step`) {
 		t.Fatalf("an option that is no mission step: %v", err)
 	}
-	if code, _, errOut := g.gate("--once-more"); code != ExitBlocked || !strings.Contains(errOut, "mission gate --once-more is a person's decision and is refused for an agent lane (AMP_THREAD_ID)") {
+	if code, _, errOut := run(t, g.lane, g.opts, "mission", "gate", "889", "--repo", "o/r", "--once-more"); code != ExitBlocked ||
+		!strings.Contains(errOut, "mission gate --once-more is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("an agent's once more: exit %d: %s", code, errOut)
 	}
 	g.vfail = nil
