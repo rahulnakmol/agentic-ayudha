@@ -345,6 +345,34 @@ func TestClockRunsWhileOneWorks(t *testing.T) {
 	}
 }
 
+// Bug #1169: ship leaves #20 open with status:merged until its release. Its
+// run ends when its PR merged, at 4 h, not at the release; #21 still works.
+func TestClockEndsAtMergeWhileStoryOpen(t *testing.T) {
+	m := startedTwo(t)
+	t0 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	pr := m.g.AddPR("feat: story 20", "Refs #20", "o", "story/20", strings.Repeat("c", 40), "dev")
+	m.edit(func() { pr.Merged, pr.State, pr.MergedAt = true, "closed", t0.Add(4*time.Hour) })
+	m.delegation(20, t0, pr.Number)
+	m.status(20, "merged", "")
+	m.delegation(21, t0, 0)
+	m.closedAt(21, t0.Add(2*time.Hour))
+	m.opts.Now = func() time.Time { return t0.Add(30 * time.Hour) }
+	if c := m.show(889).Clock[0]; c.Hours != 4 || len(c.Stories) != 2 || !c.Stories[0].Ended || c.Stories[0].WorkingHours != 4 {
+		t.Fatalf("clock: %+v", c)
+	}
+	// The release closes #20 at 29 h: its run still ended at the merge.
+	m.status(20, "released", "")
+	m.closedAt(20, t0.Add(29*time.Hour))
+	if c := m.show(889).Clock[0]; c.Hours != 4 {
+		t.Fatalf("clock after the release closed #20: %+v", c)
+	}
+	// A failed read of the PR stops show: it never guesses the end.
+	m.edit(func() { m.g.Fail = fmt.Sprintf("GET /repos/o/r/pulls/%d", pr.Number) })
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("show with the PR read failing: exit %d: %s%s", code, out, errOut)
+	}
+}
+
 // Criterion 9: #20's thread runs .agents/check --full for 25 minutes before
 // a push: the minutes count; the CI run after the push does not.
 func TestLocalCheckCounts(t *testing.T) {

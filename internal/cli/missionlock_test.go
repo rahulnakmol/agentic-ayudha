@@ -425,15 +425,21 @@ func TestLockLeavesCommentsAndStatusOpen(t *testing.T) {
 }
 
 // Criterion 7: once every story and Bug merged, the last milestone of the
-// last mission is done: the lock ends with its time, and #20's body is open.
+// last mission is done when it passes its gate: the lock ends with its time,
+// and #20's body is open.
 func TestLockEndsAtLastMilestone(t *testing.T) {
 	m := startedLock(t)
 	for n := 20; n <= 27; n++ {
-		m.closeIssue(n)
+		m.status(n, "merged", "") // ship leaves each open until its release (Bug #1169)
+	}
+	// Every story merged, but MS3 has not passed its gate: the lock holds.
+	if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "is done") {
+		t.Fatalf("mission next 889 before MS3's gate: exit %d: %s%s", code, out, errOut)
 	}
 	if p, _ := m.plan(889); p.Lock.State != LockActive {
-		t.Fatalf("lock before the last milestone: %s", p.Lock.State)
+		t.Fatalf("lock before the last milestone's gate: %s", p.Lock.State)
 	}
+	m.setPlan(889, func(p *MissionPlan) { p.Milestones[len(p.Milestones)-1].Gate.State = GatePassed })
 	code, out, errOut := m.next(889)
 	p, raw := m.plan(889)
 	if code != 0 || !strings.Contains(out, "The mission of #889 is done") || p.Lock.State != LockEnded || p.Lock.EndedAt == nil ||

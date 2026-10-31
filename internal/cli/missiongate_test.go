@@ -303,7 +303,7 @@ func TestGatePassMarksMilestone(t *testing.T) {
 	if s := show(); !strings.HasSuffix(s.Milestones[1].State, "; its PRs merge after MS1's gate passes") {
 		t.Fatalf("MS2 before MS1's gate: %q", s.Milestones[1].State)
 	}
-	g.closeIssue(20)
+	g.status(20, "merged", "") // ship leaves #20 open until its release (Bug #1169)
 	rep := g.gateJSON()
 	p, raw := g.plan(889)
 	at := p.Milestones[0].Gate.At
