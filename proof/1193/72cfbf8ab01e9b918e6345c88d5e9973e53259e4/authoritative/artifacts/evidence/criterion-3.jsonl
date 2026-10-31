@@ -1,0 +1,124 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects","Output":"=== RUN   TestRejects\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_in_a_known_section"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_in_a_known_section","Output":"=== RUN   TestRejects/unknown_key_in_a_known_section\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_in_a_known_section","Output":"--- PASS: TestRejects/unknown_key_in_a_known_section (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_in_a_known_section"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_section"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_section","Output":"=== RUN   TestRejects/unknown_section\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_section","Output":"--- PASS: TestRejects/unknown_section (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_section"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_env"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_env","Output":"=== RUN   TestRejects/unknown_key_from_env\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_env","Output":"--- PASS: TestRejects/unknown_key_from_env (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_env"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_--set"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_--set","Output":"=== RUN   TestRejects/unknown_key_from_--set\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_--set","Output":"--- PASS: TestRejects/unknown_key_from_--set (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_key_from_--set"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_seat"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_seat","Output":"=== RUN   TestRejects/unknown_seat\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_seat","Output":"--- PASS: TestRejects/unknown_seat (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_seat"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_lane"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_lane","Output":"=== RUN   TestRejects/unknown_lane\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_lane","Output":"--- PASS: TestRejects/unknown_lane (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/unknown_lane"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/secret_value_instead_of_a_name"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/secret_value_instead_of_a_name","Output":"=== RUN   TestRejects/secret_value_instead_of_a_name\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/secret_value_instead_of_a_name","Output":"--- PASS: TestRejects/secret_value_instead_of_a_name (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/secret_value_instead_of_a_name"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/fleet_outside_the_user_config"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/fleet_outside_the_user_config","Output":"=== RUN   TestRejects/fleet_outside_the_user_config\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/fleet_outside_the_user_config","Output":"--- PASS: TestRejects/fleet_outside_the_user_config (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/fleet_outside_the_user_config"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_endpoint_from_the_checkout"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_endpoint_from_the_checkout","Output":"=== RUN   TestRejects/gateway_endpoint_from_the_checkout\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_endpoint_from_the_checkout","Output":"--- PASS: TestRejects/gateway_endpoint_from_the_checkout (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_endpoint_from_the_checkout"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Cursor_plan_from_the_checkout"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Cursor_plan_from_the_checkout","Output":"=== RUN   TestRejects/Cursor_plan_from_the_checkout\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Cursor_plan_from_the_checkout","Output":"--- PASS: TestRejects/Cursor_plan_from_the_checkout (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Cursor_plan_from_the_checkout"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_the_checkout"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_the_checkout","Output":"=== RUN   TestRejects/repository_tools_from_the_checkout\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_the_checkout","Output":"--- PASS: TestRejects/repository_tools_from_the_checkout (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_the_checkout"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_a_local_file"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_a_local_file","Output":"=== RUN   TestRejects/repository_tools_from_a_local_file\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_a_local_file","Output":"--- PASS: TestRejects/repository_tools_from_a_local_file (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tools_from_a_local_file"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_not_a_host"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_not_a_host","Output":"=== RUN   TestRejects/repository_tool_not_a_host\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_not_a_host","Output":"--- PASS: TestRejects/repository_tool_not_a_host (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_not_a_host"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_no_repository"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_no_repository","Output":"=== RUN   TestRejects/repository_tool_with_no_repository\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_no_repository","Output":"--- PASS: TestRejects/repository_tool_with_no_repository (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_no_repository"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_a_space_in_the_repository"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_a_space_in_the_repository","Output":"=== RUN   TestRejects/repository_tool_with_a_space_in_the_repository\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_a_space_in_the_repository","Output":"--- PASS: TestRejects/repository_tool_with_a_space_in_the_repository (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_tool_with_a_space_in_the_repository"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_named_twice"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_named_twice","Output":"=== RUN   TestRejects/repository_named_twice\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_named_twice","Output":"--- PASS: TestRejects/repository_named_twice (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/repository_named_twice"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_secret_from_a_committed_local_file"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_secret_from_a_committed_local_file","Output":"=== RUN   TestRejects/gateway_secret_from_a_committed_local_file\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_secret_from_a_committed_local_file","Output":"--- PASS: TestRejects/gateway_secret_from_a_committed_local_file (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/gateway_secret_from_a_committed_local_file"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Copilot_route_opt-in_from_the_checkout"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Copilot_route_opt-in_from_the_checkout","Output":"=== RUN   TestRejects/Copilot_route_opt-in_from_the_checkout\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Copilot_route_opt-in_from_the_checkout","Output":"--- PASS: TestRejects/Copilot_route_opt-in_from_the_checkout (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/Copilot_route_opt-in_from_the_checkout"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/bad_time_zone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/bad_time_zone","Output":"=== RUN   TestRejects/bad_time_zone\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/bad_time_zone","Output":"--- PASS: TestRejects/bad_time_zone (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/bad_time_zone"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/early_build_budget_below_one"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/early_build_budget_below_one","Output":"=== RUN   TestRejects/early_build_budget_below_one\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/early_build_budget_below_one","Output":"--- PASS: TestRejects/early_build_budget_below_one (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/early_build_budget_below_one"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/newer_schema"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/newer_schema","Output":"=== RUN   TestRejects/newer_schema\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/newer_schema","Output":"--- PASS: TestRejects/newer_schema (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/newer_schema"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_key"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_key","Output":"=== RUN   TestRejects/decision_authority_key\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_key","Output":"--- PASS: TestRejects/decision_authority_key (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_key"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_value"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_value","Output":"=== RUN   TestRejects/decision_authority_value\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_value","Output":"--- PASS: TestRejects/decision_authority_value (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/decision_authority_value"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/escalation_login"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/escalation_login","Output":"=== RUN   TestRejects/escalation_login\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/escalation_login","Output":"--- PASS: TestRejects/escalation_login (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/escalation_login"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/team_stage"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/team_stage","Output":"=== RUN   TestRejects/team_stage\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/team_stage","Output":"--- PASS: TestRejects/team_stage (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/team_stage"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/auth_on_a_non-cloud_integration"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/auth_on_a_non-cloud_integration","Output":"=== RUN   TestRejects/auth_on_a_non-cloud_integration\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/auth_on_a_non-cloud_integration","Output":"--- PASS: TestRejects/auth_on_a_non-cloud_integration (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/auth_on_a_non-cloud_integration"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_door"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_door","Output":"=== RUN   TestRejects/approvals_door\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_door","Output":"--- PASS: TestRejects/approvals_door (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_door"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_login"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_login","Output":"=== RUN   TestRejects/approvals_login\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_login","Output":"--- PASS: TestRejects/approvals_login (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/approvals_login"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/cloud_key_auth_without_a_secret"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/cloud_key_auth_without_a_secret","Output":"=== RUN   TestRejects/cloud_key_auth_without_a_secret\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/cloud_key_auth_without_a_secret","Output":"--- PASS: TestRejects/cloud_key_auth_without_a_secret (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects/cloud_key_auth_without_a_secret"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects","Output":"--- PASS: TestRejects (0.17s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/config","Test":"TestRejects"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionToolReadFromPlanNotConfig"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionToolReadFromPlanNotConfig","Output":"=== RUN   TestMissionToolReadFromPlanNotConfig\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionToolReadFromPlanNotConfig","Output":"--- PASS: TestMissionToolReadFromPlanNotConfig (3.57s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionToolReadFromPlanNotConfig"}
