@@ -1,9 +1,9 @@
 {
   "schema": "aayudha.mission.plan/v1",
   "feature": 1170,
-  "approval": 1,
+  "approval": 2,
   "approved_by": "rahulnakmol",
-  "approved_at": "2026-10-31T09:47:17Z",
+  "approved_at": "2026-10-31T11:33:03Z",
   "graph": [
     {
       "number": 1172,
@@ -114,6 +114,15 @@
       "effort": "S",
       "depends_on": [],
       "outside": []
+    },
+    {
+      "number": 1193,
+      "kind": "bug",
+      "title": "aayu mission start always refuses, because no user config key sets the person's tool for a repository",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
     }
   ],
   "milestones": [
@@ -146,7 +155,8 @@
       "name": "BUGS",
       "stories": [
         1191,
-        1192
+        1192,
+        1193
       ],
       "gate": {
         "state": "waits"
@@ -158,10 +168,10 @@
   "agents": 10,
   "agents_source": "aayu ready 1170 --agents 10 at Approve to build",
   "estimate": {
-    "runs": 17,
-    "stories": 11,
+    "runs": 18,
+    "stories": 12,
     "milestones": 3,
-    "basis": "runs ≥ 11 stories and Bugs + 2 × 3 milestones = 17"
+    "basis": "runs ≥ 12 stories and Bugs + 2 × 3 milestones = 18"
   },
   "missions": [
     {
@@ -199,6 +209,9 @@
         },
         {
           "number": 1192
+        },
+        {
+          "number": 1193
         }
       ]
     }
