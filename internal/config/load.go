@@ -172,7 +172,7 @@ func Load(src Sources) (*Loaded, error) {
 		if name == LayerRepo || name == LayerLocal {
 			for _, p := range k.MapKeys("integrations") {
 				if u := k.String("integrations." + p + ".url"); u != "" && !providerHost(p, u) {
-					errs = append(errs, fmt.Errorf("%s: [integrations.%s] url = %q: a checkout names only the provider's cloud host; any other url is read only from the user config, AAYU_INTEGRATIONS__%s__URL, or --set", source, p, u, strings.ToUpper(p)))
+					errs = append(errs, fmt.Errorf("%s: [integrations.%s] url = %q: a checkout names only the provider's cloud host; any other url is read only from the user config, AAYU_INTEGRATIONS__%s__URL, or --set", source, p, redactURL(u), strings.ToUpper(p)))
 					return
 				}
 			}
@@ -237,7 +237,11 @@ func Load(src Sources) (*Loaded, error) {
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			add(LayerFlag, "--set "+strings.Join(src.Sets, " --set "), m)
+			keys := make([]string, len(src.Sets)) // keys only: a --set value can be a secret (Bug #1198)
+			for i, s := range src.Sets {
+				keys[i], _, _ = strings.Cut(s, "=")
+			}
+			add(LayerFlag, "--set "+strings.Join(keys, " --set "), m)
 		}
 	}
 	if len(errs) > 0 {
@@ -259,7 +263,7 @@ func Load(src Sources) (*Loaded, error) {
 			}
 		}
 		if approved == "" || strings.TrimRight(env.URL, "/") != strings.TrimRight(approved, "/") {
-			return nil, fmt.Errorf("[verify.environments.%s] url %q: active_scan = true approves only the url .aayudha/config.toml, a protected path, names (%q); set the url there, or drop active_scan", name, env.URL, approved)
+			return nil, fmt.Errorf("[verify.environments.%s] url %q: active_scan = true approves only the url .aayudha/config.toml, a protected path, names (%q); set the url there, or drop active_scan", name, redactURL(env.URL), redactURL(approved))
 		}
 	}
 	if err := l.Config.Validate(); err != nil {
@@ -398,10 +402,10 @@ func envMap(environ []string) (map[string]any, []string) {
 
 func setMap(sets []string) (map[string]any, error) {
 	flat := map[string]any{}
-	for _, s := range sets {
+	for i, s := range sets {
 		key, value, ok := strings.Cut(s, "=")
-		if !ok || key == "" {
-			return nil, fmt.Errorf("--set %q: want key=value, e.g. budget.per_day_usd=20", s)
+		if !ok || key == "" || key != "version" && !strings.Contains(key, ".") { // the entry is not shown: it can be a pasted secret (Bug #1198)
+			return nil, fmt.Errorf("--set entry %d: want key=value, e.g. budget.per_day_usd=20", i+1)
 		}
 		flat[key] = value
 	}

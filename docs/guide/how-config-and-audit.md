@@ -79,7 +79,7 @@ retention_days = 90
 ## Secrets
 
 Configuration names a secret; it never holds one. A `secret` field accepts only a name (lowercase letters, digits, `-`
-and `_`), so a pasted key fails validation with a message that ends "never the key". Values live in one of three backends in
+and `_`), so a pasted key fails validation with a message that says "never the key" and does not show the value. Values live in one of three backends in
 [internal/secrets](../../internal/secrets), tried in this order:
 
 1. **`keychain`:** the operating system keychain (macOS Keychain, Windows Credential Manager, or Secret Service on
