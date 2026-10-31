@@ -8,18 +8,19 @@
   "checkpoints": [
     {
       "layer": "L07",
-      "title": "[hosts] repos: the person's tool for each repository, read only from the user config, AAYU_HOSTS__REPOS, or --set",
+      "title": "[hosts] repos names the person's tool per repository, read only from the user config",
       "contracts": [
-        "internal/config/config.go: Hosts.Repos []string (koanf hosts.repos), owner/name=tool entries; Hosts.RepoTool(repo) matches owner/name with no case; Validate refuses a bad entry, a space in owner/name, a repository named twice, or a tool outside verbs.Hosts",
-        "internal/config/load.go: the repo and local layers may not set hosts.repos, as for [hosts.cursor] plan"
+        "internal/config: [hosts] repos = [\"owner/name=tool\"], tool one of amp, cursor, claude, codex, copilot; set by the user config, AAYU_HOSTS__REPOS, or --set",
+        "config loading refuses the key in .aayudha/config.toml and config.local.toml and names the user config, as for [hosts.cursor] plan",
+        "no other key, default, or protected-config rule changes"
       ],
       "tests": [
-        "internal/config:TestRejects"
+        "TestRejects"
       ],
       "instrumentation": [
-        "the config error names [hosts] repos and the user config"
+        "the refusal names the file, the key, and the value to add"
       ],
-      "rollback": "Revert the squash commit; the key is new, so no stored config needs a change.",
+      "rollback": "Revert the squash commit: the key is gone, a user config that sets it is refused as unknown, and mission start refuses as before.",
       "criteria": [
         2,
         3
@@ -27,23 +28,21 @@
     },
     {
       "layer": "L02",
-      "title": "mission start reads [hosts] repos, and its refusal names the key",
+      "title": "mission start reads the tool from [hosts] repos, and its refusal names the key",
       "contracts": [
-        "internal/cli/mission.go: Env.repoTool reads the loaded config when Options.RepoTool is nil; Env.noRepoTool names [hosts] repos, the user config file, and --set hosts.repos=\u003crepo\u003e=\u003ctool\u003e",
-        "internal/cli/missionlock.go: the inbox start card names [hosts] repos, and says when the config does not load without quoting the error"
+        "Env.repoTool reads [hosts] repos for the repository (internal/cli/mission.go)",
+        "with no entry, Start refuses, names the key and --set hosts.repos=owner/name=\u003ctool\u003e, and writes nothing"
       ],
       "tests": [
-        "internal/cli:TestMissionToolReadFromPlanNotConfig",
-        "internal/cli:TestStartCardInEveryInbox"
+        "TestMissionToolReadFromPlanNotConfig"
       ],
       "instrumentation": [
-        "the plan records the tool and its source"
+        "mission start's report names the tool and where it came from"
       ],
-      "rollback": "Revert the squash commit; Start refuses again.",
+      "rollback": "Revert the squash commit: Start refuses as before; a started mission keeps the tool in its plan.",
       "criteria": [
         1,
-        2,
-        3
+        2
       ]
     }
   ],
@@ -53,6 +52,6 @@
       "L07"
     ]
   },
-  "planned_at": "2026-10-31T12:12:19Z",
+  "planned_at": "2026-10-31T14:15:15Z",
   "planned_by": "human-fallback"
 }
