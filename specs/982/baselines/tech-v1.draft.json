@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 982,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/982/design.json",
+      "hash": "fead5ccff8c398c604945e7fbb8f588b115c10f52d5471b14e193c568cd72537"
+    }
+  ],
+  "hash": "0ef47c5a7779b72a5cf0904faa6efb93e9786572d9ae93b86dafb274999b7cc0",
+  "summary": "Every Feature names the customer outcome it serves, aayu asks \"did it move?\" after it ships, and releases and retros show outcomes next to counts. Each Goal states what the team does best, so new work is checked against it. As agents raise capacity from a few things a quarter to hundreds, the founder can see which of them made customers better off.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T14:05:34Z"
+}
