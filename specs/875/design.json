@@ -1,0 +1,32 @@
+{
+  "feature": 875,
+  "body_hash": "f6e713adc3c966fd954256c2f5fe228ddef52c72b4360e2748ec6c48579c9d72",
+  "footprint": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "contracts": [
+    "the reviewer table (which seat reviews which baseline part, Hanu only with L01) and one finding type are in internal/verbs/registry.go; every review timing is a [critique] key that a person owns (#919, #1032)",
+    "aayu critique \u003cf\u003e --part \u003cp\u003e --seat \u003cs\u003e --review \u003cfile\u003e: records one review per seat per baseline version on the ledger (specs/\u003cf\u003e/baselines/\u003cpart\u003e-v\u003ck\u003e/reviews/\u003cseat\u003e.json) and refuses a review that is not independent: same session, same model family as the drafter, or seen another seat's review (#920)",
+    "an approved baseline starts one fresh review session per reviewing seat on the approver's agent tool, through the existing delegate receivers (#921)",
+    "the slow tick (loops/) starts each missed review, and the review window closes at [critique] review_wait_hours; Approve to build then proceeds and names the missing reviews (#922, readyapprove.go)",
+    "a local agent CLI (Codex, Copilot, OpenCode, Cursor without a key) runs a review session, and aayu critique records it when the session ends (#923)",
+    "#876 reads the recorded findings through the critique state"
+  ],
+  "layers": [
+    "L02",
+    "L03",
+    "L07"
+  ],
+  "story_order": [
+    919,
+    920,
+    921,
+    922,
+    923
+  ],
+  "rollback": "Reviews are append-only ledger records under each baseline version; a revert stops writing and starting them, and Approve to build sees no reviews, which is today's behaviour. The slow tick loop is removed with its file. No record is rewritten.",
+  "planned_at": "2026-10-31T12:05:29Z",
+  "planned_by": "human-fallback"
+}
