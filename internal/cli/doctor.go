@@ -76,7 +76,7 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 			}
 		}
 	}
-	if p.Repo != "" {
+	if p.Repo != "" && p.ConfigErr == nil { // the config check reports a config that does not load
 		p.RepoTool = func(ctx context.Context) (string, error) { return e.repoTool(ctx, p.Repo) }
 	}
 	p.Reachable = func(ctx context.Context) []identity.Reach { return e.reachable(ctx, p.Repo) }

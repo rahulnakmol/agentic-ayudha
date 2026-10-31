@@ -7,6 +7,8 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -761,8 +763,25 @@ func TestStartCardInEveryInbox(t *testing.T) {
 	code, out, errOut = run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r")
 	var list inboxList
 	if code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 1 ||
-		!slices.Contains(list.Items[0].Lines, "It runs in the tool you set for this repository, and none is set there yet: Start refuses until you set one.") {
+		!slices.Contains(list.Items[0].Lines, "It runs in the tool you set for this repository, and none is set yet: Start refuses until you set [hosts] repos in your user config.") {
 		t.Fatalf("inbox --list with no tool: exit %d: %s%s", code, out, errOut)
+	}
+	// A config that does not load (here, a checkout that sets [hosts] repos) still lists the card; it says so, and does not quote the error (Bug #1193).
+	// With --agents at Approve to build, nothing else on the card reads the config.
+	if code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21,#22 MS2=#23,#24,#25 MS3=#26,#27,#28", "--agents", "2"); code != 0 {
+		t.Fatalf("approve --agents 2: exit %d: %s%s", code, out, errOut)
+	}
+	m.opts.RepoTool = nil
+	if err := os.WriteFile(filepath.Join(m.dir, ".aayudha", "config.toml"), []byte("[hosts]\nrepos = [\"o/r=amp\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut = run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r")
+	if code != 0 || json.Unmarshal([]byte(out), &list) != nil || len(list.Items) != 1 || strings.Contains(out, "config.toml") ||
+		!slices.Contains(list.Items[0].Lines, "It runs in the tool you set for this repository, which cannot be read: your config does not load. Run aayu config validate to see why.") {
+		t.Fatalf("inbox --list with a config that does not load: exit %d: %s%s", code, out, errOut)
+	}
+	if err := os.Remove(filepath.Join(m.dir, ".aayudha", "config.toml")); err != nil {
+		t.Fatal(err)
 	}
 	// A closed Feature has no card.
 	m.closeIssue(889)

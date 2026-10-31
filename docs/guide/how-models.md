@@ -34,6 +34,11 @@ it. A checkpoint records the build model the plan picked, so a later plan change
 labelled same-family; the merge gate's reviewer app can still be of another family. Composer's base model is
 unpublished, so its family is unknown, and a review between it and any build is same-family.
 
+`aayu mission start` records the tool you build with, and reads it from `[hosts] repos` in your user config:
+`repos = ["owner/name=amp"]`, one entry per repository, with the tool one of amp, cursor, claude, codex, or copilot.
+Like the Cursor plan, the tool is yours, so a checkout's config cannot set it. `AAYU_HOSTS__REPOS` and `--set
+hosts.repos=…` replace the whole list for that run.
+
 Three rules shape this table:
 
 - **The family rule.** A reviewer must come from a different model family than the builder. A model that wrote the

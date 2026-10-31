@@ -1,0 +1,13 @@
+# Which tests prove Bug #1193's Completion Goal.
+
+[[criterion]]
+id = 1 # no tool for o/r in the user config: mission start refuses, names the key and value to set, and starts nothing
+tests = ["internal/cli:TestMissionToolReadFromPlanNotConfig"]
+
+[[criterion]]
+id = 2 # the user config sets the tool for o/r to amp: mission start records amp and starts the Kanha
+tests = ["internal/cli:TestMissionToolReadFromPlanNotConfig", "internal/config:TestRejects"]
+
+[[criterion]]
+id = 3 # the checkout's config sets the key: config loading refuses it and names the user config
+tests = ["internal/config:TestRejects", "internal/cli:TestMissionToolReadFromPlanNotConfig"]

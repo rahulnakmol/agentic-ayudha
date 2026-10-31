@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -638,11 +639,39 @@ func TestMissionToolReadFromPlanNotConfig(t *testing.T) {
 		t.Fatalf("plan.json of #901:\n%s", raw)
 	}
 	n = m.commits()
-	m.opts.RepoTool = nil
+	m.opts.RepoTool = nil // Bug #1193: the tool is [hosts] repos in the person's user config
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 901); code != ExitBlocked || m.codes() != 0 || m.commits() != n ||
-		!strings.Contains(errOut, "Start records your tool for o/r from your user config, and none is set there. Nothing was started.") {
+		!strings.Contains(errOut, "Start records your tool for o/r from [hosts] repos, and no entry there names o/r. AAYU_HOSTS__REPOS and --set hosts.repos replace that list. Nothing was started.") ||
+		!strings.Contains(errOut, `add "o/r=<tool>" to `+"`"+`[hosts] repos`+"`"+` in your user config`) || !strings.Contains(errOut, "--set hosts.repos=o/r=<tool>") || !strings.Contains(errOut, "amp, cursor, claude, codex, copilot") {
 		t.Fatalf("start with no tool: exit %d: %s%s", code, out, errOut)
 	}
+	// A checkout that sets it is refused: its author would pick every person's tool.
+	if err := os.WriteFile(filepath.Join(m.dir, ".aayudha", "config.toml"), []byte("[hosts]\nrepos = [\"o/r=cursor\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 901); code != ExitUsage || m.commits() != n ||
+		!strings.Contains(errOut, "[hosts] repos (your tool for each repository) is read only from the user config, AAYU_HOSTS__REPOS, or --set, never from the checkout") {
+		t.Fatalf("start with the tool in the checkout: exit %d: %s%s", code, out, errOut)
+	}
+	if err := os.Remove(filepath.Join(m.dir, ".aayudha", "config.toml")); err != nil {
+		t.Fatal(err)
+	}
+	// Set in the user config, whatever the case of owner/name: Start records it.
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "aayudha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "aayudha", "config.toml"), []byte("[hosts]\nrepos = [\"other/repo=cursor\", \"O/R=amp\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.person["XDG_CONFIG_HOME"] = home
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 901); code != 0 {
+		t.Fatalf("start with the tool in the user config: exit %d: %s%s", code, out, errOut)
+	}
+	if p, raw := m.plan(901); p.Tool != "amp" || p.StartedBy != "rahulnakmol" {
+		t.Fatalf("plan.json of #901 after start:\n%s", raw)
+	}
+	delete(m.person, "XDG_CONFIG_HOME")
 	// A plan aayu did not write is never read as one; and outside a checkout there is no ledger.
 	for forged, want := range map[string]string{
 		`{"schema": "aayudha.mission.plan/v1", "feature": 902}`: "ledger missions/901/plan.json: not the mission plan of #901",

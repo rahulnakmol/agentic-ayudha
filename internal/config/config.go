@@ -71,6 +71,27 @@ type Baselines struct {
 // Hosts is [hosts] (Decision #469).
 type Hosts struct {
 	Cursor CursorHost `koanf:"cursor"`
+	Repos  []string   `koanf:"repos" jsonschema_description:"The person's tool for each repository, as owner/name=tool (amp, cursor, claude, codex, or copilot): aayu mission start records it and starts the mission's Kanha there (R9, Bug #1193). Read only from the user config, AAYU_HOSTS__REPOS, or --set, never from the checkout."`
+}
+
+// RepoTools are the tools [hosts] repos may name: the registry's hosts (Bug #1193).
+func RepoTools() []string {
+	ids := make([]string, len(verbs.Hosts))
+	for i, h := range verbs.Hosts {
+		ids[i] = string(h.ID)
+	}
+	return ids
+}
+
+// RepoTool is the person's tool for repo in [hosts] repos, or "": owner and
+// name match whatever their case, as on GitHub.
+func (h Hosts) RepoTool(repo string) string {
+	for _, e := range h.Repos {
+		if r, tool, ok := strings.Cut(strings.TrimSpace(e), "="); ok && strings.EqualFold(strings.TrimSpace(r), repo) {
+			return strings.TrimSpace(tool)
+		}
+	}
+	return ""
 }
 
 // CursorHost is [hosts.cursor].
@@ -610,6 +631,20 @@ func (c *Config) Validate() error {
 	}
 	if e := c.Inspect.PaidEffort; e != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh"}, e) {
 		bad("[inspect] paid_effort = %q: want low, medium, high, or xhigh", e)
+	}
+	seen := map[string]bool{}
+	for _, e := range c.Hosts.Repos {
+		r, tool, _ := strings.Cut(strings.TrimSpace(e), "=")
+		r = strings.TrimSpace(r)
+		owner, name, ok := strings.Cut(r, "/")
+		_, known := verbs.FindHost(verbs.HostID(strings.TrimSpace(tool)))
+		switch {
+		case !ok || owner == "" || name == "" || strings.ContainsAny(r, " \t") || strings.Contains(name, "/") || !known:
+			bad("[hosts] repos entry %q (user config, AAYU_HOSTS__REPOS, or --set): want owner/name=tool, with tool one of %s", e, strings.Join(RepoTools(), ", "))
+		case seen[strings.ToLower(r)]:
+			bad("[hosts] repos names %s twice: keep one entry", r)
+		}
+		seen[strings.ToLower(r)] = true
 	}
 	if pl := c.Hosts.Cursor.Plan; pl != "" && pl != verbs.PlanX && pl != verbs.PlanLegacy {
 		bad("[hosts.cursor] plan = %q: want %s or %s", pl, verbs.PlanX, verbs.PlanLegacy)

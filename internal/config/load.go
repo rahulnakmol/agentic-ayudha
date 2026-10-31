@@ -143,6 +143,12 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [hosts.cursor] plan is read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout", source))
 			return
 		}
+		// The person's tool for a repository is theirs: a checkout that set it
+		// would start every mission's Kanha on a tool its author picked (Bug #1193).
+		if (name == LayerRepo || name == LayerLocal) && k.Exists("hosts.repos") {
+			errs = append(errs, fmt.Errorf("%s: [hosts] repos (your tool for each repository) is read only from the user config, AAYU_HOSTS__REPOS, or --set, never from the checkout", source))
+			return
+		}
 		// Likewise the ui-review lane's Copilot route: it spends the person's
 		// Copilot credits and sends their captures to Copilot, so only the
 		// person picks its model or turns it off.

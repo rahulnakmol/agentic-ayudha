@@ -1077,6 +1077,13 @@
           },
           "additionalProperties": false,
           "type": "object"
+        },
+        "repos": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "The person's tool for each repository, as owner/name=tool (amp, cursor, claude, codex, or copilot): aayu mission start records it and starts the mission's Kanha there (R9, Bug #1193). Read only from the user config, AAYU_HOSTS__REPOS, or --set, never from the checkout."
         }
       },
       "additionalProperties": false,
