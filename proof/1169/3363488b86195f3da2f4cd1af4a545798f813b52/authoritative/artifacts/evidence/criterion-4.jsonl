@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextMergedOpenStoryFreesItsDependent"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextMergedOpenStoryFreesItsDependent","Output":"=== RUN   TestMissionNextMergedOpenStoryFreesItsDependent\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextMergedOpenStoryFreesItsDependent","Output":"--- PASS: TestMissionNextMergedOpenStoryFreesItsDependent (1.90s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextMergedOpenStoryFreesItsDependent"}

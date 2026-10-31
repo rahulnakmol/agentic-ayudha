@@ -1,0 +1,14 @@
+{
+  "covered": 73,
+  "executable": 75,
+  "percent": 97.33333333333333,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/mission.go": [
+      1358,
+      1359
+    ]
+  },
+  "format": "go coverprofile"
+}
