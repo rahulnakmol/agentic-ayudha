@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -824,5 +827,97 @@ func TestMissionBudgetIsTopOfRange(t *testing.T) {
 	}
 	if p, raw := m.plan(889); p.Approval != 2 || p.Budget != 660 || p.Tool != "cursor" || p.StartedBy != "rahulnakmol" || len(p.Milestones) != 2 {
 		t.Fatalf("plan.json after a new approval:\n%s", raw)
+	}
+}
+
+// Bug #1191: a loop thread's commands carry AAYU_AGENT=1 only in its prompt.
+// The loop's first step, `aayu hook loop:<name>`, records the thread's marker
+// (criterion 1); then every listed person's decision in that thread is refused
+// before any device code, with no write (criterion 2). The person's Terminal
+// tab, in a thread where no loop ran, still approves to build after the
+// person's code (criterion 3).
+func TestLoopLaneRefusesPersonDecisions(t *testing.T) {
+	m := newMissionWorld(t)
+	m.scenario889(nil)
+	_ = os.MkdirAll(filepath.Join(m.dir, "loops"), 0o755)
+	_ = os.WriteFile(filepath.Join(m.dir, "loops", "triage-daily.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\n"), 0o644)
+	loop, tab := maps.Clone(m.agent), maps.Clone(m.agent)
+	loop["AGENT"], loop["AMP_THREAD_ID"], tab["AGENT"], tab["AMP_THREAD_ID"] = "amp", "T-loop", "amp", "T-person"
+	loop["AAYU_AUTONOMY__APPROVER"] = "rahulnakmol"                                       // inspect --approve reaches its refusal
+	pr := strconv.Itoa(m.g.AddPR("feat: x", "", "founder", "feat", devTip, "dev").Number) // ship and inspect read a PR
+	lanes := filepath.Join(m.person["XDG_STATE_HOME"], "aayudha", "loop-lanes")
+	recorded := func() []string {
+		b, _ := os.ReadFile(lanes)
+		return slices.DeleteFunc(strings.Split(string(b), "\n"), func(l string) bool { return l == "" })
+	}
+	// A process aayu started carries AAYU_AGENT=1 already, and may inherit the person's thread ID: no record.
+	lane := maps.Clone(tab)
+	lane["AAYU_AGENT"] = "1"
+	if code, out, errOut := run(t, lane, m.opts, "hook", "loop:triage-daily", "--repo", "o/r"); code != 0 || len(recorded()) != 0 {
+		t.Fatalf("loop guard with AAYU_AGENT=1: exit %d, recorded %q: %s%s", code, recorded(), out, errOut)
+	}
+	// Halted: the guard's verdict is exit 4, and the thread is recorded before it.
+	m.edit(func() { m.g.Variables = map[string]string{HaltVariable: "incident 9"} })
+	code, out, errOut := run(t, loop, m.opts, "hook", "loop:triage-daily", "--repo", "o/r")
+	m.edit(func() { delete(m.g.Variables, HaltVariable) })
+	if code != ExitBlocked || !slices.Equal(recorded(), []string{"AMP_THREAD_ID=T-loop"}) || !strings.Contains(errOut, "recorded this thread (AMP_THREAD_ID=T-loop) as a loop lane: a person's decision is refused in it until a person removes the record") {
+		t.Fatalf("halted loop guard: exit %d, recorded %q: %s%s", code, recorded(), out, errOut)
+	}
+	// Codex started by hand in the person's tab inherits the tab's marker: the record names both, so the tab stays a person's.
+	nested := maps.Clone(tab)
+	nested["CODEX_THREAD_ID"] = "019a-codex"
+	if code, out, errOut := run(t, nested, m.opts, "hook", "loop:triage-daily", "--repo", "o/r"); code != 0 ||
+		!slices.Equal(recorded(), []string{"AMP_THREAD_ID=T-loop", "AMP_THREAD_ID=T-person CODEX_THREAD_ID=019a-codex"}) {
+		t.Fatalf("nested loop guard: exit %d, recorded %q: %s%s", code, recorded(), out, errOut)
+	}
+	before := m.commits()
+	for _, args := range [][]string{
+		{"ready", "889"},
+		{"mission", "start", "889"},
+		{"ready", "889", "--part", "intent"},
+		{"ship", pr, "--solo-bypass"},
+		{"inspect", pr, "--approve", "--reason", "r"},
+		{"inspect", pr, "--dismiss", "f-1", "--reason", "r"},
+	} {
+		m.g.Reset()
+		m.device("rahulnakmol")
+		code, out, errOut := run(t, loop, m.opts, append(args, "--repo", "o/r")...)
+		if writes := len(m.g.Writes()); code != ExitBlocked || !strings.Contains(errOut, "is refused for an agent lane (AMP_THREAD_ID=T-loop of a loop thread)") ||
+			m.codes() != 0 || writes != 0 || m.commits() != before {
+			t.Errorf("aayu %s in the loop thread: exit %d, device codes %d, GitHub writes %d: %s%s", strings.Join(args, " "), code, m.codes(), writes, out, errOut)
+		}
+	}
+	// A nested agent in the loop thread adds its own marker: still the loop's.
+	inner := maps.Clone(loop)
+	inner["CODEX_THREAD_ID"] = "019a-inner"
+	if code, out, errOut := run(t, inner, m.opts, "ship", pr, "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || m.codes() != 0 ||
+		!strings.Contains(errOut, "refused for an agent lane (AMP_THREAD_ID=T-loop CODEX_THREAD_ID=019a-inner of a loop thread)") {
+		t.Errorf("a nested agent in the loop thread: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
+	}
+	m.device("rahulnakmol")
+	code, out, errOut = run(t, tab, m.opts, "ready", "889", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || !strings.Contains(errOut, "/login/device") || m.commits() == before {
+		t.Fatalf("ready 889 in the person's Terminal tab: exit %d, device codes %d, ledger commits %s → %s: %s%s", code, m.codes(), before, m.commits(), out, errOut)
+	}
+	// A sandboxed loop (Codex's workspace-write) cannot write the state directory: the record goes to TMPDIR.
+	blocked, tmp := filepath.Join(t.TempDir(), "not-a-dir"), t.TempDir()
+	_ = os.WriteFile(blocked, nil, 0o600)
+	codex := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "CODEX_THREAD_ID": "019a-loop", "XDG_STATE_HOME": blocked, "TMPDIR": tmp}
+	if code, out, errOut := run(t, codex, m.opts, "hook", "loop:triage-daily", "--repo", "o/r"); code != 0 {
+		t.Fatalf("sandboxed loop guard: exit %d: %s%s", code, out, errOut)
+	}
+	m.device("rahulnakmol")
+	code, out, errOut = run(t, codex, m.opts, "ship", pr, "--solo-bypass", "--repo", "o/r")
+	if b, _ := os.ReadFile(filepath.Join(tmp, fmt.Sprintf("aayudha-%d", os.Getuid()), "loop-lanes")); code != ExitBlocked ||
+		!strings.Contains(errOut, "(CODEX_THREAD_ID=019a-loop of a loop thread)") || m.codes() != 0 || string(b) != "\nCODEX_THREAD_ID=019a-loop\n" {
+		t.Fatalf("ship --solo-bypass in the sandboxed loop thread: exit %d, device codes %d, record %q: %s%s", code, m.codes(), b, out, errOut)
+	}
+	// Another user made that directory first, open to all: it is not trusted, and the guard stops.
+	shared := t.TempDir()
+	_ = os.Mkdir(filepath.Join(shared, fmt.Sprintf("aayudha-%d", os.Getuid())), 0o777)
+	_ = os.Chmod(filepath.Join(shared, fmt.Sprintf("aayudha-%d", os.Getuid())), 0o777)
+	codex["TMPDIR"], codex["CODEX_THREAD_ID"] = shared, "019a-shared"
+	if code, out, errOut := run(t, codex, m.opts, "hook", "loop:triage-daily", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "cannot record this thread as a loop lane") {
+		t.Fatalf("loop guard with a shared temporary directory: exit %d: %s%s", code, out, errOut)
 	}
 }

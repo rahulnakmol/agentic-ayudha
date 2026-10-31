@@ -1184,8 +1184,8 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	if e.CI { // the aayudha-approve workflow: an approver's reply to a batch (approve.go)
 		return e.approveFromComment(ctx)
 	}
-	if e.Getenv("AAYU_AGENT") == "1" {
-		return WithNext(Errorf(ExitBlocked, "inbox is human-only: it acts as you on human-only steps, so it is refused when AAYU_AGENT=1"), "aayu inbox --list")
+	if lane := e.ownLane(); lane != "" {
+		return WithNext(Errorf(ExitBlocked, "inbox is human-only: it acts as you on human-only steps, so it is refused for an agent lane (%s)", lane), "aayu inbox --list")
 	}
 	// A host's agent marker (an orb's Terminal tab inherits one) does not refuse it
 	// here: humanCaller asks the person to approve from any device (presence.go).

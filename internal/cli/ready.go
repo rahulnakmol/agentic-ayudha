@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -271,7 +272,7 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 		return Errorf(ExitUsage, "ready: --part goes with neither --check nor --guard")
 	case !request && (in.Has("changes") || in.Has("fixes")):
 		return Errorf(ExitUsage, "ready: --changes and --fixes go with --request")
-	case !request && (e.Getenv("AAYU_AGENT") == "1" || e.CI):
+	case !request && (e.ownLane() != "" || e.CI):
 		return e.personOnly("ready --part")
 	}
 	repo, err := e.RepoName(ctx)
@@ -304,7 +305,7 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 
 // personOnly is why a person's approval (what: "ready --part") cannot be asked for here.
 func (e *Env) personOnly(what string) error {
-	if sig := e.agentSignal(); sig != "" {
+	if sig := cmp.Or(e.ownLane(), e.agentSignal()); sig != "" {
 		return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s)", what, sig)
 	}
 	return Errorf(ExitBlocked, "%s needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code", what)

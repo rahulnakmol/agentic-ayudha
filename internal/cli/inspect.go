@@ -982,14 +982,11 @@ func (e *Env) approveHead(ctx context.Context, cfg *config.Config, repo string, 
 	// this record is what the gate trusts over a comment written with the
 	// person's token (CodeRabbit's Major on #647). A host's agent marker (an
 	// orb's Terminal tab) is no refusal: the device code proves the person.
-	// aayu's own lanes (AAYU_AGENT=1) and CI are refused. A push after it
+	// aayu's own lanes (ownLane: AAYU_AGENT=1 or a recorded loop thread) and CI are refused. A push after it
 	// voids it.
 	refusal := Errorf(ExitBlocked, "inspect --approve needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code")
-	lane := ""
-	switch {
-	case e.Getenv("AAYU_AGENT") == "1":
-		lane = "AAYU_AGENT=1"
-	case e.CI:
+	lane := e.ownLane()
+	if lane == "" && e.CI {
 		lane = "--ci"
 	}
 	if lane != "" {

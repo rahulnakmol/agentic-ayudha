@@ -1,0 +1,17 @@
+# Which tests prove Bug #1191's Completion Goal.
+
+[[criterion]]
+id = 1 # the loop's first step, aayu hook loop:<name> with AMP_THREAD_ID=T-loop, records T-loop before its verdict
+tests = ["internal/cli:TestLoopLaneRefusesPersonDecisions"]
+
+[[criterion]]
+id = 2 # that thread, without AAYU_AGENT=1: each listed verb is refused for the loop lane, with no device code and no write
+tests = ["internal/cli:TestLoopLaneRefusesPersonDecisions"]
+
+[[criterion]]
+id = 3 # the person's Terminal tab with AMP_THREAD_ID=T-person: ready <feature> reaches the device flow and approves
+tests = ["internal/cli:TestLoopLaneRefusesPersonDecisions"]
+
+[[criterion]]
+id = 4 # --run-now starts its agent with AAYU_AGENT=1 in its environment; the amp -ox thread runs on Amp's server (deviation in the PR)
+tests = ["internal/cli:TestInstallLoops", "internal/agentenv:TestCombinedExecWithEnv"]

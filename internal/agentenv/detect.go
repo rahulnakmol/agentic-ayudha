@@ -3,6 +3,7 @@ package agentenv
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -89,8 +90,26 @@ func codexProvider(ctx context.Context, p Probe, cli string) (bool, string) {
 func CombinedExec(ctx context.Context, dir, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if extra := EnvFrom(ctx); len(extra) > 0 {
+		cmd.Env = append(os.Environ(), extra...)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+type envKey struct{}
+
+// WithEnv returns ctx with extra NAME=value variables that CombinedExec adds
+// to the environment of the process it starts, such as AAYU_AGENT=1 for an
+// agent that aayu starts (Bug #1191). An Exec seam reads them with EnvFrom.
+func WithEnv(ctx context.Context, env ...string) context.Context {
+	return context.WithValue(ctx, envKey{}, append(EnvFrom(ctx), env...))
+}
+
+// EnvFrom is the extra environment WithEnv put in ctx.
+func EnvFrom(ctx context.Context) []string {
+	env, _ := ctx.Value(envKey{}).([]string)
+	return append([]string(nil), env...)
 }
 
 // Detect reports the four agents. It makes no model or task call and sends

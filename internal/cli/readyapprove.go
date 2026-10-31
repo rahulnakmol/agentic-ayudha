@@ -42,19 +42,17 @@ func (e *Env) approveRefusal() error {
 }
 
 // laneRefusal refuses what, a person's decision, for aayu's own agent lanes
-// (AAYU_AGENT=1: MCP and the loops, which run unattended) and CI, before
+// (ownLane: AAYU_AGENT=1, or a recorded loop thread) and CI, before
 // any ledger setup or write; nil otherwise. A shell with only a host's agent marker
 // goes on to presenceCheck, as ready --part and ship --solo-bypass do: an
 // orb's Terminal tab inherits AMP_THREAD_ID, and the device code proves the
 // person, because an agent never enters or relays it (Bug #1182).
 func (e *Env) laneRefusal(what string) error {
-	lane := ""
-	switch {
-	case e.Getenv("AAYU_AGENT") == "1":
-		lane = "AAYU_AGENT=1"
-	case e.CI:
+	lane := e.ownLane()
+	if lane == "" && e.CI {
 		lane = "--ci"
-	default:
+	}
+	if lane == "" {
 		return nil
 	}
 	return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s)", what, lane)

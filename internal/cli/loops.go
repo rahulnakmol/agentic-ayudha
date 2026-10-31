@@ -34,8 +34,13 @@ type loopGuard struct {
 // runs this month have used [budget] ci_minutes_month; otherwise it says
 // whether this run is the scheduled one (in Actions, written to GITHUB_OUTPUT
 // as due=true|false); an event loop is due whenever its host's trigger
-// started it. It writes nothing anywhere else.
+// started it. First of all it records the run's thread as a loop lane
+// (recordLoopLane, Bug #1191), so a person's decision is refused in that thread
+// although its later commands carry no AAYU_AGENT=1. It writes nothing else.
 func runLoopGuard(ctx context.Context, e *Env, name string) error {
+	if err := e.recordLoopLane(); err != nil {
+		return Errorf(ExitExternal, "loop %s: cannot record this thread as a loop lane (%v); the loop does not run", name, err)
+	}
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return Errorf(ExitUsage, "hook %s%s: run it in a checkout (loops/*.toml)", LoopHookPrefix, name)

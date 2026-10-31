@@ -211,7 +211,8 @@ refused and no code is issued (`presenceCheck` in [internal/cli/presence.go](../
 The Actions fallback never calls a model. A job checks out the repository, installs aayudha, runs the guard, and
 only then the command.
 
-**The guard.** Every run in every tool starts with `aayu hook loop:<name>` (`runLoopGuard`). It exits 4 while the
+**The guard.** Every run in every tool starts with `aayu hook loop:<name>` (`runLoopGuard`). It first records the
+run's thread as a loop lane, so a person's decision is refused in that thread (how-trust.md, "Loop threads"). It exits 4 while the
 repository is halted, and 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used
 `[budget] ci_minutes_month`. Otherwise it says whether this run is due. A loop is due only within 59 minutes after its
 local time, which picks the right one of the two UTC crons.
