@@ -770,3 +770,21 @@ func TestInstallPrePush(t *testing.T) {
 		t.Errorf("hook does not chain git-lfs or lets the gate read the refs on stdin:\n%s", PrePushHook)
 	}
 }
+
+// Bug #1191: CombinedExec puts WithEnv's variables in the started process's
+// environment, beside this process's own, and adds nothing without them.
+func TestCombinedExecWithEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	t.Setenv("AAYU_TEST_KEPT", "kept")
+	ctx := WithEnv(context.Background(), "AAYU_AGENT=1")
+	out, err := CombinedExec(ctx, t.TempDir(), "sh", "-c", `printf '%s %s' "$AAYU_AGENT" "$AAYU_TEST_KEPT"`)
+	if err != nil || out != "1 kept" {
+		t.Fatalf("with env: %q %v", out, err)
+	}
+	t.Setenv("AAYU_AGENT", "")
+	if out, err := CombinedExec(context.Background(), t.TempDir(), "sh", "-c", `printf '%s' "$AAYU_AGENT"`); err != nil || out != "" {
+		t.Fatalf("without env: %q %v", out, err)
+	}
+}

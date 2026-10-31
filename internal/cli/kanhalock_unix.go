@@ -17,3 +17,17 @@ func tryLock(fh *os.File) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// noFollow keeps OpenFile from following a symlink at the path's last element.
+const noFollow = syscall.O_NOFOLLOW
+
+// privateDir reports whether dir is a real directory that only this user owns
+// and can write: another user cannot plant records or a symlink in it.
+func privateDir(dir string) bool {
+	fi, err := os.Lstat(dir)
+	if err != nil || !fi.IsDir() || fi.Mode().Perm()&0o077 != 0 {
+		return false
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && int(st.Uid) == os.Getuid()
+}

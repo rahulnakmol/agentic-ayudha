@@ -35,7 +35,7 @@ func runReadyEarly(ctx context.Context, e *Env, in Values, f int) error {
 	switch {
 	case in.Has("part") || in.Bool("request") || in.Bool("check") || in.Bool("guard"):
 		return Errorf(ExitUsage, "ready: --early-build goes with none of --part, --request, --check, or --guard")
-	case e.Getenv("AAYU_AGENT") == "1" || e.CI:
+	case e.ownLane() != "" || e.CI:
 		return e.personOnly("ready --early-build")
 	}
 	l, err := e.Config()

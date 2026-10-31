@@ -340,7 +340,7 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 		bin = runNowArgs[tool].bin
 	}
 	fmt.Fprintf(e.Err, "install --loops: running loop %s once with %s %s …\n", name, bin, runNowArgs[tool].flag)
-	out, err := e.run(ctx, root, bin, runNowArgs[tool].flag, l.RunNowPrompt(repo, branch))
+	out, err := e.run(agentenv.WithEnv(ctx, "AAYU_AGENT=1"), root, bin, runNowArgs[tool].flag, l.RunNowPrompt(repo, branch)) // an agent lane in its process env, not only its prompt (Bug #1191)
 	fmt.Fprintln(e.Out, strings.TrimSpace(out))
 	if err != nil {
 		return Errorf(ExitExternal, "install --loops --run-now %s: %s: %v", name, bin, err)

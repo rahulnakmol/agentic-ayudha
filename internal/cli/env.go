@@ -1,13 +1,18 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -211,6 +216,112 @@ func newEnv(io IO, opts Options) (*Env, error) {
 // its agent runs (hosts.AgentMarkers, Bug #170). Agents may not confirm on a
 // human's behalf or replace the binary.
 func (e *Env) Agent() bool { return e.agentSignal() != "" }
+
+// loopMarkers are the host markers whose value names one thread, so a loop
+// thread can be told from a person's shell by it (Bug #1191). The others
+// (CLAUDECODE=1, CURSOR_AGENT=1, AGENT=amp, …) are the same in every shell.
+var loopMarkers = []string{"AMP_THREAD_ID", "CODEX_THREAD_ID", "COPILOT_AGENT_SESSION_ID"}
+
+// loopLanesPaths are where `aayu hook loop:<name>` records the threads that
+// run loops on this machine, whichever checkout or directory a later command
+// runs in: the user's state directory, then a private directory in the
+// temporary directory, which a sandboxed loop (Codex's workspace-write) can
+// still write. The second counts only while it is this user's alone
+// (privateDir), since another user may create it first; create makes it.
+func (e *Env) loopLanesPaths(create bool) []string {
+	var ps []string
+	if d := e.Getenv("XDG_STATE_HOME"); d != "" {
+		ps = append(ps, filepath.Join(d, "aayudha", "loop-lanes"))
+	} else if h := e.Getenv("HOME"); h != "" {
+		ps = append(ps, filepath.Join(h, ".local", "state", "aayudha", "loop-lanes"))
+	}
+	tmp := filepath.Join(cmp.Or(e.Getenv("TMPDIR"), os.TempDir()), fmt.Sprintf("aayudha-%d", os.Getuid()))
+	if create {
+		_ = os.Mkdir(tmp, 0o700) // privateDir decides, whoever made it
+	}
+	if privateDir(tmp) {
+		ps = append(ps, filepath.Join(tmp, "loop-lanes"))
+	}
+	return ps
+}
+
+// loopMarker is this shell's thread markers (NAME=value, space-separated), or
+// "". All of them: an agent started by hand in a person's Terminal tab
+// inherits the tab's marker beside its own, and recording only the tab's
+// would refuse the person.
+func (e *Env) loopMarker() string {
+	var ms []string
+	for _, m := range loopMarkers {
+		if v := e.Getenv(m); v != "" {
+			ms = append(ms, m+"="+v)
+		}
+	}
+	return strings.Join(ms, " ")
+}
+
+// recordLoopLane records this shell's thread as a loop lane, before the loop's
+// agent reads any task content, and says so on stderr. A shell with no thread
+// marker records nothing, and neither does one with AAYU_AGENT=1: every
+// command there is refused already, and an agent aayu started may inherit the
+// person's thread ID.
+func (e *Env) recordLoopLane() error {
+	m := e.loopMarker()
+	if m == "" || e.Getenv("AAYU_AGENT") == "1" || e.inLoopLane(m) {
+		return nil
+	}
+	ps := e.loopLanesPaths(true)
+	if len(ps) == 0 {
+		return errors.New("no state or temporary directory of this user's own")
+	}
+	var errs []error
+	for _, p := range ps {
+		err := os.MkdirAll(filepath.Dir(p), 0o700)
+		var f *os.File
+		if err == nil {
+			f, err = os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY|noFollow, 0o600)
+		}
+		if err == nil {
+			_, err = fmt.Fprintf(f, "\n%s\n", m) // a line of its own, even after a partial one
+			err = errors.Join(err, f.Close())
+		}
+		if err == nil {
+			fmt.Fprintf(e.Err, "aayu: recorded this thread (%s) as a loop lane: a person's decision is refused in it until a person removes the record (docs/guide/how-trust.md, \"Loop threads\").\n", m)
+			return nil
+		}
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// inLoopLane reports whether a recorded loop thread's markers are all among
+// m's, so a command that adds a marker in that thread (a nested agent) is
+// still the loop's.
+func (e *Env) inLoopLane(m string) bool {
+	have := strings.Fields(m)
+	for _, p := range e.loopLanesPaths(false) {
+		b, _ := os.ReadFile(p)
+		for _, line := range strings.Split(string(b), "\n") {
+			if rec := strings.Fields(line); len(rec) > 0 && !slices.ContainsFunc(rec, func(r string) bool { return !slices.Contains(have, r) }) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ownLane names aayu's own agent lane when this process is one, or "":
+// AAYU_AGENT=1 (MCP and the loops' commands), or a thread that a loop's first
+// step recorded, whose commands lack the prefix (Bug #1191). Every person's
+// decision refuses it before any device code; a host's marker alone does not.
+func (e *Env) ownLane() string {
+	if e.Getenv("AAYU_AGENT") == "1" {
+		return "AAYU_AGENT=1"
+	}
+	if m := e.loopMarker(); m != "" && e.inLoopLane(m) {
+		return m + " of a loop thread"
+	}
+	return ""
+}
 
 // agentSignal names what marks the process as an agent lane, or "".
 func (e *Env) agentSignal() string {

@@ -200,6 +200,25 @@ complete an approval: no flag, variable, or file supplies one, and the device fl
 aayu's own unattended lanes (`AAYU_AGENT=1`: the MCP server and the loops) never wait for an approval; they are
 refused at once. The pre-tool hooks still block human-only commands an agent tries to run.
 
+**Loop threads.** A scheduled loop's thread runs in an orb or a runner whose shell has only the host's marker, and
+its prompt adds `AAYU_AGENT=1` only to the commands it names. So the guard, the loop's first step, records the
+thread's markers in `$XDG_STATE_HOME/aayudha/loop-lanes` (else `~/.local/state/aayudha/loop-lanes`) before it prints
+its verdict. A sandbox that cannot write there (Codex's workspace-write) gets the record in
+`$TMPDIR/aayudha-<uid>/loop-lanes`, but only while that directory is yours alone (mode 0700, owned by you). Every
+later person's decision in that thread is then refused before any device code, as for `AAYU_AGENT=1`. Only markers
+that name one thread are recorded: `AMP_THREAD_ID`, `CODEX_THREAD_ID`, and `COPILOT_AGENT_SESSION_ID`, all of them
+together. A shell that has every marker of a record, and maybe more (a nested agent), is that loop's thread. An agent
+started by hand in your Terminal tab adds its own marker, so its record does not mark the tab. Your Terminal tab in
+a thread where no loop ran still gets the device code. The guard says on stderr when it records a thread. If you ran
+the guard by hand in your own thread, delete that thread's line from the file to undo it. An agent that
+`install --loops --run-now` starts has `AAYU_AGENT=1` in its process environment (Bug #1191).
+
+> **Honest status:** Cursor (`CURSOR_AGENT=1`) and Claude Code (`CLAUDECODE=1`) set the same marker in every shell,
+> so a loop thread of theirs is not recorded. A command there without `AAYU_AGENT=1` still reaches the device flow,
+> and the person's code still decides. A per-thread ID from those hosts would close the gap. The Amp setup thread
+> (`amp -ox`) runs in an orb on Amp's server, so aayu cannot set its process environment. Its prompt is aayu's own
+> and asks only for `set_schedule`; the first scheduled run's guard then records the thread.
+
 **No setup.** aayu ships the client ID of the project's OAuth App, "aayudha presence check", with Device Flow enabled
 (`DefaultDeviceClientID` in `internal/cli/presence.go`). A client ID is public; no secret is involved. The App's owner
 never sees your token or your approvals: GitHub hands the token only to the aayu process that polls for it, and the

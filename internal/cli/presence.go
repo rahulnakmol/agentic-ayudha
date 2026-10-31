@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -90,7 +91,7 @@ func (e *Env) requireHuman(ctx context.Context, what string, need Access) error 
 // requireApproval is requireHuman for an action that says what approving it
 // does (Pending), such as a batch of Decisions.
 func (e *Env) requireApproval(ctx context.Context, p Pending, need Access) error {
-	sig := e.agentSignal()
+	sig := cmp.Or(e.ownLane(), e.agentSignal())
 	if sig == "" && e.isTerminal(e.In) {
 		return nil
 	}
@@ -126,8 +127,8 @@ func (e *Env) commandLine() string {
 // flag, variable, or file that supplies an approval.
 //
 // It returns refusal unchanged when no approval can be asked for: aayu's own
-// agent lanes (AAYU_AGENT=1: the MCP server and loops, which run unattended)
-// and CI (--ci, where the acting account is a workflow or bot token), and no
+// agent lanes (ownLane: AAYU_AGENT=1 for the MCP server and loops, or a loop
+// thread its guard recorded, Bug #1191) and CI (--ci, where the acting account is a workflow or bot token), and no
 // repository or token to check the approver against (unless need is
 // AccessAny). The client ID is [identity] device_client_id, else
 // DeviceClientVariables, else DefaultDeviceClientID. An approval covers later
@@ -138,7 +139,7 @@ func (e *Env) presenceCheck(ctx context.Context, p Pending, need Access, refusal
 	if e.approval.covers(need) {
 		return e.approval, nil
 	}
-	if e.Getenv("AAYU_AGENT") == "1" || e.CI {
+	if e.ownLane() != "" || e.CI {
 		return nil, refusal
 	}
 	l, err := e.Config()

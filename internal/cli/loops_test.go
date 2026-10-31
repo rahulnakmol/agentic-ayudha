@@ -12,6 +12,7 @@ import (
 	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
@@ -323,8 +324,13 @@ func TestInstallLoops(t *testing.T) {
 			}
 			return "", os.ErrNotExist
 		},
-		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
+		Exec: func(ctx context.Context, _, name string, args ...string) (string, error) {
 			calls = append(calls, strings.Join(append([]string{name}, args...), " "))
+			// Bug #1191: an agent --run-now starts here is an agent lane in its process env. The amp -ox
+			// setup runs in an orb on Amp's server, which the local process env does not reach.
+			if args[0] == "-x" && !slices.Contains(agentenv.EnvFrom(ctx), "AAYU_AGENT=1") {
+				t.Errorf("%s %s started without AAYU_AGENT=1 in its env", name, args[0])
+			}
 			if strings.HasSuffix(name, "amp") && slices.Contains(args, "-ox") {
 				return "Done.\nschedule s-" + strings.TrimPrefix(args[slices.Index(args, "--title")+1], "aayudha loop: ") + " on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
 			}

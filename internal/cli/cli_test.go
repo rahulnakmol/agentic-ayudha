@@ -47,6 +47,16 @@ func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Optio
 			return get(k)
 		}
 	}
+	if env["TMPDIR"] == "" { // nor the machine's loop-lane records (Bug #1191)
+		tmp := t.TempDir()
+		get := opts.Getenv
+		opts.Getenv = func(k string) string {
+			if k == "TMPDIR" {
+				return tmp
+			}
+			return get(k)
+		}
+	}
 	if opts.UserHome == nil { // the account's home is the test's HOME, never the developer's
 		opts.UserHome = func() (string, error) { return opts.Getenv("HOME"), nil }
 	}

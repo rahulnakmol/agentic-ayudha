@@ -18,3 +18,13 @@ func tryLock(fh *os.File) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// noFollow is 0: Windows has no O_NOFOLLOW, and its temporary directory is per user.
+const noFollow = 0
+
+// privateDir reports whether dir is a real directory, not a link: Windows's
+// temporary directory is the user's own.
+func privateDir(dir string) bool {
+	fi, err := os.Lstat(dir)
+	return err == nil && fi.IsDir()
+}
