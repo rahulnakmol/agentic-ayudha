@@ -50,7 +50,15 @@
     "required": true,
     "layers": [
       "L07"
-    ]
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-31T14:21:42Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/1193#issuecomment-6544607052",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"
+    }
   },
   "planned_at": "2026-10-31T14:15:15Z",
   "planned_by": "human-fallback"
