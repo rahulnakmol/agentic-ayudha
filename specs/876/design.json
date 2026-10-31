@@ -1,0 +1,31 @@
+{
+  "feature": 876,
+  "body_hash": "a4d8ce427f69bc53344538a4a968579b365edaef3eaffbd70311636f24ae1629",
+  "footprint": [
+    "L02",
+    "L03",
+    "L05",
+    "L07"
+  ],
+  "contracts": [
+    "critique state of a Feature (internal/critique): each seat's review findings with their state (open, fixed by a later approved baseline version, dismissed); Approve to build reads it through Env.CritiqueState, today a stub (internal/cli/readyapprove.go critique)",
+    "Approve to build stays off while any finding is open, and lists each finding with its state (#1114)",
+    "aayu grill feature \u003cf\u003e --findings: lists each finding; --resolve \u003cid\u003e --as dismissed --reason \u003cline\u003e is human-only, through GitHub's device flow, and Approve to build ratifies each dismissal (#1115)",
+    "the grill skill walks each open gap with a recommendation, drafts the fix as a new baseline version (aayu ready \u003cf\u003e --part \u003cp\u003e --request --fixes \u003cids\u003e), and hands the person the dismissal command; an eval fails when the agent dismisses a gap itself (#1116)",
+    "[critique] keys stay owned by a person (#1032)"
+  ],
+  "layers": [
+    "L02",
+    "L03",
+    "L05",
+    "L07"
+  ],
+  "story_order": [
+    1114,
+    1115,
+    1116
+  ],
+  "rollback": "Findings and dismissals are append-only ledger records; a revert stops reading them, and Approve to build returns to the stub's no-findings state, which is today's behaviour. No record is rewritten.",
+  "planned_at": "2026-10-31T10:05:47Z",
+  "planned_by": "human-fallback"
+}
