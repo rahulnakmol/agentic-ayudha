@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 875,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/875/design.json",
+      "hash": "66ff02f3d35e15a952c7a45d83e9e94a09991d859d0232b23569d242c1af130a"
+    }
+  ],
+  "hash": "45dbbba17ee2fdb346cb42c62490bad42e8e3069b23f60c59723ce8d1cb88134",
+  "summary": "A new `aayu critique` verb posts one structured review per seat, and a host-scheduled loop runs one fresh session per reviewing seat. This is step S6 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T12:05:41Z"
+}
