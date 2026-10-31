@@ -257,6 +257,108 @@ func TestShipRefusals(t *testing.T) {
 	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {
 		t.Fatalf("ship with a newer red gate run behind a reply run: %d %s", code, out)
 	}
+	// Bug #1162: a newer gate run on the head failed in a job outside the gate
+	// checks, so the pack is the older run's. The pack lands only with its own
+	// run's gate checks: their red check refuses, though the newer run's gate
+	// checks are green. With them green, ship goes on to the human pass.
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	packRun := &g.Runs[len(g.Runs)-1]
+	packRun.CheckSuiteID = 5
+	packID := packRun.ID
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9900, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 6,
+		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
+	newer := suite(6, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "success"},
+		fake.CheckRun{Name: "aayudha/inspect", Conclusion: "success"}, fake.CheckRun{Name: "aayudha/pack", Conclusion: "success"})
+	g.CheckRuns[head] = append(slices.Clone(newer), suite(5, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "success", StartedAt: gateStarted, CompletedAt: gateCompleted},
+		fake.CheckRun{Name: "aayudha/inspect", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/pack", Conclusion: "success"})...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("aayudha/inspect is failure in run %d, whose pack lands, on %s; the merge gate must be green", packID, short(head))) {
+		t.Fatalf("ship with the pack's run red and a newer run's gate checks green: %d %s", code, out)
+	}
+	// So does a gate check of the pack's run that is not done, as when a
+	// re-run of that run starts between the two reads.
+	g.Mu.Lock()
+	running := suite(5, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "success", StartedAt: gateStarted, CompletedAt: gateCompleted}, fake.CheckRun{Name: "aayudha/inspect", Conclusion: "success"},
+		fake.CheckRun{Name: "aayudha/pack", Conclusion: "success"})
+	running[2].Status, running[2].Conclusion = "in_progress", ""
+	g.CheckRuns[head] = append(slices.Clone(newer), running...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("aayudha/pack is in_progress in run %d, whose pack lands", packID)) {
+		t.Fatalf("ship with the pack's run re-running: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = append(slices.Clone(newer), suite(5, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "success", StartedAt: gateStarted, CompletedAt: gateCompleted},
+		fake.CheckRun{Name: "aayudha/inspect", Conclusion: "success"}, fake.CheckRun{Name: "aayudha/pack", Conclusion: "success"})...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || strings.Contains(out, "the merge gate must be green") || !strings.Contains(out, "no human pass") {
+		t.Fatalf("ship with the pack's run green and a newer run failed outside the gate checks: %d %s", code, out)
+	}
+	// One gate run, two attempts: attempt 1 failed its floors, and a re-run of
+	// its failed jobs passed. Each attempt's gate job uploaded a pack to the
+	// run, and GitHub lists the newest first. The pack that lands is the one
+	// made while the aayudha/merge-gate check that ship reads ran: attempt 2's,
+	// in any list order. A pack from outside that attempt never lands.
+	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "coverage", Result: proof.Fail, Value: 50, Threshold: 90, Tool: "aayudha", Version: "1"}})
+	g.Mu.Lock()
+	first := g.Runs[len(g.Runs)-1].ID
+	g.Mu.Unlock()
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	both := g.Runs[len(g.Runs)-1].ID
+	g.Runs = slices.DeleteFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.ID == first })
+	attempt1, attempt2 := g.Artifacts[first][0], g.Artifacts[both][0]
+	attempt1.Created = gateUploaded.Add(-time.Hour) // attempt 1's gate job ran an hour before attempt 2's
+	g.Artifacts[both] = []fake.ArtifactZip{attempt2, attempt1}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || strings.Contains(out, "floors do not hold") || !strings.Contains(out, "no human pass") {
+		t.Fatalf("ship with attempt 2's green pack listed before attempt 1's red one: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Artifacts[both] = []fake.ArtifactZip{attempt1, attempt2}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || strings.Contains(out, "floors do not hold") || !strings.Contains(out, "no human pass") {
+		t.Fatalf("ship with attempt 1's red pack listed before attempt 2's green one: %d %s", code, out)
+	}
+	// The checks ship reads are attempt 1's, but the newest pack is from a
+	// later attempt: the two are from two attempts, so ship refuses.
+	g.Mu.Lock()
+	early := gateUploaded.Add(-2 * time.Hour).Format(time.RFC3339)
+	for i, r := range g.CheckRuns[head] {
+		if r.Name == "aayudha/merge-gate" {
+			g.CheckRuns[head][i].StartedAt, g.CheckRuns[head][i].CompletedAt = early, gateUploaded.Add(-90*time.Minute).Format(time.RFC3339)
+		}
+	}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("artifact %d of run %d was made at %s, outside the attempt whose aayudha/merge-gate check ran %s", attempt2.ID, both, gateUploaded.Format(time.RFC3339), early)) {
+		t.Fatalf("ship with a pack from another attempt than the checks: %d %s", code, out)
+	}
+	// A re-run whose gate job uploaded no pack leaves only attempt 1's, made
+	// before the gate check that ship reads started; a pack with no creation
+	// time proves no attempt. Each refuses.
+	g.Mu.Lock()
+	for i, r := range g.CheckRuns[head] {
+		if r.Name == "aayudha/merge-gate" {
+			g.CheckRuns[head][i].StartedAt, g.CheckRuns[head][i].CompletedAt = gateStarted, gateCompleted
+		}
+	}
+	g.Artifacts[both] = []fake.ArtifactZip{attempt1}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("artifact %d of run %d was made at %s, outside the attempt whose aayudha/merge-gate check ran %s to %s", attempt1.ID, both, attempt1.Created.Format(time.RFC3339), gateStarted, gateCompleted)) {
+		t.Fatalf("ship with only an earlier attempt's pack: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	attempt2.Created = time.Time{}
+	g.Artifacts[both] = []fake.ArtifactZip{attempt2}
+	for i, r := range g.CheckRuns[head] {
+		if r.Name == "aayudha/merge-gate" { // nor does a gate check with no times
+			g.CheckRuns[head][i].StartedAt, g.CheckRuns[head][i].CompletedAt = "", ""
+		}
+	}
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("artifact %d of run %d has no creation time, outside the attempt", attempt2.ID, both)) {
+		t.Fatalf("ship with a pack that has no creation time: %d %s", code, out)
+	}
 	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
 		t.Fatalf("a refused ship landed a pack:\n%s", got)
 	}
@@ -1785,7 +1887,20 @@ func TestProofLand(t *testing.T) {
 	if code, out := land(); code != ExitBlocked || !strings.Contains(out, "proof land #"+strconv.Itoa(prN)+": aayudha/pack is failure on "+short(head)) {
 		t.Fatalf("proof land with a newer red gate run: %d %s", code, out)
 	}
+	// Bug #1162: a newer gate run failed outside the gate checks, so the pack
+	// is the older run's, and it lands only with that run's gate checks green.
 	g.Mu.Lock()
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9900, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "failure", CheckSuiteID: 6,
+		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
+	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 6}},
+		{Name: "aayudha/inspect", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 6}}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success", Suite: &fake.Suite{ID: 6}},
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "failure"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("proof land #%d: aayudha/inspect is failure in run %d, whose pack lands, on %s", prN, good.ID, short(head))) {
+		t.Fatalf("proof land with the pack's run red and a newer run's gate checks green: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Runs = []fake.WorkflowRun{good}
 	g.RequiredChecks = []string{"build", "protected-paths"}
 	g.CheckRuns[head] = append(slices.Clone(gateRuns), fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
 		fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})

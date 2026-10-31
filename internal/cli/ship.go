@@ -214,7 +214,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	rec.GateRun, rec.Artifact, rec.PackSHA256 = gp.run.GetID(), gp.artifact, gp.sha256
 
 	// 2. The merge gate's checks are green on the head.
-	runs, err := gateGreen(ctx, c, owner, name, "ship", n, head)
+	runs, err := gateGreen(ctx, c, owner, name, "ship", n, head, gp)
 	if err != nil {
 		return err
 	}
@@ -648,6 +648,7 @@ func dirExists(p string) bool { st, err := os.Stat(p); return err == nil && st.I
 type gatePackRun struct {
 	run      *gh.WorkflowRun
 	artifact int64
+	uploaded time.Time // when the artifact was made
 	pack     *proof.Pack
 	sha256   string // of the artifact's pack.json
 	dir, tmp string
@@ -717,8 +718,12 @@ func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name, verb 
 // gateGreen reads every check run on head and requires the merge gate's
 // checks to be green there: the newest run of each in the gate's own suites
 // (gateSuites), so an older green run never stands in for a newer red one, nor
-// a check of the same name from another workflow or app for the gate's.
-func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, n int, head string) ([]*gh.CheckRun, error) {
+// a check of the same name from another workflow or app for the gate's. The
+// newest of each in the suite of the run whose pack lands must be green too,
+// and the pack must be made while that suite's aayudha/merge-gate check ran:
+// that job uploads it, and a run's attempts never overlap. So the pack and the
+// checks it lands with come from one attempt of one run (Bug #1162).
+func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, n int, head string, pack gatePackRun) ([]*gh.CheckRun, error) {
 	runs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CheckRun, *gh.Response, error) { // every page
 		r, resp, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: o})
 		return r.GetCheckRuns(), resp, err
@@ -730,20 +735,37 @@ func gateGreen(ctx context.Context, c *github.Client, owner, name, verb string, 
 	if err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	for _, want := range gateChecks {
-		concl := "missing"
+	newest := func(want string, suites map[int64]bool) (*gh.CheckRun, string) {
 		for _, r := range gateCheckRuns(runs, suites) {
-			if r.GetName() == want {
-				concl = r.GetStatus()
+			if r.GetName() == want { // the API lists the newest run of a name first
 				if r.GetStatus() == "completed" {
-					concl = r.GetConclusion()
+					return r, r.GetConclusion()
 				}
-				break // the API lists the newest run of a name first
+				return r, r.GetStatus()
 			}
 		}
-		if concl != "success" {
+		return nil, "missing"
+	}
+	for _, want := range gateChecks {
+		if _, concl := newest(want, suites); concl != "success" {
 			return nil, Errorf(ExitBlocked, "%s #%d: %s is %s on %s; the merge gate must be green", verb, n, want, concl, short(head))
 		}
+	}
+	own, id := map[int64]bool{pack.run.GetCheckSuiteID(): true}, pack.run.GetID()
+	for _, want := range gateChecks {
+		if _, concl := newest(want, own); concl != "success" {
+			return nil, Errorf(ExitBlocked, "%s #%d: %s is %s in run %d, whose pack lands, on %s; the merge gate must be green", verb, n, want, concl, id, short(head))
+		}
+	}
+	gate, _ := newest("aayudha/merge-gate", own)
+	stamp := func(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+	if at, from, to := pack.uploaded, gate.GetStartedAt().Time, gate.GetCompletedAt().Time; at.IsZero() || at.Before(from) || at.After(to) {
+		made := "was made at " + stamp(at)
+		if at.IsZero() {
+			made = "has no creation time"
+		}
+		return nil, Errorf(ExitBlocked, "%s #%d: artifact %d of run %d %s, outside the attempt whose aayudha/merge-gate check ran %s to %s, so the pack and the checks come from two attempts (push a commit or re-run the gate for a fresh one)",
+			verb, n, pack.artifact, id, made, stamp(from), stamp(to))
 	}
 	return runs, nil
 }
@@ -790,9 +812,12 @@ func (e *Env) unpackGateRun(ctx context.Context, c *github.Client, owner, name s
 	if err != nil {
 		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
+	// A re-run of the run's failed jobs uploads another pack to the run. The
+	// newest (the highest ID) is the latest attempt's, whose checks gateGreen
+	// reads; an older attempt's pack never stands in for it.
 	var art *gh.Artifact
 	for _, a := range arts.Artifacts {
-		if a.GetName() == "aayudha-pack" {
+		if a.GetName() == "aayudha-pack" && (art == nil || a.GetID() > art.GetID()) {
 			art = a
 		}
 	}
@@ -816,7 +841,7 @@ func (e *Env) unpackGateRun(ctx context.Context, c *github.Client, owner, name s
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return gatePackRun{}, Errorf(ExitExternal, "download artifact %d: HTTP %d %v", art.GetID(), resp.StatusCode, err)
 	}
-	g := gatePackRun{run: run, artifact: art.GetID()}
+	g := gatePackRun{run: run, artifact: art.GetID(), uploaded: art.GetCreatedAt().Time}
 	if g.tmp, err = os.MkdirTemp("", "aayudha-gate-pack-"); err != nil {
 		return g, err
 	}

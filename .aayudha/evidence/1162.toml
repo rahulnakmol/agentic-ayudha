@@ -1,0 +1,9 @@
+# Which tests prove Bug #1162's Completion Goal.
+
+[[criterion]]
+id = 1 # a newer gate run failed outside the gate checks: the pack lands only with its own run's gate checks green
+tests = ["internal/cli:TestShipRefusals", "internal/cli:TestProofLand"]
+
+[[criterion]]
+id = 2 # the newest gate run has a red gate check: ship and proof land refuse, "the merge gate must be green"
+tests = ["internal/cli:TestShipRefusals", "internal/cli:TestProofLand"]

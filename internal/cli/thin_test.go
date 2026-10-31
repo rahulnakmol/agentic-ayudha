@@ -87,6 +87,12 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 // holds stands in for build's verify of a checkpoint: the floors hold.
 func holds(context.Context, string) (bool, string, error) { return true, "floors hold", nil }
 
+// gateStarted and gateCompleted are when gateRun's aayudha/merge-gate job ran;
+// gateUploaded is when it uploaded the pack.
+const gateStarted, gateCompleted = "2026-10-12T10:00:00Z", "2026-10-12T10:20:00Z"
+
+var gateUploaded = time.Date(2026, 10, 12, 10, 19, 0, 0, time.UTC)
+
 // gateRun records a green merge gate for head, with its pack as the run's
 // aayudha-pack artifact (no bot App: CI could not write the ledger).
 func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check, footprint ...string) {
@@ -139,10 +145,15 @@ func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head s
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	id := int64(9000 + len(g.Runs))
+	for slices.ContainsFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.ID == id }) {
+		id++ // a test that removed a run would reuse an ID, and gatePack would take the other run
+	}
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
 		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
-	g.Artifacts[id] = []fake.ArtifactZip{{ID: id + 1, Name: "aayudha-pack", Zip: zb.Bytes()}}
-	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
+	// The gate job uploads the pack while it runs (Bug #1162).
+	g.Artifacts[id] = []fake.ArtifactZip{{ID: id + 1, Name: "aayudha-pack", Zip: zb.Bytes(), Created: gateUploaded}}
+	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success", StartedAt: gateStarted, CompletedAt: gateCompleted},
+		{Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
 
 // closedPullLists counts the list requests for merged PRs, which only the
