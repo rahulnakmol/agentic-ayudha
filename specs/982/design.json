@@ -1,0 +1,29 @@
+{
+  "feature": 982,
+  "body_hash": "d211e5982f5c4bbbc77d74e0c2e0f9e321818fb2d7e1091b4d438c5c53961b4e",
+  "footprint": [
+    "L03"
+  ],
+  "contracts": [
+    "the Feature form gains an Outcome section: who it helps, the Goal or Initiative metric, the expected change, and whether it serves the core competency; outcome:none with a reason for work with no customer outcome; aayu grill feature checks it (#984)",
+    "Approve to build shows the Feature's outcome next to its budget (#985)",
+    "an outcome card [outcomes] readout_days after a Feature's last story merges reads aayu measure and linked Feedback, and records moved, no change, or unknown; unknown never blocks (#986)",
+    "releases and the weekly retro show outcome counts beside output counts (#987)",
+    "the Goal form gains What we do best, which triage and grill ask about (#988)",
+    "#989 (founder minutes per merged PR) is merged"
+  ],
+  "layers": [
+    "L03"
+  ],
+  "story_order": [
+    984,
+    985,
+    986,
+    987,
+    988,
+    989
+  ],
+  "rollback": "Form sections are optional on read, so a revert stops asking for them and old issues still parse. Outcome cards are append-only ledger records that a revert stops writing. No record is rewritten.",
+  "planned_at": "2026-10-31T14:05:22Z",
+  "planned_by": "human-fallback"
+}
