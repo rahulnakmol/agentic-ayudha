@@ -1,0 +1,20 @@
+{
+  "story": 1191,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "",
+  "mode": "",
+  "family": "",
+  "status": "",
+  "brief_sha256": "",
+  "started_at": "",
+  "events": [
+    {
+      "at": "2026-10-31T14:25:42Z",
+      "status": "kanha",
+      "detail": "start of #1191 failed: build #1191 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account) (sent)",
+      "text": "start of #1191 failed: build #1191 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account)"
+    }
+  ]
+}
