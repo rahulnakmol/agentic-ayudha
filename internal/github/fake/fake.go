@@ -249,7 +249,8 @@ type ArtifactZip struct {
 	ID      int64
 	Name    string
 	Zip     []byte
-	Expired bool // GitHub no longer keeps it
+	Expired bool      // GitHub no longer keeps it
+	Created time.Time // when the run uploaded it (created_at)
 }
 
 // Request is one recorded request.
@@ -1183,7 +1184,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
-			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": a.Expired})
+			art := map[string]any{"id": a.ID, "name": a.Name, "expired": a.Expired}
+			if !a.Created.IsZero() {
+				art["created_at"] = a.Created.UTC().Format(time.RFC3339)
+			}
+			out = append(out, art)
 		}
 		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
 	case m == "GET" && reJobLogs.MatchString(p):

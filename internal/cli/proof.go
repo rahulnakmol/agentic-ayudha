@@ -526,7 +526,7 @@ func (e *Env) proofLand(ctx context.Context, repo string, n int) error {
 	// green, and every required check but the CODEOWNERS gate, which a
 	// solo-mode bypass merges past (CodeRabbit, PR #1147).
 	head := pr.GetHead().GetSHA()
-	runs, err := gateGreen(ctx, c, owner, name, "proof land", n, head)
+	runs, err := gateGreen(ctx, c, owner, name, "proof land", n, head, gp)
 	if err != nil {
 		return err
 	}
