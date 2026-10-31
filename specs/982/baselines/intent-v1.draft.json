@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 982,
+  "part": "intent",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#982 body",
+      "hash": "d211e5982f5c4bbbc77d74e0c2e0f9e321818fb2d7e1091b4d438c5c53961b4e"
+    }
+  ],
+  "hash": "b22b340b78ab9db0ad0f3756ec5d0beb6f7e932a2d19bbbb15f9fdee5a02bf59",
+  "summary": "Every Feature names the customer outcome it serves, aayu asks \"did it move?\" after it ships, and releases and retros show outcomes next to counts. Each Goal states what the team does best, so new work is checked against it. As agents raise capacity from a few things a quarter to hundreds, the founder can see which of them made customers better off.",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T14:05:25Z"
+}
