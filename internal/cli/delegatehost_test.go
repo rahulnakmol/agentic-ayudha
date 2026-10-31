@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -74,10 +75,23 @@ func TestAmpHostHandoffPrints(t *testing.T) {
 	if got := m.labels(20); !slices.Contains(got, "status:in-progress") || !slices.Contains(got, LeaseLabel) {
 		t.Fatalf("#20 is not claimed: %v", got)
 	}
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "#20 in-progress (its host hand-off of "+st.StartedAt+" waits for its Amp thread)") {
+		t.Fatalf("mission show 889: exit %d: %s%s", code, out, errOut)
+	}
 	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
 	if code != ExitBlocked || !strings.Contains(errOut, "its host hand-off of "+st.StartedAt+" waits for its thread, and build starts no second one") ||
 		!strings.Contains(errOut, path) || len(m.ampCalls()) != calls || m.state(20).Handoffs != 1 {
 		t.Fatalf("a second build of #20: exit %d: %s%s", code, out, errOut)
+	}
+	// A brief that cannot be written fails #21's start: its claim, lease, and status are released.
+	if err := os.WriteFile(filepath.Join(filepath.Dir(filepath.Dir(path)), "21"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut = run(t, m.agent, m.opts, "build", "21", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code != ExitExternal || !strings.Contains(errOut, "the brief for the host was not written") || !strings.Contains(errOut, "#21 is status:ready again, and its claim and lease are released") ||
+		m.claims(889)[21] != 0 || !slices.Contains(m.labels(21), "status:ready") || slices.Contains(m.labels(21), LeaseLabel) {
+		t.Fatalf("build 21 with no place for its brief: exit %d, claims %v, labels %v: %s%s", code, m.claims(889), m.labels(21), out, errOut)
 	}
 }
 
@@ -106,9 +120,15 @@ func TestAmpHostThreadRecorded(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "#20 in-progress on amp: https://ampcode.com/threads/"+hostThread) {
 		t.Fatalf("mission show 889: exit %d: %s%s", code, out, errOut)
 	}
-	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", "T-01a1c0de-0000-7000-8000-000000000002", "--repo", "o/r"); code != ExitBlocked ||
-		!strings.Contains(errOut, "no host hand-off of #20 waits for its thread") || m.state(20).Task != hostThread {
+	// Once recorded, no thread is recorded again. Another thread is named to stop, and the recorded one is not.
+	other := "T-01a1c0de-0000-7000-8000-000000000002"
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", other, "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "no host hand-off of #20 waits for its thread") || !strings.Contains(errOut, "Nothing was recorded; stop the thread "+other+".") || m.state(20).Task != hostThread {
 		t.Fatalf("a second --thread: exit %d: %s", code, errOut)
+	}
+	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "Nothing was recorded.") || strings.Contains(errOut, "stop the thread") {
+		t.Fatalf("the recorded thread again: exit %d: %s", code, errOut)
 	}
 }
 
@@ -127,14 +147,17 @@ func TestAmpHostThreadNotAmpRefused(t *testing.T) {
 			t.Fatalf("--thread %q: exit %d, %d writes: %s%s", bad, code, len(m.g.Writes()), out, errOut)
 		}
 	}
-	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "codex", "--thread", hostThread, "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "use it with --delegate amp") {
-		t.Fatalf("--thread with --delegate codex: exit %d: %s", code, errOut)
+	for _, args := range [][]string{{"--delegate", "codex"}, {"--delegate", "amp", "--local"}} {
+		if code, _, errOut := run(t, m.agent, m.opts, append([]string{"build", "20", "--thread", hostThread, "--repo", "o/r"}, args...)...); code != ExitUsage ||
+			!strings.Contains(errOut, "use it with --delegate amp and no --local") {
+			t.Fatalf("--thread with %q: exit %d: %s", args, code, errOut)
+		}
 	}
 	// #21 is listed start and has no hand-off: its claim, lease, and status stay as they are.
 	n, claims := m.commits(), m.claims(889)
 	m.g.Reset()
 	code, out, errOut := run(t, m.agent, m.opts, "build", "21", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r", "--asked", "a person asked for #21")
-	if code != ExitBlocked || !strings.Contains(errOut, "no host hand-off of #21 waits for its thread") || !strings.Contains(errOut, "Nothing was recorded.") ||
+	if code != ExitBlocked || !strings.Contains(errOut, "no host hand-off of #21 waits for its thread") || !strings.Contains(errOut, "Nothing was recorded; stop the thread "+hostThread+".") ||
 		m.commits() != n || len(m.g.Writes()) != 0 || !maps.Equal(m.claims(889), claims) || claims[21] != 1 || !slices.Contains(m.labels(21), "status:ready") {
 		t.Fatalf("--thread on #21, which has no hand-off: exit %d, %d writes, commits %v→%v, claims %v→%v, labels %v: %s%s", code, len(m.g.Writes()), n, m.commits(), claims, m.claims(889), m.labels(21), out, errOut)
 	}
@@ -164,6 +187,12 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 		t.Fatalf("mission recover within the claim's life: exit %d: %s%s", code, out, errOut)
 	}
 	clk.add(2 * time.Minute)
+	// A preview shows #20 start, and frees nothing.
+	n := m.commits()
+	m.g.Reset()
+	if code, out, errOut := m.next(889, "--dry-run"); code != 0 || workLines(out) != "start #20\n" || m.commits() != n || len(m.g.Writes()) != 0 || m.state(20).Status != dlgHost {
+		t.Fatalf("mission next --dry-run after the claim's life: exit %d, %d writes: %q%s", code, len(m.g.Writes()), out, errOut)
+	}
 	m.g.Reset()
 	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
 		t.Fatalf("mission next after the claim's life: exit %d: %q%s", code, out, errOut)
@@ -181,7 +210,7 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 		t.Fatalf("delegate/20/state.json after the lapse: %+v", st)
 	}
 	// The thread the Kanha created too late is not recorded.
-	n := m.commits()
+	n = m.commits()
 	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != ExitBlocked ||
 		!strings.Contains(errOut, "no host hand-off of #20 waits for its thread (its delegation is lapsed") || m.commits() != n {
 		t.Fatalf("--thread after the lapse: exit %d: %s", code, errOut)
@@ -295,31 +324,41 @@ func TestAmpHostLapseEdges(t *testing.T) {
 	}
 }
 
-// Criterion 3, a race: the hand-off lapses while a late --thread renews the
-// lease. The record is refused, and the lease it renewed is released, so it
-// holds #20 no longer.
+// Criteria 3 and 5, races: the delegation of #20 changes while a --thread
+// run renews the lease. When the hand-off lapsed, the record is refused, the
+// thread is named to stop, and the lease it renewed is released, so it holds
+// #20 no longer. When another run recorded the same thread, it is not named
+// to stop, and the lease stays.
 func TestAmpHostLateRecordReleasesLease(t *testing.T) {
-	m := newMissionWorld(t)
-	m.hostHandedOff()
-	lapsed := m.state(20)
-	lapsed.Status = dlgLapsed
-	lapsed.Events = append(lapsed.Events, delegate.Event{At: time.Now().UTC().Format(time.RFC3339), Status: dlgLapsed, Detail: "lapsed by another run"})
-	b, _ := json.Marshal(lapsed)
-	once := false
-	m.edit(func() {
-		m.g.Hook = func(method, path string) {
-			if method == "PATCH" && strings.Contains(path, "/issues/comments/") && !once { // the build renews #20's lease
-				once = true
-				putLedger(t, m.bare, delegate.LedgerPath(20), string(b))
+	for _, c := range []struct {
+		status, task, want string
+		leased             bool
+	}{
+		{dlgLapsed, "", "no host hand-off of #20 waits for its thread (now lapsed). Nothing was recorded; stop the thread " + hostThread + ".", false},
+		{dlgHandedOff, hostThread, "no host hand-off of #20 waits for its thread (now handed-off). Nothing was recorded.", true},
+	} {
+		m := newMissionWorld(t)
+		m.hostHandedOff()
+		now := m.state(20)
+		now.Status, now.Task = c.status, c.task
+		now.Events = append(now.Events, delegate.Event{At: time.Now().UTC().Format(time.RFC3339), Status: c.status, Detail: "by another run"})
+		b, _ := json.Marshal(now)
+		once := false
+		m.edit(func() {
+			m.g.Hook = func(method, path string) {
+				if method == "PATCH" && strings.Contains(path, "/issues/comments/") && !once { // the build renews #20's lease
+					once = true
+					putLedger(t, m.bare, delegate.LedgerPath(20), string(b))
+				}
 			}
+		})
+		code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r")
+		m.edit(func() { m.g.Hook = nil })
+		if !once || code != ExitBlocked || !strings.Contains(errOut, c.want) || strings.Contains(errOut, "stop the thread") == c.leased {
+			t.Fatalf("a record racing a %s delegation: once %t, exit %d: %q %q", c.status, once, code, out, errOut)
 		}
-	})
-	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r")
-	m.edit(func() { m.g.Hook = nil })
-	if !once || code != ExitBlocked || !strings.Contains(errOut, "(its delegation is lapsed on amp). Nothing was recorded.") {
-		t.Fatalf("a record racing the lapse: once %t, exit %d: %q %q", once, code, out, errOut)
-	}
-	if got := m.labels(20); slices.Contains(got, LeaseLabel) || m.state(20).Task != "" {
-		t.Fatalf("after the refused record: labels %v, state %+v", got, m.state(20))
+		if got := m.labels(20); slices.Contains(got, LeaseLabel) != c.leased || m.state(20).Task != c.task {
+			t.Fatalf("after the refused record of a %s delegation: labels %v, state %+v", c.status, got, m.state(20))
+		}
 	}
 }

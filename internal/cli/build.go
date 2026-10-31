@@ -212,16 +212,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	n := issueNumber(in.String("issue"))
 	mode := in.String("next")
 	switch {
-	case mode != "" && (n != 0 || in.String("stop") != "" || in.String("delegate") != "" || in.Bool("resume") || in.String("thread") != ""):
-		return Errorf(ExitUsage, "build --next picks the story itself: give no issue, --stop, --delegate, --thread, or --resume with it")
+	case mode != "" && (n != 0 || in.String("stop") != "" || in.String("delegate") != "" || in.Bool("resume")):
+		return Errorf(ExitUsage, "build --next picks the story itself: give no issue, --stop, --delegate, or --resume with it")
 	case mode == "" && n == 0:
 		return Errorf(ExitUsage, "build: name the Ready story or bug to build, or run `aayu build --next pick` (the build-ready loop)")
 	}
 	// --thread records the thread a host created for an Amp host hand-off (Bug #1208): only an Amp thread ID, and
 	// it is checked before anything is written.
 	if id := in.String("thread"); id != "" {
-		if in.String("delegate") != delegate.Amp {
-			return Errorf(ExitUsage, "build #%d --thread: it records an Amp thread, so use it with --delegate amp. Nothing was recorded.", n)
+		if in.String("delegate") != delegate.Amp || in.Bool("local") {
+			return Errorf(ExitUsage, "build #%d --thread: it records an Amp cloud thread, so use it with --delegate amp and no --local. Nothing was recorded.", n)
 		}
 		if _, ok := delegate.AmpThread(id); !ok {
 			return Errorf(ExitUsage, "build #%d --thread %q: not an Amp thread ID (T- and a UUID, as in https://ampcode.com/threads/T-…). Nothing was recorded.", n, clipText(id, 80))
@@ -277,9 +277,13 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			if _, err := readLedgerJSON(ctx, lw, delegate.LedgerPath(n), &ds); err != nil {
 				return Wrap(ExitExternal, err)
 			}
-			if ds.Receiver != delegate.Amp || ds.Status != dlgHost || ds.Task != "" {
-				return Errorf(ExitBlocked, "build #%d --thread: no host hand-off of #%d waits for its thread (its delegation is %s, on %s). Nothing was recorded.",
-					n, n, orDefault(ds.Status, "not started"), orDefault(ds.TaskURL, orDefault(ds.Receiver, "no receiver")))
+			if id := in.String("thread"); ds.Receiver != delegate.Amp || ds.Status != dlgHost || ds.Task != "" {
+				stop := "" // a thread that is not the recorded one runs for no hand-off; the recorded one runs on
+				if id != ds.Task {
+					stop = "; stop the thread " + id
+				}
+				return Errorf(ExitBlocked, "build #%d --thread: no host hand-off of #%d waits for its thread (its delegation is %s, on %s). Nothing was recorded%s.",
+					n, n, orDefault(ds.Status, "not started"), orDefault(ds.TaskURL, orDefault(ds.Receiver, "no receiver")), stop)
 			}
 		}
 		if err := e.changedSinceList(ctx, lw, is, chk, labels, c.DryRun(), &listed); err != nil {
@@ -419,6 +423,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		if err == nil {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
+		}
+		if dlg != nil && dlg.hostFU != nil { // a follow-up the host sends (Bug #1208)
+			res.Delegation.Host = dlg.hostFU
+			res.Next = fmt.Sprintf("send the text of %s to the Amp thread %s with your thread tool; sync again after its new commits", dlg.hostFU.Brief, dlg.hostFU.Thread)
 		}
 		// A start that got no answer may run on the host: it keeps its slot until mission recover checks (#1003).
 		maybe := dlg != nil && dlg.state.Status == dlgMaybe

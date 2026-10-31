@@ -18,7 +18,7 @@ tests = ["internal/cli:TestAmpSignedInStartsThroughCLI"]
 
 [[criterion]]
 id = 5 # --thread names an ID that is not an Amp thread ID: it is refused and nothing is recorded
-tests = ["internal/cli:TestAmpHostThreadNotAmpRefused"]
+tests = ["internal/cli:TestAmpHostThreadNotAmpRefused", "internal/cli:TestAmpHostLateRecordReleasesLease"]
 
 [[criterion]]
 id = 6 # a follow-up with the CLI not signed in: it is printed as a host hand-off to send with the thread tool, not dropped

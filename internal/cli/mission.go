@@ -966,11 +966,8 @@ func storyStart(ctx context.Context, e *Env, repo string, c *github.Client, w *l
 			return err
 		}
 		fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
-		switch d := rep.Delegation; {
-		case d != nil && berr == nil && d.Host != nil: // in an Amp thread whose amp CLI is not signed in (Bug #1208)
-			fmt.Fprintf(w, "  host hand-off: create one Amp thread titled %q with the text of %s as its prompt, then run `%s`\n", d.Host.Title, d.Host.Brief, d.Host.Record)
-		case d != nil && berr == nil:
-			fmt.Fprintf(w, "  handed off to %s (%s): %s\n", d.Receiver, d.Mode, orDefault(d.TaskURL, d.Task))
+		if d := rep.Delegation; d != nil && berr == nil {
+			fmt.Fprintf(w, "  handed off to %s (%s): %s\n", d.Receiver, d.Mode, orDefault(orDefault(d.TaskURL, d.Task), d.Host.words()))
 		}
 		return nil
 	}); err != nil {
@@ -1095,12 +1092,6 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 	// Each story's state now, and whether each depends-on target merged.
 	owner, name, _ := github.SplitRepo(repo)
 	state, merged, mergedN := map[int]string{}, map[int]bool{}, 0
-	var tree *ledger.Tree
-	defer func() {
-		if tree != nil {
-			tree.Close()
-		}
-	}()
 	for _, it := range plan.Graph {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
 		if err != nil {
@@ -1108,24 +1099,15 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		}
 		// A cancelled story holds no milestone, and only a merged one is charged (missionUsed).
 		state[it.Number], merged[it.Number] = storyState(is), depState(is) != depOpen
-		if state[it.Number] == "in-progress" { // the thread it runs on (Bug #1208), from one read of the ledger
-			if tree == nil {
-				if tree, err = w.Read(ctx); err != nil {
-					return Wrap(ExitExternal, err)
-				}
-			}
-			var st delegate.State
-			if b, err := tree.File(ctx, delegate.LedgerPath(it.Number)); ignoreMissing(err) != nil {
-				return Wrap(ExitExternal, err)
-			} else if b != nil {
-				_ = json.Unmarshal(b, &st)
-			}
-			switch {
-			case st.Status == dlgHost && st.Task == "":
-				state[it.Number] += fmt.Sprintf(" (its host hand-off of %s waits for its %s thread)", st.StartedAt, delegate.Names[st.Receiver])
-			case st.Receiver != "" && st.Status != dlgFailed && st.Status != dlgLapsed && st.Task != "":
-				state[it.Number] += fmt.Sprintf(" on %s: %s", st.Receiver, orDefault(st.TaskURL, st.Task))
-			}
+		var st delegate.State
+		if state[it.Number] == "in-progress" { // the thread it runs on (Bug #1208); a record aayu cannot read names none
+			_, _ = readLedgerJSON(ctx, w, delegate.LedgerPath(it.Number), &st)
+		}
+		switch {
+		case st.Status == dlgHost && st.Task == "":
+			state[it.Number] += fmt.Sprintf(" (its host hand-off of %s waits for its %s thread)", st.StartedAt, delegate.Names[st.Receiver])
+		case st.Receiver != "" && st.Status != dlgFailed && st.Status != dlgLapsed && st.Task != "":
+			state[it.Number] += fmt.Sprintf(" on %s: %s", st.Receiver, orDefault(st.TaskURL, st.Task))
 		}
 		if depState(is) == depMerged {
 			mergedN++
