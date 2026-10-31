@@ -6,3 +6,10 @@ packages:
 allowBuilds:
   esbuild: false
   ffmpeg-static: false
+
+# GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249 (Bug #1195): glob 13 and minimatch 10 have no fix within those majors.
+# glob comes in only through @storybook/react-vite's docgen plugin, which asks for glob ^13.0.1, so the first
+# override applies only below that plugin. The second applies only below glob 14, which already asks for minimatch 11.
+overrides:
+  '@joshwooding/vite-plugin-react-docgen-typescript>glob': '^14.0.2'
+  'glob@14>minimatch': '^11.0.1'
