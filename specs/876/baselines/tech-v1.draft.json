@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 876,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/876/design.json",
+      "hash": "90db8eca7dc239411c95ef715f186f9d3a6401653895d9bf0fabf4c2980c71f8"
+    }
+  ],
+  "hash": "ff5eaa1d7c6bbf3e07d62c050630430929bdf0c6ce0c87d06fc208da1910c4c5",
+  "summary": "`aayu grill feature \u003cf\u003e --findings` walks the open findings with the founder in the owner's thread, and each resolution is recorded. This is step S7 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-10-31T10:06:01Z"
+}
