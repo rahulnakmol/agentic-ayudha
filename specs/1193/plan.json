@@ -1,0 +1,58 @@
+{
+  "story": 1193,
+  "body_hash": "21b33cb3c1de793c5acc379f616c5d9a9925e1d1b15942271dd13b2fafff2711",
+  "footprint": [
+    "L02",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "[hosts] repos: the person's tool for each repository, read only from the user config, AAYU_HOSTS__REPOS, or --set",
+      "contracts": [
+        "internal/config/config.go: Hosts.Repos []string (koanf hosts.repos), owner/name=tool entries; Hosts.RepoTool(repo) matches owner/name with no case; Validate refuses a bad entry, a space in owner/name, a repository named twice, or a tool outside verbs.Hosts",
+        "internal/config/load.go: the repo and local layers may not set hosts.repos, as for [hosts.cursor] plan"
+      ],
+      "tests": [
+        "internal/config:TestRejects"
+      ],
+      "instrumentation": [
+        "the config error names [hosts] repos and the user config"
+      ],
+      "rollback": "Revert the squash commit; the key is new, so no stored config needs a change.",
+      "criteria": [
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "mission start reads [hosts] repos, and its refusal names the key",
+      "contracts": [
+        "internal/cli/mission.go: Env.repoTool reads the loaded config when Options.RepoTool is nil; Env.noRepoTool names [hosts] repos, the user config file, and --set hosts.repos=\u003crepo\u003e=\u003ctool\u003e",
+        "internal/cli/missionlock.go: the inbox start card names [hosts] repos, and says when the config does not load without quoting the error"
+      ],
+      "tests": [
+        "internal/cli:TestMissionToolReadFromPlanNotConfig",
+        "internal/cli:TestStartCardInEveryInbox"
+      ],
+      "instrumentation": [
+        "the plan records the tool and its source"
+      ],
+      "rollback": "Revert the squash commit; Start refuses again.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-31T12:12:19Z",
+  "planned_by": "human-fallback"
+}
