@@ -16,6 +16,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
@@ -823,6 +824,7 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 		return Errorf(ExitBlocked, "Start begins the mission's Kanha on %s, and %s. Nothing was started.", tool, why)
 	}
 	effect = append(effect, fmt.Sprintf("Its Kanha starts on %s now, and starts each story on %s", tool, tool))
+	e.warnStaleEnv(tool)
 	p, err := e.presenceCheck(ctx, Pending{What: "mission start", Effect: effect}, AccessWrite, e.personOnly("mission start"))
 	if err != nil {
 		return err
@@ -887,6 +889,20 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 		_, err := fmt.Fprintf(w, "  %s\n", rep.Kanha)
 		return err
 	})
+}
+
+// warnStaleEnv tells the person who starts a mission on tool, before the
+// device code, that tool's committed environment record is stale, with the
+// command that verifies it (Bug #1211). Each story's start verifies it first
+// anyway, so the start goes on.
+func (e *Env) warnStaleEnv(tool string) {
+	sts, _ := agentenv.Status(config.RepoRoot(e.Dir))
+	for _, st := range sts {
+		if st.Host == tool && st.State == agentenv.Stale {
+			fmt.Fprintf(e.Err, "warning: the %s environment record is stale: %s. Verify it with `aayu install --env --host %s --apply --verify`, or with no Docker `aayu install --env --host %s --cloud`; otherwise each story's start verifies it first.\n",
+				tool, st.Detail, tool, tool)
+		}
+	}
 }
 
 // storyStart is `aayu mission start <n>` for story n of Tatkal Feature f: a

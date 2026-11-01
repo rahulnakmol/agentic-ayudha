@@ -150,7 +150,7 @@ not re-run it. When no Docker daemon answers, as in an Amp orb, Ensure probes Am
 instead, and records `[cloud.amp]`. A signed-in amp CLI runs the probe with `amp -ox`. In a Kanha thread with no
 sign-in, build writes the probe to a file and releases the start. The Kanha runs the probe in a thread of its own,
 records the reply with `install --env --record`, and starts the story again. A probe that fails stops the hand-off
-with the probe's reply.
+with the probe's reply. `aayu mission start` warns before the device code when the tool's record is stale.
 
 **Two doctor rows.** `aayu doctor`'s `agent-env` row lists each host as verified, stale, or missing, and suggests
 `aayu install --env --verify` when one is not verified. The `agents` row lists what `Detect` found, with the

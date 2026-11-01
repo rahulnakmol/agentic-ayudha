@@ -197,3 +197,31 @@ func TestAmpStaleEnvHostProbe(t *testing.T) {
 		t.Fatalf("build 20 after the host's probe: exit %d: %s%s", code, out, errOut)
 	}
 }
+
+// Criterion 5: a person starts a mission on amp while the amp record is
+// stale. Start says so and names the command before the device code; with a
+// current record it says nothing.
+func TestMissionStartWarnsStaleEnv(t *testing.T) {
+	m := newMissionWorld(t)
+	m.ampEnv(staleEnv)
+	m.featureWith(889, 20)
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve: exit %d: %s%s", code, out, errOut)
+	}
+	m.setTool("amp")
+	code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889)
+	warn := strings.Index(errOut, "warning: the amp environment record is stale: verified 2026-10-16T02:35:02Z for environment "+staleEnv)
+	cmd := strings.Index(errOut, "Verify it with `aayu install --env --host amp --apply --verify`")
+	device := strings.Index(errOut, "On any device, open")
+	if code != 0 || warn < 0 || cmd < warn || device < cmd {
+		t.Fatalf("mission start 889 with a stale record: exit %d: %s%s", code, out, errOut)
+	}
+	m.ampEnv("")
+	m.featureWith(874, 950)
+	if code, out, errOut := m.approve(874); code != 0 {
+		t.Fatalf("approve 874: exit %d: %s%s", code, out, errOut)
+	}
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 874); code != 0 || strings.Contains(errOut, "environment record is stale") {
+		t.Fatalf("mission start 874 with a current record: exit %d: %s%s", code, out, errOut)
+	}
+}
