@@ -1353,6 +1353,28 @@
         "sha256": "20fd1b85846793d6930d9d2643a17e2ecbe250b1e082df239ff14b08ac627332"
       },
       "at": "2026-11-01T16:40:44Z"
+    },
+    {
+      "pr": 1229,
+      "milestone": "MS1",
+      "check": "eval:retro/em-scaleup",
+      "dev_sha": "eb51d1b29198a814920e8af32bb604a266ec6846",
+      "approval": {
+        "record": "specs/1170/approved.json",
+        "sha256": "20fd1b85846793d6930d9d2643a17e2ecbe250b1e082df239ff14b08ac627332"
+      },
+      "at": "2026-11-01T20:11:12Z"
+    },
+    {
+      "pr": 1229,
+      "milestone": "MS1",
+      "check": "eval:retro/em-startup",
+      "dev_sha": "eb51d1b29198a814920e8af32bb604a266ec6846",
+      "approval": {
+        "record": "specs/1170/approved.json",
+        "sha256": "20fd1b85846793d6930d9d2643a17e2ecbe250b1e082df239ff14b08ac627332"
+      },
+      "at": "2026-11-01T20:11:12Z"
     }
   ],
   "events_cursor": "2026-11-01T20:10:06Z"
