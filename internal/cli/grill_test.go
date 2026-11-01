@@ -609,7 +609,7 @@ func TestGrillEdit(t *testing.T) {
 		if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "4", "--body", bugBody(t, "")); code != ExitBlocked || !strings.Contains(errOut, "#4 is status:in-progress, past Ready; its body is frozen") {
 			t.Fatalf("in-progress #4: exit %d %s", code, errOut)
 		}
-		if code, _, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--edit", "3", "--body", bugBody(t, "")); code != ExitUsage || !strings.Contains(errOut, "#3 is a bug, not a story") {
+		if code, _, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--edit", "3", "--body", bugBody(t, "")); code != ExitUsage || !strings.Contains(errOut, "#3 has type bug, not story") {
 			t.Fatalf("wrong type: exit %d %s", code, errOut)
 		}
 		if len(g.Writes()) != 0 {
@@ -661,6 +661,7 @@ func TestGrillEditPlanAndUsage(t *testing.T) {
 		{[]string{"bug", "--edit", "3", "--body", still, "--create"}, "--create, --assess, --parent, and --labels go with a new draft"},
 		{[]string{"bug", "--edit", "3", "--body", still, "--labels", "effort:S"}, "--create, --assess, --parent, and --labels go with a new draft"},
 		{[]string{"bug", "--edit", "3"}, "grill bug --edit 3 needs --body: the whole new body"},
+		{[]string{"bug", "--edit", "99999999999999999999", "--body", still}, `grill --edit "99999999999999999999": want an issue number`},
 		{[]string{"brand", "--edit", "3", "--body", "version: 1"}, "grill brand has no --edit"},
 	} {
 		if code, _, errOut := run(t, env, opts, append([]string{"grill", "--repo", "o/r"}, tc.args...)...); code != ExitUsage || !strings.Contains(errOut, tc.want) {

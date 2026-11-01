@@ -275,7 +275,11 @@ var beforeReady = []string{"backlog", "discovery", "planned"}
 // Ready guard owns its body), and a running mission's lock refuses the write
 // in the client's transport (lockGuard) before the request leaves.
 func (e *Env) runGrillEdit(ctx context.Context, c *github.Client, tag, repo string, t workitems.Type, in Values) error {
-	n := issueNumber(in.String("edit"))
+	raw := in.String("edit")
+	n, err := strconv.Atoi(raw[strings.LastIndexAny(raw, "#/")+1:]) // issueNumber, but an overflow is refused, not clamped
+	if err != nil || n <= 0 {
+		return Errorf(ExitUsage, "grill --edit %q: want an issue number, #number, or issue URL", in.String("edit"))
+	}
 	if strings.TrimSpace(in.String("body")) == "" {
 		return Errorf(ExitUsage, "grill %s --edit %d needs --body: the whole new body", t.ID, n)
 	}
@@ -286,7 +290,7 @@ func (e *Env) runGrillEdit(ctx context.Context, c *github.Client, tag, repo stri
 	}
 	labels := github.IssueLabels(is)
 	if typ, _ := workitems.TypeOf(is.GetType().GetName(), labels); typ != t.ID {
-		return Errorf(ExitUsage, "grill %s --edit %d: #%d is a %s, not a %s", t.ID, n, n, or(typ, "issue of no type"), t.ID)
+		return Errorf(ExitUsage, "grill %s --edit %d: #%d has type %s, not %s", t.ID, n, n, or(typ, "none"), t.ID)
 	}
 	for _, l := range labels {
 		switch s, ok := strings.CutPrefix(l, "status:"); {
