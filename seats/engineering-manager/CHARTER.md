@@ -81,7 +81,7 @@ Sources:
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L03 | Application / workflow | `internal/verbs/**`, `internal/workitems/**`, `internal/loops/**`, `loops/**`, `work-items/**`, `skills/**`, `seats/**`, `examples/benefits-qa/ask/**` |
+| L03 | Application / workflow | `internal/verbs/**`, `internal/workitems/**`, `internal/loops/**`, `internal/agentenv/**`, `internal/audit/**`, `internal/autonomy/**`, `internal/brain/**`, `internal/brief/**`, `internal/chart/**`, `internal/counsel/**`, `internal/decide/**`, `internal/delegate/**`, `internal/design/**`, `internal/doctor/**`, `internal/experiment/**`, `internal/gittest/**`, `internal/grill/**`, `internal/initrepo/**`, `internal/inspect/**`, `internal/journey/**`, `internal/measure/**`, `internal/ops/**`, `internal/planning/**`, `internal/prbody/**`, `internal/production/**`, `internal/ratchet/**`, `internal/ready/**`, `internal/scope/**`, `internal/seats/**`, `internal/skills/**`, `internal/status/**`, `internal/survey/**`, `internal/tell/**`, `internal/testbin/**`, `internal/triage/**`, `internal/ui/**`, `internal/uireview/**`, `internal/upgrade/**`, `loops/**`, `work-items/**`, `skills/**`, `seats/**`, `examples/benefits-qa/ask/**` |
 
 | Verb | Role |
 |---|---|

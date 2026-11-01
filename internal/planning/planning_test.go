@@ -77,6 +77,83 @@ func TestCheckSliceRefusals(t *testing.T) {
 	}
 }
 
+// pathCheck slices a one-story draft of a Feature with the expected paths and
+// returns the story's path problems and its footprint.
+func pathCheck(t *testing.T, expected, paths []string) (string, string) {
+	t.Helper()
+	d := recordedSlice(t)
+	d.Stories = d.Stories[:1]
+	d.Stories[0].DependsOn, d.Stories[0].Paths = nil, paths
+	s := planning.CheckSlice(planning.Source{Number: 1, Type: "feature", Feature: 1, ExpectedPaths: expected}, d, autonomy.ReadLayers(filepath.Join("..", ".."))).Stories[0]
+	var got []string
+	for _, p := range s.Problems {
+		if p.Field == "paths" {
+			got = append(got, p.Message)
+		}
+	}
+	return strings.Join(got, "\n"), strings.Join(s.Footprint, ",")
+}
+
+// f887 is Feature #887's Expected paths.
+var f887 = []string{"internal/workitems/", "internal/delegate/brief.go", "internal/inspect/", "internal/cli/slice.go"}
+
+// A directory in a Feature's Expected paths covers every file under it, with
+// or without its slash, and only those: a sibling with a longer name is
+// outside (Story #1210, criteria 1-3).
+func TestCheckSliceDirectoryPaths(t *testing.T) {
+	const outside = " is outside the Feature's expected paths"
+	for _, tc := range []struct {
+		name      string
+		expected  []string
+		paths     []string
+		problem   string // "" when the paths have no problem
+		footprint string
+	}{
+		{"1_file_under_directory", f887, []string{"internal/workitems/validate.go"}, "", "L03"},
+		{"1_nested_file_under_directory", f887, []string{"internal/workitems/gen/main.go"}, "", "L03"},
+		{"2_directory_without_slash", []string{"internal/workitems"}, []string{"internal/workitems/validate.go"}, "", "L03"},
+		{"2_story_directory_without_slash", f887, []string{"internal/workitems"}, "", "L03"},
+		{"3_sibling_with_longer_name", f887, []string{"internal/workitemsx/a.go"}, "internal/workitemsx/a.go" + outside, ""},
+		{"3_sibling_without_slash", []string{"internal/workitems"}, []string{"internal/workitemsx/a.go"}, "internal/workitemsx/a.go" + outside, ""},
+		{"3_sibling_of_named_file", f887, []string{"internal/cli/slicex.go"}, "internal/cli/slicex.go" + outside, "L02"},
+		{"3_parent_directory", f887, []string{"internal/"}, "internal/" + outside, "L02,L03,L04,L05,L06,L07,L08"},
+		{"3_parent_glob", f887, []string{"internal/**"}, "internal/**" + outside, "L02,L03,L04,L05,L06,L07,L08"},
+		{"3_parent_traversal", f887, []string{"internal/workitems/../verify/footprint.go"}, "internal/workitems/../verify/footprint.go" + outside, "L04"},
+		{"3_traversal_back_inside", f887, []string{"internal/verify/../workitems/validate.go"}, "", "L03"},
+		{"3_glob_wider_than_expected", []string{"internal/cli/?_test.go"}, []string{"internal/cli/*_test.go"}, "internal/cli/*_test.go" + outside, "L02"},
+		{"3_glob_narrower_than_expected", []string{"internal/cli/*_test.go"}, []string{"internal/cli/?_test.go"}, "", "L02"},
+		{"1_glob_under_directory", f887, []string{"internal/workitems/*.go"}, "", "L03"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems, footprint := pathCheck(t, tc.expected, tc.paths)
+			if (tc.problem == "") != (problems == "") || !strings.Contains(problems, tc.problem) || footprint != tc.footprint {
+				t.Errorf("problems %q, footprint [%s]; want %q, [%s]", problems, footprint, tc.problem, tc.footprint)
+			}
+		})
+	}
+}
+
+// A story in internal/inspect or internal/delegate falls in the layer
+// LAYERS.md gives it, L03, with no path problem (Story #1210, criterion 4).
+func TestCheckSliceInspectAndDelegateLayer(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		paths     []string
+		footprint string
+	}{
+		{"inspect_file", []string{"internal/inspect/filter.go"}, "L03"},
+		{"inspect_directory", []string{"internal/inspect/"}, "L03"},
+		{"delegate_file", []string{"internal/delegate/brief.go"}, "L03"},
+		{"delegate_and_cli", []string{"internal/delegate/brief.go", "internal/cli/slice.go"}, "L02,L03"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if problems, footprint := pathCheck(t, f887, tc.paths); problems != "" || footprint != tc.footprint {
+				t.Errorf("problems %q, footprint [%s]; want none, [%s]", problems, footprint, tc.footprint)
+			}
+		})
+	}
+}
+
 // CheckPlan: a story without layer labels takes the plan's layers as its
 // footprint (sorted, once each) and the never layers among them need the EM
 // review; malformed checkpoints and a plan for another story are refused.

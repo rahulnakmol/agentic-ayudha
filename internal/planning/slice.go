@@ -9,6 +9,7 @@ package planning
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -89,16 +90,14 @@ func (s DraftStory) Item(feature int) workitems.Item {
 }
 
 // GlobFootprint is the layers a set of path globs can touch: a layer counts
-// when one of its globs matches a sample path of an expected glob, or an
-// expected glob matches a sample path of the layer's glob (an expected path
-// broader than the layer).
+// when one of its globs overlaps one of the globs.
 func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 	var out []string
 	for id, lgs := range l {
 		hit := false
 		for _, lg := range lgs {
 			for _, g := range globs {
-				if verify.Match(lg, sample(g)) || verify.Match(g, sample(lg)) {
+				if overlap(lg, g) {
 					hit = true
 				}
 			}
@@ -111,12 +110,62 @@ func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 	return out
 }
 
-// sample turns a glob into one concrete path it matches.
-func sample(g string) string {
-	g = strings.TrimSpace(strings.Trim(strings.TrimSpace(g), "`"))
-	g = strings.TrimPrefix(g, "/")
-	g = strings.ReplaceAll(g, "**", "x/x")
-	return strings.ReplaceAll(g, "*", "x")
+// overlap reports whether two path globs share a path: one matches a sample
+// path of the other (in either direction, so a broader glob covers a narrower
+// one).
+func overlap(a, b string) bool {
+	for _, x := range forms(a) {
+		for _, y := range forms(b) {
+			if verify.Match(x, samples(y)[0]) || verify.Match(y, samples(x)[0]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// within reports whether path glob p lies inside glob g: g matches every
+// sample path of p. A parent directory of g (`internal/` for
+// `internal/workitems/`) is not within it, nor is a glob that allows names g
+// does not (`*_test.go` in `?_test.go`).
+func within(p, g string) bool {
+	for _, x := range forms(g) {
+		for _, y := range forms(p) {
+			if !slices.ContainsFunc(samples(y), func(s string) bool { return !verify.Match(x, s) }) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// forms is what a path glob stands for, after cleaning (so
+// `internal/workitems/../cli/x.go` is `internal/cli/x.go`). A directory
+// (`internal/workitems/`) stands for every path under it; a path without a
+// wildcard and without the slash (`internal/workitems`) can be a file or a
+// directory, so it stands for itself and every path under it. A sibling with a
+// longer name (`internal/workitemsx/`) is in neither.
+func forms(g string) []string {
+	g = strings.TrimPrefix(strings.TrimSpace(strings.Trim(strings.TrimSpace(g), "`")), "/")
+	dir := strings.HasSuffix(g, "/")
+	g = path.Clean(g)
+	if dir {
+		return []string{g + "/**"}
+	}
+	if !strings.ContainsAny(g, "*?") {
+		return []string{g, g + "/**"}
+	}
+	return []string{g}
+}
+
+// samples turns a glob into two concrete paths it matches: one with short
+// wildcards, one with longer and different ones. A glob that matches both
+// allows the other glob's names of either length.
+func samples(g string) []string {
+	fill := func(deep, star, one string) string {
+		return strings.NewReplacer("**", deep, "*", star, "?", one).Replace(g)
+	}
+	return []string{fill("x/x", "x", "x"), fill("z/z/z", "zz", "z")}
 }
 
 // Paths splits an Expected paths field: one glob per line, list bullets and
@@ -174,7 +223,7 @@ func CheckSlice(src Source, d SliceDraft, layers verify.LayerGlobs) SliceReport 
 			sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: "name the paths the story changes (a subset of the Feature's expected paths)"})
 		}
 		for _, p := range s.Paths {
-			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return verify.Match(g, sample(p)) || verify.Match(p, sample(g)) }) {
+			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return within(p, g) }) {
 				sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: fmt.Sprintf("%s is outside the Feature's expected paths", p)})
 			}
 		}
