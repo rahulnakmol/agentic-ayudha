@@ -29,6 +29,12 @@
       "at": "2026-11-01T12:15:19Z",
       "status": "pr-open",
       "detail": "PR #1224 found by aayu mission recover"
+    },
+    {
+      "at": "2026-11-01T13:39:41Z",
+      "status": "kanha",
+      "detail": "merged #1207 (PR #1224): run aayu mission next 1170 (sent)",
+      "text": "merged #1207 (PR #1224): run aayu mission next 1170"
     }
   ]
 }
