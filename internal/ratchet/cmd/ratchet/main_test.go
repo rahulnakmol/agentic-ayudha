@@ -101,6 +101,11 @@ func TestRunFailsAStaleEnvironmentRecord(t *testing.T) {
 	if got := named(run("coverage.out", "HEAD", false)); !slices.Equal(got, []string{"amp", "cursor"}) {
 		t.Fatalf("setup changed: named %v", got)
 	}
+	// A record that does not parse proves nothing: the step fails on it.
+	write(agentenv.VerifiedPath, "[container.amp\n")
+	if err := run("coverage.out", "HEAD", false); err == nil || !strings.Contains(err.Error(), agentenv.VerifiedPath) {
+		t.Fatalf("an unreadable record: %v", err)
+	}
 }
 
 // A coverage-floor waiver another person accepted and closed does not lower

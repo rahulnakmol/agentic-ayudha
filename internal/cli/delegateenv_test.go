@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -178,8 +179,24 @@ func TestAmpStaleEnvHostProbe(t *testing.T) {
 	s := m.ampEnv(staleEnv)
 	m.noDocker()
 	probes := m.probeReplies("unexpected")
+	// A probe that cannot be written for the host fails the start too, and releases it.
+	dir := filepath.Join(m.dir, ".aayudha", "state", "delegate", "20")
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	m.startNext(20)
 	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code == 0 || !strings.Contains(errOut, "the probe for the host was not written") || !strings.Contains(errOut, "#20 is status:ready again, and its claim and lease are released") {
+		t.Fatalf("build 20 with no place for the probe: exit %d: %s%s", code, out, errOut)
+	}
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	m.startNext(20)
+	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
 	hand := regexp.MustCompile(`create one Amp thread titled "aayu environment probe" with the text of (\S+) as its prompt, and wait for its reply, at most 15 minutes\. ` +
 		"Then run `aayu install --env --host amp --record '<its reply>'`, and start #20 again").FindStringSubmatch(errOut)
 	if code == 0 || hand == nil || len(*probes) != 0 || !strings.Contains(errOut, "#20 is status:ready again, and its claim and lease are released") {

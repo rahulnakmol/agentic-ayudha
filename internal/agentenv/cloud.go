@@ -68,7 +68,7 @@ func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 	if err != nil && r.Reply == "" {
 		r.Detail = "amp -ox failed: " + err.Error() + ": " + clip(out, 300)
 	} else {
-		r = judge(r, want, true)
+		r = judgeLast(r, want)
 	}
 	if id, ok := strings.CutPrefix(r.URL, "https://ampcode.com/threads/"); ok {
 		if aout, aerr := run(ctx, "", "amp", "threads", "archive", id); aerr != nil {
@@ -78,25 +78,26 @@ func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 	return r
 }
 
-var markerLine = regexp.MustCompile(`^` + regexp.QuoteMeta(Marker) + ` (sha256:[0-9a-f]{16})$`)
+var markerLine = regexp.MustCompile(`^` + regexp.QuoteMeta(Marker) + ` sha256:[0-9a-f]{16}$`)
 
-// judge checks a probe's reply against want. With exact, only the reply's
-// last line counts, and it must be the marker line itself, so a reply that
-// only quotes the marker never passes (Bug #1211); otherwise the marker may
-// stand anywhere in the text, as in Codex's status output.
-func judge(r CloudResult, want string, exact bool) CloudResult {
-	got, ok := ScanMarker(r.Reply)
-	if exact {
-		lines := strings.Split(strings.TrimSpace(r.Reply), "\n")
-		m := markerLine.FindStringSubmatch(strings.TrimSpace(lines[len(lines)-1]))
-		got, ok = "", m != nil
-		if ok {
-			got = m[1]
-		}
+// judgeLast is judge on a reply whose exact last line must be the marker
+// line itself, so a reply that only quotes the marker, or goes on after it,
+// never passes (Bug #1211). Codex's status output is judged by judge, since
+// the CLI prints other lines around the reply.
+func judgeLast(r CloudResult, want string) CloudResult {
+	lines := strings.Split(strings.TrimSpace(r.Reply), "\n")
+	if !markerLine.MatchString(strings.TrimSpace(lines[len(lines)-1])) {
+		r.Detail = "the reply's last line is not the `" + Marker + "` line: " + clip(r.Reply, 300)
+		return r
 	}
+	return judge(r, want)
+}
+
+func judge(r CloudResult, want string) CloudResult {
+	got, ok := ScanMarker(r.Reply)
 	switch {
 	case !ok:
-		r.Detail = "the reply's last line is not the `" + Marker + "` line: " + clip(r.Reply, 300)
+		r.Detail = "the reply carries no `" + Marker + "` marker: " + clip(r.Reply, 300)
 	case got != want:
 		r.Detail = fmt.Sprintf("the cloud environment is %s, but this checkout's spec is %s: merge the environment to the default branch, then probe again", got, want)
 	default:
@@ -146,13 +147,13 @@ func ProbeCodex(ctx context.Context, run Exec, envID, branch, want string, poll 
 		r.Detail = "the task ended, but the CLI does not show its reply; open " + r.URL + " and run `aayu install --env --host codex --record '<the reply line>'`"
 		return r
 	}
-	return judge(r, want, false)
+	return judge(r, want)
 }
 
 // Record checks a probe reply a human copied from a host's UI and returns the
 // record for it.
 func RecordReply(host, reply, url, want string, now time.Time) (Record, error) {
-	r := judge(CloudResult{Host: host, Reply: reply}, want, true)
+	r := judgeLast(CloudResult{Host: host, Reply: reply}, want)
 	if !r.OK {
 		return Record{}, fmt.Errorf("%s", r.Detail)
 	}

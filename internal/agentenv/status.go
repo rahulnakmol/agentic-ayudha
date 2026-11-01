@@ -230,8 +230,8 @@ func Ensure(ctx context.Context, root, host string, o EnsureOptions) (HostStatus
 		return HostStatus{}, err
 	}
 	st := find(sts, host)
-	if st.State != Verified && o.Cloud != nil {
-		if st, err = ensureLive(ctx, root, host, st, o); err != nil {
+	if st.State != Verified && o.Cloud != nil && !hasDocker(ctx, o.Run) {
+		if st, err = ensureLive(ctx, root, host, o); err != nil {
 			return st, err
 		}
 	}
@@ -301,22 +301,21 @@ func KeepPins(s *Spec, old Spec) {
 	keepGate(s, old)
 }
 
-// ensureLive proves host's committed environment with o.Cloud when no Docker
-// daemon answers here; with one, it leaves st to the container. Only the
-// probe's reply decides, and a probe that passes must leave host verified.
-func ensureLive(ctx context.Context, root, host string, st HostStatus, o EnsureOptions) (HostStatus, error) {
-	s, ok, err := LoadSpec(root)
-	if _, derr := Docker(ctx, o.Run); derr == nil || !ok || err != nil {
-		return st, nil
-	}
+// ensureLive proves host's committed environment with o.Cloud, where no
+// Docker daemon answers. Only the probe's reply decides; the caller verifies
+// in a container a host the record of a passing probe does not make verified.
+func ensureLive(ctx context.Context, root, host string, o EnsureOptions) (HostStatus, error) {
+	s, _, _ := LoadSpec(root) // Status read it already
 	if r := o.Cloud(ctx, s); !r.OK {
-		return st, fmt.Errorf("no Docker daemon answers here, and the live %s probe did not pass (%s): %s", host, orStr(r.URL, "no probe thread"), r.Detail)
+		return HostStatus{Host: host}, fmt.Errorf("no Docker daemon answers here, and the live %s probe did not pass (%s): %s", host, orStr(r.URL, "no probe thread"), r.Detail)
 	}
 	sts, err := Status(root)
-	if st = find(sts, host); err == nil && st.State != Verified {
-		err = fmt.Errorf("the live %s probe passed, and its environment is %s: %s", host, st.State, st.Detail)
-	}
-	return st, err
+	return find(sts, host), err
+}
+
+func hasDocker(ctx context.Context, run Runner) bool {
+	_, err := Docker(ctx, run)
+	return err == nil
 }
 
 // notLanded lists the host's files that ref does not have as they are here,
@@ -330,12 +329,9 @@ func notLanded(root, ref, host string, record bool) []string {
 	if err != nil {
 		return nil
 	}
-	if record {
-		files = append(files, File{Path: VerifiedPath})
-	}
 	var out []string
-	for _, f := range files {
-		if !forHost(f.Path, host) {
+	for _, f := range append(files, File{Path: VerifiedPath}) {
+		if !forHost(f.Path, host) || f.Path == VerifiedPath && !record {
 			continue
 		}
 		local, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
