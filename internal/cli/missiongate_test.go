@@ -1090,6 +1090,16 @@ func TestGateVerifyRunsTheSweepOnTheTip(t *testing.T) {
 	if rep.Milestones[0].State != GateFailed || i < 0 || rep.Milestones[0].Checks[i] != (GateCheck{Check: "verify:hello.hi", Result: gateFail, Detail: "failed printed nothing"}) {
 		t.Fatalf("gate with a failing behaviour check: %+v", rep.Milestones[0])
 	}
+
+	// A runner gap does not hide a failed check: the run fails, and only the failed check gets a fix.
+	g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+	putLedger(t, g.bare, MissionGatesPath(889), "")
+	commit("case $(cat) in *requires*) echo '{\"status\": \"failed\", \"reason\": \"no event\"}';; *) printf '%s\\n' '{\"status\": \"unreachable\", \"reason\": " + strconv.Quote(gap) + "}';; esac\n")
+	rep = g.gateJSON()
+	if ms := rep.Milestones[0]; ms.State != GateFailed || len(g.runs()) != 1 || len(rep.Fixes) != 1 || rep.Fixes[0].Check != "verify:hello.events" ||
+		!slices.Contains(ms.Checks, GateCheck{Check: "verify:hello.hi", Result: gatePending, Detail: "hello.hi is unreachable: " + gap}) {
+		t.Fatalf("gate with a failed check and a runner gap: %+v, fixes %+v", ms, rep.Fixes)
+	}
 	if wts := git(t, g.dir, "worktree", "list"); strings.Count(wts, "\n") != 0 {
 		t.Fatalf("the gate left a worktree:\n%s", wts)
 	}
