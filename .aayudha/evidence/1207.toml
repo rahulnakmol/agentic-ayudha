@@ -7,3 +7,7 @@ tests = ["./internal/cli:TestMissionNextKeepsOutsidePR"]
 [[criterion]]
 id = 2 # recover writes delegate/<n>/state.json once, with that PR, pr-open, and the mission's tool; a second run writes nothing
 tests = ["./internal/cli:TestMissionRecoverAdoptsOutsidePR"]
+
+[[criterion]]
+id = 3 # build of the adopted story syncs that PR (head and inspect's disposition) and starts no hand-off, branch, or subthread
+tests = ["./internal/cli:TestBuildSyncsAdoptedPR"]

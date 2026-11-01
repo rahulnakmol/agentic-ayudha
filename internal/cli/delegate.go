@@ -641,7 +641,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d", d.state.Feature, delegate.Names[d.receiver], d.story))
 	}
 	var task delegate.Task
-	if !d.local {
+	if !d.local && (d.state.Task != "" || d.state.PR == 0) { // a PR built outside the mission that recover adopted has no task to read (Story #1207)
 		if task, err = d.adapter.Status(ctx, d.state); err != nil {
 			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: status: %v", d.story, d.receiver, err)
 		}
@@ -1015,6 +1015,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 // and keeps the task it reports. On a host hand-off it writes msg to a file
 // for the host to send to the story's thread with its thread tool (Bug #1208).
 func (d *delegation) followUp(ctx context.Context, msg string) error {
+	if !d.local && d.state.Task == "" { // never a new thread for a PR built outside the mission (Story #1207)
+		return fmt.Errorf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", d.state.PR, delegate.Names[d.receiver])
+	}
 	if d.host {
 		path := filepath.Join(d.hostDir, fmt.Sprintf("follow-up-%d.md", len(d.state.FollowUps)))
 		err := writeHostFile(path, msg)
