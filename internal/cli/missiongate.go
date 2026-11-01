@@ -113,7 +113,9 @@ type GateReport struct {
 	DevSHA       string        `json:"dev_sha"`
 	Milestones   []GateMSState `json:"milestones"`
 	Fixes        []GateFixItem `json:"fixes"`
-	Recorded     *GateFix      `json:"recorded,omitempty"` // with --pr
+	Recorded     *GateFix      `json:"recorded,omitempty"` // with --pr: the first of Records
+	Records      []GateFix     `json:"records,omitempty"`  // with --pr: one per check the PR fixes (Bug #1230)
+	Refused      []string      `json:"refused,omitempty"`  // with --pr: why a line the PR names is not recorded
 	LedgerCommit string        `json:"ledger_commit,omitempty"`
 	DryRun       bool          `json:"dry_run,omitempty"`
 }
@@ -1141,10 +1143,10 @@ func (e *Env) committed(ctx context.Context, c *github.Client, w *ledger.Writer,
 	}, costs, nil
 }
 
-// openFixPRs are the plan's fix PRs that are still open.
+// openFixPRs are the plan's fix PRs that are still open, each once.
 func openFixPRs(ctx context.Context, c *github.Client, owner, name string, plan *MissionPlan) ([]GateFix, error) {
 	var out []GateFix
-	for _, fx := range plan.GateFixes {
+	for _, fx := range gateFixPRs(plan.GateFixes) {
 		p, _, err := c.REST.PullRequests.Get(ctx, owner, name, fx.PR)
 		if err != nil {
 			return nil, Wrap(ExitExternal, err)
@@ -1159,16 +1161,21 @@ func openFixPRs(ctx context.Context, c *github.Client, owner, name string, plan 
 // fixBrief is what the Kanha gives a fix subthread.
 func fixBrief(f int, m string, ck GateCheck, sha string) string {
 	return fmt.Sprintf("Fix the gate check %s of %s of #%d. It failed on dev %s: %s. "+
-		"Branch from origin/dev and open one draft PR to dev. Its body says `Refs #%d` and, on a line of its own, `Aayudha-Gate-Fix: %s %s`. "+
+		"Branch from origin/dev and open one draft PR to dev. Its body says `Refs #%d` and, on a line of its own, `Aayudha-Gate-Fix: %s %s`; "+
+		"when the PR fixes other failed checks too, it names each on a line of its own, one line per check it fixes. "+
 		"File no issue. Then run `aayu mission gate %d --pr <the PR's number>`, and build the fix only when it records the PR.",
 		ck.Check, m, f, short(sha), ck.Detail, f, m, ck.Check, f)
 }
 
 // missionGateFix is `aayu mission gate <f> --pr <n>`: it records fix PR n in
-// the plan's gate_fixes, with the failed check its body names, the dev SHA
-// the gate failed on, and the approved record it rests on, by its hash. It
-// files no issue and writes no triage record. A fix that would pass the
-// Feature's budget waits, and one inbox card asks a person.
+// the plan's gate_fixes, one entry for each failed check its body names on an
+// `Aayudha-Gate-Fix:` line (Bug #1230), with the dev SHA the gate failed on
+// and the approved record it rests on, by its hash. Each line is checked on
+// its own: a refused line does not stop the others. It files no issue and
+// writes no triage record. A fix that would pass the Feature's budget waits,
+// and one inbox card asks a person; one PR counts once, however many checks
+// it names. A merged PR the plan records already may record the other checks
+// it names of the same gate run, so a gate that waits for them moves on.
 func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	repo, c, w, err := e.missionLedger(ctx)
 	if err != nil {
@@ -1186,26 +1193,20 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	mm := gateFixLine.FindStringSubmatch(pr.GetBody())
+	ofPR := func(fx GateFix) bool { return fx.PR == n }
+	merged := pr.GetMerged() && slices.ContainsFunc(plan.GateFixes, ofPR)
+	named := gateFixLine.FindAllStringSubmatch(pr.GetBody(), -1)
 	switch {
-	case pr.GetState() != "open" || pr.GetBase().GetRef() != e.devBranch():
+	case (pr.GetState() != "open" && !merged) || pr.GetBase().GetRef() != e.devBranch():
 		return Errorf(ExitBlocked, "#%d is not an open PR to %s: a gate fix is one", n, e.devBranch())
 	case !regexp.MustCompile(`(?i)\bRefs #` + strconv.Itoa(f) + `\b`).MatchString(pr.GetBody()):
 		return Errorf(ExitBlocked, "#%d does not say `Refs #%d`: a gate fix PR of #%d says it", n, f, f)
-	case mm == nil:
+	case len(named) == 0:
 		return Errorf(ExitBlocked, "#%d names no failed check: its body needs the line `Aayudha-Gate-Fix: <milestone> <check>`", n)
 	}
 	runs, err := gateRuns(ctx, w, f)
 	if err != nil {
 		return err
-	}
-	ms, check := mm[1], mm[2]
-	last := lastGateRun(runs, ms, false)
-	if last == nil || last.Result != gateFail || !slices.ContainsFunc(last.Checks, func(ck GateCheck) bool { return ck.Check == check && ck.Result == gateFail }) {
-		return Errorf(ExitBlocked, "%s did not fail in the last gate of %s of #%d: a fix PR comes only from a failed gate check (Decision #974)", check, ms, f)
-	}
-	if fx := findFix(plan, ms, check, last.DevSHA); fx != nil && fx.PR != n {
-		return Errorf(ExitBlocked, "%s of %s has its fix PR already, #%d: one failed check gets one fix PR", check, ms, fx.PR)
 	}
 	t, err := w.Read(ctx)
 	if err != nil {
@@ -1217,65 +1218,156 @@ func missionGateFix(ctx context.Context, e *Env, f, n int) error {
 		return Errorf(ExitBlocked, "ledger %s cannot be read: %v", ready.ApprovalPath(f), err)
 	}
 	sum := sha256.Sum256(record)
-	fix := GateFix{PR: n, Milestone: ms, Check: check, DevSHA: last.DevSHA, Approval: GateApproval{Record: ready.ApprovalPath(f), SHA256: hex.EncodeToString(sum[:])},
-		At: e.Now().UTC().Format(time.RFC3339)}
+	taken := func(ms, check string, fx *GateFix) string {
+		return fmt.Sprintf("%s of %s has its fix PR already, #%d: one failed check gets one fix PR", check, ms, fx.PR)
+	}
+	var fixes []GateFix // one per check the PR fixes: recorded already, or to record
+	var refused []string
+	seen := map[string]bool{}
+	for _, mm := range named {
+		ms, check := mm[1], mm[2]
+		if seen[ms+" "+check] {
+			continue
+		}
+		seen[ms+" "+check] = true
+		last := lastGateRun(runs, ms, false)
+		if last == nil || last.Result != gateFail || !slices.ContainsFunc(last.Checks, func(ck GateCheck) bool { return ck.Check == check && ck.Result == gateFail }) {
+			refused = append(refused, fmt.Sprintf("%s did not fail in the last gate of %s of #%d: a fix PR comes only from a failed gate check (Decision #974)", check, ms, f))
+			continue
+		}
+		switch fx := findFix(plan, ms, check, last.DevSHA); {
+		case fx != nil && fx.PR != n:
+			refused = append(refused, taken(ms, check, fx))
+		case fx != nil:
+			fixes = append(fixes, *fx)
+		case merged && !slices.ContainsFunc(plan.GateFixes, func(g GateFix) bool { return g.PR == n && g.Milestone == ms && g.DevSHA == last.DevSHA }):
+			refused = append(refused, fmt.Sprintf("#%d merged, and it is no fix of the last gate of %s: a merged fix PR records only checks of the gate run it fixed", n, ms))
+		default:
+			fixes = append(fixes, GateFix{PR: n, Milestone: ms, Check: check, DevSHA: last.DevSHA, Approval: GateApproval{Record: ready.ApprovalPath(f), SHA256: hex.EncodeToString(sum[:])},
+				At: e.Now().UTC().Format(time.RFC3339)})
+		}
+	}
+	if len(fixes) == 0 {
+		return Errorf(ExitBlocked, "%s", strings.Join(refused, "; "))
+	}
 	// The budget: what the mission used and holds, with this fix at the per-story cap, until #872 measures spend.
+	// A PR the plan records already is counted already: its other checks take its entry's Waits.
 	usedOf, costs, err := e.committed(ctx, c, w, repo, f, plan, appr)
 	if err != nil {
 		return err
 	}
 	used, est := usedOf(plan), appr.Budget.PerStoryUSD
-	if fx := findFix(plan, ms, check, last.DevSHA); fx != nil {
-		fix = *fx
-	} else if plan.Budget > 0 && used.Value+est > plan.Budget {
-		fix.Waits = "budget"
+	waitsOf := func(p *MissionPlan) (string, bool) {
+		if i := slices.IndexFunc(p.GateFixes, ofPR); i >= 0 {
+			return p.GateFixes[i].Waits, true
+		}
+		if p.Budget > 0 && usedOf(p).Value+est > p.Budget {
+			return "budget", false
+		}
+		return "", false
 	}
-	rep := GateReport{Schema: MissionGateSchema, Repo: repo, Feature: f, DevSHA: last.DevSHA, Milestones: []GateMSState{}, Fixes: []GateFixItem{}, Recorded: &fix, DryRun: c.DryRun()}
-	for !rep.DryRun && findFix(plan, ms, check, last.DevSHA) == nil {
-		if fix.Waits != "" { // before the fix is recorded: a fix whose card cannot be posted is not recorded, and is asked again
+	waits, listed := waitsOf(plan)
+	unrecorded := func(p *MissionPlan) bool {
+		return slices.ContainsFunc(fixes, func(fx GateFix) bool { return findFix(p, fx.Milestone, fx.Check, fx.DevSHA) == nil })
+	}
+	for i := range fixes {
+		if findFix(plan, fixes[i].Milestone, fixes[i].Check, fixes[i].DevSHA) == nil {
+			fixes[i].Waits = waits
+		}
+	}
+	rep := GateReport{Schema: MissionGateSchema, Repo: repo, Feature: f, DevSHA: fixes[0].DevSHA, Milestones: []GateMSState{}, Fixes: []GateFixItem{}, DryRun: c.DryRun()}
+	for !rep.DryRun && unrecorded(plan) {
+		if waits != "" && !listed { // before the fix is recorded: a fix whose card cannot be posted is not recorded, and is asked again
 			if err := e.postAsk(ctx, c, repo, f, budgetAsk(f, n, plan.Budget, used, est, plan.GateFixes, costs)); err != nil {
 				return err
 			}
 		}
 		var fresh *MissionPlan
-		rep.LedgerCommit, err = e.editPlan(ctx, w, f, fmt.Sprintf("missions: fix PR #%d of %s %s in the mission of #%d", n, ms, check, f), nil, func(p *MissionPlan) error {
-			if fx := findFix(p, ms, check, last.DevSHA); fx != nil && fx.PR != n {
-				return Errorf(ExitBlocked, "%s of %s has its fix PR already, #%d: one failed check gets one fix PR", check, ms, fx.PR)
-			}
+		var lost []string // by line of fixes: why another PR took it while this run read the plan
+		rep.LedgerCommit, err = e.editPlan(ctx, w, f, fmt.Sprintf("missions: fix PR #%d of %s in the mission of #%d", n, gateFixChecks(fixes), f), nil, func(p *MissionPlan) error {
+			lost = make([]string, len(fixes))
 			// The budget again, on the plan at the ledger tip: a fix recorded since this run read it counts too.
-			if fix.Waits == "" && p.Budget > 0 && usedOf(p).Value+est > p.Budget {
+			wt, l := waitsOf(p)
+			if !l && wt != "" && waits == "" {
 				fresh = p
 				return errFixOverBudget
 			}
-			if findFix(p, ms, check, last.DevSHA) == nil {
-				p.GateFixes = append(p.GateFixes, fix)
+			for i, fx := range fixes {
+				switch got := findFix(p, fx.Milestone, fx.Check, fx.DevSHA); {
+				case got == nil:
+					if l {
+						fixes[i].Waits = wt
+					}
+					p.GateFixes = append(p.GateFixes, fixes[i])
+				case got.PR != n:
+					lost[i] = taken(fx.Milestone, fx.Check, got)
+				}
+			}
+			if !slices.Contains(lost, "") {
+				return Errorf(ExitBlocked, "%s", strings.Join(lost, "; "))
 			}
 			return nil
 		})
 		if errors.Is(err, errFixOverBudget) { // it no longer fits: ask first, then record it waiting
-			plan, used, fix.Waits = fresh, usedOf(fresh), "budget"
+			plan, used, waits = fresh, usedOf(fresh), "budget"
+			for i := range fixes {
+				fixes[i].Waits = waits
+			}
 			continue
 		}
 		if err != nil {
 			return err
 		}
+		var kept []GateFix
+		for i, fx := range fixes {
+			if lost[i] != "" {
+				refused = append(refused, lost[i])
+			} else {
+				kept = append(kept, fx)
+			}
+		}
+		fixes = kept
 		break
 	}
+	rep.Recorded, rep.Records, rep.Refused = &fixes[0], fixes, refused
 	if err := e.Emit(rep, func(w io.Writer) error {
-		if fix.Waits != "" {
-			_, err := fmt.Fprintf(w, "Fix PR #%d of %s %s waits: it would pass #%d's budget (%s used + %s, the fix's estimate, > %s). A person decides in aayu inbox.\n",
-				n, ms, check, f, ready.USD(used.Value), ready.USD(est), ready.USD(plan.Budget))
-			return err
+		for _, fx := range fixes {
+			var err error
+			switch {
+			case fx.Waits != "":
+				_, err = fmt.Fprintf(w, "Fix PR #%d of %s %s waits: it would pass #%d's budget (%s used + %s, the fix's estimate, > %s). A person decides in aayu inbox.\n",
+					n, fx.Milestone, fx.Check, f, ready.USD(used.Value), ready.USD(est), ready.USD(plan.Budget))
+			case merged:
+				_, err = fmt.Fprintf(w, "Fix PR #%d is the fix of %s %s (dev %s) in the mission of #%d: it merged.\n", n, fx.Milestone, fx.Check, short(fx.DevSHA), f)
+			default:
+				_, err = fmt.Fprintf(w, "Fix PR #%d is the fix of %s %s (dev %s) in the mission of #%d: build it.\n", n, fx.Milestone, fx.Check, short(fx.DevSHA), f)
+			}
+			if err != nil {
+				return err
+			}
 		}
-		_, err := fmt.Fprintf(w, "Fix PR #%d is the fix of %s %s (dev %s) in the mission of #%d: build it.\n", n, ms, check, short(last.DevSHA), f)
-		return err
+		for _, r := range refused {
+			if _, err := fmt.Fprintf(w, "Not recorded: %s.\n", r); err != nil {
+				return err
+			}
+		}
+		return nil
 	}); err != nil {
 		return err
 	}
-	if fix.Waits != "" {
+	if slices.ContainsFunc(fixes, func(fx GateFix) bool { return fx.Waits != "" }) {
 		return Errorf(ExitBudget, "fix PR #%d waits for a person: it would pass #%d's budget", n, f)
 	}
 	return nil
+}
+
+// gateFixChecks names the checks of fixes, as "MS1 a, MS1 b".
+func gateFixChecks(fixes []GateFix) string {
+	var out []string
+	for _, fx := range fixes {
+		out = append(out, fx.Milestone+" "+fx.Check)
+	}
+	return strings.Join(out, ", ")
 }
 
 // errFixOverBudget is a fix PR that no longer fits the budget on the plan at the ledger tip.
@@ -1398,11 +1490,15 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 		pl.Controls = append(pl.Controls, MissionControl{Action: "budget", By: p.Login, At: at, Presence: p.Via, Reason: reason})
 		used := usedOf(pl).Value
 		freed = nil
-		for i := range pl.GateFixes { // a freed fix counts as the others do: an open one at least at the cap
-			fx := &pl.GateFixes[i]
+		for _, fx := range gateFixPRs(pl.GateFixes) { // a freed fix counts as the others do: an open one at least at the cap, once per PR
 			if v := max(costs[fx.PR], appr.Budget.PerStoryUSD); fx.Waits == "budget" && used+v <= to {
-				fx.Waits, used = "", used+v
+				used += v
 				freed = append(freed, fx.PR)
+			}
+		}
+		for i := range pl.GateFixes {
+			if slices.Contains(freed, pl.GateFixes[i].PR) {
+				pl.GateFixes[i].Waits = ""
 			}
 		}
 		return nil
