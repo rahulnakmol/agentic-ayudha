@@ -49,6 +49,7 @@ type CheckResult struct {
 	Kind      string          `json:"kind"`
 	Status    string          `json:"status"`
 	Reason    string          `json:"reason,omitempty"`
+	Requires  string          `json:"requires,omitempty"` // the precondition the check declares; unreachable without it is the launch's gap, else the runner's
 	Artifacts []CheckArtifact `json:"artifacts,omitempty"`
 	Why       string          `json:"selected_because"`
 	Network   string          `json:"network,omitempty"` // how the control tool ran: isolated, proxy-blocked, or allowed (ui and api)
@@ -312,7 +313,7 @@ func (Behaviour) Run(ctx context.Context, r *Run) (Result, error) {
 // runCheck hands one check to its map's control tool and collects what it wrote.
 func runCheck(ctx context.Context, r *Run, s selected, t Target) (CheckResult, []Evidence) {
 	ref := s.f.Ref(s.c)
-	cr := CheckResult{Ref: ref, Kind: s.c.Kind, Why: s.why}
+	cr := CheckResult{Ref: ref, Kind: s.c.Kind, Requires: s.c.Requires, Why: s.why}
 	out := filepath.Join(r.Work, "behaviour", ref)
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		cr.Status, cr.Reason = checkError, err.Error()
@@ -321,7 +322,8 @@ func runCheck(ctx context.Context, r *Run, s selected, t Target) (CheckResult, [
 	in, _ := json.Marshal(map[string]any{"product": s.m.Product, "feature": s.f.ID, "check": s.c, "out": out, "base_url": t.URL, "root": r.Root})
 	cctx, cancel := context.WithTimeout(ctx, CheckTimeout)
 	defer cancel()
-	o, err := r.Sandbox.Run(cctx, Cmd{Dir: r.Root, Name: s.m.Control[0], Args: append(slices.Clone(s.m.Control[1:]), "check"), Stdin: in, Network: needsApp(s.c.Kind)})
+	o, err := r.Sandbox.Run(cctx, Cmd{Dir: r.Root, Name: s.m.Control[0], Args: append(slices.Clone(s.m.Control[1:]), "check"), Stdin: in, Network: needsApp(s.c.Kind),
+		Env: map[string]string{"NODE_PATH": r.controlNodePath()}})
 	cr.Network = o.Network
 	if err != nil {
 		cr.Status, cr.Reason = checkError, err.Error()
@@ -353,6 +355,20 @@ func runCheck(ctx context.Context, r *Run, s selected, t Target) (CheckResult, [
 		ev = append(ev, Evidence{Path: "behaviour/" + ref + "/" + p, Kind: a.Kind, Data: b})
 	}
 	return cr, ev
+}
+
+// controlNodePath is the NODE_PATH of a control tool: the parent's first, as
+// before, then the store folder of each playwright pnpm installed. A product
+// that depends on @playwright/test through pnpm has playwright only there
+// (Bug #1226).
+func (r *Run) controlNodePath() string {
+	get := r.Sandbox.Getenv
+	if get == nil {
+		get = os.Getenv
+	}
+	dirs := filepath.SplitList(get("NODE_PATH"))
+	store, _ := filepath.Glob(filepath.Join(r.Root, "node_modules", ".pnpm", "playwright@*", "node_modules"))
+	return strings.Join(append(dirs, store...), string(os.PathListSeparator))
 }
 
 // MapFloors are the floors a PR that serves no story still runs in the merge

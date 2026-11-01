@@ -1,0 +1,13 @@
+# Which tests prove Bug #1226's Completion Goal.
+
+[[criterion]]
+id = 1 # playwright only under node_modules/.pnpm, no NODE_PATH: verify --check all resolves it and runs the browser checks
+tests = ["./internal/verify:TestControlFindsPlaywright"]
+
+[[criterion]]
+id = 2 # no Playwright anywhere: each browser check is unreachable with the install command, and the gate lists no fix
+tests = ["./internal/verify:TestControlFindsPlaywright", "./internal/cli:TestGateVerifyRunsTheSweepOnTheTip"]
+
+[[criterion]]
+id = 3 # NODE_PATH names a node_modules with Playwright: that one is used, as today
+tests = ["./internal/verify:TestControlFindsPlaywright"]

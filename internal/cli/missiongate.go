@@ -423,14 +423,26 @@ func (e *Env) runGate(ctx context.Context, c *github.Client, g *gateTree, repo, 
 		}
 		run.Checks = append(append(run.Checks, v...), ev...)
 	}
-	run.Result = gatePass
+	// A pending check (CI, an eval run) makes the run wait. A verify check is pending only for a runner gap, which
+	// may never clear, so a failed check outranks it: the failure is recorded and gets its fix (Bug #1226).
+	var waits, gap, failed bool
 	for _, ck := range run.Checks {
 		switch {
+		case ck.Result == gatePending && strings.HasPrefix(ck.Check, "verify:"):
+			gap = true
 		case ck.Result == gatePending:
-			run.Result = gatePending
-		case ck.Result != gatePass && run.Result == gatePass:
-			run.Result = gateFail
+			waits = true
+		case ck.Result != gatePass:
+			failed = true
 		}
+	}
+	switch {
+	case waits || gap && !failed:
+		run.Result = gatePending
+	case failed:
+		run.Result = gateFail
+	default:
+		run.Result = gatePass
 	}
 	return run, nil
 }
@@ -576,7 +588,12 @@ func (e *Env) gateVerify(ctx context.Context, g *gateTree, sha string) ([]GateCh
 		if json.Unmarshal(b, &rep) == nil {
 			for _, cr := range rep.Checks {
 				ck := GateCheck{Check: "verify:" + cr.Ref, Result: gatePass, Detail: cr.Status}
-				if cr.Status != verify.CheckPassed && cr.Status != verify.CheckUnreachable {
+				switch {
+				case cr.Status == verify.CheckUnreachable && cr.Requires == "":
+					// A runner gap (no Playwright, no app URL) proves nothing and is not the code's fault: the gate
+					// waits for it and lists no fix (Bug #1226). A precondition the check declares passes as before.
+					ck.Result, ck.Detail = gatePending, cr.Ref+" is unreachable: "+cr.Reason
+				case cr.Status != verify.CheckPassed && cr.Status != verify.CheckUnreachable:
 					ck.Result, ck.Detail = gateFail, strings.TrimSpace(cr.Status+" "+cr.Reason)
 				}
 				checks = append(checks, ck)
