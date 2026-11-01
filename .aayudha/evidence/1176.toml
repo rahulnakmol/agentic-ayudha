@@ -1,0 +1,21 @@
+# Which tests prove Story #1176's Completion Goal.
+
+[[criterion]]
+id = 1 # #889's MS1 started at 09:00, #1010 and #1011 merged with packs: at the end of business_hours, one Evening card per story with each criterion and its evidence
+tests = ["internal/cli:TestEveningCardsShowEvidence"]
+
+[[criterion]]
+id = 2 # he accepts #1010: missions/889/reviews.jsonl gains his login, the time, #1010, and accepted
+tests = ["internal/cli:TestEveningAcceptRecordsReview"]
+
+[[criterion]]
+id = 3 # he comments on #1011: the comment is posted on #1011, one input of the feedback pass
+tests = ["internal/cli:TestEveningCommentIsFeedback"]
+
+[[criterion]]
+id = 4 # #1104 did not merge: its card says not merged: with the mission's reason and the next step
+tests = ["internal/cli:TestEveningNotMergedSaysWhy"]
+
+[[criterion]]
+id = 5 # an agent lane runs aayu inbox --list --json: the Evening cards, with no accept action
+tests = ["internal/cli:TestEveningListHasNoAccept"]
