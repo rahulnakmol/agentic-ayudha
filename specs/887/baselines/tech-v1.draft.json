@@ -1,0 +1,18 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 887,
+  "part": "tech",
+  "version": 1,
+  "owner": "code-architect",
+  "pins": [
+    {
+      "ref": "specs/887/design.json",
+      "hash": "1de31e168970d105b5d2de54712089095c3aaf4e69119d12c93f8f5133dc96fb"
+    }
+  ],
+  "hash": "d4ad6ec59119e439e3cae7a2afa285982a51f25587c0030837a1ed581e10bf1b",
+  "summary": "A `review_guidance` field (check, risk, ignore) is frozen with the story, and the build brief and inspect read it. This is step S18 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-11-01T11:02:01Z"
+}
