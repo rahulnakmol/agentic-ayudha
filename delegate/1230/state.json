@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19874-96db-70f9-b7be-316225cc7e73",
+  "task_url": "https://ampcode.com/threads/T-01a19874-96db-70f9-b7be-316225cc7e73",
   "branch": "story/1230-fix-mission-a-gate-fix-pr-records-only-i",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "5bdb58c2c7b33bc1a6c00ed2c61e03cb8e23082af35e2bf1c137b97f8e3a30ab",
   "started_at": "2026-11-01T18:51:43Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T18:51:43Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1230: fix(mission): a gate fix PR records only its first failed check, so a fix for several checks leaves the gate waiting"
+    },
+    {
+      "at": "2026-11-01T18:52:40Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
