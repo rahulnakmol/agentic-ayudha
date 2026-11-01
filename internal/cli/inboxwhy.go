@@ -15,6 +15,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
 
 // Every way an inbox write, a read of GitHub, or the session's sign-in can
@@ -123,7 +124,7 @@ func inboxVerb(it InboxItem, a InboxAction) (did, not string) {
 		return "shipped", "wasn't shipped"
 	case it.Kind == InboxDecision:
 		return "recorded", "wasn't recorded"
-	case it.Kind == InboxHumanReview:
+	case it.Kind == InboxHumanReview || it.Kind == InboxBaseline:
 		return "approved", "wasn't approved"
 	}
 	return "done", "wasn't done"
@@ -157,6 +158,7 @@ var (
 	reMergeUnknown  = regexp.MustCompile(`GitHub has not worked out yet whether it can merge`)
 	reBypassPost    = regexp.MustCompile(`Solo-mode bypass comment was not posted`)
 	reHex           = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
+	reDraftChanged  = regexp.MustCompile(`^The \S+ of #[0-9]+ changed after the draft`)
 )
 
 // logDetail is a failed write's quit-log line: the error, then the step,
@@ -352,6 +354,8 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (
 			return fmt.Sprintf("#%d %s: its %s check hasn't run on its latest commit.", n, not, name), "its builder re-runs its checks; nothing for you yet."
 		}
 		return fmt.Sprintf("#%d %s: its %s check failed on its latest commit.", n, not, name), "its builder fixes it; nothing for you yet."
+	case it.Kind == InboxBaseline && reDraftChanged.MatchString(m): // ready --part read the draft and the pins again
+		return baselineChanged(it.Ask, n), "nothing for you yet; the card comes back when the new draft waits."
 	case reLedger.MatchString(m):
 		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), k.enter + " tries once more; if it fails again, an agent runs aayu doctor."
 	}
@@ -369,6 +373,10 @@ func changedWords(was, now InboxItem) string {
 		return "it " + strings.TrimSuffix(now.Why, ".")
 	case was.Kind != now.Kind:
 		return "it is now " + strings.ToLower(now.kind().Word)
+	case now.Kind == InboxBaseline && was.Hash == now.Hash && len(now.Options) < len(was.Options): // its approval is gone: the pins moved
+		return "its " + ready.Label(now.Ask) + " changed after the draft"
+	case was.Kind == InboxBaseline && was.Hash != now.Hash:
+		return "it was drafted again"
 	case !slices.EqualFunc(was.Options, now.Options, func(a, b InboxAction) bool { return a.Label == b.Label && a.Recommended == b.Recommended }):
 		return "its choices were edited"
 	case was.Title != now.Title:
