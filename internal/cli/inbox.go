@@ -57,9 +57,10 @@ const (
 	InboxReplaced    = "replaced"      // an open Story or Bug that another issue replaces
 	InboxAudit       = "audit"         // a PR ship merged with no person's pass, sampled for a person's look after merge
 	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
+	InboxEvening     = "evening"       // a story agreed this morning, in the evening: each criterion next to its evidence (Story #1176)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -112,6 +113,13 @@ var inboxKinds = map[string]inboxKind{
 			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours it starts no new story, " +
 			"and the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
 		Terms: []string{"Work item"}},
+	InboxEvening: {Icon: "🌇", Word: "Evening review", Seat: verbs.EngineeringManager,
+		Line: "A story you agreed this morning, each criterion next to its evidence; only you accept it or say what is wrong.",
+		Explain: "Each story of a mission milestone that started today comes back at the end of business hours with every criterion of its " +
+			"Completion Goal and the evidence its proof pack on the ledger holds for the head that merged. Accepting it records your login, the time, " +
+			"and the story in the mission's reviews.jsonl on the ledger; a comment says what is wrong, stays on the story, and is an input of the " +
+			"mission's feedback pass (#1014). If you leave it, nothing is written and the card stays until the day ends.",
+		Terms: []string{"Completion Goal", "Proof pack"}},
 	InboxStart: {Icon: "🔒", Word: "Mission start", Seat: verbs.EngineeringManager,
 		Line: "A Feature is approved to build; starting its mission locks its issues until the last milestone.",
 		Explain: "A mission builds a Feature's stories and Bugs with agents, in milestones. Starting it is your decision, through GitHub's " +
@@ -242,10 +250,14 @@ type InboxItem struct {
 	BodyHash    string        `json:"body_hash,omitempty"`   // a Decision's body as read (workitems.BodyHash): accepting it accepts that text
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	Lines       []string      `json:"lines,omitempty"`       // the card's own words under its title: a mission start's lock (Story #1013)
-	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card
-	labels      []string
-	mergeSHA    string
-	f           inboxFacts
+	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card, or whose mission an evening card's story is of
+	Pack        string        `json:"pack,omitempty"`        // the pack an evening card shows, by its ledger path and SHA-256
+	// Criteria are an evening card's criteria, each with its evidence from the pack at the merged head (Story #1176).
+	Criteria []EveningCriterion `json:"criteria,omitempty"`
+	images   map[int][]byte     // an evening card's screenshots, by the line of Lines they follow, where the terminal draws them
+	labels   []string
+	mergeSHA string
+	f        inboxFacts
 }
 
 // inboxFacts are the facts a kind's counsel is written from, and nothing else.
@@ -300,7 +312,7 @@ func (it InboxItem) short() string {
 		return fmt.Sprintf("replaced by #%d", it.ReplacedBy)
 	case InboxAudit:
 		return "merged; look it over"
-	case InboxMissionTime:
+	case InboxMissionTime, InboxEvening:
 		return it.f.problem
 	}
 	return ""
@@ -427,6 +439,9 @@ type inboxSource struct {
 	// missions, when set, reads the mission plans on the ledger: a card to
 	// start each startable one, and one for each locked body a person changed.
 	missions func(ctx context.Context) ([]missionFacts, error)
+	// evening, when set, reads the stories agreed today, each with its pack
+	// at the head that head says merged (Story #1176).
+	evening func(ctx context.Context, head func(story int) string) ([]eveningStory, error)
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -708,6 +723,13 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			return nil, err
 		}
 		out = append(out, s.lockItems(ms)...)
+	}
+	if s.evening != nil {
+		cards, err := s.eveningItems(ctx, delivered)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, cards...)
 	}
 	for _, p := range open {
 		done++
@@ -1142,6 +1164,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	if was.Kind == InboxDecision && was.BodyHash != now.BodyHash { // its options, evaluation, or recommendation: the text the person accepts
 		out = append(out, "its text changed")
 	}
+	if was.Kind == InboxEvening && (was.Pack != now.Pack || !slices.Equal(was.Lines, now.Lines)) { // an accept accepts the evidence the person read
+		out = append(out, "its evidence changed")
+	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")
 	}
@@ -1228,7 +1253,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 				return nil, "", err
 			}
 			src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-			src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+			src.pendingAudits, src.missions, src.evening = e.pendingAudits, e.startAndLockCards, e.eveningStories
 			return src, login, nil
 		})
 	}
@@ -1237,7 +1262,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+	src.pendingAudits, src.missions, src.evening = e.pendingAudits, e.startAndLockCards, e.eveningStories
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1409,12 +1434,15 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			k := it.kind()
 			fmt.Fprintf(w, "\n[%d/%d] %s #%d: %s\n", pos, total, k.Word, it.Number, it.Title)
 			say("  ", k.Line)
-			for _, l := range it.Lines { // a line that fits keeps its spacing: Locked, Open, and Ends line up
+			for i, l := range it.Lines { // a line that fits keeps its spacing: Locked, Open, and Ends line up
 				if width == 0 || len(l)+2 <= width {
 					fmt.Fprintln(w, "  "+l)
-					continue
+				} else {
+					say("  ", l)
 				}
-				say("  ", l)
+				if b := it.images[i]; b != nil { // only where the terminal draws images (Env.showsImages)
+					fmt.Fprintln(w, "   "+inlineImage(fmt.Sprintf("#%d-%d", it.Number, i), b))
+				}
 			}
 			if it.OneWay {
 				say("  ", "One-way door: hard to undo, so your pick is asked again.")
@@ -1655,10 +1683,13 @@ func (e *Env) listInbox(ctx context.Context) error {
 		id = l.Config.Identity
 	}
 	src := newInboxSource(c, repo, e.devBranch(), id)
-	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+	src.pendingAudits, src.missions, src.evening = e.pendingAudits, e.startAndLockCards, e.eveningStories
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	for i := range items { // the list acts on nothing: only a person accepts a story, in `aayu inbox`
+		items[i] = withoutAccept(items[i])
 	}
 	needs, house, waiting := splitInbox(items)
 	out := inboxList{Repo: repo, NeedsYou: len(needs), Housekeeping: len(house), NotReady: len(waiting), Items: items, Run: "aayu inbox", Human: true, How: inboxHow}
@@ -1787,6 +1818,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return e.auditAct(ctx, c, repo, login, it, a.N == 2)
 	case InboxMissionTime:
 		return e.missionTimeAct(ctx, c, repo, it, a)
+	case InboxEvening:
+		return e.eveningAct(ctx, c, repo, login, it, a)
 	}
 	var note, status, reason string
 	switch it.Kind {
