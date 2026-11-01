@@ -57,8 +57,9 @@ function playwright() {
     let found;
     try {
       found = require.resolve("playwright");
-    } catch {
-      continue;
+    } catch (e) {
+      if (e?.code === "MODULE_NOT_FOUND") continue;
+      throw e; // an install that is there but broken (an invalid package.json) is an error, not a missing one
     }
     return require(found);
   }

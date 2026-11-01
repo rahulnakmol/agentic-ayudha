@@ -214,13 +214,17 @@ func TestControlFindsPlaywright(t *testing.T) {
 	nodePath := t.TempDir()
 	for _, tc := range []struct {
 		name, nodePath, status, reason, aria string
-		store, inNodePath, broken            bool
+		store, inNodePath                    bool
+		broken                               map[string]string // files over the store's Playwright that break it
 	}{
 		{name: "only in pnpm's store, no NODE_PATH", store: true, status: CheckPassed, aria: "store"},
 		{name: "NODE_PATH and pnpm's store", store: true, inNodePath: true, nodePath: nodePath, status: CheckPassed, aria: "node-path"},
 		{name: "none installed", nodePath: t.TempDir(), status: CheckUnreachable,
 			reason: `Playwright is not installed: run "npm install --save-dev playwright && npx playwright install chromium"`},
-		{name: "installed but fails to load", store: true, broken: true, status: checkError, reason: "no result on stdout"},
+		{name: "installed but fails to load", store: true, status: checkError, reason: "no result on stdout",
+			broken: map[string]string{"playwright/index.js": "throw new Error(\"playwright: broken install\");\n"}},
+		{name: "installed with an invalid package.json", store: true, status: checkError, reason: "no result on stdout",
+			broken: map[string]string{"playwright/package.json": "{\"name\": \"playwright\",\n"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_ = os.RemoveAll(filepath.Join(root, "node_modules"))
@@ -231,8 +235,8 @@ func TestControlFindsPlaywright(t *testing.T) {
 			if tc.inNodePath {
 				write(t, nodePath, fakePlaywright("node-path"))
 			}
-			if tc.broken { // a Playwright that resolves but throws is an error, never "not installed"
-				write(t, store, map[string]string{"playwright/index.js": "throw new Error(\"playwright: broken install\");\n"})
+			if tc.broken != nil { // a Playwright that is there but broken is an error, never "not installed"
+				write(t, store, tc.broken)
 			}
 			r := behaviourRun(t, root)
 			r.Story, r.Criteria, r.Checks = 0, nil, SelectAll
@@ -255,7 +259,7 @@ func TestControlFindsPlaywright(t *testing.T) {
 			if len(got.Checks) != 1 || got.Checks[0].Status != tc.status || !strings.HasPrefix(got.Checks[0].Reason, tc.reason) || aria != tc.aria {
 				t.Fatalf("checks %+v, aria %q; want %s (%q), aria %q: %+v", got.Checks, aria, tc.status, tc.reason, tc.aria, rep.Checks[0])
 			}
-			if c := rep.Checks[0]; !tc.broken && c.Result != proof.Pass {
+			if c := rep.Checks[0]; tc.broken == nil && c.Result != proof.Pass {
 				t.Fatalf("floor %+v, want passed: an unreachable check fails nothing", c)
 			}
 		})
