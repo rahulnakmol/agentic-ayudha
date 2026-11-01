@@ -2136,6 +2136,34 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
 			}
 		}
+		// A person's approving review is the pass (no never layer in this
+		// pack, so a CODEOWNER need not give it), and it is dismissed.
+		gateRun(t, g, dir, prN, head, coverageHolds)
+		// A read that fails after the code stops the ship too.
+		for _, tc := range []struct {
+			name   string
+			code   int
+			want   string
+			onPoll func()
+		}{
+			{"approving review dismissed", ExitBlocked, "@reviewer's approving review no longer passes after the device code",
+				func() { g.Pulls[prN].Reviews[0].State = "DISMISSED" }},
+			{"branch rules read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = "GET /repos/o/r/rules/branches/dev", 0 }},
+			{"reviews read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = fmt.Sprintf("GET /repos/o/r/pulls/%d/reviews", prN), 0 }},
+		} {
+			g.Mu.Lock()
+			g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+			g.Device.OnPoll = func(int) { tc.onPoll() }
+			g.Mu.Unlock()
+			code, out := ship(marked)
+			g.Mu.Lock()
+			g.Device.OnPoll, g.Pulls[prN].Reviews, g.Fail = nil, nil, ""
+			g.Mu.Unlock()
+			if code != tc.code || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
+				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
+			}
+		}
+		gateRun(t, g, dir, prN, head, coverageHolds, "L07")
 	})
 
 	t.Run("one_code_merges", func(t *testing.T) {
