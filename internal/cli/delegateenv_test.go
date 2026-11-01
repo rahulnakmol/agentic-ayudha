@@ -153,9 +153,23 @@ func TestAmpStaleEnvProbeFails(t *testing.T) {
 	m.ampEnv(staleEnv)
 	m.noDocker()
 	probes := m.probeReplies("aayu-env failed: go: command not found")
+	// The amp CLI selects another Amp project: its orb proves nothing here, so no probe starts.
+	other, exec := true, m.opts.Exec
+	m.opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+		if name == "amp" && strings.Join(args, " ") == "projects status" && other {
+			return "Project: other/r\n", nil
+		}
+		return exec(ctx, dir, name, args...)
+	}
+	m.startNext(20)
+	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code == 0 || len(*probes) != 0 || !strings.Contains(errOut, "amp projects status selects the Amp project other/r, not this repository (o/r)") || m.cloudRecord().Project != "o/r" {
+		t.Fatalf("build 20 with another Amp project selected: exit %d, probes %q, [cloud.amp] %+v: %s%s", code, *probes, m.cloudRecord(), out, errOut)
+	}
+	other = false
 	m.startNext(20)
 	calls := len(m.ampCalls())
-	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next marked it start")
 	if code == 0 || len(*probes) != 1 || !strings.Contains(errOut, "the live amp probe did not pass (https://ampcode.com/threads/"+probeThread+")") ||
 		!strings.Contains(errOut, "aayu-env failed: go: command not found") || !strings.Contains(errOut, "`aayu install --env --host amp --apply --verify`") ||
 		!strings.Contains(errOut, "#20 is status:ready again, and its claim and lease are released") {
