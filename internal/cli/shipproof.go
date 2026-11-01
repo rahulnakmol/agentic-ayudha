@@ -392,7 +392,9 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	// this exact head on the ledger: the record the merge gate's own human
 	// fallback trusts (Story #1192). proof_rungs does not list human, so a
 	// review at rung human with no such record still waits for a person.
-	if rung == inspect.RungHuman && !slices.Contains(a.ProofRungs, rung) {
+	// The approver must also be one the pass rule allows: a paired
+	// Engineering Manager seat's human comes first (passRule).
+	if rung == inspect.RungHuman && !slices.Contains(a.ProofRungs, rung) && passRule(cfg).allows(a.Approver) == nil {
 		approver := strings.TrimPrefix(strings.TrimSpace(a.Approver), "@")
 		approvals := e.readApprovals(ctx)
 		if i := slices.IndexFunc(approvals, func(ap headApproval) bool {

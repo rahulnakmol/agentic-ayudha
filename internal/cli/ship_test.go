@@ -1508,6 +1508,18 @@ func TestShipOnApproval(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt"}
 	g.Mu.Unlock()
+	// A paired Engineering Manager seat's human gives the human pass, not the
+	// [autonomy] approver: the approver's record covers nothing then.
+	paired := conf + "\n[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(paired), 0o644)
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = paired
+	g.Mu.Unlock()
+	refused(notOneOf)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(conf), 0o644)
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.Mu.Unlock()
 
 	// Criterion 1: ship merges on the approval, and asks for no second code.
 	code, out := shipCmd(t, env, opts, prN)
