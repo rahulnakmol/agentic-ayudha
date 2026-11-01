@@ -302,7 +302,9 @@ func TestEveningListHasNoAccept(t *testing.T) {
 		t.Fatalf("lane's list: %d cards, writes %v", len(cards), m.g.Writes())
 	}
 	for _, it := range cards {
-		if len(it.Criteria) != 2 || slices.ContainsFunc(it.Options, func(a InboxAction) bool { return a.Command == eveningAccept || strings.HasPrefix(strings.ToLower(a.Label), "accept") }) {
+		if len(it.Criteria) != 2 || slices.ContainsFunc(it.Options, func(a InboxAction) bool {
+			return a.Command == eveningAccept || strings.HasPrefix(strings.ToLower(a.Label), "accept")
+		}) {
 			t.Fatalf("lane's card #%d: criteria %d, options %+v", it.Number, len(it.Criteria), it.Options)
 		}
 	}
