@@ -24,6 +24,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
@@ -2019,4 +2020,173 @@ func TestProofLand(t *testing.T) {
 			t.Errorf("gateSuites with %s failing: %v", fail, suites)
 		}
 	}
+}
+
+// Story #1206: ship --solo-bypass runs every check that needs no person
+// before it asks for the person's device code, so a code is never spent on a
+// ship that refuses; a ship that passes them asks for one code and merges,
+// and an agent lane is refused as before, before anything is read.
+func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
+	g, env, opts, dir, _, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds, "L07") // L07 is a never layer
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	// A host's shell: ship asks for a device code, as in an orb's terminal.
+	marked := maps.Clone(env)
+	maps.Copy(marked, hostShells["amp"])
+	opts.DevicePoll = time.Millisecond
+	ship := func(env map[string]string) (int, string) {
+		g.Reset()
+		g.Mu.Lock()
+		g.Device.Started = 0
+		g.Mu.Unlock()
+		return shipCmd(t, env, opts, prN, "--solo-bypass")
+	}
+	// codes is the device codes issued; writes is every GitHub request that is not a read.
+	codes := func() int { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Device.Started }
+	writes := func() (w []string) {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		for _, r := range g.Requests {
+			if r.Method != "GET" && !strings.HasPrefix(r.Path, "/login/") {
+				w = append(w, r.Method+" "+r.Path)
+			}
+		}
+		return w
+	}
+	merged := func() bool { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Merged }
+
+	t.Run("no_plan_review", func(t *testing.T) {
+		code, out := ship(marked)
+		if code != ExitBlocked || !strings.Contains(out, "the footprint touches never layer(s) L07") || !strings.Contains(out, "`aayu plan 2 --solo-bypass`") {
+			t.Fatalf("ship with no plan-time review: %d %s", code, out)
+		}
+		if n := codes(); n != 0 || len(writes()) != 0 || merged() {
+			t.Fatalf("a ship refused for its plan-time review asked for %d device code(s), wrote %v, merged %v", n, writes(), merged())
+		}
+	})
+
+	// The plan shipped with a solo-mode plan-review bypass.
+	plan := PlanRecord{Story: 2, Footprint: []string{"L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
+		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/o/r/issues/2#issuecomment-81", Note: "solo mode"}}}
+	pb, _ := json.Marshal(plan)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): pb}}); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("no_bypass_comment", func(t *testing.T) {
+		code, out := ship(marked)
+		if code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+` first: a PR comment starting "Solo-mode bypass:"`) {
+			t.Fatalf("ship with no bypass comment: %d %s", code, out)
+		}
+		if n := codes(); n != 0 || len(writes()) != 0 || merged() {
+			t.Fatalf("a ship refused for its bypass comment asked for %d device code(s), wrote %v, merged %v", n, writes(), merged())
+		}
+	})
+
+	g.Mu.Lock()
+	bypass := &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping story #2 at " + head[:12] + "."}
+	bypass.User.Login, bypass.User.Type, bypass.HTMLURL = "founder", "User", "https://github.com/o/r/pull/"+strconv.Itoa(prN)+"#issuecomment-77"
+	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
+	g.Mu.Unlock()
+
+	t.Run("agent_lane", func(t *testing.T) {
+		agent := maps.Clone(env)
+		agent["AAYU_AGENT"] = "1"
+		code, out := ship(agent)
+		if code != ExitBlocked || !strings.Contains(out, "ship --solo-bypass is a person's decision and is refused for an agent lane (AAYU_AGENT=1)") {
+			t.Fatalf("ship --solo-bypass from an agent lane: %d %s", code, out)
+		}
+		// Refused before ship reads the PR, as before.
+		g.Mu.Lock()
+		read := slices.ContainsFunc(g.Requests, func(r fake.Request) bool { return strings.Contains(r.Path, "/pulls") })
+		g.Mu.Unlock()
+		if n := codes(); n != 0 || read || merged() {
+			t.Fatalf("an agent lane's ship asked for %d device code(s), read the PR %v, merged %v", n, read, merged())
+		}
+	})
+
+	// What can change on the same head while the person enters the code is
+	// read again after it: the bypass comment, and the merge gate's checks.
+	t.Run("rechecked_after_code", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, want string
+			change     func()
+			undo       func()
+		}{
+			{"bypass comment deleted", "post a Solo-mode bypass for the head " + short(head) + " first",
+				func() {
+					g.Issues[prN].Comments = slices.DeleteFunc(slices.Clone(g.Issues[prN].Comments), func(c *fake.Comment) bool { return c.ID == 77 })
+				},
+				func() { g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass) }},
+			{"merge gate turned red", "aayudha/merge-gate is failure on " + short(head),
+				func() { g.CheckRuns[head][0].Conclusion = "failure" },
+				func() { g.CheckRuns[head][0].Conclusion = "success" }},
+		} {
+			g.Mu.Lock()
+			g.Device.OnPoll = func(int) { tc.change() }
+			g.Mu.Unlock()
+			code, out := ship(marked)
+			g.Mu.Lock()
+			g.Device.OnPoll = nil
+			tc.undo()
+			g.Mu.Unlock()
+			if code != ExitBlocked || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
+				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
+			}
+		}
+		// A person's approving review is the pass (no never layer in this
+		// pack, so a CODEOWNER need not give it), and it is dismissed.
+		gateRun(t, g, dir, prN, head, coverageHolds)
+		// A read that fails after the code stops the ship too.
+		for _, tc := range []struct {
+			name   string
+			code   int
+			want   string
+			onPoll func()
+		}{
+			{"approving review dismissed", ExitBlocked, "@reviewer's approving review no longer passes after the device code",
+				func() { g.Pulls[prN].Reviews[0].State = "DISMISSED" }},
+			{"branch rules read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = "GET /repos/o/r/rules/branches/dev", 0 }},
+			{"reviews read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = fmt.Sprintf("GET /repos/o/r/pulls/%d/reviews", prN), 0 }},
+		} {
+			g.Mu.Lock()
+			g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+			g.Device.OnPoll = func(int) { tc.onPoll() }
+			g.Mu.Unlock()
+			code, out := ship(marked)
+			g.Mu.Lock()
+			g.Device.OnPoll, g.Pulls[prN].Reviews, g.Fail = nil, nil, ""
+			g.Mu.Unlock()
+			if code != tc.code || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
+				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
+			}
+		}
+		gateRun(t, g, dir, prN, head, coverageHolds, "L07")
+	})
+
+	t.Run("one_code_merges", func(t *testing.T) {
+		// Nothing is written while the person enters the code.
+		var early []string
+		g.Mu.Lock()
+		g.Device.OnPoll = func(int) {
+			for _, r := range g.Requests {
+				if r.Method != "GET" && !strings.HasPrefix(r.Path, "/login/") {
+					early = append(early, r.Method+" "+r.Path)
+				}
+			}
+		}
+		g.Mu.Unlock()
+		code, out := ship(marked)
+		if len(early) != 0 {
+			t.Fatalf("ship wrote before the device flow: %v", early)
+		}
+		if code != 0 || !strings.Contains(out, "human pass: solo-bypass by founder") || !merged() {
+			t.Fatalf("ship with every precondition: %d %s", code, out)
+		}
+		if n := codes(); n != 1 {
+			t.Fatalf("a ship that merged asked for %d device codes, want 1", n)
+		}
+	})
 }

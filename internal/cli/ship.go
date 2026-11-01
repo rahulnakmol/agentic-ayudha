@@ -121,7 +121,10 @@ type ShipResult struct {
 // rule, and the streak state) beside the pack, the lease released, and
 // cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
-	if in.Bool("solo-bypass") {
+	// An agent lane or CI can never give the bypass, so it is refused before
+	// anything is read; a person's device code is asked for only once every
+	// check that needs no person holds, just before the first write (Story #1206).
+	if in.Bool("solo-bypass") && (e.Getenv("AAYU_AGENT") == "1" || e.CI) {
 		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
 			return err
 		}
@@ -298,31 +301,40 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		rec.PlanReview = &plan.Review
 	}
-	reviews, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequestReview, *gh.Response, error) {
-		return c.REST.PullRequests.ListReviews(ctx, owner, name, n, &o)
-	})
+	// reviewPass is the first approving review of the head that passes, and
+	// why the others do not; ship reads it again after a device code.
+	reviewPass := func() (HumanPass, []string, error) {
+		reviews, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequestReview, *gh.Response, error) {
+			return c.REST.PullRequests.ListReviews(ctx, owner, name, n, &o)
+		})
+		if err != nil {
+			return HumanPass{}, nil, Wrap(ExitExternal, err)
+		}
+		var rs []identity.Review
+		ids := map[string]int64{}
+		for _, r := range reviews {
+			rs = append(rs, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
+			ids[strings.ToLower(r.GetUser().GetLogin())] = r.GetID()
+		}
+		var why []string
+		for _, r := range identity.LatestReviews(rs) {
+			if err := identity.HumanPass(r, pr.GetUser().GetLogin(), head, pol.Config.Identity.BotLogins); err != nil {
+				why = append(why, err.Error())
+				continue
+			}
+			if err := rec.Pass.allows(r.User.Login); err != nil {
+				why = append(why, err.Error())
+				continue
+			}
+			return HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}, why, nil
+		}
+		return HumanPass{}, why, nil
+	}
+	hp, why, err := reviewPass()
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return err
 	}
-	var rs []identity.Review
-	ids := map[string]int64{}
-	for _, r := range reviews {
-		rs = append(rs, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
-		ids[strings.ToLower(r.GetUser().GetLogin())] = r.GetID()
-	}
-	var why []string
-	for _, r := range identity.LatestReviews(rs) {
-		if err := identity.HumanPass(r, pr.GetUser().GetLogin(), head, pol.Config.Identity.BotLogins); err != nil {
-			why = append(why, err.Error())
-			continue
-		}
-		if err := rec.Pass.allows(r.User.Login); err != nil {
-			why = append(why, err.Error())
-			continue
-		}
-		rec.HumanPass = HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}
-		break
-	}
+	rec.HumanPass = hp
 	if rec.HumanPass.Kind == "" && proofOK != nil && !in.Bool("solo-bypass") {
 		rec.Proof = proofOK
 		note := fmt.Sprintf("merged on proof (Decision #593): required checks %s green, the pack verified with its floors holding, inspect at merge with review rung %s, and nothing in the narrow set",
@@ -433,6 +445,37 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 		rec.HumanPass = hp
+	}
+	// Every check that needs no person passed: now the person approves the
+	// bypass, before any write. Entering the code takes minutes, so what can
+	// change on the same head (the checks, the approving review or the bypass
+	// comment) is read again after it; the PR, its base, and the holds are
+	// read again below.
+	if in.Bool("solo-bypass") {
+		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
+			return err
+		}
+		now, err := gateGreen(ctx, c, owner, name, "ship", n, head, gp)
+		if err != nil {
+			return err
+		}
+		if _, _, err := requiredChecks(ctx, c, owner, name, "ship", n, pr.GetBase().GetRef(), head, now); err != nil {
+			return err
+		}
+		switch {
+		case rec.HumanPass.Kind == "review":
+			hp, why, err := reviewPass()
+			if err != nil {
+				return err
+			}
+			if hp.Kind == "" {
+				return Errorf(ExitBlocked, "ship #%d: @%s's approving review no longer passes after the device code: %s; nothing was merged, run ship again", n, rec.HumanPass.Login, strings.Join(or2(why, "it was dismissed"), "; "))
+			}
+		case rec.HumanPass.Kind == "solo-bypass" && rec.HumanPass.Comment != "":
+			if rec.HumanPass, err = e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config); err != nil {
+				return err
+			}
+		}
 	}
 
 	// 4. Land the gate's pack (pack.json and data, never media unless the
