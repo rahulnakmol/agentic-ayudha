@@ -9,7 +9,8 @@
   "task": "T-01a19638-3e38-7691-83b0-d08e180edb3f",
   "task_url": "https://ampcode.com/threads/T-01a19638-3e38-7691-83b0-d08e180edb3f",
   "branch": "story/1179-aayu-grill-edits-a-filed-body-before-rea",
-  "status": "handed-off",
+  "pr": 1217,
+  "status": "pr-open",
   "brief_sha256": "af0195dfc84144ff7d1ca4f5547aded6f99cb2e96b35da987e5996b1e955849d",
   "started_at": "2026-11-01T08:25:45Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-01T08:27:46Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T10:26:01Z",
+      "status": "pr-open",
+      "detail": "PR #1217 found by aayu mission recover"
     }
   ]
 }
