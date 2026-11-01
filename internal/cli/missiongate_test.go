@@ -1357,7 +1357,7 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 	}
 	g.putPack(30, 130, proof.Authoritative)
 	if rep := g.gateJSON(); rep.Milestones[1].State != GatePassed {
-		t.Fatalf("gate after #31's pack landed: %+v", rep.Milestones)
+		t.Fatalf("gate after #30's pack of PR 130 landed: %+v", rep.Milestones)
 	}
 	if p, _ := g.plan(889); p.Milestones[1].Gate.State != GatePassed || p.Milestones[1].Gate.DevSHA != g.sha {
 		t.Fatalf("BUGS gate in the plan: %+v", p.Milestones[1].Gate)
