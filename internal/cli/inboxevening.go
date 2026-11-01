@@ -266,7 +266,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		crit, _ := workitems.ParseCriteria(w.Fields[workitems.FieldCriteria])
 		it := InboxItem{Kind: InboxEvening, Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Seat: verbs.EngineeringManager,
 			Evidence: is.GetHTMLURL(), Updated: is.GetUpdatedAt().Time, Feature: st.feature, labels: labels, CounselFrom: "facts"}
-		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission.", st.milestone, st.feature))
+		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission.", termText(st.milestone), st.feature))
 		pr := delivered(n)
 		shown := 0
 		if pr == nil {
@@ -297,9 +297,14 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 				it.Lines = append(it.Lines, fmt.Sprintf("Merged in #%d at %s. No proof pack on the ledger is for that head.", pr.Number, short(it.Head)))
 			}
 			it.Options = []InboxAction{
-				{N: 1, Label: fmt.Sprintf("accept #%d: it does what you agreed", n), Command: eveningAccept},
-				{N: 2, Label: fmt.Sprintf("say what is wrong, in a comment on #%d", n), Command: eveningComment, Ask: fmt.Sprintf("What is wrong? Your line is posted on #%d as your comment.", n)},
-				{N: 3, Label: "not now: nothing is written", Command: inboxLeave},
+				{Label: fmt.Sprintf("say what is wrong, in a comment on #%d", n), Command: eveningComment, Ask: fmt.Sprintf("What is wrong? Your line is posted on #%d as your comment.", n)},
+				{Label: "not now: nothing is written", Command: inboxLeave},
+			}
+			if st.pack != nil { // a person accepts the evidence of a pack, never its absence
+				it.Options = append([]InboxAction{{Label: fmt.Sprintf("accept #%d: it does what you agreed", n), Command: eveningAccept}}, it.Options...)
+			}
+			for i := range it.Options {
+				it.Options[i].N = i + 1
 			}
 		}
 		for _, c := range crit {
