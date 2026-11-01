@@ -1,0 +1,21 @@
+{
+  "story": 1173,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1173-approve-to-build-is-an-inbox-card-with-i",
+  "status": "host-handoff",
+  "brief_sha256": "e8d3efc4a92c13f8758bce3fc757467ed0beef1c05553c063306e1b7cfa96f99",
+  "started_at": "2026-11-01T12:16:11Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T12:16:11Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1173: Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries"
+    }
+  ]
+}
