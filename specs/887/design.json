@@ -1,0 +1,26 @@
+{
+  "feature": 887,
+  "body_hash": "d85b025ad4c5cc01ab737de9d4ad1085661c6c74d783e239628e7fca9cfe8f2b",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "contracts": [
+    "Review guidance stays a `#### Review guidance` block under a Story or Bug's Assumptions field: `- Check:`, `- Ignore:` and `- Risk:` lines; the issue forms do not change (#1221)",
+    "workitems.ParseGuidance(body) returns the checks, ignores and risks in order; Ready and slice refuse an Ignore that names security, data, concurrency, a floor, or a P0 or P1 area, and a line of another shape; a missing block warns (#1221)",
+    "delegate.BriefInput gains Guidance, read from the Ready snapshot's body, never the live issue, and rendered inside the untrusted quote; no guidance renders nothing (#1222)",
+    "inspect.Input gains Guidance from the same snapshot; it is in DiffHash only when present, so the cache of stories with none holds; an Ignore drops only a P2 or P3 finding outside the limits, and lists each drop in Dropped (#1223)"
+  ],
+  "layers": [
+    "L02",
+    "L03"
+  ],
+  "story_order": [
+    1221,
+    1222,
+    1223
+  ],
+  "rollback": "A revert of each story's squash undoes it: no ledger record or issue body is rewritten. Stories keep their guidance blocks as plain text. Reverting #1223 changes DiffHash only for stories with guidance, so their next review is judged again once.",
+  "planned_at": "2026-11-01T11:01:50Z",
+  "planned_by": "human-fallback"
+}
