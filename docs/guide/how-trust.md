@@ -113,7 +113,7 @@ includes a pull request whose builder's family is unknown: no reviewer can be sh
 is rung C. A rung C review never counts toward the streak. To require a different-family review for merge on proof,
 set `proof_rungs = ["A", "B"]`. A review at rung human counts too when the `[autonomy] approver` recorded
 `aayu inspect <pr> --approve` of the exact head on the ledger: ship merges on that approval and names it as the human
-pass, so the person enters one device code per head (Story #1192). A skipped or neutral required check counts as green, as GitHub counts it, and the CODEOWNERS check may
+pass, so the person enters one device code per head. A skipped or neutral required check counts as green, as GitHub counts it, and the CODEOWNERS check may
 be red only by failing on a CODEOWNERS path the pull request touches; the streak's pass never merges past it. The `[autonomy]` table and the integration
 branch that decide this are read from the base branch, never from the pull request, so a change cannot loosen the
 rules it is judged by. A change to the narrow set still needs a person per pull request, and the streak cannot pass it
