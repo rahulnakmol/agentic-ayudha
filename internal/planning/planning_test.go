@@ -116,6 +116,8 @@ func TestCheckSliceDirectoryPaths(t *testing.T) {
 		{"3_sibling_with_longer_name", f887, []string{"internal/workitemsx/a.go"}, "internal/workitemsx/a.go" + outside, ""},
 		{"3_sibling_without_slash", []string{"internal/workitems"}, []string{"internal/workitemsx/a.go"}, "internal/workitemsx/a.go" + outside, ""},
 		{"3_sibling_of_named_file", f887, []string{"internal/cli/slicex.go"}, "internal/cli/slicex.go" + outside, "L02"},
+		{"3_parent_directory", f887, []string{"internal/"}, "internal/" + outside, "L02,L03,L04,L05,L06,L07,L08"},
+		{"3_parent_glob", f887, []string{"internal/**"}, "internal/**" + outside, "L02,L03,L04,L05,L06,L07,L08"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			problems, footprint := pathCheck(t, tc.expected, tc.paths)

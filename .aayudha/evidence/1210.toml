@@ -10,7 +10,7 @@ tests = ["internal/planning:TestCheckSliceDirectoryPaths/2_directory_without_sla
 
 [[criterion]]
 id = 3 # a story names internal/workitemsx/a.go, the Feature internal/workitems/: outside the expected paths
-tests = ["internal/planning:TestCheckSliceDirectoryPaths/3_sibling_with_longer_name", "internal/planning:TestCheckSliceDirectoryPaths/3_sibling_without_slash"]
+tests = ["internal/planning:TestCheckSliceDirectoryPaths/3_sibling_with_longer_name", "internal/planning:TestCheckSliceDirectoryPaths/3_sibling_without_slash", "internal/planning:TestCheckSliceDirectoryPaths/3_parent_directory"]
 
 [[criterion]]
 id = 4 # a story names internal/inspect/filter.go or internal/delegate/brief.go: slice names its layer, no path problem

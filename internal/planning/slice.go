@@ -113,9 +113,16 @@ func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 // path of the other (in either direction, so a broader glob covers a narrower
 // one).
 func overlap(a, b string) bool {
-	for _, x := range forms(a) {
-		for _, y := range forms(b) {
-			if verify.Match(x, sample(y)) || verify.Match(y, sample(x)) {
+	return within(a, b) || within(b, a)
+}
+
+// within reports whether path glob p lies inside glob g: g matches a sample
+// path of p. A parent directory of g (`internal/` for `internal/workitems/`)
+// is not within it.
+func within(p, g string) bool {
+	for _, x := range forms(g) {
+		for _, y := range forms(p) {
+			if verify.Match(x, sample(y)) {
 				return true
 			}
 		}
@@ -200,7 +207,7 @@ func CheckSlice(src Source, d SliceDraft, layers verify.LayerGlobs) SliceReport 
 			sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: "name the paths the story changes (a subset of the Feature's expected paths)"})
 		}
 		for _, p := range s.Paths {
-			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return overlap(g, p) }) {
+			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return within(p, g) }) {
 				sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: fmt.Sprintf("%s is outside the Feature's expected paths", p)})
 			}
 		}
