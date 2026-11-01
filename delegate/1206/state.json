@@ -9,7 +9,8 @@
   "task": "T-01a1963b-6a34-7635-9495-c006696c9e4d",
   "task_url": "https://ampcode.com/threads/T-01a1963b-6a34-7635-9495-c006696c9e4d",
   "branch": "story/1206-ship-asks-for-the-device-code-before-che",
-  "status": "handed-off",
+  "pr": 1214,
+  "status": "pr-open",
   "brief_sha256": "5507baaec4cddb38b67f78e12c57201834a2b5c8772125ce7a5bc9afb5a207b0",
   "started_at": "2026-11-01T08:28:19Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-01T08:31:06Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T10:26:01Z",
+      "status": "pr-open",
+      "detail": "PR #1214 found by aayu mission recover"
     }
   ]
 }
