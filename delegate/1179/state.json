@@ -1,0 +1,21 @@
+{
+  "story": 1179,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1179-aayu-grill-edits-a-filed-body-before-rea",
+  "status": "host-handoff",
+  "brief_sha256": "af0195dfc84144ff7d1ca4f5547aded6f99cb2e96b35da987e5996b1e955849d",
+  "started_at": "2026-11-01T08:25:45Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T08:25:45Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1179: aayu grill edits a filed body before Ready, and checks link targets as Ready does"
+    }
+  ]
+}
