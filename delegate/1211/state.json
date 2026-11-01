@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a1963b-7c05-70ea-9c28-97de69f7e793",
+  "task_url": "https://ampcode.com/threads/T-01a1963b-7c05-70ea-9c28-97de69f7e793",
   "branch": "story/1211-fix-env-a-stale-amp-environment-record-s",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "f1366a2942fe02723990eda4ca756511b359b0b6be2f2d8a230428a3258d41b0",
   "started_at": "2026-11-01T08:28:52Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T08:28:52Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1211: fix(env): a stale amp environment record stops every Amp mission start, and only Docker can verify it again"
+    },
+    {
+      "at": "2026-11-01T08:31:24Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
