@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks","Output":"=== RUN   TestOneFixPRFixesSeveralChecks\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks","Output":"--- PASS: TestOneFixPRFixesSeveralChecks (3.52s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixesEntryShape"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixesEntryShape","Output":"=== RUN   TestGateFixesEntryShape\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixesEntryShape","Output":"--- PASS: TestGateFixesEntryShape (1.75s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixesEntryShape"}

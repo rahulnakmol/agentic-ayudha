@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks","Output":"=== RUN   TestOneFixPRFixesSeveralChecks\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks","Output":"--- PASS: TestOneFixPRFixesSeveralChecks (3.52s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestOneFixPRFixesSeveralChecks"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget","Output":"=== RUN   TestGateFixCountsAgainstBudget\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget","Output":"--- PASS: TestGateFixCountsAgainstBudget (7.46s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGateFixCountsAgainstBudget"}
