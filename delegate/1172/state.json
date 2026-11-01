@@ -3,24 +3,19 @@
   "feature": 1170,
   "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
   "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
-  "receiver": "",
-  "mode": "",
-  "family": "",
-  "status": "",
-  "brief_sha256": "",
-  "started_at": "",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1172-a-waiting-baseline-draft-is-an-inbox-car",
+  "status": "host-handoff",
+  "brief_sha256": "f9f1fdabb2531620a1eea4e431a41e125a8ae8914b1866ab48f725538576e165",
+  "started_at": "2026-11-01T08:23:33Z",
+  "handoffs": 1,
   "events": [
     {
-      "at": "2026-10-31T16:06:24Z",
-      "status": "kanha",
-      "detail": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account) (sent)",
-      "text": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account)"
-    },
-    {
-      "at": "2026-11-01T02:07:27Z",
-      "status": "kanha",
-      "detail": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud environment could not be set up and verified: no Docker daemon answers (docker info); start Docker, or verify on a machine that has it. `aayu install --env --ho (sent)",
-      "text": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud environment could not be set up and verified: no Docker daemon answers (docker info); start Docker, or verify on a machine that has it. `aayu install --env --ho"
+      "at": "2026-11-01T08:23:33Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1172: A waiting baseline draft is an inbox card, approved under the session's one device code"
     }
   ]
 }
