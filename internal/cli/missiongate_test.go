@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -44,17 +45,29 @@ type gateWorld struct {
 // MS2=#22"), its stories as listed, and dev at a tip whose required checks
 // build and lint pass.
 func newGateWorld(t *testing.T, ms string, stories ...int) *gateWorld {
+	return newBugsGateWorld(t, ms, stories, nil)
+}
+
+// newBugsGateWorld is newGateWorld with Bugs too, and with no --milestones when ms is "".
+func newBugsGateWorld(t *testing.T, ms string, stories, bugs []int) *gateWorld {
 	g := &gateWorld{missionWorld: newMissionWorld(t)}
 	m := g.missionWorld
 	m.issue(889, "Agents pull the next story", "feature", 0, "")
 	for _, n := range stories {
 		m.issue(n, fmt.Sprintf("Story %d", n), "story", 889, "")
 	}
+	for _, n := range bugs {
+		m.issue(n, fmt.Sprintf("Bug %d", n), "bug", 889, "")
+	}
 	m.feature(889, stories...)
 	m.mu.Lock()
 	m.tool = "amp"
 	m.mu.Unlock()
-	if code, out, errOut := m.approve(889, "--milestones", ms); code != 0 {
+	var args []string
+	if ms != "" {
+		args = []string{"--milestones", ms}
+	}
+	if code, out, errOut := m.approve(889, args...); code != 0 {
 		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
 	}
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
@@ -1243,5 +1256,64 @@ func TestGateFixPassedNeedsTheNamedCheck(t *testing.T) {
 		if got := gateFixPassed(c.ref, c.results); got != c.want {
 			t.Errorf("gateFixPassed(%q, %+v) = %t, want %t", c.ref, c.results, got, c.want)
 		}
+	}
+}
+
+// putPack lands a proof pack of story n's PR pr on the ledger, of kind
+// (authoritative or advisory), as ship and proof push do.
+func (g *gateWorld) putPack(n, pr int, kind string) {
+	g.t.Helper()
+	head := fmt.Sprintf("%040x", pr)
+	b, err := proof.Encode(&proof.Pack{Repo: "o/r", Story: n, PR: pr, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
+		Authority: proof.Authority{Kind: kind}, CompletionGoalHash: strings.Repeat("ab", 32), CreatedAt: "2026-11-01T10:00:00Z"})
+	if err != nil {
+		g.t.Fatal(err)
+	}
+	putLedger(g.t, g.bare, proof.Dir(n, head, kind)+"/pack.json", string(b))
+}
+
+// Story #1174, criterion 4: Bugs #30 and #31 merged, and #31's PR has no
+// authoritative pack on the ledger (an advisory one, and one of another PR,
+// do not count): the BUGS gate fails with "#31 merged with no proof pack",
+// and its fix waits for a person, never a fix PR. Once the pack lands, the
+// gate runs again on the same dev tip and passes.
+func TestGateBugsNeedProofPack(t *testing.T) {
+	g := newBugsGateWorld(t, "", []int{20, 21}, []int{30, 31})
+	for _, n := range []int{20, 21} {
+		g.closeIssue(n)
+	}
+	for n, pr := range map[int]int{30: 130, 31: 131} {
+		g.status(n, "merged", "") // ship leaves a Bug open until its release (Bug #1169)
+		putLedger(t, g.bare, delegate.LedgerPath(n), fmt.Sprintf(`{"story": %d, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": %d, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`, n, pr))
+	}
+	g.putPack(30, 130, proof.Authoritative)
+	g.putPack(31, 131, proof.Advisory)
+	g.putPack(31, 99, proof.Authoritative)
+	rep := g.gateJSON()
+	if len(rep.Milestones) != 2 || rep.Milestones[0].State != GatePassed || rep.Milestones[1].Name != BugsMilestone || rep.Milestones[1].State != GateFailed {
+		t.Fatalf("gate: %+v", rep.Milestones)
+	}
+	var checks []string
+	for _, ck := range rep.Milestones[1].Checks {
+		if strings.HasPrefix(ck.Check, "proof:") {
+			checks = append(checks, ck.Check+"="+ck.Result+": "+ck.Detail)
+		}
+	}
+	if want := []string{"proof:#30=passed: " + proof.Dir(30, fmt.Sprintf("%040x", 130), proof.Authoritative) + "/pack.json", "proof:#31=failed: #31 merged with no proof pack"}; !slices.Equal(checks, want) {
+		t.Fatalf("BUGS proof checks: %q, want %q", checks, want)
+	}
+	if len(rep.Fixes) != 1 || rep.Fixes[0].Check != "proof:#31" || rep.Fixes[0].Action != "waits" || rep.Fixes[0].Brief != "" ||
+		!strings.Contains(rep.Fixes[0].Reason, "aayu proof land") {
+		t.Fatalf("fixes: %+v", rep.Fixes)
+	}
+	if p, _ := g.plan(889); p.Milestones[1].Gate.State != GateFailed {
+		t.Fatalf("BUGS gate in the plan: %+v", p.Milestones[1].Gate)
+	}
+	g.putPack(31, 131, proof.Authoritative)
+	if rep := g.gateJSON(); rep.Milestones[1].State != GatePassed {
+		t.Fatalf("gate after #31's pack landed: %+v", rep.Milestones)
+	}
+	if p, _ := g.plan(889); p.Milestones[1].Gate.State != GatePassed || p.Milestones[1].Gate.DevSHA != g.sha {
+		t.Fatalf("BUGS gate in the plan: %+v", p.Milestones[1].Gate)
 	}
 }

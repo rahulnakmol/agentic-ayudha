@@ -27,6 +27,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -226,13 +227,14 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 	if err != nil {
 		return err
 	}
-	merged, layers := map[int]bool{}, map[int][]string{}
+	merged, state, layers := map[int]bool{}, map[int]string{}, map[int][]string{}
 	for _, it := range plan.Graph {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		merged[it.Number] = depState(is) != depOpen // merged or cancelled (Bug #1169)
+		state[it.Number] = depState(is)
+		merged[it.Number] = state[it.Number] != depOpen // merged or cancelled (Bug #1169)
 		for _, l := range github.IssueLabels(is) {
 			if v, ok := strings.CutPrefix(l, "layer:"); ok {
 				layers[it.Number] = append(layers[it.Number], v)
@@ -276,6 +278,12 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 		if err != nil {
 			return err
 		}
+		var packs []GateCheck // its merged Bugs' proof packs, read when its gate is due
+		if m.Gate.State != GatePassed && earlierPassed && k == len(m.Stories) {
+			if packs, err = bugPacks(ctx, w, plan, m, state); err != nil {
+				return err
+			}
+		}
 		switch {
 		case m.Gate.State == GatePassed:
 			row.Detail = fmt.Sprintf("passed on dev %s at %s", short(m.Gate.DevSHA), m.Gate.At)
@@ -285,10 +293,10 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 			row.Detail = fmt.Sprintf("building: %d of %d merged; the gate runs when its last story merges", k, len(m.Stories))
 		case !once && m.Gate.State == GateFailed && len(open) > 0:
 			row.Detail = "failed on dev " + short(m.Gate.DevSHA) + "; the gate runs again when its fixes merge: " + strings.Join(open, ", ")
-		case !once && last != nil && last.DevSHA == sha:
+		case !once && last != nil && last.DevSHA == sha && !landed(last, packs):
 			row.Detail = fmt.Sprintf("%s on dev %s, the tip now", last.Result, short(sha))
 		default:
-			run, err := e.runGate(ctx, c, g, repo, dev, sha, m, layers, runs)
+			run, err := e.runGate(ctx, c, g, repo, dev, sha, m, layers, runs, packs)
 			if err != nil {
 				return err
 			}
@@ -385,10 +393,11 @@ func (p *MissionPause) reason() string {
 	return p.Reason
 }
 
-// runGate runs the gate of milestone m on the dev tip sha: the required
-// checks of dev, then, once none of them is pending, the verify sweep and
-// the evals of the seats that own the layers of the milestone's stories.
-func (e *Env) runGate(ctx context.Context, c *github.Client, g *gateTree, repo, dev, sha string, m MissionMilestone, layers map[int][]string, runs []GateRun) (GateRun, error) {
+// runGate runs the gate of milestone m on the dev tip sha: its Bugs' proof
+// packs (bugPacks), the required checks of dev, then, once none of them is
+// pending, the verify sweep and the evals of the seats that own the layers
+// of the milestone's stories.
+func (e *Env) runGate(ctx context.Context, c *github.Client, g *gateTree, repo, dev, sha string, m MissionMilestone, layers map[int][]string, runs []GateRun, packs []GateCheck) (GateRun, error) {
 	run := GateRun{Milestone: m.Name, DevSHA: sha, At: e.Now().UTC().Format(time.RFC3339)}
 	rerun := map[string]bool{}
 	for _, r := range runs {
@@ -402,7 +411,7 @@ func (e *Env) runGate(ctx context.Context, c *github.Client, g *gateTree, repo, 
 	if err != nil {
 		return run, err
 	}
-	run.Checks = req
+	run.Checks = append(slices.Clone(packs), req...)
 	if !slices.ContainsFunc(req, func(ck GateCheck) bool { return ck.Result == gatePending }) {
 		v, err := e.gateVerify(ctx, g, sha)
 		if err != nil {
@@ -433,6 +442,59 @@ func (e *Env) runGate(ctx context.Context, c *github.Client, g *gateTree, repo, 
 		}
 	}
 	return run, nil
+}
+
+// proofCheck begins the name of a Bug's proof check: "proof:#31".
+const proofCheck = "proof:"
+
+// bugPacks are the proof checks of milestone m (Story #1174): each Bug of
+// it that merged passes only with an authoritative proof pack on the ledger
+// for its PR, the one its delegation recorded (any PR when none did). It
+// reads the ledger, never a comment. A cancelled Bug needs none.
+func bugPacks(ctx context.Context, w *ledger.Writer, plan *MissionPlan, m MissionMilestone, state map[int]string) ([]GateCheck, error) {
+	var bugs []int
+	for _, it := range plan.Graph {
+		if it.Kind == "bug" && slices.Contains(m.Stories, it.Number) && state[it.Number] == depMerged {
+			bugs = append(bugs, it.Number)
+		}
+	}
+	if len(bugs) == 0 {
+		return nil, nil
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	defer t.Close()
+	var out []GateCheck
+	for _, n := range bugs {
+		var st delegate.State
+		if b, err := t.File(ctx, delegate.LedgerPath(n)); ignoreMissing(err) != nil {
+			return nil, Wrap(ExitExternal, err)
+		} else if b != nil && json.Unmarshal(b, &st) != nil {
+			return nil, Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote", delegate.LedgerPath(n))
+		}
+		es, err := (&proof.Store{}).Packs(ctx, t, n)
+		if err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+		ck := GateCheck{Check: fmt.Sprintf("%s#%d", proofCheck, n), Result: gateFail, Detail: fmt.Sprintf("#%d merged with no proof pack", n)}
+		if i := slices.IndexFunc(es, func(x proof.Entry) bool {
+			return x.Pack.Authority.Kind == proof.Authoritative && (st.PR == 0 || x.Pack.PR == st.PR)
+		}); i >= 0 {
+			ck.Result, ck.Detail = gatePass, es[i].Path
+		}
+		out = append(out, ck)
+	}
+	return out, nil
+}
+
+// landed reports whether a proof check that failed in run r passes in
+// packs: its pack landed, so the gate runs again on the same dev tip.
+func landed(r *GateRun, packs []GateCheck) bool {
+	return slices.ContainsFunc(packs, func(ck GateCheck) bool {
+		return ck.Result == gatePass && slices.ContainsFunc(r.Checks, func(was GateCheck) bool { return was.Check == ck.Check && was.Result == gateFail })
+	})
 }
 
 // gateRequired judges each required check of dev (its rules and classic
@@ -838,7 +900,7 @@ func openFixes(plan *MissionPlan, m string, last *GateRun, prOf func(int) (*gh.P
 	}
 	var out []string
 	for _, ck := range last.Checks {
-		if ck.Result != gateFail {
+		if ck.Result != gateFail || strings.HasPrefix(ck.Check, proofCheck) { // its fix is a pack, which the gate reads itself (landed)
 			continue
 		}
 		fx := findFix(plan, m, ck.Check, last.DevSHA)
@@ -973,6 +1035,8 @@ func (e *Env) gateFixItems(ctx context.Context, c *github.Client, w *ledger.Writ
 			it := GateFixItem{Milestone: m.Name, Check: ck.Check, DevSHA: last.DevSHA, Action: "waits"}
 			key := fixKey(m.Name, ck.Check, last.DevSHA)
 			switch fx := findFix(plan, m.Name, ck.Check, last.DevSHA); {
+			case strings.HasPrefix(ck.Check, proofCheck): // a fix PR lands no pack for a merged Bug
+				it.Reason = "a person lands the pack of the Bug's merged PR: aayu proof land <PR>"
 			case fx != nil:
 				it.Action, it.PR = "fixing", fx.PR
 				if fx.Waits != "" {

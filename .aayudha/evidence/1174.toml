@@ -1,0 +1,21 @@
+# Which tests prove Story #1174's Completion Goal.
+
+[[criterion]]
+id = 1 # open stories #20, #21 and open Bugs #30, #31, no --milestones: MS1 with #20 and #21, then BUGS with #30 and #31
+tests = ["internal/cli:TestApproveToBuildPutsOpenBugsLast"]
+
+[[criterion]]
+id = 2 # --milestones names MS1 and MS2 and no Bug: BUGS with every open Bug, last
+tests = ["internal/cli:TestApproveToBuildNamedMilestonesThenBugs"]
+
+[[criterion]]
+id = 3 # Bug #32 filed while the mission runs: BUGS gains #32, and mission next lists it after the stories before
+tests = ["internal/cli:TestMissionNextBugFiledDuringMissionJoinsBugs"]
+
+[[criterion]]
+id = 4 # Bug #31 merged with no proof pack for its PR on the ledger: the BUGS gate fails with "#31 merged with no proof pack"
+tests = ["internal/cli:TestGateBugsNeedProofPack"]
+
+[[criterion]]
+id = 5 # no open Bug: the plan has no BUGS milestone
+tests = ["internal/cli:TestApproveToBuildNoOpenBugNoBugsMilestone"]
