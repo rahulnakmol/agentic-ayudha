@@ -276,6 +276,12 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 	for _, l := range m.log {
 		fmt.Fprintln(out, l)
 	}
+	if lines := e.daySet(cfg, m.started); len(lines) > 0 { // the day it set, once it started a mission (Story #1175)
+		fmt.Fprintf(out, "\n%s\n", dayIsSet)
+		for _, l := range lines {
+			fmt.Fprintln(out, "  "+l)
+		}
+	}
 	done, skipped, left := 0, 0, 0
 	for _, it := range m.items {
 		switch k := it.key(); m.state[k] {
@@ -446,6 +452,7 @@ type inboxModel struct {
 	signin     *inboxSignin                       // the session's approval, while it is asked for (inboxlogin.go); nil once approved
 	signedIn   func(*inboxSource, string) tea.Cmd // sets the session up for the approved login and reads GitHub
 	live       bool                               // the items come from a read of GitHub this session, so one that leaves it is gone
+	started    []InboxItem                        // the Mission start cards done this session, as read before the write (Story #1175)
 
 	cur, sel  int // the list row, and the choice selected on its card
 	armed     bool
@@ -1031,6 +1038,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		delete(m.selected, msg.key)
 		d := inboxDone{By: m.login, At: m.now().UTC(), Choice: job.it.button(job.a), Wrote: job.w.end()}
 		m.done[msg.key] = d
+		if job.it.Kind == InboxStart {
+			m.started = append(m.started, msg.fresh) // read again before the write: its plan is the one that started
+		}
 		// The cache is a file: it is written off the update loop, unless
 		// the inbox quits now and would not wait for it.
 		sv := &inboxSave{key: msg.key, d: d}

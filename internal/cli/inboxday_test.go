@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 )
@@ -74,5 +77,72 @@ func TestMorningCardOrder(t *testing.T) {
 	}
 	if p, _ := m.plan(889); p.StartedBy != "rahulnakmol" {
 		t.Fatalf("the mission of #889 did not start:\n%s", out)
+	}
+}
+
+// dayLine889 is the day line of #889 as approveWorld's Sunday clock reads it:
+// MS1 today, and the review at 18:00 on Monday, the next business day.
+const dayLine889 = "  #889 · today MS1: #20, #21, #22, #30 · evening review Mon 2 Nov 18:00 Europe/London, the end of [time] business_hours\n"
+
+// Criterion 2: he approves #889 and starts its mission in the session, and
+// leaves #874 for later: the last card says The day is set, with one line for
+// #889 only: its milestone today, its stories, and the evening review at the
+// end of [time] business_hours. The full-screen inbox ends with the same card.
+func TestDayIsSet(t *testing.T) {
+	t.Run("line by line", func(t *testing.T) {
+		m, pr := morningWorld(t)
+		m.device("rahulnakmol")
+		code, out, errOut := runIn(t, m.person, m.opts, "aaaaa21ys", "inbox", "--repo", "o/r")
+		last := strings.LastIndex(out, "At the review cap #"+strconv.Itoa(pr))
+		set := strings.Index(out, "\n"+dayIsSet+"\n"+dayLine889+"\ninbox: ")
+		if code != 0 || last < 0 || set < last || strings.Count(out, dayIsSet) != 1 || strings.Contains(out[max(set, 0):], "#874") {
+			t.Fatalf("inbox: exit %d:\n%s%s", code, out, errOut)
+		}
+	})
+	t.Run("full screen", func(t *testing.T) {
+		m := lockWorld(t, "cursor")
+		// Monday 19:30 in UTC is Tuesday 01:00 in Kolkata, before its hours: the review is Tuesday at 18:00 there.
+		m.opts.Now = func() time.Time { return time.Date(2026, 11, 2, 19, 30, 0, 0, time.UTC) }
+		m.person["AAYU_TIME__TZ"] = "Asia/Kolkata"
+		opts := m.opts
+		opts.TUI = func(tm tea.Model) error {
+			im := tm.(*inboxModel)
+			teaDrive(im, im.Init())
+			im.cur = slices.IndexFunc(im.rows, func(i int) bool { return im.items[i].Kind == InboxStart })
+			teaKeys(im, "1", "enter", "enter", "q")
+			return nil
+		}
+		m.device("rahulnakmol")
+		code, out, errOut := runIn(t, m.person, opts, "", "inbox", "--repo", "o/r")
+		want := "\n" + dayIsSet + "\n  #889 · today MS1: #20, #21, #22 · evening review Tue 3 Nov 18:00 Asia/Kolkata, the end of [time] business_hours\n\ninbox: 1 done"
+		if p, _ := m.plan(889); code != 0 || p.StartedBy != "rahulnakmol" || !strings.Contains(out, want) {
+			t.Fatalf("full-screen inbox: exit %d, started by %q:\n%s%s", code, p.StartedBy, out, errOut)
+		}
+	})
+}
+
+// Criterion 3: he leaves before the Mission start card, by quitting or with
+// Not now: no The day is set line, nothing starts, and the start cards wait
+// for the next session.
+func TestDayNotSetBeforeStart(t *testing.T) {
+	for name, keys := range map[string]string{"quit": "aaaaa2q", "not now": "aaaaa22s"} {
+		t.Run(name, func(t *testing.T) {
+			m, _ := morningWorld(t)
+			m.device("rahulnakmol")
+			code, out, errOut := runIn(t, m.person, m.opts, keys, "inbox", "--repo", "o/r")
+			if code != 0 || !strings.Contains(out, "Mission start #889: ") || strings.Contains(out, dayIsSet) {
+				t.Fatalf("inbox %s: exit %d:\n%s%s", keys, code, out, errOut)
+			}
+			for _, f := range []int{874, 889} {
+				if p, raw := m.plan(f); p.StartedBy != "" || p.Lock != nil {
+					t.Fatalf("leaving started #%d:\n%s", f, raw)
+				}
+			}
+			m.g.Reset()
+			waits, _ := m.listed(m.person)
+			if !slices.Contains(waits, "mission-start#874") || !slices.Contains(waits, "mission-start#889") || len(m.g.Writes()) != 0 {
+				t.Fatalf("the next session's inbox: %v, writes %v", waits, m.g.Writes())
+			}
+		})
 	}
 }
