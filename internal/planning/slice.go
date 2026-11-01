@@ -9,6 +9,7 @@ package planning
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -113,16 +114,9 @@ func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 // path of the other (in either direction, so a broader glob covers a narrower
 // one).
 func overlap(a, b string) bool {
-	return within(a, b) || within(b, a)
-}
-
-// within reports whether path glob p lies inside glob g: g matches a sample
-// path of p. A parent directory of g (`internal/` for `internal/workitems/`)
-// is not within it.
-func within(p, g string) bool {
-	for _, x := range forms(g) {
-		for _, y := range forms(p) {
-			if verify.Match(x, sample(y)) {
+	for _, x := range forms(a) {
+		for _, y := range forms(b) {
+			if verify.Match(x, samples(y)[0]) || verify.Match(y, samples(x)[0]) {
 				return true
 			}
 		}
@@ -130,15 +124,33 @@ func within(p, g string) bool {
 	return false
 }
 
-// forms is what a path glob stands for. A directory (`internal/workitems/`)
-// stands for every path under it; a path without a wildcard and without the
-// slash (`internal/workitems`) can be a file or a directory, so it stands for
-// itself and every path under it. A sibling with a longer name
-// (`internal/workitemsx/`) is in neither.
+// within reports whether path glob p lies inside glob g: g matches every
+// sample path of p. A parent directory of g (`internal/` for
+// `internal/workitems/`) is not within it, nor is a glob that allows names g
+// does not (`*_test.go` in `?_test.go`).
+func within(p, g string) bool {
+	for _, x := range forms(g) {
+		for _, y := range forms(p) {
+			if !slices.ContainsFunc(samples(y), func(s string) bool { return !verify.Match(x, s) }) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// forms is what a path glob stands for, after cleaning (so
+// `internal/workitems/../cli/x.go` is `internal/cli/x.go`). A directory
+// (`internal/workitems/`) stands for every path under it; a path without a
+// wildcard and without the slash (`internal/workitems`) can be a file or a
+// directory, so it stands for itself and every path under it. A sibling with a
+// longer name (`internal/workitemsx/`) is in neither.
 func forms(g string) []string {
 	g = strings.TrimPrefix(strings.TrimSpace(strings.Trim(strings.TrimSpace(g), "`")), "/")
-	if d, ok := strings.CutSuffix(g, "/"); ok {
-		return []string{d + "/**"}
+	dir := strings.HasSuffix(g, "/")
+	g = path.Clean(g)
+	if dir {
+		return []string{g + "/**"}
 	}
 	if !strings.ContainsAny(g, "*?") {
 		return []string{g, g + "/**"}
@@ -146,10 +158,14 @@ func forms(g string) []string {
 	return []string{g}
 }
 
-// sample turns a glob into one concrete path it matches.
-func sample(g string) string {
-	g = strings.ReplaceAll(g, "**", "x/x")
-	return strings.ReplaceAll(g, "*", "x")
+// samples turns a glob into two concrete paths it matches: one with short
+// wildcards, one with longer and different ones. A glob that matches both
+// allows the other glob's names of either length.
+func samples(g string) []string {
+	fill := func(deep, star, one string) string {
+		return strings.NewReplacer("**", deep, "*", star, "?", one).Replace(g)
+	}
+	return []string{fill("x/x", "x", "x"), fill("z/z/z", "zz", "z")}
 }
 
 // Paths splits an Expected paths field: one glob per line, list bullets and

@@ -118,6 +118,11 @@ func TestCheckSliceDirectoryPaths(t *testing.T) {
 		{"3_sibling_of_named_file", f887, []string{"internal/cli/slicex.go"}, "internal/cli/slicex.go" + outside, "L02"},
 		{"3_parent_directory", f887, []string{"internal/"}, "internal/" + outside, "L02,L03,L04,L05,L06,L07,L08"},
 		{"3_parent_glob", f887, []string{"internal/**"}, "internal/**" + outside, "L02,L03,L04,L05,L06,L07,L08"},
+		{"3_parent_traversal", f887, []string{"internal/workitems/../verify/footprint.go"}, "internal/workitems/../verify/footprint.go" + outside, "L04"},
+		{"3_traversal_back_inside", f887, []string{"internal/verify/../workitems/validate.go"}, "", "L03"},
+		{"3_glob_wider_than_expected", []string{"internal/cli/?_test.go"}, []string{"internal/cli/*_test.go"}, "internal/cli/*_test.go" + outside, "L02"},
+		{"3_glob_narrower_than_expected", []string{"internal/cli/*_test.go"}, []string{"internal/cli/?_test.go"}, "", "L02"},
+		{"1_glob_under_directory", f887, []string{"internal/workitems/*.go"}, "", "L03"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			problems, footprint := pathCheck(t, tc.expected, tc.paths)
