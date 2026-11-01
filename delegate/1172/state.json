@@ -15,6 +15,12 @@
       "status": "kanha",
       "detail": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account) (sent)",
       "text": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account)"
+    },
+    {
+      "at": "2026-11-01T02:07:27Z",
+      "status": "kanha",
+      "detail": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud environment could not be set up and verified: no Docker daemon answers (docker info); start Docker, or verify on a machine that has it. `aayu install --env --ho (sent)",
+      "text": "start of #1172 failed: build #1172 --delegate amp: Amp's cloud environment could not be set up and verified: no Docker daemon answers (docker info); start Docker, or verify on a machine that has it. `aayu install --env --ho"
     }
   ]
 }
