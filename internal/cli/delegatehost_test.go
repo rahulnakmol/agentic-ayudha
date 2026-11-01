@@ -103,6 +103,19 @@ func TestAmpHostThreadRecorded(t *testing.T) {
 	m.hostHandedOff()
 	st := m.state(20)
 	calls := len(m.ampCalls())
+	// Another write lands on the ledger while the record is written: nothing is recorded, and the same command runs again.
+	race, pushed := m.opts, false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, "specs/20/other.json", "{}")
+		}
+	}
+	if code, out, errOut := run(t, m.agent, race, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); !pushed || code != ExitBlocked ||
+		!strings.Contains(errOut, "Nothing was recorded; run the same --thread command again.") || !strings.Contains(errOut, "next: aayu build 20 --delegate amp --thread "+hostThread) ||
+		strings.Contains(out, dlgHandedOff) || m.state(20).Task != "" || m.state(20).Status != dlgHost {
+		t.Fatalf("a record that lost the ledger race: pushed %t, exit %d: %s%s", pushed, code, out, errOut)
+	}
 	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r", "--json")
 	var rec BuildResult
 	if code != 0 || json.Unmarshal([]byte(out), &rec) != nil || rec.Delegation.Task != hostThread || rec.Delegation.Status != dlgHandedOff || rec.Delegation.Host != nil {
@@ -129,6 +142,27 @@ func TestAmpHostThreadRecorded(t *testing.T) {
 	if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != ExitBlocked ||
 		!strings.Contains(errOut, "Nothing was recorded.") || strings.Contains(errOut, "stop the thread") {
 		t.Fatalf("the recorded thread again: exit %d: %s", code, errOut)
+	}
+}
+
+// mission show names no thread for a delegation record that does not parse,
+// and fails on one git cannot read, never showing the story with no thread.
+// The mission is not started, so the show's clock reads no record.
+func TestMissionShowUnreadableDelegation(t *testing.T) {
+	m := newMissionWorld(t)
+	m.scenario889(nil)
+	if code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21 MS2=#22,#23"); code != 0 {
+		t.Fatalf("approve: exit %d: %s%s", code, out, errOut)
+	}
+	m.status(20, "in-progress", "")
+	m.status(21, "in-progress", "")
+	putLedger(t, m.bare, delegate.LedgerPath(20), "{")
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#20 in-progress, #21 in-progress") {
+		t.Fatalf("mission show with an unparsable record: exit %d: %s%s", code, out, errOut)
+	}
+	putLedger(t, m.bare, delegate.LedgerPath(21)+"/x", "{}") // the record's path is a directory: git cannot read it as a file
+	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "delegate/21/state.json") {
+		t.Fatalf("mission show with an unreadable record: exit %d: %s%s", code, out, errOut)
 	}
 }
 

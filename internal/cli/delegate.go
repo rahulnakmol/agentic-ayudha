@@ -761,7 +761,15 @@ func (e *Env) recordThread(ctx context.Context, d *delegation, res *BuildResult,
 	res.Next = fmt.Sprintf("%s works on #%d; `aayu build %d --delegate %s` again to sync: it finds the PR (Refs #%d) and forwards inspect's findings", d.receiver, d.story, d.story, d.receiver, d.story)
 	d.base = tip
 	defer func() { d.base = "" }()
-	return e.saveDelegation(ctx, d)
+	err = e.saveDelegation(ctx, d)
+	if errors.Is(err, ledger.ErrMoved) { // the ledger write failed before the state comment, so nothing landed
+		d.state = cur // build reports the hand-off that still waits, not the record that did not land
+		d.fill(res.Delegation)
+		res.Next = ""
+		return WithNext(Errorf(ExitBlocked, "build #%d --thread: the ledger changed while aayu recorded the thread. Nothing was recorded; run the same --thread command again.", d.story),
+			fmt.Sprintf("aayu build %d --delegate %s --thread %s", d.story, d.receiver, d.thread))
+	}
+	return err
 }
 
 // ensureCloudEnv runs agentenv.Ensure for the receiver before a cloud
