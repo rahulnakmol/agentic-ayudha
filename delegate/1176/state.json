@@ -1,0 +1,21 @@
+{
+  "story": 1176,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1176-the-evening-review-each-story-agreed-thi",
+  "status": "host-handoff",
+  "brief_sha256": "851d779186e54e510a17d83075d981514c47c46494e5ec8e9ef38c822a520e1d",
+  "started_at": "2026-11-01T08:25:28Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T08:25:28Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1176: The evening review: each story agreed this morning, with each criterion next to its evidence"
+    }
+  ]
+}
