@@ -1,12 +1,12 @@
 # Agent environments aayu verified (`aayu install --env --verify`, `--cloud`). Generated; do not edit.
 [container]
 [container.amp]
-fingerprint = 'sha256:b6655dfa4a0f5c48'
+fingerprint = 'sha256:c00612fd89796fef'
 method = 'container'
 image = 'debian:12'
-at = '2026-10-16T02:27:35Z'
-seconds = 316
-evidence = 'setup cold 144s, warm 3s; check 169s; 1 attempt(s)'
+at = '2026-11-01T03:04:09Z'
+seconds = 1282
+evidence = 'setup cold 320s, warm 5s; check 957s; 1 attempt(s)'
 
 [container.claude]
 fingerprint = 'sha256:b6655dfa4a0f5c48'
