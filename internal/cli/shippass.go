@@ -73,9 +73,12 @@ func (p PassRule) who() string {
 }
 
 // allows checks a review that is already a human pass (identity.HumanPass)
-// against the rule.
+// against the rule. A login may be written with a leading "@" in config.
 func (p PassRule) allows(login string) error {
-	if len(p.Approvers) > 0 && !slices.ContainsFunc(p.Approvers, func(a string) bool { return strings.EqualFold(a, login) }) {
+	same := func(a string) bool {
+		return strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(a), "@"), strings.TrimPrefix(strings.TrimSpace(login), "@"))
+	}
+	if len(p.Approvers) > 0 && !slices.ContainsFunc(p.Approvers, same) {
 		return fmt.Errorf("approval by %s is not the human pass: it must come from %s (%s)", login, strings.Join(p.Approvers, " or "), p.As)
 	}
 	if len(p.Never) > 0 && !slices.ContainsFunc(p.Owners, func(a string) bool { return strings.EqualFold(a, login) }) {

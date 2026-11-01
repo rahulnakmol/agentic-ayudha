@@ -1516,6 +1516,8 @@ func TestShipOnApproval(t *testing.T) {
 	g.RefFiles[base][".aayudha/config.toml"] = paired
 	g.Mu.Unlock()
 	refused(notOneOf)
+	// The seat's human may be the approver, written with or without "@".
+	conf = strings.Replace(conf, `approver = "lead"`, `approver = "@lead"`, 1) + "\n[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"Lead\"\n"
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(conf), 0o644)
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
