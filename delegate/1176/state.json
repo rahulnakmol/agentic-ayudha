@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19638-3524-75d9-9c45-50f4f9b5c712",
+  "task_url": "https://ampcode.com/threads/T-01a19638-3524-75d9-9c45-50f4f9b5c712",
   "branch": "story/1176-the-evening-review-each-story-agreed-thi",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "851d779186e54e510a17d83075d981514c47c46494e5ec8e9ef38c822a520e1d",
   "started_at": "2026-11-01T08:25:28Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T08:25:28Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1176: The evening review: each story agreed this morning, with each criterion next to its evidence"
+    },
+    {
+      "at": "2026-11-01T08:27:37Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
