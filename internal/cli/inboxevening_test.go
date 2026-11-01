@@ -29,7 +29,8 @@ var (
 // starts #889's mission at 09:00, which starts MS1 (#1010, #1011, #1104);
 // MS2 (#1012) waits for MS1's gate. #1010 and #1011 merge with proof packs:
 // #1010's maps criterion 1 to a screenshot in the media bucket and criterion
-// 2 to an API trace on the ledger; #1011's maps only criterion 1, and a newer
+// 2 to an API trace on the ledger; #1011's, advisory, maps only criterion 1 to a
+// screenshot no run holds, and a newer
 // pack of #1011 for another head, the best by authority and age, maps criterion 2. A person stops
 // #1104, which does not merge. The clock reads *now, London time.
 func eveningWorld(t *testing.T) (*missionWorld, *time.Time) {
@@ -84,7 +85,7 @@ func eveningWorld(t *testing.T) (*missionWorld, *time.Time) {
 		Criteria:  []proof.Criterion{{ID: 1, Evidence: []string{"media/cart.png"}}, {ID: 2, Evidence: []string{"evidence/criterion-2.jsonl"}}},
 		Artifacts: []proof.Artifact{cart, proof.NewArtifact("evidence/criterion-2.jsonl", "api-trace", trace)}},
 		map[string][]byte{"evidence/criterion-2.jsonl": trace})
-	putPack(t, m.bare, &proof.Pack{Story: 1011, PRHeadSHA: head1011, Authority: proof.Authority{Kind: proof.Authoritative, RunID: 78},
+	putPack(t, m.bare, &proof.Pack{Story: 1011, PRHeadSHA: head1011, Authority: proof.Authority{Kind: proof.Advisory},
 		Criteria:  []proof.Criterion{{ID: 1, Evidence: []string{"media/page.png"}}},
 		Artifacts: []proof.Artifact{proof.NewArtifact("media/page.png", "screenshot", []byte("\x89PNG page"))}}, nil)
 	putPack(t, m.bare, &proof.Pack{Story: 1011, PRHeadSHA: strings.Repeat("dead", 10), Authority: proof.Authority{Kind: proof.Authoritative, RunID: 79}, CreatedAt: "2026-11-02T16:00:00Z",
@@ -180,7 +181,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 		"  2. [api-trace] state: POST /cart with no items; expected: 422 with code cart.empty\n" +
 		"     api-trace: evidence/criterion-2.jsonl · https://github.com/o/r/blob/ledger/proof/1010/" + head1010 + "/authoritative/artifacts/evidence/criterion-2.jsonl\n"
 	card1011 := "  1. [screenshot] state: Story 1011 is empty; expected: the \"Your cart is empty\" message and a Browse button\n" +
-		"     screenshot: media/page.png · https://github.com/o/r/actions/runs/78\n" +
+		"     screenshot: media/page.png · https://github.com/o/r/blob/ledger/proof/1011/" + head1011 + "/advisory/pack.json\n" +
 		"  2. [api-trace] state: POST /cart with no items; expected: 422 with code cart.empty\n" +
 		"     No evidence in the pack for this criterion.\n"
 	choices := "  1. Accept #1010: it does what you agreed (preselected)\n  2. Say what is wrong, in a comment on #1010\n  3. Not now: nothing is written\n  4. Open #1010 on GitHub\n"
@@ -194,7 +195,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	code, out, errOut = runIn(t, m.person, m.opts, "sss", "inbox", "--repo", "o/r")
 	img := "     screenshot: media/cart.png · https://github.com/o/r/actions/runs/77\n   \x1b]1337;File=name="
 	if code != 0 || !strings.Contains(out, img) || !strings.Contains(out, ";inline=1:"+base64.StdEncoding.EncodeToString(cartPNG)+"\a\n") ||
-		strings.Count(out, "\x1b]1337") != 1 || !strings.Contains(out, "     screenshot: media/page.png · https://github.com/o/r/actions/runs/78\n") {
+		strings.Count(out, "\x1b]1337") != 1 || !strings.Contains(out, "     screenshot: media/page.png · https://github.com/o/r/blob/ledger/proof/1011/"+head1011+"/advisory/pack.json\n") {
 		t.Fatalf("inbox in iTerm2: exit %d:\n%q%s", code, out, errOut)
 	}
 
@@ -269,7 +270,14 @@ func TestEveningAcceptRecordsReview(t *testing.T) {
 // accepted.
 func TestEveningCommentIsFeedback(t *testing.T) {
 	m, _ := eveningWorld(t)
+	// GitHub refuses the comment: no review is recorded, so the card stays.
+	m.edit(func() { m.g.Fail = "POST /repos/o/r/issues/1011/comments" })
 	code, out, errOut := runIn(t, m.person, m.opts, "s2the page names the wrong person\nq", "inbox", "--repo", "o/r")
+	m.edit(func() { m.g.Fail = "" })
+	if len(m.reviews()) != 0 || !strings.Contains(out, "✗ ") {
+		t.Fatalf("inbox 2 comment when GitHub refuses it: exit %d, reviews %+v:\n%s%s", code, m.reviews(), out, errOut)
+	}
+	code, out, errOut = runIn(t, m.person, m.opts, "s2the page names the wrong person\nq", "inbox", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "done: your comment is on #1011") {
 		t.Fatalf("inbox 2 comment: exit %d:\n%s%s", code, out, errOut)
 	}
@@ -310,12 +318,61 @@ func TestEveningNotMergedSaysWhy(t *testing.T) {
 	if code != 0 || !strings.Contains(out, card) || !strings.Contains(out, choices) {
 		t.Fatalf("inbox: exit %d:\n%s%s", code, out, errOut)
 	}
-	// Once the stop is lifted, the reason is the mission's next one: it has not started.
-	m.setPlan(889, func(p *MissionPlan) { p.Stopped = nil })
-	for _, it := range eveningList(t, m, m.person) {
-		if it.Number == 1104 && !slices.Contains(it.Lines, "not merged: it has not started.") {
-			t.Fatalf("#1104 with no stop: %q", it.Lines)
+	// Each reason the mission has, in the order it reads them.
+	lines := func(n int) []string {
+		for _, it := range eveningList(t, m, m.person) {
+			if it.Number == n {
+				return it.Lines
+			}
 		}
+		return nil
+	}
+	pr := m.g.AddPR("feat: story 1104", "Refs #1104\n", "agent", "story/1104-x", strings.Repeat("b104", 10), "dev")
+	m.edit(func() { pr.State = "closed" })
+	for _, c := range []struct {
+		name string
+		edit func(*MissionPlan)
+		want []string
+	}{
+		{"ended", func(p *MissionPlan) { p.State = "ended (scope cut)" },
+			[]string{"not merged: the mission ended (scope cut).", "Next: a new mission plan starts it: `aayu ready 889`."}},
+		{"paused", func(p *MissionPlan) { p.State, p.Pause = "", &MissionPause{Reason: "the budget is spent"} },
+			[]string{"not merged: the mission is paused: the budget is spent.", "Next: the person who paused it resumes it: `aayu mission resume 889`."}},
+		{"no stop", func(p *MissionPlan) { p.Pause, p.Stopped = nil, nil },
+			[]string{"not merged: it has not started.", "Next: the mission starts it when an agent is free; `aayu mission show 889` says what the mission does next."}},
+		{"a failed run", func(p *MissionPlan) { p.StoryStates = []MissionStoryState{{Number: 1104, State: "failed"}} },
+			[]string{"not merged: its run is failed."}},
+		{"a wait", func(p *MissionPlan) {
+			p.StoryStates = nil
+			for i := range p.Missions {
+				for j := range p.Missions[i].Stories {
+					if p.Missions[i].Stories[j].Number == 1104 {
+						p.Missions[i].Stories[j].Waits = "waits on #950 (#874)"
+					}
+				}
+			}
+		}, []string{"not merged: it waits on #950 (#874)."}},
+	} {
+		m.setPlan(889, c.edit)
+		if got := lines(1104); !slices.Equal(got[1:1+len(c.want)], c.want) {
+			t.Fatalf("#1104 %s: %q", c.name, got)
+		}
+	}
+	m.setPlan(889, func(p *MissionPlan) { p.Missions = nil })
+	m.edit(func() { pr.State = "open" })
+	if got := lines(1104); got[1] != fmt.Sprintf("not merged: its PR #%d is open and has not merged.", pr.Number) {
+		t.Fatalf("#1104 with an open PR: %q", got)
+	}
+	// It merges with no pack for its head; a pack of #1011 that does not decode leaves #1011's card saying so.
+	m.edit(func() {
+		pr.State, pr.Merged, pr.MergedAt, pr.MergeCommitSHA = "closed", true, time.Date(2026, 11, 2, 16, 0, 0, 0, time.UTC), strings.Repeat("f", 40)
+	})
+	putLedger(t, m.bare, proof.Dir(1011, strings.Repeat("beef", 10), proof.Advisory)+"/"+proof.FileName, "{}")
+	if got := lines(1104); got[1] != fmt.Sprintf("Merged in #%d at b104b10. No proof pack on the ledger is for that head.", pr.Number) || got[3] != "   No evidence in the pack for this criterion." {
+		t.Fatalf("#1104 merged with no pack: %q", got)
+	}
+	if got := lines(1011); !strings.HasPrefix(got[1], "Merged in #8 at 1011101. Its packs cannot be read: ") {
+		t.Fatalf("#1011 with a pack that does not decode: %q", got)
 	}
 }
 
