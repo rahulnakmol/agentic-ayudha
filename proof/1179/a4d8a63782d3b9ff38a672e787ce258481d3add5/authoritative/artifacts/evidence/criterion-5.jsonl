@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/title_and_body_in_one_write"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/title_and_body_in_one_write","Output":"=== RUN   TestGrillEdit/title_and_body_in_one_write\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/title_and_body_in_one_write","Output":"--- PASS: TestGrillEdit/title_and_body_in_one_write (0.06s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/title_and_body_in_one_write"}

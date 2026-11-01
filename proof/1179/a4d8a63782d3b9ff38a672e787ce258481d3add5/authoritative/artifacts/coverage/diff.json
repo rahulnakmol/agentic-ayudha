@@ -1,0 +1,25 @@
+{
+  "covered": 165,
+  "executable": 176,
+  "percent": 93.75,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/grill.go": [
+      294,
+      295,
+      316,
+      317,
+      325,
+      326,
+      371,
+      372,
+      373
+    ],
+    "internal/ready/ready.go": [
+      153,
+      154
+    ]
+  },
+  "format": "go coverprofile"
+}

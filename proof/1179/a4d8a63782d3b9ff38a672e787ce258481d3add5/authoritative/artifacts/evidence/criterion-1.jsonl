@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/writes_a_checked_body"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/writes_a_checked_body","Output":"=== RUN   TestGrillEdit/writes_a_checked_body\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/writes_a_checked_body","Output":"--- PASS: TestGrillEdit/writes_a_checked_body (0.07s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/writes_a_checked_body"}

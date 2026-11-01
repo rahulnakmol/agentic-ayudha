@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/refuses_a_Ready_issue"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/refuses_a_Ready_issue","Output":"=== RUN   TestGrillEdit/refuses_a_Ready_issue\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/refuses_a_Ready_issue","Output":"--- PASS: TestGrillEdit/refuses_a_Ready_issue (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/refuses_a_Ready_issue"}

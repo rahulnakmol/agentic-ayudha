@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/fails_Create"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/fails_Create","Output":"=== RUN   TestGrillEdit/fails_Create\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/fails_Create","Output":"--- PASS: TestGrillEdit/fails_Create (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGrillEdit/fails_Create"}
