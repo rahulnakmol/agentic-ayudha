@@ -1,0 +1,21 @@
+{
+  "story": 1230,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1230-fix-mission-a-gate-fix-pr-records-only-i",
+  "status": "host-handoff",
+  "brief_sha256": "5bdb58c2c7b33bc1a6c00ed2c61e03cb8e23082af35e2bf1c137b97f8e3a30ab",
+  "started_at": "2026-11-01T18:51:43Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T18:51:43Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1230: fix(mission): a gate fix PR records only its first failed check, so a fix for several checks leaves the gate waiting"
+    }
+  ]
+}
