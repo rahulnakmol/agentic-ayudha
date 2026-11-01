@@ -45,6 +45,7 @@ func init() { register("inbox", runInbox) }
 const (
 	InboxDecision    = "decision"      // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxScope       = "scope"         // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
+	InboxBaseline    = "baseline"      // a baseline draft of one part of a Feature that waits for a person (Story #1172)
 	InboxMission     = "mission"       // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
 	InboxStart       = "mission-start" // a Feature approved to build whose mission a person may start, which locks its issues (Story #1013)
 	InboxLocked      = "locked"        // an issue whose body changed while a mission locks it: it waits until a person keeps the edit (Story #1013)
@@ -59,7 +60,7 @@ const (
 	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxBaseline, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -99,6 +100,13 @@ var inboxKinds = map[string]inboxKind{
 			"Within the budget in [scope] budget_percent, changes go ahead; past it, a change waits for a person, against a Decision someone accepted. " +
 			"Accepting writes the baseline or applies the change and records it on the ledger. If you leave it, nothing changes.",
 		Terms: []string{"Release", "Decision"}},
+	InboxBaseline: {Icon: "📌", Word: "Baseline", Seat: verbs.ProductStrategist,
+		Line: "An agent drafted a part of a Feature; it counts as the baseline only when you approve it.",
+		Explain: "An agent drafts each part of a Feature (its intent, spec, technical design, and UX design) as a list of pins: what the part " +
+			"freezes, each with its hash. The card shows the pins, the checklist, and each change since the version before, and the counsel of the " +
+			"seat that owns the part. Approving runs `aayu ready <feature> --part <part>`, which reads the draft and the pins again after the " +
+			"device code and baselines only the hash on the card; one code covers the session. If you leave it, the draft waits and nothing is frozen.",
+		Terms: []string{"Work item", "Footprint", "Seat"}},
 	InboxMission: {Icon: "🧩", Word: "Mission", Seat: verbs.EngineeringManager,
 		Line: "A Feature's mission stopped at a step only a person takes; its stories wait for you.",
 		Explain: "A mission builds a Feature's stories in milestones, and each milestone ends with a gate of fixed checks on dev. " +
@@ -200,7 +208,8 @@ var (
 const glossaryURL = "https://github.com/rahulnakmol/agentic-ayudha/blob/main/GLOSSARY.md"
 
 // seatIcons are the twins' avatars beside their counsel.
-var seatIcons = map[verbs.SeatID]string{verbs.Founder: "🧘", verbs.EngineeringManager: "🏹", verbs.Auditor: "📜", verbs.ProductStrategist: "🎯"}
+var seatIcons = map[verbs.SeatID]string{verbs.Founder: "🧘", verbs.EngineeringManager: "🏹", verbs.Auditor: "📜", verbs.ProductStrategist: "🎯",
+	verbs.CodeArchitect: "📐", verbs.UXResearcher: "🎨"}
 
 // InboxAction is one thing the person can do with an item: one of its
 // options, under the number the person picks it by. A Decision's options keep
@@ -243,9 +252,19 @@ type InboxItem struct {
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	Lines       []string      `json:"lines,omitempty"`       // the card's own words under its title: a mission start's lock (Story #1013)
 	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card
+	Hash        string        `json:"hash,omitempty"`        // a Baseline card's draft hash: approving it baselines this hash and no other
+	Checklist   []InboxCheck  `json:"checklist,omitempty"`   // a Baseline card's checks of what the person agrees to
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
+}
+
+// InboxCheck is one check on a card's checklist: what it checks, whether it
+// holds, and what fails it.
+type InboxCheck struct {
+	Check  string `json:"check"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // inboxFacts are the facts a kind's counsel is written from, and nothing else.
@@ -282,6 +301,8 @@ func (it InboxItem) short() string {
 		return "gate stopped"
 	case InboxStart:
 		return "a person starts it"
+	case InboxBaseline:
+		return it.f.problem
 	case InboxLocked:
 		return "changed while locked"
 	case InboxReady:
@@ -427,6 +448,9 @@ type inboxSource struct {
 	// missions, when set, reads the mission plans on the ledger: a card to
 	// start each startable one, and one for each locked body a person changed.
 	missions func(ctx context.Context) ([]missionFacts, error)
+	// baselines, when set, reads the baseline drafts of the open Features
+	// that wait for a person: a card for each (Story #1172).
+	baselines func(ctx context.Context, features []int) ([]InboxItem, error)
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -708,6 +732,26 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 			return nil, err
 		}
 		out = append(out, s.lockItems(ms)...)
+	}
+	if s.baselines != nil {
+		var features []int
+		for _, n := range numbers {
+			if is := s.issues[n]; !is.IsPullRequest() && is.GetState() == "open" {
+				if typ, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); typ == "feature" {
+					features = append(features, n)
+				}
+			}
+		}
+		cards, err := s.baselines(ctx, features)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range cards {
+			is := s.issues[it.Number]
+			it.Title = termText(it.Title + ": " + is.GetTitle())
+			it.URL, it.Evidence, it.Updated = is.GetHTMLURL(), is.GetHTMLURL(), is.GetUpdatedAt().Time
+			out = append(out, it)
+		}
 	}
 	for _, p := range open {
 		done++
@@ -1142,6 +1186,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	if was.Kind == InboxDecision && was.BodyHash != now.BodyHash { // its options, evaluation, or recommendation: the text the person accepts
 		out = append(out, "its text changed")
 	}
+	if was.Kind == InboxBaseline && was.Hash != now.Hash { // approving it baselines the hash the person read
+		out = append(out, "it was drafted again")
+	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")
 	}
@@ -1228,7 +1275,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 				return nil, "", err
 			}
 			src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-			src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+			src.pendingAudits, src.missions, src.baselines = e.pendingAudits, e.startAndLockCards, e.baselineCards
 			return src, login, nil
 		})
 	}
@@ -1237,7 +1284,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+	src.pendingAudits, src.missions, src.baselines = e.pendingAudits, e.startAndLockCards, e.baselineCards
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1655,10 +1702,17 @@ func (e *Env) listInbox(ctx context.Context) error {
 		id = l.Config.Identity
 	}
 	src := newInboxSource(c, repo, e.devBranch(), id)
-	src.pendingAudits, src.missions = e.pendingAudits, e.startAndLockCards
+	src.pendingAudits, src.missions, src.baselines = e.pendingAudits, e.startAndLockCards, e.baselineCards
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
+	}
+	if e.agentSignal() != "" { // an agent lane reads a baseline card and never approves it (Story #1172)
+		for i := range items {
+			if items[i].Kind == InboxBaseline {
+				items[i].Options = slices.DeleteFunc(items[i].Options, func(a InboxAction) bool { return a.Command != inboxLeave })
+			}
+		}
 	}
 	needs, house, waiting := splitInbox(items)
 	out := inboxList{Repo: repo, NeedsYou: len(needs), Housekeeping: len(house), NotReady: len(waiting), Items: items, Run: "aayu inbox", Human: true, How: inboxHow}
@@ -1773,6 +1827,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return e.keepEdit(ctx, c, repo, it)
 	case InboxStart: // Start reads the plan again, and asks for the device code: the lock is the person's to confirm.
 		return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(it.Number)})
+	case InboxBaseline: // ready --part reads the draft and the pins again, and asks for the device code unless this session already gave one
+		return handlers["ready"](ctx, e, Values{"issue": strconv.Itoa(it.Number), "part": it.Ask, readyExpectHash: it.Hash})
 	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
 		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
 	case InboxReady:

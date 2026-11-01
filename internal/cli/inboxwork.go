@@ -140,6 +140,8 @@ var (
 func inboxStage(method, path, state string) (stage, wrote string) {
 	read := method == http.MethodGet || method == http.MethodHead
 	switch {
+	case strings.HasPrefix(path, "/login/"): // GitHub's device flow: it proves who you are and writes nothing
+		return "asking for your device code", ""
 	case strings.HasSuffix(path, "/graphql"):
 		return "reading GitHub", ""
 	case read && strings.HasSuffix(path, "/pulls") && state == "closed":
@@ -217,15 +219,16 @@ var inboxSteps = map[string]inboxStep{
 	"checking the required checks":                           {"Check the required checks", "Checking the merge gate is still green"},
 	"reading reviews, files, and commits":                    {"Read the reviews and commits", "Reading the reviews and commits on the head"},
 	"reading the merged pull requests (the autonomy streak)": {"Count the autonomy streak", "Counting recent merges for the autonomy streak; this is the slow step"},
-	"merging":                   {"Merge into dev", "Merging the pull request into dev"},
-	"posting a comment":         {"Post the record on GitHub", "Posting the record of what you did on GitHub"},
-	"updating labels":           {"Update the labels", "Updating the labels"},
-	"deleting the branch":       {"Delete the merged branch", "Deleting the merged branch"},
-	"updating the issue":        {"Close the issue", "Closing the issue"},
-	"updating the pull request": {"Update the pull request", "Updating the pull request"},
-	"reading comments":          {"Read the comments", "Reading the comments"},
-	"reading GitHub":            {"Read GitHub", "Reading GitHub"},
-	"writing to GitHub":         {"Write to GitHub", "Writing to GitHub"},
+	"merging":                     {"Merge into dev", "Merging the pull request into dev"},
+	"posting a comment":           {"Post the record on GitHub", "Posting the record of what you did on GitHub"},
+	"updating labels":             {"Update the labels", "Updating the labels"},
+	"deleting the branch":         {"Delete the merged branch", "Deleting the merged branch"},
+	"updating the issue":          {"Close the issue", "Closing the issue"},
+	"updating the pull request":   {"Update the pull request", "Updating the pull request"},
+	"reading comments":            {"Read the comments", "Reading the comments"},
+	"reading GitHub":              {"Read GitHub", "Reading GitHub"},
+	"writing to GitHub":           {"Write to GitHub", "Writing to GitHub"},
+	"asking for your device code": {"Ask for your device code", "Waiting for you to enter the device code on GitHub"},
 }
 
 func inboxStepOf(stage string) inboxStep {
@@ -258,6 +261,10 @@ func inboxDoingFor(it InboxItem, a InboxAction) inboxDoing {
 	case it.Kind == InboxHumanReview:
 		return inboxDoing{fmt.Sprintf("Approving #%d's head as your review", n), fmt.Sprintf("Approved #%d's head as your review", n), "usually a few seconds",
 			"The merge gate reads your approval on its next run and can merge it.", []string{"reading it again from GitHub", "posting a comment"}}
+	case it.Kind == InboxBaseline && a.Command != inboxLeave:
+		part, _, _ := strings.Cut(it.Title, ":") // "Spec v1"
+		return inboxDoing{fmt.Sprintf("Approving %s of #%d", part, n), fmt.Sprintf("Approved %s of #%d", part, n), "usually a few seconds after the device code",
+			"It is the part's baseline on the ledger; a later edit shows as drift.", []string{"reading it again from GitHub", "asking for your device code", "posting a comment"}}
 	case it.Kind == InboxUnshipped:
 		return inboxDoing{fmt.Sprintf("Marking #%d merged without proof", n), fmt.Sprintf("Marked #%d merged without proof", n), "usually a few seconds",
 			"It stays uncovered in aayu audit; nothing in the code changes.", []string{"reading it again from GitHub", "posting a comment", "updating labels"}}

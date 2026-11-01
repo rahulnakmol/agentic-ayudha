@@ -256,7 +256,12 @@ type partRun struct {
 	repo string
 	n    int
 	part string
+	want string // the draft hash a person chose on an inbox card: approve only that one
 }
+
+// readyExpectHash pins ready --part to the draft hash a person chose in the
+// inbox (Story #1172); it is not a flag, so only the inbox sets it.
+const readyExpectHash = "expect-hash"
 
 // runReadyPart drafts (--request, any lane) or approves (a person only) a
 // baseline of one part of a Feature (Feature #874). An approval is refused
@@ -278,7 +283,7 @@ func runReadyPart(ctx context.Context, e *Env, in Values, n int) error {
 	if err != nil {
 		return err
 	}
-	r := &partRun{e: e, repo: repo, n: n, part: part}
+	r := &partRun{e: e, repo: repo, n: n, part: part, want: in.String(readyExpectHash)}
 	var tok identity.Token
 	ident, tag, who := "human", "", ""
 	if request {
@@ -635,6 +640,9 @@ func (r *partRun) approve(ctx context.Context) error {
 	}
 	if draft == nil {
 		return Errorf(ExitBlocked, "No %s draft of #%d waits for a person. An agent drafts it: aayu ready %d --part %s --request", ready.Label(r.part), r.n, r.n, r.part)
+	}
+	if r.want != "" && draft.Hash != r.want {
+		return Errorf(ExitBlocked, "%s v%d of #%d was drafted again after you read it (hash %s, not %s). Nothing was baselined.", ready.Title(r.part), draft.Version, r.n, draft.Hash[:12], r.want[:min(len(r.want), 12)])
 	}
 	if err := r.holds(ctx, ready.PinsHash(draft.Pins)); err != nil {
 		return err

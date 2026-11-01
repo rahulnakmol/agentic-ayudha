@@ -1,0 +1,25 @@
+# Which tests prove Story #1172's Completion Goal.
+
+[[criterion]]
+id = 1 # #889 has intent, spec, and tech v1 drafts: three Baseline cards with part, version, pins, and the owner seat's counsel
+tests = ["internal/cli:TestBaselineCards"]
+
+[[criterion]]
+id = 2 # three approvals in one inbox session: one device code, and intent-v1.json, spec-v1.json, tech-v1.json by rahulnakmol
+tests = ["internal/cli:TestBaselineApproveOneCode", "internal/cli:TestBaselineApprovesTheHashShown"]
+
+[[criterion]]
+id = 3 # the spec changed after the card was read: nothing written, and the card says why
+tests = ["internal/cli:TestBaselineSpecChanged"]
+
+[[criterion]]
+id = 4 # an agent lane's inbox --list --json: the three cards with checklists, and no approve action
+tests = ["internal/cli:TestBaselineAgentLane"]
+
+[[criterion]]
+id = 5 # the spec card in inbox --plain: one line per story, then its checklist
+tests = ["internal/cli:TestBaselineSpecCard"]
+
+[[criterion]]
+id = 6 # a tech v2 draft after an approved v1: each change with what, why, and need
+tests = ["internal/cli:TestBaselineChangesSinceV1"]
