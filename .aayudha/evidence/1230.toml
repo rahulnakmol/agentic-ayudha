@@ -1,0 +1,17 @@
+# Which tests prove Bug #1230's Completion Goal.
+
+[[criterion]]
+id = 1 # a fix PR names two failed checks of one milestone: --pr records it for both, one line per check
+tests = ["./internal/cli:TestOneFixPRFixesSeveralChecks"]
+
+[[criterion]]
+id = 2 # that PR merged: the gate runs again on the dev tip
+tests = ["./internal/cli:TestOneFixPRFixesSeveralChecks"]
+
+[[criterion]]
+id = 3 # a named check did not fail, or has another fix PR: that line is refused with today's reason, the other is recorded
+tests = ["./internal/cli:TestOneFixPRFixesSeveralChecks", "./internal/cli:TestGateFixesEntryShape"]
+
+[[criterion]]
+id = 4 # the fix counts against the budget once, at the per-story cap, however many checks it names
+tests = ["./internal/cli:TestOneFixPRFixesSeveralChecks", "./internal/cli:TestGateFixCountsAgainstBudget"]

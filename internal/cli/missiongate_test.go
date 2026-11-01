@@ -485,6 +485,117 @@ func TestGateFixesEntryShape(t *testing.T) {
 	}
 }
 
+// Bug #1230: one fix PR names several failed checks of MS1 on its
+// `Aayudha-Gate-Fix:` lines. It is recorded for each check it fixes, each
+// line on its own (criteria 1, 3), it counts once against the budget
+// (criterion 4), and once its fixes merge the gate runs again (criterion 2).
+// A merged PR recorded for one check only, as before the fix, records its
+// other checks of that gate run, so a waiting gate moves on.
+func TestOneFixPRFixesSeveralChecks(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+	g.closeIssue(20)
+	g.vfail, g.efail = []string{"inbox.ship-once"}, []string{"retro/em-enterprise", "retro/em-scaleup", "retro/em-startup"}
+	failed := g.sha
+	if rep := g.gateJSON(); rep.Milestones[0].State != GateFailed || len(rep.Fixes) != 4 {
+		t.Fatalf("gate with four failed checks: %+v", rep)
+	}
+	// Room for exactly two open fixes at the $60 cap: $60 merged (#20) + $60 (#990) + $60 (#991) + $60 (#992) = $240.
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 240 })
+	g.fixPR(990, "verify:inbox.ship-once", "Refs #889")
+	if code, out, errOut := g.gate("--pr", "990"); code != 0 {
+		t.Fatalf("gate --pr 990: exit %d: %s%s", code, out, errOut)
+	}
+	g.fixPR(991, "eval:retro/em-enterprise", "Refs #889")
+	g.edit(func() {
+		g.g.Pulls[991].Body = "Refs #889\n\nAayudha-Gate-Fix: MS1 eval:retro/em-enterprise\nAayudha-Gate-Fix: MS1 verify:mission.next-order\n" +
+			"Aayudha-Gate-Fix: MS1 eval:retro/em-scaleup\nAayudha-Gate-Fix: MS1 verify:inbox.ship-once\nAayudha-Gate-Fix: MS1 eval:retro/em-scaleup\n"
+	})
+	g.eachRequestFails(func() (int, string, string) { return g.gate("--pr", "991") })
+	code, out, errOut := g.gate("--pr", "991")
+	want := "Fix PR #991 is the fix of MS1 eval:retro/em-enterprise (dev 9f8e7d6) in the mission of #889: build it.\n" +
+		"Fix PR #991 is the fix of MS1 eval:retro/em-scaleup (dev 9f8e7d6) in the mission of #889: build it.\n" +
+		"Not recorded: verify:mission.next-order did not fail in the last gate of MS1 of #889: a fix PR comes only from a failed gate check (Decision #974).\n" +
+		"Not recorded: verify:inbox.ship-once of MS1 has its fix PR already, #990: one failed check gets one fix PR.\n"
+	if code != 0 || out != want {
+		t.Fatalf("gate --pr 991 naming four checks: exit %d:\n got %s\nwant %s%s", code, out, want, errOut)
+	}
+	entries := func() []string {
+		p, _ := g.plan(889)
+		var out []string
+		for _, fx := range p.GateFixes {
+			if fx.DevSHA != failed || fx.Waits != "" {
+				t.Fatalf("gate_fixes entry: %+v", fx)
+			}
+			out = append(out, fmt.Sprintf("#%d %s", fx.PR, fx.Check))
+		}
+		return out
+	}
+	if got := entries(); !slices.Equal(got, []string{"#990 verify:inbox.ship-once", "#991 eval:retro/em-enterprise", "#991 eval:retro/em-scaleup"}) {
+		t.Fatalf("gate_fixes after --pr 991: %v", got)
+	}
+	// Criterion 4: #991 counts once, at the cap, so #992 still fits the $240 budget.
+	code, out, errOut = run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r", "--json")
+	var show MissionShowReport
+	if code != 0 || json.Unmarshal([]byte(out), &show) != nil || show.Budget == nil || show.Budget.Used.Value != 180 ||
+		!strings.HasSuffix(show.Budget.Used.Source, "; gate fix PRs: #990 $60 (open: at least the per-story cap), #991 $60 (open: at least the per-story cap)") {
+		t.Fatalf("mission show with #991 fixing two checks: exit %d: %s%s", code, out, errOut)
+	}
+	g.fixPR(992, "eval:retro/em-startup", "Refs #889")
+	if code, out, errOut := g.gate("--pr", "992"); code != 0 || !strings.Contains(out, "Fix PR #992 is the fix of MS1 eval:retro/em-startup") {
+		t.Fatalf("gate --pr 992 at the budget's edge: exit %d: %s%s", code, out, errOut)
+	}
+	// The live case: #991 merged while the plan recorded it for em-enterprise only, so the gate waits for em-scaleup.
+	g.setPlan(889, func(p *MissionPlan) {
+		p.GateFixes = slices.DeleteFunc(p.GateFixes, func(fx GateFix) bool { return fx.PR == 991 && fx.Check == "eval:retro/em-scaleup" })
+	})
+	g.mergePR(991)
+	if code, out, _ := g.gate(); code != 0 || !strings.Contains(out, "the gate runs again when its fixes merge: #990, eval:retro/em-scaleup (no PR yet), #992") {
+		t.Fatalf("gate with em-scaleup unrecorded: exit %d: %s", code, out)
+	}
+	// A merged PR the plan does not record is no gate fix.
+	g.fixPR(993, "eval:retro/em-scaleup", "Refs #889")
+	g.mergePR(993)
+	if code, _, errOut := g.gate("--pr", "993"); code != ExitBlocked || !strings.Contains(errOut, "#993 is not an open PR to dev: a gate fix is one") {
+		t.Fatalf("gate --pr 993, merged and unrecorded: exit %d: %s", code, errOut)
+	}
+	if code, out, errOut := g.gate("--pr", "991"); code != 0 ||
+		!strings.Contains(out, "Fix PR #991 is the fix of MS1 eval:retro/em-scaleup (dev 9f8e7d6) in the mission of #889: it merged.\n") {
+		t.Fatalf("gate --pr 991 after it merged: exit %d: %s%s", code, out, errOut)
+	}
+	if got := entries(); !slices.Equal(got, []string{"#990 verify:inbox.ship-once", "#991 eval:retro/em-enterprise", "#992 eval:retro/em-startup", "#991 eval:retro/em-scaleup"}) {
+		t.Fatalf("gate_fixes after the merged --pr 991: %v", got)
+	}
+	// Criterion 2: every fix merged, so the gate runs again on the new dev tip; em-scaleup and em-startup fail again there.
+	g.mergePR(990)
+	g.mergePR(992)
+	g.tip(strings.Repeat("a", 40), "success")
+	g.vfail, g.efail = nil, []string{"retro/em-scaleup", "retro/em-startup"}
+	if rep := g.gateJSON(); g.calls != 2 || rep.Milestones[0].State != GateFailed || rep.DevSHA != g.sha ||
+		failedOf(rep.Milestones[0].Checks) != "eval:retro/em-scaleup, eval:retro/em-startup" {
+		t.Fatalf("gate after the fixes merged: verify runs %d: %+v", g.calls, rep)
+	}
+	// A merged fix PR is no fix of a later gate run.
+	if code, _, errOut := g.gate("--pr", "991"); code != ExitBlocked ||
+		!strings.Contains(errOut, "#991 merged, and it is no fix of the last gate of MS1: a merged fix PR records only checks of the gate run it fixed") {
+		t.Fatalf("gate --pr 991 on the next failed run: exit %d: %s", code, errOut)
+	}
+	// Criterion 4: a fix of both checks that passes the budget ($60 merged + $60 > $100) waits once, with one card,
+	// and a raise to $120 lets the PR go on with both its checks: it counts once.
+	g.setPlan(889, func(p *MissionPlan) { p.Budget = 100 })
+	g.fixPR(995, "eval:retro/em-scaleup", "Refs #889")
+	g.edit(func() { g.g.Pulls[995].Body += "Aayudha-Gate-Fix: MS1 eval:retro/em-startup\n" })
+	comments := len(g.g.Issues[889].Comments)
+	if code, out, errOut := g.gate("--pr", "995"); code != ExitBudget || len(g.g.Issues[889].Comments) != comments+1 ||
+		strings.Count(out, "Fix PR #995 of MS1 eval:retro/em-") != 2 || !strings.Contains(out, "($60 used + $60, the fix's estimate, > $100)") {
+		t.Fatalf("gate --pr 995 over the budget: exit %d, cards %d: %s%s", code, len(g.g.Issues[889].Comments)-comments, out, errOut)
+	}
+	code, out, errOut = g.mission(g.person, "rahulnakmol", "budget", 889, "--to", "120", "--reason", "the retro fix is needed for MS1")
+	if p, _ := g.plan(889); code != 0 || !strings.Contains(out, "fix PRs that go on: #995\n") ||
+		slices.ContainsFunc(p.GateFixes, func(fx GateFix) bool { return fx.Waits != "" }) {
+		t.Fatalf("budget raise for #995: exit %d, fixes %+v: %s%s", code, p.GateFixes, out, errOut)
+	}
+}
+
 // No gate runs, and no fix or budget is recorded, for a Feature with no
 // plan or a mission no one started; a paused mission runs no gate, and
 // --once-more needs a stopped gate.

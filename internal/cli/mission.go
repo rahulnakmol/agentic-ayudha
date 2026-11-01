@@ -1295,10 +1295,11 @@ func missionUsed(plan *MissionPlan, appr *ready.Approval, merged int, costs map[
 }
 
 // fixSpend is what the plan's gate fix PRs count against the budget, as
-// missionUsed says, with a note for each.
+// missionUsed says, with a note for each. A PR counts once, however many
+// checks it fixes (Bug #1230).
 func fixSpend(plan *MissionPlan, per float64, costs map[int]float64, open map[int]bool) (float64, []string) {
 	total, notes := 0.0, []string(nil)
-	for _, fx := range plan.GateFixes {
+	for _, fx := range gateFixPRs(plan.GateFixes) {
 		switch v := costs[fx.PR]; {
 		case fx.Waits != "": // a waiting fix spends nothing until a person lets it go on
 		case open[fx.PR]:
@@ -1311,6 +1312,18 @@ func fixSpend(plan *MissionPlan, per float64, costs map[int]float64, open map[in
 		}
 	}
 	return total, notes
+}
+
+// gateFixPRs are the first entry of each fix PR in fixes: a PR that fixes
+// several checks has one entry for each, with the same Waits.
+func gateFixPRs(fixes []GateFix) []GateFix {
+	var out []GateFix
+	for _, fx := range fixes {
+		if !slices.ContainsFunc(out, func(o GateFix) bool { return o.PR == fx.PR }) {
+			out = append(out, fx)
+		}
+	}
+	return out
 }
 
 // openFixSet are the plan's fix PRs that are still open, by number.

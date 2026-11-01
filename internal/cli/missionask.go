@@ -75,7 +75,7 @@ func budgetAsk(f, n int, budget float64, used SourcedNumber, est float64, fixes 
 				Ask: "Why raise the budget?"},
 			{N: 2, Label: fmt.Sprintf("Keep #%d waiting", n), Command: missionCmd(f, fmt.Sprintf("budget <f> --keep %d", n))},
 		}}
-	for _, fx := range fixes {
+	for _, fx := range gateFixPRs(fixes) {
 		if v := costs[fx.PR]; v > 0 {
 			a.Lines = append(a.Lines, fmt.Sprintf("Fix PR #%d (%s %s) spent %s", fx.PR, fx.Milestone, fx.Check, ready.USD(v)))
 		}
