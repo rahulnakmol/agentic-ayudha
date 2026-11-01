@@ -119,15 +119,18 @@ func sample(g string) string {
 	return strings.ReplaceAll(g, "*", "x")
 }
 
-// Paths splits an Expected paths field: one glob per line, list bullets and
-// backticks allowed.
+// Paths splits an Expected paths field: one glob per line or per comma (a
+// glob here has no braces, so a comma never belongs to one), list bullets
+// and backticks allowed.
 func Paths(field string) []string {
 	var out []string
 	for _, l := range strings.Split(strings.ReplaceAll(field, "\r\n", "\n"), "\n") {
 		l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-*"))
-		l = strings.Trim(strings.TrimSpace(l), "`")
-		if l != "" && !workitems.Empty(l) {
-			out = append(out, l)
+		for _, p := range strings.Split(l, ",") {
+			p = strings.Trim(strings.TrimSpace(p), "`")
+			if p = strings.TrimSpace(p); p != "" && !workitems.Empty(p) {
+				out = append(out, p)
+			}
 		}
 	}
 	return out

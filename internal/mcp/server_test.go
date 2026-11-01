@@ -111,6 +111,9 @@ func TestArgs(t *testing.T) {
 		{cmd: find("research"), raw: `{}`, errMsg: "feature is required"},
 		{cmd: find("research"), raw: `{"feature": ""}`, errMsg: "feature: want a non-empty string"},
 		{cmd: find("research"), raw: `{"feature": "3", "platform": "desktop"}`, errMsg: "platform: want one of ios, android, web"},
+		// grill --edit writes whenever it is given (Story #1179): refused while writes are hidden, passed on when they are exposed.
+		{cmd: find("grill"), raw: `{"type": "bug", "edit": 1169, "body": "b"}`, errMsg: `unknown argument "edit"`},
+		{cmd: find("grill"), writes: true, raw: `{"type": "bug", "edit": 1169, "body": "b"}`, want: "grill --json --body=b --edit=1169 -- bug"},
 		{cmd: twoPos, raw: `{"second": "b"}`, errMsg: "second needs first before it"},
 		{cmd: twoPos, raw: `{"first": "a", "second": "b"}`, want: "pair --json -- a b"},
 	} {

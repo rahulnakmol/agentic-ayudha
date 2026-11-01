@@ -1,0 +1,29 @@
+# Which tests prove Story #1179's Completion Goal.
+
+[[criterion]]
+id = 1 # Bug #3 (status:planned) fails Ready on its Links: grill bug --edit checks the new body, writes it through the actions log, and prints the diff
+tests = ["internal/cli:TestGrillEdit/writes_a_checked_body"]
+
+[[criterion]]
+id = 2 # the new body fails Create: nothing is written, and each problem is listed
+tests = ["internal/cli:TestGrillEdit/fails_Create"]
+
+[[criterion]]
+id = 3 # the issue is status:ready: refused with "#4 is Ready; its body is frozen"
+tests = ["internal/cli:TestGrillEdit/refuses_a_Ready_issue"]
+
+[[criterion]]
+id = 4 # a running mission locks the issue: refused, naming the mission
+tests = ["internal/cli:TestGrillEditLocked"]
+
+[[criterion]]
+id = 5 # --title with --edit: the title and the body are written in one write
+tests = ["internal/cli:TestGrillEdit/title_and_body_in_one_write"]
+
+[[criterion]]
+id = 6 # a Bug draft caused-by a Story: grill --dry-run reports Ready's own link problem
+tests = ["internal/cli:TestGrillLinkTargetsAsReady"]
+
+[[criterion]]
+id = 7 # comma-separated Expected paths: grill feature --dry-run and slice read the same paths, one per comma
+tests = ["internal/cli:TestExpectedPathsCommas"]
