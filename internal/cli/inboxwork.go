@@ -261,10 +261,6 @@ func inboxDoingFor(it InboxItem, a InboxAction) inboxDoing {
 	case it.Kind == InboxHumanReview:
 		return inboxDoing{fmt.Sprintf("Approving #%d's head as your review", n), fmt.Sprintf("Approved #%d's head as your review", n), "usually a few seconds",
 			"The merge gate reads your approval on its next run and can merge it.", []string{"reading it again from GitHub", "posting a comment"}}
-	case it.Kind == InboxBaseline && a.Command != inboxLeave:
-		part, _, _ := strings.Cut(it.Title, ":") // "Spec v1"
-		return inboxDoing{fmt.Sprintf("Approving %s of #%d", part, n), fmt.Sprintf("Approved %s of #%d", part, n), "usually a few seconds after the device code",
-			"It is the part's baseline on the ledger; a later edit shows as drift.", []string{"reading it again from GitHub", "asking for your device code", "posting a comment"}}
 	case it.Kind == InboxUnshipped:
 		return inboxDoing{fmt.Sprintf("Marking #%d merged without proof", n), fmt.Sprintf("Marked #%d merged without proof", n), "usually a few seconds",
 			"It stays uncovered in aayu audit; nothing in the code changes.", []string{"reading it again from GitHub", "posting a comment", "updating labels"}}

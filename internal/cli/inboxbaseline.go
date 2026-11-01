@@ -2,14 +2,12 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
-	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -33,13 +31,9 @@ func baselineChanged(part string, f int) string {
 // on the ledger, each with its part's pins as they are now (partRun.pins, the
 // code approve checks them with), as inbox cards. A UX draft of a Feature
 // with no L01 in its footprint has no card. It writes nothing.
-func (e *Env) baselineCards(ctx context.Context, features []int) ([]InboxItem, error) {
+func (e *Env) baselineCards(ctx context.Context, repo string, features []int) ([]InboxItem, error) {
 	if config.RepoRoot(e.Dir) == "" || len(features) == 0 { // no checkout, so no ledger to read
 		return nil, nil
-	}
-	repo, err := e.RepoName(ctx)
-	if err != nil {
-		return nil, err
 	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
@@ -50,11 +44,8 @@ func (e *Env) baselineCards(ctx context.Context, features []int) ([]InboxItem, e
 		return nil, err
 	}
 	t, err := w.Read(ctx)
-	if errors.Is(err, ledger.ErrNoLedger) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
+	if err != nil { // no ledger yet: nothing is drafted
+		return nil, ignoreMissing(err)
 	}
 	paths, err := t.List(ctx, "specs")
 	t.Close()
@@ -74,12 +65,9 @@ func (e *Env) baselineCards(ctx context.Context, features []int) ([]InboxItem, e
 				continue
 			}
 			r := &partRun{e: e, c: c, w: w, repo: repo, n: f, part: part}
-			base, draft, _, err := r.records(ctx)
+			base, draft, _, err := r.records(ctx) // a draft waits: Versions said so
 			if err != nil {
 				return nil, err
-			}
-			if draft == nil {
-				continue
 			}
 			it, pins, err := r.feature(ctx)
 			switch {
@@ -160,12 +148,9 @@ func baselineCard(d ready.Baseline, base *ready.Baseline, holds bool, stories []
 			InboxCheck{Check: "no story is XL", OK: len(xl) == 0, Detail: joinFail(xl, "XL")},
 			InboxCheck{Check: "each story is in the Feature's paths", OK: len(outside) == 0, Detail: strings.Join(outside, "; ")})
 	} else {
-		for i, p := range d.Pins {
-			head := "Pins     "
-			if i > 0 {
-				head = "         "
-			}
-			lines = append(lines, fmt.Sprintf("%s%s · %s", head, termText(p.Ref), termText(p.Hash[:min(len(p.Hash), 12)])))
+		lines = append(lines, "Pins")
+		for _, p := range d.Pins {
+			lines = append(lines, fmt.Sprintf("  %s · %s", termText(p.Ref), termText(p.Hash[:min(len(p.Hash), 12)])))
 		}
 	}
 	if base != nil {

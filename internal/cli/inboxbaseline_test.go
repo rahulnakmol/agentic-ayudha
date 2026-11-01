@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -108,7 +111,7 @@ func TestBaselineCards(t *testing.T) {
 		"[1/3] Baseline #889: Intent v1: Agents pull the next story\n  " + inboxKinds[InboxBaseline].Line + "\n",
 		"  Part     intent v1, drafted by ",
 		"  Hash     " + intent.Hash[:12] + " is what you approve\n",
-		"  Pins     #889 body · " + workitems.BodyHash(body)[:12] + "\n",
+		"  Pins\n    #889 body · " + workitems.BodyHash(body)[:12] + "\n",
 		"  Arjun (Product Strategist), counsel, not approval: What you agree to: the problem #889 says it solves",
 		"  1. Approve intent v1 of #889 at hash " + intent.Hash[:12] + " (recommended)\n  2. Leave it waiting: nothing is frozen\n  3. Open #889 on GitHub\n",
 		"[2/3] Baseline #889: Spec v1: Agents pull the next story\n",
@@ -118,7 +121,7 @@ func TestBaselineCards(t *testing.T) {
 		"  1. Approve spec v1 of #889 at hash " + spec.Hash[:12] + " (recommended)\n",
 		"[3/3] Baseline #889: Tech v1: Agents pull the next story\n",
 		"  Part     tech v1, drafted by ",
-		"  Pins     specs/889/design.json · " + hex.EncodeToString(design[:])[:12] + "\n",
+		"  Pins\n    specs/889/design.json · " + hex.EncodeToString(design[:])[:12] + "\n",
 		"  Vishwa (Code Architect), counsel, not approval: The contract you freeze: 1 pin of #889, with specs/889/design.json first, at hash " + tech.Hash[:12],
 		"  1. Approve tech v1 of #889 at hash " + tech.Hash[:12] + " (recommended)\n",
 	} {
@@ -131,6 +134,54 @@ func TestBaselineCards(t *testing.T) {
 	}
 	if t.Failed() {
 		t.Logf("inbox:\n%s%s", out, errOut)
+	}
+	// The full-screen inbox lists the same three cards, each with what waits.
+	tui := m.opts
+	tui.TUI = func(tm tea.Model) error {
+		im := tm.(*inboxModel)
+		teaDrive(im, im.Init())
+		im.Update(tea.WindowSizeMsg{Width: 110, Height: 44})
+		view := ansi.Strip(im.View().Content)
+		for _, part := range []string{"intent", "spec", "tech"} {
+			if !strings.Contains(view, part+" v1 to approve") {
+				t.Errorf("the full-screen inbox lacks the %s card:\n%s", part, view)
+			}
+		}
+		return nil
+	}
+	if code, out, errOut := runIn(t, m.person, tui, "", "inbox", "--repo", "o/r"); code != 0 {
+		t.Errorf("full-screen inbox: exit %d: %s%s", code, out, errOut)
+	}
+	// A repository with no ledger yet has nothing drafted, and the inbox still opens.
+	git(t, m.bare, "branch", "-D", "ledger")
+	if code, out, errOut := run(t, m.person, m.opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || strings.Contains(out, `"kind": "baseline"`) {
+		t.Errorf("inbox with no ledger: exit %d: %s%s", code, out, errOut)
+	}
+}
+
+// The UX part has a card only when the Feature's footprint has L01 (the
+// story's notes): with its design stages on the ledger and a UI path, the UX
+// draft is a fourth card with Hanu's counsel; once the Feature's paths leave
+// L01, it has none.
+func TestBaselineUXCard(t *testing.T) {
+	paths := func(globs string) func(g *fake.GitHub) {
+		return func(g *fake.GitHub) { g.Issues[889].Body = setSection(g.Issues[889].Body, "Expected paths", globs) }
+	}
+	m := baselineWorld(t, paths("- `internal/cli/**`\n- `packages/design-system/**`"))
+	putLedger(t, m.bare, "design/889/research/manifest.json", `{"stage": "research"}`)
+	m.draftPart("ux", "")
+	ux := m.draftOf("ux", 1)
+	code, out, errOut := runIn(t, m.person, m.opts, "ssss", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "[4/4] Baseline #889: UX v1: Agents pull the next story\n") ||
+		!strings.Contains(out, "  Pins\n    design/889/research/manifest.json · "+ux.Pins[0].Hash[:12]+"\n") ||
+		!strings.Contains(out, "  Hanu (UX Researcher & Evolutionist), counsel, not approval: What you freeze: 1 design record of #889") ||
+		!strings.Contains(out, "  1. Approve UX v1 of #889 at hash "+ux.Hash[:12]+" (recommended)\n") {
+		t.Fatalf("inbox with a UX draft: exit %d:\n%s%s", code, out, errOut)
+	}
+	m.edit(func() { paths("- `internal/cli/**`")(m.g) })
+	code, out, errOut = runIn(t, m.person, m.opts, "sss", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || strings.Contains(out, "UX v1") || !strings.Contains(out, "[3/3] Baseline #889: Tech v1") {
+		t.Fatalf("inbox after the paths left L01: exit %d:\n%s%s", code, out, errOut)
 	}
 }
 
@@ -244,6 +295,14 @@ func TestBaselineSpecChanged(t *testing.T) {
 			t.Fatalf("a changed spec was baselined: %s commits, was %s", m.commits(), n)
 		}
 	})
+	t.Run("its stories are gone", func(t *testing.T) { // the part has nothing to pin now
+		m := baselineWorld(t, nil)
+		m.edit(func() { m.g.Issues[889].Subs = nil })
+		code, out, errOut := runIn(t, m.person, m.opts, "ss", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "  "+inboxKinds[InboxBaseline].Line+"\n  "+said+"\n") || strings.Contains(out, "Approve spec") {
+			t.Fatalf("inbox with no stories: exit %d:\n%s%s", code, out, errOut)
+		}
+	})
 	t.Run("while the code waited", func(t *testing.T) {
 		m := baselineWorld(t, nil)
 		n := m.commits()
@@ -346,6 +405,7 @@ func TestBaselineSpecCard(t *testing.T) {
 				g.Issues[20].Labels[i].Name = "effort:S\x1b[2J"
 			}
 		}
+		g.Issues[20].Labels = slices.DeleteFunc(g.Issues[20].Labels, func(l fake.Label) bool { return l.Name == "layer:L02" })
 		for i, l := range g.Issues[22].Labels {
 			if l.Name == "effort:S" {
 				g.Issues[22].Labels[i].Name = "effort:XL"
@@ -364,7 +424,7 @@ func TestBaselineSpecCard(t *testing.T) {
 		"    ✓ nothing it pins changed since the draft\n" +
 		"    ✗ each story has criteria: #20: no criteria\n" +
 		"    ✗ no story is XL: #22: XL\n" +
-		"    ✗ each story is in the Feature's paths: #21 is in L07\uFFFD, outside L02\n"; !strings.Contains(bad, want) || strings.ContainsAny(bad, "\x1b\a") ||
+		"    ✗ each story is in the Feature's paths: #20 names no layer; #21 is in L07\uFFFD, outside L02\n"; !strings.Contains(bad, want) || strings.ContainsAny(bad, "\x1b\a") ||
 		!strings.Contains(bad, "  1. Approve spec v1 of #889 at hash ") || strings.Contains(bad, "(recommended)") {
 		t.Errorf("spec card with failing checks:\n%s\nwant:\n%s", bad, want)
 	}

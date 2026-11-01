@@ -450,7 +450,7 @@ type inboxSource struct {
 	missions func(ctx context.Context) ([]missionFacts, error)
 	// baselines, when set, reads the baseline drafts of the open Features
 	// that wait for a person: a card for each (Story #1172).
-	baselines func(ctx context.Context, features []int) ([]InboxItem, error)
+	baselines func(ctx context.Context, repo string, features []int) ([]InboxItem, error)
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -742,7 +742,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				}
 			}
 		}
-		cards, err := s.baselines(ctx, features)
+		cards, err := s.baselines(ctx, s.repo, features)
 		if err != nil {
 			return nil, err
 		}
