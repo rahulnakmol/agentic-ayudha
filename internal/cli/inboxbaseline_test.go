@@ -341,6 +341,11 @@ func TestBaselineSpecCard(t *testing.T) {
 	}
 	bad := spec(t, func(g *fake.GitHub) {
 		g.Issues[20].Body = setSection(g.Issues[20].Body, "Completion Goal", "_No response_")
+		for i, l := range g.Issues[20].Labels { // label text is anyone's: it reaches the terminal with no control characters
+			if l.Name == "effort:S" {
+				g.Issues[20].Labels[i].Name = "effort:S\x1b[2J"
+			}
+		}
 		for i, l := range g.Issues[22].Labels {
 			if l.Name == "effort:S" {
 				g.Issues[22].Labels[i].Name = "effort:XL"
@@ -348,18 +353,18 @@ func TestBaselineSpecCard(t *testing.T) {
 		}
 		for i, l := range g.Issues[21].Labels {
 			if l.Name == "layer:L02" {
-				g.Issues[21].Labels[i].Name = "layer:L07"
+				g.Issues[21].Labels[i].Name = "layer:L07\a"
 			}
 		}
 	})
-	if want := "    #20 Story 20 · 0 criteria · effort S\n" +
+	if want := "    #20 Story 20 · 0 criteria · effort S\uFFFD[2J\n" +
 		"    #21 Story 21 · 3 criteria · effort S\n" +
 		"    #22 Story 22 · 2 criteria · effort XL\n" +
 		"  Checklist\n" +
 		"    ✓ nothing it pins changed since the draft\n" +
 		"    ✗ each story has criteria: #20: no criteria\n" +
 		"    ✗ no story is XL: #22: XL\n" +
-		"    ✗ each story is in the Feature's paths: #21 is in L07, outside L02\n"; !strings.Contains(bad, want) ||
+		"    ✗ each story is in the Feature's paths: #21 is in L07\uFFFD, outside L02\n"; !strings.Contains(bad, want) || strings.ContainsAny(bad, "\x1b\a") ||
 		!strings.Contains(bad, "  1. Approve spec v1 of #889 at hash ") || strings.Contains(bad, "(recommended)") {
 		t.Errorf("spec card with failing checks:\n%s\nwant:\n%s", bad, want)
 	}

@@ -144,7 +144,7 @@ func baselineCard(d ready.Baseline, base *ready.Baseline, holds bool, stories []
 					none = append(none, fmt.Sprintf("#%d", sp.Number))
 				}
 			}
-			lines = append(lines, fmt.Sprintf("  #%d %s · %s · effort %s", sp.Number, termText(sp.Title), count, or(sp.Effort, "none")))
+			lines = append(lines, fmt.Sprintf("  #%d %s · %s · effort %s", sp.Number, termText(sp.Title), count, termText(or(sp.Effort, "none"))))
 			if sp.Effort == "XL" {
 				xl = append(xl, fmt.Sprintf("#%d", sp.Number))
 			}
@@ -152,7 +152,7 @@ func baselineCard(d ready.Baseline, base *ready.Baseline, holds bool, stories []
 			case len(sp.Layers) == 0:
 				outside = append(outside, fmt.Sprintf("#%d names no layer", sp.Number))
 			case len(out) > 0:
-				outside = append(outside, fmt.Sprintf("#%d is in %s, outside %s", sp.Number, strings.Join(out, ", "), or(strings.Join(footprint, ", "), "an empty footprint")))
+				outside = append(outside, fmt.Sprintf("#%d is in %s, outside %s", sp.Number, termText(strings.Join(out, ", ")), or(strings.Join(footprint, ", "), "an empty footprint")))
 			}
 		}
 		checks = append(checks,
@@ -165,7 +165,7 @@ func baselineCard(d ready.Baseline, base *ready.Baseline, holds bool, stories []
 			if i > 0 {
 				head = "         "
 			}
-			lines = append(lines, fmt.Sprintf("%s%s · %s", head, termText(p.Ref), p.Hash[:min(len(p.Hash), 12)]))
+			lines = append(lines, fmt.Sprintf("%s%s · %s", head, termText(p.Ref), termText(p.Hash[:min(len(p.Hash), 12)])))
 		}
 	}
 	if base != nil {
