@@ -1,0 +1,21 @@
+{
+  "story": 1175,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1175-the-morning-is-set-the-inbox-orders-the",
+  "status": "host-handoff",
+  "brief_sha256": "74ce2275e68921a45a1fefe3f7e3ad6039b95dd8ae1e959021f2c83bae1d0b0f",
+  "started_at": "2026-11-01T14:26:28Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T14:26:28Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1175: The morning is set: the inbox orders the day's cards and ends with the day's plan"
+    }
+  ]
+}
