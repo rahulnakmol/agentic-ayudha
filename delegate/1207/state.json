@@ -9,7 +9,8 @@
   "task": "T-01a196a6-72a0-7630-908c-774132eb2570",
   "task_url": "https://ampcode.com/threads/T-01a196a6-72a0-7630-908c-774132eb2570",
   "branch": "story/1207-the-mission-starts-a-story-that-already",
-  "status": "handed-off",
+  "pr": 1224,
+  "status": "pr-open",
   "brief_sha256": "8a5b41fd692f253fa6fa10b98c4fcf03e76cb26dfce65a1513b2f9c346d1f4b1",
   "started_at": "2026-11-01T10:27:02Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-01T10:27:47Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T12:15:19Z",
+      "status": "pr-open",
+      "detail": "PR #1224 found by aayu mission recover"
     }
   ]
 }
