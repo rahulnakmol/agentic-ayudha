@@ -68,7 +68,7 @@ func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 	if err != nil && r.Reply == "" {
 		r.Detail = "amp -ox failed: " + err.Error() + ": " + clip(out, 300)
 	} else {
-		r = judge(r, want)
+		r = judgeLast(r, want)
 	}
 	if id, ok := strings.CutPrefix(r.URL, "https://ampcode.com/threads/"); ok {
 		if aout, aerr := run(ctx, "", "amp", "threads", "archive", id); aerr != nil {
@@ -76,6 +76,21 @@ func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 		}
 	}
 	return r
+}
+
+var markerLine = regexp.MustCompile(`^` + regexp.QuoteMeta(Marker) + ` sha256:[0-9a-f]{16}$`)
+
+// judgeLast is judge on a reply whose exact last line must be the marker
+// line itself, so a reply that only quotes the marker, or goes on after it,
+// never passes (Bug #1211). Codex's status output is judged by judge, since
+// the CLI prints other lines around the reply.
+func judgeLast(r CloudResult, want string) CloudResult {
+	lines := strings.Split(strings.TrimSpace(r.Reply), "\n")
+	if !markerLine.MatchString(strings.TrimSpace(lines[len(lines)-1])) {
+		r.Detail = "the reply's last line is not the `" + Marker + "` line: " + clip(r.Reply, 300)
+		return r
+	}
+	return judge(r, want)
 }
 
 func judge(r CloudResult, want string) CloudResult {
@@ -138,7 +153,7 @@ func ProbeCodex(ctx context.Context, run Exec, envID, branch, want string, poll 
 // Record checks a probe reply a human copied from a host's UI and returns the
 // record for it.
 func RecordReply(host, reply, url, want string, now time.Time) (Record, error) {
-	r := judge(CloudResult{Host: host, Reply: reply}, want)
+	r := judgeLast(CloudResult{Host: host, Reply: reply}, want)
 	if !r.OK {
 		return Record{}, fmt.Errorf("%s", r.Detail)
 	}

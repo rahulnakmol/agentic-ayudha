@@ -570,6 +570,16 @@ func TestProbeReplies(t *testing.T) {
 	if _, err := RecordReply(Codex, "aayu-env failed: go: command not found", "", want, timeNow()); err == nil {
 		t.Error("a failed reply was recorded")
 	}
+	// Only the reply's exact last line counts (Bug #1211): a reply that quotes the marker, or goes on after it, fails.
+	for _, reply := range []string{"aayu-env failed: the check never printed aayu-env ok " + want, "The check passed: aayu-env ok " + want,
+		"aayu-env ok " + want + "\naayu-env failed: go test: exit status 1"} {
+		if _, err := RecordReply(Amp, reply, "", want, timeNow()); err == nil || !strings.Contains(err.Error(), "the reply's last line is not the `aayu-env ok` line") {
+			t.Errorf("reply %q: %v; want it refused", reply, err)
+		}
+	}
+	if rec, err := RecordReply(Amp, "\n  aayu-env ok "+want+"  \n", "", want, timeNow()); err != nil || rec.Fingerprint != want {
+		t.Errorf("the marker line alone: %+v %v", rec, err)
+	}
 }
 
 func timeNow() time.Time { return time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC) }

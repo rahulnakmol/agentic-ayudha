@@ -1,7 +1,8 @@
 // Command ratchet checks or tightens this repository's coverage floor
 // (internal/ratchet; Appendix B S-4.3r) and, given a base, checks that the
-// change lowers no skill-eval bar (evals.CheckBars, Story #400). CI's build
-// job runs
+// change lowers no skill-eval bar (evals.CheckBars, Story #400) and leaves no
+// agent-environment host it changes unverified (Bug #1211). CI's build job
+// runs
 //
 //	go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out [-base <sha>]
 //
@@ -15,8 +16,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -85,11 +88,54 @@ func run(profile, base string, update bool) error {
 			return err
 		}
 		problems = append(problems, bars...)
+		envs, err := envRecords(base)
+		if err != nil {
+			return err
+		}
+		problems = append(problems, envs...)
 	}
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "\n::error::"))
 	}
 	return nil
+}
+
+// envRecords fails a change to the agent environment since base (its spec or
+// its setup) that leaves a host of the spec's hosts with no new verification
+// record of it, in a container or in the host's cloud (Bug #1211): a stale
+// record is caught at merge, not when a mission starts a story on that host.
+// A record counts only when it carries the spec's fingerprint and differs
+// from base's, since a setup can change while the fingerprint does not.
+func envRecords(base string) ([]string, error) {
+	if exec.Command("git", "diff", "--quiet", base, "--", agentenv.SpecPath, agentenv.SetupPath).Run() == nil {
+		return nil, nil
+	}
+	dir, err := os.MkdirTemp("", "env-records-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	b, _ := exec.Command("git", "show", base+":"+agentenv.VerifiedPath).Output() // none at base: every record is new
+	s, _, err := agentenv.LoadSpec(".")
+	v, verr := agentenv.LoadVerified(".")
+	werr := os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	if werr == nil {
+		werr = os.WriteFile(filepath.Join(dir, filepath.FromSlash(agentenv.VerifiedPath)), b, 0o644)
+	}
+	old, oerr := agentenv.LoadVerified(dir)
+	if err = errors.Join(err, verr, werr, oerr); err != nil {
+		return nil, err
+	}
+	fp := s.Fingerprint()
+	fresh := func(r, was agentenv.Record) bool { return r.Fingerprint == fp && r != was }
+	var out []string
+	for _, h := range s.Hosts {
+		if !fresh(v.Container[h], old.Container[h]) && !fresh(v.Cloud[h], old.Cloud[h]) {
+			out = append(out, fmt.Sprintf("environment record: the agent environment changed, and %s has no new record of %s verified for %s: run `aayu install --env --host %s --apply --verify` and commit %s",
+				agentenv.VerifiedPath, fp, h, h, agentenv.VerifiedPath))
+		}
+	}
+	return out, nil
 }
 
 // baseRatchet reads the base commit's ratchet; the floor before the ratchet

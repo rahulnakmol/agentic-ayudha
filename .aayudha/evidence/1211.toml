@@ -1,0 +1,21 @@
+# Which tests prove Bug #1211's Completion Goal.
+
+[[criterion]]
+id = 1 # a PR changes env.toml or .agents/setup and a host in hosts has no record of the new fingerprint: CI's ratchet step fails, names each host, and gives the command
+tests = ["internal/ratchet/cmd/ratchet:TestRunFailsAStaleEnvironmentRecord"]
+
+[[criterion]]
+id = 2 # stale amp record, no Docker daemon, build in an Amp thread: build probes amp live, records [cloud.amp] at the new fingerprint, and hands the story off
+tests = ["internal/cli:TestAmpStaleEnvProbedLive", "internal/cli:TestAmpStaleEnvHostProbe"]
+
+[[criterion]]
+id = 3 # stale amp record and the probe fails: build stops with the probe's last line and the command, and the story is status:ready with its claim released
+tests = ["internal/cli:TestAmpStaleEnvProbeFails", "internal/cli:TestAmpStaleEnvHostProbe", "internal/agentenv:TestProbeReplies"]
+
+[[criterion]]
+id = 4 # the amp record is current: build hands off with no container and no probe
+tests = ["internal/cli:TestAmpCurrentEnvHandsOff", "internal/cli:TestAmpStaleEnvProbedLive"]
+
+[[criterion]]
+id = 5 # mission start on amp with a stale amp record: start warns and names the command before the device code
+tests = ["internal/cli:TestMissionStartWarnsStaleEnv"]

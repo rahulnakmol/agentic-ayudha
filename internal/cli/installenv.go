@@ -282,6 +282,9 @@ func (e *Env) probeCloud(ctx context.Context, root, h, repo string, s agentenv.S
 		if project == "" {
 			return agentenv.CloudResult{Host: h, Detail: "no Amp project matches this repository (`amp projects create`)"}
 		}
+		if repo != "" && !strings.EqualFold(project, repo) { // a probe of another project proves nothing here, and Detect refuses its record
+			return agentenv.CloudResult{Host: h, Detail: "amp projects status selects the Amp project " + project + ", not this repository (" + repo + ")"}
+		}
 		e.talkf("install --env --cloud: probing a new orb in Amp project %s (setup, then the check; several minutes)…", project)
 		r := agentenv.ProbeAmp(ctx, e.exec(), project, want)
 		if r.OK {
