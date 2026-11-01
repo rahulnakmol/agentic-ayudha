@@ -576,7 +576,12 @@ func (e *Env) gateVerify(ctx context.Context, g *gateTree, sha string) ([]GateCh
 		if json.Unmarshal(b, &rep) == nil {
 			for _, cr := range rep.Checks {
 				ck := GateCheck{Check: "verify:" + cr.Ref, Result: gatePass, Detail: cr.Status}
-				if cr.Status != verify.CheckPassed && cr.Status != verify.CheckUnreachable {
+				switch {
+				case cr.Status == verify.CheckUnreachable && cr.Requires == "":
+					// A runner gap (no Playwright, no app URL) proves nothing and is not the code's fault: the gate
+					// waits for it and lists no fix (Bug #1226). A precondition the check declares passes as before.
+					ck.Result, ck.Detail = gatePending, cr.Ref+" is unreachable: "+cr.Reason
+				case cr.Status != verify.CheckPassed && cr.Status != verify.CheckUnreachable:
 					ck.Result, ck.Detail = gateFail, strings.TrimSpace(cr.Status+" "+cr.Reason)
 				}
 				checks = append(checks, ck)

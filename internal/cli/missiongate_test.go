@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1062,14 +1063,29 @@ func TestGateVerifyRunsTheSweepOnTheTip(t *testing.T) {
 	sk := filepath.Join(g.dir, ".agents", "skills", "verify-app")
 	_ = os.MkdirAll(filepath.Join(sk, "features"), 0o755)
 	_ = os.WriteFile(filepath.Join(g.dir, "app.sh"), []byte("case $1 in hello) echo hi;; esac # cmd hello\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(sk, "control.sh"), []byte("cat >/dev/null\necho '{\"status\": \"failed\", \"reason\": \"printed nothing\", \"artifacts\": []}'\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(sk, "features", "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \".agents/skills/verify-app/control.sh\"], \"surfaces\": [{\"kind\": \"command\", \"files\": [\"app.sh\"], \"pattern\": \"cmd ([a-z]+)\"}]}\n```\n\n1. [Hello](hello.md)\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(sk, "features", "hello.md"), []byte("# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n## Gotchas\n"), 0o644)
-	git(t, g.dir, "add", "-A")
-	git(t, g.dir, "commit", "--quiet", "-m", "app")
-	git(t, g.dir, "update-ref", "refs/remotes/origin/dev", "HEAD")
-	g.tip(git(t, g.dir, "rev-parse", "HEAD"), "success")
+	_ = os.WriteFile(filepath.Join(sk, "features", "hello.md"), []byte("# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n```check\n{\"id\": \"events\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"requires\": \"an events sink\", \"steps\": [{\"run\": [\"hello\"]}]}\n```\n\n## Gotchas\n"), 0o644)
+	commit := func(control string) {
+		_ = os.WriteFile(filepath.Join(sk, "control.sh"), []byte(control), 0o644)
+		git(t, g.dir, "add", "-A")
+		git(t, g.dir, "commit", "--quiet", "-m", "app")
+		git(t, g.dir, "update-ref", "refs/remotes/origin/dev", "HEAD")
+		g.tip(git(t, g.dir, "rev-parse", "HEAD"), "success")
+	}
+
+	// Bug #1226, criterion 2: the runner has no Playwright. The check is unreachable, so the gate waits and lists no
+	// fix; a check whose declared precondition the launch lacks proves nothing and passes, as before.
+	const gap = "Playwright is not installed: run \"npm install --save-dev playwright && npx playwright install chromium\""
+	commit("case $(cat) in *requires*) echo '{\"status\": \"unreachable\", \"reason\": \"no events sink\"}';; *) printf '%s\\n' '{\"status\": \"unreachable\", \"reason\": " + strconv.Quote(gap) + "}';; esac\n")
 	rep := g.gateJSON()
+	if ms := rep.Milestones[0]; ms.State == GatePassed || ms.State == GateFailed || len(rep.Fixes) != 0 || len(g.runs()) != 0 ||
+		!slices.Contains(ms.Checks, GateCheck{Check: "verify:hello.hi", Result: gatePending, Detail: "hello.hi is unreachable: " + gap}) ||
+		!slices.Contains(ms.Checks, GateCheck{Check: "verify:hello.events", Result: gatePass, Detail: "unreachable"}) || !strings.HasPrefix(ms.Detail, "pending: hello.hi is unreachable: Playwright") {
+		t.Fatalf("gate with no Playwright: %+v, fixes %+v, runs %+v", ms, rep.Fixes, g.runs())
+	}
+
+	commit("cat >/dev/null\necho '{\"status\": \"failed\", \"reason\": \"printed nothing\", \"artifacts\": []}'\n")
+	rep = g.gateJSON()
 	i := slices.IndexFunc(rep.Milestones[0].Checks, func(ck GateCheck) bool { return strings.HasPrefix(ck.Check, "verify:") })
 	if rep.Milestones[0].State != GateFailed || i < 0 || rep.Milestones[0].Checks[i] != (GateCheck{Check: "verify:hello.hi", Result: gateFail, Detail: "failed printed nothing"}) {
 		t.Fatalf("gate with a failing behaviour check: %+v", rep.Milestones[0])
