@@ -135,7 +135,9 @@
         1182
       ],
       "gate": {
-        "state": "waits"
+        "state": "failed",
+        "dev_sha": "eb51d1b29198a814920e8af32bb604a266ec6846",
+        "at": "2026-11-01T14:56:12Z"
       }
     },
     {
