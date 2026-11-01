@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verbs/gen","Test":"TestEveryInternalPackageInALayer"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verbs/gen","Test":"TestEveryInternalPackageInALayer","Output":"=== RUN   TestEveryInternalPackageInALayer\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verbs/gen","Test":"TestEveryInternalPackageInALayer","Output":"--- PASS: TestEveryInternalPackageInALayer (0.06s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verbs/gen","Test":"TestEveryInternalPackageInALayer"}

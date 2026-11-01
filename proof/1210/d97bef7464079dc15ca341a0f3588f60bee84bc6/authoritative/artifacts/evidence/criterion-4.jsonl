@@ -1,0 +1,20 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer","Output":"=== RUN   TestCheckSliceInspectAndDelegateLayer\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_file"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_file","Output":"=== RUN   TestCheckSliceInspectAndDelegateLayer/inspect_file\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_file","Output":"--- PASS: TestCheckSliceInspectAndDelegateLayer/inspect_file (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_file"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_directory"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_directory","Output":"=== RUN   TestCheckSliceInspectAndDelegateLayer/inspect_directory\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_directory","Output":"--- PASS: TestCheckSliceInspectAndDelegateLayer/inspect_directory (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/inspect_directory"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_file"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_file","Output":"=== RUN   TestCheckSliceInspectAndDelegateLayer/delegate_file\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_file","Output":"--- PASS: TestCheckSliceInspectAndDelegateLayer/delegate_file (0.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_file"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_and_cli"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_and_cli","Output":"=== RUN   TestCheckSliceInspectAndDelegateLayer/delegate_and_cli\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_and_cli","Output":"--- PASS: TestCheckSliceInspectAndDelegateLayer/delegate_and_cli (0.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer/delegate_and_cli"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer","Output":"--- PASS: TestCheckSliceInspectAndDelegateLayer (0.14s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/planning","Test":"TestCheckSliceInspectAndDelegateLayer"}
