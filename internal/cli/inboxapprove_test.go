@@ -148,7 +148,8 @@ func TestApproveCardOneCode(t *testing.T) {
 	m.device("rahulnakmol")
 	code, out, errOut := runIn(t, m.person, m.opts, "aaaa", "inbox", "--plain", "--repo", "o/r")
 	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "[4/4] Approve to build #889: ") ||
-		!strings.Contains(out, "Approved #889 to build as @rahulnakmol, approval 1.") || !strings.Contains(out, "inbox: 4 done, 0 skipped, 0 left") {
+		!strings.Contains(out, "Approved #889 to build as @rahulnakmol, approval 1.") ||
+		!strings.Contains(out, "[5/5] Mission start #889: ") || !strings.Contains(out, "inbox: 4 done, 0 skipped, 1 left") { // its Mission start card follows (Story #1175)
 		t.Fatalf("inbox a a a a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
 	got, gotPlan, ok := m.approvalRecords()
