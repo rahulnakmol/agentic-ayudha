@@ -187,7 +187,7 @@ func (d *discoverer) goModule() {
 	}
 	d.spec.Deps = append(d.spec.Deps, Step{Run: "go mod download", Evidence: ev})
 	d.check("go build ./...", "go.mod")
-	d.check("go test ./...", "go.mod")
+	d.check("go test -timeout 30m ./...", "go.mod") // a large module outruns go test's 10-minute default in a clean container
 	for _, dep := range []struct{ mod, svc string }{{"github.com/jackc/pgx", "postgres"}, {"github.com/lib/pq", "postgres"}, {"github.com/redis/go-redis", "redis"}, {"github.com/go-redis/redis", "redis"}, {"github.com/go-sql-driver/mysql", "mysql"}} {
 		if strings.Contains(string(mod), dep.mod) {
 			d.service(dep.svc, "go.mod requires "+dep.mod)

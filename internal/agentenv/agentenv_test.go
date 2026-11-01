@@ -88,7 +88,7 @@ func TestDiscoverGoAndPnpmWorkspace(t *testing.T) {
 	for _, c := range s.Checks {
 		checks = append(checks, c.Run)
 	}
-	if strings.Join(checks, "; ") != "go build ./...; go test ./...; pnpm -r --if-present run test" {
+	if strings.Join(checks, "; ") != "go build ./...; go test -timeout 30m ./...; pnpm -r --if-present run test" {
 		t.Errorf("checks = %v", checks)
 	}
 	if len(s.Browsers) != 1 || s.Browsers[0].Run != "pnpm --filter @x/ui exec playwright install --with-deps chromium" {
