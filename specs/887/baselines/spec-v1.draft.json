@@ -1,0 +1,67 @@
+{
+  "schema": "aayudha.feature.baseline/v1",
+  "feature": 887,
+  "part": "spec",
+  "version": 1,
+  "owner": "product-strategist",
+  "pins": [
+    {
+      "ref": "#1221",
+      "hash": "5ec13a496b5b5c64de13778361ebfc928d124b125c18abff2bda6e32bcc5e801",
+      "story": {
+        "number": 1221,
+        "title": "A Story or Bug's Review guidance is parsed and checked at Ready, with the Ignore limits",
+        "completion_goal_hash": "1481688640d5d6762d296d6d1dbcde43aa09332106a869a973e2b3c34c426feb",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": []
+      }
+    },
+    {
+      "ref": "#1222",
+      "hash": "54826de4364333e6ebc91e77259bda5b65e079845a29413e8f5f91a9dd5ad281",
+      "story": {
+        "number": 1222,
+        "title": "The build brief carries the story's Review guidance from the Ready snapshot",
+        "completion_goal_hash": "5eb0dbb487023e44f6ebd4b057b3ac962ef0935473c51adab8769b93c8fef1af",
+        "effort": "S",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": [
+          1221
+        ]
+      }
+    },
+    {
+      "ref": "#1223",
+      "hash": "5c9215cd563d5f0d9b2b24f1ea749cd7e718ef35baf68a1c64f65a267c5407e6",
+      "story": {
+        "number": 1223,
+        "title": "inspect reads the frozen Review guidance, keeps every limited finding, and re-reviews when it changes",
+        "completion_goal_hash": "66a0d70cc6a79e88149de0e5eee03a62a9d0df308cfd3f89bb244466ee0bcdf6",
+        "effort": "M",
+        "layers": [
+          "L02",
+          "L03"
+        ],
+        "depends_on": [
+          1221
+        ]
+      }
+    },
+    {
+      "ref": "#887 stories",
+      "hash": "570d111768ec80750082379c471b6a43b6dfc0811e0a1e7f831c45cb58e7a309"
+    }
+  ],
+  "hash": "eee927df73d9dad2fe1307ff28d93b44474fe4e31d441acd2f3b3b067e56ee08",
+  "summary": "A `review_guidance` field (check, risk, ignore) is frozen with the story, and the build brief and inspect read it. This is step S18 of the core design (aayu core: the human-dependency engine, agreed by @rahulnakmol on 2026-10-21).",
+  "source_session": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "drafted_by": "rahulnakmol",
+  "drafted_at": "2026-11-01T11:01:57Z"
+}
