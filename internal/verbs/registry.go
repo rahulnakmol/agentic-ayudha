@@ -162,7 +162,9 @@ type Input struct {
 	HumanOnly bool
 	// ReadOnlyValues pins the input of an ExposeRead command to the values that
 	// keep it read-only while [mcp] expose_writes is false (WP3.3), e.g.
-	// ready --check = "true". Bool inputs use "true" or "false".
+	// ready --check = "true". Bool inputs use "true" or "false"; an input of
+	// another type that writes whenever it is given uses "" (left out), e.g.
+	// grill --edit.
 	ReadOnlyValues []string
 }
 
@@ -641,6 +643,7 @@ var Verbs = []Command{
 			flag("idea", TypeString, "The request in the human's own words. With --assess, the idea to assess; with a draft, the request its Provenance must quote and resolve."),
 			flag("assess", TypeBool, "Read-only fact pass for the idea: the vagueness gate (unpack or pass, with its reasons), its vague qualifiers, abbreviations, and missing outcome with the dimensions to ask about, the product types, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data)."),
 			readOnlyWith(flag("create", TypeBool, "Write the validated draft: the issue (through the actions log), or design/brand.yaml; without it grill only validates."), "false"),
+			readOnlyWith(flag("edit", TypeIssue, "A filed issue of the type to change before Ready: --body (and --title) are checked as a draft and, when they pass Create, written in one write through the actions log, with the diff shown. Refused for a Ready issue and for one a running mission locks."), ""),
 		},
 		Outputs:  []string{"issue", "design/brand.yaml", "assessment"},
 		Gates:    []GateID{GateValidator, GateBaseline, GateHalt},

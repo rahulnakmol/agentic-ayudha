@@ -63,6 +63,11 @@ aayu:
       required: false
       positional: false
       description: "Write the validated draft: the issue (through the actions log), or design/brand.yaml; without it grill only validates."
+    - name: edit
+      type: issue
+      required: false
+      positional: false
+      description: "A filed issue of the type to change before Ready: --body (and --title) are checked as a draft and, when they pass Create, written in one write through the actions log, with the diff shown. Refused for a Ready issue and for one a running mission locks."
   outputs:
     - "issue"
     - "design/brand.yaml"

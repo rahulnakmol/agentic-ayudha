@@ -70,6 +70,7 @@ func TestReadyFailures(t *testing.T) {
 	story := loadFixture(t, "story")[StageReady]
 	decision := loadFixture(t, "decision")[StageReady]
 	feature := loadFixture(t, "feature")[StageReady]
+	bug := loadFixture(t, "bug")[StageReady]
 	with := func(it Item, f func(*Item)) Item {
 		c := it
 		c.Fields = map[string]string{}
@@ -163,6 +164,11 @@ func TestReadyFailures(t *testing.T) {
 			[]string{`links: a Story cannot carry a "supersedes" link; allowed: depends-on`}},
 		{"supersedes a story", with(decision, func(c *Item) { c.Fields[FieldLinks] = "supersedes #9"; c.LinkTypes = map[int]string{9: "story"} }), StageReady,
 			[]string{"links: supersedes #9: #9 is a story; supersedes links to a decision"}},
+		// Story #1179: the article fits the type, as grill and Ready both say it.
+		{"caused-by a story", with(bug, func(c *Item) { c.Fields[FieldLinks] = "caused-by #999"; c.LinkTypes = map[int]string{999: "story"} }), StageReady,
+			[]string{"links: caused-by #999: #999 is a story; caused-by links to an incident"}},
+		{"supersedes an incident", with(decision, func(c *Item) { c.Fields[FieldLinks] = "supersedes #9"; c.LinkTypes = map[int]string{9: "incident"} }), StageReady,
+			[]string{"links: supersedes #9: #9 is an incident; supersedes links to a decision"}},
 		{"two priorities", with(story, func(c *Item) { c.Labels = append(c.Labels, "priority:P1", "priority:P2") }), StageReady,
 			[]string{"priority: Priority has 2 labels (P1, P2); keep one"}},
 		{"type label disagrees", with(story, func(c *Item) { c.Labels = append(c.Labels, "type:bug") }), StageReady,
