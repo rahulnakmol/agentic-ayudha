@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19781-a1ad-7465-a5f8-ba6e50d8e886",
+  "task_url": "https://ampcode.com/threads/T-01a19781-a1ad-7465-a5f8-ba6e50d8e886",
   "branch": "story/1175-the-morning-is-set-the-inbox-orders-the",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "74ce2275e68921a45a1fefe3f7e3ad6039b95dd8ae1e959021f2c83bae1d0b0f",
   "started_at": "2026-11-01T14:26:28Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T14:26:28Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1175: The morning is set: the inbox orders the day's cards and ends with the day's plan"
+    },
+    {
+      "at": "2026-11-01T14:27:13Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
