@@ -1,0 +1,21 @@
+{
+  "story": 1174,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1174-bugs-come-last-a-mission-ends-with-a-bug",
+  "status": "host-handoff",
+  "brief_sha256": "42b7f58ed2e7a6b529ba07e9f63d0454854bd6f0ee7f02920b47d50c62e8adc8",
+  "started_at": "2026-11-01T08:25:11Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T08:25:11Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1174: Bugs come last: a mission ends with a BUGS milestone, and a Bug filed during the mission joins it"
+    }
+  ]
+}
