@@ -95,10 +95,10 @@ func TestApproveCard(t *testing.T) {
 			"    #20 Story 20 · story · effort S · MS1\n" +
 			"    #21 Story 21 · story · effort S · MS1\n" +
 			"    #22 Story 22 · story · effort S · MS1\n" +
-			"    #30 Bug 30 · Bug · effort S · MS1\n",
+			"    #30 Bug 30 · Bug · effort S · BUGS\n", // an open Bug is fixed last, in BUGS (Story #1174)
 		"  Budget   up to $75 (3 stories × $25, [budget] per_story_usd)\n",
 		"  Agents   up to 4 at once ([build] agents on dev)\n",
-		"  Milestones MS1 #20, #21, #22, #30; complete when MS1 passes its gate\n",
+		"  Milestones MS1 #20, #21, #22 · BUGS #30; complete when BUGS passes its gate\n",
 		"  High-risk entries by story: none shown. They come with #1029, which has not merged, so the card cannot read them yet.\n",
 		"  Baselines intent v1, spec v1, technical design v1\n",
 		"  Arjun (Product Strategist), counsel, not approval: What you agree to: the 3 stories and 1 Bug of #889 on the card",
