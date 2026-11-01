@@ -217,11 +217,40 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 // with his login, the time, #1010, and accepted; its card leaves the evening.
 func TestEveningAcceptRecordsReview(t *testing.T) {
 	m, _ := eveningWorld(t)
+	// The pack changes between the card he read and his accept: nothing is written, and the card comes back as it is now.
+	trace := []byte(`{"Action":"pass","Test":"TestCartAgain"}` + "\n")
+	lists := 0
+	m.edit(func() {
+		m.g.Hook = func(method, path string) {
+			if method == "GET" && path == "/repos/o/r/issues" {
+				if lists++; lists == 2 { // the read again, just before the accept
+					putPack(t, m.bare, &proof.Pack{Story: 1010, PRHeadSHA: head1010, Authority: proof.Authority{Kind: proof.Authoritative, RunID: 77},
+						Criteria:  []proof.Criterion{{ID: 2, Evidence: []string{"evidence/criterion-2.jsonl"}}},
+						Artifacts: []proof.Artifact{proof.NewArtifact("evidence/criterion-2.jsonl", "api-trace", trace)}},
+						map[string][]byte{"evidence/criterion-2.jsonl": trace})
+				}
+			}
+		}
+	})
 	code, out, errOut := runIn(t, m.person, m.opts, "1yq", "inbox", "--repo", "o/r")
+	m.edit(func() { m.g.Hook = nil })
+	if code != 0 || !strings.Contains(out, "#1010 changed on GitHub since you opened it") || !strings.Contains(out, "its evidence changed") || len(m.reviews()) != 0 {
+		t.Fatalf("accept after the pack changed: exit %d, reviews %+v:\n%s%s", code, m.reviews(), out, errOut)
+	}
+	var pack string
+	for _, it := range eveningList(t, m, m.person) {
+		if it.Number == 1010 {
+			pack = it.Pack
+		}
+	}
+	if !strings.HasPrefix(pack, "proof/1010/"+head1010+"/authoritative/pack.json@sha256:") {
+		t.Fatalf("#1010's pack: %q", pack)
+	}
+	code, out, errOut = runIn(t, m.person, m.opts, "1yq", "inbox", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "done: @rahulnakmol accepted #1010 at 1010101, recorded in missions/889/reviews.jsonl") {
 		t.Fatalf("inbox 1 Accept: exit %d:\n%s%s", code, out, errOut)
 	}
-	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:00:00Z"}
+	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Pack: pack, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:00:00Z"}
 	if got := m.reviews(); !slices.Equal(got, []StoryReview{want}) {
 		t.Fatalf("reviews.jsonl: %+v, want %+v", got, want)
 	}
@@ -313,5 +342,26 @@ func TestEveningListHasNoAccept(t *testing.T) {
 	}
 	if code, _, errOut := runIn(t, m.lane, m.opts, "1y", "inbox", "--repo", "o/r"); code != ExitBlocked || len(m.reviews()) != 0 {
 		t.Fatalf("lane's inbox: exit %d, reviews %+v: %s", code, m.reviews(), errOut)
+	}
+}
+
+// Criterion 1: a pack's artifact paths are data. A path with terminal control
+// characters reaches no card line, link, or JSON field as a control character.
+func TestEveningEvidenceIsSafeText(t *testing.T) {
+	m, _ := eveningWorld(t)
+	evil := "evidence/\x1b]8;;https://evil.example\x07trace.jsonl"
+	trace := []byte(`{"Action":"pass"}` + "\n")
+	putPack(t, m.bare, &proof.Pack{Story: 1011, PRHeadSHA: head1011, Authority: proof.Authority{Kind: proof.Authoritative, RunID: 78},
+		Criteria:  []proof.Criterion{{ID: 2, Evidence: []string{evil}}},
+		Artifacts: []proof.Artifact{proof.NewArtifact(evil, "api-trace", trace)}}, map[string][]byte{evil: trace})
+	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "trace.jsonl") || strings.ContainsAny(out, "\x1b\x07") {
+		t.Fatalf("inbox with a control character in a path: exit %d:\n%q%s", code, out, errOut)
+	}
+	for _, it := range eveningList(t, m, m.person) {
+		b, _ := json.Marshal(it)
+		if strings.Contains(string(b), `\u001b`) || strings.Contains(string(b), `\u0007`) {
+			t.Fatalf("card #%d carries a control character: %s", it.Number, b)
+		}
 	}
 }

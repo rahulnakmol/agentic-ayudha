@@ -251,6 +251,7 @@ type InboxItem struct {
 	Details     []string      `json:"details,omitempty"`     // GitHub's own facts behind the card (d shows them)
 	Lines       []string      `json:"lines,omitempty"`       // the card's own words under its title: a mission start's lock (Story #1013)
 	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card, or whose mission an evening card's story is of
+	Pack        string        `json:"pack,omitempty"`        // the pack an evening card shows, by its ledger path and SHA-256
 	// Criteria are an evening card's criteria, each with its evidence from the pack at the merged head (Story #1176).
 	Criteria []EveningCriterion `json:"criteria,omitempty"`
 	images   map[int][]byte     // an evening card's screenshots, by the line of Lines they follow, where the terminal draws them
@@ -1162,6 +1163,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	}
 	if was.Kind == InboxDecision && was.BodyHash != now.BodyHash { // its options, evaluation, or recommendation: the text the person accepts
 		out = append(out, "its text changed")
+	}
+	if was.Kind == InboxEvening && (was.Pack != now.Pack || !slices.Equal(was.Lines, now.Lines)) { // an accept accepts the evidence the person read
+		out = append(out, "its evidence changed")
 	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")

@@ -2,7 +2,7 @@
 
 [[criterion]]
 id = 1 # #889's MS1 started at 09:00, #1010 and #1011 merged with packs: at the end of business_hours, one Evening card per story with each criterion and its evidence
-tests = ["internal/cli:TestEveningCardsShowEvidence"]
+tests = ["internal/cli:TestEveningCardsShowEvidence", "internal/cli:TestEveningEvidenceIsSafeText"]
 
 [[criterion]]
 id = 2 # he accepts #1010: missions/889/reviews.jsonl gains his login, the time, #1010, and accepted
