@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1001,7 +1002,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	d.event(now, dlgFix, fmt.Sprintf("cycle %d: %d finding(s) on %s", st.Cycles, len(ids), short(head)))
 	res.Delegation.FollowUp = true
 	report()
-	if err := d.outside(); err != nil {
+	if err := cmp.Or(d.outside(), d.noTask()); err != nil {
 		return nil, true, Errorf(ExitBlocked, "build #%d: %v", d.story, err)
 	}
 	if d.local {
@@ -1027,11 +1028,21 @@ func (d *delegation) outside() error {
 	return fmt.Errorf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", d.state.PR, delegate.Names[d.receiver])
 }
 
+// noTask refuses a follow-up to a thread that d's delegation does not name:
+// a start that got no answer records no task. Codex makes a new task on the
+// PR's branch, so it needs none.
+func (d *delegation) noTask() error {
+	if d.local || d.state.Task != "" || d.receiver == delegate.Codex {
+		return nil
+	}
+	return fmt.Errorf("#%d's delegation records no %s task, so no thread takes the fixes of PR #%d: a person checks %s", d.story, delegate.Names[d.receiver], d.state.PR, delegate.Names[d.receiver])
+}
+
 // followUp sends msg to the receiver within receiverTimeout (Bug #1124),
 // and keeps the task it reports. On a host hand-off it writes msg to a file
 // for the host to send to the story's thread with its thread tool (Bug #1208).
 func (d *delegation) followUp(ctx context.Context, msg string) error {
-	if err := d.outside(); err != nil {
+	if err := cmp.Or(d.outside(), d.noTask()); err != nil {
 		return err
 	}
 	if d.host {
