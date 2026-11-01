@@ -441,6 +441,7 @@ func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 		"MS1=#20,#21,#22 MS2=#22,#23,#24,#25": "#22 is in MS1 and MS2: every story and Bug belongs to one milestone",
 		"MS1=#20,#21,#22,#23,#24,#25,#99":     "MS1 names #99, which is not a story or Bug of #889",
 		"MS1=20,21,22,23":                     "#24 is in no milestone: every story and Bug belongs to one",
+		"BUGS=#25 MS1=#20,#21,#22,#23,#24":    "BUGS is milestone 1 of 2: the Bugs are fixed last, so it is the last milestone",
 	} {
 		if code, out, errOut := m.approve(889, "--milestones", spec); code != ExitBlocked || !strings.Contains(errOut, want) || m.commits() != n {
 			t.Fatalf("--milestones %s: exit %d: %s%s", spec, code, out, errOut)

@@ -658,6 +658,10 @@ func parseMilestones(spec string) ([]MissionMilestone, error) {
 // checkMilestones says why the milestones do not hold the Feature's stories
 // and Bugs, each in exactly one (Decision #915), or "".
 func checkMilestones(f int, ms []MissionMilestone, all []int) string {
+	// The gates pass in plan order: a BUGS before another milestone could pass while that one builds (Story #1174).
+	if i := slices.IndexFunc(ms, func(m MissionMilestone) bool { return m.Name == BugsMilestone }); i >= 0 && i != len(ms)-1 {
+		return fmt.Sprintf("%s is milestone %d of %d: the Bugs are fixed last, so it is the last milestone", BugsMilestone, i+1, len(ms))
+	}
 	in := map[int][]string{}
 	for _, m := range ms {
 		for _, n := range m.Stories {
