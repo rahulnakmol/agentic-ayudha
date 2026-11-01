@@ -212,6 +212,14 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 || !slices.Contains(cards[0].Lines, "Agreed this morning: MS2 of #889's mission.") {
 		t.Fatalf("Evening cards on Tuesday after MS2 starts: %+v", cards)
 	}
+	// A milestone that starts after hours, at 19:00, is still today's: it shows at 20:00.
+	m.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate.At = "2026-11-03T19:00:00Z" })
+	m.mu.Lock()
+	*now = time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC)
+	m.mu.Unlock()
+	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 {
+		t.Fatalf("Evening cards at 20:00 for MS2 started at 19:00: %+v", cards)
+	}
 }
 
 // Criterion 2: he accepts #1010, and missions/889/reviews.jsonl gains a line
@@ -261,6 +269,20 @@ func TestEveningAcceptRecordsReview(t *testing.T) {
 	}
 	if !slices.Equal(nums, []int{1011, 1104}) {
 		t.Fatalf("Evening cards after the accept: %v", nums)
+	}
+	// The pack of that head changes after his accept: the accept was of the old one, so #1010 comes back.
+	putPack(t, m.bare, &proof.Pack{Story: 1010, PRHeadSHA: head1010, Authority: proof.Authority{Kind: proof.Authoritative, RunID: 77},
+		Criteria:  []proof.Criterion{{ID: 1, Evidence: []string{"evidence/criterion-1.jsonl"}}},
+		Artifacts: []proof.Artifact{proof.NewArtifact("evidence/criterion-1.jsonl", "api-trace", trace)}},
+		map[string][]byte{"evidence/criterion-1.jsonl": trace})
+	var again []string
+	for _, it := range eveningList(t, m, m.person) {
+		if it.Number == 1010 {
+			again = append(again, it.Pack)
+		}
+	}
+	if len(again) != 1 || again[0] == pack {
+		t.Fatalf("#1010 after its pack changed past the accept: %q (accepted %q)", again, pack)
 	}
 }
 

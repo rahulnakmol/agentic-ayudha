@@ -89,8 +89,19 @@ type eveningStory struct {
 	plan      *MissionPlan
 	pack      *proof.Entry      // its pack at the merged head; nil when there is none, or it did not merge
 	packErr   string            // why its packs cannot be read
-	reviewed  bool              // a person reviewed it today at that head
+	reviewed  bool              // a person reviewed it today at that head and that pack
 	images    map[string][]byte // its screenshots by artifact path, read only where the terminal shows images
+}
+
+// packID names the story's pack by its ledger path and SHA-256: what a
+// review accepts. A story with no pack has none.
+func (st eveningStory) packID() string {
+	if st.pack == nil {
+		return ""
+	}
+	b, _ := proof.Encode(st.pack.Pack)
+	sum := sha256.Sum256(b)
+	return termText(st.pack.Path) + "@sha256:" + hex.EncodeToString(sum[:])
 }
 
 // eveningDay is today's local day and the end of its business hours, when now
@@ -142,7 +153,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string) (
 		return nil, nil
 	}
 	clock, _ := l.Config.Clock() // a config that loaded has a clock (config.Validate)
-	day, end, ok := eveningDay(clock, e.Now())
+	day, _, ok := eveningDay(clock, e.Now())
 	if !ok {
 		return nil, nil
 	}
@@ -171,18 +182,13 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string) (
 			return nil, err
 		}
 		for i, m := range p.Milestones {
-			if at, ok := milestoneStart(p, i); !ok || at.Before(day) || !at.Before(end) {
+			if at, ok := milestoneStart(p, i); !ok || at.Before(day) { // any start today: one after hours shows this evening, never later
 				continue
 			}
 			for _, n := range m.Stories {
 				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p}
 				h := head(n)
-				for _, r := range reviews {
-					if at, err := time.Parse(time.RFC3339, r.At); err == nil && r.Story == n && r.Head == h && !at.Before(day) {
-						st.reviewed = true
-					}
-				}
-				if h != "" && !st.reviewed {
+				if h != "" {
 					es, err := packs.Packs(ctx, t, n)
 					if err != nil {
 						st.packErr = oneLineErr(err)
@@ -193,6 +199,16 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string) (
 							break
 						}
 					}
+				}
+				// A review today of this head and this pack (none, when it has none) answers the card; a pack that
+				// changed since, even after the person's accept, brings it back with its new evidence.
+				for _, r := range reviews {
+					if at, err := time.Parse(time.RFC3339, r.At); err == nil && r.Story == n && r.Head == h && r.Pack == st.packID() && !at.Before(day) {
+						st.reviewed = true
+					}
+				}
+				if st.reviewed {
+					st.pack = nil
 				}
 				if st.pack != nil && e.showsImages() {
 					if media == nil {
@@ -282,11 +298,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		} else {
 			p := s.pulls[pr.Number]
 			it.PR, it.Head, it.Evidence, it.mergeSHA = pr.Number, p.GetHead().GetSHA(), p.GetHTMLURL(), pr.MergeSHA
-			if st.pack != nil { // what an accept accepts: this pack, as read
-				b, _ := proof.Encode(st.pack.Pack)
-				sum := sha256.Sum256(b)
-				it.Pack = termText(st.pack.Path) + "@sha256:" + hex.EncodeToString(sum[:])
-			}
+			it.Pack = st.packID() // what an accept accepts: this pack, as read
 			it.f.problem = "agreed today: review it"
 			switch {
 			case st.pack != nil:
