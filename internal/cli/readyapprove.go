@@ -80,14 +80,17 @@ type approveRun struct {
 	milestones string
 	// agents is --agents: how many stories the Feature's mission runs at once; 0 keeps the last approval's.
 	agents int
+	// shown is the hash of the stories and Bugs an inbox card showed (approveStories): approve only those (Story #1173).
+	shown string
 }
 
 // approveToBuild is `aayu ready <feature>` (Feature #877, Decision #903): a
 // person approves the Feature's baselines, its stories, and its budget, once,
 // through GitHub's device flow every time. Everything is read again after the
 // code, and only what the person saw is approved. Then Arjun posts the
-// Feature's Ready snapshot.
-func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milestones string, agents int) error {
+// Feature's Ready snapshot. shown, when set, is the hash of the stories and
+// Bugs an inbox card showed: the read after the code must agree it.
+func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milestones string, agents int, shown string) error {
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return err
@@ -97,7 +100,7 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		return err
 	}
 	r.GH = c
-	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones, agents: agents}
+	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones, agents: agents, shown: shown}
 	want, effect, prev, _, err := a.prepare(ctx)
 	if err != nil {
 		return err
@@ -130,6 +133,9 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	plan2, planEffect2, old2, err := a.missionPlan(ctx, got.Agents)
 	if err != nil {
 		return err
+	}
+	if a.shown != "" && approveStories(got, plan2) != a.shown { // the card's stories, read again after the code, said before any other change
+		return Errorf(ExitBlocked, "%s Nothing was approved.", approveChanged(n))
 	}
 	if !got.Agreed(want) || !slices.Equal(append(again, planEffect2...), effect) || version(prev2) != version(prev) || missionJSON(&plan2) != missionJSON(&plan) ||
 		(old == nil) != (old2 == nil) || old != nil && missionJSON(old) != missionJSON(old2) {

@@ -196,8 +196,9 @@ func TestBaselineApproveOneCode(t *testing.T) {
 		drafts[part] = m.draftOf(part, 1)
 	}
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "aaa", "inbox", "--plain", "--repo", "o/r")
-	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "inbox: 3 done, 0 skipped, 0 left") {
+	// Then #889's Approve to build card says the command's refusal (it has no Initiative parent here), and s leaves it (Story #1173).
+	code, out, errOut := runIn(t, m.person, m.opts, "aaas", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "inbox: 3 done, 1 skipped, 0 left") {
 		t.Fatalf("inbox a a a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
 	for _, part := range []string{"intent", "spec", "tech"} {

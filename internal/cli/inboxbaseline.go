@@ -30,7 +30,8 @@ func baselineChanged(part string, f int) string {
 // baselineCards reads the baseline drafts of features that wait for a person
 // on the ledger, each with its part's pins as they are now (partRun.pins, the
 // code approve checks them with), as inbox cards. A UX draft of a Feature
-// with no L01 in its footprint has no card. It writes nothing.
+// with no L01 in its footprint has no card. After a Feature's Baseline cards
+// comes its Approve to build card (approveCard). It writes nothing.
 func (e *Env) baselineCards(ctx context.Context, repo string, features []int) ([]InboxItem, error) {
 	if config.RepoRoot(e.Dir) == "" || len(features) == 0 { // no checkout, so no ledger to read
 		return nil, nil
@@ -50,11 +51,15 @@ func (e *Env) baselineCards(ctx context.Context, repo string, features []int) ([
 	defer t.Close()
 	var out []InboxItem
 	for _, f := range features {
+		var unapproved []string // the parts with no approved version: Approve to build waits for them (Story #1173)
 		for _, part := range ready.Parts {
 			r := &partRun{e: e, c: c, w: w, repo: repo, n: f, part: part}
 			base, draft, err := r.recordsIn(ctx, t)
 			if err != nil {
 				return nil, err
+			}
+			if base == nil {
+				unapproved = append(unapproved, part)
 			}
 			if draft == nil {
 				continue
@@ -80,6 +85,13 @@ func (e *Env) baselineCards(ctx context.Context, repo string, features []int) ([
 				}
 			}
 			out = append(out, baselineCard(*draft, base, holds, stories, e.footprint(it)))
+		}
+		card, err := e.approveCard(ctx, c, w, t, repo, f, unapproved)
+		if err != nil {
+			return nil, err
+		}
+		if card != nil {
+			out = append(out, *card)
 		}
 	}
 	return out, nil

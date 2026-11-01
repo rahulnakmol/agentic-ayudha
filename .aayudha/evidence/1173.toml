@@ -1,0 +1,21 @@
+# Which tests prove Story #1173's Completion Goal.
+
+[[criterion]]
+id = 1 # intent, spec, and tech of #889 approved, no approval: an Approve to build card with stories and Bugs, budget, agents, milestones, high-risk entries
+tests = ["internal/cli:TestApproveCard"]
+
+[[criterion]]
+id = 2 # approved in the baselines' session: one device code, and approved.json and plan.json as aayu ready 889 writes them
+tests = ["internal/cli:TestApproveCardOneCode"]
+
+[[criterion]]
+id = 3 # agents set to 10 on the card: approved.json has agents 10
+tests = ["internal/cli:TestApproveCardAgents"]
+
+[[criterion]]
+id = 4 # a story changed after the card was read: nothing approved, and the inbox says "The stories of #889 changed while you read it."
+tests = ["internal/cli:TestApproveCardStoriesChanged"]
+
+[[criterion]]
+id = 5 # the tech baseline is not approved: only the Baseline cards, no Approve to build card
+tests = ["internal/cli:TestApproveCardWaitsForBaselines"]
