@@ -1,0 +1,16 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR","Output":"=== RUN   TestBuildSyncsAdoptedPR\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/amp"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/amp","Output":"=== RUN   TestBuildSyncsAdoptedPR/amp\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/amp","Output":"--- PASS: TestBuildSyncsAdoptedPR/amp (1.60s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/amp"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/cursor"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/cursor","Output":"=== RUN   TestBuildSyncsAdoptedPR/cursor\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/cursor","Output":"--- PASS: TestBuildSyncsAdoptedPR/cursor (1.68s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/cursor"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/opencode"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/opencode","Output":"=== RUN   TestBuildSyncsAdoptedPR/opencode\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/opencode","Output":"--- PASS: TestBuildSyncsAdoptedPR/opencode (1.70s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR/opencode"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR","Output":"--- PASS: TestBuildSyncsAdoptedPR (4.97s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBuildSyncsAdoptedPR"}

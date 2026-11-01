@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextKeepsOutsidePR"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextKeepsOutsidePR","Output":"=== RUN   TestMissionNextKeepsOutsidePR\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextKeepsOutsidePR","Output":"--- PASS: TestMissionNextKeepsOutsidePR (1.98s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextKeepsOutsidePR"}

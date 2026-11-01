@@ -1,0 +1,19 @@
+{
+  "covered": 56,
+  "executable": 61,
+  "percent": 91.80327868852459,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/delegate.go": [
+      931,
+      932,
+      1046,
+      1047
+    ],
+    "internal/cli/missionrecover.go": [
+      685
+    ]
+  },
+  "format": "go coverprofile"
+}
