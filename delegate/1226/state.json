@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a197ce-b42f-77cc-895d-61bd3f9b8ed5",
+  "task_url": "https://ampcode.com/threads/T-01a197ce-b42f-77cc-895d-61bd3f9b8ed5",
   "branch": "story/1226-fix-verify-the-gate-cannot-find-a-pnpm-i",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "3b88ac80f5a6bc053df81faca94eb5c0e0d748f55dcc9e63ea7f3d64a54021c8",
   "started_at": "2026-11-01T15:50:40Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T15:50:40Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1226: fix(verify): the gate cannot find a pnpm-installed Playwright, so its browser checks fail and list a fix"
+    },
+    {
+      "at": "2026-11-01T15:51:21Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
