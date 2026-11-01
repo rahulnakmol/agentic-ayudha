@@ -1,7 +1,8 @@
 // Command ratchet checks or tightens this repository's coverage floor
 // (internal/ratchet; Appendix B S-4.3r) and, given a base, checks that the
-// change lowers no skill-eval bar (evals.CheckBars, Story #400). CI's build
-// job runs
+// change lowers no skill-eval bar (evals.CheckBars, Story #400) and leaves no
+// agent-environment host it changes unverified (Bug #1211). CI's build job
+// runs
 //
 //	go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out [-base <sha>]
 //
@@ -17,6 +18,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -85,11 +87,41 @@ func run(profile, base string, update bool) error {
 			return err
 		}
 		problems = append(problems, bars...)
+		envs, err := envRecords(base)
+		if err != nil {
+			return err
+		}
+		problems = append(problems, envs...)
 	}
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "\n::error::"))
 	}
 	return nil
+}
+
+// envRecords fails a change to the agent environment since base (its spec or
+// its setup) that leaves a host of the spec's hosts with no verification
+// record of the new environment, in a container or in the host's cloud
+// (Bug #1211): a stale record is caught at merge, not when a mission starts
+// a story on that host. When git cannot tell, the records are checked.
+func envRecords(base string) ([]string, error) {
+	if exec.Command("git", "diff", "--quiet", base, "--", agentenv.SpecPath, agentenv.SetupPath).Run() == nil {
+		return nil, nil
+	}
+	s, _, err := agentenv.LoadSpec(".")
+	v, verr := agentenv.LoadVerified(".")
+	if err = errors.Join(err, verr); err != nil {
+		return nil, err
+	}
+	fp := s.Fingerprint()
+	var out []string
+	for _, h := range s.Hosts {
+		if v.Container[h].Fingerprint != fp && v.Cloud[h].Fingerprint != fp {
+			out = append(out, fmt.Sprintf("environment record: the agent environment changed, and %s has no record of %s verified for %s: run `aayu install --env --host %s --apply --verify` and commit %s",
+				agentenv.VerifiedPath, fp, h, h, agentenv.VerifiedPath))
+		}
+	}
+	return out, nil
 }
 
 // baseRatchet reads the base commit's ratchet; the floor before the ratchet
