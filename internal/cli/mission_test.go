@@ -423,15 +423,16 @@ func TestMissionStartWritesPlan(t *testing.T) {
 	}
 }
 
-// Criterion 2: a draft plan that leaves story #24 and Bug #25 in no
-// milestone is refused before the device code, and so is any other plan that
-// does not put each story and Bug in exactly one milestone.
+// Criterion 2: a draft plan that leaves story #24 in no milestone is refused
+// before the device code, and so is any other plan that does not put each
+// story and Bug in exactly one milestone. Open Bug #25, named in none, goes
+// to BUGS (Story #1174).
 func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 	m := storiesAndBug(t)
 	n := m.commits()
 	m.g.Reset()
 	code, out, errOut := m.approve(889, "--milestones", "MS1=#20,#21 MS2=#22,#23")
-	if code != ExitBlocked || !strings.Contains(errOut, "#24 and #25 are in no milestone: every story and Bug belongs to one") ||
+	if code != ExitBlocked || !strings.Contains(errOut, "#24 is in no milestone: every story and Bug belongs to one") ||
 		m.codes() != 0 || m.commits() != n || slices.ContainsFunc(m.g.Writes(), func(r fake.Request) bool { return strings.Contains(r.Path, "/issues/") }) {
 		t.Fatalf("a story and a Bug in no milestone: exit %d, device codes %d, commits %s → %s: %s%s", code, m.codes(), n, m.commits(), out, errOut)
 	}
@@ -439,7 +440,8 @@ func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 	for spec, want := range map[string]string{
 		"MS1=#20,#21,#22 MS2=#22,#23,#24,#25": "#22 is in MS1 and MS2: every story and Bug belongs to one milestone",
 		"MS1=#20,#21,#22,#23,#24,#25,#99":     "MS1 names #99, which is not a story or Bug of #889",
-		"MS1=20,21,22,23,24":                  "#25 is in no milestone: every story and Bug belongs to one",
+		"MS1=20,21,22,23":                     "#24 is in no milestone: every story and Bug belongs to one",
+		"BUGS=#25 MS1=#20,#21,#22,#23,#24":    "BUGS is milestone 1 of 2: the Bugs are fixed last, so it is the last milestone",
 	} {
 		if code, out, errOut := m.approve(889, "--milestones", spec); code != ExitBlocked || !strings.Contains(errOut, want) || m.commits() != n {
 			t.Fatalf("--milestones %s: exit %d: %s%s", spec, code, out, errOut)
@@ -497,6 +499,84 @@ func TestApproveToBuildOneMilestonePasses(t *testing.T) {
 	m.closeIssue(25)
 	if code, out, errOut := m.mission(m.person, "", "show", 889); code != 0 || !strings.Contains(out, "MS1       gate: its last story merged, so its gate runs") {
 		t.Fatalf("show with every story merged: exit %d: %s%s", code, out, errOut)
+	}
+}
+
+// bugsWorld is Feature #889 with stories #20 and #21 and Bugs: open ones,
+// and closed ones that merged (Story #1174).
+func bugsWorld(t *testing.T, open []int, closed ...int) *missionWorld {
+	t.Helper()
+	m := newMissionWorld(t)
+	m.issue(889, "Agents pull the next story", "feature", 0, "")
+	m.issue(20, "Story 20", "story", 889, "")
+	m.issue(21, "Story 21", "story", 889, "")
+	for _, n := range append(slices.Clone(open), closed...) {
+		m.issue(n, fmt.Sprintf("Bug %d", n), "bug", 889, "")
+	}
+	for _, n := range closed {
+		m.closeIssue(n)
+	}
+	m.feature(889, 20, 21)
+	return m
+}
+
+// milestonesOf are the plan's milestones as "MS1=20,21 BUGS=30,31", with
+// the milestone each graph item names.
+func milestonesOf(p MissionPlan) string {
+	var parts []string
+	for _, ms := range p.Milestones {
+		parts = append(parts, ms.Name+"="+strings.Trim(strings.ReplaceAll(fmt.Sprint(ms.Stories), " ", ","), "[]"))
+	}
+	for _, it := range p.Graph {
+		parts = append(parts, fmt.Sprintf("#%d:%s", it.Number, it.Milestone))
+	}
+	return strings.Join(parts, " ")
+}
+
+// Story #1174, criterion 1: with open stories #20 and #21 and open Bugs #30
+// and #31, Approve to build with no --milestones puts the stories in MS1,
+// then the Bugs in BUGS, which ends the Feature.
+func TestApproveToBuildPutsOpenBugsLast(t *testing.T) {
+	m := bugsWorld(t, []int{30, 31})
+	code, out, errOut := m.approve(889)
+	if code != 0 || !strings.Contains(errOut, "Approving: Mission plan: MS1 #20, #21 · BUGS #30, #31; every story and Bug is in one milestone; complete when BUGS passes its gate") {
+		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
+	}
+	p, raw := m.plan(889)
+	if got := milestonesOf(p); got != "MS1=20,21 BUGS=30,31 #20:MS1 #21:MS1 #30:BUGS #31:BUGS" || p.FeatureDone != "BUGS" ||
+		p.Milestones[1].Gate != (MilestoneGate{State: GateWaits}) {
+		t.Fatalf("plan.json: %s\n%s", got, raw)
+	}
+}
+
+// Story #1174, criterion 2: --milestones names MS1 and MS2 and no Bug: the
+// plan adds BUGS with every open Bug, last. Approve to build again with no
+// --milestones agrees that plan as it is, with no device code.
+func TestApproveToBuildNamedMilestonesThenBugs(t *testing.T) {
+	m := bugsWorld(t, []int{30, 31})
+	if code, out, errOut := m.approve(889, "--milestones", "MS1=#21 MS2=#20"); code != 0 {
+		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
+	}
+	p, raw := m.plan(889)
+	if got := milestonesOf(p); got != "MS1=21 MS2=20 BUGS=30,31 #20:MS2 #21:MS1 #30:BUGS #31:BUGS" || p.FeatureDone != "BUGS" {
+		t.Fatalf("plan.json: %s\n%s", got, raw)
+	}
+	n := m.commits()
+	if code, out, errOut := m.approve(889); code != 0 || m.codes() != 0 || m.commits() != n || !strings.Contains(out, "is approved to build already") {
+		t.Fatalf("approve again: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
+	}
+}
+
+// Story #1174, criterion 5: with no open Bug (Bug #33 merged and closed),
+// the plan has no BUGS milestone; the closed Bug stays in MS1.
+func TestApproveToBuildNoOpenBugNoBugsMilestone(t *testing.T) {
+	m := bugsWorld(t, nil, 33)
+	if code, out, errOut := m.approve(889); code != 0 {
+		t.Fatalf("approve 889: exit %d: %s%s", code, out, errOut)
+	}
+	p, raw := m.plan(889)
+	if got := milestonesOf(p); got != "MS1=20,21,33 #20:MS1 #21:MS1 #33:MS1" || p.FeatureDone != "MS1" || strings.Contains(raw, BugsMilestone) {
+		t.Fatalf("plan.json: %s\n%s", got, raw)
 	}
 }
 

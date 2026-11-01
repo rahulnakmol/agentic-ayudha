@@ -28,9 +28,10 @@ import (
 // Kanha, decides which of a mission's stories and Bugs start now, with no
 // model call. It reads the Feature's stories as they are now, on every run,
 // so a story that joins a Tatkal Feature mid-Release is listed; whether it
-// may be Ready is Ready's rule. The order is priority, then slice order (the
-// Feature's sub-issue order), then Ready time. Each start is claimed on the
-// ledger as admitClaim claims a loop pick, so two runs never start one story.
+// may be Ready is Ready's rule. The order is the BUGS milestone last (Story
+// #1174), then priority, then slice order (the Feature's sub-issue order),
+// then Ready time. Each start is claimed on the ledger as admitClaim claims a
+// loop pick, so two runs never start one story.
 
 // WorkSchema is the schema of a work list: what starts now and why the rest
 // waits. `aayu loop --due` (#911) returns the same shape with scope repo.
@@ -74,6 +75,7 @@ type nextEntry struct {
 	slice   int
 	readyAt time.Time
 	free    bool // Ready and not running: a start unless the claim, the budget, or the agents hold it
+	bugs    int  // 1 in the BUGS milestone: listed after the stories of the milestones before (Story #1174)
 }
 
 // missionNext is `aayu mission next <f>`.
@@ -172,6 +174,21 @@ func (e *Env) workList(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			return err
 		}
 	}
+	// A Bug filed while the mission runs joins its BUGS milestone, with no new approval (Story #1174).
+	// A list that does not claim only previews it.
+	if joined, err := joinBugs(ctx, c, repo, plan, subs); err != nil {
+		return err
+	} else if joined && claim && !c.DryRun() {
+		var jerr error
+		_, err := updatePlan(ctx, w, f, fmt.Sprintf("missions: a new Bug of #%d joins %s", f, BugsMilestone), func(p *MissionPlan) bool {
+			ok, err := joinBugs(ctx, c, repo, p, subs)
+			jerr = err
+			return ok
+		})
+		if err = cmp.Or(jerr, err); err != nil {
+			return err
+		}
+	}
 	changed, err := e.lockedEdits(ctx, c, w, repo, plan, subs)
 	if err != nil {
 		return err
@@ -236,6 +253,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		}
 		kind, _ := workitems.TypeOf(is.GetType().GetName(), labels)
 		en := nextEntry{n: n, prio: priorityRank(labels), slice: min(i, len(subs)), item: WorkListItem{Key: "#" + strconv.Itoa(n), Action: "waits", bug: kind == "bug"}}
+		if slices.ContainsFunc(plan.Milestones, func(m MissionMilestone) bool { return m.Name == BugsMilestone && slices.Contains(m.Stories, n) }) {
+			en.bugs = 1
+		}
 		var st *delegate.State
 		if b, err := t.File(ctx, delegate.LedgerPath(n)); ignoreMissing(err) != nil {
 			return Wrap(ExitExternal, err)
@@ -314,7 +334,7 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		entries = append(entries, en)
 	}
 	slices.SortStableFunc(entries, func(a, b nextEntry) int {
-		return cmp.Or(a.prio-b.prio, a.slice-b.slice, a.readyAt.Compare(b.readyAt), a.n-b.n)
+		return cmp.Or(a.bugs-b.bugs, a.prio-b.prio, a.slice-b.slice, a.readyAt.Compare(b.readyAt), a.n-b.n)
 	})
 	per := appr.Budget.PerStoryUSD
 	agents, _, err := e.missionAgents(ctx, c, repo, f, appr.Agents)

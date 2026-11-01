@@ -449,19 +449,78 @@ func TestMissionNextTatkalStoryJoins(t *testing.T) {
 	}
 }
 
-// Criterion 10: a Ready Bug of the Feature is listed by the same order as a
-// story, marked as a Bug.
+// Criterion 10: a Ready Bug of the Feature is listed, marked as a Bug, and
+// after the stories: it is in BUGS (Story #1174).
 func TestMissionNextListsBugs(t *testing.T) {
 	m := newMissionWorld(t)
 	m.startedMission(889, []int{26, 27}, 26)
 	m.setPlan(889, func(p *MissionPlan) { p.Budget = 600 }) // the approval's budget counts its stories only
 	m.status(26, "ready", "")
 	m.status(27, "ready", "")
-	if p, _ := m.plan(889); p.Milestones[0].Name != "MS1" || !slices.Equal(p.Milestones[0].Stories, []int{26, 27}) {
-		t.Fatalf("milestones: %+v", p.Milestones)
+	if p, _ := m.plan(889); milestonesOf(p) != "MS1=27 BUGS=26 #26:BUGS #27:MS1" {
+		t.Fatalf("milestones: %s", milestonesOf(p))
 	}
-	if code, out, errOut := m.next(889); code != 0 || out != "start #26 (bug)\nstart #27\n" {
+	if code, out, errOut := m.next(889); code != 0 || out != "start #27\nstart #26 (bug)\n" {
 		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+}
+
+// Story #1174, criterion 3: Bug #32, filed under #889 while its mission
+// runs, joins the plan's BUGS milestone with no new approval, and mission
+// next lists it after the stories of the milestones before, though it is P0
+// (in BUGS, priority orders it before #30).
+func TestMissionNextBugFiledDuringMissionJoinsBugs(t *testing.T) {
+	m := newMissionWorld(t)
+	m.startedMission(889, []int{20, 21, 30}, 30)
+	m.setPlan(889, func(p *MissionPlan) { p.Budget = 1000 }) // the approval's budget counts its stories only
+	m.issue(32, "Answers vanish", "bug", 889, "")
+	for _, n := range []int{20, 21, 30} {
+		m.status(n, "ready", "")
+	}
+	m.status(32, "ready", "P0")
+	m.setPlan(889, func(p *MissionPlan) {
+		p.Milestones[1].Gate = MilestoneGate{State: GatePassed, DevSHA: devTip, At: "2026-11-01T09:00:00Z"}
+	})
+	codes := m.codes()
+	if p, _ := m.plan(889); milestonesOf(p) != "MS1=20,21 BUGS=30 #20:MS1 #21:MS1 #30:BUGS" {
+		t.Fatalf("plan before #32: %s", milestonesOf(p))
+	}
+	if code, out, errOut := m.next(889); code != 0 || m.codes() != codes || out != "start #20\nstart #21\nstart #32 (bug)\nstart #30 (bug)\n" {
+		t.Fatalf("mission next 889: exit %d, device codes %d: %q%s", code, m.codes(), out, errOut)
+	}
+	p, raw := m.plan(889)
+	// BUGS waits for its gate again: a passed gate never judged #32.
+	if got := milestonesOf(p); got != "MS1=20,21 BUGS=30,32 #20:MS1 #21:MS1 #30:BUGS #32:BUGS" || p.Approval != 1 || p.FeatureDone != BugsMilestone ||
+		p.Milestones[1].Gate != (MilestoneGate{State: GateWaits}) ||
+		!slices.ContainsFunc(p.Missions[0].Stories, func(s MissionStory) bool { return s.Number == 32 }) {
+		t.Fatalf("plan after #32 was filed: %s\n%s", got, raw)
+	}
+	if log := git(t, m.bare, "log", "--format=%s", "ledger"); !strings.Contains(log, "missions: a new Bug of #889 joins BUGS") {
+		t.Fatalf("ledger log:\n%s", log)
+	}
+	// The next run finds #32 in BUGS already: it joins once.
+	if _, _, _ = m.next(889); milestonesOf(func() MissionPlan { p, _ := m.plan(889); return p }()) != "MS1=20,21 BUGS=30,32 #20:MS1 #21:MS1 #30:BUGS #32:BUGS" {
+		t.Fatal("#32 joined BUGS twice")
+	}
+	// Bug #33 depends on #950 of Feature #874, which is open. While aayu cannot read #950, nothing is listed and
+	// #33 joins nothing; once it can, #33 joins BUGS in mission 2, which waits on #950.
+	m.issue(874, "Feature baselines", "feature", 0, "")
+	m.issue(950, "Story 950", "story", 874, "")
+	m.issue(33, "Answers vanish again", "bug", 889, "depends-on #950")
+	m.edit(func() { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues/950", 0 })
+	if code, out, errOut := m.next(889); code != ExitExternal || out != "" {
+		t.Fatalf("mission next with #950 unreadable: exit %d: %q%s", code, out, errOut)
+	}
+	if p, _ := m.plan(889); strings.Contains(milestonesOf(p), "33") {
+		t.Fatalf("#33 joined with #950 unreadable: %s", milestonesOf(p))
+	}
+	m.edit(func() { m.g.Fail = "" })
+	if code, out, errOut := m.next(889); code != 0 {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); !strings.HasSuffix(milestonesOf(p), "BUGS=30,32,33 #20:MS1 #21:MS1 #30:BUGS #32:BUGS #33:BUGS") || len(p.Missions) != 2 ||
+		fmt.Sprint(p.Missions[1]) != fmt.Sprint(Mission{Number: 2, Stories: []MissionStory{{Number: 33, Waits: "waits on #950 (#874)"}}}) {
+		t.Fatalf("plan after #33 was filed: %s\n%s", milestonesOf(p), raw)
 	}
 }
 
