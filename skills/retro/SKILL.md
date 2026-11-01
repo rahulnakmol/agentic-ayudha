@@ -159,13 +159,13 @@ Write it to fit the stage from the start.
 - **Startup: Retro note**, under a page: at most 400 words of prose, so aim for 300 and count before you reply;
   when over, cut the weakest cause or detail, never a citation. One sentence one level up: what this was really
   about. Then what happened, plan against actual, in two or three cited lines; the causes as two or three numbered
-  items, each cited; one line on what went well; and one change with an owner and when it is checked. No other
+  items, each cited; one line on what went well; and one change with an owner and the date it is checked. No other
   headings beyond one for the change.
 - **Scaleup: Delivery review**, a page or two. Plan against actual as a table (planned, observed, source); the causes,
   numbered and cited; the corrections and what each caught; what went well; and owned actions as a table (action,
-  owner, check).
+  owner, check date).
 - **Enterprise: Retrospective memo**, read before the review. Summary; context; a timeline table; contributing causes,
-  numbered and cited; what went well; decisions requested of the reader; actions as a table (action, owner, check);
+  numbered and cited; what went well; decisions requested of the reader; actions as a table (action, owner, check date);
   and a data appendix of every figure with its source.
 
 Hold every sentence to what the record shows:
@@ -184,8 +184,10 @@ Hold every sentence to what the record shows:
   as whether the rest of the work went well or what size the story should have been. Never deny a finding the
   report filed (an estimate miss stays an estimate miss): explain it. A rate is about the stories it counts.
 - No number, date, person, rule, or budget that is not in what you read. An owner is a seat twin or a person the
-  record names; "when it is checked" is a date the record gives (the next retro's) or an event it supports ("before
-  the next story of that kind is marked Ready"), never an invented date. The artefact ends with the change in one
+  record names. "When it is checked" is a date: when the record gives one (the next retro report's due date), the
+  check names that date, in every action. An event the record supports ("before the next story of that kind is
+  marked Ready") may come with the date, never in its place; only when the record gives no date is the event the
+  whole check. Never invent a date. The artefact ends with the change in one
   statement: what changes, its owner, and its check; a coaching question to the owner may come just before it. The
   change names the layer, type, floor, or code it is about, so it carries its own citation in the same sentence (the
   source of the gap it closes: "… the layer of every type a criterion needs (`internal/ledger/tombstone.go:12-16`,
