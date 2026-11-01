@@ -1331,16 +1331,26 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 	if code, out, errOut := g.gate(); code != ExitExternal || !strings.Contains(errOut, "ledger delegate/31/state.json: not a delegation aayu wrote") || len(g.runs()) != runs {
 		t.Fatalf("gate with #31's delegation unreadable: exit %d: %s%s", code, out, errOut)
 	}
-	putLedger(t, g.bare, delegate.LedgerPath(31), `{"story": 31, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": 131, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`)
+	// #31's delegation now names no PR either: PR 131, which names #31, delivered it.
+	putLedger(t, g.bare, delegate.LedgerPath(31), `{"story": 31, "receiver": "amp", "mode": "cloud", "family": "anthropic", "status": "working", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`)
 	g.putPack(31, 131, proof.Authoritative)
 	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
 	g.mergedPR(140, "Refs #30", at.Add(time.Hour))
 	g.mergedPR(130, "Refs #30", at)
+	g.mergedPR(131, "Refs #31", at)
 	g.mergedPR(132, "Refs #32", at.Add(-time.Hour))
+	g.g.Reset()
 	if rep := g.gateJSON(); rep.Milestones[1].State != GateFailed || !slices.ContainsFunc(rep.Milestones[1].Checks, func(ck GateCheck) bool {
 		return ck == GateCheck{Check: "proof:#30", Result: gateFail, Detail: "#30 merged with no proof pack"}
 	}) {
 		t.Fatalf("gate with #30's pack of a later PR only: %+v", rep.Milestones)
+	}
+	// Two Bugs with no delegated PR: the gate lists dev's closed PRs once, not once per Bug.
+	g.g.Mu.Lock()
+	lists := len(slices.DeleteFunc(slices.Clone(g.g.Requests), func(r fake.Request) bool { return r.Method != "GET" || r.Path != "/repos/o/r/pulls" }))
+	g.g.Mu.Unlock()
+	if lists != 1 {
+		t.Fatalf("the gate listed dev's closed PRs %d times", lists)
 	}
 	g.putPack(30, 130, proof.Authoritative)
 	if rep := g.gateJSON(); rep.Milestones[1].State != GatePassed {

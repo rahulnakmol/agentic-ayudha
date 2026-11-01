@@ -467,6 +467,8 @@ func bugPacks(ctx context.Context, c *github.Client, w *ledger.Writer, repo, dev
 	}
 	defer t.Close()
 	var out []GateCheck
+	var closed []*gh.PullRequest // dev's closed PRs, listed once, when a Bug's delegation names no PR
+	listed := false
 	for _, n := range bugs {
 		var st delegate.State
 		if b, err := t.File(ctx, delegate.LedgerPath(n)); ignoreMissing(err) != nil {
@@ -474,10 +476,17 @@ func bugPacks(ctx context.Context, c *github.Client, w *ledger.Writer, repo, dev
 		} else if b != nil && json.Unmarshal(b, &st) != nil {
 			return nil, Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote", delegate.LedgerPath(n))
 		}
-		if st.PR == 0 {
-			if st.PR, err = deliveredPR(ctx, c, repo, dev, n); err != nil {
-				return nil, err
+		if st.PR == 0 && !listed {
+			owner, name, _ := github.SplitRepo(repo)
+			if closed, err = github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+				return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", Base: dev, ListOptions: o})
+			}); err != nil {
+				return nil, Wrap(ExitExternal, err)
 			}
+			listed = true
+		}
+		if st.PR == 0 {
+			st.PR = deliveredPR(closed, dev, n)
 		}
 		es, err := (&proof.Store{}).Packs(ctx, t, n)
 		if err != nil {
@@ -494,17 +503,10 @@ func bugPacks(ctx context.Context, c *github.Client, w *ledger.Writer, repo, dev
 	return out, nil
 }
 
-// deliveredPR is the PR that delivered story or Bug n when no delegation
-// recorded one, as audit reads it (Data.mergePR): the first PR merged into
-// dev that names n (StoryOf); 0 when none did.
-func deliveredPR(ctx context.Context, c *github.Client, repo, dev string, n int) (int, error) {
-	owner, name, _ := github.SplitRepo(repo)
-	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
-		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", Base: dev, ListOptions: o})
-	})
-	if err != nil {
-		return 0, Wrap(ExitExternal, err)
-	}
+// deliveredPR is the PR of prs, dev's closed PRs, that delivered story or
+// Bug n when no delegation recorded one, as audit reads it (Data.mergePR):
+// the first merged into dev that names n (StoryOf); 0 when none did.
+func deliveredPR(prs []*gh.PullRequest, dev string, n int) int {
 	var first *gh.PullRequest
 	for _, p := range prs {
 		at := p.GetMergedAt().Time
@@ -512,7 +514,7 @@ func deliveredPR(ctx context.Context, c *github.Client, repo, dev string, n int)
 			first = p
 		}
 	}
-	return first.GetNumber(), nil
+	return first.GetNumber()
 }
 
 // landed reports whether a proof check that failed in run r passes in
