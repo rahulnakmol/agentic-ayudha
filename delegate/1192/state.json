@@ -3,18 +3,19 @@
   "feature": 1170,
   "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
   "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
-  "receiver": "",
-  "mode": "",
-  "family": "",
-  "status": "",
-  "brief_sha256": "",
-  "started_at": "",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1192-ship-asks-for-a-second-code-after-a-pers",
+  "status": "host-handoff",
+  "brief_sha256": "9db2aabc6607a41123f9c37539cb53cce0d10c2325bfdd8c196dc92fa152fb96",
+  "started_at": "2026-11-01T08:28:02Z",
+  "handoffs": 1,
   "events": [
     {
-      "at": "2026-10-31T14:26:12Z",
-      "status": "kanha",
-      "detail": "start of #1192 failed: build #1192 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account) (sent)",
-      "text": "start of #1192 failed: build #1192 --delegate amp: Amp's cloud agent is not connected here. Amp here: CLI installed (/home/user/.amp/bin/amp), not signed in; cloud: amp is not signed in (no AMP_API_KEY and no saved account)"
+      "at": "2026-11-01T08:28:02Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1192: ship asks for a second code after a person approved the head with inspect --approve"
     }
   ]
 }
