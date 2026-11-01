@@ -51,10 +51,16 @@ if (!base && check.steps.some((s) => !s.run)) answer("unreachable", "no app URL:
 
 function playwright() {
   for (const from of [join(input.root || process.cwd(), "package.json"), import.meta.url]) {
+    // The product's own Playwright, else NODE_PATH's (aayu adds the playwright that pnpm keeps in its store). Only a
+    // Playwright that does not resolve is missing; one that resolves but fails to load is an error, so it shows.
+    const require = createRequire(from);
+    let found;
     try {
-      // The product's own Playwright, else NODE_PATH's (aayu adds the playwright that pnpm keeps in its store).
-      return createRequire(from)("playwright");
-    } catch {}
+      found = require.resolve("playwright");
+    } catch {
+      continue;
+    }
+    return require(found);
   }
   // A missing harness is a gap of the runner, not a fault of the product: the check proves nothing and fails
   // nothing, and the milestone gate waits for it.

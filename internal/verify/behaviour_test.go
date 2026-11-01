@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -200,9 +199,6 @@ exports.chromium = { launch: async () => ({ newContext: async () => ({ newPage: 
 // comes first as before, and with none installed each browser check is
 // unreachable with the command to install it, which fails nothing.
 func TestControlFindsPlaywright(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
-	}
 	control, err := os.ReadFile(filepath.Join("..", "..", "hosts", "verify-skill", "node", "control.mjs"))
 	if err != nil {
 		t.Fatal(err)
@@ -218,12 +214,13 @@ func TestControlFindsPlaywright(t *testing.T) {
 	nodePath := t.TempDir()
 	for _, tc := range []struct {
 		name, nodePath, status, reason, aria string
-		store, inNodePath                    bool
+		store, inNodePath, broken            bool
 	}{
 		{name: "only in pnpm's store, no NODE_PATH", store: true, status: CheckPassed, aria: "store"},
 		{name: "NODE_PATH and pnpm's store", store: true, inNodePath: true, nodePath: nodePath, status: CheckPassed, aria: "node-path"},
 		{name: "none installed", nodePath: t.TempDir(), status: CheckUnreachable,
 			reason: `Playwright is not installed: run "npm install --save-dev playwright && npx playwright install chromium"`},
+		{name: "installed but fails to load", store: true, broken: true, status: checkError, reason: "no result on stdout"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_ = os.RemoveAll(filepath.Join(root, "node_modules"))
@@ -233,6 +230,9 @@ func TestControlFindsPlaywright(t *testing.T) {
 			}
 			if tc.inNodePath {
 				write(t, nodePath, fakePlaywright("node-path"))
+			}
+			if tc.broken { // a Playwright that resolves but throws is an error, never "not installed"
+				write(t, store, map[string]string{"playwright/index.js": "throw new Error(\"playwright: broken install\");\n"})
 			}
 			r := behaviourRun(t, root)
 			r.Story, r.Criteria, r.Checks = 0, nil, SelectAll
@@ -255,7 +255,7 @@ func TestControlFindsPlaywright(t *testing.T) {
 			if len(got.Checks) != 1 || got.Checks[0].Status != tc.status || !strings.HasPrefix(got.Checks[0].Reason, tc.reason) || aria != tc.aria {
 				t.Fatalf("checks %+v, aria %q; want %s (%q), aria %q: %+v", got.Checks, aria, tc.status, tc.reason, tc.aria, rep.Checks[0])
 			}
-			if c := rep.Checks[0]; c.Result != proof.Pass {
+			if c := rep.Checks[0]; !tc.broken && c.Result != proof.Pass {
 				t.Fatalf("floor %+v, want passed: an unreachable check fails nothing", c)
 			}
 		})
