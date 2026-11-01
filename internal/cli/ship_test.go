@@ -2107,6 +2107,37 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 		}
 	})
 
+	// What can change on the same head while the person enters the code is
+	// read again after it: the bypass comment, and the merge gate's checks.
+	t.Run("rechecked_after_code", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, want string
+			change     func()
+			undo       func()
+		}{
+			{"bypass comment deleted", "post a Solo-mode bypass for the head " + short(head) + " first",
+				func() {
+					g.Issues[prN].Comments = slices.DeleteFunc(slices.Clone(g.Issues[prN].Comments), func(c *fake.Comment) bool { return c.ID == 77 })
+				},
+				func() { g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass) }},
+			{"merge gate turned red", "aayudha/merge-gate is failure on " + short(head),
+				func() { g.CheckRuns[head][0].Conclusion = "failure" },
+				func() { g.CheckRuns[head][0].Conclusion = "success" }},
+		} {
+			g.Mu.Lock()
+			g.Device.OnPoll = func(int) { tc.change() }
+			g.Mu.Unlock()
+			code, out := ship(marked)
+			g.Mu.Lock()
+			g.Device.OnPoll = nil
+			tc.undo()
+			g.Mu.Unlock()
+			if code != ExitBlocked || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
+				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
+			}
+		}
+	})
+
 	t.Run("one_code_merges", func(t *testing.T) {
 		// Nothing is written while the person enters the code.
 		var early []string
