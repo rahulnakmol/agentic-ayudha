@@ -46,6 +46,7 @@ const (
 	InboxDecision    = "decision"      // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxScope       = "scope"         // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
 	InboxBaseline    = "baseline"      // a baseline draft of one part of a Feature that waits for a person (Story #1172)
+	InboxApprove     = "approve"       // a Feature whose baselines are approved and that waits for Approve to build (Story #1173)
 	InboxMission     = "mission"       // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
 	InboxStart       = "mission-start" // a Feature approved to build whose mission a person may start, which locks its issues (Story #1013)
 	InboxLocked      = "locked"        // an issue whose body changed while a mission locks it: it waits until a person keeps the edit (Story #1013)
@@ -60,7 +61,7 @@ const (
 	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxBaseline, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxBaseline, InboxApprove, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -107,6 +108,12 @@ var inboxKinds = map[string]inboxKind{
 			"seat that owns the part. Approving runs `aayu ready <feature> --part <part>`, which reads the draft and the pins again after the " +
 			"device code and baselines only the hash on the card; one code covers the session. If you leave it, the draft waits and nothing is frozen.",
 		Terms: []string{"Work item", "Footprint", "Seat"}},
+	InboxApprove: {Icon: "🚀", Word: "Approve to build", Seat: verbs.ProductStrategist,
+		Line: "Every baseline of a Feature is approved; it waits for you to approve it to build.",
+		Explain: "Approve to build agrees a Feature's stories and Bugs, its budget (each story times [budget] per_story_usd), how many " +
+			"stories run at once, and its milestones. Approving runs `aayu ready <feature>`, which reads the stories again after the device code " +
+			"and approves only the ones on the card; one code covers the session. If you leave it, nothing is approved and no mission can start.",
+		Terms: []string{"Work item", "Seat"}},
 	InboxMission: {Icon: "🧩", Word: "Mission", Seat: verbs.EngineeringManager,
 		Line: "A Feature's mission stopped at a step only a person takes; its stories wait for you.",
 		Explain: "A mission builds a Feature's stories in milestones, and each milestone ends with a gate of fixed checks on dev. " +
@@ -301,7 +308,7 @@ func (it InboxItem) short() string {
 		return "gate stopped"
 	case InboxStart:
 		return "a person starts it"
-	case InboxBaseline:
+	case InboxBaseline, InboxApprove:
 		return it.f.problem
 	case InboxLocked:
 		return "changed while locked"
@@ -748,7 +755,10 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		}
 		for _, it := range cards {
 			is := s.issues[it.Number]
-			it.Title = termText(it.Title + ": " + is.GetTitle())
+			if it.Title != "" { // a Baseline card names its part; an Approve to build card is the Feature's own
+				it.Title += ": "
+			}
+			it.Title = termText(it.Title + is.GetTitle())
 			it.URL, it.Evidence, it.Updated = is.GetHTMLURL(), is.GetHTMLURL(), is.GetUpdatedAt().Time
 			out = append(out, it)
 		}
@@ -1189,6 +1199,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	if was.Kind == InboxBaseline && was.Hash != now.Hash { // approving it baselines the hash the person read
 		out = append(out, "it was drafted again")
 	}
+	if was.Kind == InboxApprove && was.Hash != now.Hash { // approving it approves the stories the person read
+		out = append(out, "its stories changed")
+	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")
 	}
@@ -1354,7 +1367,8 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	items = append(needs, house...)
 	done, skipped, handled := 0, 0, 0
 	left := func() int { return len(items) - handled }
-	failed := 0 // writes that did not land: no celebration after one
+	failed := 0        // writes that did not land: no celebration after one
+	baselined := false // a Baseline card was approved: a Feature may now wait for Approve to build
 	key := func() (byte, error) {
 		fmt.Fprint(w, "  > ")
 		k, err := e.readKey()
@@ -1389,7 +1403,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		var ch errInboxChanged
 		switch {
 		case errors.As(err, &ch) && ch.Item.Number != 0:
-			say("  ", fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; here it is as it is now.", it.Number, changedWords(it, ch.Item)))
+			say("  ", changedLine(it, ch.Item)+" Nothing was written; here it is as it is now.")
 			if len(ch.What) > 0 {
 				say("    ", "Detail: "+strings.Join(ch.What, "; "))
 			}
@@ -1410,6 +1424,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++
+			baselined = baselined || it.Kind == InboxBaseline
 		}
 		handled++
 		return it, false
@@ -1567,6 +1582,25 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			return finishInbox(w, done, skipped, left())
 		}
 	}
+	// Approve to build follows its baselines in the same session, so the code
+	// that approved them covers it too (Story #1173).
+	if baselined {
+		more, err := src.gather(ctx)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		for _, it := range more {
+			if it.Kind != InboxApprove || slices.ContainsFunc(items, func(x InboxItem) bool { return x.key() == it.key() }) {
+				continue
+			}
+			items = append(items, it)
+			pos, total = pos+1, total+1
+			if quit, err := card(it); err != nil || quit {
+				fmt.Fprintln(w)
+				return finishInbox(w, done, skipped, left())
+			}
+		}
+	}
 	if len(house) > 0 && !tidied {
 		pos++
 		fmt.Fprintf(w, "\n[%d/%d] %s: %d %s\n", pos, total, inboxTidy.Word, len(house), plural(len(house), "item", "items"))
@@ -1707,9 +1741,9 @@ func (e *Env) listInbox(ctx context.Context) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if e.agentSignal() != "" { // an agent lane reads a baseline card and never approves it (Story #1172)
+	if e.agentSignal() != "" { // an agent lane reads a baseline or Approve to build card and never approves it (Stories #1172, #1173)
 		for i := range items {
-			if items[i].Kind == InboxBaseline {
+			if items[i].Kind == InboxBaseline || items[i].Kind == InboxApprove {
 				items[i].Options = slices.DeleteFunc(items[i].Options, func(a InboxAction) bool { return a.Command != inboxLeave })
 			}
 		}
@@ -1829,6 +1863,16 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(it.Number)})
 	case InboxBaseline: // ready --part reads the draft and the pins again, and asks for the device code unless this session already gave one
 		return handlers["ready"](ctx, e, Values{"issue": strconv.Itoa(it.Number), "part": it.Ask, readyExpectHash: it.Hash})
+	case InboxApprove: // ready reads the Feature again, asks for the device code unless this session already gave one, and approves only the card's stories
+		v := Values{"issue": strconv.Itoa(it.Number), readyExpectHash: it.Hash}
+		if a.Answer != "" { // the agents the person set on the card, as --agents
+			n, err := strconv.Atoi(a.Answer)
+			if err != nil || n < 1 {
+				return Errorf(ExitUsage, "%q is not a number of agents (a whole number, 1 or more); nothing was approved", a.Answer)
+			}
+			v["agents"] = n
+		}
+		return handlers["ready"](ctx, e, v)
 	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
 		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
 	case InboxReady:

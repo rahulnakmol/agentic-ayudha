@@ -133,7 +133,7 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 			if err := e.approveRefusal(); err != nil {
 				return err
 			}
-			return e.approveToBuild(ctx, r, n, in.String("milestones"), in.Int("agents"))
+			return e.approveToBuild(ctx, r, n, in.String("milestones"), in.Int("agents"), in.String(readyExpectHash))
 		}
 		if in.Has("milestones") {
 			return Errorf(ExitUsage, "ready: --milestones names a Feature's milestones at Approve to build; #%d is not a Feature", n)
@@ -260,7 +260,8 @@ type partRun struct {
 }
 
 // readyExpectHash pins ready --part to the draft hash a person chose in the
-// inbox (Story #1172); it is not a flag, so only the inbox sets it.
+// inbox (Story #1172), and Approve to build to the stories and Bugs its card
+// showed (Story #1173); it is not a flag, so only the inbox sets it.
 const readyExpectHash = "expect-hash"
 
 // runReadyPart drafts (--request, any lane) or approves (a person only) a

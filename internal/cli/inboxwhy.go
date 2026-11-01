@@ -124,7 +124,7 @@ func inboxVerb(it InboxItem, a InboxAction) (did, not string) {
 		return "shipped", "wasn't shipped"
 	case it.Kind == InboxDecision:
 		return "recorded", "wasn't recorded"
-	case it.Kind == InboxHumanReview || it.Kind == InboxBaseline:
+	case it.Kind == InboxHumanReview || it.Kind == InboxBaseline || it.Kind == InboxApprove:
 		return "approved", "wasn't approved"
 	}
 	return "done", "wasn't done"
@@ -159,6 +159,7 @@ var (
 	reBypassPost    = regexp.MustCompile(`Solo-mode bypass comment was not posted`)
 	reHex           = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 	reDraftChanged  = regexp.MustCompile(`^The \S+ of #[0-9]+ changed after the draft`)
+	reStoriesRead   = regexp.MustCompile(`^The stories of #[0-9]+ changed while`)
 )
 
 // logDetail is a failed write's quit-log line: the error, then the step,
@@ -356,10 +357,21 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (
 		return fmt.Sprintf("#%d %s: its %s check failed on its latest commit.", n, not, name), "its builder fixes it; nothing for you yet."
 	case it.Kind == InboxBaseline && reDraftChanged.MatchString(m): // ready --part read the draft and the pins again
 		return baselineChanged(it.Ask, n), "nothing for you yet; the card comes back when the new draft waits."
+	case it.Kind == InboxApprove && reStoriesRead.MatchString(m): // ready read the stories again: they are not the card's
+		return approveChanged(n), "you read the card again with the stories as they are now; nothing was approved."
 	case reLedger.MatchString(m):
 		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), k.enter + " tries once more; if it fails again, an agent runs aayu doctor."
 	}
 	return fmt.Sprintf("#%d %s: aayu stopped before writing anything it wasn't sure of.", n, not), "you read " + k.details + "; an agent can act on them."
+}
+
+// changedLine says that an item changed on GitHub since the person read it,
+// and how: an Approve to build card says its stories changed.
+func changedLine(was, now InboxItem) string {
+	if was.Kind == InboxApprove && now.Kind == InboxApprove && was.Hash != now.Hash {
+		return approveChanged(was.Number)
+	}
+	return fmt.Sprintf("#%d changed on GitHub since you opened it: %s.", was.Number, changedWords(was, now))
 }
 
 // changedWords says how an item changed on GitHub since the person read it.

@@ -975,7 +975,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		if i := m.item(); i >= 0 && m.items[i].key() == msg.key {
 			m.sel, m.armed = 0, false
 		}
-		m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written; the card shows it as it is now.", num, changedWords(job.it, ch.Item))
+		m.notes[msg.key] = changedLine(job.it, ch.Item) + " Nothing was written; the card shows it as it is now."
 		if ch.Item.Number == 0 { // nothing is left to show: the card keeps what was read, and offers none of it
 			m.notes[msg.key] = fmt.Sprintf("#%d changed on GitHub since you opened it: %s. Nothing was written.", num, changedWords(job.it, ch.Item))
 		}
