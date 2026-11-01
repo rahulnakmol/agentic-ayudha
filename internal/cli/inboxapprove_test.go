@@ -242,6 +242,28 @@ func TestApproveCardStoriesChanged(t *testing.T) {
 			t.Fatalf("stories changed during the code were approved: %s commits, was %s", m.commits(), n)
 		}
 	})
+	// A Bug added while the code waits changes no baseline: the card's pin says it, not the generic change.
+	t.Run("a Bug added while the code waited", func(t *testing.T) {
+		m := approveWorld(t)
+		m.approveDrafts("intent", "spec", "tech")
+		m.issue(31, "Bug 31", "bug", 0, "")
+		n := m.commits()
+		m.edit(func() {
+			m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve",
+				OnPoll: func(int) {
+					if m.g.Issues[31].Parent == 0 {
+						m.g.Issues[31].Parent, m.g.Issues[889].Subs = 889, append(m.g.Issues[889].Subs, 31)
+					}
+				}}
+		})
+		code, out, errOut := runIn(t, m.person, m.opts, "a", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || m.codes() != 1 || !strings.Contains(out, "✗ "+said+"\n  Nothing was changed on GitHub.\n") {
+			t.Fatalf("inbox a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+		}
+		if _, _, ok := m.approvalRecords(); ok || m.commits() != n {
+			t.Fatalf("a Bug added during the code was approved: %s commits, was %s", m.commits(), n)
+		}
+	})
 	// A Bug added after the card was read changes no baseline, so only the
 	// card's pin, checked after the code, holds the approval back.
 	t.Run("read again after the code", func(t *testing.T) {

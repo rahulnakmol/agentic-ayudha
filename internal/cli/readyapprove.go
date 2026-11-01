@@ -134,12 +134,12 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if err != nil {
 		return err
 	}
+	if a.shown != "" && approveStories(got, plan2) != a.shown { // the card's stories, read again after the code, said before any other change
+		return Errorf(ExitBlocked, "%s Nothing was approved.", approveChanged(n))
+	}
 	if !got.Agreed(want) || !slices.Equal(append(again, planEffect2...), effect) || version(prev2) != version(prev) || missionJSON(&plan2) != missionJSON(&plan) ||
 		(old == nil) != (old2 == nil) || old != nil && missionJSON(old) != missionJSON(old2) {
 		return Errorf(ExitBlocked, "The approval of #%d changed while the code was waiting; nothing was approved.", n)
-	}
-	if a.shown != "" && approveStories(got, plan2) != a.shown { // the card's stories, read again after the code
-		return Errorf(ExitBlocked, "%s Nothing was approved.", approveChanged(n))
 	}
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
 	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: e.presenceRecord(p.Login)}
