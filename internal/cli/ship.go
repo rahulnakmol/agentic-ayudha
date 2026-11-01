@@ -438,11 +438,24 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = hp
 	}
 	// Every check that needs no person passed: now the person approves the
-	// bypass, before any write. The PR, its base, and the holds are read
-	// again below, after the code, so a push while the person enters it stops the merge.
+	// bypass, before any write. Entering the code takes minutes, so what can
+	// change on the same head (the checks, the bypass comment) is read again
+	// after it; the PR, its base, and the holds are read again below.
 	if in.Bool("solo-bypass") {
 		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
 			return err
+		}
+		now, err := gateGreen(ctx, c, owner, name, "ship", n, head, gp)
+		if err != nil {
+			return err
+		}
+		if _, _, err := requiredChecks(ctx, c, owner, name, "ship", n, pr.GetBase().GetRef(), head, now); err != nil {
+			return err
+		}
+		if rec.HumanPass.Kind == "solo-bypass" && rec.HumanPass.Comment != "" {
+			if rec.HumanPass, err = e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config); err != nil {
+				return err
+			}
 		}
 	}
 
