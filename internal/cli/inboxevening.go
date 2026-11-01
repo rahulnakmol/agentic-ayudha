@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -138,17 +137,11 @@ func inlineImage(name string, b []byte) string {
 // its pack at the head that head says merged ("" when it did not merge). It
 // reads nothing before the end of today's business hours.
 func (e *Env) eveningStories(ctx context.Context, head func(story int) string) ([]eveningStory, error) {
-	if config.RepoRoot(e.Dir) == "" {
-		return nil, nil
-	}
 	l, err := e.Config()
 	if err != nil { // `aayu inbox` itself refuses such a config; `--list` shows the rest without its clock
 		return nil, nil
 	}
-	clock, err := l.Config.Clock()
-	if err != nil {
-		return nil, err
-	}
+	clock, _ := l.Config.Clock() // a config that loaded has a clock (config.Validate)
 	day, end, ok := eveningDay(clock, e.Now())
 	if !ok {
 		return nil, nil
@@ -157,7 +150,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string) (
 	if err != nil {
 		return nil, err
 	}
-	repo, w, plans, err := e.ledgerPlans(ctx, tok, "human")
+	repo, w, plans, err := e.ledgerPlans(ctx, tok, "human") // no checkout: no ledger, and no plan
 	if err != nil || len(plans) == 0 {
 		return nil, err
 	}
@@ -411,10 +404,7 @@ func (e *Env) eveningAct(ctx context.Context, c *github.Client, repo, login stri
 	}
 	r := StoryReview{Story: it.Number, PR: it.PR, Head: it.Head, Pack: it.Pack, Verdict: ReviewAccepted, By: login, At: e.Now().UTC().Format(time.RFC3339)}
 	if a.Command == eveningComment {
-		text := strings.TrimSpace(a.Answer)
-		if text == "" {
-			return Errorf(ExitUsage, "inbox: a comment on #%d needs your words", it.Number)
-		}
+		text := strings.TrimSpace(a.Answer) // both inboxes refuse an empty line before this
 		owner, name, _ := github.SplitRepo(repo)
 		var url string
 		_, err := c.Write(ctx, actions.Action{Kind: "github.comment.create", Target: fmt.Sprintf("%s#%d", repo, it.Number),
@@ -433,9 +423,6 @@ func (e *Env) eveningAct(ctx context.Context, c *github.Client, repo, login stri
 	commit := ledger.Commit{Message: fmt.Sprintf("mission: evening review of #%d by %s (%s)", it.Number, login, r.Verdict),
 		Append: map[string][]byte{MissionReviewsPath(it.Feature): append(b, '\n')}}
 	if _, err := w.Write(ctx, commit); err != nil {
-		if errors.Is(err, ledger.ErrNoLedger) {
-			return Errorf(ExitBlocked, "inbox: this repository has no ledger to record the review of #%d on", it.Number)
-		}
 		return Wrap(ExitExternal, err)
 	}
 	if r.Verdict == ReviewCommented {
