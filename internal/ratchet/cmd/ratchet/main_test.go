@@ -68,7 +68,7 @@ func TestRunFailsALoweredEvalBar(t *testing.T) {
 
 // Bug #1211, criterion 1: a change to the agent environment (its spec or its
 // setup) fails CI's ratchet step while a host of the spec's hosts has no
-// record of the new environment; it names each such host and the command
+// new record of the environment; it names each such host and the command
 // that verifies it. A record left stale by an older change fails nothing.
 func TestRunFailsAStaleEnvironmentRecord(t *testing.T) {
 	spec := "version = 1\nhosts = ['amp', 'cursor']\n"
@@ -100,6 +100,26 @@ func TestRunFailsAStaleEnvironmentRecord(t *testing.T) {
 	write(agentenv.SetupPath, "#!/usr/bin/env bash\necho hand edit\n")
 	if got := named(run("coverage.out", "HEAD", false)); !slices.Equal(got, []string{"amp", "cursor"}) {
 		t.Fatalf("setup changed: named %v", got)
+	}
+	// A setup can change while the spec's fingerprint does not: records of that fingerprint already on the base are
+	// not new, so they do not prove the changed setup.
+	write(agentenv.SpecPath, spec)
+	write(agentenv.SetupPath, "#!/usr/bin/env bash\n")
+	s, _, _ = agentenv.LoadSpec(".")
+	current := "[container.amp]\nfingerprint = '" + s.Fingerprint() + "'\n[container.cursor]\nfingerprint = '" + s.Fingerprint() + "'\n"
+	write(agentenv.VerifiedPath, current)
+	for _, args := range [][]string{{"add", "."}, {"commit", "-q", "-m", "records"}} {
+		if out, err := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write(agentenv.SetupPath, "#!/usr/bin/env bash\necho hand edit\n")
+	if got := named(run("coverage.out", "HEAD", false)); !slices.Equal(got, []string{"amp", "cursor"}) {
+		t.Fatalf("setup changed, records of the same fingerprint from the base: named %v", got)
+	}
+	write(agentenv.VerifiedPath, current+"[cloud.amp]\nfingerprint = '"+s.Fingerprint()+"'\nat = '2026-11-01T12:00:00Z'\n")
+	if got := named(run("coverage.out", "HEAD", false)); !slices.Equal(got, []string{"cursor"}) {
+		t.Fatalf("setup changed, amp probed again: named %v", got)
 	}
 	// A record that does not parse proves nothing: the step fails on it.
 	write(agentenv.VerifiedPath, "[container.amp\n")

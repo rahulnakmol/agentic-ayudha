@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
@@ -100,24 +101,37 @@ func run(profile, base string, update bool) error {
 }
 
 // envRecords fails a change to the agent environment since base (its spec or
-// its setup) that leaves a host of the spec's hosts with no verification
-// record of the new environment, in a container or in the host's cloud
-// (Bug #1211): a stale record is caught at merge, not when a mission starts
-// a story on that host. When git cannot tell, the records are checked.
+// its setup) that leaves a host of the spec's hosts with no new verification
+// record of it, in a container or in the host's cloud (Bug #1211): a stale
+// record is caught at merge, not when a mission starts a story on that host.
+// A record counts only when it carries the spec's fingerprint and differs
+// from base's, since a setup can change while the fingerprint does not.
 func envRecords(base string) ([]string, error) {
 	if exec.Command("git", "diff", "--quiet", base, "--", agentenv.SpecPath, agentenv.SetupPath).Run() == nil {
 		return nil, nil
 	}
+	dir, err := os.MkdirTemp("", "env-records-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	b, _ := exec.Command("git", "show", base+":"+agentenv.VerifiedPath).Output() // none at base: every record is new
 	s, _, err := agentenv.LoadSpec(".")
 	v, verr := agentenv.LoadVerified(".")
-	if err = errors.Join(err, verr); err != nil {
+	werr := os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	if werr == nil {
+		werr = os.WriteFile(filepath.Join(dir, filepath.FromSlash(agentenv.VerifiedPath)), b, 0o644)
+	}
+	old, oerr := agentenv.LoadVerified(dir)
+	if err = errors.Join(err, verr, werr, oerr); err != nil {
 		return nil, err
 	}
 	fp := s.Fingerprint()
+	fresh := func(r, was agentenv.Record) bool { return r.Fingerprint == fp && r != was }
 	var out []string
 	for _, h := range s.Hosts {
-		if v.Container[h].Fingerprint != fp && v.Cloud[h].Fingerprint != fp {
-			out = append(out, fmt.Sprintf("environment record: the agent environment changed, and %s has no record of %s verified for %s: run `aayu install --env --host %s --apply --verify` and commit %s",
+		if !fresh(v.Container[h], old.Container[h]) && !fresh(v.Cloud[h], old.Cloud[h]) {
+			out = append(out, fmt.Sprintf("environment record: the agent environment changed, and %s has no new record of %s verified for %s: run `aayu install --env --host %s --apply --verify` and commit %s",
 				agentenv.VerifiedPath, fp, h, h, agentenv.VerifiedPath))
 		}
 	}

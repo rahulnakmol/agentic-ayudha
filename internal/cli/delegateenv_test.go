@@ -23,16 +23,20 @@ const staleEnv = "sha256:0000000000000000"
 
 const probeThread = "T-01a1c0de-0000-7000-8000-000000001211"
 
-// ampEnv commits an amp agent environment to dev, generated from m's
-// checkout, with a container and a cloud record of environment fp ("" for
-// the spec's own, a current record), and returns the spec.
-func (m *missionWorld) ampEnv(fp string) agentenv.Spec {
+// ampEnv commits an agent environment for hosts (amp when none) to dev,
+// generated from m's checkout, with a container and a cloud record of
+// environment fp for each ("" for the spec's own, a current record), and
+// returns the spec.
+func (m *missionWorld) ampEnv(fp string, hosts ...string) agentenv.Spec {
 	m.t.Helper()
 	d, err := agentenv.Discover(m.dir)
 	if err != nil {
 		m.t.Fatal(err)
 	}
-	s, err := agentenv.Settle(d, map[string]agentenv.Answer{"hosts": {Value: "amp", Source: "stated"}})
+	if len(hosts) == 0 {
+		hosts = []string{agentenv.Amp}
+	}
+	s, err := agentenv.Settle(d, map[string]agentenv.Answer{"hosts": {Value: strings.Join(hosts, ","), Source: "stated"}})
 	if err != nil {
 		m.t.Fatal(err)
 	}
@@ -42,8 +46,12 @@ func (m *missionWorld) ampEnv(fp string) agentenv.Spec {
 	if fp == "" {
 		fp = s.Fingerprint()
 	}
-	if err := (agentenv.Records{Container: map[string]agentenv.Record{agentenv.Amp: {Fingerprint: fp, Method: "container", Image: "debian:12", At: "2026-10-16T02:35:02Z"}},
-		Cloud: map[string]agentenv.Record{agentenv.Amp: {Fingerprint: fp, Method: "cloud", Project: "o/r", At: "2026-10-16T03:20:30Z"}}}).Save(m.dir); err != nil {
+	v := agentenv.Records{Container: map[string]agentenv.Record{}, Cloud: map[string]agentenv.Record{}}
+	for _, h := range hosts {
+		v.Container[h] = agentenv.Record{Fingerprint: fp, Method: "container", Image: "debian:12", At: "2026-10-16T02:35:02Z"}
+		v.Cloud[h] = agentenv.Record{Fingerprint: fp, Method: "cloud", Project: "o/r", At: "2026-10-16T03:20:30Z"}
+	}
+	if err := v.Save(m.dir); err != nil {
 		m.t.Fatal(err)
 	}
 	git(m.t, m.dir, "add", ".aayudha", ".agents")
@@ -254,5 +262,16 @@ func TestMissionStartWarnsStaleEnv(t *testing.T) {
 	}
 	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 874); code != 0 || strings.Contains(errOut, "environment record is stale") {
 		t.Fatalf("mission start 874 with a current record: exit %d: %s%s", code, out, errOut)
+	}
+	// Cursor's CLI runs no probe: a stale Cursor record names the command that records a probe's reply instead.
+	m.ampEnv(staleEnv, agentenv.Cursor)
+	m.featureWith(875, 951)
+	if code, out, errOut := m.approve(875); code != 0 {
+		t.Fatalf("approve 875: exit %d: %s%s", code, out, errOut)
+	}
+	m.setTool("cursor")
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 875); code != 0 || strings.Contains(errOut, "--cloud") ||
+		!strings.Contains(errOut, "or record a live probe's reply with `aayu install --env --host cursor --record '<its reply>'`") {
+		t.Fatalf("mission start 875 on cursor with a stale record: exit %d: %s%s", code, out, errOut)
 	}
 }
