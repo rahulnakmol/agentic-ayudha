@@ -374,6 +374,14 @@ func TestEveningNotMergedSaysWhy(t *testing.T) {
 	if got := lines(1011); !strings.HasPrefix(got[1], "Merged in #8 at 1011101. Its packs cannot be read: ") {
 		t.Fatalf("#1011 with a pack that does not decode: %q", got)
 	}
+	// With no pack to accept, neither card offers an accept: only a comment, or not now.
+	code, out, errOut = runIn(t, m.person, m.opts, "sssq", "inbox", "--repo", "o/r") // #1010, #1011, #1104
+	for _, n := range []int{1011, 1104} {
+		want := fmt.Sprintf("  1. Say what is wrong, in a comment on #%d (preselected)\n  2. Not now: nothing is written\n  3. Open #%d on GitHub\n", n, n)
+		if code != 0 || !strings.Contains(out, want) || strings.Contains(out, fmt.Sprintf("Accept #%d", n)) {
+			t.Fatalf("#%d with no pack: exit %d:\n%s%s", n, code, out, errOut)
+		}
+	}
 }
 
 // Criterion 5: an agent lane runs `aayu inbox --list --json` in the evening:
@@ -402,8 +410,8 @@ func TestEveningListHasNoAccept(t *testing.T) {
 	}
 }
 
-// Criterion 1: a pack's artifact paths are data. A path with terminal control
-// characters reaches no card line, link, or JSON field as a control character.
+// Criterion 1: a pack's artifact paths and the plan's milestone names are data.
+// A control character in either reaches no card line, link, or JSON field.
 func TestEveningEvidenceIsSafeText(t *testing.T) {
 	m, _ := eveningWorld(t)
 	evil := "evidence/\x1b]8;;https://evil.example\x07trace.jsonl"
@@ -411,6 +419,7 @@ func TestEveningEvidenceIsSafeText(t *testing.T) {
 	putPack(t, m.bare, &proof.Pack{Story: 1011, PRHeadSHA: head1011, Authority: proof.Authority{Kind: proof.Authoritative, RunID: 78},
 		Criteria:  []proof.Criterion{{ID: 2, Evidence: []string{evil}}},
 		Artifacts: []proof.Artifact{proof.NewArtifact(evil, "api-trace", trace)}}, map[string][]byte{evil: trace})
+	m.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Name = "MS1\x1b[2J" }) // a milestone name is ledger data too
 	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "trace.jsonl") || strings.ContainsAny(out, "\x1b\x07") {
 		t.Fatalf("inbox with a control character in a path: exit %d:\n%q%s", code, out, errOut)
