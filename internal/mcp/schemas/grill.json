@@ -22,6 +22,15 @@
       ],
       "x-aayu-type": "bool"
     },
+    "edit": {
+      "description": "A filed issue of the type to change before Ready: --body (and --title) are checked as a draft and, when they pass Create, written in one write through the actions log, with the diff shown. Refused for a Ready issue and for one a running mission locks.",
+      "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
+      "type": "string",
+      "x-aayu-read-only-values": [
+        ""
+      ],
+      "x-aayu-type": "issue"
+    },
     "idea": {
       "description": "The request in the human's own words. With --assess, the idea to assess; with a draft, the request its Provenance must quote and resolve.",
       "type": "string",

@@ -125,8 +125,8 @@ func toolSchema(c verbs.Command, exposeWrites bool) (map[string]any, error) {
 	for _, in := range c.Inputs {
 		pinned := !exposeWrites && len(in.ReadOnlyValues) > 0
 		switch {
-		case in.HumanOnly || (pinned && in.Type == verbs.TypeBool):
-			delete(props, in.Name) // bool pins are applied by the server, not chosen by the caller
+		case in.HumanOnly || (pinned && (in.Type == verbs.TypeBool || in.ReadOnlyValues[0] == "")):
+			delete(props, in.Name) // bool pins are applied by the server, not chosen by the caller; a "" pin leaves the input out
 			required = slices.DeleteFunc(required, func(r any) bool { return r == in.Name })
 		case pinned:
 			p := props[in.Name].(map[string]any)
@@ -196,11 +196,11 @@ func Args(c verbs.Command, raw json.RawMessage, exposeWrites bool) ([]string, er
 	for _, i := range c.Inputs {
 		v, given := in[i.Name]
 		pinned := !exposeWrites && len(i.ReadOnlyValues) > 0
-		if pinned && i.Type == verbs.TypeBool {
+		if pinned && (i.Type == verbs.TypeBool || i.ReadOnlyValues[0] == "") {
 			if given {
 				return nil, fmt.Errorf("unknown argument %q", i.Name)
 			}
-			v, given = i.ReadOnlyValues[0] == "true", true
+			v, given = i.ReadOnlyValues[0] == "true", i.Type == verbs.TypeBool
 		}
 		if !given {
 			if i.Required {

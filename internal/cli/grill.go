@@ -23,6 +23,9 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/measure"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -45,6 +48,10 @@ type GrillResult struct {
 	Pairs    []design.PairResult    `json:"pairs,omitempty"` // grill brand: the AA palette check
 	Written  string                 `json:"written,omitempty"`
 	Readback string                 `json:"readback,omitempty"` // Story, Bug: what done looks like, for the human to confirm (WP5.3b)
+	// ExpectedPaths are a Feature's Expected paths as slice reads them (planning.Paths).
+	ExpectedPaths []string `json:"expected_paths,omitempty"`
+	Edited        bool     `json:"edited,omitempty"` // --edit: the filed issue's title and body were written
+	Diff          string   `json:"diff,omitempty"`   // --edit: the filed title and body against the new ones
 }
 
 // grillDraft is what the interview produced: flags, or the TUI's answers.
@@ -52,6 +59,7 @@ type GrillResult struct {
 // Story's or Bug's Provenance must quote.
 type grillDraft struct {
 	Title, Body, Labels, Parent, Idea string
+	filed                             []string // --edit: the filed issue's labels, checked as they are
 }
 
 // BaselineDays is the window of the baseline grill fetches for a Goal or
@@ -72,6 +80,9 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 		if in.Bool("assess") {
 			return Errorf(ExitUsage, "grill brand has no --assess; it checks the palette against WCAG AA")
 		}
+		if in.String("edit") != "" {
+			return Errorf(ExitUsage, "grill brand has no --edit; it writes design/brand.yaml")
+		}
 		return runGrillBrand(e, in)
 	}
 	t, ok := workitems.FindType(typ)
@@ -82,12 +93,18 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	if in.String("edit") != "" && (in.Bool("create") || in.Bool("assess") || in.String("parent") != "" || in.String("labels") != "") {
+		return Errorf(ExitUsage, "grill --edit changes the body and title of a filed issue; --create, --assess, --parent, and --labels go with a new draft")
+	}
 	if in.Bool("assess") {
 		return e.runGrillAssess(ctx, repo, t, in)
 	}
 	c, tag, err := e.grillClient(ctx)
 	if err != nil {
 		return err
+	}
+	if in.String("edit") != "" {
+		return e.runGrillEdit(ctx, c, tag, repo, t, in)
 	}
 	d := grillDraft{Title: strings.TrimSpace(in.String("title")), Body: in.String("body"), Labels: in.String("labels"), Parent: in.String("parent"), Idea: strings.TrimSpace(in.String("idea"))}
 	create := in.Bool("create")
@@ -207,15 +224,7 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 			verdict = "does not pass yet"
 		}
 		fmt.Fprintf(w, "%s draft %q: %s\n", typ, d.Title, verdict)
-		if res.Baseline != nil {
-			fmt.Fprintf(w, "  baseline: %s = %s over %s (%s)\n", res.Baseline.Metric, strconv.FormatFloat(res.Baseline.Value, 'f', -1, 64), res.Baseline.Population, windowText(res.Baseline.Window))
-		}
-		for _, p := range res.Create {
-			fmt.Fprintf(w, "  create: %s\n", p)
-		}
-		for _, p := range res.Ready {
-			fmt.Fprintf(w, "  ready: %s\n", p)
-		}
+		grillProblems(w, res)
 		switch {
 		case res.DryRun:
 			fmt.Fprintln(w, "  --dry-run: the issue is planned, not written")
@@ -234,6 +243,136 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 	}
 	if !res.Pass {
 		return Errorf(ExitBlocked, "the %s draft has %d problem(s); keep interviewing", typ, len(res.Create)+len(res.Ready))
+	}
+	return nil
+}
+
+// grillProblems writes a Feature's expected paths, a fetched baseline, and the
+// Create and Ready problems of a grill result.
+func grillProblems(w io.Writer, res GrillResult) {
+	if len(res.ExpectedPaths) > 0 {
+		fmt.Fprintf(w, "  expected paths: %s\n", strings.Join(res.ExpectedPaths, ", "))
+	}
+	if res.Baseline != nil {
+		fmt.Fprintf(w, "  baseline: %s = %s over %s (%s)\n", res.Baseline.Metric, strconv.FormatFloat(res.Baseline.Value, 'f', -1, 64), res.Baseline.Population, windowText(res.Baseline.Window))
+	}
+	for _, p := range res.Create {
+		fmt.Fprintf(w, "  create: %s\n", p)
+	}
+	for _, p := range res.Ready {
+		fmt.Fprintf(w, "  ready: %s\n", p)
+	}
+}
+
+// beforeReady are the statuses whose body grill --edit may change.
+var beforeReady = []string{"backlog", "discovery", "planned"}
+
+// runGrillEdit is `grill <type> --edit <n> --body <new>` (Story #1179): it
+// checks the new body (and --title) of a filed issue as grill checks a draft,
+// with the issue's own labels and parent, and when it passes Create writes
+// the title and body in one write through the actions log, then shows the
+// diff. Only a body before Ready changes: a Ready issue is refused here (the
+// Ready guard owns its body), and a running mission's lock refuses the write
+// in the client's transport (lockGuard) before the request leaves.
+func (e *Env) runGrillEdit(ctx context.Context, c *github.Client, tag, repo string, t workitems.Type, in Values) error {
+	raw := in.String("edit")
+	n, err := strconv.Atoi(raw[strings.LastIndexAny(raw, "#/")+1:]) // issueNumber, but an overflow is refused, not clamped
+	if err != nil || n <= 0 {
+		return Errorf(ExitUsage, "grill --edit %q: want an issue number, #number, or issue URL", in.String("edit"))
+	}
+	if other, ok := strings.CutPrefix(raw, "https://github.com/"); ok {
+		if other, _, _ = strings.Cut(other, "/issues/"); !strings.EqualFold(other, repo) {
+			return Errorf(ExitUsage, "grill --edit %s: the issue is in %s, and grill edits %s; nothing was read or written", raw, other, repo)
+		}
+	}
+	if strings.TrimSpace(in.String("body")) == "" {
+		return Errorf(ExitUsage, "grill %s --edit %d needs --body: the whole new body", t.ID, n)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	labels := github.IssueLabels(is)
+	if typ, _ := workitems.TypeOf(is.GetType().GetName(), labels); typ != t.ID {
+		return Errorf(ExitUsage, "grill %s --edit %d: #%d has type %s, not %s", t.ID, n, n, or(typ, "none"), t.ID)
+	}
+	status := false
+	for _, l := range labels {
+		switch s, ok := strings.CutPrefix(l, "status:"); {
+		case !ok:
+		case slices.Contains(beforeReady, s):
+			status = true
+		case s == "ready":
+			return Errorf(ExitBlocked, "#%d is Ready; its body is frozen", n)
+		default:
+			return Errorf(ExitBlocked, "#%d is status:%s, past Ready; its body is frozen", n, s)
+		}
+	}
+	if !status { // its state is unknown, so it may be past Ready
+		return Errorf(ExitBlocked, "#%d has no status: label, so aayu cannot tell that it is before Ready; its body is frozen until it has one", n)
+	}
+	if !slices.Contains(labels, "type:"+t.ID) { // typed by its issue type: Parse reads the type from the labels
+		labels = append([]string{"type:" + t.ID}, labels...)
+	}
+	d := grillDraft{Title: is.GetTitle(), Body: in.String("body"), Idea: strings.TrimSpace(in.String("idea")), filed: labels}
+	if title := strings.TrimSpace(in.String("title")); title != "" {
+		d.Title = title
+	}
+	switch parent, _, err := c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(n)); {
+	case err == nil:
+		d.Parent = strconv.Itoa(parent.GetNumber())
+	case !github.NotFound(err):
+		return Wrap(ExitExternal, err)
+	}
+	res, err := e.grillCheck(ctx, c, repo, t, &d)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	res.Issue, res.URL = n, is.GetHTMLURL()
+	res.Diff = upgrade.Unified("# "+is.GetTitle()+"\n\n"+strings.ReplaceAll(is.GetBody(), "\r\n", "\n")+"\n", "# "+d.Title+"\n\n"+strings.ReplaceAll(d.Body, "\r\n", "\n")+"\n")
+	if len(res.Create) == 0 {
+		req := gh.UpdateIssueRequest{Body: &d.Body}
+		payload := map[string]any{"type": t.ID, "body_sha256": workitems.BodyHash(d.Body), "tag": tag}
+		if in.String("title") != "" {
+			req.Title, payload["title"] = &d.Title, d.Title
+		}
+		res.Identity, res.DryRun = c.Identity(), c.DryRun()
+		_, err := c.Write(ctx, actions.Action{Kind: "github.issue.edit", Target: fmt.Sprintf("%s#%d", repo, n), Seat: "product-strategist",
+			Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/%d", repo, n)}, Payload: payload},
+			func(ctx context.Context) (any, error) {
+				_, _, err := c.REST.Issues.Update(ctx, owner, name, n, req)
+				return nil, err
+			})
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		res.Edited = !res.DryRun
+	}
+	if err := e.Emit(res, func(w io.Writer) error {
+		switch {
+		case len(res.Create) > 0:
+			fmt.Fprintf(w, "#%d %q: the new body does not pass Create; nothing was written\n", n, d.Title)
+		case res.DryRun:
+			fmt.Fprintf(w, "#%d %q: --dry-run: the edit is planned, not written\n", n, d.Title)
+		default:
+			fmt.Fprintf(w, "#%d %q: edited %s (as %s)\n", n, d.Title, res.URL, res.Identity)
+		}
+		if res.Diff != "" {
+			for _, l := range strings.Split(strings.TrimSuffix(res.Diff, "\n"), "\n") {
+				fmt.Fprintf(w, "  %s\n", l)
+			}
+		}
+		grillProblems(w, res)
+		if len(res.Create) == 0 && len(res.Ready) > 0 {
+			fmt.Fprintf(w, "  next: fix the ready problems, then `aayu ready %d`\n", n)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(res.Create) > 0 {
+		return Errorf(ExitBlocked, "the new body of #%d has %d Create problem(s); nothing was written", n, len(res.Create))
 	}
 	return nil
 }
@@ -259,6 +398,9 @@ func (e *Env) grillCheck(ctx context.Context, c *github.Client, repo string, t w
 		status = "status:backlog" // intake waits for triage, as the issue forms file it
 	}
 	labels := []string{"type:" + t.ID, status}
+	if d.filed != nil {
+		labels = d.filed
+	}
 	for _, l := range strings.Split(d.Labels, ",") {
 		if l = strings.TrimSpace(l); l == "" {
 			continue
@@ -287,6 +429,16 @@ func (e *Env) grillCheck(ctx context.Context, c *github.Client, repo string, t w
 			pt, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
 			it.Parent = &workitems.Ref{Number: res.Parent, Type: pt}
 		}
+	}
+	// Link targets are read as Ready reads them (Story #1179): a draft that
+	// links to the wrong type does not pass grill and then fail Ready.
+	lps, err := ready.LinkTypes(ctx, c, repo, &it)
+	if err != nil { // GitHub did not answer: the draft is not judged, and --edit writes nothing
+		return res, Wrap(ExitExternal, err)
+	}
+	res.Ready = append(res.Ready, lps...)
+	if t.ID == "feature" {
+		res.ExpectedPaths = planning.Paths(it.Fields["expected_paths"])
 	}
 	if _, ok := t.Field(workitems.FieldOwner); ok && workitems.Empty(it.Fields[workitems.FieldOwner]) {
 		it.Fields[workitems.FieldOwner] = e.technicalOwner()

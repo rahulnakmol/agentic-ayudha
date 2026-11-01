@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -513,5 +514,244 @@ func TestGrillTUIStory(t *testing.T) {
 	g.Mu.Unlock()
 	if created.Parent != 1 || !contains(g.LabelNames(before+1), "effort:S") || !contains(g.LabelNames(before+1), "priority:P2") {
 		t.Fatalf("created story: parent %d labels %v", created.Parent, g.LabelNames(before+1))
+	}
+}
+
+// editWorld is Story #1179's repository: #1 a Story, #2 an Incident, #3 Bug
+// #1169's shape (status:planned, its Links name the Story, so it fails
+// Ready), and #4 a Ready Bug. The checkout keeps one actions log.
+func editWorld(t *testing.T) (*fake.GitHub, map[string]string, Options) {
+	t.Helper()
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("Show empty list", fixtureBody(t, "story", nil), "type:story", "status:planned", "effort:S")
+	g.AddIssue("Checkout down", fixtureBody(t, "incident", nil), "type:incident")
+	g.AddIssue("Questionnaire loses answers on back", bugBody(t, "caused-by #1"), "type:bug", "status:planned", "effort:XS")
+	g.AddIssue("Ready bug", bugBody(t, ""), "type:bug", "status:ready", "effort:XS")
+	dir, _ := ledgerCheckout(t)
+	return g, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+}
+
+// bugBody is the Ready bug fixture with links as its Links section.
+func bugBody(t *testing.T, links string) string {
+	return fixtureBody(t, "bug", func(f map[string]string) {
+		if links != "" {
+			f[workitems.FieldLinks] = links
+		}
+	})
+}
+
+func issueBody(g *fake.GitHub, n int) (string, string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	return g.Issues[n].Title, g.Issues[n].Body
+}
+
+// Story #1179: grill <type> --edit checks a filed issue's new body as it
+// checks a draft and writes it, in one write, only before Ready.
+func TestGrillEdit(t *testing.T) {
+	// Criterion 1: Bug #3's Links fail Ready; grill checks the new body,
+	// writes it through the actions log, and prints the diff.
+	t.Run("writes a checked body", func(t *testing.T) {
+		g, env, opts := editWorld(t)
+		if code, out, _ := run(t, env, opts, "ready", "3", "--repo", "o/r", "--check"); code != ExitBlocked || !strings.Contains(out, "caused-by #1: #1 is a story") {
+			t.Fatalf("ready --check before the edit: exit %d\n%s", code, out)
+		}
+		g.Reset()
+		fixed := bugBody(t, "caused-by #2")
+		code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", fixed)
+		if code != 0 || !strings.Contains(out, `#3 "Questionnaire loses answers on back": edited`) ||
+			!strings.Contains(out, "  -caused-by #1\n") || !strings.Contains(out, "  +caused-by #2\n") || strings.Contains(out, "ready:") {
+			t.Fatalf("grill bug --edit 3: exit %d\n%s%s", code, out, errOut)
+		}
+		if _, body := issueBody(g, 3); body != fixed {
+			t.Fatalf("#3's body:\n%s", body)
+		}
+		if w := g.Writes(); len(w) != 1 || w[0].Method != http.MethodPatch || w[0].Path != "/repos/o/r/issues/3" {
+			t.Fatalf("writes: %+v", w)
+		}
+		if code, out, _ := run(t, env, opts, "actions", "grep", "github.issue.edit"); code != 0 || !strings.Contains(out, `"target":"o/r#3"`) || !strings.Contains(out, `"status":"done"`) {
+			t.Fatalf("actions log:\n%s", out)
+		}
+		if code, out, _ := run(t, env, opts, "ready", "3", "--repo", "o/r", "--check"); code != 0 {
+			t.Fatalf("ready --check after the edit: exit %d\n%s", code, out)
+		}
+	})
+
+	// Criterion 2: a body that fails Create writes nothing and lists each problem.
+	t.Run("fails Create", func(t *testing.T) {
+		g, env, opts := editWorld(t)
+		_, before := issueBody(g, 3)
+		g.Reset()
+		bad := fixtureBody(t, "bug", func(f map[string]string) { delete(f, "reproduce"); delete(f, "actual") })
+		code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", bad)
+		if code != ExitBlocked || !strings.Contains(out, "the new body does not pass Create; nothing was written") ||
+			!strings.Contains(out, "  create: reproduce: Steps to reproduce is required at Create\n") || !strings.Contains(out, "  create: actual: Actual behaviour is required at Create\n") ||
+			!strings.Contains(errOut, "the new body of #3 has 2 Create problem(s); nothing was written") {
+			t.Fatalf("failing body: exit %d\n%s%s", code, out, errOut)
+		}
+		if _, after := issueBody(g, 3); after != before || len(g.Writes()) != 0 {
+			t.Fatalf("a failing body was written: %+v", g.Writes())
+		}
+	})
+
+	// Criterion 3: a Ready issue's body is frozen.
+	t.Run("refuses a Ready issue", func(t *testing.T) {
+		g, env, opts := editWorld(t)
+		g.Reset()
+		code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "4", "--body", bugBody(t, "caused-by #2"), "--title", "New title")
+		if code != ExitBlocked || !strings.Contains(errOut, "#4 is Ready; its body is frozen") || len(g.Writes()) != 0 {
+			t.Fatalf("Ready #4: exit %d, writes %+v\n%s%s", code, g.Writes(), out, errOut)
+		}
+		// A status past Ready is frozen too, and the type must match.
+		g.Mu.Lock()
+		g.Issues[4].Labels = []fake.Label{{Name: "type:bug"}, {Name: "status:in-progress"}}
+		g.Mu.Unlock()
+		if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "4", "--body", bugBody(t, "")); code != ExitBlocked || !strings.Contains(errOut, "#4 is status:in-progress, past Ready; its body is frozen") {
+			t.Fatalf("in-progress #4: exit %d %s", code, errOut)
+		}
+		if code, _, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--edit", "3", "--body", bugBody(t, "")); code != ExitUsage || !strings.Contains(errOut, "#3 has type bug, not story") {
+			t.Fatalf("wrong type: exit %d %s", code, errOut)
+		}
+		if len(g.Writes()) != 0 {
+			t.Fatalf("writes: %+v", g.Writes())
+		}
+	})
+
+	// Criterion 5: --title and the body go in one write.
+	t.Run("title and body in one write", func(t *testing.T) {
+		g, env, opts := editWorld(t)
+		g.Reset()
+		fixed := bugBody(t, "caused-by #2")
+		code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--json", "--edit", "3", "--body", fixed, "--title", "Back clears the answers")
+		var res GrillResult
+		if code != 0 || json.Unmarshal([]byte(out), &res) != nil || !res.Edited || res.Issue != 3 || !strings.Contains(res.Diff, "-# Questionnaire loses answers on back\n+# Back clears the answers\n") {
+			t.Fatalf("--title with --edit: exit %d\n%s%s", code, out, errOut)
+		}
+		w := g.Writes()
+		if len(w) != 1 || w[0].Path != "/repos/o/r/issues/3" || w[0].Body["title"] != "Back clears the answers" || w[0].Body["body"] != fixed {
+			t.Fatalf("writes: %+v", w)
+		}
+		if title, body := issueBody(g, 3); title != "Back clears the answers" || body != fixed {
+			t.Fatalf("#3: %q\n%s", title, body)
+		}
+	})
+}
+
+// grill --edit's other paths: a dry run writes nothing; a body that passes
+// Create but not Ready is written and its Ready problems are named; --edit
+// does not mix with a new draft's flags or with brand.
+func TestGrillEditPlanAndUsage(t *testing.T) {
+	g, env, opts := editWorld(t)
+	g.Reset()
+	code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--dry-run", "--edit", "3", "--body", bugBody(t, "caused-by #2"))
+	if code != 0 || !strings.Contains(out, "--dry-run: the edit is planned, not written") || len(g.Writes()) != 0 {
+		t.Fatalf("--dry-run: exit %d, writes %+v\n%s%s", code, g.Writes(), out, errOut)
+	}
+	still := bugBody(t, "caused-by #1\ndepends-on #2")
+	code, out, errOut = run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", still)
+	if _, body := issueBody(g, 3); code != 0 || body != still || !strings.Contains(out, "  ready: links: caused-by #1: #1 is a story; caused-by links to an incident\n") ||
+		!strings.Contains(out, "next: fix the ready problems, then `aayu ready 3`") {
+		t.Fatalf("a body that passes Create only: exit %d\n%s%s", code, out, errOut)
+	}
+	// A link target GitHub does not answer for is an external error, not a
+	// Ready problem, and nothing is written.
+	g.Reset()
+	g.Fail = "GET /repos/o/r/issues/1"
+	if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", bugBody(t, "caused-by #2\ndepends-on #1")); code != ExitExternal || !strings.Contains(errOut, "injected failure") || len(g.Writes()) != 0 {
+		t.Fatalf("link lookup fails: exit %d, writes %+v: %s", code, g.Writes(), errOut)
+	}
+	// An issue with no status: label may be past Ready: its body is frozen.
+	g.Mu.Lock()
+	g.Issues[3].Labels = []fake.Label{{Name: "type:bug"}, {Name: "effort:XS"}}
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", still); code != ExitBlocked || !strings.Contains(errOut, "#3 has no status: label") {
+		t.Fatalf("no status label: exit %d %s", code, errOut)
+	}
+	g.Reset()
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"bug", "--edit", "3", "--body", still, "--create"}, "--create, --assess, --parent, and --labels go with a new draft"},
+		{[]string{"bug", "--edit", "3", "--body", still, "--labels", "effort:S"}, "--create, --assess, --parent, and --labels go with a new draft"},
+		{[]string{"bug", "--edit", "3"}, "grill bug --edit 3 needs --body: the whole new body"},
+		{[]string{"bug", "--edit", "99999999999999999999", "--body", still}, `grill --edit "99999999999999999999": want an issue number`},
+		{[]string{"bug", "--edit", "https://github.com/x/y/issues/3", "--body", still}, "the issue is in x/y, and grill edits o/r; nothing was read or written"},
+		{[]string{"brand", "--edit", "3", "--body", "version: 1"}, "grill brand has no --edit"},
+	} {
+		if code, _, errOut := run(t, env, opts, append([]string{"grill", "--repo", "o/r"}, tc.args...)...); code != ExitUsage || !strings.Contains(errOut, tc.want) {
+			t.Errorf("%v: exit %d %s", tc.args, code, errOut)
+		}
+	}
+	if len(g.Writes()) != 0 {
+		t.Fatalf("writes: %+v", g.Writes())
+	}
+}
+
+// Story #1179 criterion 4: a running mission's lock refuses grill --edit of
+// its open Bug #27, even before Ready, naming the mission; nothing reaches GitHub.
+func TestGrillEditLocked(t *testing.T) {
+	m := startedLock(t)
+	m.status(27, "planned", "")
+	_, before := issueBody(m.g, 27)
+	m.g.Reset()
+	body := fixtureBody(t, "bug", func(f map[string]string) { delete(f, workitems.FieldLinks); f["summary"] = "Answers vanish on Back." })
+	code, out, errOut := run(t, m.agent, m.opts, "grill", "bug", "--repo", "o/r", "--edit", "27", "--body", body)
+	if code != ExitBlocked || !strings.Contains(errOut, "#27 is locked by mission #889 until it ends") {
+		t.Fatalf("locked #27: exit %d\n%s%s", code, out, errOut)
+	}
+	if _, after := issueBody(m.g, 27); after != before || len(m.issueWrites(27)) != 0 {
+		t.Fatalf("a locked body was written: %+v", m.issueWrites(27))
+	}
+}
+
+// Story #1179 criterion 6: grill reads link targets as Ready does, so a Bug
+// draft caused-by a Story gets Ready's answer before it is filed.
+func TestGrillLinkTargetsAsReady(t *testing.T) {
+	g, env, opts := editWorld(t)
+	g.Reset()
+	const want = "links: caused-by #1: #1 is a story; caused-by links to an incident"
+	code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--dry-run", "--title", "Back clears answers", "--body", bugBody(t, "caused-by #1"), "--labels", "effort:XS")
+	if code != ExitBlocked || !strings.Contains(out, "  ready: "+want+"\n") {
+		t.Fatalf("grill bug --dry-run: exit %d\n%s%s", code, out, errOut)
+	}
+	if code, out, _ := run(t, env, opts, "ready", "3", "--repo", "o/r", "--check"); code != ExitBlocked || !strings.Contains(out, "  - "+want+"\n") {
+		t.Fatalf("ready 3 --check: exit %d\n%s", code, out)
+	}
+	if code, out, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--dry-run", "--title", "Back clears answers", "--body", bugBody(t, "caused-by #2"), "--labels", "effort:XS"); code != 0 {
+		t.Fatalf("caused-by the Incident: exit %d\n%s%s", code, out, errOut)
+	}
+	if code, out, _ := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--title", "Back clears answers", "--body", bugBody(t, "caused-by #99"), "--labels", "effort:XS"); code != ExitBlocked || !strings.Contains(out, "  ready: links: caused-by #99: no such issue\n") {
+		t.Fatalf("caused-by no issue: exit %d\n%s", code, out)
+	}
+	if len(g.Writes()) != 0 {
+		t.Fatalf("writes: %+v", g.Writes())
+	}
+}
+
+// Story #1179 criterion 7: a Feature's Expected paths on one line, separated
+// by commas, read as one path per comma, the same in grill and slice.
+func TestExpectedPathsCommas(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	body := fixtureBody(t, "feature", func(f map[string]string) {
+		delete(f, workitems.FieldLinks)
+		f["expected_paths"] = "`internal/cli/**`, internal/planning/**,docs/guide/**\n- `docs/a,b/**`"
+	})
+	g.AddIssue("Eligibility questionnaire", body, "type:feature", "status:planned")
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	want := []string{"internal/cli/**", "internal/planning/**", "docs/guide/**", "docs/a,b/**"} // a backtick-quoted glob keeps its comma
+	code, out, errOut := run(t, env, opts, "grill", "feature", "--repo", "o/r", "--dry-run", "--json", "--title", "Eligibility questionnaire", "--body", body)
+	var gr GrillResult
+	if json.NewDecoder(strings.NewReader(out)).Decode(&gr) != nil || !slices.Equal(gr.ExpectedPaths, want) {
+		t.Fatalf("grill feature --dry-run: exit %d paths %q\n%s%s", code, gr.ExpectedPaths, out, errOut)
+	}
+	if _, text, _ := run(t, env, opts, "grill", "feature", "--repo", "o/r", "--dry-run", "--title", "Eligibility questionnaire", "--body", body); !strings.Contains(text, "  expected paths: internal/cli/**, internal/planning/**, docs/guide/**, docs/a,b/**\n") {
+		t.Fatalf("grill feature text:\n%s", text)
+	}
+	code, out, errOut = run(t, env, opts, "slice", "1", "--repo", "o/r", "--json")
+	var sr SliceResult
+	if code != 0 || json.Unmarshal([]byte(out), &sr) != nil || !slices.Equal(sr.ExpectedPaths, want) {
+		t.Fatalf("slice 1: exit %d paths %q\n%s%s", code, sr.ExpectedPaths, out, errOut)
 	}
 }

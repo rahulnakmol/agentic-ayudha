@@ -225,7 +225,8 @@ func TestRegistry(t *testing.T) {
 						return fmt.Errorf("%s input %s: read-only values only make sense on a read-exposed command", c.Name, i.Name)
 					}
 					for _, v := range i.ReadOnlyValues {
-						if ok := (i.Type == TypeBool && (v == "true" || v == "false")) || (i.Type == TypeEnum && slices.Contains(i.Enum, v)); !ok {
+						if ok := (i.Type == TypeBool && (v == "true" || v == "false")) || (i.Type == TypeEnum && slices.Contains(i.Enum, v)) ||
+							(i.Type != TypeBool && i.Type != TypeEnum && v == "" && len(i.ReadOnlyValues) == 1); !ok {
 							return fmt.Errorf("%s input %s: read-only value %q is not a value of the input", c.Name, i.Name, v)
 						}
 					}

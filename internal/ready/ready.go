@@ -107,21 +107,11 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 		case !github.NotFound(perr):
 			return res, is, perr
 		}
-		links, _ := workitems.ParseLinks(it.Fields[workitems.FieldLinks])
-		for _, l := range links {
-			target, _, lerr := r.GH.REST.Issues.Get(ctx, owner, name, l.Number)
-			if github.NotFound(lerr) {
-				ps = append(ps, workitems.Problem{Field: workitems.FieldLinks, Message: fmt.Sprintf("%s #%d: no such issue", l.Kind, l.Number)})
-				continue
-			}
-			if lerr != nil {
-				return res, is, lerr
-			}
-			if it.LinkTypes == nil {
-				it.LinkTypes = map[int]string{}
-			}
-			it.LinkTypes[l.Number], _ = workitems.TypeOf(target.GetType().GetName(), github.IssueLabels(target))
+		lps, lerr := LinkTypes(ctx, r.GH, r.Repo, &it)
+		if lerr != nil {
+			return res, is, lerr
 		}
+		ps = append(ps, lps...)
 		ps = append(ps, workitems.Validate(it, workitems.StageReady)...)
 		if os, _ := workitems.ParseOptions(it.Fields["options"]); workitems.Lettered(os) {
 			res.Warnings = append(res.Warnings, workitems.Problem{Field: "options", Message: "lettered or named, not numbered, so they read as 1 (A), 2 (B), … in order: " +
@@ -151,6 +141,34 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 		res.Problems = []workitems.Problem{}
 	}
 	return res, is, nil
+}
+
+// LinkTypes reads the issue each link in it's Links names and records its type
+// in it.LinkTypes, so Validate checks that a link points at a type its kind
+// allows. A link to no issue is a problem. Ready and grill both use it, so a
+// draft and a filed issue get the same answer (Story #1179).
+func LinkTypes(ctx context.Context, c *github.Client, repo string, it *workitems.Item) ([]workitems.Problem, error) {
+	owner, name, err := github.SplitRepo(repo)
+	if err != nil {
+		return nil, err
+	}
+	var ps []workitems.Problem
+	links, _ := workitems.ParseLinks(it.Fields[workitems.FieldLinks])
+	for _, l := range links {
+		target, _, err := c.REST.Issues.Get(ctx, owner, name, l.Number)
+		if github.NotFound(err) {
+			ps = append(ps, workitems.Problem{Field: workitems.FieldLinks, Message: fmt.Sprintf("%s #%d: no such issue", l.Kind, l.Number)})
+			continue
+		}
+		if err != nil {
+			return ps, err
+		}
+		if it.LinkTypes == nil {
+			it.LinkTypes = map[int]string{}
+		}
+		it.LinkTypes[l.Number], _ = workitems.TypeOf(target.GetType().GetName(), github.IssueLabels(target))
+	}
+	return ps, nil
 }
 
 // LedgerPath is where a work item's Ready snapshot lives on the ledger.

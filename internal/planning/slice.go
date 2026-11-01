@@ -168,15 +168,28 @@ func samples(g string) []string {
 	return []string{fill("x/x", "x", "x"), fill("z/z/z", "zz", "z")}
 }
 
-// Paths splits an Expected paths field: one glob per line, list bullets and
-// backticks allowed.
+// Paths splits an Expected paths field: one glob per line, or per comma
+// outside backticks (a backtick-quoted glob keeps its commas), list bullets
+// and backticks allowed.
 func Paths(field string) []string {
 	var out []string
 	for _, l := range strings.Split(strings.ReplaceAll(field, "\r\n", "\n"), "\n") {
 		l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-*"))
-		l = strings.Trim(strings.TrimSpace(l), "`")
-		if l != "" && !workitems.Empty(l) {
-			out = append(out, l)
+		var parts []string
+		quoted, from := false, 0
+		for i, r := range l {
+			switch {
+			case r == '`':
+				quoted = !quoted
+			case r == ',' && !quoted:
+				parts, from = append(parts, l[from:i]), i+1
+			}
+		}
+		for _, p := range append(parts, l[from:]) {
+			p = strings.Trim(strings.TrimSpace(p), "`")
+			if p = strings.TrimSpace(p); p != "" && !workitems.Empty(p) {
+				out = append(out, p)
+			}
 		}
 	}
 	return out

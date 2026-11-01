@@ -265,10 +265,20 @@ func checkLinks(t Type, it Item, v string) []Problem {
 		case !ok || !slices.Contains(t.Links, l.Kind):
 			ps = append(ps, Problem{FieldLinks, fmt.Sprintf("a %s cannot carry a %q link; allowed: %s", t.Name, l.Kind, strings.Join(t.Links, ", "))})
 		case it.LinkTypes[l.Number] != "" && !slices.Contains(k.To, it.LinkTypes[l.Number]):
-			ps = append(ps, Problem{FieldLinks, fmt.Sprintf("%s #%d: #%d is a %s; %s links to a %s", l.Kind, l.Number, l.Number, it.LinkTypes[l.Number], l.Kind, strings.Join(k.To, " or "))})
+			to := strings.Join(k.To, " or ")
+			ps = append(ps, Problem{FieldLinks, fmt.Sprintf("%s #%d: #%d is %s %s; %s links to %s %s", l.Kind, l.Number, l.Number, article(it.LinkTypes[l.Number]), it.LinkTypes[l.Number], l.Kind, article(to), to)})
 		}
 	}
 	return ps
+}
+
+// article is "an" before a type ID that starts with a vowel (incident,
+// initiative, experiment), else "a".
+func article(id string) string {
+	if id != "" && strings.ContainsRune("aeiou", rune(id[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 // checkRecommendation checks that a Decision's Recommendation designates one

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -123,6 +124,13 @@ func grilledBody(t *testing.T, edit func(f map[string]string)) (string, string) 
 // same vague criterion on an issue is refused by `ready --check`.
 func TestGrillConcreteDraft(t *testing.T) {
 	_, g, opts := bakery(t)
+	// The story depends-on #14, the pickup slots story of the eval's github/
+	// fixture: grill reads a link's target as Ready does (Story #1179).
+	slots := g.AddIssue("Order pickup slots", "", "type:story")
+	g.Mu.Lock()
+	delete(g.Issues, slots.Number)
+	slots.Number, g.Issues[14] = 14, slots
+	g.Mu.Unlock()
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	grillJSON := func(body, idea string) (int, GrillResult) {
 		_, out, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--json", "--idea", idea, "--parent", "1",
@@ -173,7 +181,7 @@ func TestGrillConcreteDraft(t *testing.T) {
 		f[workitems.FieldCriteria] = "1. [recording] state: `/menu/search` with the seeded menu; expected: results feel fast"
 	}), "type:story", "effort:S")
 	vague.Parent = 1
-	code, out, _ := run(t, env, opts, "ready", "4", "--check", "--repo", "o/r")
+	code, out, _ := run(t, env, opts, "ready", strconv.Itoa(vague.Number), "--check", "--repo", "o/r")
 	if code != ExitBlocked || !strings.Contains(out, `completion_goal: criterion 1 says "fast" with nothing to observe`) {
 		t.Fatalf("ready --check on a vague criterion: %d\n%s", code, out)
 	}
