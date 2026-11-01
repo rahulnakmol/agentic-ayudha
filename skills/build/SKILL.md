@@ -51,6 +51,11 @@ aayu:
       required: false
       positional: false
       description: "With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR."
+    - name: thread
+      type: string
+      required: false
+      positional: false
+      description: "With --delegate amp: record the Amp thread (T-…) that the host created for a host hand-off. Build prints a host hand-off in an Amp thread whose amp CLI is not signed in. Only an Amp thread ID is recorded."
     - name: asked
       type: string
       required: false

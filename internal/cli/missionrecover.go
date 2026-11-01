@@ -668,6 +668,9 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 		return say("left", fmt.Sprintf("its PR #%d is not open: recover starts nothing for it", st.PR))
 	case st.Mode == "local":
 		return say("left", fmt.Sprintf("runs %s on its builder's machine: recover reads no host for it", name))
+	case st.Status == dlgHost && st.Task == "":
+		// The Kanha creates its thread (Bug #1208); mission next releases it once the hand-off lapses.
+		return say("left", fmt.Sprintf("its host hand-off of %s waits for its %s thread: recover starts nothing for it", st.StartedAt, name))
 	case st.Status == dlgMaybe:
 		if _, ok := r.adapter(st.Receiver).(delegate.Lister); !ok {
 			r.touch(n).State = stateMaybe
@@ -899,7 +902,7 @@ func missionRecover(ctx context.Context, e *Env, f int) error {
 		if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if st.Receiver == "" || st.Status == dlgMerged { // not started: mission next starts it
+		if st.Receiver == "" || st.Status == dlgMerged || st.Status == dlgLapsed { // not started, or a lapsed host hand-off: mission next starts it
 			continue
 		}
 		rep.Stories = append(rep.Stories, r.story(ctx, n, st))

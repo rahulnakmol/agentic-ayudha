@@ -51,6 +51,7 @@ aayu build [<issue>]
 | `--resume` | no | Resume from the last Aayudha-Checkpoint trailer. |
 | `--delegate` | no | Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one). OpenCode has no cloud agent, so it always runs locally. One of: `codex`, `cursor`, `claude`, `amp`, `opencode`, `auto`. |
 | `--local` | no | With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR. |
+| `--thread` | no | With --delegate amp: record the Amp thread (T-…) that the host created for a host hand-off. Build prints a host hand-off in an Amp thread whose amp CLI is not signed in. Only an Amp thread ID is recorded. |
 | `--asked` | no | The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story. |
 | `--decline` | no | Decline open items of the last session review, one "\<id>: \<why>" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them. |
 

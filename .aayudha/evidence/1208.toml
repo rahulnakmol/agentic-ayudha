@@ -1,0 +1,25 @@
+# Which tests prove Bug #1208's Completion Goal.
+
+[[criterion]]
+id = 1 # AMP_THREAD_ID set, the amp CLI not signed in: build claims the story, writes its brief, prints a host hand-off, and starts no CLI
+tests = ["internal/cli:TestAmpHostHandoffPrints"]
+
+[[criterion]]
+id = 2 # the Kanha records the thread it created with --thread: the delegation state records it as the CLI path does, and mission show lists it running
+tests = ["internal/cli:TestAmpHostThreadRecorded"]
+
+[[criterion]]
+id = 3 # a hand-off with no thread after the claim's life: mission next releases the claim and lists the story start again
+tests = ["internal/cli:TestAmpHostHandoffLapses", "internal/cli:TestAmpHostLapseEdges", "internal/cli:TestAmpHostLateRecordReleasesLease"]
+
+[[criterion]]
+id = 4 # the amp CLI is signed in: build starts the thread through the CLI, as before
+tests = ["internal/cli:TestAmpSignedInStartsThroughCLI"]
+
+[[criterion]]
+id = 5 # --thread names an ID that is not an Amp thread ID: it is refused and nothing is recorded
+tests = ["internal/cli:TestAmpHostThreadNotAmpRefused", "internal/cli:TestAmpHostLateRecordReleasesLease"]
+
+[[criterion]]
+id = 6 # a follow-up with the CLI not signed in: it is printed as a host hand-off to send with the thread tool, not dropped
+tests = ["internal/cli:TestAmpHostFollowUp"]

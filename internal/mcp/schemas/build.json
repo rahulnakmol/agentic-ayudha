@@ -56,6 +56,11 @@
       "description": "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires.",
       "type": "string",
       "x-aayu-type": "string"
+    },
+    "thread": {
+      "description": "With --delegate amp: record the Amp thread (T-…) that the host created for a host hand-off. Build prints a host hand-off in an Amp thread whose amp CLI is not signed in. Only an Amp thread ID is recorded.",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
   "required": [],

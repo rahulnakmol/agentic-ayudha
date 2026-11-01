@@ -139,6 +139,15 @@ story. Start only the items it marks `start`, each with `aayu build <n> --delega
 again first and starts nothing that changed since the list. Run `next` only in the tool the plan records. With
 `--json` it is an `aayudha.work/v1` list: `{schema, scope {kind, id}, items [{key, action, reason, subthread}]}`.
 
+On Amp, a story starts from the Kanha's thread with no signed-in `amp` CLI. When the CLI is not signed in, build
+claims the story and prints a host hand-off: the brief file, the thread title, and the record command. Create one
+thread with your thread tool, with that title and the brief's text as its prompt. Then run
+`aayu build <n> --delegate amp --thread <T-id>` with the new thread's ID. Only an Amp thread ID is recorded. When
+build says a hand-off waits for its thread, record the thread you created; create one only if you did not. A
+hand-off with no recorded thread lapses 15 minutes after the hand-off. Then `next` releases the claim, the lease,
+and `status:in-progress`, and lists the story again. Build prints a follow-up the same way: send it to the thread
+it names.
+
 `next` starts at most `[build] agents` stories at once (default 5). It reads the value from the integration
 branch's committed config; a local value can only lower it. A Feature's own value, set at Approve to build with
 `aayu ready <feature> --agents N`, comes first. A prompt never sets a limit: if your prompt names agents or a budget,

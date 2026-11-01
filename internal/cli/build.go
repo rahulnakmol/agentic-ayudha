@@ -217,6 +217,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	case mode == "" && n == 0:
 		return Errorf(ExitUsage, "build: name the Ready story or bug to build, or run `aayu build --next pick` (the build-ready loop)")
 	}
+	// --thread records the thread a host created for an Amp host hand-off (Bug #1208): only an Amp thread ID, and
+	// it is checked before anything is written.
+	if id := in.String("thread"); id != "" {
+		if in.String("delegate") != delegate.Amp || in.Bool("local") {
+			return Errorf(ExitUsage, "build #%d --thread: it records an Amp cloud thread, so use it with --delegate amp and no --local. Nothing was recorded.", n)
+		}
+		if _, ok := delegate.AmpThread(id); !ok {
+			return Errorf(ExitUsage, "build #%d --thread %q: not an Amp thread ID (T- and a UUID, as in https://ampcode.com/threads/T-…). Nothing was recorded.", n, clipText(id, 80))
+		}
+	}
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
 		return err
@@ -259,6 +269,22 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		lw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 		if err != nil {
 			return err
+		}
+		// --thread only records a host hand-off that waits for its thread: anything else is refused here, before the
+		// lease, the status, or a claim changes (Bug #1208).
+		if in.String("thread") != "" {
+			var ds delegate.State
+			if _, err := readLedgerJSON(ctx, lw, delegate.LedgerPath(n), &ds); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			if id := in.String("thread"); ds.Receiver != delegate.Amp || ds.Status != dlgHost || ds.Task != "" {
+				stop := "" // a thread that is not the recorded one runs for no hand-off; the recorded one runs on
+				if id != ds.Task {
+					stop = "; stop the thread " + id
+				}
+				return Errorf(ExitBlocked, "build #%d --thread: no host hand-off of #%d waits for its thread (its delegation is %s, on %s). Nothing was recorded%s.",
+					n, n, orDefault(ds.Status, "not started"), orDefault(ds.TaskURL, orDefault(ds.Receiver, "no receiver")), stop)
+			}
 		}
 		if err := e.changedSinceList(ctx, lw, is, chk, labels, c.DryRun(), &listed); err != nil {
 			return err
@@ -397,6 +423,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		if err == nil {
 			write, done, err = e.delegateStep(ctx, dlg, chk, &res)
+		}
+		if dlg != nil && dlg.hostFU != nil { // a follow-up the host sends (Bug #1208)
+			res.Delegation.Host = dlg.hostFU
+			res.Next = fmt.Sprintf("send the text of %s to the Amp thread %s with your thread tool; sync again after its new commits", dlg.hostFU.Brief, dlg.hostFU.Thread)
 		}
 		// A start that got no answer may run on the host: it keeps its slot until mission recover checks (#1003).
 		maybe := dlg != nil && dlg.state.Status == dlgMaybe
@@ -1186,22 +1216,8 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, res *BuildResult, cause error) error {
 	reason := oneLineErr(cause)
 	f, _, _, err := storyMission(ctx, c, w, repo, n)
-	var claims []loopClaim
-	if err == nil && f != 0 {
-		claims, err = e.claimLines(ctx, w, MissionClaimsPath(f), nil)
-	}
-	for _, cl := range claims {
-		if cl.Story == n && err == nil {
-			cl.Release = true
-			b, _ := json.Marshal(cl)
-			_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: the start of #%d failed; its claim is released", n), Append: map[string][]byte{MissionClaimsPath(f): append(b, '\n')}})
-		}
-	}
 	if err == nil {
-		_, err = e.releaseLease(ctx, c, repo, n, "the start of its subthread failed")
-	}
-	if err == nil {
-		err = setStatus(ctx, c, repo, n, labels, "ready")
+		err = e.releaseStart(ctx, c, w, repo, f, n, labels, "the start of #%d failed", "the start of its subthread failed")
 	}
 	if err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("%s; and its slot was not released: %w", reason, err))
@@ -1213,6 +1229,31 @@ func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Write
 		out.Next = ce.Next
 	}
 	return out
+}
+
+// releaseStart frees story n's slot in Feature f's mission (none when f is
+// 0): its live claim lines are released with the ledger message what (one
+// %d, the story), its lease ends for why, and it is status:ready again.
+func (e *Env) releaseStart(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, f, n int, labels []string, what, why string) error {
+	var claims []loopClaim
+	var err error
+	if f != 0 {
+		claims, err = e.claimLines(ctx, w, MissionClaimsPath(f), nil)
+	}
+	for _, cl := range claims {
+		if cl.Story == n && err == nil {
+			cl.Release = true
+			b, _ := json.Marshal(cl)
+			_, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("missions: "+what+"; its claim is released", n), Append: map[string][]byte{MissionClaimsPath(f): append(b, '\n')}})
+		}
+	}
+	if err == nil {
+		_, err = e.releaseLease(ctx, c, repo, n, why)
+	}
+	if err == nil {
+		err = setStatus(ctx, c, repo, n, labels, "ready")
+	}
+	return err
 }
 
 // kanhaNote adds what tellKanha did to a build's notes: its note, or why it

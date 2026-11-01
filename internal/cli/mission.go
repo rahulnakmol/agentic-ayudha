@@ -17,6 +17,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -966,7 +967,7 @@ func storyStart(ctx context.Context, e *Env, repo string, c *github.Client, w *l
 		}
 		fmt.Fprintf(w, "  ledger %s (%s)\n", rep.LedgerPath, short(rep.LedgerCommit))
 		if d := rep.Delegation; d != nil && berr == nil {
-			fmt.Fprintf(w, "  handed off to %s (%s): %s\n", d.Receiver, d.Mode, orDefault(d.TaskURL, d.Task))
+			fmt.Fprintf(w, "  handed off to %s (%s): %s\n", d.Receiver, d.Mode, orDefault(orDefault(d.TaskURL, d.Task), d.Host.words()))
 		}
 		return nil
 	}); err != nil {
@@ -1098,6 +1099,16 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		}
 		// A cancelled story holds no milestone, and only a merged one is charged (missionUsed).
 		state[it.Number], merged[it.Number] = storyState(is), depState(is) != depOpen
+		var st delegate.State
+		if state[it.Number] == "in-progress" { // the thread it runs on (Bug #1208); a record aayu cannot read names none
+			_, _ = readLedgerJSON(ctx, w, delegate.LedgerPath(it.Number), &st)
+		}
+		switch {
+		case st.Status == dlgHost && st.Task == "":
+			state[it.Number] += fmt.Sprintf(" (its host hand-off of %s waits for its %s thread)", st.StartedAt, delegate.Names[st.Receiver])
+		case st.Receiver != "" && st.Status != dlgFailed && st.Status != dlgLapsed && st.Task != "":
+			state[it.Number] += fmt.Sprintf(" on %s: %s", st.Receiver, orDefault(st.TaskURL, st.Task))
+		}
 		if depState(is) == depMerged {
 			mergedN++
 		}

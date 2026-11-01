@@ -42,7 +42,28 @@ type Delegation struct {
 	PR       int            `json:"pr,omitempty"`
 	Proved   string         `json:"proved,omitempty"` // the receiver's own "What I proved" (a preview; the merge gate's proof decides)
 	FollowUp bool           `json:"follow_up_sent,omitempty"`
+	Host     *HostHandoff   `json:"host_handoff,omitempty"` // what the Amp thread this build runs in sends itself (Bug #1208)
 	State    delegate.State `json:"-"`
+}
+
+// words is a host hand-off of a start as its reader acts on it, or "" for
+// none (a follow-up's is in the build's next step).
+func (h *HostHandoff) words() string {
+	if h == nil || h.Record == "" {
+		return ""
+	}
+	return fmt.Sprintf("host hand-off: create one Amp thread titled %q with the text of %s as its prompt, then run `%s`", h.Title, h.Brief, h.Record)
+}
+
+// HostHandoff is work that build hands to the Amp thread it runs in when the
+// amp CLI is not signed in there (Bug #1208): the host creates the story's
+// thread, or sends it a follow-up, with its own thread tool. aayu calls no Amp
+// API and starts no CLI.
+type HostHandoff struct {
+	Title  string `json:"title,omitempty"`  // a start: the thread's title
+	Brief  string `json:"brief"`            // the file whose text is the prompt: the brief, or the follow-up
+	Record string `json:"record,omitempty"` // a start: the command that records the thread the host created
+	Thread string `json:"thread,omitempty"` // a follow-up: the story's thread, to send it to
 }
 
 // delegation is a delegated build in progress.
@@ -71,6 +92,11 @@ type delegation struct {
 	lease    *Lease        // the story's lease as last renewed during a usage-limit wait
 	feature  int           // the Feature whose started mission the story is in
 	kanha    *ready.Parent // that mission's Kanha, when Start recorded one
+	host     bool          // Amp, in an Amp thread whose amp CLI is not signed in: the host creates the thread (Bug #1208)
+	thread   string        // --thread: the thread the host created for a host hand-off
+	hostDir  string        // where build writes text for the host to send (git-ignored runtime state)
+	hostFU   *HostHandoff  // a follow-up this run wrote for the host to send
+	base     string        // when set, the ledger tip the next saveDelegation must land on (ledger.Commit.Base)
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -85,7 +111,21 @@ const (
 	dlgMerged    = "merged"
 	dlgPaused    = "paused"        // the local receiver hit its subscription usage limit
 	dlgMaybe     = "maybe-started" // the hand-off got no answer before its timeout: the task may exist (Story #1003)
+	dlgHost      = "host-handoff"  // the brief waits for the host to create the thread and record it (Bug #1208)
+	dlgLapsed    = "lapsed"        // a host hand-off got no thread in time: its claim, lease, and status were released
 )
+
+// hostLapsed reports whether st is a host hand-off that got no thread within
+// pickLockTTL, the life of the claim that started it (Bug #1208).
+func (e *Env) hostLapsed(st delegate.State) bool {
+	at, err := time.Parse(time.RFC3339, st.StartedAt)
+	return st.Status == dlgHost && st.Task == "" && (err != nil || e.Now().Sub(at) > pickLockTTL)
+}
+
+// writeHostFile writes text for the host to send with its thread tool.
+func writeHostFile(path, text string) error {
+	return errors.Join(os.MkdirAll(filepath.Dir(path), 0o755), os.WriteFile(path, []byte(text), 0o600))
+}
 
 const delegateMarker = "<!-- aayudha:delegate -->"
 
@@ -288,7 +328,11 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if d.receiver == delegate.OpenCode {
 		d.local = true // OpenCode has no cloud agent: its stories run as local sessions (Story #1012)
 	}
-	if !d.local && !cloud[d.receiver] {
+	// In an Amp thread whose amp CLI is not signed in, the thread creates the story's thread itself: build hands
+	// the start to the host and records the thread it made (Bug #1208). A signed-in CLI starts it, as before.
+	d.thread, d.hostDir = in.String("thread"), filepath.Join(e.stateDir(), "state", "delegate", strconv.Itoa(n))
+	d.host = d.receiver == delegate.Amp && !d.local && !local[delegate.Amp] && e.Getenv("AMP_THREAD_ID") != ""
+	if !d.local && !cloud[d.receiver] && !d.host && d.thread == "" {
 		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, false))
 	}
 	if d.local {
@@ -301,7 +345,8 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	d.adapter = e.receiverAdapter(cfg, d.receiver, c, repo, root)
 	// Every hand-off is fresh: a new branch and, locally, a new worktree; a
 	// sync keeps the hand-off's own.
-	d.fresh = d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
+	d.fresh = d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged ||
+		d.state.Status == dlgLapsed || d.thread == "" && e.hostLapsed(d.state)
 	d.handoff = max(d.state.Handoffs, 1)
 	if d.state.Receiver == "" {
 		d.handoff = 0
@@ -471,7 +516,7 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 		return nil
 	}
 	b, _ := json.MarshalIndent(d.state, "", "  ")
-	if _, err := d.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: state of #%d (%s)", d.story, d.state.Status), Files: map[string][]byte{delegate.LedgerPath(d.story): append(b, '\n')}}); err != nil {
+	if _, err := d.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: state of #%d (%s)", d.story, d.state.Status), Files: map[string][]byte{delegate.LedgerPath(d.story): append(b, '\n')}, Base: d.base}); err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	var body strings.Builder
@@ -505,6 +550,9 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	now := e.Now()
 	res.Delegation = &Delegation{Receiver: d.receiver, Mode: mode(d.local), Reason: d.reason}
 	report := func() { d.fill(res.Delegation) }
+	if d.thread != "" {
+		return nil, true, e.recordThread(ctx, d, res, now)
+	}
 	if d.fresh {
 		if err := e.writeBrief(ctx, d, chk); err != nil {
 			return nil, true, err
@@ -526,6 +574,9 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		// checked in a clean container when missing or stale (agentenv).
 		if err := e.ensureCloudEnv(ctx, d, res); err != nil {
 			return nil, true, err
+		}
+		if d.host {
+			return nil, true, e.hostHandoff(ctx, d, res, now)
 		}
 		var task delegate.Task
 		err := e.act(ctx, d, "delegate.handoff", map[string]any{"brief_sha256": d.state.BriefHash}, func(ctx context.Context) error {
@@ -579,6 +630,11 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	}
 
 	// Sync.
+	if d.state.Status == dlgHost && d.state.Task == "" {
+		return nil, true, WithNext(Errorf(ExitBlocked, "build #%d --delegate amp: its host hand-off of %s waits for its thread, and build starts no second one", d.story, d.state.StartedAt),
+			fmt.Sprintf("if you created its thread, record it: aayu build %d --delegate amp --thread <its T-id>. Only if you did not, create it with the text of %s as its prompt, then record it",
+				d.story, filepath.Join(d.hostDir, fmt.Sprintf("brief-%d.md", d.state.Handoffs))))
+	}
 	if d.state.Status == dlgMaybe && d.state.Task == "" && d.state.PR == 0 {
 		// No task to read: only mission recover, which lists the host, may change this record (Bug #1148).
 		return nil, true, WithNext(Errorf(ExitBlocked, "build #%d --delegate %s: #%d may have started on %s, and aayu knows no task of it to sync", d.story, d.receiver, d.story, delegate.Names[d.receiver]),
@@ -630,6 +686,64 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	}
 	res.PR = d.state.PR
 	return e.reviewLoop(ctx, d, res)
+}
+
+// hostHandoff hands the start of d's story to the Amp thread this build runs
+// in (Bug #1208). The brief goes to a file, and the host creates the story's
+// thread with its own thread tool, with the brief as its prompt, then records
+// it with --thread. aayu calls no Amp API and starts no CLI. The mission's
+// claim and the lease hold the story until then. A hand-off with no thread
+// after pickLockTTL lapses: mission next releases it and lists the story again.
+// A brief that cannot be written fails the start, so build frees its slot.
+func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, now time.Time) error {
+	path := filepath.Join(d.hostDir, fmt.Sprintf("brief-%d.md", d.handoff))
+	if err := writeHostFile(path, d.brief); err != nil {
+		return Errorf(ExitExternal, "build #%d --delegate amp: the brief for the host was not written: %v", d.story, err)
+	}
+	title := delegate.AmpTitle(delegate.Handoff{Story: d.story, Title: d.title})
+	d.event(now, dlgHost, "the host creates the thread: "+title)
+	d.fill(res.Delegation)
+	res.Delegation.Host = &HostHandoff{Title: title, Brief: path, Record: fmt.Sprintf("aayu build %d --delegate amp --thread <T-id>", d.story)}
+	res.Next = fmt.Sprintf("create one Amp thread titled %q, with the text of %s as its prompt. Then run `aayu build %d --delegate amp --thread <its T-id>`. "+
+		"After %d minutes with no thread, the hand-off lapses", title, path, d.story, int(pickLockTTL.Minutes()))
+	return e.saveDelegation(ctx, d)
+}
+
+// recordThread records the thread the host created for d's host hand-off
+// (--thread), as the CLI's hand-off records its thread. It lands only on the
+// ledger tip it read, where the same hand-off still waits, so a lapse and a
+// record never overwrite each other. When the hand-off lapsed while this run
+// renewed the story's lease, that lease holds nothing, so it goes.
+func (e *Env) recordThread(ctx context.Context, d *delegation, res *BuildResult, now time.Time) error {
+	t, err := d.w.Read(ctx)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	b, err := t.File(ctx, delegate.LedgerPath(d.story))
+	tip := t.Tip
+	t.Close()
+	var cur delegate.State
+	if err != nil || json.Unmarshal(b, &cur) != nil || cur.Status != dlgHost || cur.Task != "" || cur.StartedAt != d.state.StartedAt {
+		stop := "" // a thread that is not the recorded one runs for no hand-off; the recorded one runs on
+		if d.thread != cur.Task {
+			stop = "; stop the thread " + d.thread
+		}
+		err := Errorf(ExitBlocked, "build #%d --thread: no host hand-off of #%d waits for its thread (now %s). Nothing was recorded%s.", d.story, d.story, orDefault(cur.Status, "unread"), stop)
+		if cur.Status == dlgLapsed && !d.c.DryRun() {
+			_, lerr := e.releaseLease(ctx, d.c, d.repo, d.story, "its host hand-off lapsed before its thread was recorded")
+			return errors.Join(err, lerr)
+		}
+		return err
+	}
+	url, _ := delegate.AmpThread(d.thread)
+	d.state = cur
+	d.state.Task, d.state.TaskURL = d.thread, url
+	d.event(now, dlgHandedOff, "brief sent: the host created the thread")
+	d.fill(res.Delegation)
+	res.Next = fmt.Sprintf("%s works on #%d; `aayu build %d --delegate %s` again to sync: it finds the PR (Refs #%d) and forwards inspect's findings", d.receiver, d.story, d.story, d.receiver, d.story)
+	d.base = tip
+	defer func() { d.base = "" }()
+	return e.saveDelegation(ctx, d)
 }
 
 // ensureCloudEnv runs agentenv.Ensure for the receiver before a cloud
@@ -870,8 +984,17 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 }
 
 // followUp sends msg to the receiver within receiverTimeout (Bug #1124),
-// and keeps the task it reports.
+// and keeps the task it reports. On a host hand-off it writes msg to a file
+// for the host to send to the story's thread with its thread tool (Bug #1208).
 func (d *delegation) followUp(ctx context.Context, msg string) error {
+	if d.host {
+		path := filepath.Join(d.hostDir, fmt.Sprintf("follow-up-%d.md", len(d.state.FollowUps)))
+		err := writeHostFile(path, msg)
+		if err == nil {
+			d.hostFU = &HostHandoff{Brief: path, Thread: d.state.Task}
+		}
+		return err
+	}
 	return withReceiverTimeout(ctx, d.receiver, func(ctx context.Context) error {
 		t, err := d.adapter.FollowUp(ctx, d.state, msg)
 		if err == nil && t.ID != "" {
@@ -1030,7 +1153,10 @@ func (e *Env) emitDelegation(res BuildResult) error {
 				fmt.Fprintf(w, "    %s\n", l)
 			}
 		}
-		if d.FollowUp {
+		switch {
+		case d.Host.words() != "":
+			fmt.Fprintf(w, "  %s\n", d.Host.words())
+		case d.FollowUp && d.Host == nil: // a host's follow-up is in next
 			fmt.Fprintln(w, "  follow-up sent with inspect's findings")
 		}
 		for _, x := range res.Notes {
