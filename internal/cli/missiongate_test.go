@@ -1339,6 +1339,9 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 	g.mergedPR(130, "Refs #30", at)
 	g.mergedPR(131, "Refs #31", at)
 	g.mergedPR(132, "Refs #32", at.Add(-time.Hour))
+	// PR 129 names #30 too, but closed with no merge (merged_at null): it delivered nothing, and the gate goes on.
+	g.mergedPR(129, "Refs #30", at.Add(-time.Hour))
+	g.edit(func() { g.g.Pulls[129].Merged, g.g.Pulls[129].MergedAt = false, time.Time{} })
 	g.g.Reset()
 	if rep := g.gateJSON(); rep.Milestones[1].State != GateFailed || !slices.ContainsFunc(rep.Milestones[1].Checks, func(ck GateCheck) bool {
 		return ck == GateCheck{Check: "proof:#30", Result: gateFail, Detail: "#30 merged with no proof pack"}
