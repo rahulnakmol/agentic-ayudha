@@ -1173,7 +1173,7 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 			out = append(out, fmt.Sprintf("%q is no longer offered", a.Label))
 		case now.Options[j].Label != a.Label:
 			out = append(out, fmt.Sprintf("the choice now reads %q", now.Options[j].Label))
-		case was.Kind == InboxDecision && now.Options[j].Recommended != a.Recommended: // whether accepting it asks to confirm
+		case (was.Kind == InboxDecision || was.Kind == InboxBaseline) && now.Options[j].Recommended != a.Recommended: // whether picking it asks to confirm
 			out = append(out, nowOr(now.Options[j].Recommended, "it is %s the recommendation"))
 		}
 	}

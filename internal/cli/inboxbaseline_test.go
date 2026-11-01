@@ -264,6 +264,31 @@ func TestBaselineApprovesTheHashShown(t *testing.T) {
 	}
 }
 
+// A card whose recommendation turned off since it was read (the Feature's
+// paths moved, so a story is outside them; the draft hash is the same) is
+// shown again, never approved on the stale Enter that skipped the question.
+func TestBaselineRecommendationChanged(t *testing.T) {
+	m := baselineWorld(t, nil)
+	lists := 0
+	m.edit(func() {
+		m.g.Hook = func(method, p string) {
+			if method == "GET" && p == "/repos/o/r/issues" {
+				if lists++; lists == 2 { // the read again before the write
+					m.g.Issues[889].Body = setSection(m.g.Issues[889].Body, "Expected paths", "- `packages/design-system/**`")
+				}
+			}
+		}
+	})
+	m.device("rahulnakmol")
+	code, out, errOut := runIn(t, m.person, m.opts, "sa", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 0 || !strings.Contains(out, "#889 changed on GitHub since you opened it: its choices were edited. Nothing was written; here it is as it is now.") {
+		t.Fatalf("inbox s a, the recommendation turned off: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+	}
+	if _, ok := m.record("specs/889/baselines/spec-v1.json"); ok {
+		t.Fatal("a card whose checks no longer hold was approved on a stale Enter")
+	}
+}
+
 // Criterion 3: the spec of #889 changes after the card is read, or while the
 // device code waits: approving the spec card writes nothing, and the card
 // says so in the person's words.
