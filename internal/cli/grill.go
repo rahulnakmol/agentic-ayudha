@@ -297,14 +297,20 @@ func (e *Env) runGrillEdit(ctx context.Context, c *github.Client, tag, repo stri
 	if typ, _ := workitems.TypeOf(is.GetType().GetName(), labels); typ != t.ID {
 		return Errorf(ExitUsage, "grill %s --edit %d: #%d has type %s, not %s", t.ID, n, n, or(typ, "none"), t.ID)
 	}
+	status := false
 	for _, l := range labels {
 		switch s, ok := strings.CutPrefix(l, "status:"); {
-		case !ok || slices.Contains(beforeReady, s):
+		case !ok:
+		case slices.Contains(beforeReady, s):
+			status = true
 		case s == "ready":
 			return Errorf(ExitBlocked, "#%d is Ready; its body is frozen", n)
 		default:
 			return Errorf(ExitBlocked, "#%d is status:%s, past Ready; its body is frozen", n, s)
 		}
+	}
+	if !status { // its state is unknown, so it may be past Ready
+		return Errorf(ExitBlocked, "#%d has no status: label, so aayu cannot tell that it is before Ready; its body is frozen until it has one", n)
 	}
 	if !slices.Contains(labels, "type:"+t.ID) { // typed by its issue type: Parse reads the type from the labels
 		labels = append([]string{"type:" + t.ID}, labels...)
@@ -427,8 +433,8 @@ func (e *Env) grillCheck(ctx context.Context, c *github.Client, repo string, t w
 	// Link targets are read as Ready reads them (Story #1179): a draft that
 	// links to the wrong type does not pass grill and then fail Ready.
 	lps, err := ready.LinkTypes(ctx, c, repo, &it)
-	if err != nil {
-		lps = append(lps, workitems.Problem{Field: workitems.FieldLinks, Message: err.Error()})
+	if err != nil { // GitHub did not answer: the draft is not judged, and --edit writes nothing
+		return res, Wrap(ExitExternal, err)
 	}
 	res.Ready = append(res.Ready, lps...)
 	if t.ID == "feature" {

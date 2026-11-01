@@ -653,6 +653,20 @@ func TestGrillEditPlanAndUsage(t *testing.T) {
 		!strings.Contains(out, "next: fix the ready problems, then `aayu ready 3`") {
 		t.Fatalf("a body that passes Create only: exit %d\n%s%s", code, out, errOut)
 	}
+	// A link target GitHub does not answer for is an external error, not a
+	// Ready problem, and nothing is written.
+	g.Reset()
+	g.Fail = "GET /repos/o/r/issues/1"
+	if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", bugBody(t, "caused-by #2\ndepends-on #1")); code != ExitExternal || !strings.Contains(errOut, "injected failure") || len(g.Writes()) != 0 {
+		t.Fatalf("link lookup fails: exit %d, writes %+v: %s", code, g.Writes(), errOut)
+	}
+	// An issue with no status: label may be past Ready: its body is frozen.
+	g.Mu.Lock()
+	g.Issues[3].Labels = []fake.Label{{Name: "type:bug"}, {Name: "effort:XS"}}
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "grill", "bug", "--repo", "o/r", "--edit", "3", "--body", still); code != ExitBlocked || !strings.Contains(errOut, "#3 has no status: label") {
+		t.Fatalf("no status label: exit %d %s", code, errOut)
+	}
 	g.Reset()
 	for _, tc := range []struct {
 		args []string
@@ -721,18 +735,18 @@ func TestExpectedPathsCommas(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	body := fixtureBody(t, "feature", func(f map[string]string) {
 		delete(f, workitems.FieldLinks)
-		f["expected_paths"] = "`internal/cli/**`, internal/planning/**,docs/guide/**"
+		f["expected_paths"] = "`internal/cli/**`, internal/planning/**,docs/guide/**\n- `docs/a,b/**`"
 	})
 	g.AddIssue("Eligibility questionnaire", body, "type:feature", "status:planned")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
-	want := []string{"internal/cli/**", "internal/planning/**", "docs/guide/**"}
+	want := []string{"internal/cli/**", "internal/planning/**", "docs/guide/**", "docs/a,b/**"} // a backtick-quoted glob keeps its comma
 	code, out, errOut := run(t, env, opts, "grill", "feature", "--repo", "o/r", "--dry-run", "--json", "--title", "Eligibility questionnaire", "--body", body)
 	var gr GrillResult
 	if json.NewDecoder(strings.NewReader(out)).Decode(&gr) != nil || !slices.Equal(gr.ExpectedPaths, want) {
 		t.Fatalf("grill feature --dry-run: exit %d paths %q\n%s%s", code, gr.ExpectedPaths, out, errOut)
 	}
-	if _, text, _ := run(t, env, opts, "grill", "feature", "--repo", "o/r", "--dry-run", "--title", "Eligibility questionnaire", "--body", body); !strings.Contains(text, "  expected paths: internal/cli/**, internal/planning/**, docs/guide/**\n") {
+	if _, text, _ := run(t, env, opts, "grill", "feature", "--repo", "o/r", "--dry-run", "--title", "Eligibility questionnaire", "--body", body); !strings.Contains(text, "  expected paths: internal/cli/**, internal/planning/**, docs/guide/**, docs/a,b/**\n") {
 		t.Fatalf("grill feature text:\n%s", text)
 	}
 	code, out, errOut = run(t, env, opts, "slice", "1", "--repo", "o/r", "--json")
