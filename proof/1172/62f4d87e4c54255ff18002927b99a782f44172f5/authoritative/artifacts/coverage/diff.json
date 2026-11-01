@@ -1,0 +1,29 @@
+{
+  "covered": 200,
+  "executable": 213,
+  "percent": 93.89671361502347,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inbox.go": [
+      747,
+      748
+    ],
+    "internal/cli/inboxbaseline.go": [
+      40,
+      41,
+      44,
+      45,
+      57,
+      58,
+      67,
+      68,
+      75,
+      76
+    ],
+    "internal/cli/ready.go": [
+      448
+    ]
+  },
+  "format": "go coverprofile"
+}

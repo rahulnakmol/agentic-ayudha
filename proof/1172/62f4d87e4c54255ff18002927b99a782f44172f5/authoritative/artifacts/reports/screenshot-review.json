@@ -1,0 +1,4 @@
+{
+  "advisory": true,
+  "skipped": "no screenshot passed the OCR redaction scan (2 not scanned; is tesseract installed?)"
+}

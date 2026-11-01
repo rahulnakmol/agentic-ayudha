@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineChangesSinceV1"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineChangesSinceV1","Output":"=== RUN   TestBaselineChangesSinceV1\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineChangesSinceV1","Output":"--- PASS: TestBaselineChangesSinceV1 (0.94s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineChangesSinceV1"}

@@ -1,0 +1,16 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged","Output":"=== RUN   TestBaselineSpecChanged\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/after_the_card_was_read"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/after_the_card_was_read","Output":"=== RUN   TestBaselineSpecChanged/after_the_card_was_read\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/after_the_card_was_read","Output":"--- PASS: TestBaselineSpecChanged/after_the_card_was_read (0.56s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/after_the_card_was_read"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/its_stories_are_gone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/its_stories_are_gone","Output":"=== RUN   TestBaselineSpecChanged/its_stories_are_gone\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/its_stories_are_gone","Output":"--- PASS: TestBaselineSpecChanged/its_stories_are_gone (0.47s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/its_stories_are_gone"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/while_the_code_waited"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/while_the_code_waited","Output":"=== RUN   TestBaselineSpecChanged/while_the_code_waited\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/while_the_code_waited","Output":"--- PASS: TestBaselineSpecChanged/while_the_code_waited (0.71s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged/while_the_code_waited"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged","Output":"--- PASS: TestBaselineSpecChanged (1.74s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineSpecChanged"}

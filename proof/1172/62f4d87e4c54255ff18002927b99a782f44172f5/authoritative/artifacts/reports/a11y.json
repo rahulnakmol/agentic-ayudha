@@ -1,0 +1,36 @@
+{
+  "versions": {
+    "playwright": "1.64.0",
+    "axe": "4.14.0"
+  },
+  "states": [
+    {
+      "n": 1,
+      "url": "http://127.0.0.1:8787/",
+      "status": 200,
+      "error": "",
+      "pii": [],
+      "axe": [],
+      "motion": [],
+      "keyboard_unreachable": [],
+      "small_targets": [],
+      "clipped": [],
+      "screenshot": "/tmp/aayudha-verify-2217040741/web/state-1.png",
+      "video": "/tmp/aayudha-verify-2217040741/web/video-1/page@d6b54cbfe76757833fb3296c3ef1c578.webm"
+    },
+    {
+      "n": 5,
+      "url": "http://127.0.0.1:8787/",
+      "status": 200,
+      "error": "",
+      "pii": [],
+      "axe": [],
+      "motion": [],
+      "keyboard_unreachable": [],
+      "small_targets": [],
+      "clipped": [],
+      "screenshot": "/tmp/aayudha-verify-2217040741/web/state-5.png",
+      "video": ""
+    }
+  ]
+}

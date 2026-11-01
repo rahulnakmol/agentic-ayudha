@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApproveOneCode"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApproveOneCode","Output":"=== RUN   TestBaselineApproveOneCode\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApproveOneCode","Output":"--- PASS: TestBaselineApproveOneCode (1.18s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApproveOneCode"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApprovesTheHashShown"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApprovesTheHashShown","Output":"=== RUN   TestBaselineApprovesTheHashShown\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApprovesTheHashShown","Output":"--- PASS: TestBaselineApprovesTheHashShown (0.62s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBaselineApprovesTheHashShown"}
