@@ -1,0 +1,9 @@
+{"request":{"method":"GET","path":"/api/ask"},"response":{"status":405,"body":{"error":"use POST with a JSON body"}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"text/plain","body":"question=hi"},"response":{"status":415,"body":{"error":"send Content-Type: application/json"}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\":\"hi\",\"name\":\"Ada\"}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: unknown field \"name\""}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"Question\":\"hi\"}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: unknown field \"Question\""}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\": \"dental\", \"question\": \"vision\"}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: duplicate field \"question\""}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\": null}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: field \"question\": want a string"}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\": \"dental\"} {}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: something follows the JSON object"}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\":\"hi\",\"user_id\":\"ada@example.com\"}"},"response":{"status":400,"body":{"error":"user_id must be a pseudonymous ID of letters, digits, and hyphens"}}}
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\":\"  \"}"},"response":{"status":400,"body":{"error":"question is required"}}}

@@ -1,0 +1,20 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright","Output":"=== RUN   TestControlFindsPlaywright\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH","Output":"=== RUN   TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH","Output":"--- PASS: TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/only_in_pnpm's_store,_no_NODE_PATH"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store","Output":"=== RUN   TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store","Output":"--- PASS: TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/NODE_PATH_and_pnpm's_store"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/none_installed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/none_installed","Output":"=== RUN   TestControlFindsPlaywright/none_installed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/none_installed","Output":"--- PASS: TestControlFindsPlaywright/none_installed (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/none_installed"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/installed_but_fails_to_load"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/installed_but_fails_to_load","Output":"=== RUN   TestControlFindsPlaywright/installed_but_fails_to_load\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/installed_but_fails_to_load","Output":"--- PASS: TestControlFindsPlaywright/installed_but_fails_to_load (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright/installed_but_fails_to_load"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright","Output":"--- PASS: TestControlFindsPlaywright (0.21s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/verify","Test":"TestControlFindsPlaywright"}

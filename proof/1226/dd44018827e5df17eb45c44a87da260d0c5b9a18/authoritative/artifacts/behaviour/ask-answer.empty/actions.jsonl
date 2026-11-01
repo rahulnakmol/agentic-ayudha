@@ -1,0 +1,4 @@
+{"i":0,"step":{"goto":"/"},"ok":true,"observed":"HTTP 200 /"}
+{"i":1,"step":{"expect":{"role":"heading","name":"Try a question"}},"ok":true,"observed":"heading \"Try a question\" visible"}
+{"i":2,"step":{"count":{"role":"link","within":"Try a question","equals":3}},"ok":true,"observed":"3 link(s) in \"Try a question\""}
+{"i":3,"step":{"screenshot":"empty.png"},"ok":true,"observed":"screenshot empty.png"}

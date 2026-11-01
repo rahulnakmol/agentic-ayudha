@@ -1,0 +1,14 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question": How many weeks of parental leave do I get?
+    - button "Ask"
+  - region "Answer":
+    - heading "Answer" [level=2]
+    - blockquote:
+      - paragraph: Parental leave gives every new parent 16 weeks of fully paid leave, which can be taken within 12 months of the birth, adoption, or foster placement.
+    - paragraph: "Source: Leave, Parental leave"
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

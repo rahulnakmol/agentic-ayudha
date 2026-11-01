@@ -1,0 +1,12 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question": What is my manager's salary?
+    - button "Ask"
+  - region "We cannot answer this":
+    - heading "We cannot answer this" [level=2]
+    - paragraph: We cannot answer questions about another person's records. Only that person or HR can see them.
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

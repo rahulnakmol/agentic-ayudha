@@ -1,0 +1,12 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question": Should I choose the HSA plan?
+    - button "Ask"
+  - region "We cannot answer this":
+    - heading "We cannot answer this" [level=2]
+    - paragraph: We cannot give medical or financial advice. The plan documents and an HR specialist can explain your options.
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

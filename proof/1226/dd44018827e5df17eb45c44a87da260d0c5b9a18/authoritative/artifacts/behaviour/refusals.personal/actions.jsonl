@@ -1,0 +1,7 @@
+{"i":0,"step":{"goto":"/"},"ok":true,"observed":"HTTP 200 /"}
+{"i":1,"step":{"fill":{"label":"Your question","value":"What is my manager's salary?"}},"ok":true,"observed":"\"Your question\" = \"What is my manager's salary?\""}
+{"i":2,"step":{"click":{"role":"button","name":"Ask"}},"ok":true,"observed":"clicked button \"Ask\""}
+{"i":3,"step":{"expect":{"role":"heading","name":"We cannot answer this"}},"ok":true,"observed":"heading \"We cannot answer this\" visible"}
+{"i":4,"step":{"expectText":"another person's records"},"ok":true,"observed":"text \"another person's records\" visible"}
+{"i":5,"step":{"screenshot":"personal.png"},"ok":true,"observed":"screenshot personal.png"}
+{"i":6,"step":{"api":{"path":"/api/ask","json":{"question":"What is my manager's salary?"},"status":200,"body":{"status":"refused","reason":"personal-data"}}},"ok":true,"observed":"POST /api/ask → 200"}

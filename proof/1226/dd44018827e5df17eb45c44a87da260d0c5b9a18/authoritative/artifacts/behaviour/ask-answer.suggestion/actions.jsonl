@@ -1,0 +1,5 @@
+{"i":0,"step":{"goto":"/"},"ok":true,"observed":"HTTP 200 /"}
+{"i":1,"step":{"click":{"role":"link","name":"How many weeks of parental leave do I get?"}},"ok":true,"observed":"clicked link \"How many weeks of parental leave do I get?\""}
+{"i":2,"step":{"expect":{"role":"heading","name":"Answer"}},"ok":true,"observed":"heading \"Answer\" visible"}
+{"i":3,"step":{"expectText":"Source: "},"ok":true,"observed":"text \"Source: \" visible"}
+{"i":4,"step":{"screenshot":"suggestion.png"},"ok":true,"observed":"screenshot suggestion.png"}

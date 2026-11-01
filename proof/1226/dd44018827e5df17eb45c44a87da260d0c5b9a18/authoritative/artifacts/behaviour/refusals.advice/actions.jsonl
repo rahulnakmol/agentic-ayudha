@@ -1,0 +1,6 @@
+{"i":0,"step":{"goto":"/?q=Should%20I%20choose%20the%20HSA%20plan%3F"},"ok":true,"observed":"HTTP 200 /?q=Should%20I%20choose%20the%20HSA%20plan%3F"}
+{"i":1,"step":{"expect":{"role":"heading","name":"We cannot answer this"}},"ok":true,"observed":"heading \"We cannot answer this\" visible"}
+{"i":2,"step":{"expectText":"medical or financial advice"},"ok":true,"observed":"text \"medical or financial advice\" visible"}
+{"i":3,"step":{"screenshot":"advice.png"},"ok":true,"observed":"screenshot advice.png"}
+{"i":4,"step":{"api":{"path":"/api/ask","json":{"question":"Should I choose the HSA plan?"},"status":200,"body":{"status":"refused","reason":"advice"}}},"ok":true,"observed":"POST /api/ask → 200"}
+{"i":5,"step":{"api":{"path":"/api/ask","json":{"question":"What dosage of ibuprofen can I take?"},"status":200,"body":{"status":"refused","reason":"advice"}}},"ok":true,"observed":"POST /api/ask → 200"}

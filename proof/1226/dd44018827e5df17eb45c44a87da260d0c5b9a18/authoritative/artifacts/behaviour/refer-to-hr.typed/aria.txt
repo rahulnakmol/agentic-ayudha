@@ -1,0 +1,12 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question": How do I adopt a pet?
+    - button "Ask"
+  - region "We sent this to HR":
+    - heading "We sent this to HR" [level=2]
+    - paragraph: The plan documents do not answer this. An HR specialist will reply within 2 business days.
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

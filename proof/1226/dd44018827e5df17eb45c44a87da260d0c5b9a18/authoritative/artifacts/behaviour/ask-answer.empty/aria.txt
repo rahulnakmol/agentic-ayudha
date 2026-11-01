@@ -1,0 +1,21 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question"
+    - button "Ask"
+  - region "Try a question":
+    - heading "Try a question" [level=2]
+    - list:
+      - listitem:
+        - link "What is the dental annual deductible?":
+          - /url: /?q=What%20is%20the%20dental%20annual%20deductible%3f
+      - listitem:
+        - link "How many weeks of parental leave do I get?":
+          - /url: /?q=How%20many%20weeks%20of%20parental%20leave%20do%20I%20get%3f
+      - listitem:
+        - link "Does Example Co match my 401(k) contributions?":
+          - /url: /?q=Does%20Example%20Co%20match%20my%20401%28k%29%20contributions%3f
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

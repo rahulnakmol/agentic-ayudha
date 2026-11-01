@@ -1,0 +1,1 @@
+{"request":{"method":"POST","path":"/api/ask","content_type":"application/json","body":"{\"question\":\"How do I adopt a pet?\",\"user_id\":\"v-verify\"}"},"response":{"status":200,"body":{"status":"referred","citations":[],"reason":"not-in-plan-documents","message":"The plan documents do not answer this. An HR specialist will reply within 2 business days."}}}

@@ -1,0 +1,14 @@
+- banner: Example Co Benefits Plan year 2026
+- main:
+  - heading "Ask about your benefits" [level=1]
+  - paragraph: Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.
+  - search:
+    - text: Your question
+    - textbox "Your question": What is the dental annual deductible?
+    - button "Ask"
+  - region "Answer":
+    - heading "Answer" [level=2]
+    - blockquote:
+      - paragraph: The Dental plan annual deductible is 50 dollars per person, and it does not apply to cleanings or other preventive dental care.
+    - paragraph: "Source: Dental, Deductible"
+- contentinfo: Synthetic demo data for the fictional employer Example Co. This is not real benefits advice.

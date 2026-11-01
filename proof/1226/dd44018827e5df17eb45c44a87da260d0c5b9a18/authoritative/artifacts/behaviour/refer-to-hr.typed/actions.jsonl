@@ -1,0 +1,8 @@
+{"i":0,"step":{"goto":"/"},"ok":true,"observed":"HTTP 200 /"}
+{"i":1,"step":{"fill":{"label":"Your question","value":"How do I adopt a pet?"}},"ok":true,"observed":"\"Your question\" = \"How do I adopt a pet?\""}
+{"i":2,"step":{"click":{"role":"button","name":"Ask"}},"ok":true,"observed":"clicked button \"Ask\""}
+{"i":3,"step":{"expect":{"role":"heading","name":"We sent this to HR"}},"ok":true,"observed":"heading \"We sent this to HR\" visible"}
+{"i":4,"step":{"expectText":"within 2 business days"},"ok":true,"observed":"text \"within 2 business days\" visible"}
+{"i":5,"step":{"absentText":"Source: "},"ok":true,"observed":"text \"Source: \" absent"}
+{"i":6,"step":{"screenshot":"referred.png"},"ok":true,"observed":"screenshot referred.png"}
+{"i":7,"step":{"api":{"path":"/api/ask","json":{"question":"How do I adopt a pet?","user_id":"v-verify"},"status":200,"body":{"status":"referred","reason":"not-in-plan-documents"}}},"ok":true,"observed":"POST /api/ask → 200"}

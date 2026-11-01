@@ -1,0 +1,218 @@
+{
+  "checks": [
+    {
+      "check": "ask-answer.typed",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "answer.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        },
+        {
+          "path": "recording.webm",
+          "kind": "recording"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "ask-answer.suggestion",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "suggestion.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "ask-answer.empty",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "empty.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "refer-to-hr.typed",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "referred.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "refusals.personal",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "personal.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "refusals.advice",
+      "kind": "ui",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "advice.png",
+          "kind": "screenshot"
+        },
+        {
+          "path": "aria.txt",
+          "kind": "report"
+        },
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "api-ask.answered",
+      "kind": "api",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "api-ask.errors",
+      "kind": "api",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "api-ask.health",
+      "kind": "api",
+      "status": "passed",
+      "artifacts": [
+        {
+          "path": "actions.jsonl",
+          "kind": "report"
+        },
+        {
+          "path": "api-trace.jsonl",
+          "kind": "api-trace"
+        }
+      ],
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "product-events.visit-and-ask",
+      "kind": "ui",
+      "status": "unreachable",
+      "reason": "the [verify] seed launch does not provide \"events\"",
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    },
+    {
+      "check": "telemetry.ask-traced",
+      "kind": "api",
+      "status": "unreachable",
+      "reason": "the [verify] seed launch does not provide \"telemetry\"",
+      "selected_because": "the map's harness changed",
+      "network": "allowed"
+    }
+  ],
+  "criteria_problems": null
+}

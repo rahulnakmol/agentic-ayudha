@@ -1,0 +1,2 @@
+{"i":0,"step":{"api":{"path":"/api/ask","json":{"question":"Does Example Co match my 401(k) contributions?","user_id":"v-verify"},"status":200,"body":{"status":"answered"}}},"ok":true,"observed":"POST /api/ask → 200"}
+{"i":1,"step":{"api":{"path":"/api/ask","json":{"question":"What is my plan's dental deductible?"},"status":200,"body":{"status":"answered"}}},"ok":true,"observed":"POST /api/ask → 200"}
