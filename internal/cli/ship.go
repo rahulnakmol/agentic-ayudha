@@ -121,7 +121,10 @@ type ShipResult struct {
 // rule, and the streak state) beside the pack, the lease released, and
 // cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
-	if in.Bool("solo-bypass") {
+	// An agent lane or CI can never give the bypass, so it is refused before
+	// anything is read; a person's device code is asked for only once every
+	// check that needs no person holds, just before the first write (Story #1206).
+	if in.Bool("solo-bypass") && (e.Getenv("AAYU_AGENT") == "1" || e.CI) {
 		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
 			return err
 		}
@@ -433,6 +436,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 		rec.HumanPass = hp
+	}
+	// Every check that needs no person passed: now the person approves the
+	// bypass, before any write. The PR, its base, and the holds are read
+	// again below, after the code, so a push while the person enters it stops the merge.
+	if in.Bool("solo-bypass") {
+		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
+			return err
+		}
 	}
 
 	// 4. Land the gate's pack (pack.json and data, never media unless the
