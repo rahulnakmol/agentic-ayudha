@@ -1,0 +1,21 @@
+{
+  "story": 1226,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1226-fix-verify-the-gate-cannot-find-a-pnpm-i",
+  "status": "host-handoff",
+  "brief_sha256": "3b88ac80f5a6bc053df81faca94eb5c0e0d748f55dcc9e63ea7f3d64a54021c8",
+  "started_at": "2026-11-01T15:50:40Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T15:50:40Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1226: fix(verify): the gate cannot find a pnpm-installed Playwright, so its browser checks fail and list a fix"
+    }
+  ]
+}
