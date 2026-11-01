@@ -1,0 +1,14 @@
+{
+  "covered": 92,
+  "executable": 94,
+  "percent": 97.87234042553192,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/ratchet/cmd/ratchet/main.go": [
+      115,
+      116
+    ]
+  },
+  "format": "go coverprofile"
+}

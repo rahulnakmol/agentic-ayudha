@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvProbedLive"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvProbedLive","Output":"=== RUN   TestAmpStaleEnvProbedLive\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvProbedLive","Output":"--- PASS: TestAmpStaleEnvProbedLive (1.86s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvProbedLive"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvHostProbe"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvHostProbe","Output":"=== RUN   TestAmpStaleEnvHostProbe\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvHostProbe","Output":"--- PASS: TestAmpStaleEnvHostProbe (2.56s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpStaleEnvHostProbe"}

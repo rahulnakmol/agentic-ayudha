@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWarnsStaleEnv"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWarnsStaleEnv","Output":"=== RUN   TestMissionStartWarnsStaleEnv\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWarnsStaleEnv","Output":"--- PASS: TestMissionStartWarnsStaleEnv (2.90s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionStartWarnsStaleEnv"}

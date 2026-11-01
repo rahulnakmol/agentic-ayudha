@@ -1,0 +1,18 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"=== RUN   TestRunFailsAStaleEnvironmentRecord\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"coverage 50.0 %; floor 50.0 % (margin 0.5)\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"eval bars: none lowered\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord","Output":"--- PASS: TestRunFailsAStaleEnvironmentRecord (0.08s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/ratchet/cmd/ratchet","Test":"TestRunFailsAStaleEnvironmentRecord"}
