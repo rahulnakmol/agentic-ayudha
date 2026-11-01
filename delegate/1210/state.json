@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a1963b-73cf-7188-aa25-d8aecaa17135",
+  "task_url": "https://ampcode.com/threads/T-01a1963b-73cf-7188-aa25-d8aecaa17135",
   "branch": "story/1210-fix-slice-a-directory-in-expected-paths",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "e498b468bac4da8376e48647c67009de7c1e30f1d2566c70175f8b4add438351",
   "started_at": "2026-11-01T08:28:36Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T08:28:36Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1210: fix(slice): a directory in Expected paths covers no file under it, and internal/inspect and internal/delegate fall in no layer"
+    },
+    {
+      "at": "2026-11-01T08:31:16Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
