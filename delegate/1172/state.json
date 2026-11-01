@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19635-d14b-7437-828e-d54636109769",
+  "task_url": "https://ampcode.com/threads/T-01a19635-d14b-7437-828e-d54636109769",
   "branch": "story/1172-a-waiting-baseline-draft-is-an-inbox-car",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "f9f1fdabb2531620a1eea4e431a41e125a8ae8914b1866ab48f725538576e165",
   "started_at": "2026-11-01T08:23:33Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T08:23:33Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1172: A waiting baseline draft is an inbox card, approved under the session's one device code"
+    },
+    {
+      "at": "2026-11-01T08:24:46Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
