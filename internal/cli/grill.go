@@ -280,6 +280,11 @@ func (e *Env) runGrillEdit(ctx context.Context, c *github.Client, tag, repo stri
 	if err != nil || n <= 0 {
 		return Errorf(ExitUsage, "grill --edit %q: want an issue number, #number, or issue URL", in.String("edit"))
 	}
+	if other, ok := strings.CutPrefix(raw, "https://github.com/"); ok {
+		if other, _, _ = strings.Cut(other, "/issues/"); !strings.EqualFold(other, repo) {
+			return Errorf(ExitUsage, "grill --edit %s: the issue is in %s, and grill edits %s; nothing was read or written", raw, other, repo)
+		}
+	}
 	if strings.TrimSpace(in.String("body")) == "" {
 		return Errorf(ExitUsage, "grill %s --edit %d needs --body: the whole new body", t.ID, n)
 	}
