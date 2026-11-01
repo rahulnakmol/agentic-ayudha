@@ -497,6 +497,26 @@ func TestMissionNextBugFiledDuringMissionJoinsBugs(t *testing.T) {
 	if _, _, _ = m.next(889); milestonesOf(func() MissionPlan { p, _ := m.plan(889); return p }()) != "MS1=20,21 BUGS=30,32 #20:MS1 #21:MS1 #30:BUGS #32:BUGS" {
 		t.Fatal("#32 joined BUGS twice")
 	}
+	// Bug #33 depends on #950 of Feature #874, which is open. While aayu cannot read #950, nothing is listed and
+	// #33 joins nothing; once it can, #33 joins BUGS in mission 2, which waits on #950.
+	m.issue(874, "Feature baselines", "feature", 0, "")
+	m.issue(950, "Story 950", "story", 874, "")
+	m.issue(33, "Answers vanish again", "bug", 889, "depends-on #950")
+	m.edit(func() { m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues/950", 0 })
+	if code, out, errOut := m.next(889); code != ExitExternal || out != "" {
+		t.Fatalf("mission next with #950 unreadable: exit %d: %q%s", code, out, errOut)
+	}
+	if p, _ := m.plan(889); strings.Contains(milestonesOf(p), "33") {
+		t.Fatalf("#33 joined with #950 unreadable: %s", milestonesOf(p))
+	}
+	m.edit(func() { m.g.Fail = "" })
+	if code, out, errOut := m.next(889); code != 0 {
+		t.Fatalf("mission next 889: exit %d: %q%s", code, out, errOut)
+	}
+	if p, raw := m.plan(889); !strings.HasSuffix(milestonesOf(p), "BUGS=30,32,33 #20:MS1 #21:MS1 #30:BUGS #32:BUGS #33:BUGS") || len(p.Missions) != 2 ||
+		fmt.Sprint(p.Missions[1]) != fmt.Sprint(Mission{Number: 2, Stories: []MissionStory{{Number: 33, Waits: "waits on #950 (#874)"}}}) {
+		t.Fatalf("plan after #33 was filed: %s\n%s", milestonesOf(p), raw)
+	}
 }
 
 // Criterion 11: #874's mission is done, so its Ready Bugs start from the

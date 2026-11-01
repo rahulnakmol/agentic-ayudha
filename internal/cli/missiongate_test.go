@@ -1309,6 +1309,13 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 	if p, _ := g.plan(889); p.Milestones[1].Gate.State != GateFailed {
 		t.Fatalf("BUGS gate in the plan: %+v", p.Milestones[1].Gate)
 	}
+	// A delegation record aayu cannot read names no PR: the gate fails closed, and records no run.
+	runs := len(g.runs())
+	putLedger(t, g.bare, delegate.LedgerPath(31), "not json")
+	if code, out, errOut := g.gate(); code != ExitExternal || !strings.Contains(errOut, "ledger delegate/31/state.json: not a delegation aayu wrote") || len(g.runs()) != runs {
+		t.Fatalf("gate with #31's delegation unreadable: exit %d: %s%s", code, out, errOut)
+	}
+	putLedger(t, g.bare, delegate.LedgerPath(31), `{"story": 31, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": 131, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`)
 	g.putPack(31, 131, proof.Authoritative)
 	if rep := g.gateJSON(); rep.Milestones[1].State != GatePassed {
 		t.Fatalf("gate after #31's pack landed: %+v", rep.Milestones)
