@@ -134,7 +134,7 @@ installs a git pre-push hook that runs the gate, and `.agents/setup` installs it
 Results land in `.aayudha/env-verified.toml`. Agents may run `--apply` and `--verify`: they write only repository
 files. A pull request that changes `.aayudha/env.toml` or `.agents/setup` fails CI's coverage ratchet step while a
 host in the spec's `hosts` has no record of the new fingerprint. The step names each such host and the command
-that verifies it (Bug #1211).
+that verifies it.
 
 **Detect and Ensure.** `agentenv.Detect` reports, per agent, the CLI path and version, whether it is signed in,
 whether its cloud can take a hand-off, and the exact install and sign-in commands. It makes no model or task call,
