@@ -23,6 +23,12 @@
       "at": "2026-11-01T08:31:16Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T10:25:53Z",
+      "status": "kanha",
+      "detail": "merged #1210 (PR #1215): run aayu mission next 1170 (sent)",
+      "text": "merged #1210 (PR #1215): run aayu mission next 1170"
     }
   ]
 }
