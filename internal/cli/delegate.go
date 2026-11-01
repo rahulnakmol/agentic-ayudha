@@ -926,6 +926,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		d.event(now, dlgFix, fmt.Sprintf("round %d: %s failed on %s", round+1, strings.Join(names, ", "), short(head)))
 		res.Delegation.FollowUp = true
 		report()
+		if err := d.outside(); err != nil {
+			return nil, true, Errorf(ExitBlocked, "build #%d: %v", d.story, err)
+		}
 		if d.local {
 			return e.localWriter(d, msg), false, nil
 		}
@@ -998,6 +1001,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	d.event(now, dlgFix, fmt.Sprintf("cycle %d: %d finding(s) on %s", st.Cycles, len(ids), short(head)))
 	res.Delegation.FollowUp = true
 	report()
+	if err := d.outside(); err != nil {
+		return nil, true, Errorf(ExitBlocked, "build #%d: %v", d.story, err)
+	}
 	if d.local {
 		return e.localWriter(d, msg), false, nil
 	}
@@ -1011,12 +1017,22 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	return nil, true, e.saveDelegation(ctx, d)
 }
 
+// outside refuses a follow-up for a PR built outside the mission that
+// recover adopted (Story #1207): no thread, task, or local run of aayu's
+// builds it, so none gets its fixes, and none starts for them.
+func (d *delegation) outside() error {
+	if d.state.PR == 0 || d.state.Task != "" || d.state.Handoffs != 0 {
+		return nil
+	}
+	return fmt.Errorf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", d.state.PR, delegate.Names[d.receiver])
+}
+
 // followUp sends msg to the receiver within receiverTimeout (Bug #1124),
 // and keeps the task it reports. On a host hand-off it writes msg to a file
 // for the host to send to the story's thread with its thread tool (Bug #1208).
 func (d *delegation) followUp(ctx context.Context, msg string) error {
-	if !d.local && d.state.Task == "" { // never a new thread for a PR built outside the mission (Story #1207)
-		return fmt.Errorf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", d.state.PR, delegate.Names[d.receiver])
+	if err := d.outside(); err != nil {
+		return err
 	}
 	if d.host {
 		path := filepath.Join(d.hostDir, fmt.Sprintf("follow-up-%d.md", len(d.state.FollowUps)))

@@ -668,6 +668,9 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 				return say("kept", kept+" (--dry-run: the delegation is not updated)")
 			}
 			if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
+				if s.PR == pr && s.Status != dlgMaybe && s.Receiver != "" { // another run kept it on this PR since: write it once
+					return errMoved
+				}
 				detail := fmt.Sprintf("PR #%d found by aayu mission recover", pr)
 				if s.Receiver == "" {
 					s.Story, s.Feature, s.Receiver, s.Mode, s.Family = n, r.f, r.tool, mode(r.tool == delegate.OpenCode), delegate.Family(r.tool, "")
@@ -679,7 +682,7 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 				s.PR, s.Status = pr, dlgPROpen
 				s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: dlgPROpen, Detail: detail})
 				return nil
-			}); err != nil {
+			}); err != nil && !errors.Is(err, errMoved) {
 				return say("failed", "its PR could not be recorded: "+oneLineErr(err))
 			}
 		}

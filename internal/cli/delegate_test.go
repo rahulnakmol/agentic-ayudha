@@ -890,18 +890,39 @@ func TestDelegateFollowUpStalls(t *testing.T) {
 
 // Story #1207, criterion 3: build of the adopted #1191 syncs its PR, its
 // head and inspect's disposition, and starts no hand-off, branch, or
-// subthread, on Amp and on Cursor, whose status read needs a task the
-// adopted PR does not have. A fix on a later head goes to no thread either.
+// subthread: on Amp; on Cursor, whose status read needs a task the adopted
+// PR does not have; and on OpenCode, which runs locally. A fix on a later
+// head goes to no thread or local run either.
 func TestBuildSyncsAdoptedPR(t *testing.T) {
-	for _, tool := range []string{"amp", "cursor"} {
+	for _, tool := range []string{"amp", "cursor", "opencode"} {
 		t.Run(tool, func(t *testing.T) {
 			m, pr := outsidePRWorld(t)
-			host := ""
 			if tool != "amp" {
 				m.setPlan(1170, func(p *MissionPlan) { p.Tool = tool })
-				host = tool
 			}
-			if code, out, errOut := m.recover(1170, host); code != 0 || m.state(1191).Receiver != tool {
+			if tool == "opencode" { // its CLI is installed and signed in to a model provider
+				look, probe := m.opts.LookPath, m.opts.Exec
+				m.opts.LookPath = func(name string) (string, error) {
+					if name == "opencode" {
+						return "/usr/local/bin/opencode", nil
+					}
+					return look(name)
+				}
+				m.opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+					if strings.Join(args, " ") == "auth list" {
+						return "1 credentials", nil
+					}
+					return probe(ctx, dir, name, args...)
+				}
+			}
+			recover := func() (int, string, string) { return m.recover(1170, strings.TrimPrefix(tool, "amp")) }
+			if tool == "opencode" { // no --host names it: the person's repository tool does
+				m.setTool(tool)
+				recover = func() (int, string, string) {
+					return run(t, m.person, m.opts, "mission", "recover", "1170", "--repo", "o/r")
+				}
+			}
+			if code, out, errOut := recover(); code != 0 || m.state(1191).Receiver != tool {
 				t.Fatalf("recover: exit %d: %s%s", code, out, errOut)
 			}
 			verdict := func(head, disposition string, id int64) {

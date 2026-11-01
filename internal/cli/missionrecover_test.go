@@ -1353,4 +1353,22 @@ func TestMissionRecoverAdoptsOutsidePR(t *testing.T) {
 	if m.handoffs(1191) != 0 || len(m.claims(1170)) != 0 {
 		t.Fatalf("recover started #1191: %d hand-offs, claims %v", m.handoffs(1191), m.claims(1170))
 	}
+
+	// Two runs read no delegation: the other run adopts the PR, and a build syncs it, while this run writes.
+	// This run writes nothing over it.
+	m, pr = outsidePRWorld(t)
+	other := fmt.Sprintf(`{"story": 1191, "feature": 1170, "receiver": "amp", "mode": "cloud", "pr": %d, "status": %q, "events": [{"at": "2026-11-01T10:00:00Z", "status": %q}]}`, pr.Number, dlgReady, dlgReady)
+	race, pushed := m.opts, false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, delegate.LedgerPath(1191), other)
+		}
+	}
+	if code, out, errOut := run(t, m.agent, race, "mission", "recover", "1170", "--repo", "o/r"); code != 0 || !pushed || !strings.HasPrefix(out, "@rahulnakmol recovered") {
+		t.Fatalf("recover in a race: exit %d: %s%s", code, out, errOut)
+	}
+	if got := git(t, m.bare, "show", "ledger:"+delegate.LedgerPath(1191)); got != other {
+		t.Fatalf("recover wrote over the other run's delegation:\n%s", got)
+	}
 }
