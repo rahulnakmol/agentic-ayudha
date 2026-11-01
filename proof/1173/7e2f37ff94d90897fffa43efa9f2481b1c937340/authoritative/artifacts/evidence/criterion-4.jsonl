@@ -1,0 +1,20 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged","Output":"=== RUN   TestApproveCardStoriesChanged\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/after_the_card_was_read"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/after_the_card_was_read","Output":"=== RUN   TestApproveCardStoriesChanged/after_the_card_was_read\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/after_the_card_was_read","Output":"--- PASS: TestApproveCardStoriesChanged/after_the_card_was_read (0.68s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/after_the_card_was_read"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/while_the_code_waited"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/while_the_code_waited","Output":"=== RUN   TestApproveCardStoriesChanged/while_the_code_waited\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/while_the_code_waited","Output":"--- PASS: TestApproveCardStoriesChanged/while_the_code_waited (0.90s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/while_the_code_waited"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited","Output":"=== RUN   TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited","Output":"--- PASS: TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited (1.08s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/a_Bug_added_while_the_code_waited"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/read_again_after_the_code"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/read_again_after_the_code","Output":"=== RUN   TestApproveCardStoriesChanged/read_again_after_the_code\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/read_again_after_the_code","Output":"--- PASS: TestApproveCardStoriesChanged/read_again_after_the_code (5.75s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged/read_again_after_the_code"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged","Output":"--- PASS: TestApproveCardStoriesChanged (8.42s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveCardStoriesChanged"}
