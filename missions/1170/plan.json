@@ -983,6 +983,13 @@
       "tool": "amp",
       "at": "2026-11-01T10:26:01Z",
       "presence": "none"
+    },
+    {
+      "control": "recover",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-11-01T12:15:19Z",
+      "presence": "none"
     }
   ],
   "events_cursor": "2026-11-01T10:56:07Z"
