@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -174,5 +175,89 @@ func TestBehaviourRefusesProduction(t *testing.T) {
 	}
 	if log := calls(t, root); len(log) != 0 {
 		t.Fatalf("the control tool ran: %q", log)
+	}
+}
+
+// fakePlaywright is a playwright package whose page's accessibility tree is
+// its install's name, so aria.txt says which Playwright control.mjs loaded.
+func fakePlaywright(name string) map[string]string {
+	return map[string]string{
+		"playwright/package.json": `{"name": "playwright", "main": "index.js"}`,
+		"playwright/index.js": `const page = {
+  goto: async () => ({ status: () => 200 }),
+  url: () => "http://127.0.0.1:9999/",
+  locator: () => ({ ariaSnapshot: async () => "` + name + `" }),
+  screenshot: async () => {},
+  video: () => null,
+};
+exports.chromium = { launch: async () => ({ newContext: async () => ({ newPage: async () => page, close: async () => {} }), close: async () => {} }) };
+`,
+	}
+}
+
+// Bug #1226: the Node control tool (hosts/verify-skill/node/control.mjs) finds
+// the Playwright that pnpm keeps only in its store, NODE_PATH's Playwright
+// comes first as before, and with none installed each browser check is
+// unreachable with the command to install it, which fails nothing.
+func TestControlFindsPlaywright(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not installed")
+	}
+	control, err := os.ReadFile(filepath.Join("..", "..", "hosts", "verify-skill", "node", "control.mjs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := ".agents/skills/verify-tasks/"
+	ui := "```check\n{\"id\": \"home\", \"kind\": \"ui\", \"evidence\": \"screenshot\", \"steps\": [{\"goto\": \"/\"}]}\n```\n\n"
+	root, _, _ := repo(t, map[string]string{"app/main.go": "package main\n"}, map[string]string{
+		dir + "control.mjs":        string(control),
+		dir + "features/README.md": "# map\n\n```map\n{\"product\": \"tasks\", \"control\": [\"node\", \"" + dir + "control.mjs\"]}\n```\n\n1. [Tasks](tasks.md)\n",
+		dir + "features/tasks.md":  feature("tasks", "app/main.go", ui),
+	})
+	store := filepath.Join(root, "node_modules", ".pnpm", "playwright@1.64.0", "node_modules")
+	nodePath := t.TempDir()
+	for _, tc := range []struct {
+		name, nodePath, status, reason, aria string
+		store, inNodePath                    bool
+	}{
+		{name: "only in pnpm's store, no NODE_PATH", store: true, status: CheckPassed, aria: "store"},
+		{name: "NODE_PATH and pnpm's store", store: true, inNodePath: true, nodePath: nodePath, status: CheckPassed, aria: "node-path"},
+		{name: "none installed", nodePath: t.TempDir(), status: CheckUnreachable,
+			reason: `Playwright is not installed: run "npm install --save-dev playwright && npx playwright install chromium"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_ = os.RemoveAll(filepath.Join(root, "node_modules"))
+			_ = os.RemoveAll(filepath.Join(nodePath, "playwright"))
+			if tc.store {
+				write(t, store, fakePlaywright("store"))
+			}
+			if tc.inNodePath {
+				write(t, nodePath, fakePlaywright("node-path"))
+			}
+			r := behaviourRun(t, root)
+			r.Story, r.Criteria, r.Checks = 0, nil, SelectAll
+			r.Sandbox.Getenv = func(k string) string {
+				return map[string]string{"PATH": os.Getenv("PATH"), "NODE_PATH": tc.nodePath}[k]
+			}
+			rep := Execute(context.Background(), r, []Floor{Behaviour{}})
+			var got struct {
+				Checks []CheckResult `json:"checks"`
+			}
+			aria := ""
+			for _, a := range rep.Artifacts {
+				switch a.Path {
+				case "reports/behaviour.json":
+					_ = json.Unmarshal(a.Data, &got)
+				case "behaviour/tasks.home/aria.txt":
+					aria = string(a.Data)
+				}
+			}
+			if len(got.Checks) != 1 || got.Checks[0].Status != tc.status || !strings.HasPrefix(got.Checks[0].Reason, tc.reason) || aria != tc.aria {
+				t.Fatalf("checks %+v, aria %q; want %s (%q), aria %q: %+v", got.Checks, aria, tc.status, tc.reason, tc.aria, rep.Checks[0])
+			}
+			if c := rep.Checks[0]; c.Result != proof.Pass {
+				t.Fatalf("floor %+v, want passed: an unreachable check fails nothing", c)
+			}
+		})
 	}
 }

@@ -82,9 +82,13 @@ network. Each check has three minutes.
 The control tool answers `passed`, `failed`, or `unreachable`:
 
 - **failed** fails the floor, so the gate turns red at once.
-- **unreachable** means a precondition in `requires` is missing. It proves nothing and fails nothing.
+- **unreachable** means a precondition in `requires` is missing, or the runner lacks a tool, such as Playwright. It
+  proves nothing and fails nothing. A milestone gate waits on a runner gap and lists no fix for it.
 - **no valid answer** (malformed JSON, an unknown status, an artifact path outside the output directory, or an unknown
   artifact kind) blocks the floor.
+
+The Node control tool loads the product's Playwright first, then the one in NODE_PATH. aayu adds the Playwright that
+pnpm keeps in `node_modules/.pnpm` to the end of NODE_PATH.
 
 A criterion mapped to checks is evidenced only when every one of them passed and produced an artifact of the
 criterion's own kind. A `cli` or `lib` transcript uses the `api-trace` kind. aayu hashes every artifact into the pack
