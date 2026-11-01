@@ -280,7 +280,7 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 		}
 		var packs []GateCheck // its merged Bugs' proof packs, read when its gate is due
 		if m.Gate.State != GatePassed && earlierPassed && k == len(m.Stories) {
-			if packs, err = bugPacks(ctx, w, plan, m, state); err != nil {
+			if packs, err = bugPacks(ctx, c, w, repo, dev, plan, m, state); err != nil {
 				return err
 			}
 		}
@@ -449,9 +449,9 @@ const proofCheck = "proof:"
 
 // bugPacks are the proof checks of milestone m (Story #1174): each Bug of
 // it that merged passes only with an authoritative proof pack on the ledger
-// for its PR, the one its delegation recorded (any PR when none did). It
-// reads the ledger, never a comment. A cancelled Bug needs none.
-func bugPacks(ctx context.Context, w *ledger.Writer, plan *MissionPlan, m MissionMilestone, state map[int]string) ([]GateCheck, error) {
+// for the PR that delivered it: the one its delegation recorded, else
+// deliveredPR. It reads the ledger, never a comment. A cancelled Bug needs none.
+func bugPacks(ctx context.Context, c *github.Client, w *ledger.Writer, repo, dev string, plan *MissionPlan, m MissionMilestone, state map[int]string) ([]GateCheck, error) {
 	var bugs []int
 	for _, it := range plan.Graph {
 		if it.Kind == "bug" && slices.Contains(m.Stories, it.Number) && state[it.Number] == depMerged {
@@ -474,19 +474,45 @@ func bugPacks(ctx context.Context, w *ledger.Writer, plan *MissionPlan, m Missio
 		} else if b != nil && json.Unmarshal(b, &st) != nil {
 			return nil, Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote", delegate.LedgerPath(n))
 		}
+		if st.PR == 0 {
+			if st.PR, err = deliveredPR(ctx, c, repo, dev, n); err != nil {
+				return nil, err
+			}
+		}
 		es, err := (&proof.Store{}).Packs(ctx, t, n)
 		if err != nil {
 			return nil, Wrap(ExitExternal, err)
 		}
 		ck := GateCheck{Check: fmt.Sprintf("%s#%d", proofCheck, n), Result: gateFail, Detail: fmt.Sprintf("#%d merged with no proof pack", n)}
 		if i := slices.IndexFunc(es, func(x proof.Entry) bool {
-			return x.Pack.Authority.Kind == proof.Authoritative && (st.PR == 0 || x.Pack.PR == st.PR)
+			return x.Pack.Authority.Kind == proof.Authoritative && st.PR != 0 && x.Pack.PR == st.PR
 		}); i >= 0 {
 			ck.Result, ck.Detail = gatePass, es[i].Path
 		}
 		out = append(out, ck)
 	}
 	return out, nil
+}
+
+// deliveredPR is the PR that delivered story or Bug n when no delegation
+// recorded one, as audit reads it (Data.mergePR): the first PR merged into
+// dev that names n (StoryOf); 0 when none did.
+func deliveredPR(ctx context.Context, c *github.Client, repo, dev string, n int) (int, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", Base: dev, ListOptions: o})
+	})
+	if err != nil {
+		return 0, Wrap(ExitExternal, err)
+	}
+	var first *gh.PullRequest
+	for _, p := range prs {
+		at := p.GetMergedAt().Time
+		if !at.IsZero() && p.GetBase().GetRef() == dev && StoryOf(p.GetBody(), "", p.GetHead().GetRef()) == n && (first == nil || at.Before(first.GetMergedAt().Time)) {
+			first = p
+		}
+	}
+	return first.GetNumber(), nil
 }
 
 // landed reports whether a proof check that failed in run r passes in

@@ -482,7 +482,7 @@ func openBugs(subs []*gh.Issue) []int {
 }
 
 // withBugs puts each of bugs that no milestone of ms holds in BUGS, which
-// it adds last when ms has none.
+// it adds last when ms has none. BUGS then waits for its gate again.
 func withBugs(ms []MissionMilestone, bugs []int) []MissionMilestone {
 	for _, n := range bugs {
 		if slices.ContainsFunc(ms, func(m MissionMilestone) bool { return slices.Contains(m.Stories, n) }) {
@@ -493,6 +493,7 @@ func withBugs(ms []MissionMilestone, bugs []int) []MissionMilestone {
 			ms, i = append(ms, MissionMilestone{Name: BugsMilestone, Stories: []int{}, Gate: MilestoneGate{State: GateWaits}}), len(ms)
 		}
 		ms[i].Stories = append(slices.Clone(ms[i].Stories), n) // never into the backing array of a plan read before
+		ms[i].Gate = MilestoneGate{State: GateWaits}           // a passed gate never judged the new Bug
 	}
 	return ms
 }

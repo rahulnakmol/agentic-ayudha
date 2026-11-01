@@ -1272,21 +1272,37 @@ func (g *gateWorld) putPack(n, pr int, kind string) {
 	putLedger(g.t, g.bare, proof.Dir(n, head, kind)+"/pack.json", string(b))
 }
 
+// mergedPR adds PR n to dev with body, merged at, as on the PR list.
+func (g *gateWorld) mergedPR(n int, body string, at time.Time) {
+	pr := g.g.AddPR(fmt.Sprintf("fix: %d", n), body, "rahulnakmol", fmt.Sprintf("fix/%d", n), strings.Repeat("c", 40), "dev")
+	g.edit(func() {
+		is := g.g.Issues[pr.Number]
+		delete(g.g.Issues, pr.Number)
+		delete(g.g.Pulls, pr.Number)
+		is.Number, pr.Number = n, n
+		pr.State, pr.Merged, pr.MergedAt = "closed", true, at
+		g.g.Issues[n], g.g.Pulls[n] = is, pr
+	})
+}
+
 // Story #1174, criterion 4: Bugs #30 and #31 merged, and #31's PR has no
 // authoritative pack on the ledger (an advisory one, and one of another PR,
 // do not count): the BUGS gate fails with "#31 merged with no proof pack",
-// and its fix waits for a person, never a fix PR. Once the pack lands, the
-// gate runs again on the same dev tip and passes.
+// and its fix waits for a person, never a fix PR. #30 has no delegation, and
+// no merged PR names it yet: no pack counts for it. Then PR 130, the first
+// merged into dev that names it, delivered it, and a pack of the later PR 140
+// does not count. Once both packs land, the gate runs again on the same dev
+// tip and passes.
 func TestGateBugsNeedProofPack(t *testing.T) {
 	g := newBugsGateWorld(t, "", []int{20, 21}, []int{30, 31})
 	for _, n := range []int{20, 21} {
 		g.closeIssue(n)
 	}
-	for n, pr := range map[int]int{30: 130, 31: 131} {
+	for _, n := range []int{30, 31} {
 		g.status(n, "merged", "") // ship leaves a Bug open until its release (Bug #1169)
-		putLedger(t, g.bare, delegate.LedgerPath(n), fmt.Sprintf(`{"story": %d, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": %d, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`, n, pr))
 	}
-	g.putPack(30, 130, proof.Authoritative)
+	putLedger(t, g.bare, delegate.LedgerPath(31), `{"story": 31, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": 131, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`)
+	g.putPack(30, 140, proof.Authoritative)
 	g.putPack(31, 131, proof.Advisory)
 	g.putPack(31, 99, proof.Authoritative)
 	rep := g.gateJSON()
@@ -1299,11 +1315,11 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 			checks = append(checks, ck.Check+"="+ck.Result+": "+ck.Detail)
 		}
 	}
-	if want := []string{"proof:#30=passed: " + proof.Dir(30, fmt.Sprintf("%040x", 130), proof.Authoritative) + "/pack.json", "proof:#31=failed: #31 merged with no proof pack"}; !slices.Equal(checks, want) {
+	if want := []string{"proof:#30=failed: #30 merged with no proof pack", "proof:#31=failed: #31 merged with no proof pack"}; !slices.Equal(checks, want) {
 		t.Fatalf("BUGS proof checks: %q, want %q", checks, want)
 	}
-	if len(rep.Fixes) != 1 || rep.Fixes[0].Check != "proof:#31" || rep.Fixes[0].Action != "waits" || rep.Fixes[0].Brief != "" ||
-		!strings.Contains(rep.Fixes[0].Reason, "aayu proof land") {
+	if len(rep.Fixes) != 2 || rep.Fixes[1].Check != "proof:#31" || rep.Fixes[1].Action != "waits" || rep.Fixes[1].Brief != "" ||
+		!strings.Contains(rep.Fixes[1].Reason, "aayu proof land") {
 		t.Fatalf("fixes: %+v", rep.Fixes)
 	}
 	if p, _ := g.plan(889); p.Milestones[1].Gate.State != GateFailed {
@@ -1317,6 +1333,16 @@ func TestGateBugsNeedProofPack(t *testing.T) {
 	}
 	putLedger(t, g.bare, delegate.LedgerPath(31), `{"story": 31, "receiver": "amp", "mode": "cloud", "family": "anthropic", "pr": 131, "status": "merge-ready", "brief_sha256": "", "started_at": "2026-11-01T09:00:00Z"}`)
 	g.putPack(31, 131, proof.Authoritative)
+	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	g.mergedPR(140, "Refs #30", at.Add(time.Hour))
+	g.mergedPR(130, "Refs #30", at)
+	g.mergedPR(132, "Refs #32", at.Add(-time.Hour))
+	if rep := g.gateJSON(); rep.Milestones[1].State != GateFailed || !slices.ContainsFunc(rep.Milestones[1].Checks, func(ck GateCheck) bool {
+		return ck == GateCheck{Check: "proof:#30", Result: gateFail, Detail: "#30 merged with no proof pack"}
+	}) {
+		t.Fatalf("gate with #30's pack of a later PR only: %+v", rep.Milestones)
+	}
+	g.putPack(30, 130, proof.Authoritative)
 	if rep := g.gateJSON(); rep.Milestones[1].State != GatePassed {
 		t.Fatalf("gate after #31's pack landed: %+v", rep.Milestones)
 	}

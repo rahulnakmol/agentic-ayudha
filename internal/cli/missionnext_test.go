@@ -478,6 +478,9 @@ func TestMissionNextBugFiledDuringMissionJoinsBugs(t *testing.T) {
 		m.status(n, "ready", "")
 	}
 	m.status(32, "ready", "P0")
+	m.setPlan(889, func(p *MissionPlan) {
+		p.Milestones[1].Gate = MilestoneGate{State: GatePassed, DevSHA: devTip, At: "2026-11-01T09:00:00Z"}
+	})
 	codes := m.codes()
 	if p, _ := m.plan(889); milestonesOf(p) != "MS1=20,21 BUGS=30 #20:MS1 #21:MS1 #30:BUGS" {
 		t.Fatalf("plan before #32: %s", milestonesOf(p))
@@ -486,7 +489,9 @@ func TestMissionNextBugFiledDuringMissionJoinsBugs(t *testing.T) {
 		t.Fatalf("mission next 889: exit %d, device codes %d: %q%s", code, m.codes(), out, errOut)
 	}
 	p, raw := m.plan(889)
+	// BUGS waits for its gate again: a passed gate never judged #32.
 	if got := milestonesOf(p); got != "MS1=20,21 BUGS=30,32 #20:MS1 #21:MS1 #30:BUGS #32:BUGS" || p.Approval != 1 || p.FeatureDone != BugsMilestone ||
+		p.Milestones[1].Gate != (MilestoneGate{State: GateWaits}) ||
 		!slices.ContainsFunc(p.Missions[0].Stories, func(s MissionStory) bool { return s.Number == 32 }) {
 		t.Fatalf("plan after #32 was filed: %s\n%s", got, raw)
 	}
