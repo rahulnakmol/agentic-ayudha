@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a1970a-5967-7735-a6d1-29e1fa762d9f",
+  "task_url": "https://ampcode.com/threads/T-01a1970a-5967-7735-a6d1-29e1fa762d9f",
   "branch": "story/1173-approve-to-build-is-an-inbox-card-with-i",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "e8d3efc4a92c13f8758bce3fc757467ed0beef1c05553c063306e1b7cfa96f99",
   "started_at": "2026-11-01T12:16:11Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-01T12:16:11Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1173: Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries"
+    },
+    {
+      "at": "2026-11-01T12:16:54Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
