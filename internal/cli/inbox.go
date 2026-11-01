@@ -1625,7 +1625,12 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		}
 		clear(want)
 		rest := append(slices.Clone(needs[next:]), add...)
-		slices.SortStableFunc(rest, func(a, b InboxItem) int { return rank(a.Kind) - rank(b.Kind) })
+		slices.SortStableFunc(rest, func(a, b InboxItem) int { // as items sorts them: by kind, then by number
+			if d := rank(a.Kind) - rank(b.Kind); d != 0 {
+				return d
+			}
+			return a.Number - b.Number
+		})
 		needs, items, total = append(needs[:next], rest...), append(items, add...), total+len(add)
 		return nil
 	}
