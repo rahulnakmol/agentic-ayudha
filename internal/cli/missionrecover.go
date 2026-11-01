@@ -229,22 +229,30 @@ func (e *Env) newRecovery(ctx context.Context, c *github.Client, w *ledger.Write
 }
 
 // readPRs reads the open PRs, and the story each refers to.
-func (r *recovery) readPRs(ctx context.Context) error {
-	owner, name, _ := github.SplitRepo(r.repo)
+func (r *recovery) readPRs(ctx context.Context) (err error) {
+	r.prs, r.open, err = storyPRs(ctx, r.c, r.repo)
+	return err
+}
+
+// storyPRs reads the open PRs in one list: the open PR that refers to each
+// story (its body's Refs #n or its branch, as StoryOf reads them), and every
+// open PR.
+func storyPRs(ctx context.Context, c *github.Client, repo string) (map[int]int, map[int]bool, error) {
+	owner, name, _ := github.SplitRepo(repo)
 	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
-		return r.c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
 	})
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return nil, nil, Wrap(ExitExternal, err)
 	}
-	r.prs, r.open = map[int]int{}, map[int]bool{}
+	stories, open := map[int]int{}, map[int]bool{}
 	for _, pr := range prs {
-		r.open[pr.GetNumber()] = true
+		open[pr.GetNumber()] = true
 		if n := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()); n != 0 {
-			r.prs[n] = pr.GetNumber()
+			stories[n] = pr.GetNumber()
 		}
 	}
-	return nil
+	return stories, open, nil
 }
 
 // openPR is story n's open PR: its delegation's, or one that refers to it.
@@ -599,8 +607,9 @@ func (r *recovery) spentClaims(ctx context.Context, path string, n int, st deleg
 	return spent, err
 }
 
-// setDelegation edits delegate/<n>/state.json at the ledger tip; an edit
-// that returns an error writes nothing.
+// setDelegation edits delegate/<n>/state.json at the ledger tip, from an
+// empty delegation when there is none; an edit that returns an error writes
+// nothing.
 func (r *recovery) setDelegation(ctx context.Context, n int, edit func(*delegate.State) error) error {
 	for range 3 {
 		t, err := r.w.Read(ctx)
@@ -611,7 +620,7 @@ func (r *recovery) setDelegation(ctx context.Context, n int, edit func(*delegate
 		tip := t.Tip
 		t.Close()
 		var st delegate.State
-		if err != nil || json.Unmarshal(b, &st) != nil {
+		if ignoreMissing(err) != nil || err == nil && json.Unmarshal(b, &st) != nil {
 			return Errorf(ExitExternal, "ledger %s: not a delegation aayu wrote for #%d", delegate.LedgerPath(n), n)
 		}
 		if err := edit(&st); err != nil {
@@ -650,20 +659,35 @@ func (r *recovery) story(ctx context.Context, n int, st delegate.State) RecoverS
 	case st.Status == dlgCapped:
 		return say("left", "capped: a person takes over, and recover starts nothing for it")
 	case pr != 0:
-		if st.PR != pr || st.Status == dlgMaybe {
+		kept := fmt.Sprintf("kept on its PR #%d", pr)
+		if st.Receiver == "" { // a PR built outside the mission (Story #1207): it becomes the delegation, so build syncs it
+			kept += fmt.Sprintf(", built outside the mission: adopted as its delegation on %s", r.tool)
+		}
+		if st.PR != pr || st.Status == dlgMaybe || st.Receiver == "" {
 			if r.c.DryRun() {
-				return say("kept", fmt.Sprintf("kept on its PR #%d (--dry-run: the delegation is not updated)", pr))
+				return say("kept", kept+" (--dry-run: the delegation is not updated)")
 			}
 			if err := r.setDelegation(ctx, n, func(s *delegate.State) error {
+				if s.PR == pr && s.Status != dlgMaybe && s.Receiver != "" { // another run kept it on this PR since: write it once
+					return errMoved
+				}
+				detail := fmt.Sprintf("PR #%d found by aayu mission recover", pr)
+				if s.Receiver == "" {
+					s.Story, s.Feature, s.Receiver, s.Mode, s.Family = n, r.f, r.tool, mode(r.tool == delegate.OpenCode), delegate.Family(r.tool, "")
+					s.StartedAt, detail = r.now.UTC().Format(time.RFC3339), detail+": built outside the mission, adopted as its delegation"
+					if p := r.kanha(); p != nil {
+						s.Kanha, s.KanhaURL = p.Session, p.URL
+					}
+				}
 				s.PR, s.Status = pr, dlgPROpen
-				s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: dlgPROpen, Detail: fmt.Sprintf("PR #%d found by aayu mission recover", pr)})
+				s.Events = append(s.Events, delegate.Event{At: r.now.UTC().Format(time.RFC3339), Status: dlgPROpen, Detail: detail})
 				return nil
-			}); err != nil {
+			}); err != nil && !errors.Is(err, errMoved) {
 				return say("failed", "its PR could not be recorded: "+oneLineErr(err))
 			}
 		}
 		r.clear(n)
-		return say("kept", fmt.Sprintf("kept on its PR #%d", pr))
+		return say("kept", kept)
 	case st.PR != 0:
 		return say("left", fmt.Sprintf("its PR #%d is not open: recover starts nothing for it", st.PR))
 	case st.Mode == "local":
@@ -902,7 +926,9 @@ func missionRecover(ctx context.Context, e *Env, f int) error {
 		if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &st); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if st.Receiver == "" || st.Status == dlgMerged || st.Status == dlgLapsed { // not started, or a lapsed host hand-off: mission next starts it
+		// Not started, or a lapsed host hand-off: mission next starts it. A story with no delegation and an open PR
+		// that refers to it was built outside the mission: recover adopts that PR (Story #1207).
+		if st.Receiver == "" && r.prs[n] == 0 || st.Status == dlgMerged || st.Status == dlgLapsed {
 			continue
 		}
 		rep.Stories = append(rep.Stories, r.story(ctx, n, st))

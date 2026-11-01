@@ -215,6 +215,12 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	fixes, _ := fixSpend(plan, appr.Budget.PerStoryUSD, costs, openSet)
 	spent += fixes
+	// The open PR that refers to each story, read once per run: a story with one is never started a second time
+	// (Story #1207), whoever built it; recover adopts that PR as its delegation.
+	storyPR, _, err := storyPRs(ctx, c, repo)
+	if err != nil {
+		return err
+	}
 	held := map[int]bool{} // open stories that run or hold a claim: each counts at its cap until #872 measures spend per story
 	var entries []nextEntry
 	read := map[int]*gh.Issue{} // each listed item: a depends-on target in the list needs no read
@@ -271,6 +277,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = "changed while locked"
 		case slices.ContainsFunc(plan.StoryStarts, func(s MissionStoryStart) bool { return s.Number == n }):
 			en.item.Reason = startedOn(plan, n) // a Tatkal story the Kanha only orders and tracks
+		case storyPR[n] != 0: // it shows the PR, so a person sees one that names the story by mistake
+			en.item.Reason = fmt.Sprintf("kept on its PR #%d", storyPR[n])
 		case !contains(labels, ready.LabelReady):
 			en.item.Reason, en.item.detail = "not Ready", storyState(is)
 		default:

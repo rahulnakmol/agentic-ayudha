@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -641,7 +642,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d", d.state.Feature, delegate.Names[d.receiver], d.story))
 	}
 	var task delegate.Task
-	if !d.local {
+	if !d.local && (d.state.Task != "" || d.state.PR == 0) { // a PR built outside the mission that recover adopted has no task to read (Story #1207)
 		if task, err = d.adapter.Status(ctx, d.state); err != nil {
 			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: status: %v", d.story, d.receiver, err)
 		}
@@ -926,6 +927,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		d.event(now, dlgFix, fmt.Sprintf("round %d: %s failed on %s", round+1, strings.Join(names, ", "), short(head)))
 		res.Delegation.FollowUp = true
 		report()
+		if err := d.outside(); err != nil {
+			return nil, true, Errorf(ExitBlocked, "build #%d: %v", d.story, err)
+		}
 		if d.local {
 			return e.localWriter(d, msg), false, nil
 		}
@@ -998,6 +1002,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	d.event(now, dlgFix, fmt.Sprintf("cycle %d: %d finding(s) on %s", st.Cycles, len(ids), short(head)))
 	res.Delegation.FollowUp = true
 	report()
+	if err := cmp.Or(d.outside(), d.noTask()); err != nil {
+		return nil, true, Errorf(ExitBlocked, "build #%d: %v", d.story, err)
+	}
 	if d.local {
 		return e.localWriter(d, msg), false, nil
 	}
@@ -1011,10 +1018,33 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	return nil, true, e.saveDelegation(ctx, d)
 }
 
+// outside refuses a follow-up for a PR built outside the mission that
+// recover adopted (Story #1207): no thread, task, or local run of aayu's
+// builds it, so none gets its fixes, and none starts for them.
+func (d *delegation) outside() error {
+	if d.state.PR == 0 || d.state.Task != "" || d.state.Handoffs != 0 {
+		return nil
+	}
+	return fmt.Errorf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", d.state.PR, delegate.Names[d.receiver])
+}
+
+// noTask refuses a follow-up to a thread that d's delegation does not name:
+// a start that got no answer records no task. Codex makes a new task on the
+// PR's branch, so it needs none.
+func (d *delegation) noTask() error {
+	if d.local || d.state.Task != "" || d.receiver == delegate.Codex {
+		return nil
+	}
+	return fmt.Errorf("#%d's delegation records no %s task, so no thread takes the fixes of PR #%d: a person checks %s", d.story, delegate.Names[d.receiver], d.state.PR, delegate.Names[d.receiver])
+}
+
 // followUp sends msg to the receiver within receiverTimeout (Bug #1124),
 // and keeps the task it reports. On a host hand-off it writes msg to a file
 // for the host to send to the story's thread with its thread tool (Bug #1208).
 func (d *delegation) followUp(ctx context.Context, msg string) error {
+	if err := cmp.Or(d.outside(), d.noTask()); err != nil {
+		return err
+	}
 	if d.host {
 		path := filepath.Join(d.hostDir, fmt.Sprintf("follow-up-%d.md", len(d.state.FollowUps)))
 		err := writeHostFile(path, msg)

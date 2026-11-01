@@ -1280,3 +1280,95 @@ func TestMissionRecoverLeavesAndRefuses(t *testing.T) {
 		t.Fatalf("retry in a paused mission: exit %d: %s", code, errOut)
 	}
 }
+
+// outsidePRWorld is Bug #1191's case (Story #1207): the started mission of
+// #1170 has two Ready stories, and #1191 has an open PR (Refs #1191) from a
+// branch built outside the mission, with no delegation. #1192 has neither.
+func outsidePRWorld(t *testing.T) (*missionWorld, *fake.PR) {
+	t.Helper()
+	m := newMissionWorld(t)
+	m.ampConnected()
+	m.startedMission(1170, []int{1191, 1192})
+	m.readyStory(1191)
+	m.readyStory(1192)
+	pr := m.g.AddPR("fix: built by hand", "Refs #1191\n\nBuilt outside the mission.", "rahulnakmol", "fix/by-hand", strings.Repeat("c", 40), "dev")
+	return m, pr
+}
+
+// Story #1207, criterion 1: mission next keeps #1191 on its PR and claims
+// nothing for it; #1192 starts. It reads the open PRs once per run, not once
+// per story.
+func TestMissionNextKeepsOutsidePR(t *testing.T) {
+	m, pr := outsidePRWorld(t)
+	m.g.Reset()
+	code, out, errOut := m.next(1170)
+	if want := fmt.Sprintf("waits #1191: kept on its PR #%d\nstart #1192\n", pr.Number); code != 0 || out != want {
+		t.Fatalf("mission next 1170: exit %d, want %q: %q%s", code, want, out, errOut)
+	}
+	if got := m.claims(1170); got[1191] != 0 || got[1192] != 1 || len(got) != 1 {
+		t.Fatalf("claims after the list: %v, want one, for #1192", got)
+	}
+	lists := 0
+	m.edit(func() {
+		for _, r := range m.g.Requests {
+			if r.Method == "GET" && r.Path == "/repos/o/r/pulls" {
+				lists++
+			}
+		}
+	})
+	if lists != 1 {
+		t.Fatalf("mission next listed the open PRs %d times, want once per run", lists)
+	}
+	// The list fails closed: a PR list it cannot read starts nothing.
+	putLedger(t, m.bare, MissionClaimsPath(1170), "")
+	m.edit(func() { m.g.Fail = "GET /repos/o/r/pulls" })
+	if code, out, _ := m.next(1170); code != ExitExternal || out != "" || len(m.claims(1170)) != 0 {
+		t.Fatalf("PR list failing: exit %d: %q", code, out)
+	}
+}
+
+// Story #1207, criterion 2: recover writes #1191's delegation once, with
+// the PR, status pr-open, and the mission's tool as its receiver. A second
+// run writes nothing.
+func TestMissionRecoverAdoptsOutsidePR(t *testing.T) {
+	m, pr := outsidePRWorld(t)
+	code, out, errOut := m.recover(1170, "")
+	want := fmt.Sprintf("#1191  kept on its PR #%d, built outside the mission: adopted as its delegation on amp", pr.Number)
+	if code != 0 || !slices.Equal(storyLines(out), []string{want}) {
+		t.Fatalf("recover: exit %d, want the line %q: %s%s", code, want, out, errOut)
+	}
+	st := m.state(1191)
+	if st.Story != 1191 || st.Feature != 1170 || st.Receiver != "amp" || st.Mode != "cloud" || st.PR != pr.Number || st.Status != dlgPROpen || st.Task != "" ||
+		st.Kanha != m.parent(1170).Session {
+		t.Fatalf("#1191's delegation: %+v", st)
+	}
+	commits := m.commits()
+	code, out, errOut = m.recover(1170, "")
+	if code != 0 || !strings.Contains(out, "  nothing changed\n") || m.commits() != commits || !slices.Equal(storyLines(out), []string{fmt.Sprintf("#1191  kept on its PR #%d", pr.Number)}) {
+		t.Fatalf("second recover: exit %d, commits %s → %s: %s%s", code, commits, m.commits(), out, errOut)
+	}
+	if n := strings.Count(git(t, m.bare, "log", "--format=%H", "ledger", "--", delegate.LedgerPath(1191)), "\n") + 1; n != 1 {
+		t.Fatalf("%s was written %d times, want once", delegate.LedgerPath(1191), n)
+	}
+	if m.handoffs(1191) != 0 || len(m.claims(1170)) != 0 {
+		t.Fatalf("recover started #1191: %d hand-offs, claims %v", m.handoffs(1191), m.claims(1170))
+	}
+
+	// Two runs read no delegation: the other run adopts the PR, and a build syncs it, while this run writes.
+	// This run writes nothing over it.
+	m, pr = outsidePRWorld(t)
+	other := fmt.Sprintf(`{"story": 1191, "feature": 1170, "receiver": "amp", "mode": "cloud", "pr": %d, "status": %q, "events": [{"at": "2026-11-01T10:00:00Z", "status": %q}]}`, pr.Number, dlgReady, dlgReady)
+	race, pushed := m.opts, false
+	race.LedgerAttempt = func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, m.bare, delegate.LedgerPath(1191), other)
+		}
+	}
+	if code, out, errOut := run(t, m.agent, race, "mission", "recover", "1170", "--repo", "o/r"); code != 0 || !pushed || !strings.HasPrefix(out, "@rahulnakmol recovered") {
+		t.Fatalf("recover in a race: exit %d: %s%s", code, out, errOut)
+	}
+	if got := git(t, m.bare, "show", "ledger:"+delegate.LedgerPath(1191)); got != other {
+		t.Fatalf("recover wrote over the other run's delegation:\n%s", got)
+	}
+}

@@ -887,3 +887,106 @@ func TestDelegateFollowUpStalls(t *testing.T) {
 		t.Fatalf("follow-up with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
 	}
 }
+
+// Story #1207, criterion 3: build of the adopted #1191 syncs its PR, its
+// head and inspect's disposition, and starts no hand-off, branch, or
+// subthread: on Amp; on Cursor, whose status read needs a task the adopted
+// PR does not have; and on OpenCode, which runs locally. A fix on a later
+// head goes to no thread or local run either.
+func TestBuildSyncsAdoptedPR(t *testing.T) {
+	for _, tool := range []string{"amp", "cursor", "opencode"} {
+		t.Run(tool, func(t *testing.T) {
+			m, pr := outsidePRWorld(t)
+			if tool != "amp" {
+				m.setPlan(1170, func(p *MissionPlan) { p.Tool = tool })
+			}
+			if tool == "opencode" { // its CLI is installed and signed in to a model provider
+				look, probe := m.opts.LookPath, m.opts.Exec
+				m.opts.LookPath = func(name string) (string, error) {
+					if name == "opencode" {
+						return "/usr/local/bin/opencode", nil
+					}
+					return look(name)
+				}
+				m.opts.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+					if strings.Join(args, " ") == "auth list" {
+						return "1 credentials", nil
+					}
+					return probe(ctx, dir, name, args...)
+				}
+			}
+			recover := func() (int, string, string) { return m.recover(1170, strings.TrimPrefix(tool, "amp")) }
+			if tool == "opencode" { // no --host names it: the person's repository tool does
+				m.setTool(tool)
+				recover = func() (int, string, string) {
+					return run(t, m.person, m.opts, "mission", "recover", "1170", "--repo", "o/r")
+				}
+			}
+			if code, out, errOut := recover(); code != 0 || m.state(1191).Receiver != tool {
+				t.Fatalf("recover: exit %d: %s%s", code, out, errOut)
+			}
+			verdict := func(head, disposition string, id int64) { inspectVerdict(m, pr, head, disposition, id) }
+			head := strings.Repeat("c", 40)
+			verdict(head, inspect.Merge, 11910)
+			calls, cursorCalls := len(m.callLog()), func() int { c, _ := m.cursorCalls(); return len(c) } // the Kanha's thread, from the mission's start
+			sent := cursorCalls()
+			noThread := func(when string) {
+				t.Helper()
+				if k := m.handoffs(1191); k != 0 || len(m.callLog()) != calls || cursorCalls() != sent {
+					t.Fatalf("%s: build called the receiver (%d hand-offs): %q", when, k, m.callLog()[calls:])
+				}
+			}
+			res := m.kanhaBuild(1191, tool)
+			if res.Delegation.Status != dlgReady || res.Delegation.PR != pr.Number || res.PR != pr.Number || res.Delegation.Task != "" {
+				t.Fatalf("build 1191: %+v %+v", res, res.Delegation)
+			}
+			st := m.state(1191)
+			if st.Receiver != tool || st.Status != dlgReady || st.Branch != "fix/by-hand" || st.Handoffs != 0 || st.Task != "" || st.Events[len(st.Events)-1].Detail != "inspect merge on "+short(head) {
+				t.Fatalf("#1191's delegation after the sync: %+v", st)
+			}
+			noThread("merge")
+			// A new head that inspect sends back with a fix: no thread of aayu's builds the PR, so none gets the findings.
+			head = strings.Repeat("d", 40)
+			m.edit(func() { m.g.Pulls[pr.Number].Head.SHA = head })
+			verdict(head, inspect.Fix, 11911)
+			code, out, errOut := run(t, m.agent, m.opts, "build", "1191", "--delegate", tool, "--repo", "o/r", "--asked", "aayu mission next")
+			want := fmt.Sprintf("PR #%d was built outside the mission, and no %s thread of aayu's builds it: its author fixes it", pr.Number, delegate.Names[tool])
+			if code == 0 || !strings.Contains(errOut, want) {
+				t.Fatalf("build 1191 on a fix: exit %d: %s%s", code, out, errOut)
+			}
+			noThread("fix")
+		})
+	}
+}
+
+// inspectVerdict posts the merge gate's inspect verdict on PR pr at head:
+// disposition, with one P2 finding on a fix.
+func inspectVerdict(m *missionWorld, pr *fake.PR, head, disposition string, id int64) {
+	res := inspect.Result{PR: pr.Number, Head: head, Disposition: disposition, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}}
+	if disposition == inspect.Fix {
+		res.Findings = []inspect.Finding{{ID: "F-1191", Severity: "P2", Title: "an empty list divides by zero", Fix: "return 0"}}
+	}
+	j, _ := json.Marshal(inspect.State{Cycles: 1, Result: &res})
+	m.edit(func() {
+		c := &fake.Comment{ID: id, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+		c.User.Login, c.User.Type = "github-actions[bot]", "Bot"
+		m.g.Issues[pr.Number].Comments = append(m.g.Issues[pr.Number].Comments, c)
+	})
+}
+
+// A start that got no answer records no task. Recover finds its PR and keeps
+// it there: a fix finding then goes to no thread, as no task names one.
+func TestBuildFollowUpNeedsATask(t *testing.T) {
+	m, pr := outsidePRWorld(t)
+	m.delegated(delegate.State{Story: 1191, Feature: 1170, Receiver: "amp", Mode: "cloud", Status: dlgMaybe, Handoffs: 1,
+		Events: []delegate.Event{{At: "2026-11-01T09:00:00Z", Status: dlgMaybe, Detail: "no answer before the timeout"}}})
+	if code, out, errOut := m.recover(1170, ""); code != 0 || m.state(1191).Status != dlgPROpen {
+		t.Fatalf("recover: exit %d: %s%s", code, out, errOut)
+	}
+	inspectVerdict(m, pr, strings.Repeat("c", 40), inspect.Fix, 11912)
+	calls := len(m.callLog())
+	code, out, errOut := run(t, m.agent, m.opts, "build", "1191", "--delegate", "amp", "--repo", "o/r", "--asked", "aayu mission next")
+	if code == 0 || !strings.Contains(errOut, fmt.Sprintf("#1191's delegation records no Amp task, so no thread takes the fixes of PR #%d", pr.Number)) || len(m.callLog()) != calls {
+		t.Fatalf("build 1191 on a fix: exit %d, calls %q: %s%s", code, m.callLog()[calls:], out, errOut)
+	}
+}
