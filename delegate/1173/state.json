@@ -9,7 +9,8 @@
   "task": "T-01a1970a-5967-7735-a6d1-29e1fa762d9f",
   "task_url": "https://ampcode.com/threads/T-01a1970a-5967-7735-a6d1-29e1fa762d9f",
   "branch": "story/1173-approve-to-build-is-an-inbox-card-with-i",
-  "status": "handed-off",
+  "pr": 1225,
+  "status": "pr-open",
   "brief_sha256": "e8d3efc4a92c13f8758bce3fc757467ed0beef1c05553c063306e1b7cfa96f99",
   "started_at": "2026-11-01T12:16:11Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-01T12:16:54Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T13:39:57Z",
+      "status": "pr-open",
+      "detail": "PR #1225 found by aayu mission recover"
     }
   ]
 }
