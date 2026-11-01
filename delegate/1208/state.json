@@ -1,0 +1,20 @@
+{
+  "story": 1208,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "",
+  "mode": "",
+  "family": "",
+  "status": "",
+  "brief_sha256": "",
+  "started_at": "",
+  "events": [
+    {
+      "at": "2026-11-01T02:05:50Z",
+      "status": "kanha",
+      "detail": "merged #1208 (PR #1209): run aayu mission next 1170 (sent)",
+      "text": "merged #1208 (PR #1209): run aayu mission next 1170"
+    }
+  ]
+}
