@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,6 +59,7 @@ type StoryReview struct {
 	Story   int    `json:"story"`
 	PR      int    `json:"pr,omitempty"`
 	Head    string `json:"head,omitempty"` // the merged head the card showed the evidence of
+	Pack    string `json:"pack,omitempty"` // the pack the card showed, by its ledger path and SHA-256
 	Verdict string `json:"verdict"`        // accepted or commented
 	By      string `json:"by"`
 	At      string `json:"at"`
@@ -286,10 +289,15 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		} else {
 			p := s.pulls[pr.Number]
 			it.PR, it.Head, it.Evidence, it.mergeSHA = pr.Number, p.GetHead().GetSHA(), p.GetHTMLURL(), pr.MergeSHA
+			if st.pack != nil { // what an accept accepts: this pack, as read
+				b, _ := proof.Encode(st.pack.Pack)
+				sum := sha256.Sum256(b)
+				it.Pack = termText(st.pack.Path) + "@sha256:" + hex.EncodeToString(sum[:])
+			}
 			it.f.problem = "agreed today: review it"
 			switch {
 			case st.pack != nil:
-				it.Lines = append(it.Lines, fmt.Sprintf("Merged in #%d at %s. Evidence: the %s pack %s on the ledger.", pr.Number, short(it.Head), st.pack.Pack.Authority.Kind, path.Dir(st.pack.Path)))
+				it.Lines = append(it.Lines, fmt.Sprintf("Merged in #%d at %s. Evidence: the %s pack %s on the ledger.", pr.Number, short(it.Head), st.pack.Pack.Authority.Kind, termText(path.Dir(st.pack.Path))))
 			case st.packErr != "":
 				it.Lines = append(it.Lines, fmt.Sprintf("Merged in #%d at %s. Its packs cannot be read: %s.", pr.Number, short(it.Head), termText(st.packErr)))
 			default:
@@ -309,7 +317,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 						continue
 					}
 					for _, rel := range pc.Evidence {
-						ev := EveningEvidence{Path: termText(rel), Link: evidenceLink(repoURL, *st.pack, rel)}
+						ev := EveningEvidence{Path: termText(rel), Link: termText(evidenceLink(repoURL, *st.pack, rel))}
 						if a, ok := st.pack.Pack.Artifact(rel); ok {
 							ev.Kind = termText(a.Kind)
 						}
@@ -401,7 +409,7 @@ func (e *Env) eveningAct(ctx context.Context, c *github.Client, repo, login stri
 	if err != nil {
 		return err
 	}
-	r := StoryReview{Story: it.Number, PR: it.PR, Head: it.Head, Verdict: ReviewAccepted, By: login, At: e.Now().UTC().Format(time.RFC3339)}
+	r := StoryReview{Story: it.Number, PR: it.PR, Head: it.Head, Pack: it.Pack, Verdict: ReviewAccepted, By: login, At: e.Now().UTC().Format(time.RFC3339)}
 	if a.Command == eveningComment {
 		text := strings.TrimSpace(a.Answer)
 		if text == "" {
