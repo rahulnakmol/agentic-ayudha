@@ -437,9 +437,15 @@ func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, tip
 		return nil, nil, "", Wrap(ExitExternal, err)
 	}
 	defer t.Close()
+	base, draft, err = r.recordsIn(ctx, t)
+	return base, draft, t.Tip, err
+}
+
+// recordsIn is records in the ledger tree t, which the caller already read.
+func (r *partRun) recordsIn(ctx context.Context, t *ledger.Tree) (base, draft *ready.Baseline, err error) {
 	paths, err := t.List(ctx, ready.BaselineDir(r.n))
 	if err != nil {
-		return nil, nil, "", Wrap(ExitExternal, err)
+		return nil, nil, Wrap(ExitExternal, err)
 	}
 	get := func(v int, isDraft bool) (*ready.Baseline, error) {
 		p := ready.BaselinePath(r.n, r.part, v, isDraft)
@@ -464,9 +470,9 @@ func (r *partRun) records(ctx context.Context) (base, draft *ready.Baseline, tip
 		draft, err = get(drafted, true)
 	}
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, err
 	}
-	return base, draft, t.Tip, nil
+	return base, draft, nil
 }
 
 // request drafts the part's next version and says on the Feature that it

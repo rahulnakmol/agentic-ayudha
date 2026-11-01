@@ -43,31 +43,21 @@ func (e *Env) baselineCards(ctx context.Context, repo string, features []int) ([
 	if err != nil {
 		return nil, err
 	}
-	t, err := w.Read(ctx)
-	if err != nil { // no ledger yet: nothing is drafted
+	t, err := w.Read(ctx) // one read: each part's records come from the same tree, so a listing and its records agree
+	if err != nil {       // no ledger yet: nothing is drafted
 		return nil, ignoreMissing(err)
 	}
-	paths, err := t.List(ctx, "specs")
-	t.Close()
-	if err != nil {
-		return nil, err
-	}
+	defer t.Close()
 	var out []InboxItem
 	for _, f := range features {
-		var mine []string
-		for _, p := range paths {
-			if strings.HasPrefix(p, ready.BaselineDir(f)+"/") {
-				mine = append(mine, p)
-			}
-		}
 		for _, part := range ready.Parts {
-			if approved, drafted := ready.Versions(mine, part); drafted <= approved {
-				continue
-			}
 			r := &partRun{e: e, c: c, w: w, repo: repo, n: f, part: part}
-			base, draft, _, err := r.records(ctx) // a draft waits: Versions said so
+			base, draft, err := r.recordsIn(ctx, t)
 			if err != nil {
 				return nil, err
+			}
+			if draft == nil {
+				continue
 			}
 			it, pins, err := r.feature(ctx)
 			switch {
