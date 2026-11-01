@@ -355,7 +355,17 @@ const (
 var LayerTable = []Layer{
 	{L01, "Experience", UXResearcher, []string{"packages/design-system/**", "examples/benefits-qa/web/**"}},
 	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**", "examples/benefits-qa/api/**", "examples/benefits-qa/cmd/**"}},
-	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
+	// L03 also holds every verb's own package under internal/ that no other
+	// layer names (Story #1210): L03 is the default, and moving one to another
+	// layer is the Code Architect's call.
+	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**",
+		"internal/agentenv/**", "internal/audit/**", "internal/autonomy/**", "internal/brain/**", "internal/brief/**", "internal/chart/**",
+		"internal/counsel/**", "internal/decide/**", "internal/delegate/**", "internal/design/**", "internal/doctor/**", "internal/experiment/**",
+		"internal/gittest/**", "internal/grill/**", "internal/initrepo/**", "internal/inspect/**", "internal/journey/**", "internal/measure/**",
+		"internal/ops/**", "internal/planning/**", "internal/prbody/**", "internal/production/**", "internal/ratchet/**", "internal/ready/**",
+		"internal/scope/**", "internal/seats/**", "internal/skills/**", "internal/status/**", "internal/survey/**", "internal/tell/**",
+		"internal/testbin/**", "internal/triage/**", "internal/ui/**", "internal/uireview/**", "internal/upgrade/**",
+		"loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
 	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
 	{L05, "Intelligence", DataAIArchitect, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
 	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/integrations/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},

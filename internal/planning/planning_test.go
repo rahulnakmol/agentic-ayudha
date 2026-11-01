@@ -126,6 +126,27 @@ func TestCheckSliceDirectoryPaths(t *testing.T) {
 	}
 }
 
+// A story in internal/inspect or internal/delegate falls in the layer
+// LAYERS.md gives it, L03, with no path problem (Story #1210, criterion 4).
+func TestCheckSliceInspectAndDelegateLayer(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		paths     []string
+		footprint string
+	}{
+		{"inspect_file", []string{"internal/inspect/filter.go"}, "L03"},
+		{"inspect_directory", []string{"internal/inspect/"}, "L03"},
+		{"delegate_file", []string{"internal/delegate/brief.go"}, "L03"},
+		{"delegate_and_cli", []string{"internal/delegate/brief.go", "internal/cli/slice.go"}, "L02,L03"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if problems, footprint := pathCheck(t, f887, tc.paths); problems != "" || footprint != tc.footprint {
+				t.Errorf("problems %q, footprint [%s]; want none, [%s]", problems, footprint, tc.footprint)
+			}
+		})
+	}
+}
+
 // CheckPlan: a story without layer labels takes the plan's layers as its
 // footprint (sorted, once each) and the never layers among them need the EM
 // review; malformed checkpoints and a plan for another story are refused.

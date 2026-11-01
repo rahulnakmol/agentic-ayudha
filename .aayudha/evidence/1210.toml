@@ -1,0 +1,21 @@
+# Which tests prove Story #1210's Completion Goal.
+
+[[criterion]]
+id = 1 # Expected paths include internal/workitems/, a story names internal/workitems/validate.go: no path problem
+tests = ["internal/planning:TestCheckSliceDirectoryPaths/1_file_under_directory", "internal/planning:TestCheckSliceDirectoryPaths/1_nested_file_under_directory"]
+
+[[criterion]]
+id = 2 # internal/workitems with no slash: the same as with the slash
+tests = ["internal/planning:TestCheckSliceDirectoryPaths/2_directory_without_slash", "internal/planning:TestCheckSliceDirectoryPaths/2_story_directory_without_slash"]
+
+[[criterion]]
+id = 3 # a story names internal/workitemsx/a.go, the Feature internal/workitems/: outside the expected paths
+tests = ["internal/planning:TestCheckSliceDirectoryPaths/3_sibling_with_longer_name", "internal/planning:TestCheckSliceDirectoryPaths/3_sibling_without_slash"]
+
+[[criterion]]
+id = 4 # a story names internal/inspect/filter.go or internal/delegate/brief.go: slice names its layer, no path problem
+tests = ["internal/planning:TestCheckSliceInspectAndDelegateLayer"]
+
+[[criterion]]
+id = 5 # go generate: LAYERS.md lists internal/inspect/** and internal/delegate/**; a package in no layer fails a test
+tests = ["internal/verbs/gen:TestEveryInternalPackageInALayer"]
