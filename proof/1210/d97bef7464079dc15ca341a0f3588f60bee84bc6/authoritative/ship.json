@@ -1,0 +1,53 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1210,
+  "pr": 1215,
+  "pr_head_sha": "d97bef7464079dc15ca341a0f3588f60bee84bc6",
+  "merge_commit": "bed5524d174f6e241fca42421268008b6163fb1c",
+  "pack": "proof/1210/d97bef7464079dc15ca341a0f3588f60bee84bc6/authoritative/pack.json",
+  "pack_landed": "artifact 13079975322 of run 41294980504 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/41294980504), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 41294980504,
+  "artifact": 13079975322,
+  "pack_sha256": "cdc2f661bf2637cf3d8b37041d58163f109cd6cdb4b6dc644ce8912e0edcc029",
+  "human_pass": {
+    "kind": "proof",
+    "login": "rahulnakmol",
+    "commit": "d97bef7464079dc15ca341a0f3588f60bee84bc6",
+    "note": "merged on proof (Decision #593): required checks build, generate-drift, lint, commits, security, docs, release-snapshot green, the pack verified with its floors holding, inspect at merge with review rung B, and nothing in the narrow set; CODEOWNERS paths seats/engineering-manager/CHARTER.md merged with no code owner's review"
+  },
+  "proof": {
+    "rung": "B",
+    "required_checks": [
+      "build",
+      "generate-drift",
+      "lint",
+      "commits",
+      "security",
+      "docs",
+      "release-snapshot"
+    ],
+    "protected": [
+      "seats/engineering-manager/CHARTER.md"
+    ],
+    "policy": "5c0298b2e526acb3bcef369c1b3f2363f75c1a04"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L03"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "autonomous": false,
+    "skipped": "the human pass is settled: proof"
+  },
+  "actions_segment": "actions/2026-11-01/cli-20261101T102510Z.jsonl",
+  "shipped_at": "2026-11-01T10:25:31Z",
+  "shipped_by": "rahulnakmol"
+}
