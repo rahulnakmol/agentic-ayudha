@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadNotAmpRefused"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadNotAmpRefused","Output":"=== RUN   TestAmpHostThreadNotAmpRefused\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadNotAmpRefused","Output":"--- PASS: TestAmpHostThreadNotAmpRefused (1.51s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadNotAmpRefused"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostLateRecordReleasesLease"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostLateRecordReleasesLease","Output":"=== RUN   TestAmpHostLateRecordReleasesLease\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostLateRecordReleasesLease","Output":"--- PASS: TestAmpHostLateRecordReleasesLease (3.25s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostLateRecordReleasesLease"}

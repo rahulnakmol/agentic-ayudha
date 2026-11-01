@@ -1,0 +1,54 @@
+{
+  "head": "2eacf0bfaeeb15716b2600067211351efc6f1ce0",
+  "maps": [
+    {
+      "dir": "examples/benefits-qa/.agents/skills/verify-benefits-qa",
+      "product": "benefits-qa",
+      "features": [
+        {
+          "id": "ask-answer",
+          "checks": 3
+        },
+        {
+          "id": "refer-to-hr",
+          "checks": 1
+        },
+        {
+          "id": "refusals",
+          "checks": 2
+        },
+        {
+          "id": "api-ask",
+          "checks": 3
+        },
+        {
+          "id": "product-events",
+          "checks": 1
+        },
+        {
+          "id": "telemetry",
+          "checks": 1
+        }
+      ]
+    },
+    {
+      "dir": "examples/notes/.agents/skills/verify-notes",
+      "product": "notes",
+      "features": [
+        {
+          "id": "add-and-list",
+          "checks": 4
+        },
+        {
+          "id": "mark-done",
+          "checks": 2
+        },
+        {
+          "id": "store",
+          "checks": 1
+        }
+      ]
+    }
+  ],
+  "verdict": "clean"
+}

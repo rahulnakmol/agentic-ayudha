@@ -1,0 +1,31 @@
+{
+  "covered": 184,
+  "executable": 199,
+  "percent": 92.46231155778895,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/build.go": [
+      278,
+      279
+    ],
+    "internal/cli/delegate.go": [
+      720,
+      721,
+      1159
+    ],
+    "internal/cli/missionnext.go": [
+      379,
+      380,
+      386,
+      387,
+      419,
+      420,
+      426,
+      427,
+      434,
+      435
+    ]
+  },
+  "format": "go coverprofile"
+}
