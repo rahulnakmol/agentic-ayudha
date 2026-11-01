@@ -1,0 +1,21 @@
+{
+  "story": 1207,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1207-the-mission-starts-a-story-that-already",
+  "status": "host-handoff",
+  "brief_sha256": "8a5b41fd692f253fa6fa10b98c4fcf03e76cb26dfce65a1513b2f9c346d1f4b1",
+  "started_at": "2026-11-01T10:27:02Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-01T10:27:02Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1207: The mission starts a story that already has an open Refs PR built outside it"
+    }
+  ]
+}
