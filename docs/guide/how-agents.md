@@ -111,7 +111,7 @@ host calls the same script:
 
 The fingerprint is a SHA-256 of the requirements and setup steps. `agentenv.Status` reports each host as missing,
 stale (the code asks for something else, a generated file was edited, or the record's fingerprint differs), or
-verified.
+verified. A host is verified by a container record or by a live cloud record of the current fingerprint.
 
 **The flags.** Without flags, `install --env` shows the spec, a diff of every file, and the UI values.
 
@@ -132,7 +132,9 @@ installs a git pre-push hook that runs the gate, and `.agents/setup` installs it
 `git push --no-verify` skips it once.
 
 Results land in `.aayudha/env-verified.toml`. Agents may run `--apply` and `--verify`: they write only repository
-files.
+files. A pull request that changes `.aayudha/env.toml` or `.agents/setup` fails CI's coverage ratchet step while a
+host in the spec's `hosts` has no record of the new fingerprint. The step names each such host and the command
+that verifies it (Bug #1211).
 
 **Detect and Ensure.** `agentenv.Detect` reports, per agent, the CLI path and version, whether it is signed in,
 whether its cloud can take a hand-off, and the exact install and sign-in commands. It makes no model or task call,
@@ -144,7 +146,11 @@ secret store or `CURSOR_API_KEY`; for Claude Code, a claude.ai sign-in; for Amp,
 for this repository. Before a fresh cloud hand-off, `build --delegate` calls `agentenv.Ensure` for the receiver. It
 regenerates and verifies a missing or stale environment, which takes minutes. When the verified files are not on the
 default branch yet, it returns `ErrNotLanded` with the exact git command, and the hand-off stops with exit 4. Syncs do
-not re-run it.
+not re-run it. When no Docker daemon answers, as in an Amp orb, Ensure probes Amp's committed environment live
+instead, and records `[cloud.amp]`. A signed-in amp CLI runs the probe with `amp -ox`. In a Kanha thread with no
+sign-in, build writes the probe to a file and releases the start. The Kanha runs the probe in a thread of its own,
+records the reply with `install --env --record`, and starts the story again. A probe that fails stops the hand-off
+with the probe's reply.
 
 **Two doctor rows.** `aayu doctor`'s `agent-env` row lists each host as verified, stale, or missing, and suggests
 `aayu install --env --verify` when one is not verified. The `agents` row lists what `Detect` found, with the

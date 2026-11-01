@@ -14,7 +14,7 @@ import (
 
 // States of a host's environment (doctor's agent-env check).
 const (
-	Verified = "verified" // generated from the current spec and verified in a clean container
+	Verified = "verified" // generated from the current spec and verified in a clean container or the host's live cloud
 	Stale    = "stale"    // the code's toolchain or the files changed since generation or verification
 	Missing  = "missing"  // not generated or never verified
 )
@@ -90,6 +90,8 @@ func Status(root string) ([]HostStatus, error) {
 		switch {
 		case len(drift) > 0:
 			st.State, st.Detail, st.Lines = Stale, "generated files changed; `aayu install --env --apply` rewrites them", drift
+		case st.Live && (!okc || rec.Fingerprint != fp): // the host's own cloud ran the check of this environment (Bug #1211)
+			st.State, st.Detail = Verified, fmt.Sprintf("verified %s live in %s's cloud (%s, %s)", cl.At, h, cl.Evidence, fp)
 		case !okc:
 			st.State, st.Detail = Missing, "generated, never verified: `aayu install --env --host "+h+" --verify`"
 		case rec.Fingerprint != fp:
@@ -186,6 +188,10 @@ type EnsureOptions struct {
 	Fetch  Fetch  // resolves pins when the spec must be regenerated
 	Run    Runner // container runner
 	LogDir string
+	// Cloud, when set, proves the host's environment live in its own cloud
+	// where no Docker daemon answers (Bug #1211): it probes the committed
+	// spec on the default branch, records a passing probe, and returns it.
+	Cloud func(ctx context.Context, s Spec) CloudResult
 }
 
 func (o *EnsureOptions) defaults(root string) {
@@ -212,9 +218,11 @@ func (o *EnsureOptions) defaults(root string) {
 // Ensure makes host's environment verified before a cloud hand-off: when it
 // is missing or stale it regenerates the files from the code (recorded
 // answers; new questions take their defaults), verifies them in a clean
-// container, and records the result. A verified environment whose files are
-// not on Remote/Base yet returns an error wrapping ErrNotLanded whose text is
-// the exact command that lands them.
+// container, and records the result. With no Docker daemon and o.Cloud set,
+// the committed environment is probed live instead. A verified environment
+// whose files are not on Remote/Base yet returns an error wrapping
+// ErrNotLanded whose text is the exact command that lands them; the record
+// of a live probe need not land, since the probe ran what Remote/Base has.
 func Ensure(ctx context.Context, root, host string, o EnsureOptions) (HostStatus, error) {
 	o.defaults(root)
 	sts, err := Status(root)
@@ -222,6 +230,11 @@ func Ensure(ctx context.Context, root, host string, o EnsureOptions) (HostStatus
 		return HostStatus{}, err
 	}
 	st := find(sts, host)
+	if st.State != Verified && o.Cloud != nil {
+		if st, err = ensureLive(ctx, root, host, st, o); err != nil {
+			return st, err
+		}
+	}
 	if st.State != Verified {
 		disc, err := Discover(root)
 		if err != nil {
@@ -257,7 +270,7 @@ func Ensure(ctx context.Context, root, host string, o EnsureOptions) (HostStatus
 		}
 		st = find(sts, host)
 	}
-	if missing := notLanded(root, o.Remote+"/"+o.Base, host); len(missing) > 0 {
+	if missing := notLanded(root, o.Remote+"/"+o.Base, host, !st.Live); len(missing) > 0 {
 		return st, fmt.Errorf("%w: git add %s && git commit -s -m \"build(env): set up the %s agent environment\", then open a pull request to %s and merge it (%s)",
 			ErrNotLanded, strings.Join(missing, " "), host, o.Base, strings.Join(missing, ", ")+" differ from "+o.Remote+"/"+o.Base)
 	}
@@ -288,8 +301,27 @@ func KeepPins(s *Spec, old Spec) {
 	keepGate(s, old)
 }
 
-// notLanded lists the host's files that ref does not have as they are here.
-func notLanded(root, ref, host string) []string {
+// ensureLive proves host's committed environment with o.Cloud when no Docker
+// daemon answers here; with one, it leaves st to the container. Only the
+// probe's reply decides, and a probe that passes must leave host verified.
+func ensureLive(ctx context.Context, root, host string, st HostStatus, o EnsureOptions) (HostStatus, error) {
+	s, ok, err := LoadSpec(root)
+	if _, derr := Docker(ctx, o.Run); derr == nil || !ok || err != nil {
+		return st, nil
+	}
+	if r := o.Cloud(ctx, s); !r.OK {
+		return st, fmt.Errorf("no Docker daemon answers here, and the live %s probe did not pass (%s): %s", host, orStr(r.URL, "no probe thread"), r.Detail)
+	}
+	sts, err := Status(root)
+	if st = find(sts, host); err == nil && st.State != Verified {
+		err = fmt.Errorf("the live %s probe passed, and its environment is %s: %s", host, st.State, st.Detail)
+	}
+	return st, err
+}
+
+// notLanded lists the host's files that ref does not have as they are here,
+// and the verification record when record is set.
+func notLanded(root, ref, host string, record bool) []string {
 	s, ok, err := LoadSpec(root)
 	if err != nil || !ok {
 		return nil
@@ -298,8 +330,11 @@ func notLanded(root, ref, host string) []string {
 	if err != nil {
 		return nil
 	}
+	if record {
+		files = append(files, File{Path: VerifiedPath})
+	}
 	var out []string
-	for _, f := range append(files, File{Path: VerifiedPath}) {
+	for _, f := range files {
 		if !forHost(f.Path, host) {
 			continue
 		}

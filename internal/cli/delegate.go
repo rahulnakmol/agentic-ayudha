@@ -709,6 +709,23 @@ func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, 
 	return e.saveDelegation(ctx, d)
 }
 
+// hostProbe hands the live probe of Amp's environment to the Amp thread this
+// build runs in, whose amp CLI is not signed in (Bug #1211), as hostHandoff
+// hands it a start: the probe goes to a file, and the host creates the probe
+// thread with its own thread tool and records the probe's reply. aayu calls
+// no Amp API. The result fails, so build releases the story's start; once the
+// reply is recorded, the next start finds amp verified and hands it off.
+func (d *delegation) hostProbe() agentenv.CloudResult {
+	path := filepath.Join(d.hostDir, "probe.md")
+	if err := writeHostFile(path, agentenv.ProbePrompt); err != nil {
+		return agentenv.CloudResult{Host: delegate.Amp, Detail: "the probe for the host was not written: " + err.Error()}
+	}
+	return agentenv.CloudResult{Host: delegate.Amp, Detail: fmt.Sprintf("the amp CLI is not signed in here, so the host runs the probe: "+
+		"create one Amp thread titled %q with the text of %s as its prompt, and wait for its reply, at most %d minutes. "+
+		"Then run `aayu install --env --host amp --record '<its reply>'`, and start #%d again",
+		"aayu environment probe", path, int(pickLockTTL.Minutes()), d.story)}
+}
+
 // recordThread records the thread the host created for d's host hand-off
 // (--thread), as the CLI's hand-off records its thread. It lands only on the
 // ledger tip it read, where the same hand-off still waits, so a lapse and a
@@ -749,12 +766,23 @@ func (e *Env) recordThread(ctx context.Context, d *delegation, res *BuildResult,
 // ensureCloudEnv runs agentenv.Ensure for the receiver before a cloud
 // hand-off. A verified environment whose files are not on the default branch
 // yet, or one that fails verification, stops the hand-off with the exact
-// next step; --local stays available.
+// next step; --local stays available. Where no Docker daemon answers, Amp's
+// environment is probed live in a new orb (Bug #1211): through the amp CLI
+// when it is signed in, else by a thread the host creates.
 func (e *Env) ensureCloudEnv(ctx context.Context, d *delegation, res *BuildResult) error {
 	ensure := e.EnsureEnv
 	if ensure == nil {
 		ensure = func(ctx context.Context, root, host string) (agentenv.HostStatus, error) {
-			return agentenv.Ensure(ctx, root, host, agentenv.EnsureOptions{Run: e.envRunner(), Fetch: e.envFetch()})
+			o := agentenv.EnsureOptions{Run: e.envRunner(), Fetch: e.envFetch()}
+			if host == delegate.Amp {
+				o.Cloud = func(ctx context.Context, s agentenv.Spec) agentenv.CloudResult {
+					return e.probeCloud(ctx, root, host, d.repo, s)
+				}
+			}
+			if d.host {
+				o.Cloud = func(context.Context, agentenv.Spec) agentenv.CloudResult { return d.hostProbe() }
+			}
+			return agentenv.Ensure(ctx, root, host, o)
 		}
 	}
 	pp := e.progress(fmt.Sprintf("Checking %s's cloud environment", delegate.Names[d.receiver]))
