@@ -59,7 +59,7 @@ func (p PassRule) who() string {
 		people = p.Owners
 		if len(p.Approvers) > 0 {
 			people = slices.DeleteFunc(slices.Clone(p.Owners), func(o string) bool {
-				return !slices.ContainsFunc(p.Approvers, func(a string) bool { return strings.EqualFold(a, o) })
+				return !slices.ContainsFunc(p.Approvers, func(a string) bool { return sameLogin(a, o) })
 			})
 		}
 		if len(people) == 0 {
@@ -73,16 +73,23 @@ func (p PassRule) who() string {
 }
 
 // allows checks a review that is already a human pass (identity.HumanPass)
-// against the rule.
+// against the rule. A login may be written with a leading "@" in config.
 func (p PassRule) allows(login string) error {
-	if len(p.Approvers) > 0 && !slices.ContainsFunc(p.Approvers, func(a string) bool { return strings.EqualFold(a, login) }) {
+	same := func(a string) bool { return sameLogin(a, login) }
+	if len(p.Approvers) > 0 && !slices.ContainsFunc(p.Approvers, same) {
 		return fmt.Errorf("approval by %s is not the human pass: it must come from %s (%s)", login, strings.Join(p.Approvers, " or "), p.As)
 	}
-	if len(p.Never) > 0 && !slices.ContainsFunc(p.Owners, func(a string) bool { return strings.EqualFold(a, login) }) {
+	if len(p.Never) > 0 && !slices.ContainsFunc(p.Owners, same) {
 		return fmt.Errorf("approval by %s does not cover never layer(s) %s: a CODEOWNER of %s must approve (owners: %s), whatever the streak",
 			login, strings.Join(p.Never, ", "), strings.Join(p.NeverPath, ", "), listOrNone(p.Owners))
 	}
 	return nil
+}
+
+// sameLogin reports whether two GitHub logins name one account: case, spaces,
+// and a leading "@" (as config may write one) do not count.
+func sameLogin(a, b string) bool {
+	return strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(a), "@"), strings.TrimPrefix(strings.TrimSpace(b), "@"))
 }
 
 // neverOwners fills in the never-layer paths of a PR's files, those with no

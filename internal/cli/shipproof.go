@@ -20,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
@@ -38,6 +39,9 @@ type ProofPass struct {
 	Checks    []string `json:"required_checks"`     // the base branch's required checks, all green
 	Protected []string `json:"protected,omitempty"` // CODEOWNERS paths it merged with no code owner's approval
 	Policy    string   `json:"policy"`              // the base branch's tip whose config and CODEOWNERS judged it
+	// Approval is the [autonomy] approver's `aayu inspect --approve` of the
+	// head, on the ledger, that a review at rung human rests on (Story #1192).
+	Approval *headApproval `json:"approval,omitempty"`
 }
 
 // branchTip is the commit a branch points at now.
@@ -383,12 +387,28 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	}
 	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", policy), Changed: changed,
 		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: cfg.Identity.BotLogins}).Unapproved
+	// A person's review at the head (rung human) is the human pass when the
+	// base policy's [autonomy] approver recorded `aayu inspect --approve` of
+	// this exact head on the ledger: the record the merge gate's own human
+	// fallback trusts (Story #1192). proof_rungs does not list human, so a
+	// review at rung human with no such record still waits for a person.
+	// The approver must also be one the pass rule allows: a paired
+	// Engineering Manager seat's human comes first (passRule).
+	if rung == inspect.RungHuman && !slices.Contains(a.ProofRungs, rung) && passRule(cfg).allows(a.Approver) == nil {
+		approver := strings.TrimPrefix(strings.TrimSpace(a.Approver), "@")
+		approvals := e.readApprovals(ctx)
+		if i := slices.IndexFunc(approvals, func(ap headApproval) bool {
+			return ap.PR == pr.GetNumber() && ap.Head == head && strings.EqualFold(ap.By, approver)
+		}); i >= 0 && approver != "" {
+			pp.Approval = &approvals[i]
+		}
+	}
 	switch {
 	case readErr != nil: // a file the narrow set judges could not be read
 		return nil, "", false, Wrap(ExitExternal, readErr)
 	case pr.GetBase().GetRef() != dev:
 		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), false, nil
-	case !slices.Contains(a.ProofRungs, rung):
+	case !slices.Contains(a.ProofRungs, rung) && pp.Approval == nil:
 		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), false, nil
 	case gate != "" && gate != "success" && gate != "failure":
 		return nil, fmt.Sprintf("required check %s is %s; only its failure for the CODEOWNERS paths a PR touches is accepted", seats.GateCheck, gate), false, nil

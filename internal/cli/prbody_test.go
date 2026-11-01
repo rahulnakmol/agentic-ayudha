@@ -154,6 +154,8 @@ func TestPassRuleWho(t *testing.T) {
 	withApprover.Approvers = []string{"alice"}
 	outsider := never
 	outsider.Approvers = []string{"carol"}
+	at := never // config may write the approver with an "@"
+	at.Approvers = []string{"@bob"}
 	for _, tc := range []struct {
 		rule PassRule
 		want string
@@ -162,6 +164,7 @@ func TestPassRuleWho(t *testing.T) {
 		{PassRule{Approvers: []string{"rahulnakmol"}}, "@rahulnakmol"},
 		{never, "@Alice or @bob"},
 		{withApprover, "@Alice"},
+		{at, "@bob"},
 		{outsider, "nobody configured (no approver is a CODEOWNER of internal/autonomy/)"},
 	} {
 		if got := tc.rule.who(); got != tc.want {

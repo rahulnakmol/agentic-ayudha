@@ -1429,6 +1429,124 @@ func TestShipOnProof(t *testing.T) {
 	}
 }
 
+// Story #1192: the [autonomy] approver approves a PR's head once with `aayu
+// inspect --approve` (one device code), the merge gate's inspect records a
+// human review of that head, and ship merges on that approval with no second
+// code; the ship record names the approval as the human pass. An approval of
+// an older head, one by another login, a PR in the narrow set, and a human
+// rung with no approval all refuse as before.
+func TestShipOnApproval(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	base := strings.Repeat("b", 40)
+	conf := "version = 1\n\n[autonomy]\napprover = \"lead\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\nalways_person = [\"policy/\"]\n"
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(conf), 0o644)
+	g.Mu.Lock()
+	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
+	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
+	g.JobLogs = map[int64]string{7701: "2026-10-31T10:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (reviewed by lead)\n2026-10-31T10:00:00.0000000Z   review: human review: lead\n"}
+	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{}
+	g.RefFiles = map[string]map[string]string{base: {".aayudha/config.toml": conf}}
+	g.Pulls[prN].Files = []string{"empty.txt"}
+	g.Mu.Unlock()
+	approval := func(at, by string) {
+		t.Helper()
+		b, _ := json.Marshal(headApproval{PR: prN, Head: at, By: by, At: "2026-10-31T09:50:00Z", Reason: "read the diff and the pack"})
+		putLedger(t, bare, ApprovedPath, string(b)+"\n")
+	}
+	codes := func() int {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Device == nil {
+			return 0
+		}
+		return g.Device.Started
+	}
+	refused := func(want string) {
+		t.Helper()
+		code, out := shipCmd(t, env, opts, prN)
+		g.Mu.Lock()
+		merged := g.Pulls[prN].Merged
+		g.Mu.Unlock()
+		if code != ExitBlocked || merged || !strings.Contains(out, want) {
+			t.Fatalf("ship, want %q: %d merged %t\n%s", want, code, merged, out)
+		}
+	}
+	notOneOf := "no merge on proof: the review rung at the head is human, not one of A, B, C ([autonomy] proof_rungs)"
+	// Criterion 5: a human rung with no approval on the ledger waits for a person.
+	refused(notOneOf)
+	refused("commented Ready to ship, so the PR waits in the `aayu inbox`")
+	// Criterion 2: an approval of an older head covers nothing at this one.
+	approval(strings.Repeat("a", 40), "lead")
+	refused(notOneOf)
+	// Criterion 3: an approval by a login that is not the [autonomy] approver,
+	// even one recorded for this head, covers nothing.
+	approval(head, "mallory")
+	refused(notOneOf)
+
+	// The approver approves this head through the device flow: one code.
+	person := opts
+	person.DevicePoll = time.Millisecond
+	g.Mu.Lock()
+	g.Viewer = "lead"
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "lead", Outcome: "approve"}
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "read the diff and the pack", "--repo", "o/r"); code != 0 || codes() != 1 {
+		t.Fatalf("inspect --approve: %d, %d device codes\n%s", code, codes(), errOut)
+	}
+	g.Mu.Lock()
+	g.Viewer = "founder" // the agent ships under the person's GitHub login
+	g.Mu.Unlock()
+	// Criterion 4: in the narrow set the approval is no pass: the PR still
+	// waits for --solo-bypass or the inbox.
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", "policy/approvers.md"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches policy/approvers.md, in the narrow set that always needs a person ([autonomy] always_person: policy/)")
+	refused("commented Ready to ship, so the PR waits in the `aayu inbox`")
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt"}
+	g.Mu.Unlock()
+	// A paired Engineering Manager seat's human gives the human pass, not the
+	// [autonomy] approver: the approver's record covers nothing then.
+	paired := conf + "\n[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(paired), 0o644)
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = paired
+	g.Mu.Unlock()
+	refused(notOneOf)
+	// The seat's human may be the approver, written with or without "@".
+	conf = strings.Replace(conf, `approver = "lead"`, `approver = "@lead"`, 1) + "\n[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"Lead\"\n"
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(conf), 0o644)
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.Mu.Unlock()
+
+	// Criterion 1: ship merges on the approval, and asks for no second code.
+	code, out := shipCmd(t, env, opts, prN)
+	if code != 0 || !strings.Contains(out, "human pass: approval by lead") || codes() != 1 {
+		t.Fatalf("ship on the approval: %d, %d device codes\n%s", code, codes(), out)
+	}
+	var sr ShipRecord
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
+	if hp := sr.HumanPass; hp.Kind != "approval" || hp.Login != "lead" || hp.Commit != head ||
+		!strings.Contains(hp.Note, "@lead approved `"+short(head)+"` with `aayu inspect "+strconv.Itoa(prN)+" --approve`") || !strings.Contains(hp.Note, "(`"+ApprovedPath+"`)") ||
+		sr.Proof == nil || sr.Proof.Rung != inspect.RungHuman || sr.Proof.Approval == nil || sr.Proof.Approval.Head != head || sr.Proof.Approval.By != "lead" {
+		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
+	}
+	g.Mu.Lock()
+	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if !merged || !strings.Contains(body, "- Human pass: @lead approved `"+short(head)+"`") {
+		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
+	}
+	// A person passed it, so it waits for no look after merge.
+	if slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("PR labels: %v", g.LabelNames(prN))
+	}
+}
+
 // pullCount is how many pull requests g holds.
 func pullCount(g *fake.GitHub) int {
 	g.Mu.Lock()
