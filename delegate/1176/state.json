@@ -9,7 +9,8 @@
   "task": "T-01a19638-3524-75d9-9c45-50f4f9b5c712",
   "task_url": "https://ampcode.com/threads/T-01a19638-3524-75d9-9c45-50f4f9b5c712",
   "branch": "story/1176-the-evening-review-each-story-agreed-thi",
-  "status": "handed-off",
+  "pr": 1213,
+  "status": "pr-open",
   "brief_sha256": "851d779186e54e510a17d83075d981514c47c46494e5ec8e9ef38c822a520e1d",
   "started_at": "2026-11-01T08:25:28Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-01T08:27:37Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-01T10:26:01Z",
+      "status": "pr-open",
+      "detail": "PR #1213 found by aayu mission recover"
     }
   ]
 }
