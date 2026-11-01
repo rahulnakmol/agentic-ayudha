@@ -379,6 +379,13 @@
       "presence": "device-flow",
       "story": 1191,
       "reason": "PR #1199 already builds #1191 outside the mission"
+    },
+    {
+      "control": "recover",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-11-01T10:26:01Z",
+      "presence": "none"
     }
   ],
   "events_cursor": "2026-11-01T08:31:24Z"
