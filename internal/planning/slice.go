@@ -89,16 +89,14 @@ func (s DraftStory) Item(feature int) workitems.Item {
 }
 
 // GlobFootprint is the layers a set of path globs can touch: a layer counts
-// when one of its globs matches a sample path of an expected glob, or an
-// expected glob matches a sample path of the layer's glob (an expected path
-// broader than the layer).
+// when one of its globs overlaps one of the globs.
 func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 	var out []string
 	for id, lgs := range l {
 		hit := false
 		for _, lg := range lgs {
 			for _, g := range globs {
-				if verify.Match(lg, sample(g)) || verify.Match(g, sample(lg)) {
+				if overlap(lg, g) {
 					hit = true
 				}
 			}
@@ -111,10 +109,38 @@ func GlobFootprint(l verify.LayerGlobs, globs []string) []string {
 	return out
 }
 
+// overlap reports whether two path globs share a path: one matches a sample
+// path of the other (in either direction, so a broader glob covers a narrower
+// one).
+func overlap(a, b string) bool {
+	for _, x := range forms(a) {
+		for _, y := range forms(b) {
+			if verify.Match(x, sample(y)) || verify.Match(y, sample(x)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// forms is what a path glob stands for. A directory (`internal/workitems/`)
+// stands for every path under it; a path without a wildcard and without the
+// slash (`internal/workitems`) can be a file or a directory, so it stands for
+// itself and every path under it. A sibling with a longer name
+// (`internal/workitemsx/`) is in neither.
+func forms(g string) []string {
+	g = strings.TrimPrefix(strings.TrimSpace(strings.Trim(strings.TrimSpace(g), "`")), "/")
+	if d, ok := strings.CutSuffix(g, "/"); ok {
+		return []string{d + "/**"}
+	}
+	if !strings.ContainsAny(g, "*?") {
+		return []string{g, g + "/**"}
+	}
+	return []string{g}
+}
+
 // sample turns a glob into one concrete path it matches.
 func sample(g string) string {
-	g = strings.TrimSpace(strings.Trim(strings.TrimSpace(g), "`"))
-	g = strings.TrimPrefix(g, "/")
 	g = strings.ReplaceAll(g, "**", "x/x")
 	return strings.ReplaceAll(g, "*", "x")
 }
@@ -174,7 +200,7 @@ func CheckSlice(src Source, d SliceDraft, layers verify.LayerGlobs) SliceReport 
 			sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: "name the paths the story changes (a subset of the Feature's expected paths)"})
 		}
 		for _, p := range s.Paths {
-			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return verify.Match(g, sample(p)) || verify.Match(p, sample(g)) }) {
+			if len(src.ExpectedPaths) > 0 && !slices.ContainsFunc(src.ExpectedPaths, func(g string) bool { return overlap(g, p) }) {
 				sr.Problems = append(sr.Problems, workitems.Problem{Field: "paths", Message: fmt.Sprintf("%s is outside the Feature's expected paths", p)})
 			}
 		}
