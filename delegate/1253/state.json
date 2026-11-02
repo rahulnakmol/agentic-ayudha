@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19d63-8097-7643-90e0-3fe5d2143b05",
+  "task_url": "https://ampcode.com/threads/T-01a19d63-8097-7643-90e0-3fe5d2143b05",
   "branch": "story/1253-aayu-inbox-asks-up-to-five-decisions-to",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "0334eea4e44972e4a9f9cb871a3154282688543daf5bf8d92ce60f9e407c8ff9",
   "started_at": "2026-11-02T17:48:46Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-02T17:48:46Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1253: aayu inbox asks up to five decisions to start one Feature: a card per baseline part, then Approve to build, then Mission start"
+    },
+    {
+      "at": "2026-11-02T17:52:06Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
