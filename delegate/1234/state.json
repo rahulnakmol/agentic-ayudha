@@ -9,7 +9,8 @@
   "task": "T-01a19adc-b8f9-747e-b4a7-e9a43d102ced",
   "task_url": "https://ampcode.com/threads/T-01a19adc-b8f9-747e-b4a7-e9a43d102ced",
   "branch": "story/1234-fix-ship-ship-merges-a-pr-proven-on-an-o",
-  "status": "handed-off",
+  "pr": 1236,
+  "status": "pr-open",
   "brief_sha256": "2dd91da42f8e78ac1332cdf4ef13aa851bf22a24f924f2b0272c9f0522b91a44",
   "started_at": "2026-11-02T06:04:51Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-02T06:05:34Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-02T07:32:19Z",
+      "status": "pr-open",
+      "detail": "PR #1236 found by aayu mission recover"
     }
   ]
 }
