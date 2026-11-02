@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	gh "github.com/google/go-github/v90/github"
@@ -164,6 +165,29 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 	})
 	if err != nil {
 		return nil, "", Wrap(ExitExternal, err)
+	}
+	// A draft runs no CI (Story #1250): its jobs report skipped, which counts
+	// as success below. A skipped or neutral run that started before the PR
+	// was last marked ready ran on the draft and proves nothing, so the run
+	// the ready_for_review event starts must stand in for it; with none, the
+	// check is missing. A result that ran, from any time, still counts.
+	skipped := func(r *gh.CheckRun) bool {
+		return r.GetStatus() == "completed" && (r.GetConclusion() == "skipped" || r.GetConclusion() == "neutral")
+	}
+	if slices.ContainsFunc(runs, skipped) {
+		events, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Timeline, *gh.Response, error) {
+			return c.REST.Issues.ListIssueTimeline(ctx, owner, name, n, &o)
+		})
+		if err != nil {
+			return nil, "", Wrap(ExitExternal, err)
+		}
+		var ready time.Time
+		for _, ev := range events {
+			if ev.GetEvent() == "ready_for_review" && ev.GetCreatedAt().After(ready) {
+				ready = ev.GetCreatedAt().Time
+			}
+		}
+		runs = slices.DeleteFunc(slices.Clone(runs), func(r *gh.CheckRun) bool { return skipped(r) && r.GetStartedAt().Before(ready) })
 	}
 	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs, checks)
 	if err != nil {

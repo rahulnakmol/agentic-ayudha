@@ -1190,6 +1190,35 @@ func TestShipOnProof(t *testing.T) {
 	g.CheckRuns[head] = append([]fake.CheckRun{same, cancelled}, runsBefore...)
 	g.Mu.Unlock()
 
+	// Story #1250: a draft's CI skips every job, and a skip counts as
+	// success. After the PR was marked ready, a skip from before proves
+	// nothing: build's only run is the draft's skip, so build is missing.
+	// A run since then counts, a skip in the same second as the event too,
+	// and so does a result that ran before it (lint); docs' and
+	// release-snapshot's skips carry no time, so they are from before.
+	passing := slices.Clone(g.CheckRuns[head])
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = []string{"convert_to_draft", "ready_for_review"}, []string{"2026-10-27T13:57:00Z", "2026-10-27T14:00:00Z"}
+	notBuild := slices.DeleteFunc(slices.Clone(runsBefore), func(r fake.CheckRun) bool { return r.Name == "build" })
+	draftBuild := fake.CheckRun{ID: 121613900001, Name: "build", Status: "completed", Conclusion: "skipped", App: actions, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T13:58:00Z"}
+	g.CheckRuns[head] = append([]fake.CheckRun{draftBuild}, notBuild...)
+	g.Mu.Unlock()
+	refused("required check build is missing on " + short(head))
+	g.Mu.Lock()
+	readyBuild := fake.CheckRun{ID: 121613900002, Name: "build", Status: "completed", Conclusion: "success", App: actions, Suite: &fake.Suite{ID: 61}, StartedAt: "2026-10-27T14:00:05Z"}
+	g.CheckRuns[head] = append([]fake.CheckRun{readyBuild, draftBuild}, notBuild...)
+	g.Mu.Unlock()
+	refused("required check docs is missing on " + short(head))
+	g.Mu.Lock()
+	readyDocs := fake.CheckRun{ID: 121613900003, Name: "docs", Status: "completed", Conclusion: "skipped", App: actions, Suite: &fake.Suite{ID: 61}, StartedAt: "2026-10-27T14:00:00Z"}
+	g.CheckRuns[head] = append([]fake.CheckRun{readyBuild, readyDocs, draftBuild}, notBuild...)
+	g.Mu.Unlock()
+	refused("required check release-snapshot is missing on " + short(head))
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = nil, nil
+	g.CheckRuns[head] = passing
+	g.Mu.Unlock()
+
 	// The audit's label goes on before the merge: when it cannot, nothing
 	// merges, so no merge on proof escapes the look after merge.
 	g.Mu.Lock()
