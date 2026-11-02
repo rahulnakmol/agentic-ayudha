@@ -135,9 +135,9 @@
         1182
       ],
       "gate": {
-        "state": "failed",
-        "dev_sha": "0c4abee6d960609bcfffba73182baf920a9c0dae",
-        "at": "2026-11-02T00:05:36Z"
+        "state": "passed",
+        "dev_sha": "b83e187932bd21fc344b5a3684a6f14957242245",
+        "at": "2026-11-02T04:05:05Z"
       }
     },
     {
