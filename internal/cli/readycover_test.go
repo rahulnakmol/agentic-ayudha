@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -314,22 +316,84 @@ func TestReadyStoryCoverage(t *testing.T) {
 }
 
 // Bug #1251 criterion 3: every command that a message of `aayu ready` names
-// (each string in ready*.go) parses against the command
-// tree with every flag it gives; the strings of internal/ready, which ready
-// prints, too. Placeholders become values. A verb fails unless it is a
-// command or one of the prose words below ("aayu wrote …"). Only an unknown
-// verb or flag fails: a value the tree would refuse is not this test's concern.
+// (each string literal in internal/cli/ready*.go and internal/ready, which
+// ready prints) has a real verb, and each flag it gives is a flag of that
+// verb. A flag in a literal with no command (a suffix such as " --request"
+// that code joins to one) must be a flag of some command. A verb that is
+// prose ("aayu wrote …") is not a command. Each flag is looked up on its own,
+// so a bad value before it hides nothing.
 func TestReadyNamesOnlyRealCommands(t *testing.T) {
 	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Getenv: func(string) string { return "" }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	root := newRoot(e)
-	named := regexp.MustCompile("aayu ([a-z][a-z-]*(?: +(?:--?[a-z][a-z-]*|<[^>]+>|%[ds]|[0-9a-z][0-9a-z_-]*))*)")
+	prose := []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only"}
+	tok := `(?:--?[a-z][a-z-]*(?:=[^\s"'\x60]*)?|<[^>]+>|%[a-z]|"[^"]*"|'[^']*'|[0-9a-z][0-9a-z_./,:-]*)`
+	named := regexp.MustCompile("aayu ([a-z][a-z-]*(?: +" + tok + ")*)")
+	flagRe := regexp.MustCompile(`(?:^|[\s(\x60])(--?[a-z][a-z-]*)`)
+	anyFlag := func(name string) bool {
+		var found func(c *cobra.Command) bool
+		found = func(c *cobra.Command) bool {
+			if c.Flag(name) != nil {
+				return true
+			}
+			return slices.ContainsFunc(c.Commands(), found)
+		}
+		return found(root)
+	}
+	has := func(c *cobra.Command, f string) bool {
+		if name, ok := strings.CutPrefix(f, "--"); ok {
+			name, _, _ = strings.Cut(name, "=")
+			return c.Flag(name) != nil
+		}
+		return len(f) == 2 && (c.Flags().ShorthandLookup(f[1:]) != nil || c.InheritedFlags().ShorthandLookup(f[1:]) != nil)
+	}
+	// faults lists what is wrong with the commands that s names.
+	faults := func(s string) []string {
+		var out []string
+		spans := named.FindAllStringSubmatch(s, -1)
+		for _, m := range spans {
+			args := strings.Fields(m[1])
+			cmd, _, err := root.Find(args[:1])
+			if err != nil || cmd == root {
+				if !slices.Contains(prose, args[0]) {
+					out = append(out, fmt.Sprintf("`aayu %s`: %s is no command", m[1], args[0]))
+				}
+				continue
+			}
+			for _, a := range args[1:] {
+				if f := flagRe.FindStringSubmatch(" " + a); f != nil && f[1] != "-" && !has(cmd, f[1]) {
+					out = append(out, fmt.Sprintf("`aayu %s`: %s is no flag of %s", m[1], f[1], args[0]))
+				}
+			}
+		}
+		if len(spans) == 0 {
+			for _, f := range flagRe.FindAllStringSubmatch(s, -1) {
+				if name, ok := strings.CutPrefix(f[1], "--"); ok && !anyFlag(name) {
+					out = append(out, fmt.Sprintf("%q: %s is no flag of any command", s, f[1]))
+				}
+			}
+		}
+		return out
+	}
+	for s, bad := range map[string]bool{ // controls: each wrong form is found, and a right one passes
+		"aayu ready 840 --part=spec --request --changes <file>":    false,
+		"next: aayu ready %d --part %s --request, then aayu inbox": false,
+		"aayu ready 840 --check=true --ack 853":                    true,
+		"aayu ready 840 --agents invalid --ack 853":                true,
+		"aayu ready 840 --part=spec --request --ack 853":           true,
+		" --ack":                            true,
+		"aayu ack 853":                      true,
+		"aayu grill feature 840 --findings": true,
+	} {
+		if got := faults(s); (len(got) > 0) != bad {
+			t.Errorf("control %q: faults %q", s, got)
+		}
+	}
 	files, _ := filepath.Glob("ready*.go")
 	more, _ := filepath.Glob(filepath.Join("..", "ready", "*.go"))
 	files = slices.DeleteFunc(append(files, more...), func(f string) bool { return strings.HasSuffix(f, "_test.go") })
-	prose := []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only"}
 	checked := 0
 	for _, file := range files {
 		f, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
@@ -341,22 +405,10 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 			if !ok || lit.Kind != token.STRING {
 				return true
 			}
-			s, err := strconv.Unquote(lit.Value)
-			if err != nil {
-				return true
-			}
-			for _, m := range named.FindAllStringSubmatch(s, -1) {
-				args := strings.Fields(regexp.MustCompile(`<[^>]+>|%[ds]`).ReplaceAllString(m[1], "1"))
-				cmd, rest, err := root.Find(args)
-				if err != nil || cmd == root {
-					if !slices.Contains(prose, args[0]) {
-						t.Errorf("%s names `aayu %s`: %s is no command", file, m[1], args[0])
-					}
-					continue
-				}
-				checked++
-				if err := cmd.ParseFlags(rest); err != nil && strings.Contains(err.Error(), "unknown") {
-					t.Errorf("%s names `aayu %s`: %v", file, m[1], err)
+			if s, err := strconv.Unquote(lit.Value); err == nil {
+				checked += len(named.FindAllString(s, -1))
+				for _, fault := range faults(s) {
+					t.Errorf("%s names %s", file, fault)
 				}
 			}
 			return true
