@@ -179,15 +179,19 @@ Hold every sentence to what the record shows:
   what, not when anyone could have seen a gap: say what the record shows and stop there.
 - Four kinds of claim need a record that states them; "so" or "suggests" does not make one safe:
   - a cause: a gap or an event is a cause of the overrun only when a record links it to the extra work (the
-    checkpoints that did that work, a review that names the gap); one with no such link (a missing rollback step, a
-    correction rate) is an observation, not a cause;
-  - a mechanism: how or why something was done ("the footprint was read from the code the story adds");
-  - a counterfactual: what would have happened otherwise ("would have saved a checkpoint", "would have caught it");
-  - a label: a word that sums up a record, a table cell included ("none planned", "untested", "late").
+    checkpoints that did the missing work); a record that only names the gap is not that link. One with no such link
+    (a missing rollback step, a correction rate) is an observation, not a cause. State a linked cause directly;
+  - a mechanism or a motive: how or why something was done ("the footprint was read from the code the story adds");
+  - a counterfactual or a prediction: what would have happened otherwise, or what a change will save ("would have
+    saved a checkpoint", "will remove a checkpoint"). A proposed change says what changes, not what it will save;
+  - a label: a word or a table cell that sums up the record in terms its facts do not give ("none planned" where the
+    plan says nothing, "untested", "late"). A count or a difference of cited figures ("5 used, budget 2") is an
+    observation.
 
-  When the record does not state it, write what the record shows, with its citation, and then the rest as one
-  question that ends its paragraph or list item: "Open question: what set the footprint at Ready?" In a table, a
-  cell the record does not fill says "not in the record".
+  When the record does not state it, cut it. Keep it as an open question only when the answer would change the
+  proposed change: write what the record shows, with its citation, then one question at the end of that paragraph
+  or list item ("Open question: what set the footprint at Ready?"). The question assumes nothing the record does not
+  show. In a table, a cell the record does not fill says "not in the record".
 - Never turn a missing record into a fact. Write "the plan has no checkpoint in that layer", not "nobody checked the
   layers"; say what a later checkpoint did as its record says, and nothing more (not that it also supplied what the
   plan lacked); "coverage was under the floor at that checkpoint", not "the change was untested"; "the review requested
@@ -220,6 +224,8 @@ Hold every sentence to what the record shows:
   about a waiver the record does not show.
 
 Before you reply, check the draft against the record, one item at a time: each numbered cause (which record links it
-to the extra work?), each "so", "suggests", "would have", and "could have" (which cited line states it?), and each
-label and table cell (which source fills it?). Rewrite each item that fails as what the record shows and an open
-question, or cut it.
+to the extra work?); each "so" and "suggests" (which cited lines lead a reader to it?); each "would have", "could
+have", and "will" about an effect (which record states it?); each label and table cell (which source fills it?); each
+sentence that sums up, such as the opening, a summary, what went well, or "only", "both", or "all" (do its cited lines
+cover all of it?); and each open question (does it assume anything the record does not show?). Cut each item that
+fails, or rewrite it as what the record shows.
