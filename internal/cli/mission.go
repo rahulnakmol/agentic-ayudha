@@ -1237,7 +1237,9 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return Wrap(ExitExternal, err)
 			}
-			_ = json.Unmarshal(b, &st)
+			if json.Unmarshal(b, &st) != nil {
+				st = delegate.State{} // a type error keeps the fields decoded before it; none of them counts
+			}
 		}
 		switch {
 		case st.Status == dlgHost && st.Task == "":

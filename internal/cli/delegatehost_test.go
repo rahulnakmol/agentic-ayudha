@@ -156,9 +156,11 @@ func TestMissionShowUnreadableDelegation(t *testing.T) {
 	}
 	m.status(20, "in-progress", "")
 	m.status(21, "in-progress", "")
-	putLedger(t, m.bare, delegate.LedgerPath(20), "{")
-	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#20 in-progress, #21 in-progress") {
-		t.Fatalf("mission show with an unparsable record: exit %d: %s%s", code, out, errOut)
+	for _, rec := range []string{"{", `{"receiver":"amp","status":"handed-off","task":"T-x","story":"20"}`} { // a syntax error, and a type error after usable fields
+		putLedger(t, m.bare, delegate.LedgerPath(20), rec)
+		if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#20 in-progress, #21 in-progress") {
+			t.Fatalf("mission show with the unparsable record %s: exit %d: %s%s", rec, code, out, errOut)
+		}
 	}
 	putLedger(t, m.bare, delegate.LedgerPath(21)+"/x", "{}") // the record's path is a directory: git cannot read it as a file
 	if code, out, errOut := run(t, m.person, m.opts, "mission", "show", "889", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "delegate/21/state.json") {
