@@ -17,6 +17,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -344,12 +345,21 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	for n := range held {
 		spent += max(per-costs[n], 0)
 	}
+	// A mission starts stories only in the day: outside [time] business_hours nothing starts (Story #1178).
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	clock, _ := l.Config.Clock() // a config that loaded has a clock (config.Validate)
 	for i := range entries {
 		en := &entries[i]
 		if !en.free {
 			continue
 		}
 		switch {
+		case !clock.Within(now):
+			en.item.Reason = "outside the day: starts at " + dayStart(clock, now)
+			continue
 		case claimed[en.n]:
 			en.item.Reason = "claimed by another run"
 			continue
@@ -393,6 +403,14 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	}
 	return nil
 }
+
+// dayTime is t as the inbox says a time: "Tue 3 Nov 09:00 Europe/London".
+func dayTime(clock config.Clock, t time.Time) string {
+	return t.In(clock.Loc).Format("Mon 2 Jan 15:04") + " " + clock.Loc.String()
+}
+
+// dayStart is when the day next starts at t: t itself inside [time] business_hours.
+func dayStart(clock config.Clock, t time.Time) string { return dayTime(clock, clock.Next(t)) }
 
 // lapseHost lapses story n's host hand-off st that got no thread (Bug #1208),
 // and reports whether n is free. With write, it first marks the delegation

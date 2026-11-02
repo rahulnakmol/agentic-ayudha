@@ -637,7 +637,7 @@ func TestMissionNextRefusedOnOtherTool(t *testing.T) {
 		!strings.Contains(errOut, "#874's mission runs on codex, the tool of @bob, who started it: run this there") {
 		t.Fatalf("mission next on claude: exit %d: %s%s", code, out, errOut)
 	}
-	codex := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "CODEX_THREAD_ID": "t-1", "XDG_STATE_HOME": m.agent["XDG_STATE_HOME"]}
+	codex := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "CODEX_THREAD_ID": "t-1", "XDG_STATE_HOME": m.agent["XDG_STATE_HOME"], "AAYU_TIME__BUSINESS_HOURS": allDay, "AAYU_TIME__TZ": noonZone(time.Now())}
 	if code, out, errOut := run(t, codex, m.opts, "mission", "next", "874", "--repo", "o/r"); code != 0 || out != "start #950\n" {
 		t.Fatalf("mission next on codex: exit %d: %q%s", code, out, errOut)
 	}
@@ -1011,5 +1011,45 @@ func TestMissionAgentsReadFailsClosed(t *testing.T) {
 	}
 	if m.commits() != commits || len(m.claims(889)) != 0 {
 		t.Fatalf("a failed read wrote the ledger: %s -> %s commits, claims %v", commits, m.commits(), m.claims(889))
+	}
+}
+
+// at sets the world's clock.
+func (m *missionWorld) at(now *time.Time, t time.Time) {
+	m.mu.Lock()
+	*now = t
+	m.mu.Unlock()
+}
+
+// Story #1178, criterion 3: after the end of [time] business_hours, a mission's startable
+// story starts nothing: `aayu mission next` says when the day starts, and the
+// tick wakes no Kanha. On Friday evening the day starts on Monday.
+func TestMissionNextOutsideTheDay(t *testing.T) {
+	m := newMissionWorld(t)
+	m.workday()
+	now := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
+	m.opts.Now = func() time.Time { m.mu.Lock(); defer m.mu.Unlock(); return now }
+	m.startedMission(889, []int{20})
+	m.status(20, "ready", "")
+	for _, tc := range []struct {
+		at   time.Time
+		want string
+	}{
+		{time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), "waits #20: outside the day: starts at Tue 3 Nov 09:00 Europe/London\n"},
+		{time.Date(2026, 11, 3, 8, 59, 0, 0, time.UTC), "waits #20: outside the day: starts at Tue 3 Nov 09:00 Europe/London\n"},
+		{time.Date(2026, 11, 6, 21, 0, 0, 0, time.UTC), "waits #20: outside the day: starts at Mon 9 Nov 09:00 Europe/London\n"},
+		{time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC), "waits #20: outside the day: starts at Mon 9 Nov 09:00 Europe/London\n"},
+	} {
+		m.at(&now, tc.at)
+		if code, out, errOut := m.next(889); code != 0 || out != tc.want || len(m.claims(889)) != 0 {
+			t.Fatalf("mission next at %s: exit %d, claims %v, want %q: %q%s", tc.at, code, m.claims(889), tc.want, out, errOut)
+		}
+		if _, rep, _ := m.tick(tc.at); len(rep.Woken) != 0 || len(rep.Held) != 1 || !strings.Contains(rep.Held[0].Why, "nothing can start: outside the day") {
+			t.Fatalf("tick at %s: %+v", tc.at, rep)
+		}
+	}
+	m.at(&now, time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC))
+	if code, out, errOut := m.next(889); code != 0 || out != "start #20\n" || m.claims(889)[20] != 1 {
+		t.Fatalf("mission next at the start of the day: exit %d: %q%s", code, out, errOut)
 	}
 }

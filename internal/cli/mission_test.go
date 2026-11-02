@@ -126,6 +126,8 @@ func newMissionWorld(t *testing.T) *missionWorld {
 	m.lane = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1", "AMP_THREAD_ID": "T-agent-thread", "XDG_STATE_HOME": state}
 	for _, env := range []map[string]string{m.person, m.agent, m.lane} {
 		env["AAYU_SECRET_CURSOR_API_KEY"], env["AAYU_DELEGATE__CURSOR_API"], env["AAYU_DELEGATE__CODEX_ENV"] = "cursor-key", srv.URL, "env-1"
+		// Missions start stories only in the day (Story #1178): on the wall clock most tests read, every hour is in it.
+		env["AAYU_TIME__BUSINESS_HOURS"], env["AAYU_TIME__TZ"] = allDay, noonZone(time.Now())
 	}
 	m.opts = Options{IsTerminal: stdinTTY, GitHubAPI: m.g.URL(), GitHubGap: -1, Dir: m.dir, DevicePoll: 10 * time.Millisecond,
 		RepoTool: func(_ context.Context, repo string) (string, error) {
@@ -167,6 +169,26 @@ func newMissionWorld(t *testing.T) *missionWorld {
 	}
 	m.issue(870, "Human-dependency engine", "initiative", 0, "")
 	return m
+}
+
+// allDay is business hours with every minute of the day in it but the last:
+// [time] business_hours ends a day at 23:59 at the latest.
+const allDay = "Mon-Sun 00:00-23:59"
+
+// noonZone is a fixed zone where now is about noon, so a test on the wall
+// clock never reaches allDay's last minute.
+func noonZone(now time.Time) string {
+	off := 12 - now.UTC().Hour()           // the zone's offset from UTC, in hours: -11 to +12
+	return fmt.Sprintf("Etc/GMT%+d", -off) // Etc/GMT-5 is UTC+5
+}
+
+// workday gives the world the committed business hours, Mon-Fri 09:00-18:00
+// in Europe/London, for a test on a clock of its own.
+func (m *missionWorld) workday() {
+	for _, env := range []map[string]string{m.person, m.agent, m.lane} {
+		delete(env, "AAYU_TIME__BUSINESS_HOURS")
+		delete(env, "AAYU_TIME__TZ")
+	}
 }
 
 func (m *missionWorld) edit(f func()) { m.g.Mu.Lock(); f(); m.g.Mu.Unlock() }
