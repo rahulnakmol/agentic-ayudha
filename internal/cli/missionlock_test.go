@@ -29,10 +29,12 @@ import (
 // lockWorld is #889 approved to build with milestones MS1 to MS3: seven Ready
 // stories (#20 to #26), an open Bug #27, and a closed Bug #28. #20 has three
 // criteria and the labels effort:S, risk:medium, and priority:P1. The person's
-// tool is tool.
+// tool is tool. The clock reads Monday 2 November 2026, 10:00 London time:
+// within business hours, so the inbox shows no evening review (eveningDay).
 func lockWorld(t *testing.T, tool string) *missionWorld {
 	t.Helper()
 	m := newMissionWorld(t)
+	m.opts.Now = func() time.Time { return time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC) }
 	m.mu.Lock()
 	m.tool = tool
 	m.mu.Unlock()
