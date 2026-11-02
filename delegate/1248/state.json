@@ -9,7 +9,8 @@
   "task": "T-01a19cf8-f8a3-7324-a3ff-40a4d73ae4a7",
   "task_url": "https://ampcode.com/threads/T-01a19cf8-f8a3-7324-a3ff-40a4d73ae4a7",
   "branch": "story/1248-fix-mission-extend-refuses-before-the-ti",
-  "status": "handed-off",
+  "pr": 1249,
+  "status": "pr-open",
   "brief_sha256": "7db565ebb027f7eed3c1c0b0f84a3df3953bf41e648aecfa2dba2acb6e641255",
   "started_at": "2026-11-02T15:54:31Z",
   "handoffs": 1,
@@ -23,6 +24,11 @@
       "at": "2026-11-02T15:55:47Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-02T17:45:48Z",
+      "status": "pr-open",
+      "detail": "PR #1249 found by aayu mission recover"
     }
   ]
 }
