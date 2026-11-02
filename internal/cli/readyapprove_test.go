@@ -393,7 +393,7 @@ func TestReadyApproveToBuild(t *testing.T) {
 	setCrit(func(c *ready.Critique) {
 		*c = ready.Critique{Reviews: 5, In: 2, AskedAt: time.Now().Add(-time.Hour), Open: []string{"tech-v1/quality-architect/1"}}
 	})
-	off("Approve to build is off: technical design v1 has 1 open gap (tech-v1/quality-architect/1). Next: aayu grill feature 840 --findings")
+	off("Approve to build is off: technical design v1 has 1 open gap (tech-v1/quality-architect/1). Next: aayu ready 840 --part tech --request --changes <file> --fixes tech-v1/quality-architect/1")
 	dismissal := ready.Dismissal{Finding: "tech-v1/quality-architect/1", Reason: "out of scope for v0.4.0", Words: "Not this release; v0.5.0 takes it."}
 	setCrit(func(c *ready.Critique) { c.Open, c.Dismissed = nil, []ready.Dismissal{dismissal} })
 	off("3 of 5 reviews are not in; Approve to build opens when they are in or [critique] review_wait_hours have passed")

@@ -3,8 +3,13 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -197,11 +202,18 @@ func TestReadyStoryCoverage(t *testing.T) {
 		stories[853].Labels = slices.DeleteFunc(stories[853].Labels, func(l fake.Label) bool { return l.Name == "effort:S" })
 		stories[853].Labels = append(stories[853].Labels, fake.Label{Name: "effort:M"})
 	})
-	refused(853, "#853 changed after Approve to build (effort S to M). A person acknowledges it: aayu ready 840 --ack 853")
-	refused(853, "next: aayu ready 840 --part spec --request") // a command that runs today
+	// Bug #1251: each waits for the next spec version and Approve to build again, by commands that exist; never --ack.
+	steps := "It waits for spec v2 of #840 and Approve to build again. An agent drafts the spec: aayu ready 840 --part spec --request --changes <file>. A person approves it in aayu inbox, then runs aayu ready 840."
+	refused(853, "#853 changed after Approve to build (effort S to M). "+steps)
+	refused(853, "next: aayu ready 840 --part spec --request --changes <file>")
 	added := numbered(g.AddIssue("Story 858", storyBody("Story 858", "Added later."), "type:story", "effort:S"), 858)
 	edit(func() { added.Parent, feature.Subs = 840, append(feature.Subs, 858) })
-	refused(858, "#858 was added after Approve to build. A person acknowledges it: aayu ready 840 --ack 858")
+	refused(858, "#858 was added after Approve to build. "+steps)
+	for _, n := range []int{853, 858} {
+		if _, out := readyRun(n); strings.Contains(out, "--ack") {
+			t.Errorf("ready %d names --ack, which does not exist: %s", n, out)
+		}
+	}
 	// A changed title or Completion Goal is a change too; the story it names is the only one refused.
 	edit(func() { stories[854].Title = "Story 854, renamed" })
 	refused(854, "#854 changed after Approve to build (title).")
@@ -298,5 +310,59 @@ func TestReadyStoryCoverage(t *testing.T) {
 	putLedger(t, bare, ready.ApprovalPath(840), `{"schema": "aayudha.feature.approved/v1", "feature": 841, "version": 9}`)
 	if code, out := readyRun(856); code != ExitExternal || !strings.Contains(out, "not an Approve to build record of #840") {
 		t.Fatalf("a forged approval: exit %d:\n%s", code, out)
+	}
+}
+
+// Bug #1251 criterion 3: every command that a message of `aayu ready` names
+// (each string in ready*.go) parses against the command
+// tree with every flag it gives; the strings of internal/ready, which ready
+// prints, too. Placeholders become values. A verb fails unless it is a
+// command or one of the prose words below ("aayu wrote …"). Only an unknown
+// verb or flag fails: a value the tree would refuse is not this test's concern.
+func TestReadyNamesOnlyRealCommands(t *testing.T) {
+	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := newRoot(e)
+	named := regexp.MustCompile("aayu ([a-z][a-z-]*(?: +(?:--?[a-z][a-z-]*|<[^>]+>|%[ds]|[0-9a-z][0-9a-z_-]*))*)")
+	files, _ := filepath.Glob("ready*.go")
+	more, _ := filepath.Glob(filepath.Join("..", "ready", "*.go"))
+	files = slices.DeleteFunc(append(files, more...), func(f string) bool { return strings.HasSuffix(f, "_test.go") })
+	prose := []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only"}
+	checked := 0
+	for _, file := range files {
+		f, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			s, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				return true
+			}
+			for _, m := range named.FindAllStringSubmatch(s, -1) {
+				args := strings.Fields(regexp.MustCompile(`<[^>]+>|%[ds]`).ReplaceAllString(m[1], "1"))
+				cmd, rest, err := root.Find(args)
+				if err != nil || cmd == root {
+					if !slices.Contains(prose, args[0]) {
+						t.Errorf("%s names `aayu %s`: %s is no command", file, m[1], args[0])
+					}
+					continue
+				}
+				checked++
+				if err := cmd.ParseFlags(rest); err != nil && strings.Contains(err.Error(), "unknown") {
+					t.Errorf("%s names `aayu %s`: %v", file, m[1], err)
+				}
+			}
+			return true
+		})
+	}
+	if checked < 10 {
+		t.Fatalf("found only %d named commands: the scan is broken", checked)
 	}
 }
