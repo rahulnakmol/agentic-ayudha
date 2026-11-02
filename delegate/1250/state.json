@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19d62-c3a8-761f-9c6d-06746c4527b6",
+  "task_url": "https://ampcode.com/threads/T-01a19d62-c3a8-761f-9c6d-06746c4527b6",
   "branch": "story/1250-builders-iterate-on-a-draft-pr-locally-a",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "ffead30318c93471226c64f007626670fa49fdc6295790559be9b2a6dd062198",
   "started_at": "2026-11-02T17:48:28Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-02T17:48:28Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1250: Builders iterate on a draft PR locally, and GitHub runs CI, the merge gate, and the paid review once the PR is ready"
+    },
+    {
+      "at": "2026-11-02T17:51:14Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
