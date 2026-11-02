@@ -49,7 +49,7 @@ func missionCmd(f int, s string) string {
 // run with its checks and time, and no recommendation.
 func noGoAsk(f int, m string, fails []GateRun) missionAsk {
 	a := missionAsk{ID: noGoAskID(m), Title: noGoTitle(m, f, len(fails)),
-		Why: fmt.Sprintf("The gate of %s failed %d times, so the mission stopped and asks you.", m, len(fails)),
+		Why: fmt.Sprintf("The gate of %s failed %d times in a row, so the mission stopped and asks you.", m, len(fails)),
 		Options: []InboxAction{
 			{N: 1, Label: "Run the gate once more", Command: missionCmd(f, "gate <f> --once-more")},
 			{N: 2, Label: "Stop the mission, with a reason", Command: missionCmd(f, "stop <f> --reason"), Ask: "Why stop the mission?"},

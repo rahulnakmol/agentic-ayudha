@@ -872,16 +872,16 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 			g.mergePR(981 + i)
 			continue
 		}
-		if rep.Milestones[0].State != GateStopped || rep.Milestones[0].Detail != "MS1 of #889 failed its gate 3 times: its stories wait" ||
+		if rep.Milestones[0].State != GateStopped || rep.Milestones[0].Detail != "MS1 of #889 failed its gate 3 times in a row: its stories wait" ||
 			rep.Fixes[0].Action != "waits" || !strings.HasPrefix(rep.Fixes[0].Reason, "the mission is stopped") {
 			t.Fatalf("third failed gate: %+v", rep)
 		}
 	}
 	p, _ := g.plan(889)
-	if p.Milestones[0].Gate.State != GateStopped || p.Pause == nil || p.Pause.Reason != "MS1 of #889 failed its gate 3 times: its stories wait" {
+	if p.Milestones[0].Gate.State != GateStopped || p.Pause == nil || p.Pause.Reason != "MS1 of #889 failed its gate 3 times in a row: its stories wait" {
 		t.Fatalf("plan after the third failure: %+v %+v", p.Milestones[0].Gate, p.Pause)
 	}
-	if code, _, errOut := g.next(889); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 is paused: MS1 of #889 failed its gate 3 times: its stories wait. Nothing starts.") {
+	if code, _, errOut := g.next(889); code != ExitBlocked || !strings.Contains(errOut, "The mission of #889 is paused: MS1 of #889 failed its gate 3 times in a row: its stories wait. Nothing starts.") {
 		t.Fatalf("mission next after the stop: exit %d: %s", code, errOut)
 	}
 	if code, out, errOut := run(t, g.agent, g.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 ||
@@ -906,8 +906,8 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 		fmt.Sprintf("Run 2 at %s on dev 2222222: verify:inbox.ship-once failed", runs[1].At),
 		fmt.Sprintf("Run 3 at %s on dev 3333333: verify:mission.stays failed", runs[2].At),
 	}
-	if len(cards) != 1 || cards[0].Title != "MS1 of #889 failed its gate 3 times: its stories wait" || cards[0].short() != "gate stopped" ||
-		cards[0].Why != "The gate of MS1 failed 3 times, so the mission stopped and asks you." || !slices.Equal(cards[0].Details, wantLines) ||
+	if len(cards) != 1 || cards[0].Title != "MS1 of #889 failed its gate 3 times in a row: its stories wait" || cards[0].short() != "gate stopped" ||
+		cards[0].Why != "The gate of MS1 failed 3 times in a row, so the mission stopped and asks you." || !slices.Equal(cards[0].Details, wantLines) ||
 		len(cards[0].Options) != 2 || cards[0].Options[0].Label != "Run the gate once more" || cards[0].Options[1].Label != "Stop the mission, with a reason" ||
 		cards[0].Options[0].Recommended || cards[0].Options[1].Recommended || strings.Contains(cards[0].Counsel, "I recommend") {
 		t.Fatalf("no-go card: %+v", cards)
@@ -938,6 +938,13 @@ func TestGateStopsAtMaxNoGo(t *testing.T) {
 	}
 	if code, out, errOut := g.next(889); code != 0 || out != "start #22\n" {
 		t.Fatalf("mission next after the pass: exit %d: %q%s", code, out, errOut)
+	}
+	// A later failure of MS1's gate counts from 1 (Bug #1268).
+	g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = MilestoneGate{State: GateWaits} })
+	g.vfail = []string{"mission.stays"}
+	g.tip(strings.Repeat("4", 40), "success")
+	if ms := g.gateJSON().Milestones[0]; ms.State != GateFailed || !strings.Contains(ms.Detail, "(1 of 3 failed runs before the mission stops)") {
+		t.Fatalf("a failure after the once-more pass: %+v", ms)
 	}
 }
 
@@ -1002,6 +1009,73 @@ func TestGateMaxNoGoIsDevs(t *testing.T) {
 	}
 	if ms := third(strings.Repeat("b", 40), "--set", "mission.max_no_go=3"); ms.State != GateStopped {
 		t.Fatalf("third failure with --set mission.max_no_go=3: %+v", ms)
+	}
+}
+
+// Bug #1268: a milestone's failed gate runs count from its last pass. Two
+// failures, a pass, then one failure is failure 1 of max_no_go: the mission
+// goes on and lists a fix (criterion 1). Three failures since the pass stop
+// it, as three with no pass do (criterion 2). A stop counted before the fix,
+// with fewer failures since the pass, still holds when a person's once-more
+// fails.
+func TestGateFailuresCountFromLastPass(t *testing.T) {
+	log := func(results ...string) string {
+		var b strings.Builder
+		for i, r := range results {
+			run := GateRun{Milestone: "MS1", DevSHA: strings.Repeat(fmt.Sprint(i+1), 40), At: "2026-11-02T04:05:00Z", Result: r}
+			if r == gateFail {
+				run.Checks = []GateCheck{{Check: "verify:inbox.ship-once", Result: gateFail}}
+			}
+			bs, _ := json.Marshal(run)
+			b.Write(append(bs, '\n'))
+		}
+		return b.String()
+	}
+	for _, tc := range []struct {
+		name  string
+		runs  []string
+		state string // the milestone's gate state, and so whether the run is a person's once-more
+		want  string // the milestone's gate state after the run
+		count string
+	}{
+		{name: "one failure after a pass", runs: []string{gateFail, gateFail, gatePass}, state: GateWaits, want: GateFailed, count: "(1 of 3 failed runs before the mission stops)"},
+		{name: "three failures since a pass", runs: []string{gateFail, gateFail, gatePass, gateFail, gateFail}, state: GateWaits, want: GateStopped, count: "failed its gate 3 times in a row"},
+		{name: "a failed once-more after an older stop", runs: []string{gateFail, gateFail, gatePass, gateFail}, state: GateStopped, want: GateStopped, count: "failed its gate 2 times in a row"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
+			g.closeIssue(20)
+			g.status(22, "ready", "")
+			putLedger(t, g.bare, MissionGatesPath(889), log(tc.runs...))
+			g.setPlan(889, func(p *MissionPlan) {
+				p.Milestones[0].Gate = MilestoneGate{State: tc.state}
+				if tc.state == GateStopped {
+					p.Pause = &MissionPause{Reason: "MS1 of #889 failed its gate 3 times: its stories wait", By: gatePause("MS1"), At: "2026-11-02T18:00:00Z"}
+				}
+			})
+			g.vfail = []string{"mission.stays"}
+			g.tip(strings.Repeat("a", 40), "success")
+			var ms GateMSState
+			if tc.state == GateStopped {
+				if code, out, errOut := g.mission(g.person, "rahulnakmol", "gate", 889, "--once-more"); code != 0 {
+					t.Fatalf("once more: exit %d: %s%s", code, out, errOut)
+				}
+			} else {
+				rep := g.gateJSON()
+				ms = rep.Milestones[0]
+				if ms.State != tc.want || !strings.Contains(ms.Detail, tc.count) {
+					t.Fatalf("the gate after runs %v: %+v", tc.runs, ms)
+				}
+				if tc.want == GateFailed && (len(rep.Fixes) != 1 || rep.Fixes[0].Check != "verify:mission.stays" || rep.Fixes[0].Action != "start") {
+					t.Fatalf("the fixes after one failure since the pass: %+v", rep.Fixes)
+				}
+			}
+			p, _ := g.plan(889)
+			if p.Milestones[0].Gate.State != tc.want || (tc.want == GateStopped) != (p.Pause != nil) ||
+				tc.want == GateStopped && !strings.Contains(p.Pause.Reason, tc.count) {
+				t.Fatalf("the plan after runs %v: gate %+v, pause %+v", tc.runs, p.Milestones[0].Gate, p.Pause)
+			}
+		})
 	}
 }
 
