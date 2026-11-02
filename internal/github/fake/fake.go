@@ -133,9 +133,6 @@ type PR struct {
 	Compared []string `json:"-"`
 	// Timeline is its timeline's event names (GET /issues/{n}/timeline), oldest first.
 	Timeline []string `json:"-"`
-	// TimelineAt is when each Timeline event happened (RFC 3339), by index;
-	// an event past its end has no time.
-	TimelineAt []string `json:"-"`
 	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
 	// file listing leaves out (it lists at most 3,000).
 	ChangedFiles int    `json:"changed_files"`
@@ -204,7 +201,8 @@ type Status struct {
 
 // App is the GitHub App of a check run.
 type App struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
+	Slug string `json:"slug,omitempty"`
 }
 
 // WorkflowRun is an Actions run.
@@ -583,12 +581,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/issues/") && strings.HasSuffix(p, "/timeline"):
 		out := []map[string]any{}
 		if pr := g.Pulls[atoi(strings.TrimSuffix(strings.TrimPrefix(p, repo+"/issues/"), "/timeline"))]; pr != nil {
-			for i, ev := range pr.Timeline {
-				e := map[string]any{"event": ev}
-				if i < len(pr.TimelineAt) {
-					e["created_at"] = pr.TimelineAt[i]
-				}
-				out = append(out, e)
+			for _, ev := range pr.Timeline {
+				out = append(out, map[string]any{"event": ev})
 			}
 		}
 		reply(200, out)

@@ -1191,31 +1191,43 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Unlock()
 
 	// Story #1250: a draft's CI skips every job, and a skip counts as
-	// success. After the PR was marked ready, a skip from before proves
-	// nothing: build's only run is the draft's skip, so build is missing.
-	// A run since then counts, a skip in the same second as the event too,
-	// and so does a result that ran before it (lint); docs' and
-	// release-snapshot's skips carry no time, so they are from before.
+	// success. Once the PR was marked ready, a skip from an Actions run in
+	// which nothing ran proves nothing, whatever its time: build's and docs'
+	// only runs are the draft's (suite 60), so build is missing. The ready
+	// run (suite 61) counts, and so does an external app's skip (lint,
+	// suite 70) and a neutral check of no suite (release-snapshot).
 	passing := slices.Clone(g.CheckRuns[head])
+	gha := &fake.App{ID: 15368, Slug: "github-actions"}
+	draftRun := []fake.CheckRun{
+		{ID: 121613900001, Name: "changes", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"},
+		{ID: 121613900002, Name: "build", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"},
+		{ID: 121613900003, Name: "docs", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"}}
+	external := fake.CheckRun{ID: 121613900004, Name: "lint", Status: "completed", Conclusion: "skipped", App: &fake.App{ID: 777, Slug: "circleci"}, Suite: &fake.Suite{ID: 70}}
+	others := slices.DeleteFunc(slices.Clone(runsBefore), func(r fake.CheckRun) bool { return r.Name == "build" || r.Name == "docs" || r.Name == "lint" })
+	readyRun := []fake.CheckRun{
+		{ID: 121613900005, Name: "changes", Status: "completed", Conclusion: "success", App: gha, Suite: &fake.Suite{ID: 61}},
+		{ID: 121613900006, Name: "build", Status: "completed", Conclusion: "success", App: gha, Suite: &fake.Suite{ID: 61}}}
 	g.Mu.Lock()
-	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = []string{"convert_to_draft", "ready_for_review"}, []string{"2026-10-27T13:57:00Z", "2026-10-27T14:00:00Z"}
-	notBuild := slices.DeleteFunc(slices.Clone(runsBefore), func(r fake.CheckRun) bool { return r.Name == "build" })
-	draftBuild := fake.CheckRun{ID: 121613900001, Name: "build", Status: "completed", Conclusion: "skipped", App: actions, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T13:58:00Z"}
-	g.CheckRuns[head] = append([]fake.CheckRun{draftBuild}, notBuild...)
+	g.Pulls[prN].Timeline = []string{"convert_to_draft", "ready_for_review"}
+	g.CheckRuns[head] = append(append(slices.Clone(draftRun), external), others...)
 	g.Mu.Unlock()
 	refused("required check build is missing on " + short(head))
 	g.Mu.Lock()
-	readyBuild := fake.CheckRun{ID: 121613900002, Name: "build", Status: "completed", Conclusion: "success", App: actions, Suite: &fake.Suite{ID: 61}, StartedAt: "2026-10-27T14:00:05Z"}
-	g.CheckRuns[head] = append([]fake.CheckRun{readyBuild, draftBuild}, notBuild...)
+	g.CheckRuns[head] = append(append(append(slices.Clone(readyRun), draftRun...), external), others...)
 	g.Mu.Unlock()
 	refused("required check docs is missing on " + short(head))
+	// A PR never marked ready keeps today's reading: the same skips pass every
+	// required check, and ship goes on to the audit label (made to fail here,
+	// so nothing merges).
 	g.Mu.Lock()
-	readyDocs := fake.CheckRun{ID: 121613900003, Name: "docs", Status: "completed", Conclusion: "skipped", App: actions, Suite: &fake.Suite{ID: 61}, StartedAt: "2026-10-27T14:00:00Z"}
-	g.CheckRuns[head] = append([]fake.CheckRun{readyBuild, readyDocs, draftBuild}, notBuild...)
+	g.Pulls[prN].Timeline = nil
+	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0
 	g.Mu.Unlock()
-	refused("required check release-snapshot is missing on " + short(head))
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "not merged: the aayu:audit label") {
+		t.Fatalf("ship of a PR never marked ready, with its skips: %d %s", code, out)
+	}
 	g.Mu.Lock()
-	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = nil, nil
+	g.Fail = ""
 	g.CheckRuns[head] = passing
 	g.Mu.Unlock()
 

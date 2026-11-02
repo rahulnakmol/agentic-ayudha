@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 	"unicode"
 
 	gh "github.com/google/go-github/v90/github"
@@ -166,28 +166,34 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 	if err != nil {
 		return nil, "", Wrap(ExitExternal, err)
 	}
-	// A draft runs no CI (Story #1250): its jobs report skipped, which counts
-	// as success below. A skipped or neutral run that started before the PR
-	// was last marked ready ran on the draft and proves nothing, so the run
-	// the ready_for_review event starts must stand in for it; with none, the
-	// check is missing. A result that ran, from any time, still counts.
-	skipped := func(r *gh.CheckRun) bool {
-		return r.GetStatus() == "completed" && (r.GetConclusion() == "skipped" || r.GetConclusion() == "neutral")
+	// A draft runs no CI (Story #1250): every job of its Actions run reports
+	// skipped, which counts as success below. A run in which nothing ran
+	// proves nothing, so once the PR was marked ready, its skips do not
+	// count: the run of the ready event must stand in, and with none the
+	// check is missing. A run in which a job ran keeps its path-filter
+	// skips, other apps' checks count as before, and so does every check of
+	// a PR that was never marked ready.
+	idle := map[int64]bool{} // Actions check suites in which every run skipped
+	for _, r := range runs {
+		if id := r.GetCheckSuite().GetID(); id != 0 && r.GetApp().GetSlug() == "github-actions" {
+			skip := r.GetStatus() == "completed" && r.GetConclusion() == "skipped"
+			if was, seen := idle[id]; !seen || was {
+				idle[id] = skip
+			}
+		}
 	}
-	if slices.ContainsFunc(runs, skipped) {
+	if slices.Contains(slices.Collect(maps.Values(idle)), true) {
 		events, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Timeline, *gh.Response, error) {
 			return c.REST.Issues.ListIssueTimeline(ctx, owner, name, n, &o)
 		})
 		if err != nil {
 			return nil, "", Wrap(ExitExternal, err)
 		}
-		var ready time.Time
-		for _, ev := range events {
-			if ev.GetEvent() == "ready_for_review" && ev.GetCreatedAt().After(ready) {
-				ready = ev.GetCreatedAt().Time
-			}
+		if slices.ContainsFunc(events, func(t *gh.Timeline) bool { return t.GetEvent() == "ready_for_review" }) {
+			runs = slices.DeleteFunc(slices.Clone(runs), func(r *gh.CheckRun) bool {
+				return idle[r.GetCheckSuite().GetID()] && r.GetApp().GetSlug() == "github-actions"
+			})
 		}
-		runs = slices.DeleteFunc(slices.Clone(runs), func(r *gh.CheckRun) bool { return skipped(r) && r.GetStartedAt().Before(ready) })
 	}
 	wf, err := suiteWorkflows(ctx, c, owner, name, head, runs, checks)
 	if err != nil {
