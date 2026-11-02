@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -1212,6 +1213,12 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 	// Each story's state now, and whether each depends-on target merged.
 	owner, name, _ := github.SplitRepo(repo)
 	state, merged, mergedN := map[int]string{}, map[int]bool{}, 0
+	var tree *ledger.Tree // read once, for the first in-progress story
+	defer func() {
+		if tree != nil {
+			tree.Close()
+		}
+	}()
 	for _, it := range plan.Graph {
 		is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
 		if err != nil {
@@ -1220,8 +1227,19 @@ func missionShow(ctx context.Context, e *Env, f int) error {
 		// A cancelled story holds no milestone, and only a merged one is charged (missionUsed).
 		state[it.Number], merged[it.Number] = storyState(is), depState(is) != depOpen
 		var st delegate.State
-		if state[it.Number] == "in-progress" { // the thread it runs on (Bug #1208); a record aayu cannot read names none
-			_, _ = readLedgerJSON(ctx, w, delegate.LedgerPath(it.Number), &st)
+		if state[it.Number] == "in-progress" { // the thread it runs on (Bug #1208); a missing or unparsable record names none
+			if tree == nil {
+				if tree, err = w.Read(ctx); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+			}
+			b, err := tree.File(ctx, delegate.LedgerPath(it.Number))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return Wrap(ExitExternal, err)
+			}
+			if json.Unmarshal(b, &st) != nil {
+				st = delegate.State{} // a type error keeps the fields decoded before it; none of them counts
+			}
 		}
 		switch {
 		case st.Status == dlgHost && st.Task == "":
