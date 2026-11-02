@@ -354,6 +354,10 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 	}
 	// Each open Bug the person did not name is fixed last, in BUGS (Story #1174).
 	ms = withBugs(ms, bugs)
+	var again []string
+	if old != nil && strings.TrimSpace(a.milestones) != "" {
+		ms, again = keepGates(ms, old.Milestones)
+	}
 	if msg := checkMilestones(a.n, ms, nums); msg != "" {
 		return p, nil, nil, off("%s. Next: name each story's and Bug's milestone with aayu ready %d --milestones 'MS1=#a,#b MS2=#c'", msg, a.n)
 	}
@@ -411,7 +415,37 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 		fmt.Sprintf("Estimate: %s; up to %d stories at once (%s)", p.Estimate.Basis, p.Agents, p.AgentsSource),
 	}
 	effect = append(effect, estimateLines(p.Missions, warn, maxH)...)
-	return p, effect, old, nil
+	return p, append(effect, again...), old, nil
+}
+
+// keepGates gives each milestone of ms that keeps its name and its stories
+// in old its gate from old, so a passed gate stays passed (Bug #1267). A
+// milestone whose stories changed keeps the gate that waits, and each such
+// gate that had run gets a line that says why it runs again.
+func keepGates(ms, old []MissionMilestone) ([]MissionMilestone, []string) {
+	var again []string
+	for i, m := range ms {
+		j := slices.IndexFunc(old, func(om MissionMilestone) bool { return om.Name == m.Name })
+		if j < 0 {
+			continue
+		}
+		adds := slices.DeleteFunc(slices.Clone(m.Stories), func(n int) bool { return slices.Contains(old[j].Stories, n) })
+		drops := slices.DeleteFunc(slices.Clone(old[j].Stories), func(n int) bool { return slices.Contains(m.Stories, n) })
+		switch {
+		case len(adds) == 0 && len(drops) == 0:
+			ms[i].Gate = old[j].Gate
+		case old[j].Gate.State != GateWaits:
+			var why []string
+			if len(adds) > 0 {
+				why = append(why, "adds "+issueRefs(adds))
+			}
+			if len(drops) > 0 {
+				why = append(why, "drops "+issueRefs(drops))
+			}
+			again = append(again, fmt.Sprintf("%s's gate runs again: its stories changed (%s)", m.Name, strings.Join(why, "; ")))
+		}
+	}
+	return ms, again
 }
 
 // missionsLine says the missions: "Mission 1: #20, #21; #22 waits for mission 2: waits on #950 (#874)".

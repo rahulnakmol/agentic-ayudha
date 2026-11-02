@@ -978,6 +978,49 @@ func TestGateStopOptionStopsTheMission(t *testing.T) {
 	}
 }
 
+// Bug #1267: Approve to build again keeps the gate of a milestone that keeps
+// its name and its stories. MS1 passed; moving #21 out of MS2 keeps MS1
+// passed, with its commit, time, and gate fixes, so MS2's PRs are not held
+// (criterion 1). Approving with no --milestones keeps every gate (criterion
+// 3). Adding #21 to MS1 makes its gate wait, and the approval says why
+// (criterion 2).
+func TestApproveAgainKeepsPassedGate(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#21,#22", 20, 21, 22)
+	g.closeIssue(20)
+	if ms := g.gateJSON().Milestones[0]; ms.State != GatePassed {
+		t.Fatalf("MS1's gate: %+v", ms)
+	}
+	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
+	fix := GateFix{PR: 981, Milestone: "MS1", Check: "verify:inbox.ship-once", DevSHA: g.sha, At: "2026-11-02T04:00:00Z"}
+	g.setPlan(889, func(p *MissionPlan) { p.GateFixes = []GateFix{fix} })
+	before, _ := g.plan(889)
+	kept := func(when string) {
+		t.Helper()
+		p, _ := g.plan(889)
+		if p.Milestones[0].Gate != before.Milestones[0].Gate || len(p.GateFixes) != 1 || p.GateFixes[0] != fix {
+			t.Fatalf("MS1 after %s: gate %+v, was %+v; fixes %+v", when, p.Milestones[0].Gate, before.Milestones[0].Gate, p.GateFixes)
+		}
+		if code, out, errOut := g.mission(g.person, "", "show", 889); code != 0 || strings.Contains(out, "its PRs merge after MS1's gate passes") {
+			t.Fatalf("mission show after %s: exit %d: %s%s", when, code, out, errOut)
+		}
+	}
+	if code, out, errOut := g.approve(889, "--milestones", "MS1=#20 MS2=#22 MS3=#21"); code != 0 || strings.Contains(errOut, "gate runs again") {
+		t.Fatalf("approve again with MS1 kept: exit %d: %s%s", code, out, errOut)
+	}
+	kept("an approval that keeps MS1")
+	if code, out, errOut := g.approve(889, "--agents", "3"); code != 0 {
+		t.Fatalf("approve again with no --milestones: exit %d: %s%s", code, out, errOut)
+	}
+	kept("an approval with no --milestones")
+	if code, out, errOut := g.approve(889, "--milestones", "MS1=#20,#21 MS2=#22"); code != 0 ||
+		!strings.Contains(errOut, "MS1's gate runs again: its stories changed (adds #21)") {
+		t.Fatalf("approve again with #21 added to MS1: exit %d: %s%s", code, out, errOut)
+	}
+	if p, _ := g.plan(889); p.Milestones[0].Gate.State != GateWaits {
+		t.Fatalf("MS1 after #21 joined it: %+v", p.Milestones[0].Gate)
+	}
+}
+
 // [mission] max_no_go is dev's committed value: the embedded default (3)
 // does not lower a committed 4, and a person's --set does.
 func TestGateMaxNoGoIsDevs(t *testing.T) {
