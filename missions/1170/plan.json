@@ -2519,6 +2519,13 @@
       "tool": "amp",
       "at": "2026-11-02T17:45:48Z",
       "presence": "none"
+    },
+    {
+      "control": "recover",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-11-02T17:55:23Z",
+      "presence": "none"
     }
   ],
   "gate_fixes": [
