@@ -9,5 +9,5 @@ id = 2 # a covered story changed after Approve to build: the same steps with the
 tests = ["internal/cli:TestReadyStoryCoverage"]
 
 [[criterion]]
-id = 3 # every command a message of aayu ready names parses against the command tree with every flag
+id = 3 # each command named in a string of internal/cli/ready*.go or internal/ready has a real verb, and each flag to the end of its sentence is that verb's; a joined suffix is checked against the command before it; controls show each wrong form fails
 tests = ["internal/cli:TestReadyNamesOnlyRealCommands"]

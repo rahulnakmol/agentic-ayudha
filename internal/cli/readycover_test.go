@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -317,31 +317,22 @@ func TestReadyStoryCoverage(t *testing.T) {
 
 // Bug #1251 criterion 3: every command that a message of `aayu ready` names
 // (each string literal in internal/cli/ready*.go and internal/ready, which
-// ready prints) has a real verb, and each flag it gives is a flag of that
-// verb. A flag in a literal with no command (a suffix such as " --request"
-// that code joins to one) must be a flag of some command. A verb that is
-// prose ("aayu wrote …") is not a command. Each flag is looked up on its own,
-// so a bad value before it hides nothing.
+// ready prints) has a real verb, and each flag it gives, to the end of its
+// sentence, is a flag of that verb. Each flag is looked up on its own, so a
+// value before it (a path, a bad number, an uppercase word) hides nothing. A
+// literal that names no command, such as a suffix " --request" that code
+// joins to a command, is checked against the last command named before it
+// in the same function, else against ready. A verb that is prose
+// ("aayu wrote …") is not a command.
 func TestReadyNamesOnlyRealCommands(t *testing.T) {
 	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Getenv: func(string) string { return "" }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	root := newRoot(e)
+	ready, _, _ := root.Find([]string{"ready"})
+	commands := 0
 	prose := []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only"}
-	tok := `(?:--?[a-z][a-z-]*(?:=[^\s"'\x60]*)?|<[^>]+>|%[a-z]|"[^"]*"|'[^']*'|[0-9a-z][0-9a-z_./,:-]*)`
-	named := regexp.MustCompile("aayu ([a-z][a-z-]*(?: +" + tok + ")*)")
-	flagRe := regexp.MustCompile(`(?:^|[\s(\x60])(--?[a-z][a-z-]*)`)
-	anyFlag := func(name string) bool {
-		var found func(c *cobra.Command) bool
-		found = func(c *cobra.Command) bool {
-			if c.Flag(name) != nil {
-				return true
-			}
-			return slices.ContainsFunc(c.Commands(), found)
-		}
-		return found(root)
-	}
 	has := func(c *cobra.Command, f string) bool {
 		if name, ok := strings.CutPrefix(f, "--"); ok {
 			name, _, _ = strings.Cut(name, "=")
@@ -349,72 +340,104 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 		}
 		return len(f) == 2 && (c.Flags().ShorthandLookup(f[1:]) != nil || c.InheritedFlags().ShorthandLookup(f[1:]) != nil)
 	}
-	// faults lists what is wrong with the commands that s names.
-	faults := func(s string) []string {
+	isFlag := func(w string) bool { // --name or -x; --%s and --> are not flags
+		w, ok := strings.CutPrefix(w, "-")
+		return ok && len(w) > 0 && (w[0] >= 'a' && w[0] <= 'z' || len(w) > 1 && w[0] == '-' && w[1] >= 'a' && w[1] <= 'z')
+	}
+	trim := func(w string) string { return strings.TrimRight(strings.TrimLeft(w, "(\x60'\""), ".,;:)\x60'\"") }
+	// check lists what is wrong with the commands that the Go source src names.
+	check := func(name string, src any) []string {
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, name, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var out []string
-		spans := named.FindAllStringSubmatch(s, -1)
-		for _, m := range spans {
-			args := strings.Fields(m[1])
-			cmd, _, err := root.Find(args[:1])
-			if err != nil || cmd == root {
-				if !slices.Contains(prose, args[0]) {
-					out = append(out, fmt.Sprintf("`aayu %s`: %s is no command", m[1], args[0]))
-				}
-				continue
+		var last *cobra.Command
+		spans := 0
+		ast.Inspect(f, func(n ast.Node) bool {
+			if _, ok := n.(*ast.FuncDecl); ok {
+				last = nil
 			}
-			for _, a := range args[1:] {
-				if f := flagRe.FindStringSubmatch(" " + a); f != nil && f[1] != "-" && !has(cmd, f[1]) {
-					out = append(out, fmt.Sprintf("`aayu %s`: %s is no flag of %s", m[1], f[1], args[0]))
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			s, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				return true
+			}
+			at := fset.Position(lit.Pos())
+			words := strings.Fields(s)
+			named := false
+			for i := 0; i < len(words); i++ {
+				if trim(words[i]) != "aayu" || i+1 == len(words) {
+					continue
+				}
+				verb := trim(words[i+1])
+				cmd, _, err := root.Find([]string{verb})
+				if err != nil || cmd == root {
+					if !slices.Contains(prose, verb) {
+						out = append(out, fmt.Sprintf("%s: `aayu %s`: no command", at, verb))
+					}
+					continue
+				}
+				named, last = true, cmd
+				spans++
+				for _, w := range words[i+2:] { // to the end of the sentence, or the next command
+					if trim(w) == "aayu" {
+						break
+					}
+					if f := trim(w); isFlag(f) && !has(cmd, f) {
+						out = append(out, fmt.Sprintf("%s: `aayu %s`: %s is no flag of it", at, verb, f))
+					}
+					if strings.HasSuffix(w, ".") || strings.HasSuffix(w, ";") {
+						break
+					}
 				}
 			}
-		}
-		if len(spans) == 0 {
-			for _, f := range flagRe.FindAllStringSubmatch(s, -1) {
-				if name, ok := strings.CutPrefix(f[1], "--"); ok && !anyFlag(name) {
-					out = append(out, fmt.Sprintf("%q: %s is no flag of any command", s, f[1]))
+			if !named { // a suffix or a message about flags: the last command named, else ready
+				cmd := cmp.Or(last, ready)
+				for _, w := range words {
+					if f := trim(w); strings.HasPrefix(f, "--") && isFlag(f) && !has(cmd, f) {
+						out = append(out, fmt.Sprintf("%s: %q: %s is no flag of %s", at, s, f, cmd.Name()))
+					}
 				}
 			}
-		}
+			return true
+		})
+		commands += spans
 		return out
 	}
-	for s, bad := range map[string]bool{ // controls: each wrong form is found, and a right one passes
-		"aayu ready 840 --part=spec --request --changes <file>":    false,
-		"next: aayu ready %d --part %s --request, then aayu inbox": false,
-		"aayu ready 840 --check=true --ack 853":                    true,
-		"aayu ready 840 --agents invalid --ack 853":                true,
-		"aayu ready 840 --part=spec --request --ack 853":           true,
-		" --ack":                            true,
-		"aayu ack 853":                      true,
-		"aayu grill feature 840 --findings": true,
+	for src, bad := range map[string]bool{ // controls: each wrong form is found, and a right one passes
+		`_ = "aayu ready 840 --part=spec --request --changes <file>. A person approves it in aayu inbox."`: false,
+		`n := "aayu ready %d --part %s"; n += " --request"`:                                                false,
+		`_ = "aayu ready 840 --changes /tmp/changes.json --ack 853"`:                                       true,
+		`_ = "aayu ready 840 --part Spec --ack 853"`:                                                       true,
+		`_ = "aayu ready 840 --check=true --ack 853"`:                                                      true,
+		`_ = "aayu ready 840 --agents invalid --ack 853"`:                                                  true,
+		`n := "aayu ready %d --part %s"; n += " --list"`:                                                   true,
+		`_ = " --ack"`:       true,
+		`_ = "aayu ack 853"`: true,
+		`_ = "aayu grill feature 840 --findings"`: true,
 	} {
-		if got := faults(s); (len(got) > 0) != bad {
-			t.Errorf("control %q: faults %q", s, got)
+		if got := check("control.go", "package x\nfunc f() {\nvar n string\n_ = n\n"+src+"\n}\n"); (len(got) > 0) != bad {
+			t.Errorf("control %s: faults %q", src, got)
 		}
 	}
 	files, _ := filepath.Glob("ready*.go")
 	more, _ := filepath.Glob(filepath.Join("..", "ready", "*.go"))
 	files = slices.DeleteFunc(append(files, more...), func(f string) bool { return strings.HasSuffix(f, "_test.go") })
-	checked := 0
-	for _, file := range files {
-		f, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				return true
-			}
-			if s, err := strconv.Unquote(lit.Value); err == nil {
-				checked += len(named.FindAllString(s, -1))
-				for _, fault := range faults(s) {
-					t.Errorf("%s names %s", file, fault)
-				}
-			}
-			return true
-		})
+	if len(files) < 8 {
+		t.Fatalf("found only %d files to scan: %v", len(files), files)
 	}
-	if checked < 10 {
-		t.Fatalf("found only %d named commands: the scan is broken", checked)
+	commands = 0
+	for _, file := range files {
+		for _, fault := range check(file, nil) {
+			t.Error(fault)
+		}
+	}
+	if commands < 20 {
+		t.Fatalf("found only %d named commands: the scan is broken", commands)
 	}
 }
