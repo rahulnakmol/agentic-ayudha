@@ -282,6 +282,9 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, repo string, 
 			fmt.Fprintln(out, "  "+l)
 		}
 	}
+	if m.proven != nil { // the day it proved (Story #1177): its words stay once the screen closes
+		e.dayProven(out, m.proven)
+	}
 	done, skipped, left := 0, 0, 0
 	for _, it := range m.items {
 		switch k := it.key(); m.state[k] {
@@ -453,6 +456,8 @@ type inboxModel struct {
 	signedIn   func(*inboxSource, string) tea.Cmd // sets the session up for the approved login and reads GitHub
 	live       bool                               // the items come from a read of GitHub this session, so one that leaves it is gone
 	started    []InboxItem                        // the Mission start cards done this session, as read before the write (Story #1175)
+	accepted   map[int]bool                       // the stories whose evening accept landed this session
+	proven     *dayTally                          // the day those accepts proved (Story #1177)
 
 	cur, sel  int // the list row, and the choice selected on its card
 	armed     bool
@@ -955,6 +960,7 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		b = &inboxBatch{total: 1}
 	}
 	num := job.it.Number
+	proved := false // this write is the accept that proves the day
 	var ch errInboxChanged
 	var why inboxWhy // a failure in a person's words
 	if msg.err != nil && !errors.As(msg.err, &ch) {
@@ -1041,6 +1047,15 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		if job.it.Kind == InboxStart {
 			m.started = append(m.started, msg.fresh) // read again before the write: its plan is the one that started
 		}
+		if job.it.Kind == InboxEvening && job.a.Command == eveningAccept {
+			if m.accepted == nil {
+				m.accepted = map[int]bool{}
+			}
+			m.accepted[num] = true
+			if msg.fresh.day.proves(m.accepted) { // read again before the write: the tally the accept completes
+				m.proven, proved = msg.fresh.day, true
+			}
+		}
 		// The cache is a file: it is written off the update loop, unless
 		// the inbox quits now and would not wait for it.
 		sv := &inboxSave{key: msg.key, d: d}
@@ -1067,8 +1082,10 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 	}
 	// A celebration only after a write that succeeded, with nothing failed
 	// in its set and nothing still running or not done: never on a failure.
-	if needs, house := m.left(); m.state[msg.key] == "done" && msg.err == nil && m.quitting == quitNo && len(m.queue) == 0 && (cleared || b.total == 1) {
+	if needs, house := m.left(); m.state[msg.key] == "done" && msg.err == nil && m.quitting == quitNo && (proved || len(m.queue) == 0 && (cleared || b.total == 1)) {
 		switch {
+		case proved: // the day's own cheer, before inbox zero
+			m.celebrate(m.proven.cheer())
 		case needs == 0 && house == 0: // a skipped or failed item still counts
 			m.celebrate(cheerFor(0, true))
 		case cleared:

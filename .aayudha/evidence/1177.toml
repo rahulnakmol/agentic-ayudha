@@ -1,0 +1,17 @@
+# Which tests prove Story #1177's Completion Goal.
+
+[[criterion]]
+id = 1 # every story agreed this morning merged, each criterion has evidence, and he accepted each: The day is proven with the counts, the inbox's cheer, and the milestone day-proven for the date
+tests = ["./internal/cli:TestDayIsProven"]
+
+[[criterion]]
+id = 2 # criterion 3 of #1011 has no evidence: no proven line, and the card says `#1011 criterion 3 has no evidence` and the next step
+tests = ["./internal/cli:TestDayNotProvenWithoutEvidence"]
+
+[[criterion]]
+id = 3 # [ui] plain = true: the same words, with no motion
+tests = ["./internal/cli:TestDayProvenPlain"]
+
+[[criterion]]
+id = 4 # no Feature was started this morning: no proven line
+tests = ["./internal/cli:TestNoDayToProve"]

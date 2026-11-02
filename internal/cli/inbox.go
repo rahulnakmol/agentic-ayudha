@@ -280,6 +280,7 @@ type InboxItem struct {
 	mergeSHA string
 	f        inboxFacts
 	plan     *MissionPlan // a Mission start card's plan: the day it sets (Story #1175)
+	day      *dayTally    // an evening card's day: whether accepting the cards left proves it (Story #1177)
 }
 
 // InboxCheck is one check on a card's checklist: what it checks, whether it
@@ -1406,14 +1407,20 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	// (Stories #1173, #1175).
 	follow := map[string]string{InboxBaseline: InboxApprove, InboxApprove: InboxStart}
 	want := map[string]bool{}
-	var started []InboxItem // the Mission start cards done in this session
-	// The session ends with the day it set, once it started a mission (Story #1175).
+	var started []InboxItem    // the Mission start cards done in this session
+	accepted := map[int]bool{} // the stories whose evening accept landed in this session
+	var proven *dayTally       // the day those accepts proved (Story #1177)
+	// The session ends with the day it set, once it started a mission (Story
+	// #1175), or the day it proved.
 	finish := func() error {
 		if lines := e.daySet(cfg, started); len(lines) > 0 {
 			fmt.Fprintf(w, "\n%s\n", dayIsSet)
 			for _, l := range lines {
 				say("  ", l)
 			}
+		}
+		if proven != nil {
+			e.dayProven(w, proven)
 		}
 		return finishInbox(w, done, skipped, left())
 	}
@@ -1477,6 +1484,12 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 			if it.Kind == InboxStart && !e.DryRun {
 				started = append(started, fresh) // read again before the write: its plan is the one that started
+			}
+			if it.Kind == InboxEvening && a.Command == eveningAccept && !e.DryRun {
+				accepted[it.Number] = true
+				if fresh.day.proves(accepted) { // read again before the write: the tally the accept completes
+					proven = fresh.day
+				}
 			}
 		}
 		handled++
@@ -1726,10 +1739,17 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 		}
 	}
-	if left() == 0 && done > 0 && failed == 0 && skipped == 0 {
+	if left() == 0 && done > 0 && failed == 0 && skipped == 0 && proven == nil { // a proven day has its own cheer
 		e.cheer(w, cheerFor(0, true))
 	}
 	return finish()
+}
+
+// dayProven says the day is proven, with the inbox's cheer, and records the
+// milestone day-proven for its date (Story #1177).
+func (e *Env) dayProven(w io.Writer, d *dayTally) {
+	e.cheer(w, d.cheer())
+	e.recordMilestone("day-proven:" + d.date)
 }
 
 // cheer prints a celebration as words: the line-by-line inbox has no motion.

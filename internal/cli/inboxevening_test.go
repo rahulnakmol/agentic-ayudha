@@ -34,7 +34,8 @@ var (
 // screenshot no run holds, and a newer
 // pack of #1011 for another head, the best by authority and age, maps criterion 2. A person stops
 // #1104, which does not merge. The clock reads *now, London time.
-func eveningWorld(t *testing.T) (*missionWorld, *time.Time) {
+// Each of before edits the issues before the mission is approved and started.
+func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *time.Time) {
 	t.Helper()
 	m := newMissionWorld(t)
 	now := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
@@ -46,6 +47,9 @@ func eveningWorld(t *testing.T) (*missionWorld, *time.Time) {
 	for _, n := range []int{1010, 1011, 1104, 1012} {
 		m.issue(n, fmt.Sprintf("Story %d", n), "story", 889, "")
 		m.status(n, "ready", "")
+	}
+	for _, f := range before {
+		f(m)
 	}
 	m.feature(889, 1010, 1011, 1104, 1012)
 	if code, out, errOut := m.approve(889, "--milestones", "MS1=#1010,#1011,#1104 MS2=#1012"); code != 0 {

@@ -90,6 +90,8 @@ type eveningStory struct {
 	pack      *proof.Entry      // its pack at the merged head; nil when there is none, or it did not merge
 	packErr   string            // why its packs cannot be read
 	reviewed  bool              // a person reviewed it today at that head and that pack
+	accepted  bool              // and that review, or another of them, accepts it
+	date      string            // today, the day it was agreed, as 2006-01-02
 	images    map[string][]byte // its screenshots by artifact path, read only where the terminal shows images
 }
 
@@ -187,7 +189,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string, i
 				continue
 			}
 			for _, n := range m.Stories {
-				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p}
+				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p, date: day.Format(time.DateOnly)}
 				h := head(n)
 				if h != "" {
 					es, err := packs.Packs(ctx, t, n)
@@ -205,13 +207,10 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string, i
 				// changed since, even after the person's accept, brings it back with its new evidence.
 				for _, r := range reviews {
 					if at, err := time.Parse(time.RFC3339, r.At); err == nil && r.Story == n && r.Head == h && r.Pack == st.packID() && !at.Before(day) {
-						st.reviewed = true
+						st.reviewed, st.accepted = true, st.accepted || r.Verdict == ReviewAccepted
 					}
 				}
-				if st.reviewed {
-					st.pack = nil
-				}
-				if st.pack != nil && images { // only the surface that draws them reads the media secret and the bytes
+				if st.pack != nil && !st.reviewed && images { // only the surface that draws them reads the media secret and the bytes
 					if media == nil {
 						if media, err = e.proofStore(ctx, c, tok, "human", ""); err != nil {
 							media = packs // no bucket to read: each image keeps its path and link
@@ -268,6 +267,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 	if err != nil {
 		return nil, err
 	}
+	day := s.dayTally(stories)
 	repoURL := ""
 	var out []InboxItem
 	for _, st := range stories {
@@ -279,13 +279,13 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 			repoURL = is.GetHTMLURL()[:i]
 		}
 		labels := github.IssueLabels(is)
-		w, _ := workitems.Parse(n, is.GetTitle(), is.GetBody(), is.GetType().GetName(), labels)
-		crit, _ := workitems.ParseCriteria(w.Fields[workitems.FieldCriteria])
-		it := InboxItem{Kind: InboxEvening, Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Seat: verbs.EngineeringManager,
+		crit := storyCriteria(is)
+		it := InboxItem{day: day, Kind: InboxEvening, Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Seat: verbs.EngineeringManager,
 			Evidence: is.GetHTMLURL(), Updated: is.GetUpdatedAt().Time, Feature: st.feature, labels: labels, CounselFrom: "facts"}
 		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission.", termText(st.milestone), st.feature))
 		pr := delivered(n)
 		shown := 0
+		var missing []string // a merged story's criteria with no evidence in its pack, each on its own line
 		if pr == nil {
 			why, next := s.notMerged(st.plan, n)
 			it.f.problem = "not merged"
@@ -339,8 +339,11 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 			it.Lines = append(it.Lines, fmt.Sprintf("%d. [%s] %s", ec.N, ec.Kind, ec.Text))
 			if len(ec.Evidence) == 0 {
 				it.Lines = append(it.Lines, "   No evidence in the pack for this criterion.")
-			} else {
+			}
+			if hasEvidence(st.pack, c.N) {
 				shown++
+			} else if pr != nil {
+				missing = append(missing, fmt.Sprintf("#%d criterion %d has no evidence.", n, c.N))
 			}
 			for _, ev := range ec.Evidence {
 				it.Lines = append(it.Lines, fmt.Sprintf("   %s: %s · %s", or(ev.Kind, "artifact"), ev.Path, ev.Link))
@@ -353,6 +356,10 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 			}
 			it.Criteria = append(it.Criteria, ec)
 		}
+		if len(missing) > 0 { // the day is proven only when every criterion has its evidence (Story #1177)
+			it.Lines = append(append(it.Lines, missing...),
+				fmt.Sprintf("Next: say what is missing in a comment on #%d, and the mission's feedback pass (#1014) builds its evidence.", n))
+		}
 		if pr != nil {
 			it.Why = fmt.Sprintf("#%d was agreed this morning and merged in #%d; its pack at the merged head shows evidence for %d of %d criteria.", n, pr.Number, shown, len(crit))
 			it.Counsel = fmt.Sprintf("What this is about: whether #%d does what you agreed this morning. It merged in #%d at %s, and its pack at that head "+
@@ -364,6 +371,84 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		out = append(out, it)
 	}
 	return out, nil
+}
+
+// dayTally is the day's proof as the evening reads it (Story #1177): the
+// stories agreed today and their criteria. It is whole only when each story
+// merged, its pack at the merged head has evidence for every criterion, and
+// a person accepted it, or its card waits for that accept (open).
+type dayTally struct {
+	date              string
+	stories, criteria int
+	whole             bool
+	open              []int
+}
+
+// dayTally is the tally of stories, the reviewed ones too; nil when no
+// story was agreed today, so a day with nothing to prove is never proven.
+func (s *inboxSource) dayTally(stories []eveningStory) *dayTally {
+	if len(stories) == 0 {
+		return nil
+	}
+	d := &dayTally{date: stories[0].date, whole: true}
+	for _, st := range stories {
+		crit := storyCriteria(s.issues[st.number])
+		d.stories, d.criteria = d.stories+1, d.criteria+len(crit)
+		d.whole = d.whole && len(crit) > 0 && (st.accepted || !st.reviewed) // a comment, and no accept, says it is not done
+		for _, c := range crit {
+			d.whole = d.whole && hasEvidence(st.pack, c.N)
+		}
+		if !st.reviewed {
+			d.open = append(d.open, st.number)
+		}
+	}
+	return d
+}
+
+// proves reports whether the accepts of the stories in accepted, each a
+// write that landed, prove the day: every card that d left open is accepted.
+func (d *dayTally) proves(accepted map[int]bool) bool {
+	if d == nil || !d.whole {
+		return false
+	}
+	for _, n := range d.open {
+		if !accepted[n] {
+			return false
+		}
+	}
+	return true
+}
+
+// cheer is the celebration of a proven day, in the Quality Architect's voice.
+func (d *dayTally) cheer() inboxCheer {
+	return inboxCheer{head: fmt.Sprintf("The day is proven: %s and %s, each with its evidence. Job well done.",
+		countWords(d.stories, "story", "stories"), countWords(d.criteria, "criterion", "criteria")), seat: verbs.QualityArchitect,
+		voice: "Every criterion you agreed this morning has its evidence in a pack, and you accepted each story. I looked for a gap and found none."}
+}
+
+// storyCriteria is the Completion Goal of a story as GitHub has it now.
+func storyCriteria(is *gh.Issue) []workitems.Criterion {
+	if is == nil {
+		return nil
+	}
+	w, _ := workitems.Parse(is.GetNumber(), is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
+	crit, _ := workitems.ParseCriteria(w.Fields[workitems.FieldCriteria])
+	return crit
+}
+
+// hasEvidence reports whether pack x maps criterion n to an artifact it holds.
+func hasEvidence(x *proof.Entry, n int) bool {
+	if x == nil {
+		return false
+	}
+	for _, c := range x.Pack.Criteria {
+		for _, rel := range c.Evidence {
+			if _, ok := x.Pack.Artifact(rel); ok && c.ID == n {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // evidenceLink is where a person opens an artifact of pack x: its file on the

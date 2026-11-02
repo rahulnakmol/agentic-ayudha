@@ -151,22 +151,29 @@ func (e *Env) milestone(key string, once bool, title, detail string) {
 	if !t.Human() || e.DryRun {
 		return
 	}
-	if once {
-		seen := map[string]string{}
-		b, err := os.ReadFile(e.milestonesPath())
-		if err == nil {
-			_ = json.Unmarshal(b, &seen)
-		}
-		if seen[key] != "" {
-			return
-		}
-		seen[key] = e.Now().UTC().Format(time.RFC3339)
-		if b, err := json.MarshalIndent(seen, "", "  "); err == nil {
-			_ = os.MkdirAll(filepath.Dir(e.milestonesPath()), 0o755)
-			_ = os.WriteFile(e.milestonesPath(), append(b, '\n'), 0o644)
-		}
+	if once && !e.recordMilestone(key) {
+		return
 	}
 	t.Celebrate(title, detail)
+}
+
+// recordMilestone records the first time of milestone key in
+// milestones.json; false when it was recorded before.
+func (e *Env) recordMilestone(key string) bool {
+	seen := map[string]string{}
+	b, err := os.ReadFile(e.milestonesPath())
+	if err == nil {
+		_ = json.Unmarshal(b, &seen)
+	}
+	if seen[key] != "" {
+		return false
+	}
+	seen[key] = e.Now().UTC().Format(time.RFC3339)
+	if b, err := json.MarshalIndent(seen, "", "  "); err == nil {
+		_ = os.MkdirAll(filepath.Dir(e.milestonesPath()), 0o755)
+		_ = os.WriteFile(e.milestonesPath(), append(b, '\n'), 0o644)
+	}
+	return true
 }
 
 // progress starts a live step on the conversation stream.
