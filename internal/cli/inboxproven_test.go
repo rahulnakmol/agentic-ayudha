@@ -131,6 +131,31 @@ func TestDayIsProven(t *testing.T) {
 	})
 }
 
+// Criterion 1: a milestones.json that does not read (another aayu's write cut
+// short) is not written over by the proven day: it keeps what it recorded.
+func TestDayProvenKeepsUnreadableMilestones(t *testing.T) {
+	m := provenWorld(t)
+	cut := `{"first-proven-ship": "2026-10-01T09:00:00Z", "first-re`
+	paths := []string{filepath.Join(m.dir, ".aayudha", "state", "milestones.json"), filepath.Join(m.person["XDG_STATE_HOME"], "aayudha", "state", "milestones.json")}
+	for _, p := range paths {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(cut), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, out, errOut := runIn(t, m.person, m.opts, "1y1y1y", "inbox", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, dayProvenHead) {
+		t.Fatalf("inbox: exit %d:\n%s%s", code, out, errOut)
+	}
+	for _, p := range paths {
+		if b, _ := os.ReadFile(p); string(b) != cut {
+			t.Fatalf("%s was written over: %q", p, b)
+		}
+	}
+}
+
 // Criterion 2: criterion 3 of #1011 has no evidence in its pack: there is no
 // proven line, even once he accepts every card, and #1011's card says
 // `#1011 criterion 3 has no evidence` and the next step. Evidence that names

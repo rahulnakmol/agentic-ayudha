@@ -158,20 +158,24 @@ func (e *Env) milestone(key string, once bool, title, detail string) {
 }
 
 // recordMilestone records the first time of milestone key in
-// milestones.json; false when it was recorded before.
+// milestones.json; false when it was recorded before, or the file cannot be
+// read, so a record it cannot read is never written over.
 func (e *Env) recordMilestone(key string) bool {
-	seen := map[string]string{}
-	b, err := os.ReadFile(e.milestonesPath())
-	if err == nil {
-		_ = json.Unmarshal(b, &seen)
-	}
-	if seen[key] != "" {
+	p, seen := e.milestonesPath(), map[string]string{}
+	b, err := os.ReadFile(p)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) || err == nil && json.Unmarshal(b, &seen) != nil || seen[key] != "" {
 		return false
 	}
 	seen[key] = e.Now().UTC().Format(time.RFC3339)
-	if b, err := json.MarshalIndent(seen, "", "  "); err == nil {
-		_ = os.MkdirAll(filepath.Dir(e.milestonesPath()), 0o755)
-		_ = os.WriteFile(e.milestonesPath(), append(b, '\n'), 0o644)
+	if b, err = json.MarshalIndent(seen, "", "  "); err != nil || os.MkdirAll(filepath.Dir(p), 0o755) != nil {
+		return true
+	}
+	// Whole or not at all: another aayu reads the file only as it was, or as it is now.
+	if f, err := os.CreateTemp(filepath.Dir(p), "milestones-*.tmp"); err == nil {
+		werr := errors.Join(f.Chmod(0o644), func() error { _, err := f.Write(append(b, '\n')); return err }())
+		if cerr := f.Close(); werr != nil || cerr != nil || os.Rename(f.Name(), p) != nil {
+			_ = os.Remove(f.Name())
+		}
 	}
 	return true
 }
