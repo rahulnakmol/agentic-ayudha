@@ -573,6 +573,59 @@ func TestFeatureOpenPartRefreshFails(t *testing.T) {
 	}
 }
 
+// With no Approve to build on its card (#889 has no Initiative parent here),
+// the Feature card approves its parts alone: all three in one ledger commit,
+// at the hashes shown, under one device code. It offers no start, and a start
+// asked for anyway writes nothing.
+func TestFeatureApproveWithoutBuild(t *testing.T) {
+	m := baselineWorld(t, nil)
+	_, items := m.listed(m.person)
+	if len(items) != 1 || items[0].Build == nil || items[0].Build.Hash != "" || items[0].choice(1).Command != featureApprove ||
+		slices.ContainsFunc(items[0].Options, func(a InboxAction) bool { return a.Command == featureStart }) {
+		t.Fatalf("the card with no Approve to build: %+v", items)
+	}
+	m.device("rahulnakmol")
+	n := m.commits()
+	e, c := m.client(m.person)
+	l, err := e.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []InboxAction{{N: 1, Label: "approve and start", Command: featureStart}, *items[0].choice(2)} { // a start, and opening a part, approve nothing
+		if err := e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], a); CodeOf(err) != ExitUsage || m.codes() != 0 || m.commits() != n {
+			t.Fatalf("%s: %v, device codes %d, %s commits (was %s)", a.Label, err, m.codes(), m.commits(), n)
+		}
+	}
+	// The person declines the device code: nothing is written.
+	m.edit(func() {
+		m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "deny"}
+	})
+	if err := e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1)); err == nil || m.codes() != 1 || m.commits() != n {
+		t.Fatalf("a declined code: %v, device codes %d, %s commits (was %s)", err, m.codes(), m.commits(), n)
+	}
+	m.device("rahulnakmol")
+	before := len(strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n"))
+	code, out, errOut := runIn(t, m.person, m.opts, "1ys", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || !strings.Contains(out, "] Approve to build #889: ") {
+		t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+	}
+	for _, part := range []string{"intent", "spec", "tech"} {
+		b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part))
+		was := b
+		was.ApprovedBy, was.ApprovedAt, was.Presence = "", "", ""
+		if !ok || b.ApprovedBy != "rahulnakmol" || !reflect.DeepEqual(was, m.draftOf(part, 1)) {
+			t.Errorf("%s-v1.json: written %v: %+v", part, ok, b)
+		}
+	}
+	log := strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n")
+	if log = log[:len(log)-before]; !slices.Equal(log, []string{"specs: 3 baselines of #889, approved by @rahulnakmol"}) {
+		t.Errorf("the ledger's new commits: %q", log)
+	}
+	if _, _, ok := m.approvalRecords(); ok {
+		t.Error("#889 was approved to build")
+	}
+}
+
 // A step that fails after the parts and Approve to build of #889 are on the
 // ledger says they are there, never that nothing changed.
 func TestFeatureApproveFailsAfterTheCommit(t *testing.T) {
@@ -636,31 +689,47 @@ func TestFeatureApprovePinMoved(t *testing.T) {
 		}
 		nothing(t, m, n)
 	})
-	t.Run("in the run that writes the parts", func(t *testing.T) { // the Approve to build run that writes the parts refuses a moved pin itself
-		m := approveWorld(t)
-		m.edit(func() { retitle(m.g) })
-		n := m.commits()
-		m.device("rahulnakmol")
-		e, c := m.client(m.person)
-		_, tok, err := e.HumanGitHub(t.Context())
-		if err != nil {
-			t.Fatal(err)
-		}
-		w, err := e.Ledger(t.Context(), tok, "human", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		drafts, parts := map[string]*ready.Baseline{}, map[string][]byte{}
-		for _, part := range []string{"intent", "spec", "tech"} {
-			d := m.draftOf(part, 1)
-			drafts[part], parts[ready.BaselinePath(889, part, 1, false)] = &d, []byte("{}")
-		}
-		a := &approveRun{e: e, c: c, w: w, r: &ready.Ready{Repo: "o/r", TechnicalOwner: e.technicalOwner(), GH: c}, n: 889, drafts: drafts, parts: parts}
-		if err := a.approve(t.Context()); CodeOf(err) != ExitBlocked || fmt.Sprint(err) != said+" Nothing was written for #889." {
-			t.Fatalf("approve with the spec moved: %v", err)
-		}
-		nothing(t, m, n)
-	})
+	// The Approve to build run that writes the parts refuses, itself, a moved pin, a part drafted again, and its own check.
+	for name, c := range map[string]struct {
+		move  func(m *missionWorld, drafts map[string]*ready.Baseline)
+		check func(MissionPlan) error
+		want  string
+	}{
+		"in the run that writes the parts": {move: func(m *missionWorld, _ map[string]*ready.Baseline) { m.edit(func() { retitle(m.g) }) },
+			want: said + " Nothing was written for #889."},
+		"a part drafted again before that run": {move: func(_ *missionWorld, drafts map[string]*ready.Baseline) { drafts["spec"].Version = 2 },
+			want: "Spec v2 of #889 was drafted again after you read it. Nothing was written for #889."},
+		"that run's own check": {check: func(MissionPlan) error { return Errorf(ExitBlocked, "The plan is not the card's.") },
+			want: "The plan is not the card's."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			drafts, parts := map[string]*ready.Baseline{}, map[string][]byte{}
+			for _, part := range []string{"intent", "spec", "tech"} {
+				d := m.draftOf(part, 1)
+				drafts[part], parts[ready.BaselinePath(889, part, 1, false)] = &d, []byte("{}")
+			}
+			if c.move != nil {
+				c.move(m, drafts)
+			}
+			n := m.commits()
+			m.device("rahulnakmol")
+			e, cl := m.client(m.person)
+			_, tok, err := e.HumanGitHub(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			w, err := e.Ledger(t.Context(), tok, "human", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &approveRun{e: e, c: cl, w: w, r: &ready.Ready{Repo: "o/r", TechnicalOwner: e.technicalOwner(), GH: cl}, n: 889, drafts: drafts, parts: parts, check: c.check}
+			if err := a.approve(t.Context()); CodeOf(err) != ExitBlocked || fmt.Sprint(err) != c.want {
+				t.Fatalf("approve: %v", err)
+			}
+			nothing(t, m, n)
+		})
+	}
 	t.Run("its agents moved", func(t *testing.T) { // [build] agents on dev 4 → 20: the Approve to build is not the card's
 		m := approveWorld(t)
 		_, items := m.listed(m.person)
@@ -678,17 +747,62 @@ func TestFeatureApprovePinMoved(t *testing.T) {
 		}
 		nothing(t, m, n)
 	})
-	t.Run("the start cannot run here", func(t *testing.T) { // no tool for the repository: nothing is approved either
-		m := approveWorld(t)
-		m.opts.RepoTool = func(context.Context, string) (string, error) { return "", nil }
-		n := m.commits()
-		m.device("rahulnakmol")
-		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
-		if code != 0 || m.codes() != 0 || !strings.Contains(out, "The mission of #889 cannot start here: no entry in [hosts] repos names o/r") {
-			t.Fatalf("inbox 1 y with no tool: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
-		}
-		nothing(t, m, n)
-	})
+	// The start cannot run here: nothing is approved either. With no tool it says so before the code;
+	// an estimate over [mission] max_hours needs a reason, which only the Mission start card takes.
+	for name, c := range map[string]struct {
+		set   func(m *missionWorld)
+		codes int
+		want  string
+	}{
+		"no tool for the repository": {func(m *missionWorld) {
+			m.opts.RepoTool = func(context.Context, string) (string, error) { return "", nil }
+		}, 0,
+			"The mission of #889 cannot start here: no entry in [hosts] repos names o/r"},
+		"an estimate over max_hours": {func(m *missionWorld) { m.hours(map[string]float64{"S": 60}, map[string]float64{"S": 60}) }, 1,
+			"The mission of #889 cannot start here: mission 1's estimate is 60 working hours, over 48 h, so it starts only from its Mission start card with a reason. Nothing was written for #889"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			c.set(m)
+			n := m.commits()
+			m.device("rahulnakmol")
+			code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+			if code != 0 || m.codes() != c.codes || !strings.Contains(out, c.want) {
+				t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+			}
+			nothing(t, m, n)
+		})
+	}
+	// Another person's write after the card was read: a part approved on its own, or a Bug added to #889.
+	for name, c := range map[string]struct {
+		move func(m *missionWorld)
+		want string
+	}{
+		"a part approved on its own": {func(m *missionWorld) { m.approveDrafts("spec") },
+			"Spec v1 of #889 no longer waits: it was approved or drafted again after you read it. Nothing was written for #889."},
+		"a Bug added": {func(m *missionWorld) { m.issue(31, "Bug 31", "bug", 889, "") },
+			"The stories of #889 changed while you read it. Nothing was written for #889."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			_, items := m.listed(m.person)
+			c.move(m)
+			n := m.commits()
+			m.device("rahulnakmol")
+			e, cl := m.client(m.person)
+			l, err := e.Config()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = e.inboxAct(t.Context(), &l.Config, cl, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+			if CodeOf(err) != ExitBlocked || fmt.Sprint(err) != c.want || m.codes() != 0 || m.commits() != n {
+				t.Fatalf("approve and start: %v, device codes %d, %s commits (was %s)", err, m.codes(), m.commits(), n)
+			}
+			if _, _, ok := m.approvalRecords(); ok {
+				t.Fatal("#889 was approved to build")
+			}
+		})
+	}
 	t.Run("drafted again at the same hash", func(t *testing.T) { // the spec is approved at v1 and drafted again as v2 with v1's hash
 		m := approveWorld(t)
 		_, items := m.listed(m.person)
