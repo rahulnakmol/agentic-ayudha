@@ -34,8 +34,8 @@ env:
 
 jobs:
   # Path filters. Jobs gated on these outputs report "skipped", which satisfies a required check, so only
-  # PRs that cannot affect a job skip it. Pushes and dispatches run everything. A draft PR skips this job, so
-  # every job that needs it skips too; the jobs that do not need it skip drafts themselves.
+  # PRs that cannot affect a job skip it. Pushes, dispatches, and a PR marked ready run everything. A draft PR
+  # skips this job, so every job that needs it skips too; the jobs that do not need it skip drafts themselves.
   changes:
     name: changes
     if: github.event.pull_request.draft != true
@@ -57,9 +57,11 @@ jobs:
       - id: filter
         env:
           EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" != "pull_request" ]; then
+          # Marking a draft ready is its first CI run, so it runs every job (Story #1250).
+          if [ "$EVENT" != "pull_request" ] || [ "$ACTION" = "ready_for_review" ]; then
             { echo go=true; echo docs=true; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
