@@ -117,6 +117,27 @@ type MissionPlan struct {
 	Sources     []MissionSource     `json:"sources,omitempty"`
 	// HostWakes are the event hosts' wakes (`aayu mission wake`, Story #1012), at most keptWakes.
 	HostWakes []MissionHostWake `json:"host_wakes,omitempty"`
+	// Rebases are the PR heads ship refused because they do not contain
+	// dev's tip (Bug #1234), one per story: each waits on a rebase.
+	Rebases []MissionRebase `json:"rebases,omitempty"`
+}
+
+// MissionRebase is story Number's PR head that ship refused: dev's tip Dev
+// is not in it. The story waits on a rebase while its PR's head is Head.
+type MissionRebase struct {
+	Number int    `json:"number"`
+	PR     int    `json:"pr"`
+	Head   string `json:"head"`
+	Dev    string `json:"dev"`
+	At     string `json:"at"`
+}
+
+// rebase is story n's rebase wait in the plan, or nil.
+func (p *MissionPlan) rebase(n int) *MissionRebase {
+	if i := slices.IndexFunc(p.Rebases, func(r MissionRebase) bool { return r.Number == n }); i >= 0 {
+		return &p.Rebases[i]
+	}
+	return nil
 }
 
 // MissionStopped is one story or Bug a person stopped, and why.

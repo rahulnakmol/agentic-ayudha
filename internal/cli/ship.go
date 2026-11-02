@@ -184,7 +184,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// and again just before the merge. With no checkout there is no ledger to
 	// read, and ship stops before the merge (proofStore).
 	var fix *GateFix
-	if mw, lerr := e.Ledger(ctx, tok, "human", ""); lerr == nil {
+	mw, lerr := e.Ledger(ctx, tok, "human", "")
+	if lerr == nil {
 		if fix, err = missionHold(ctx, c, mw, repo, n, story, ref); err != nil {
 			return err
 		}
@@ -207,7 +208,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// can each pass and break dev together (Bug #1234). Ancestry decides,
 	// never timestamps or which files the tip changed: ship cannot tell
 	// which change matters. The tip is checked again just before the merge.
-	if err := onTip(ctx, c, owner, name, pr, pol.Tip); err != nil {
+	// A refusal records the wait in the story's mission and tells its builder.
+	if err := e.onTip(ctx, c, mw, repo, pr, story, pol.Tip); err != nil {
 		return err
 	}
 
@@ -1001,8 +1003,11 @@ func headMoved(n int, chose, now string) error {
 
 // onTip refuses PR pr unless its head contains tip, its base branch's tip
 // (Bug #1234): GitHub's comparison of the tip and the head is "ahead" or
-// "identical" only when the tip is an ancestor of the head.
-func onTip(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, tip string) error {
+// "identical" only when the tip is an ancestor of the head. A refusal
+// records in the mission of story that it waits on a rebase (w nil: no
+// ledger, no record).
+func (e *Env) onTip(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, pr *gh.PullRequest, story int, tip string) error {
+	owner, name, _ := github.SplitRepo(repo)
 	head := pr.GetHead().GetSHA()
 	cp, _, err := c.REST.Repositories.CompareCommits(ctx, owner, name, tip, head, &gh.ListOptions{PerPage: 1})
 	if err != nil {
@@ -1012,7 +1017,11 @@ func onTip(ctx context.Context, c *github.Client, owner, name string, pr *gh.Pul
 		return nil
 	}
 	n, base := pr.GetNumber(), or(cp.GetMergeBaseCommit().GetSHA(), pr.GetBase().GetSHA())
-	return WithNext(Errorf(ExitBlocked, "ship #%d: #%d was proven on %s, not on %s %s: rebase it and let the gate run; nothing was merged", n, n, short(base), pr.GetBase().GetRef(), short(tip)),
+	note := ""
+	if w != nil && !c.DryRun() {
+		note = e.waitRebase(ctx, c, w, repo, pr, story, tip)
+	}
+	return WithNext(Errorf(ExitBlocked, "ship #%d: #%d was proven on %s, not on %s %s: rebase it and let the gate run; nothing was merged%s", n, n, short(base), pr.GetBase().GetRef(), short(tip), note),
 		fmt.Sprintf("rebase %s onto %s, push it, and run aayu ship %d once the merge gate passes on the new head", pr.GetHead().GetRef(), pr.GetBase().GetRef(), n))
 }
 

@@ -384,6 +384,46 @@ func missionHold(ctx context.Context, c *github.Client, w *ledger.Writer, repo s
 	return fix, nil
 }
 
+// waitRebase records in the started mission that lists story that its PR
+// pr waits on a rebase onto tip, dev's tip (Bug #1234), so `aayu mission
+// next` shows it, and tells the story's builder thread once per head and
+// tip. It returns what ship adds to its refusal: ship refuses either way.
+func (e *Env) waitRebase(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, pr *gh.PullRequest, story int, tip string) string {
+	f, plan, _, err := storyMission(ctx, c, w, repo, story)
+	switch {
+	case err != nil:
+		return "; the mission was not read, so it does not show the wait: " + oneLineErr(err)
+	case plan == nil || plan.StartedBy == "" || plan.State != "" || !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool { return it.Number == story }):
+		return ""
+	}
+	wait := MissionRebase{Number: story, PR: pr.GetNumber(), Head: pr.GetHead().GetSHA(), Dev: tip, At: e.Now().UTC().Format(time.RFC3339)}
+	wrote, err := updatePlan(ctx, w, f, fmt.Sprintf("missions: #%d waits on a rebase onto %s", story, short(tip)), func(p *MissionPlan) bool {
+		if r := p.rebase(story); r != nil && r.PR == wait.PR && r.Head == wait.Head && r.Dev == wait.Dev {
+			return false // recorded, and its builder told, by an earlier ship
+		}
+		p.Rebases = append(slices.DeleteFunc(p.Rebases, func(r MissionRebase) bool { return r.Number == story }), wait)
+		return true
+	})
+	if err != nil {
+		return fmt.Sprintf("; the mission of #%d does not show the wait: %s", f, oneLineErr(err))
+	}
+	shown := fmt.Sprintf("; the mission of #%d shows #%d waits on a rebase", f, story)
+	if !wrote {
+		return shown
+	}
+	var st delegate.State
+	if ok, err := readLedgerJSON(ctx, w, delegate.LedgerPath(story), &st); err != nil || !ok || st.Receiver == "" || slices.Contains([]string{dlgFailed, dlgMerged, dlgCapped}, st.Status) {
+		return shown + ", and no builder thread is recorded to tell"
+	}
+	msg := fmt.Sprintf("aayu: ship refused PR #%d: its head %s was proven on a %s without %s, the tip now. Rebase %s onto the latest %s, push it with --force-with-lease, and let the merge gate run on the new head. Ship runs again once it passes.",
+		pr.GetNumber(), short(wait.Head), pr.GetBase().GetRef(), short(tip), pr.GetHead().GetRef(), pr.GetBase().GetRef())
+	ths, err := e.tell(ctx, c, w, repo, []delegate.State{st}, "delegate.rebase", msg, "its builder was told to rebase", "a person tells it to rebase")
+	if len(ths) == 0 {
+		return shown + ", and its builder was not told: " + oneLineErr(err)
+	}
+	return shown + "; " + ths[0].Line
+}
+
 // controllable says why Feature f's plan takes no stop or resume now, or nil.
 func controllable(plan *MissionPlan, f int) error {
 	switch {

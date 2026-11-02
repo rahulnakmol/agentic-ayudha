@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -1868,6 +1869,51 @@ func TestShipNeedsDevTipInHead(t *testing.T) {
 	g.Mu.Unlock()
 	if code != 0 || !merged || !strings.Contains(out, fmt.Sprintf("ship #%d: merged as", prN)) {
 		t.Fatalf("ship of the rebased head: exit %d, merged %t: %s", code, merged, out)
+	}
+}
+
+// Bug #1234, criterion 4: the mission of #1 lists #2, and ship refuses
+// #2's PR for a head without dev's tip: `aayu mission next 1` shows #2
+// waits on a rebase, and #2's builder thread is told once, not at each
+// refusal of the same head. Once the head moves, the wait ends.
+func TestShipRebaseWaitsInMission(t *testing.T) {
+	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
+	shipMission(t, s.bare, func(*MissionPlan) {})
+	const builder = "T-01a17000-0000-7000-8000-000000000002"
+	st, _ := json.Marshal(delegate.State{Story: 2, Feature: 1, Receiver: "amp", Mode: "cloud", Task: builder, Status: dlgReady, PR: s.prN, StartedAt: "2026-11-02T04:00:00Z"})
+	putLedger(t, s.bare, delegate.LedgerPath(2), string(st))
+	s.g.Mu.Lock()
+	base := s.g.Pulls[s.prN].Base.SHA
+	branch := s.g.Pulls[s.prN].Head.Ref
+	s.g.Mu.Unlock()
+	tip := strings.Repeat("a", 40)
+	devAt(s.g, tip, s.head, base, false)
+	for range 2 {
+		shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, fmt.Sprintf("not on dev %s: rebase it and let the gate run; nothing was merged; the mission of #1 shows #2 waits on a rebase", short(tip)))
+	}
+	msg := fmt.Sprintf("aayu: ship refused PR #%d: its head %s was proven on a dev without %s, the tip now. Rebase %s onto the latest dev, push it with --force-with-lease, and let the merge gate run on the new head. Ship runs again once it passes.",
+		s.prN, short(s.head), short(tip), branch)
+	if calls, _ := s.sent(); !slices.Equal(calls, []string{"amp threads continue " + builder + " -ox " + msg}) {
+		t.Fatalf("ship told %q, want the builder once", calls)
+	}
+	next := func() string {
+		t.Helper()
+		env := maps.Clone(s.env)
+		env["AMP_THREAD_ID"] = shipKanhaThread
+		code, out, errOut := run(t, env, s.opts, "mission", "next", "1", "--repo", "o/r")
+		if code != 0 {
+			t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+		}
+		return out
+	}
+	if out, want := next(), fmt.Sprintf("waits #2: waits on a rebase: PR #%d was proven on a dev without %s · subthread %s\n", s.prN, short(tip), builder); !strings.Contains(out, want) {
+		t.Fatalf("mission next does not show the wait %q:\n%s", want, out)
+	}
+	s.g.Mu.Lock()
+	s.g.Pulls[s.prN].Head.SHA = strings.Repeat("9", 40)
+	s.g.Mu.Unlock()
+	if out := next(); strings.Contains(out, "waits on a rebase") {
+		t.Fatalf("mission next shows the wait after the head moved:\n%s", out)
 	}
 }
 
