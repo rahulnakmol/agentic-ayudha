@@ -332,53 +332,39 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 		return p, nil, nil, err
 	}
 	slices.SortFunc(subs, func(x, y *gh.Issue) int { return x.GetNumber() - y.GetNumber() })
-	nums := make([]int, len(subs))
+	nums, bugs := make([]int, len(subs)), openBugs(subs)
 	for i, s := range subs {
 		nums[i] = s.GetNumber()
 	}
 	// With no --milestones, the milestones the person named last time hold; the check below still refuses new stories.
+	// With none and no plan yet, MS1 holds every story and Bug but the open Bugs.
 	ms := []MissionMilestone(nil)
-	if strings.TrimSpace(a.milestones) == "" && old != nil {
+	switch {
+	case strings.TrimSpace(a.milestones) == "" && old != nil:
 		ms = slices.Clone(old.Milestones)
-	} else if ms, err = parseMilestones(a.milestones, nums); err != nil {
-		return p, nil, nil, err
+	case strings.TrimSpace(a.milestones) == "":
+		if rest := slices.DeleteFunc(slices.Clone(nums), func(n int) bool { return slices.Contains(bugs, n) }); len(rest) > 0 {
+			ms = []MissionMilestone{{Name: "MS1", Stories: rest, Gate: MilestoneGate{State: GateWaits}}}
+		}
+	default:
+		if ms, err = parseMilestones(a.milestones); err != nil {
+			return p, nil, nil, err
+		}
 	}
+	// Each open Bug the person did not name is fixed last, in BUGS (Story #1174).
+	ms = withBugs(ms, bugs)
 	if msg := checkMilestones(a.n, ms, nums); msg != "" {
 		return p, nil, nil, off("%s. Next: name each story's and Bug's milestone with aayu ready %d --milestones 'MS1=#a,#b MS2=#c'", msg, a.n)
 	}
 	owner, name, _ := github.SplitRepo(a.r.Repo)
 	done := map[int]bool{}
-	bugs := 0
+	anyBug := false
 	for _, si := range subs {
-		labels := github.IssueLabels(si)
-		kind, _ := workitems.TypeOf(si.GetType().GetName(), labels)
-		if kind == "bug" {
-			bugs++
+		it, err := missionItem(ctx, a.c, owner, name, si, ms, nums, done)
+		if err != nil {
+			return p, nil, nil, err
 		}
-		it := MissionItem{Number: si.GetNumber(), Kind: kind, Title: si.GetTitle(), DependsOn: []int{}, Outside: []MissionDep{}}
-		for _, l := range labels {
-			if v, ok := strings.CutPrefix(l, "effort:"); ok {
-				it.Effort = v
-			}
-		}
-		for _, m := range ms {
-			if slices.Contains(m.Stories, it.Number) {
-				it.Milestone = m.Name
-			}
-		}
-		done[it.Number] = depState(si) != depOpen // merged or cancelled: it holds no mission back
-		for _, d := range dependsOn(si.GetBody()) {
-			if slices.Contains(nums, d) {
-				it.DependsOn = append(it.DependsOn, d)
-				continue
-			}
-			dep, err := outsideDep(ctx, a.c, owner, name, d)
-			if err != nil {
-				return p, nil, nil, err
-			}
-			it.Outside = append(it.Outside, dep.MissionDep)
-			done[d] = dep.merged
-		}
+		anyBug = anyBug || it.Kind == "bug"
 		p.Graph = append(p.Graph, it)
 	}
 	release, err := a.e.tatkalRelease(ctx, a.n)
@@ -386,7 +372,7 @@ func (a *approveRun) missionPlan(ctx context.Context, approved int) (MissionPlan
 		return p, nil, nil, Wrap(ExitExternal, err)
 	}
 	what := "stories"
-	if bugs > 0 {
+	if anyBug {
 		what = "stories and Bugs"
 	}
 	runs := len(nums) + 2*len(ms)
@@ -444,6 +430,120 @@ func missionsLine(ms []Mission) string {
 		}
 	}
 	return b.String()
+}
+
+// missionItem is story or Bug si as the plan's graph holds it, in its
+// milestone of ms. Into done it puts whether si and each depends-on target
+// outside nums, the Feature's stories and Bugs, merged or was cancelled: such
+// an item holds no mission back.
+func missionItem(ctx context.Context, c *github.Client, owner, name string, si *gh.Issue, ms []MissionMilestone, nums []int, done map[int]bool) (MissionItem, error) {
+	labels := github.IssueLabels(si)
+	kind, _ := workitems.TypeOf(si.GetType().GetName(), labels)
+	it := MissionItem{Number: si.GetNumber(), Kind: kind, Title: si.GetTitle(), DependsOn: []int{}, Outside: []MissionDep{}}
+	for _, l := range labels {
+		if v, ok := strings.CutPrefix(l, "effort:"); ok {
+			it.Effort = v
+		}
+	}
+	for _, m := range ms {
+		if slices.Contains(m.Stories, it.Number) {
+			it.Milestone = m.Name
+		}
+	}
+	done[it.Number] = depState(si) != depOpen
+	for _, d := range dependsOn(si.GetBody()) {
+		if slices.Contains(nums, d) {
+			it.DependsOn = append(it.DependsOn, d)
+			continue
+		}
+		dep, err := outsideDep(ctx, c, owner, name, d)
+		if err != nil {
+			return it, err
+		}
+		it.Outside = append(it.Outside, dep.MissionDep)
+		done[d] = dep.merged
+	}
+	return it, nil
+}
+
+// BugsMilestone is the milestone a Feature's open Bugs are fixed in, after
+// every other milestone (Story #1174). A plan with no open Bug has none.
+const BugsMilestone = "BUGS"
+
+// openBugs are the numbers of the open Bugs among subs.
+func openBugs(subs []*gh.Issue) []int {
+	var out []int
+	for _, is := range subs {
+		if kind, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); kind == "bug" && is.GetState() == "open" {
+			out = append(out, is.GetNumber())
+		}
+	}
+	return out
+}
+
+// withBugs puts each of bugs that no milestone of ms holds in BUGS, which
+// it adds last when ms has none. BUGS then waits for its gate again.
+func withBugs(ms []MissionMilestone, bugs []int) []MissionMilestone {
+	for _, n := range bugs {
+		if slices.ContainsFunc(ms, func(m MissionMilestone) bool { return slices.Contains(m.Stories, n) }) {
+			continue
+		}
+		i := slices.IndexFunc(ms, func(m MissionMilestone) bool { return m.Name == BugsMilestone })
+		if i < 0 {
+			ms, i = append(ms, MissionMilestone{Name: BugsMilestone, Stories: []int{}, Gate: MilestoneGate{State: GateWaits}}), len(ms)
+		}
+		ms[i].Stories = append(slices.Clone(ms[i].Stories), n) // never into the backing array of a plan read before
+		ms[i].Gate = MilestoneGate{State: GateWaits}           // a passed gate never judged the new Bug
+	}
+	return ms
+}
+
+// joinBugs adds each open Bug of subs, the Feature's stories and Bugs now,
+// that the plan's graph does not hold to its BUGS milestone (Story #1174). A
+// Bug needs no Approve to build, so it joins the started mission with none:
+// in its first mission, or in the next while a depends-on outside the
+// Feature is open (splitMissions). It reports whether the plan changed.
+func joinBugs(ctx context.Context, c *github.Client, repo string, plan *MissionPlan, subs []*gh.Issue) (bool, error) {
+	inGraph := func(n int) bool {
+		return slices.ContainsFunc(plan.Graph, func(it MissionItem) bool { return it.Number == n })
+	}
+	var bugs []*gh.Issue
+	nums, open := []int{}, openBugs(subs)
+	for _, it := range plan.Graph {
+		nums = append(nums, it.Number)
+	}
+	for _, is := range subs {
+		if n := is.GetNumber(); slices.Contains(open, n) && !inGraph(n) {
+			bugs, nums = append(bugs, is), append(nums, n)
+		}
+	}
+	if len(bugs) == 0 {
+		return false, nil
+	}
+	plan.Milestones = withBugs(plan.Milestones, nums[len(plan.Graph):])
+	owner, name, _ := github.SplitRepo(repo)
+	done, items := map[int]bool{}, []MissionItem{}
+	for _, is := range bugs {
+		it, err := missionItem(ctx, c, owner, name, is, plan.Milestones, nums, done)
+		if err != nil {
+			return false, err
+		}
+		items = append(items, it)
+	}
+	// The plan's own stories and Bugs are in their missions already: they hold no new Bug back.
+	for _, m := range splitMissions(items, func(n int) bool { return inGraph(n) || done[n] }) {
+		i := slices.IndexFunc(plan.Missions, func(pm Mission) bool { return pm.Number == m.Number })
+		if i < 0 {
+			plan.Missions, i = append(plan.Missions, Mission{Number: m.Number, Stories: []MissionStory{}}), len(plan.Missions)
+		}
+		plan.Missions[i].Stories = append(plan.Missions[i].Stories, m.Stories...)
+	}
+	plan.Graph = append(plan.Graph, items...)
+	if plan.Release == 0 { // a Tatkal Feature lives as long as its Release
+		plan.FeatureDone = plan.Milestones[len(plan.Milestones)-1].Name
+		plan.CompleteWhen = plan.FeatureDone + " passes its gate"
+	}
+	return true, nil
 }
 
 // splitMissions puts each story and Bug whose depends-on outside the Feature
@@ -533,11 +633,7 @@ func outsideDep(ctx context.Context, c *github.Client, owner, name string, n int
 var milestoneName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // parseMilestones reads --milestones: "MS1=#20,#21 MS2=#22,#23", in order.
-// With none and no plan yet, the plan has one milestone, MS1, with every story and Bug.
-func parseMilestones(spec string, all []int) ([]MissionMilestone, error) {
-	if strings.TrimSpace(spec) == "" {
-		return []MissionMilestone{{Name: "MS1", Stories: all, Gate: MilestoneGate{State: GateWaits}}}, nil
-	}
+func parseMilestones(spec string) ([]MissionMilestone, error) {
 	var ms []MissionMilestone
 	for _, part := range strings.FieldsFunc(spec, func(r rune) bool { return r == ' ' || r == ';' || r == '\n' || r == '\t' }) {
 		nm, refs, ok := strings.Cut(part, "=")
@@ -563,6 +659,10 @@ func parseMilestones(spec string, all []int) ([]MissionMilestone, error) {
 // checkMilestones says why the milestones do not hold the Feature's stories
 // and Bugs, each in exactly one (Decision #915), or "".
 func checkMilestones(f int, ms []MissionMilestone, all []int) string {
+	// The gates pass in plan order: a BUGS before another milestone could pass while that one builds (Story #1174).
+	if i := slices.IndexFunc(ms, func(m MissionMilestone) bool { return m.Name == BugsMilestone }); i >= 0 && i != len(ms)-1 {
+		return fmt.Sprintf("%s is milestone %d of %d: the Bugs are fixed last, so it is the last milestone", BugsMilestone, i+1, len(ms))
+	}
 	in := map[int][]string{}
 	for _, m := range ms {
 		for _, n := range m.Stories {
