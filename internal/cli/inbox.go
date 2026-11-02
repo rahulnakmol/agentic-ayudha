@@ -53,6 +53,7 @@ const (
 	InboxReady       = "ready"         // an open Story PR that ship refused only for the human pass, its gate green
 	InboxNotReady    = "not-ready"     // a PR ship left Ready to ship that cannot ship now (a conflict, a check, new commits): nothing for a person yet (Story #796)
 	InboxHumanReview = "human-review"  // a PR whose merge gate waits at the human rung for its head (Story #675)
+	InboxFinding     = "finding"       // a PR whose P0 or P1 finding waits for a person: disputed, or past the builder's fix cycles (Story #1254)
 	InboxCapped      = "capped"        // a PR whose review stopped at the round cap (step-back), waiting for a person
 	InboxUnshipped   = "unshipped"     // a Story whose PR merged into dev without a ship record
 	InboxFixed       = "fixed"         // an open Bug whose fix merged into dev
@@ -65,7 +66,7 @@ const (
 // inboxOrder is the order a person decides the cards in: the morning's
 // decisions, baselines, Approve to build, and mission start first, then the
 // other cards (Story #1175).
-var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxFinding, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -171,6 +172,13 @@ var inboxKinds = map[string]inboxKind{
 			"the merge gate asks the [autonomy] approver instead, and only a review recorded through `aayu inspect <pr> --approve` counts. " +
 			"Approving here records the same thing: your review of the commit on the card, with what you checked, on the ledger and on the pull request. " +
 			"If you leave it, the pull request does not merge; a new push needs a new review.",
+		Terms: []string{"Merge gate", "Disposition"}},
+	InboxFinding: {Icon: "🚨", Word: "P0 or P1 finding", Seat: verbs.EngineeringManager,
+		Line: "A P0 or P1 review finding that no agent may decline waits for a person.",
+		Explain: "inspect's review keeps a P0 or P1 finding on this pull request's head, and an agent never declines one on its own. " +
+			"It comes to you when a reviewer disputed it, or when the builder used its fix cycles and the finding is still open. " +
+			"Opening it lets you read the finding and its evidence: have it fixed, or dismiss it with `aayu inspect <pr> --dismiss <id> --reason`, " +
+			"which only a person runs. If you leave it, the pull request does not merge.",
 		Terms: []string{"Merge gate", "Disposition"}},
 	InboxCapped: {Icon: "✋", Word: "At the review cap", Seat: verbs.EngineeringManager,
 		Line: "Agents tried to fix this pull request as often as allowed; a person looks next.",
@@ -335,6 +343,8 @@ func (it InboxItem) short() string {
 		return it.f.problem
 	case InboxHumanReview:
 		return "needs a human review"
+	case InboxFinding:
+		return it.f.problem
 	case InboxCapped:
 		return "hit the review cap"
 	case InboxUnshipped:
@@ -834,6 +844,9 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				continue
 			}
 		}
+		if card := findingItem(p, st, dev); card != nil {
+			out = append(out, *card)
+		}
 		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev && !p.GetDraft() {
 			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, Updated: p.GetUpdatedAt().Time,
 				Evidence: p.GetHTMLURL(), Head: head, f: inboxFacts{head: head},
@@ -905,6 +918,42 @@ func mapKeys[V any](m map[int]V) func(func(int) bool) {
 			}
 		}
 	}
+}
+
+// findingItem is PR p's card for its P0 and P1 findings that wait for a
+// person (Story #1254), or nil: inspect's result at its head keeps one, and a
+// reviewer disputed it or the builder used its fix cycles. A review stopped
+// at the round cap is the capped card's.
+func findingItem(p *gh.PullRequest, st inspect.State, dev string) *InboxItem {
+	head := p.GetHead().GetSHA()
+	if p.GetBase().GetRef() != dev || p.GetDraft() || st.Result == nil || st.Stopped != "" || st.Result.Head != "" && st.Result.Head != head {
+		return nil
+	}
+	var lines []string
+	disputed := false
+	for _, f := range st.Result.Findings {
+		if f.Severity != "P0" && f.Severity != "P1" {
+			continue
+		}
+		disputed = disputed || f.Disputed != ""
+		at := f.File
+		if f.Line > 0 {
+			at += ":" + strconv.Itoa(f.Line)
+		}
+		lines = append(lines, termText(fmt.Sprintf("%s %s: %s (%s)", f.Severity, or(f.ID, "finding"), f.Title, at)))
+	}
+	if len(lines) == 0 || !disputed && st.Cycles < inspect.MaxCycles {
+		return nil
+	}
+	why := fmt.Sprintf("the builder used its %d fix cycles, and inspect still keeps %d P0 or P1 %s on `%s`; an agent never declines one.",
+		inspect.MaxCycles, len(lines), plural(len(lines), "finding", "findings"), short(head))
+	if disputed {
+		why = fmt.Sprintf("a reviewer disputed a P0 or P1 finding that inspect keeps on `%s`; only a person dismisses it, and an agent never declines one.", short(head))
+	}
+	return &InboxItem{Kind: InboxFinding, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
+		PR: p.GetNumber(), Updated: p.GetUpdatedAt().Time, Evidence: p.GetHTMLURL(), Head: head, Details: lines,
+		f: inboxFacts{head: head, problem: fmt.Sprintf("%d P0/P1 %s", len(lines), plural(len(lines), "finding", "findings"))}, Why: why,
+		Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and read the findings", Command: "open"}}}
 }
 
 // decisionItem is an open Decision as an inbox step: accept one of its
