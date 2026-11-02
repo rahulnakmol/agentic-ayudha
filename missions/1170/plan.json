@@ -2113,6 +2113,13 @@
       "reason": "MS2 and BUGS still building after the MS1 gate fixes",
       "mission": 1,
       "hours": 48
+    },
+    {
+      "control": "recover",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-11-02T17:45:48Z",
+      "presence": "none"
     }
   ],
   "gate_fixes": [
