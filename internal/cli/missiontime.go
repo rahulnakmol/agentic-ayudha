@@ -279,6 +279,10 @@ type MissionClock struct {
 	Wall       float64            `json:"wall"`
 	NotCounted map[string]float64 `json:"not_counted"`
 	Stories    []StoryClock       `json:"stories"`
+	// heldFrom is when new starts wait once the clock reached its limit: the
+	// end of the person's window in which its limit card was shown (Story
+	// #1254). Zero while the card waits for a window.
+	heldFrom time.Time
 }
 
 // StoryClock is a story's working total: the time its own thread worked, less its waits.
@@ -331,8 +335,14 @@ func recordedRun(n int, rec *StoryRunRecord) (storyRun, bool) {
 	return r, true
 }
 
-// reached reports whether the mission used its time: new starts wait.
+// reached reports whether the mission used its time.
 func (c MissionClock) reached() bool { return c.Limit > 0 && c.Hours >= c.Limit }
+
+// holds reports whether new starts wait at now: the mission used its time,
+// and its limit card went unanswered to the end of a person's window.
+func (c MissionClock) holds(now time.Time) bool {
+	return c.reached() && !c.heldFrom.IsZero() && !now.Before(c.heldFrom)
+}
 
 // String is "19 h of 48 (11 h not counted: 5 h person, 2 h usage limit, 4 h CI)".
 func (c MissionClock) String() string {
@@ -704,17 +714,22 @@ func trustedBy(ctx context.Context, c *github.Client, owner, name string, id con
 	})
 }
 
-// missionCards posts each mission's time card once: when its clock reaches
-// warn_hours, and when it reaches its limit. A card a person saw, or an
-// extension, is not posted again until the next limit.
-func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f int, clocks []MissionClock, warn, maxH int, id config.Identity) error {
-	if c.DryRun() {
-		return nil
-	}
+// missionCards posts each mission's time card once, inside a person's window
+// (Story #1254): when its clock reaches warn_hours, and when it reaches its
+// limit. Outside a window the card waits for the next one, and the request is
+// queued for that window's one message. A card a person saw, or an extension,
+// is not posted again until the next limit. It sets each limited clock's
+// heldFrom: the end of the window its limit card was shown in. With post
+// false (a preview, or a dry run) it posts and queues nothing, and a card it
+// would post now counts as shown now.
+func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f int, clocks []MissionClock, warn, maxH int, id config.Identity, win config.Windows, post bool) error {
+	post = post && !c.DryRun()
 	owner, name, _ := github.SplitRepo(repo)
+	now := e.Now()
 	var comments []*gh.IssueComment
 	read := false
-	for _, mc := range clocks {
+	for i := range clocks {
+		mc := &clocks[i]
 		state, line := "", ""
 		switch {
 		case mc.reached():
@@ -738,7 +753,7 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 		if state == "limit" {
 			hours = mc.Limit
 		}
-		posted := false
+		posted, shown := false, time.Time{}
 		for _, cm := range comments {
 			// A warning only when the mission has no card yet, and a limit card once per limit; only a card by an
 			// account with write access counts, as the inbox reads it.
@@ -750,13 +765,33 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 				return Wrap(ExitExternal, err)
 			} else if ok {
 				posted = state == "warn" || mm[2] == "limit" && mm[3] == hrs(hours)
+				if posted && state == "limit" { // the limit card was shown when it was written
+					shown = cmp.Or(cm.GetUpdatedAt().Time, cm.GetCreatedAt().Time)
+				}
 			}
 		}
-		if posted {
+		switch {
+		case posted:
+		case !win.Within(now): // it waits for the next window, queued for its one message
+			if post {
+				e.askLater(ctx, fmt.Sprintf("mission-time:%s#%d/%d:%s:%s", repo, f, mc.Mission, state, hrs(hours)), fmt.Sprintf("#%d: mission %d's time card (%s h, %s)", f, mc.Mission, hrs(hours), state),
+					fmt.Sprintf("The card waits in aayu inbox from %s: %s", win.Next(now).Format("Mon 2 Jan 15:04 MST"), strings.ReplaceAll(line, "**", "")))
+			}
 			continue
+		case !post:
+			shown = now
+		default:
+			if err := upsertCard(ctx, c, repo, f, mc.Mission, state, missionCard(mc.Mission, state, hours, float64(maxH), line)); err != nil {
+				return err
+			}
+			shown = now
 		}
-		if err := upsertCard(ctx, c, repo, f, mc.Mission, state, missionCard(mc.Mission, state, hours, float64(maxH), line)); err != nil {
-			return err
+		switch {
+		case state != "limit" || shown.IsZero():
+		case len(win.Spans) == 0: // no windows: a person may be asked at any time, so the hold starts with the card
+			mc.heldFrom = now
+		default:
+			mc.heldFrom = win.End(shown)
 		}
 	}
 	return nil

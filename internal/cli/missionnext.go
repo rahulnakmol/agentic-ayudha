@@ -135,7 +135,12 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.recordWorking(ctx, c, w, f, clocks); err != nil {
 		return err
 	}
-	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity); err != nil {
+	// Inside a person's window, the requests queued since the last one go out first, as one message (Story #1254).
+	if !c.DryRun() {
+		e.flushRequests(ctx)
+	}
+	win, _ := l.Config.PersonWindows() // a config that loaded has windows (config.Validate)
+	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, true); err != nil {
 		return err
 	}
 	subs, err := featureItems(ctx, c, repo, f, "story", "bug") // in sub-issue order: the slice order
@@ -344,22 +349,38 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	for n := range held {
 		spent += max(per-costs[n], 0)
 	}
+	// Past the mission's budget, its card waits for a person's window, and new starts wait only from the end of the
+	// window it was shown in (Story #1254). The [budget] breaker is money, not a card: it stops every lane above.
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	win, _ := l.Config.PersonWindows() // a config that loaded has windows (config.Validate)
+	budget := &budgetCard{e: e, c: c, repo: repo, f: f, budget: plan.Budget, per: per, win: win, now: now, preview: !claim || c.DryRun()}
 	for i := range entries {
 		en := &entries[i]
 		if !en.free {
 			continue
 		}
+		over := plan.Budget > 0 && spent+per > plan.Budget // a story counts at its per-story cap until #872 measures spend per story
 		switch {
 		case claimed[en.n]:
 			en.item.Reason = "claimed by another run"
 			continue
-		case heldBy(plan, clocks, en.n) != nil: // past its time limit a mission starts nothing new; running stories go on
-			en.item.Reason = heldBy(plan, clocks, en.n).holdReason(f)
+		case heldBy(plan, clocks, en.n, now) != nil: // past its time limit and a window's end a mission starts nothing new; running stories go on
+			en.item.Reason = heldBy(plan, clocks, en.n, now).holdReason(f)
 			continue
-		case plan.Budget > 0 && spent+per > plan.Budget: // a story counts at its per-story cap until #872 measures spend per story
-			en.item.Reason = fmt.Sprintf("would pass #%d's approved budget", f)
-			en.item.detail = fmt.Sprintf("%s + %s > %s USD", usd(spent), usd(per), usd(plan.Budget))
-			continue
+		case over:
+			budget.over = true
+			if holds, err := budget.holds(ctx); err != nil {
+				return err
+			} else if holds {
+				en.item.Reason = fmt.Sprintf("would pass #%d's approved budget", f)
+				en.item.detail = fmt.Sprintf("%s + %s > %s USD", usd(spent), usd(per), usd(plan.Budget))
+				continue
+			}
+		}
+		switch {
 		case len(busy) >= agents:
 			en.item.Reason = "no free agent"
 			continue
@@ -381,6 +402,9 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		default: // another run took the last free agent
 			en.item.Reason, busy[lost] = "no free agent", true
 		}
+	}
+	if err := budget.ask(ctx); err != nil {
+		return err
 	}
 	for _, en := range entries {
 		if en.item.Reason == "no free agent" {
@@ -784,14 +808,16 @@ func parentRef(p *workitems.Ref) string {
 	return fmt.Sprintf("#%d", p.Number)
 }
 
-// heldBy is the clock of story n's mission when it reached its time limit, else nil.
-func heldBy(plan *MissionPlan, clocks []MissionClock, n int) *MissionClock {
+// heldBy is the clock of story n's mission when it holds new starts at now:
+// it reached its time limit, and its card went unanswered to the end of a
+// person's window (Story #1254). Else nil.
+func heldBy(plan *MissionPlan, clocks []MissionClock, n int, now time.Time) *MissionClock {
 	for _, m := range plan.Missions {
 		if !slices.ContainsFunc(m.Stories, func(s MissionStory) bool { return s.Number == n }) {
 			continue
 		}
 		for i := range clocks {
-			if clocks[i].Mission == m.Number && clocks[i].reached() {
+			if clocks[i].Mission == m.Number && clocks[i].holds(now) {
 				return &clocks[i]
 			}
 		}

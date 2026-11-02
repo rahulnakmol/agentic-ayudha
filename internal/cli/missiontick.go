@@ -116,6 +116,9 @@ func missionTick(ctx context.Context, e *Env) error {
 		return err
 	}
 	rep := TickReport{Repo: repo, Woken: []TickWake{}, Held: []TickHeld{}, Synced: []TickSync{}, Ship: []LoopItem{}, DryRun: c.DryRun()}
+	if !rep.DryRun { // inside a person's window, the requests queued since the last one go out as one message (Story #1254)
+		e.flushRequests(ctx)
+	}
 	for _, f := range features {
 		if why := e.tickMission(ctx, c, w, repo, f, states, &rep); why != "" {
 			rep.Held = append(rep.Held, TickHeld{Feature: f, Why: why})
@@ -212,8 +215,11 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 		var clocks []MissionClock // a story past its mission's time limit cannot start, so it wakes nobody (Story #1015)
 		var l *config.Loaded
 		if l, err = e.Config(); err == nil {
-			_, maxH := missionLimits(&l.Config)
-			clocks, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
+			warn, maxH := missionLimits(&l.Config)
+			if clocks, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity); err == nil {
+				win, _ := l.Config.PersonWindows()
+				err = e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, false) // reads when a hold starts; posts nothing
+			}
 		}
 		if err == nil {
 			if subs, err = featureItems(ctx, c, repo, f, "story", "bug"); err == nil {
