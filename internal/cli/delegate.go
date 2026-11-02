@@ -716,8 +716,8 @@ func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, 
 		if err := ignoreMissing(err); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		for _, cl := range e.allClaims(raw) { // however old: a claim that expired during setup still sets the deadline
-			if cl.Story == d.story {
+		for _, cl := range e.allClaims(raw) { // the claim live when this build began, though it expired during setup
+			if at, err := time.Parse(time.RFC3339, cl.At); err == nil && cl.Story == d.story && now.Sub(at) <= pickLockTTL {
 				d.state.ClaimedAt = cl.At
 			}
 		}

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -263,16 +264,19 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 // Bug #1266, criterion 1: a host hand-off lives as long as the mission claim
 // that started it. A build that hands #20 off 14 minutes after the claim gets
 // no 15 minutes more: 16 minutes after the claim, mission next releases #20
-// and lists it start. That holds when the claim expires during the build's
-// environment setup too. A --thread recorded before mission next marks the
-// lapse is kept (criterion 2); one recorded after it is refused.
+// and lists it start; at 14m59s it holds #20. That holds when the claim
+// expires during the build's environment setup too, but a claim of a failed
+// earlier start does not set a retry's deadline. A --thread recorded before
+// mission next marks the lapse is kept (criterion 2); one after it is refused.
 func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		setup        time.Duration // the clock moves this much while build verifies the environment
 		recordBefore bool          // --thread runs before mission next
+		failFirst    bool          // the first build fails its setup at t=16m, and build runs again without mission next
 	}{
 		{name: "late build"},
+		{name: "retry after a failed setup", setup: 2 * time.Minute, failFirst: true},
 		{name: "claim expires during setup", setup: 2 * time.Minute},
 		{name: "thread recorded before the lapse is marked", recordBefore: true},
 	} {
@@ -289,10 +293,35 @@ func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 				clk.add(tc.setup)
 				return ensure(ctx, root, host)
 			}
+			if tc.failFirst {
+				m.opts.EnsureEnv = func(context.Context, string, string) (agentenv.HostStatus, error) {
+					clk.add(tc.setup)
+					return agentenv.HostStatus{}, errors.New("no Docker daemon answers")
+				}
+				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r"); code == 0 {
+					t.Fatalf("build with a failed setup: exit 0: %s", errOut)
+				}
+				m.opts.EnsureEnv = ensure
+			}
 			if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil {
 				t.Fatalf("no host hand-off: %+v", res.Delegation)
 			}
-			clk.add(2*time.Minute - tc.setup)
+			if tc.failFirst { // the retry's hand-off lives 15 minutes from its own start
+				clk.add(2 * time.Minute)
+				if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "start #20") || m.state(20).Status != dlgHost {
+					t.Fatalf("mission next 2 minutes after the retry: exit %d, state %+v: %q%s", code, m.state(20), out, errOut)
+				}
+				return
+			}
+			if tc.setup == 0 && !tc.recordBefore { // a second before the claim's life ends, the claim still holds #20
+				clk.add(time.Minute - time.Second)
+				if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "start #20") || m.state(20).Status != dlgHost {
+					t.Fatalf("mission next 14m59s after the claim: exit %d, state %+v: %q%s", code, m.state(20), out, errOut)
+				}
+				clk.add(time.Minute + time.Second)
+			} else {
+				clk.add(2*time.Minute - tc.setup)
+			}
 			if tc.recordBefore {
 				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != 0 {
 					t.Fatalf("--thread 16 minutes after the claim, before mission next: exit %d: %s", code, errOut)
