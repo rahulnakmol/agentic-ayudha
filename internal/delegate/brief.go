@@ -169,7 +169,9 @@ func Brief(in BriefInput) string {
 		b.WriteString("- PR title and every commit subject are Conventional Commits (`feat: …`, `fix: …`). Sign off every commit (`git commit -s`, DCO).\n")
 	}
 	if in.Ships {
-		b.WriteString("- After each push, run `aayu inspect <pr>` and act on its findings: fix each one in the same PR, with a test that fails without the fix. Never decline a P0 or P1 yourself: stop and say why in the PR.\n")
+		// Draft-first (Story #1250): GitHub runs no CI, merge gate, or paid review on a draft, and ship refuses one.
+		b.WriteString("- Open the PR as a draft (`gh pr create --draft`): GitHub runs no CI, merge gate, or paid review on a draft. Iterate on it with `bash .agents/check --full` and a local review. Mark it ready once (`gh pr ready <pr>`), after both pass; `aayu ship` refuses a draft.\n")
+		b.WriteString("- After each push to the ready PR, run `aayu inspect <pr>` and act on its findings: fix each one in the same PR, with a test that fails without the fix. Never decline a P0 or P1 yourself: stop and say why in the PR.\n")
 		fmt.Fprintf(&b, "- Before you ship, rebase the branch on the latest `origin/%s` when `%s` moved, push it with `git push --force-with-lease`, and wait for the merge gate and `aayu inspect <pr>` on the new head.\n", in.Base, in.Base)
 		b.WriteString("- When every required check is green and `aayu inspect <pr>` says `merge` at the head, run `aayu ship <pr>`: ship decides, and merges on proof. When it refuses, or posts Ready to ship (a PR in the narrow set waits in `aayu inbox` for a person), stop and say why in the PR.\n")
 		fmt.Fprintf(&b, "- Never merge another way: never `gh pr merge`, never `--admin`, never GitHub's merge button. Never approve or close the PR, and never push to `%s`, `rolling`, or `main`.\n", in.Base)

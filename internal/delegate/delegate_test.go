@@ -84,7 +84,9 @@ func TestBrief(t *testing.T) {
 var shipLines = []string{
 	"You own story #2 to its merge, in your own worktree on a new branch `story/2-show-empty-list` from `dev`",
 	"You may use subagents",
-	"After each push, run `aayu inspect <pr>` and act on its findings",
+	"Open the PR as a draft (`gh pr create --draft`)",
+	"Iterate on it with `bash .agents/check --full` and a local review. Mark it ready once (`gh pr ready <pr>`), after both pass",
+	"After each push to the ready PR, run `aayu inspect <pr>` and act on its findings",
 	"Before you ship, rebase the branch on the latest `origin/dev`",
 	"run `aayu ship <pr>`: ship decides, and merges on proof",
 	"posts Ready to ship (a PR in the narrow set waits in `aayu inbox` for a person), stop",
