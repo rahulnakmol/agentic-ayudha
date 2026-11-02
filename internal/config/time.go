@@ -151,7 +151,8 @@ type Windows struct {
 }
 
 // NewWindows parses tz and windows written as "10:30-11:30", one per entry.
-// Windows may not overlap or cross midnight.
+// Windows may not overlap or cross midnight, and each starts at half past an
+// hour: the hourly safety tick runs then, so it opens every window.
 func NewWindows(tz string, windows []string) (Windows, error) {
 	var w Windows
 	loc, err := time.LoadLocation(tz)
@@ -169,6 +170,9 @@ func NewWindows(tz string, windows []string) (Windows, error) {
 		b, err2 := minutes(end)
 		if err1 != nil || err2 != nil || b <= a {
 			return w, bad
+		}
+		if a%60 != 30 { // the safety tick (loops/build-ready.toml) runs at half past each hour, and sends the window's message
+			return w, fmt.Errorf("[time] windows: %q starts at :%02d: a window starts at half past an hour, when the safety tick runs and sends its one message", s, a%60)
 		}
 		w.Spans = append(w.Spans, [2]int{a, b})
 	}

@@ -144,7 +144,7 @@ var sections = []section{
 		rows: []row{
 			{"time.tz", "IANA time zone of business hours, the person's windows, and the loops' crons.", "WP1.2"},
 			{"time.business_hours", "Business days and hours: the clock of Decision SLAs.", "WP1.2"},
-			{"time.windows", "A person's windows each day, in `time.tz`: the only times aayu asks a person to act (a page, a comment approval batch, a mission's time or budget card). Outside them no work waits for a person, and every request waits for the next window, where one message lists them all. A mission past `mission.max_hours` or its budget holds new starts only from the end of a window in which its card went unanswered. Empty: any time.", "0.4"},
+			{"time.windows", "A person's windows each day, in `time.tz`: the only times aayu asks a person to act (a page, a comment approval batch, a mission's time or budget card). Outside them no work waits for a person, and every request waits for the next window, where one message lists them all; each starts at half past an hour, when the safety tick sends it. A mission past `mission.max_hours` or its budget holds new starts only from the end of a window in which its card went unanswered. Empty: any time.", "0.4"},
 		},
 		note: "Urgent pages (a halt and its resume) ignore the windows. The `[budget]` breaker is money, not a request: it stops every agent lane at any time.",
 	},

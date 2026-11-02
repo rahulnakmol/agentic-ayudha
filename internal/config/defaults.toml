@@ -214,5 +214,6 @@ tz = "Europe/London"
 business_hours = "Mon-Fri 09:00-18:00"
 # A person's two windows each day, in tz (Story #1254): the only times aayu asks a person to act (a page, a comment
 # approval batch, an inbox card). Outside them no work waits for a person; every request waits for the next window,
-# where one message lists them all. An empty list means a person may be asked at any time.
+# where one message lists them all. Each starts at half past an hour, when the safety tick sends that message. An empty
+# list means a person may be asked at any time.
 windows = ["10:30-11:30", "18:30-19:30"]

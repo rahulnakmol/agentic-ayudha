@@ -737,7 +737,7 @@ func TestPersonWindows(t *testing.T) {
 	if now := at(2, 3, 0); err != nil || !none.Within(now) || !none.Next(now).Equal(now) || !none.End(now).Equal(now) {
 		t.Fatalf("no windows: %v", err)
 	}
-	for _, bad := range [][]string{{"11:30-10:30"}, {"10:30"}, {"10:30-25:00"}, {"10:00-11:00", "10:30-12:00"}, {"22:00-24:00"}} {
+	for _, bad := range [][]string{{"11:30-10:30"}, {"10:30"}, {"10:30-25:00"}, {"10:30-12:30", "11:30-13:00"}, {"22:30-24:00"}, {"10:00-11:00"}, {"10:45-11:15"}} {
 		if _, err := Load(Sources{Sets: []string{"time.windows=" + strings.Join(bad, ",")}}); err == nil || !strings.Contains(err.Error(), "[time] windows") {
 			t.Fatalf("windows %q: err = %v", bad, err)
 		}
