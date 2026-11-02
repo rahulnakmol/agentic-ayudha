@@ -121,16 +121,16 @@ func TestApproveCard(t *testing.T) {
 }
 
 // Criterion 5: while a baseline of #889 is not approved, the inbox has its
-// Baseline cards and no Approve to build card; the card comes once the last
-// one is approved.
+// Feature card (Bug #1253) and no Approve to build card of its own; that card
+// comes once the last part is approved.
 func TestApproveCardWaitsForBaselines(t *testing.T) {
 	m := approveWorld(t)
 	for _, c := range []struct {
 		approve []string
 		want    []string
 	}{
-		{nil, []string{"baseline#889/intent", "baseline#889/spec", "baseline#889/tech"}},
-		{[]string{"intent", "spec"}, []string{"baseline#889/tech"}},
+		{nil, []string{"feature#889"}},
+		{[]string{"intent", "spec"}, []string{"feature#889"}},
 		{[]string{"tech"}, []string{"approve#889"}},
 	} {
 		m.approveDrafts(c.approve...)
@@ -140,28 +140,29 @@ func TestApproveCardWaitsForBaselines(t *testing.T) {
 	}
 }
 
-// Criterion 2: approving the three Baseline cards and then the Approve to
-// build card in one inbox session asks for one device code, and writes
-// approved.json and plan.json as `aayu ready 889` writes them.
+// Criterion 2: Approve only on #889's Feature card (Bug #1253), which
+// approves its baselines and then Approve to build in one inbox session,
+// asks for one device code, and writes approved.json and plan.json as `aayu
+// ready 889` writes them.
 func TestApproveCardOneCode(t *testing.T) {
 	m := approveWorld(t)
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "aaaa", "inbox", "--plain", "--repo", "o/r")
-	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "[4/4] Approve to build #889: ") ||
+	code, out, errOut := runIn(t, m.person, m.opts, "2y", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "[1/1] Feature #889: ") ||
 		!strings.Contains(out, "Approved #889 to build as @rahulnakmol, approval 1.") ||
-		!strings.Contains(out, "[5/5] Mission start #889: ") || !strings.Contains(out, "inbox: 4 done, 0 skipped, 1 left") { // its Mission start card follows (Story #1175)
-		t.Fatalf("inbox a a a a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+		!strings.Contains(out, "[2/2] Mission start #889: ") || !strings.Contains(out, "inbox: 1 done, 0 skipped, 1 left") { // its Mission start card follows (Story #1175)
+		t.Fatalf("inbox 2 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
 	got, gotPlan, ok := m.approvalRecords()
 	if !ok || got.By != "rahulnakmol" || got.Agents != 0 || gotPlan.Agents != 4 || len(got.Stories) != 3 || len(gotPlan.Graph) != 4 {
 		t.Fatalf("the card's approval: %v %+v %+v", ok, got, gotPlan)
 	}
 
-	// The command, in a world where the person approved the baselines in the inbox and left the card.
+	// The command, in a world where the person approved each part on its own in the inbox and left the Approve to build card.
 	cmd := approveWorld(t)
 	cmd.device("rahulnakmol")
-	if code, out, errOut := runIn(t, cmd.person, cmd.opts, "aaa3", "inbox", "--plain", "--repo", "o/r"); code != 0 {
-		t.Fatalf("inbox a a a, leave: exit %d:\n%s%s", code, out, errOut)
+	if code, out, errOut := runIn(t, cmd.person, cmd.opts, "3a3a3a3", "inbox", "--plain", "--repo", "o/r"); code != 0 || !strings.Contains(out, "] Approve to build #889: ") {
+		t.Fatalf("inbox 3 a 3 a 3 a, leave: exit %d:\n%s%s", code, out, errOut)
 	}
 	if _, _, ok := cmd.approvalRecords(); ok {
 		t.Fatal("leaving the card approved #889")

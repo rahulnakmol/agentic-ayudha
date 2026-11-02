@@ -24,6 +24,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -574,6 +575,9 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 	byKey := map[string]InboxItem{}
 	for _, it := range fresh {
 		byKey[it.key()] = it
+		for _, p := range it.Parts { // a part opened from its Feature card stays as that card has it now
+			byKey[p.key()] = p
+		}
 	}
 	var out []InboxItem
 	seen := map[string]bool{}
@@ -1047,6 +1051,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		if job.it.Kind == InboxStart {
 			m.started = append(m.started, msg.fresh) // read again before the write: its plan is the one that started
 		}
+		if job.it.Kind == InboxFeature && job.a.Command == featureStart && msg.fresh.Build != nil {
+			m.started = append(m.started, *msg.fresh.Build) // the Approve to build it started, read again before the write
+		}
 		if job.it.Kind == InboxEvening && job.a.Command == eveningAccept {
 			if m.accepted == nil {
 				m.accepted = map[int]bool{}
@@ -1498,6 +1505,16 @@ func (m *inboxModel) enter() tea.Cmd {
 		m.status = "Opened " + it.URL
 	case c.Command == inboxLeave: // nothing to write: the card stays
 		m.status = it.button(c) + ": nothing was written, and the card stays in the inbox."
+	case strings.HasPrefix(c.Command, inboxPart): // the part's own card, under its Feature card's row (Bug #1253)
+		p := it.Parts[slices.IndexFunc(it.Parts, func(p InboxItem) bool { return inboxPart+p.Ask == c.Command })]
+		if !slices.ContainsFunc(m.items, func(x InboxItem) bool { return x.key() == p.key() }) {
+			at := slices.IndexFunc(m.items, func(x InboxItem) bool { return x.key() == it.key() })
+			m.items = slices.Insert(m.items, at+1, p)
+			m.layoutRows()
+		}
+		m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].key() == p.key() })
+		m.sel, m.armed = 0, false
+		m.status = fmt.Sprintf("Opened the %s of #%d on its own; approving it here approves only that part.", ready.Name(p.Ask), p.Number)
 	case c.Ask != "":
 		m.ask = &inboxAsk{title: fmt.Sprintf("%s #%d: %s", it.kind().Word, it.Number, it.button(c)), lines: []string{inboxEffect(it, c)}, jobs: []inboxJob{{it: it, a: c}}, prompt: c.Ask}
 		m.status = "Nothing is written until you type what you checked and press Enter."

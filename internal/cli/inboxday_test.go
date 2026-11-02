@@ -52,27 +52,25 @@ func cardOrder(out string) []string {
 	return got
 }
 
-// Criterion 1: with a Decision, #889's three Baseline cards, its Approve to
-// build card, and a Mission start card waiting, the inbox lists them in that
-// order before the other cards, and one session shows #889's Approve to build
-// and Mission start cards after its baselines, before the other cards.
+// Criterion 1: with a Decision, #889's Feature card (its baselines and the
+// Approve to build after them, Bug #1253), and a Mission start card waiting,
+// the inbox lists them in that order before the other cards, and one session
+// approves and starts #889 from its one card, before the other cards.
 func TestMorningCardOrder(t *testing.T) {
-	morning := []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart}
+	morning := []string{InboxDecision, InboxFeature, InboxBaseline, InboxApprove, InboxStart}
 	if !slices.Equal(inboxOrder[:len(morning)], morning) {
 		t.Fatalf("the inbox orders %v first, want %v, then the other cards", inboxOrder[:len(morning)], morning)
 	}
 	m, pr := morningWorld(t)
 	keys, _ := m.listed(m.person)
 	capped := "capped#" + strconv.Itoa(pr)
-	if want := []string{"decision#5", "baseline#889/intent", "baseline#889/spec", "baseline#889/tech", "mission-start#900", capped}; !slices.Equal(keys, want) {
+	if want := []string{"decision#5", "feature#889", "mission-start#900", capped}; !slices.Equal(keys, want) {
 		t.Fatalf("inbox --list: %v, want %v", keys, want)
 	}
 	m.device("rahulnakmol")
-	// Accept the Decision, approve the three baselines and #889, start #889, Not now on #900, skip the PR.
-	// #889's Mission start comes before #900's, which waited from the start: the order by number, as --list has it.
-	code, out, errOut := runIn(t, m.person, m.opts, "aaaaa1y2s", "inbox", "--repo", "o/r")
-	want := []string{"Decision #5", "Baseline #889", "Baseline #889", "Baseline #889", "Approve to build #889",
-		"Mission start #889", "Mission start #900", "At the review cap #" + strconv.Itoa(pr)}
+	// Accept the Decision, approve and start #889 from its card, Not now on #900, skip the PR.
+	code, out, errOut := runIn(t, m.person, m.opts, "a1y2s", "inbox", "--repo", "o/r")
+	want := []string{"Decision #5", "Feature #889", "Mission start #900", "At the review cap #" + strconv.Itoa(pr)}
 	if got := cardOrder(out); code != 0 || m.codes() != 1 || !slices.Equal(got, want) {
 		t.Fatalf("inbox: exit %d, device codes %d, cards %v, want %v:\n%s%s", code, m.codes(), got, want, out, errOut)
 	}
@@ -94,7 +92,7 @@ func TestDayIsSet(t *testing.T) {
 	t.Run("line by line", func(t *testing.T) {
 		m, pr := morningWorld(t)
 		m.device("rahulnakmol")
-		code, out, errOut := runIn(t, m.person, m.opts, "aaaaa1y2s", "inbox", "--repo", "o/r")
+		code, out, errOut := runIn(t, m.person, m.opts, "a1y2s", "inbox", "--repo", "o/r")
 		last := strings.LastIndex(out, "At the review cap #"+strconv.Itoa(pr))
 		set := strings.Index(out, "\n"+dayIsSet+"\n"+dayLine889+"\ninbox: ")
 		if code != 0 || last < 0 || set < last || strings.Count(out, dayIsSet) != 1 || strings.Contains(out[max(set, 0):], "#900") {
@@ -123,11 +121,12 @@ func TestDayIsSet(t *testing.T) {
 	})
 }
 
-// Criterion 3: he leaves before the Mission start card, by quitting or with
-// Not now: no The day is set line, nothing starts, and the start cards wait
-// for the next session.
+// Criterion 3: he approves #889 without the start (Approve only, Bug
+// #1253) and leaves before the Mission start card, by quitting or with Not
+// now: no The day is set line, nothing starts, and the start cards wait for
+// the next session.
 func TestDayNotSetBeforeStart(t *testing.T) {
-	for name, keys := range map[string]string{"quit": "aaaaaq", "not now": "aaaaa22s"} {
+	for name, keys := range map[string]string{"quit": "a2yq", "not now": "a2y22s"} {
 		t.Run(name, func(t *testing.T) {
 			m, _ := morningWorld(t)
 			m.device("rahulnakmol")

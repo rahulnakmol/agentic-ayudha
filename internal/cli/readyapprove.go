@@ -82,6 +82,9 @@ type approveRun struct {
 	agents int
 	// shown is the hash of the stories and Bugs an inbox card showed (approveStories): approve only those (Story #1173).
 	shown string
+	// drafts are parts that count as approved at their waiting draft: a
+	// Feature card's preview of the Approve to build that follows (Bug #1253).
+	drafts map[string]*ready.Baseline
 }
 
 // approveToBuild is `aayu ready <feature>` (Feature #877, Decision #903): a
@@ -246,6 +249,9 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 		base, draft, _, err := pr.records(ctx)
 		if err != nil {
 			return rec, nil, nil, "", err
+		}
+		if d := a.drafts[part]; d != nil {
+			base = d
 		}
 		if base == nil {
 			need, next := "", fmt.Sprintf("aayu ready %d --part %s", a.n, part)

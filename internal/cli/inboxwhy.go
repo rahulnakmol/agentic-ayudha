@@ -124,7 +124,7 @@ func inboxVerb(it InboxItem, a InboxAction) (did, not string) {
 		return "shipped", "wasn't shipped"
 	case it.Kind == InboxDecision:
 		return "recorded", "wasn't recorded"
-	case it.Kind == InboxHumanReview || it.Kind == InboxBaseline || it.Kind == InboxApprove:
+	case it.Kind == InboxHumanReview || it.Kind == InboxFeature || it.Kind == InboxBaseline || it.Kind == InboxApprove:
 		return "approved", "wasn't approved"
 	}
 	return "done", "wasn't done"
@@ -160,6 +160,7 @@ var (
 	reHex           = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 	reDraftChanged  = regexp.MustCompile(`^The \S+ of #[0-9]+ changed after the draft`)
 	reStoriesRead   = regexp.MustCompile(`^The stories of #[0-9]+ changed while`)
+	reFeatureMoved  = regexp.MustCompile(`Nothing was written for #[0-9]+\.`)
 )
 
 // logDetail is a failed write's quit-log line: the error, then the step,
@@ -359,6 +360,8 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (
 		return baselineChanged(it.Ask, n), "nothing for you yet; the card comes back when the new draft waits."
 	case it.Kind == InboxApprove && reStoriesRead.MatchString(m): // ready read the stories again: they are not the card's
 		return approveChanged(n), "you read the card again with the stories as they are now; nothing was approved."
+	case it.Kind == InboxFeature && reFeatureMoved.MatchString(m): // a part or the stories, read again after the code, are not the card's
+		return m[:reFeatureMoved.FindStringIndex(m)[0]-1], "you read the card again as it is now; nothing was written for #" + fmt.Sprint(n) + "."
 	case reLedger.MatchString(m):
 		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), k.enter + " tries once more; if it fails again, an agent runs aayu doctor."
 	}
@@ -370,6 +373,11 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (
 func changedLine(was, now InboxItem) string {
 	if was.Kind == InboxApprove && now.Kind == InboxApprove && was.Hash != now.Hash {
 		return approveChanged(was.Number)
+	}
+	if was.Kind == InboxFeature && now.Kind == InboxFeature { // the card says which part moved
+		if moved := featureMoved(was, now); moved != "" {
+			return moved
+		}
 	}
 	return fmt.Sprintf("#%d changed on GitHub since you opened it: %s.", was.Number, changedWords(was, now))
 }

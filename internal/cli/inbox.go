@@ -45,7 +45,8 @@ func init() { register("inbox", runInbox) }
 const (
 	InboxDecision    = "decision"      // an open Decision waiting for acceptance (a provisional one to ratify or revert)
 	InboxScope       = "scope"         // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
-	InboxBaseline    = "baseline"      // a baseline draft of one part of a Feature that waits for a person (Story #1172)
+	InboxFeature     = "feature"       // a Feature whose baseline drafts wait for a person: every part, its Approve to build, and its mission start on one card (Bug #1253)
+	InboxBaseline    = "baseline"      // one part of a Feature card, opened on its own (Story #1172)
 	InboxApprove     = "approve"       // a Feature whose baselines are approved and that waits for Approve to build (Story #1173)
 	InboxMission     = "mission"       // a mission that asks a person: its gate failed max_no_go times, or a fix PR would pass the budget (Story #1001)
 	InboxStart       = "mission-start" // a Feature approved to build whose mission a person may start, which locks its issues (Story #1013)
@@ -63,9 +64,9 @@ const (
 )
 
 // inboxOrder is the order a person decides the cards in: the morning's
-// decisions, baselines, Approve to build, and mission start first, then the
-// other cards (Story #1175).
-var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+// decisions, baselines (a Feature card, or one of its parts), Approve to
+// build, and mission start first, then the other cards (Story #1175).
+var inboxOrder = []string{InboxDecision, InboxFeature, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -73,6 +74,16 @@ const InboxMarker = "<!-- aayudha:inbox -->"
 // inboxLeave is a choice that writes nothing and leaves the card in the
 // inbox: a mission's Not now, or Leave the issue waiting.
 const inboxLeave = "leave"
+
+// The choices of a Feature card (Bug #1253): approve every part, then Approve
+// to build, then the mission start; the same without the start; and open one
+// part (inboxPart + the part) as its own Baseline card. Opening a part writes
+// nothing: the inbox shows the part's card.
+const (
+	featureStart   = "approve-start"
+	featureApprove = "approve-only"
+	inboxPart      = "part:"
+)
 
 // inboxKind is one kind of item as every surface shows it: the terminal
 // inbox, --plain, --list, and the approval batch (Story #586). It is the one
@@ -105,6 +116,13 @@ var inboxKinds = map[string]inboxKind{
 			"Within the budget in [scope] budget_percent, changes go ahead; past it, a change waits for a person, against a Decision someone accepted. " +
 			"Accepting writes the baseline or applies the change and records it on the ledger. If you leave it, nothing changes.",
 		Terms: []string{"Release", "Decision"}},
+	InboxFeature: {Icon: "🧱", Word: "Feature", Seat: verbs.ProductStrategist,
+		Line: "An agent drafted a Feature's parts; you approve them, and its build and start, in one decision.",
+		Explain: "An agent drafts each part of a Feature (its intent, spec, technical design, and UX design) as a list of pins, each with a " +
+			"hash. The card shows every part that waits, with its version, hash, and changes, and the Approve to build that follows. Approve and " +
+			"start writes each part's approval at the hash on the card, then Approve to build, then the mission start, under one device code; " +
+			"if a part moved, it writes nothing. You can also open one part on its own, or leave it all waiting.",
+		Terms: []string{"Work item", "Seat"}},
 	InboxBaseline: {Icon: "📌", Word: "Baseline", Seat: verbs.ProductStrategist,
 		Line: "An agent drafted a part of a Feature; it counts as the baseline only when you approve it.",
 		Explain: "An agent drafts each part of a Feature (its intent, spec, technical design, and UX design) as a list of pins: what the part " +
@@ -271,8 +289,14 @@ type InboxItem struct {
 	Lines       []string      `json:"lines,omitempty"`       // the card's own words under its title: a mission start's lock (Story #1013)
 	Feature     int           `json:"feature,omitempty"`     // the Feature whose mission locks the issue on a locked-edit card, or whose mission an evening card's story is of
 	Hash        string        `json:"hash,omitempty"`        // a Baseline card's draft hash: approving it baselines this hash and no other
+	Version     int           `json:"version,omitempty"`     // a Baseline card's draft version
 	Checklist   []InboxCheck  `json:"checklist,omitempty"`   // a Baseline card's checks of what the person agrees to
 	Pack        string        `json:"pack,omitempty"`        // the pack an evening card shows, by its ledger path and SHA-256
+	// Parts are a Feature card's parts, each the Baseline card it opens as;
+	// Build is the Approve to build card that follows them, nil when none
+	// follows (Bug #1253).
+	Parts []InboxItem `json:"parts,omitempty"`
+	Build *InboxItem  `json:"build,omitempty"`
 	// Criteria are an evening card's criteria, each with its evidence from the pack at the merged head (Story #1176).
 	Criteria []EveningCriterion `json:"criteria,omitempty"`
 	images   map[int][]byte     // an evening card's screenshots, by the line of Lines they follow, where the terminal draws them
@@ -325,7 +349,7 @@ func (it InboxItem) short() string {
 		return "gate stopped"
 	case InboxStart:
 		return "a person starts it"
-	case InboxBaseline, InboxApprove:
+	case InboxFeature, InboxBaseline, InboxApprove:
 		return it.f.problem
 	case InboxLocked:
 		return "changed while locked"
@@ -776,13 +800,22 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, it := range cards {
+		named := func(it *InboxItem) {
 			is := s.issues[it.Number]
-			if it.Title != "" { // a Baseline card names its part; an Approve to build card is the Feature's own
+			if it.Title != "" { // a Baseline card names its part; a Feature or Approve to build card is the Feature's own
 				it.Title += ": "
 			}
 			it.Title = termText(it.Title + is.GetTitle())
 			it.URL, it.Evidence, it.Updated = is.GetHTMLURL(), is.GetHTMLURL(), is.GetUpdatedAt().Time
+		}
+		for _, it := range cards {
+			named(&it)
+			for i := range it.Parts {
+				named(&it.Parts[i])
+			}
+			if it.Build != nil {
+				named(it.Build)
+			}
 			out = append(out, it)
 		}
 	}
@@ -1175,6 +1208,9 @@ func (s *inboxSource) reread(ctx context.Context, it InboxItem, a InboxAction) (
 	if err != nil {
 		return it, nil, err
 	}
+	for _, x := range items { // a part opened from its Feature card is read again as that card has it now
+		items = append(items, x.Parts...)
+	}
 	i := slices.IndexFunc(items, func(x InboxItem) bool { return x.key() == it.key() })
 	if i < 0 {
 		return it, nil, errInboxChanged{}
@@ -1231,6 +1267,11 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	}
 	if was.Kind == InboxApprove && was.Hash != now.Hash { // approving it approves the stories the person read
 		out = append(out, "its stories changed")
+	}
+	if was.Kind == InboxFeature && now.Kind == InboxFeature { // approving it approves each part, and the stories, the person read
+		if moved := featureMoved(was, now); moved != "" {
+			out = append(out, moved)
+		}
 	}
 	if was.Kind == InboxEvening && (was.Pack != now.Pack || !slices.Equal(was.Lines, now.Lines)) { // an accept accepts the evidence the person read
 		out = append(out, "its evidence changed")
@@ -1402,10 +1443,11 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	done, skipped, handled := 0, 0, 0
 	left := func() int { return len(items) - handled }
 	failed := 0 // writes that did not land: no celebration after one
-	// A done Baseline card may bring its Feature's Approve to build card, and a
-	// done Approve to build its Mission start card: the session reads them
-	// (Stories #1173, #1175).
-	follow := map[string]string{InboxBaseline: InboxApprove, InboxApprove: InboxStart}
+	// A done Baseline card may bring its Feature's Approve to build card, a
+	// done Approve to build its Mission start card, and a Feature card that
+	// approved without the start either one: the session reads them (Stories
+	// #1173, #1175, Bug #1253).
+	follow := map[string][]string{InboxBaseline: {InboxApprove}, InboxFeature: {InboxApprove, InboxStart}, InboxApprove: {InboxStart}}
 	want := map[string]bool{}
 	var started []InboxItem    // the Mission start cards done in this session
 	accepted := map[int]bool{} // the stories whose evening accept landed in this session
@@ -1479,11 +1521,14 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++
-			if k, ok := follow[it.Kind]; ok {
+			for _, k := range follow[it.Kind] {
 				want[k] = true
 			}
 			if it.Kind == InboxStart && !e.DryRun {
 				started = append(started, fresh) // read again before the write: its plan is the one that started
+			}
+			if it.Kind == InboxFeature && a.Command == featureStart && fresh.Build != nil && !e.DryRun {
+				started = append(started, *fresh.Build) // the Approve to build it started, read again before the write
 			}
 			if it.Kind == InboxEvening && a.Command == eveningAccept && !e.DryRun {
 				accepted[it.Number] = true
@@ -1532,7 +1577,8 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	}
 	total := len(needs) + min(len(house), 1)
 	pos := 0
-	card := func(it InboxItem) (quit bool, err error) {
+	var card func(it InboxItem) (quit bool, err error)
+	card = func(it InboxItem) (quit bool, err error) {
 		for {
 			k := it.kind()
 			fmt.Fprintf(w, "\n[%d/%d] %s #%d: %s\n", pos, total, k.Word, it.Number, it.Title)
@@ -1607,6 +1653,24 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 					skipped++
 					handled++
 					return false, nil
+				}
+				if part, ok := strings.CutPrefix(pick.Command, inboxPart); ok { // the part's own card, then this card as it is now (Bug #1253)
+					p := it.Parts[slices.IndexFunc(it.Parts, func(p InboxItem) bool { return p.Ask == part })]
+					items, total, pos = append(items, p), total+1, pos+1
+					if quit, err := card(p); err != nil || quit {
+						return quit, err
+					}
+					got, err := src.gather(ctx)
+					if err != nil {
+						return true, Wrap(ExitExternal, err)
+					}
+					j := slices.IndexFunc(got, func(x InboxItem) bool { return x.key() == it.key() })
+					if j < 0 { // no part of it waits now: its Approve to build card follows, if it has one
+						handled++
+						return false, nil
+					}
+					it = got[j]
+					break
 				}
 				if pick.Ask != "" {
 					say("  ", inboxEffect(it, *pick)+" "+pick.Ask+" One line; an empty line goes back.")
@@ -1839,11 +1903,9 @@ func (e *Env) listInbox(ctx context.Context) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if e.agentSignal() != "" { // an agent lane reads a baseline or Approve to build card and never approves it (Stories #1172, #1173)
+	if e.agentSignal() != "" { // an agent lane reads a Feature, baseline, or Approve to build card and never approves it (Stories #1172, #1173, Bug #1253)
 		for i := range items {
-			if items[i].Kind == InboxBaseline || items[i].Kind == InboxApprove {
-				items[i].Options = slices.DeleteFunc(items[i].Options, func(a InboxAction) bool { return a.Command != inboxLeave })
-			}
+			items[i] = withoutApproval(items[i])
 		}
 	}
 	for i := range items { // the list acts on nothing: only a person accepts a story, in `aayu inbox`
@@ -1927,6 +1989,23 @@ func (e *Env) listInbox(ctx context.Context) error {
 	})
 }
 
+// withoutApproval is it as an agent lane reads it: a Feature, Baseline, or
+// Approve to build card, and each card inside one, offers only Leave.
+func withoutApproval(it InboxItem) InboxItem {
+	if it.Kind == InboxFeature || it.Kind == InboxBaseline || it.Kind == InboxApprove {
+		it.Options = slices.DeleteFunc(slices.Clone(it.Options), func(a InboxAction) bool { return a.Command != inboxLeave })
+	}
+	it.Parts = slices.Clone(it.Parts)
+	for i := range it.Parts {
+		it.Parts[i] = withoutApproval(it.Parts[i])
+	}
+	if it.Build != nil {
+		b := withoutApproval(*it.Build)
+		it.Build = &b
+	}
+	return it
+}
+
 func finishInbox(w io.Writer, done, skipped, left int) error {
 	_, err := fmt.Fprintf(w, "\ninbox: %d done, %d skipped, %d left\n", done, skipped, left)
 	return err
@@ -1962,6 +2041,11 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return e.keepEdit(ctx, c, repo, it)
 	case InboxStart: // Start reads the plan again, and asks for the device code: the lock is the person's to confirm.
 		return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(it.Number)})
+	case InboxFeature: // every part, Approve to build, and the start, read again before and after the one device code (Bug #1253)
+		if a.Command != featureStart && a.Command != featureApprove {
+			return Errorf(ExitUsage, "inbox: %q is not an approval of #%d; nothing was written", a.Label, it.Number)
+		}
+		return e.approveFeature(ctx, repo, it, a.Command == featureStart)
 	case InboxBaseline: // ready --part reads the draft and the pins again, and asks for the device code unless this session already gave one
 		return handlers["ready"](ctx, e, Values{"issue": strconv.Itoa(it.Number), "part": it.Ask, readyExpectHash: it.Hash})
 	case InboxApprove: // ready reads the Feature again, asks for the device code unless this session already gave one, and approves only the card's stories
