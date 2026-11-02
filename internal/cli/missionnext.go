@@ -282,15 +282,12 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		}
 		// A PR ship refused for a head without dev's tip waits on a rebase (Bug #1234) until its head moves.
 		wait := plan.rebase(n)
-		if wait != nil && storyPR[n] != wait.PR {
-			wait = nil
-		}
 		if wait != nil {
 			pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, wait.PR)
 			if err != nil {
 				return Wrap(ExitExternal, err)
 			}
-			if pr.GetHead().GetSHA() != wait.Head {
+			if pr.GetState() != "open" || pr.GetHead().GetSHA() != wait.Head {
 				wait = nil
 			}
 		}

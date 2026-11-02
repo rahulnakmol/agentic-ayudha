@@ -124,12 +124,14 @@ type MissionPlan struct {
 
 // MissionRebase is story Number's PR head that ship refused: dev's tip Dev
 // is not in it. The story waits on a rebase while its PR's head is Head.
+// Told is set once its builder thread was reached.
 type MissionRebase struct {
 	Number int    `json:"number"`
 	PR     int    `json:"pr"`
 	Head   string `json:"head"`
 	Dev    string `json:"dev"`
 	At     string `json:"at"`
+	Told   bool   `json:"told,omitempty"`
 }
 
 // rebase is story n's rebase wait in the plan, or nil.

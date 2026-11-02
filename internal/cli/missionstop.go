@@ -386,29 +386,35 @@ func missionHold(ctx context.Context, c *github.Client, w *ledger.Writer, repo s
 
 // waitRebase records in the started mission that lists story that its PR
 // pr waits on a rebase onto tip, dev's tip (Bug #1234), so `aayu mission
-// next` shows it, and tells the story's builder thread once per head and
-// tip. It returns what ship adds to its refusal: ship refuses either way.
+// next` shows it, and tells the story's builder thread until it is reached
+// once for that head and tip. It returns what ship adds to its refusal:
+// ship refuses either way.
 func (e *Env) waitRebase(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, pr *gh.PullRequest, story int, tip string) string {
 	f, plan, _, err := storyMission(ctx, c, w, repo, story)
-	switch {
-	case err != nil:
-		return "; the mission was not read, so it does not show the wait: " + oneLineErr(err)
-	case plan == nil || plan.StartedBy == "" || plan.State != "" || !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool { return it.Number == story }):
+	if err == nil && (plan == nil || plan.StartedBy == "" || plan.State != "" || !slices.ContainsFunc(plan.Graph, func(it MissionItem) bool { return it.Number == story })) {
 		return ""
 	}
 	wait := MissionRebase{Number: story, PR: pr.GetNumber(), Head: pr.GetHead().GetSHA(), Dev: tip, At: e.Now().UTC().Format(time.RFC3339)}
-	wrote, err := updatePlan(ctx, w, f, fmt.Sprintf("missions: #%d waits on a rebase onto %s", story, short(tip)), func(p *MissionPlan) bool {
-		if r := p.rebase(story); r != nil && r.PR == wait.PR && r.Head == wait.Head && r.Dev == wait.Dev {
-			return false // recorded, and its builder told, by an earlier ship
-		}
-		p.Rebases = append(slices.DeleteFunc(p.Rebases, func(r MissionRebase) bool { return r.Number == story }), wait)
-		return true
-	})
+	same := func(r *MissionRebase) bool {
+		return r != nil && r.PR == wait.PR && r.Head == wait.Head && r.Dev == wait.Dev
+	}
+	told := false
+	if err == nil {
+		_, err = updatePlan(ctx, w, f, fmt.Sprintf("missions: #%d waits on a rebase onto %s", story, short(tip)), func(p *MissionPlan) bool {
+			if r := p.rebase(story); same(r) {
+				told = r.Told // recorded by an earlier ship; a builder it did not reach is told again
+				return false
+			}
+			told = false
+			p.Rebases = append(slices.DeleteFunc(p.Rebases, func(r MissionRebase) bool { return r.Number == story }), wait)
+			return true
+		})
+	}
 	if err != nil {
-		return fmt.Sprintf("; the mission of #%d does not show the wait: %s", f, oneLineErr(err))
+		return "; the mission does not show the wait: " + oneLineErr(err)
 	}
 	shown := fmt.Sprintf("; the mission of #%d shows #%d waits on a rebase", f, story)
-	if !wrote {
+	if told {
 		return shown
 	}
 	var st delegate.State
@@ -417,9 +423,20 @@ func (e *Env) waitRebase(ctx context.Context, c *github.Client, w *ledger.Writer
 	}
 	msg := fmt.Sprintf("aayu: ship refused PR #%d: its head %s was proven on a %s without %s, the tip now. Rebase %s onto the latest %s, push it with --force-with-lease, and let the merge gate run on the new head. Ship runs again once it passes.",
 		pr.GetNumber(), short(wait.Head), pr.GetBase().GetRef(), short(tip), pr.GetHead().GetRef(), pr.GetBase().GetRef())
-	ths, err := e.tell(ctx, c, w, repo, []delegate.State{st}, "delegate.rebase", msg, "its builder was told to rebase", "a person tells it to rebase")
+	ths, err := e.tell(ctx, c, w, repo, []delegate.State{st}, "delegate.rebase", msg, "its builder was told to rebase", "ship tells it again at its next refusal")
 	if len(ths) == 0 {
 		return shown + ", and its builder was not told: " + oneLineErr(err)
+	}
+	// The wait records that the builder heard it; a record that fails only means ship tells it again.
+	if ths[0].Reached {
+		_, _ = updatePlan(ctx, w, f, fmt.Sprintf("missions: the builder of #%d was told to rebase", story), func(p *MissionPlan) bool {
+			r := p.rebase(story)
+			ok := same(r) && !r.Told
+			if ok {
+				r.Told = true
+			}
+			return ok
+		})
 	}
 	return shown + "; " + ths[0].Line
 }

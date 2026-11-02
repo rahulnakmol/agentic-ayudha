@@ -1846,6 +1846,13 @@ func TestShipNeedsDevTipInHead(t *testing.T) {
 	// Criterion 1: A's merge is a commit after B's base. The gate on B's head is green, and its pack verifies.
 	withA := strings.Repeat("a", 40)
 	devAt(g, withA, head, base, false)
+	// A comparison GitHub fails is an error, never a pass.
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/compare/" + withA + "..." + head
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "/compare/"+withA+"...") {
+		t.Fatalf("ship when the comparison fails: exit %d: %s", code, out)
+	}
 	shipRefused(t, g, env, opts, bare, prN, fmt.Sprintf("ship #%d: #%d was proven on %s, not on dev %s: rebase it and let the gate run; nothing was merged", prN, prN, short(base), short(withA)))
 	// Criterion 3: dev moved only by a docs-only commit after B's base: ship cannot tell which change matters.
 	docs := strings.Repeat("e", 40)
@@ -1874,27 +1881,40 @@ func TestShipNeedsDevTipInHead(t *testing.T) {
 
 // Bug #1234, criterion 4: the mission of #1 lists #2, and ship refuses
 // #2's PR for a head without dev's tip: `aayu mission next 1` shows #2
-// waits on a rebase, and #2's builder thread is told once, not at each
-// refusal of the same head. Once the head moves, the wait ends.
+// waits on a rebase, and #2's builder thread is told until it is reached,
+// not at each refusal of the same head. Once the head moves, the wait ends.
 func TestShipRebaseWaitsInMission(t *testing.T) {
 	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
 	shipMission(t, s.bare, func(*MissionPlan) {})
 	const builder = "T-01a17000-0000-7000-8000-000000000002"
-	st, _ := json.Marshal(delegate.State{Story: 2, Feature: 1, Receiver: "amp", Mode: "cloud", Task: builder, Status: dlgReady, PR: s.prN, StartedAt: "2026-11-02T04:00:00Z"})
-	putLedger(t, s.bare, delegate.LedgerPath(2), string(st))
 	s.g.Mu.Lock()
 	base := s.g.Pulls[s.prN].Base.SHA
 	branch := s.g.Pulls[s.prN].Head.Ref
 	s.g.Mu.Unlock()
 	tip := strings.Repeat("a", 40)
 	devAt(s.g, tip, s.head, base, false)
-	for range 2 {
-		shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, fmt.Sprintf("not on dev %s: rebase it and let the gate run; nothing was merged; the mission of #1 shows #2 waits on a rebase", short(tip)))
-	}
+	notOnDev := fmt.Sprintf("not on dev %s: rebase it and let the gate run; nothing was merged", short(tip))
+	// A mission ship cannot read after its hold is named; ship refuses all the same.
+	s.g.Mu.Lock()
+	s.g.Fail, s.g.FailAfter = "GET /repos/o/r/issues/2/parent", 1
+	s.g.Mu.Unlock()
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, notOnDev+"; the mission does not show the wait: ")
+	refused := notOnDev + "; the mission of #1 shows #2 waits on a rebase"
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+", and no builder thread is recorded to tell")
+	st, _ := json.Marshal(delegate.State{Story: 2, Feature: 1, Receiver: "amp", Mode: "cloud", Task: builder, Status: dlgReady, PR: s.prN, StartedAt: "2026-11-02T04:00:00Z"})
+	putLedger(t, s.bare, delegate.LedgerPath(2), string(st))
+	// The first tell does not reach the builder, so the next refusal of the same head tells it again;
+	// once it is reached, a refusal tells it nothing more.
+	s.send = func() error { return fmt.Errorf("amp: exit status 1: thread %s not found", builder) }
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+"; not reached: "+builder)
+	s.send = func() error { return nil }
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+"; its builder was told to rebase")
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused)
 	msg := fmt.Sprintf("aayu: ship refused PR #%d: its head %s was proven on a dev without %s, the tip now. Rebase %s onto the latest dev, push it with --force-with-lease, and let the merge gate run on the new head. Ship runs again once it passes.",
 		s.prN, short(s.head), short(tip), branch)
-	if calls, _ := s.sent(); !slices.Equal(calls, []string{"amp threads continue " + builder + " -ox " + msg}) {
-		t.Fatalf("ship told %q, want the builder once", calls)
+	tell := "amp threads continue " + builder + " -ox " + msg
+	if calls, _ := s.sent(); !slices.Equal(calls, []string{tell, tell}) {
+		t.Fatalf("ship told %q, want the builder until it is reached", calls)
 	}
 	next := func() string {
 		t.Helper()
@@ -1908,6 +1928,15 @@ func TestShipRebaseWaitsInMission(t *testing.T) {
 	}
 	if out, want := next(), fmt.Sprintf("waits #2: waits on a rebase: PR #%d was proven on a dev without %s · subthread %s\n", s.prN, short(tip), builder); !strings.Contains(out, want) {
 		t.Fatalf("mission next does not show the wait %q:\n%s", want, out)
+	}
+	// A PR mission next cannot read is an error, never a start.
+	s.g.Mu.Lock()
+	s.g.Fail = fmt.Sprintf("GET /repos/o/r/pulls/%d", s.prN)
+	s.g.Mu.Unlock()
+	env := maps.Clone(s.env)
+	env["AMP_THREAD_ID"] = shipKanhaThread
+	if code, out, errOut := run(t, env, s.opts, "mission", "next", "1", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("mission next when the PR cannot be read: exit %d: %s%s", code, out, errOut)
 	}
 	s.g.Mu.Lock()
 	s.g.Pulls[s.prN].Head.SHA = strings.Repeat("9", 40)
