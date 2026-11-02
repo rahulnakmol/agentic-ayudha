@@ -214,7 +214,7 @@ func featureMoved(was, now InboxItem) string {
 		switch {
 		case i < 0:
 			return fmt.Sprintf("%s v%d of #%d no longer waits: it was approved or drafted again after you read it.", ready.Title(p.Ask), p.Version, f)
-		case now.Parts[i].Hash != p.Hash:
+		case now.Parts[i].Hash != p.Hash || now.Parts[i].Version != p.Version: // a draft hash leaves out its version: v4 can have v2's hash
 			return fmt.Sprintf("%s v%d of #%d was drafted again after you read it.", ready.Title(p.Ask), p.Version, f)
 		case !now.Parts[i].Checklist[0].OK:
 			return baselineChanged(p.Ask, f)
@@ -280,7 +280,7 @@ func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, 
 			if err != nil {
 				return "", nil, err
 			}
-			if d == nil || d.Hash != p.Hash { // the ledger moved after the card was read again
+			if d == nil || d.Hash != p.Hash || d.Version != p.Version { // the ledger moved after the card was read again
 				return "", nil, Errorf(ExitBlocked, "%s v%d of #%d was drafted again after you read it. Nothing was written for #%d.", ready.Title(p.Ask), p.Version, f, f)
 			}
 			drafts = append(drafts, *d)

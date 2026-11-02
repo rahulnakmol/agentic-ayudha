@@ -276,7 +276,7 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 			return rec, nil, nil, "", err
 		}
 		if d := a.drafts[part]; d != nil {
-			if draft == nil || draft.Hash != d.Hash { // approved or drafted again since the card was read
+			if draft == nil || draft.Hash != d.Hash || draft.Version != d.Version { // approved or drafted again since the card was read
 				return rec, nil, nil, "", Errorf(ExitBlocked, "%s v%d of #%d was drafted again after you read it. Nothing was written for #%d.", ready.Title(part), d.Version, a.n, a.n)
 			}
 			base = d

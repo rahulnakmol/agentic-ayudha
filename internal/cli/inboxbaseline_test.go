@@ -689,6 +689,33 @@ func TestFeatureApprovePinMoved(t *testing.T) {
 		}
 		nothing(t, m, n)
 	})
+	t.Run("drafted again at the same hash", func(t *testing.T) { // the spec is approved at v1 and drafted again as v2 with v1's hash
+		m := approveWorld(t)
+		_, items := m.listed(m.person)
+		m.approveDrafts("spec")
+		was, _ := m.record(ready.BaselinePath(889, "spec", 1, false))
+		v2 := m.draftOf("spec", 1)
+		v2.Version = 2
+		data, _ := json.Marshal(v2)
+		putLedger(t, m.bare, ready.BaselinePath(889, "spec", 2, true), string(data))
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		l, err := e.Config()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+		if want := "Spec v1 of #889 was drafted again after you read it. Nothing was written for #889."; CodeOf(err) != ExitBlocked || fmt.Sprint(err) != want || m.codes() != 0 {
+			t.Fatalf("approve and start: %v, device codes %d", err, m.codes())
+		}
+		if now, _ := m.record(ready.BaselinePath(889, "spec", 1, false)); !reflect.DeepEqual(now, was) || m.commits() != n {
+			t.Fatalf("spec-v1.json is now %+v, was %+v; %s commits, was %s", now, was, m.commits(), n)
+		}
+		if _, _, ok := m.approvalRecords(); ok {
+			t.Fatal("#889 was approved to build")
+		}
+	})
 	t.Run("the tech design moved", func(t *testing.T) {
 		m := approveWorld(t)
 		_, items := m.listed(m.person)
