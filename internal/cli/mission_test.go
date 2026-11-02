@@ -46,6 +46,7 @@ type missionWorld struct {
 	briefs   []string        // the brief of each call that sent one
 	cursorAt string          // the fake Cursor API's URL
 	archived map[string]bool // Amp threads that are archived
+	media    int             // requests to the proof media bucket (Story #1176)
 }
 
 // Fake receiver answers: a new Amp thread, a Claude Code cloud session, a Codex task, and a local session.

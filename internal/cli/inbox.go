@@ -476,7 +476,10 @@ type inboxSource struct {
 	baselines func(ctx context.Context, repo string, features []int) ([]InboxItem, error)
 	// evening, when set, reads the stories agreed today, each with its pack
 	// at the head that head says merged (Story #1176).
-	evening func(ctx context.Context, head func(story int) string) ([]eveningStory, error)
+	evening func(ctx context.Context, head func(story int) string, images bool) ([]eveningStory, error)
+	// images is set only by the line-by-line inbox, the one surface that draws
+	// an evening card's screenshots: the others read no media (Story #1176).
+	images bool
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -1327,6 +1330,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
 	src.pendingAudits, src.missions, src.baselines, src.evening = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories
+	src.images = e.showsImages()
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)

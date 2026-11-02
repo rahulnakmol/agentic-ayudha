@@ -145,9 +145,10 @@ func inlineImage(name string, b []byte) string {
 }
 
 // eveningStories reads the stories agreed today from the ledger, each with
-// its pack at the head that head says merged ("" when it did not merge). It
-// reads nothing before the end of today's business hours.
-func (e *Env) eveningStories(ctx context.Context, head func(story int) string) ([]eveningStory, error) {
+// its pack at the head that head says merged ("" when it did not merge), and
+// with images its screenshots. It reads nothing before the end of today's
+// business hours.
+func (e *Env) eveningStories(ctx context.Context, head func(story int) string, images bool) ([]eveningStory, error) {
 	l, err := e.Config()
 	if err != nil { // `aayu inbox` itself refuses such a config; `--list` shows the rest without its clock
 		return nil, nil
@@ -210,7 +211,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string) (
 				if st.reviewed {
 					st.pack = nil
 				}
-				if st.pack != nil && e.showsImages() {
+				if st.pack != nil && images { // only the surface that draws them reads the media secret and the bytes
 					if media == nil {
 						if media, err = e.proofStore(ctx, c, tok, "human", ""); err != nil {
 							media = packs // no bucket to read: each image keeps its path and link
@@ -263,7 +264,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		}
 		return ""
 	}
-	stories, err := s.evening(ctx, head)
+	stories, err := s.evening(ctx, head, s.images)
 	if err != nil {
 		return nil, err
 	}

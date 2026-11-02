@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,6 +57,13 @@ func eveningWorld(t *testing.T) (*missionWorld, *time.Time) {
 
 	// The media bucket, from dev's committed config (the checkout's is the same) and the person's secret.
 	s3 := fakes3.New(t, "sk")
+	bucket := s3.Server.Config.Handler
+	s3.Server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		m.media++
+		m.mu.Unlock()
+		bucket.ServeHTTP(w, r)
+	})
 	cfg := "version = 1\n[proof]\nmedia = \"s3://proof-bucket/acme?endpoint=" + s3.Server.URL + "\"\n"
 	m.edit(func() { m.g.RefFiles[devTip][".aayudha/config.toml"] = cfg })
 	if err := os.MkdirAll(filepath.Join(m.dir, ".aayudha"), 0o755); err != nil {
@@ -423,6 +431,11 @@ func TestEveningListHasNoAccept(t *testing.T) {
 		}) {
 			t.Fatalf("lane's card #%d: criteria %d, options %+v", it.Number, len(it.Criteria), it.Options)
 		}
+	}
+	// In a terminal that draws images, the list still reads no media: only the line-by-line inbox draws them.
+	m.lane["TERM_PROGRAM"], m.lane["AAYU_SECRET_PROOF_MEDIA"] = "iTerm.app", "ak:sk" // a shell that holds the person's media secret
+	if cards := eveningList(t, m, m.lane); len(cards) != 3 || m.media != 0 {
+		t.Fatalf("lane's list in iTerm2: %d cards, %d media bucket requests", len(cards), m.media)
 	}
 	if code, out, errOut := run(t, m.lane, m.opts, "inbox", "--list", "--repo", "o/r"); code != 0 || !strings.Contains(out, "Evening review") || strings.Contains(out, "Accept #") {
 		t.Fatalf("lane's Markdown list: exit %d:\n%s%s", code, out, errOut)
