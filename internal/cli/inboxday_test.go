@@ -82,8 +82,9 @@ func TestMorningCardOrder(t *testing.T) {
 }
 
 // dayLine889 is the day line of #889 as approveWorld's Sunday clock reads it:
-// MS1 today, and the review at 18:00 on Monday, the next business day.
-const dayLine889 = "  #889 · today MS1: #20, #21, #22, #30 · evening review Mon 2 Nov 18:00 Europe/London, the end of [time] business_hours\n"
+// MS1 today, without Bug #30, which waits in the BUGS milestone (#1174), and
+// the review at 18:00 on Monday, the next business day.
+const dayLine889 = "  #889 · today MS1: #20, #21, #22 · evening review Mon 2 Nov 18:00 Europe/London, the end of [time] business_hours\n"
 
 // Criterion 2: he approves #889 and starts its mission in the session, and
 // leaves #900 for later: the last card says The day is set, with one line for
