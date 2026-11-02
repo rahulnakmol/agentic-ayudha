@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNamedMilestonesThenBugs"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNamedMilestonesThenBugs","Output":"=== RUN   TestApproveToBuildNamedMilestonesThenBugs\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNamedMilestonesThenBugs","Output":"--- PASS: TestApproveToBuildNamedMilestonesThenBugs (1.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNamedMilestonesThenBugs"}

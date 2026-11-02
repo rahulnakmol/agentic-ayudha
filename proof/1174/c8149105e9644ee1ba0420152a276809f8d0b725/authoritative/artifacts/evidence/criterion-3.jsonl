@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextBugFiledDuringMissionJoinsBugs"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextBugFiledDuringMissionJoinsBugs","Output":"=== RUN   TestMissionNextBugFiledDuringMissionJoinsBugs\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextBugFiledDuringMissionJoinsBugs","Output":"--- PASS: TestMissionNextBugFiledDuringMissionJoinsBugs (2.40s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionNextBugFiledDuringMissionJoinsBugs"}

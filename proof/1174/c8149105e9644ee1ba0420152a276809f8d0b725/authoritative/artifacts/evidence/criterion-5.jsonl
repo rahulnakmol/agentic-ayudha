@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNoOpenBugNoBugsMilestone"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNoOpenBugNoBugsMilestone","Output":"=== RUN   TestApproveToBuildNoOpenBugNoBugsMilestone\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNoOpenBugNoBugsMilestone","Output":"--- PASS: TestApproveToBuildNoOpenBugNoBugsMilestone (0.84s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestApproveToBuildNoOpenBugNoBugsMilestone"}
