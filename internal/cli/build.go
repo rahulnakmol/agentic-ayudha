@@ -264,7 +264,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return e.stopBuild(ctx, c, bot, l, repo, n, labels, why)
 	}
 	// A mission list marked it start: the person who started the mission asked for it (Story #1005).
-	listed := false
+	listed, claimAt := false, ""
 	if in.String("delegate") != "" { // a Kanha starts what a mission list marked start: it acts on the live state only
 		lw, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 		if err != nil {
@@ -286,7 +286,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 					n, n, orDefault(ds.Status, "not started"), orDefault(ds.TaskURL, orDefault(ds.Receiver, "no receiver")), stop)
 			}
 		}
-		if err := e.changedSinceList(ctx, lw, is, chk, labels, c.DryRun(), &listed); err != nil {
+		if err := e.changedSinceList(ctx, lw, is, chk, labels, c.DryRun(), &listed, &claimAt); err != nil {
 			return err
 		}
 		if err := tatkalHold(ctx, c, lw, repo, n); err != nil {
@@ -417,6 +417,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if in.String("delegate") != "" {
 		var done bool
 		dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels)
+		if err == nil {
+			dlg.claimAt = claimAt
+		}
 		if err == nil && in.Bool("sync-only") && dlg.fresh {
 			// The receiver changed, to the tool of the mission the story is now in: a fresh hand-off, which a sync never makes.
 			return Errorf(ExitBlocked, "build #%d: nothing to sync: its mission runs on %s, and the delegation is on %s; a sync never hands a story off", n, dlg.receiver, dlg.state.Receiver)

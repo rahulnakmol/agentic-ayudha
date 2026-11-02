@@ -265,12 +265,13 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 // that started it. A build that hands #20 off 14 minutes after the claim gets
 // no 15 minutes more: 16 minutes after the claim, mission next releases #20
 // and lists it start; at 14m59s it holds #20. That holds when the claim
-// expires during the build's environment setup too, but a claim of a failed
-// earlier start does not set a retry's deadline. A --thread recorded before
+// expires while the build takes the lease or sets up the environment too, but
+// a claim of a failed earlier start does not set a retry's deadline. A --thread recorded before
 // mission next marks the lapse is kept (criterion 2); one after it is refused.
 func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
+		lease        time.Duration // the clock moves this much while build takes the lease
 		setup        time.Duration // the clock moves this much while build verifies the environment
 		recordBefore bool          // --thread runs before mission next
 		failFirst    bool          // the first build fails its setup at t=16m, and build runs again without mission next
@@ -278,6 +279,7 @@ func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 		{name: "late build"},
 		{name: "retry after a failed setup", setup: 2 * time.Minute, failFirst: true},
 		{name: "claim expires during setup", setup: 2 * time.Minute},
+		{name: "claim expires while build takes the lease", lease: 2 * time.Minute},
 		{name: "thread recorded before the lapse is marked", recordBefore: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -303,8 +305,20 @@ func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 				}
 				m.opts.EnsureEnv = ensure
 			}
-			if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil {
-				t.Fatalf("no host hand-off: %+v", res.Delegation)
+			if tc.lease > 0 {
+				m.g.Hook = func(method, p string) {
+					if method == "POST" && strings.HasSuffix(p, "/issues/20/comments") {
+						clk.add(tc.lease)
+						m.g.Hook = nil
+					}
+				}
+			}
+			from := "the story's claim"
+			if tc.failFirst {
+				from = "this hand-off"
+			}
+			if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil || !strings.Contains(res.Next, "15 minutes after "+from+", the hand-off lapses") {
+				t.Fatalf("no host hand-off, or its deadline is not from %s: %+v: %s", from, res.Delegation, res.Next)
 			}
 			if tc.failFirst { // the retry's hand-off lives 15 minutes from its own start
 				clk.add(2 * time.Minute)
@@ -313,14 +327,14 @@ func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
 				}
 				return
 			}
-			if tc.setup == 0 && !tc.recordBefore { // a second before the claim's life ends, the claim still holds #20
+			if tc.setup == 0 && tc.lease == 0 && !tc.recordBefore { // a second before the claim's life ends, the claim still holds #20
 				clk.add(time.Minute - time.Second)
 				if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "start #20") || m.state(20).Status != dlgHost {
 					t.Fatalf("mission next 14m59s after the claim: exit %d, state %+v: %q%s", code, m.state(20), out, errOut)
 				}
 				clk.add(time.Minute + time.Second)
 			} else {
-				clk.add(2*time.Minute - tc.setup)
+				clk.add(2*time.Minute - tc.setup - tc.lease)
 			}
 			if tc.recordBefore {
 				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != 0 {

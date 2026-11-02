@@ -144,9 +144,9 @@ claims the story and prints a host hand-off: the brief file, the thread title, a
 thread with your thread tool, with that title and the brief's text as its prompt. Then run
 `aayu build <n> --delegate amp --thread <T-id>` with the new thread's ID. Only an Amp thread ID is recorded. When
 build says a hand-off waits for its thread, record the thread you created; create one only if you did not. A
-hand-off with no recorded thread lapses 15 minutes after the story's claim. Then `next` releases the claim, the lease,
-and `status:in-progress`, and lists the story again. Build prints a follow-up the same way: send it to the thread
-it names.
+hand-off with no recorded thread lapses 15 minutes after the story's claim. With no claim, it lapses 15 minutes
+after the hand-off. Then `next` releases the claim, the lease, and `status:in-progress`, and lists the story again.
+Build prints a follow-up the same way: send it to the thread it names.
 
 `next` starts at most `[build] agents` stories at once (default 5). It reads the value from the integration
 branch's committed config; a local value can only lower it. A Feature's own value, set at Approve to build with
