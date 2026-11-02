@@ -24,6 +24,7 @@ import (
 func morningWorld(t *testing.T) (*missionWorld, int) {
 	t.Helper()
 	m := approveWorld(t)
+	m.workday() // the day's plan names the end of the committed business hours
 	m.issue(900, "Feature baselines", "feature", 0, "")
 	m.issue(950, "Story 950", "story", 900, "")
 	m.feature(900, 950)
@@ -103,6 +104,7 @@ func TestDayIsSet(t *testing.T) {
 	})
 	t.Run("full screen", func(t *testing.T) {
 		m := lockWorld(t, "cursor")
+		m.workday()
 		// Monday 19:30 in UTC is Tuesday 01:00 in Kolkata, before its hours: the review is Tuesday at 18:00 there.
 		m.opts.Now = func() time.Time { return time.Date(2026, 11, 2, 19, 30, 0, 0, time.UTC) }
 		m.person["AAYU_TIME__TZ"] = "Asia/Kolkata"

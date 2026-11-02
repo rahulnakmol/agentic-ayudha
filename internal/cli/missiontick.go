@@ -198,7 +198,9 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	}
 	now := e.Now()
 	told := lastTold(f, plan, appr, states)
-	due := dueRetries(plan, told, now)
+	l, _ := e.Config()           // loaded and checked by the GitHub client
+	clock, _ := l.Config.Clock() // a config that loaded has a clock (config.Validate)
+	due := dueRetries(plan, told, now, clock)
 	if now.Sub(told) < tickPeriod && len(due) == 0 {
 		return fmt.Sprintf("its Kanha was told at %s, since the last tick", told.UTC().Format(time.RFC3339))
 	}
@@ -257,7 +259,7 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 			held = p.State
 		case p.Pause != nil:
 			held = "paused: " + p.Pause.Reason
-		case now.Sub(told) < tickPeriod && len(dueRetries(p, told, now)) == 0:
+		case now.Sub(told) < tickPeriod && len(dueRetries(p, told, now, clock)) == 0:
 			held = "another tick woke its Kanha"
 		default:
 			p.Wakes = append(p.Wakes, MissionWake{At: at, Event: msg, Status: wakeSending})
@@ -272,7 +274,6 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	case !ok:
 		return held
 	}
-	l, _ := e.Config() // loaded and checked by the GitHub client
 	ad := e.receiverAdapter(l.Config.Delegate, p.Host, c, repo, config.RepoRoot(e.Dir))
 	log, err := e.Actions()
 	if err == nil {
@@ -303,7 +304,10 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 // dueRetries are the stories whose failed step's retry was due at now and
 // came due after the Kanha was last told: only recover runs a retry, and
 // only on a Kanha wake (#1003), so the tick wakes for it.
-func dueRetries(p *MissionPlan, told, now time.Time) []string {
+func dueRetries(p *MissionPlan, told, now time.Time, day config.Clock) []string {
+	if !day.Within(now) { // a retry hands a story off afresh: none starts outside the day (Story #1178)
+		return nil
+	}
 	var due []string
 	for _, ss := range p.StoryStates {
 		at, err := time.Parse(time.RFC3339, ss.RetryAt)

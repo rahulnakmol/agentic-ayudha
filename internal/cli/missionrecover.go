@@ -790,6 +790,13 @@ func (r *recovery) restart(ctx context.Context, n int, st delegate.State, why, k
 		out.State = "retried"
 	}
 	branch := or(st.Branch, "a new branch")
+	// A restart hands the story off afresh: the Kanha starts none outside the day; a person's retry is theirs (Story #1178).
+	if l, err := r.e.Config(); err == nil && r.verb == "recover" {
+		if clock, _ := l.Config.Clock(); !clock.Within(r.e.Now()) {
+			out.State, out.Line = "left", fmt.Sprintf("%s: outside the day: restarts at %s", why, dayStart(clock, r.e.Now()))
+			return out
+		}
+	}
 	if r.c.DryRun() {
 		out.Line = fmt.Sprintf("%s: --dry-run: would restart it from %s and its brief", why, branch)
 		return out
