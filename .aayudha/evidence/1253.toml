@@ -2,7 +2,7 @@
 
 [[criterion]]
 id = 1 # drafts wait, no Approve to build: one card per Feature, each part's version and hash, and the Approve to build it leads to
-tests = ["internal/cli:TestFeatureCard"]
+tests = ["internal/cli:TestFeatureCard", "internal/cli:TestBaselineChangesSinceV1"]
 
 [[criterion]]
 id = 2 # Approve and start: each part pinned to the card's hash, then Approve to build, then the mission start, one device code
@@ -14,7 +14,7 @@ tests = ["internal/cli:TestFeatureApprovePinMoved"]
 
 [[criterion]]
 id = 4 # Open a part: today's baseline card, and approving or leaving it there changes only that part
-tests = ["internal/cli:TestBaselineCards", "internal/cli:TestBaselineApproveOneCode"]
+tests = ["internal/cli:TestBaselineCards", "internal/cli:TestBaselineApproveOneCode", "internal/cli:TestFeatureOpenPartRefreshFails"]
 
 [[criterion]]
 id = 5 # an agent lane's inbox --list: the Feature card and no approve action

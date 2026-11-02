@@ -1753,7 +1753,10 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 		pos++
 		if quit, err := card(needs[i]); err != nil || quit {
 			fmt.Fprintln(w)
-			return finish()
+			if ferr := finish(); err == nil { // a read that failed ends the session with its error, after the tally
+				return ferr
+			}
+			return err
 		}
 	}
 	if len(house) > 0 && !tidied {

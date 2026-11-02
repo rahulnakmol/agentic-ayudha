@@ -553,6 +553,26 @@ func TestFeatureApproveAndStart(t *testing.T) {
 	})
 }
 
+// Bug #1253 criterion 4: a read that fails when the Feature card comes back
+// after an opened part ends the inbox with the error, never a silent exit.
+func TestFeatureOpenPartRefreshFails(t *testing.T) {
+	m := baselineWorld(t, nil)
+	lists := 0
+	m.edit(func() {
+		m.g.Hook = func(method, p string) {
+			if method == "GET" && p == "/repos/o/r/issues" {
+				if lists++; lists >= 2 { // the read again after the part's card
+					m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues", 0
+				}
+			}
+		}
+	})
+	code, out, errOut := runIn(t, m.person, m.opts, "32s", "inbox", "--plain", "--repo", "o/r")
+	if code == 0 || lists < 2 || !strings.Contains(errOut, "injected failure") {
+		t.Fatalf("inbox 3 2, the refresh fails: exit %d, %d issue lists:\n%s%s", code, lists, out, errOut)
+	}
+}
+
 // A step that fails after the parts and Approve to build of #889 are on the
 // ledger says they are there, never that nothing changed.
 func TestFeatureApproveFailsAfterTheCommit(t *testing.T) {
@@ -616,7 +636,7 @@ func TestFeatureApprovePinMoved(t *testing.T) {
 		}
 		nothing(t, m, n)
 	})
-	t.Run("at the check just before the commit", func(t *testing.T) { // the Approve to build run that writes the parts reads every pin once more
+	t.Run("in the run that writes the parts", func(t *testing.T) { // the Approve to build run that writes the parts refuses a moved pin itself
 		m := approveWorld(t)
 		m.edit(func() { retitle(m.g) })
 		n := m.commits()
@@ -765,10 +785,12 @@ func TestBaselineChangesSinceV1(t *testing.T) {
 	}
 	m.draftPart("tech", changes)
 	code, out, errOut := runIn(t, m.person, m.opts, "4ss", "inbox", "--plain", "--repo", "o/r")
-	// The Feature card says each change too, before any choice (Bug #1253).
+	// The Feature card says each change too, with its why and need, before any choice (Bug #1253).
 	if want := "  Tech v2 · hash " + m.draftOf("tech", 2).Hash[:12] + " · 2 of 2 checks hold\n" +
-		"      Changes since v1:\n        specs/889/design.json: The design adds the L04 test layer.\n"; !strings.Contains(out, want) {
-		t.Errorf("the Feature card lacks %q:\n%s", want, out)
+		"      Changes since v1:\n        specs/889/design.json: The design adds the L04 test layer.\n" +
+		"          Why: Each story's checks need a home in the test layer.\n          Need: A person sees each story proven before it merges.\n"; !strings.Contains(out, want) ||
+		strings.Index(out, want) > strings.Index(out, "  1. Approve ") {
+		t.Errorf("the Feature card lacks %q before its choices:\n%s", want, out)
 	}
 	i := strings.Index(out, "] Baseline #889: Tech v2: Agents pull the next story\n")
 	want := "  Changes since v1:\n" +

@@ -133,8 +133,8 @@ func partLines(p InboxItem, d ready.Baseline, base *ready.Baseline, holds bool) 
 	}
 	if base != nil {
 		lines = append(lines, fmt.Sprintf("    Changes since v%d:", base.Version))
-		for _, ch := range d.Changes {
-			lines = append(lines, "      "+termText(ch.Ref)+": "+termText(ch.What))
+		for _, ch := range d.Changes { // the why and the need too: the hash approves them
+			lines = append(lines, "      "+termText(ch.Ref)+": "+termText(ch.What), "        Why: "+termText(ch.Why), "        Need: "+termText(ch.Need))
 		}
 	}
 	return lines
