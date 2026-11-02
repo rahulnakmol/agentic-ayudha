@@ -73,6 +73,7 @@ type fakeCursor struct {
 	reqs     []map[string]any
 	finished int    // the PR number the finished run reports; 0 while running
 	status   string // when set, every run reports this status, as an archived agent's does (Story #1003)
+	sameRun  bool   // a follow-up keeps the run's ID, as Amp's and Claude Code's keep their task (Bug #1264)
 }
 
 func (f *fakeCursor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +95,8 @@ func (f *fakeCursor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, read("run-running.json"))
 	case r.Method == "GET":
 		_, _ = io.WriteString(w, strings.ReplaceAll(read("run-finished.json"), "{{PR}}", strconv.Itoa(f.finished)))
+	case f.sameRun:
+		_, _ = io.WriteString(w, strings.ReplaceAll(read("followup.json"), "run-02", "run-01"))
 	default:
 		_, _ = io.WriteString(w, read("followup.json"))
 	}
@@ -320,7 +323,7 @@ func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
 	refuseLedger(t, bare, refuse)
 	code, res, errOut := delegateRun(t, env, opts, set...)
 	if code != ExitExternal || res.Delegation == nil || res.Delegation.Status != "" || res.Delegation.Task != "" || res.Next != "" ||
-		!strings.Contains(errOut, "Cursor has #2 as task https://cursor.com/agents?id=bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f, and aayu did not record it") ||
+		!strings.Contains(errOut, "Cursor has #2 as task https://cursor.com/agents?id=bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f, and its record may not be on the ledger") ||
 		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds no record") {
 		t.Fatalf("a hand-off whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
 	}
@@ -366,9 +369,12 @@ func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
 	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
 	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate)
 	g.Mu.Unlock()
+	cur.mu.Lock()
+	cur.sameRun = true // the follow-up keeps the task's ID: the error still names it
+	cur.mu.Unlock()
 	code, res, errOut = delegateRun(t, env, opts, set...)
 	if code != ExitExternal || res.Delegation.Status != dlgHandedOff || len(held().FollowUps) != 0 ||
-		!strings.Contains(errOut, "Cursor has the follow-up as task bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f/run-02, and its record did not land, so the next sync may send it again") {
+		!strings.Contains(errOut, "Cursor has the follow-up on task bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f/run-01, and its record may not be on the ledger, so the next sync may send it again") {
 		t.Fatalf("a findings follow-up whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
 	}
 	// A sync that stops at the cycle cap keeps its own error, and says the record was not written.
@@ -464,7 +470,7 @@ func TestDelegateCIRepair(t *testing.T) {
 	code, res, errOut := delegateRun(t, env, opts, set...)
 	refuseLedger(t, bare, "")
 	if code != ExitExternal || len(posts()) != 1 || res.Delegation.FollowUp && res.Delegation.Status == dlgFix ||
-		!strings.Contains(errOut, "Cursor has the follow-up as task bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f/run-02, and its record did not land") {
+		!strings.Contains(errOut, "Cursor has the follow-up on task bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f/run-02, and its record may not be on the ledger") {
 		t.Fatalf("a CI follow-up whose record the ledger refused: %d %+v %s", code, res.Delegation, errOut)
 	}
 	skip = 1
@@ -836,7 +842,9 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 
 	// Bug #1264: the ledger refuses the pause's record. The wait goes on with a warning, and the record that lands
 	// after the rerun is the whole hand-off, not the record the ledger held before it.
+	// The story was on Cursor before, so the record the ledger holds names another receiver and mode.
 	_, env, opts, _, bare = delegateFixture(t)
+	putLedger(t, bare, delegate.LedgerPath(2), `{"story":2,"receiver":"cursor","mode":"cloud","status":"failed","task":"bc-1/run-01"}`)
 	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
 	now = opts.Now()
 	opts.Now = func() time.Time { return now }
@@ -855,6 +863,7 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	ds = delegate.State{}
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &ds)
 	if code != 0 || runs != 2 || res.PR == 0 || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") ||
+		res.Delegation.Receiver != delegate.Codex || res.Delegation.Mode != "local" ||
 		ds.Receiver != delegate.Codex || ds.Mode != "local" || ds.Story != 2 || ds.Branch == "" || ds.BriefHash == "" || ds.PR != res.PR || ds.Status != dlgPROpen {
 		t.Fatalf("a pause whose record the ledger refused: exit %d runs %d, ledger %+v: %s", code, runs, ds, errOut)
 	}

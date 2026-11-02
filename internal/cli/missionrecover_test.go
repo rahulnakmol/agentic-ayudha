@@ -573,6 +573,36 @@ func TestMissionMaybeStartedCommentFails(t *testing.T) {
 	}
 }
 
+// Bug #1264: the maybe-started record lands, and the write still fails after it (here the actions log refuses
+// its entry). Build keeps the story's slot and reports the maybe-started record the ledger holds.
+func TestMissionMaybeStartedLandedWithError(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	log := filepath.Join(w.opts.Dir, ".aayudha", "telemetry", "actions.jsonl")
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			hook := filepath.Join(w.bare, "hooks", "post-receive") // the push lands, then the actions log refuses its entry
+			if err := os.WriteFile(hook, []byte("#!/bin/sh\nchmod 444 '"+log+"'\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			git(t, w.bare, "config", "core.hooksPath", "hooks") // over any global hooks path
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	t.Cleanup(func() { _ = os.Chmod(log, 0o644) })
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != ExitExternal || !strings.Contains(errOut, "actions log") || // later writes fail on the log too, so their error leads
+
+		w.state(64).Status != dlgMaybe || res.Delegation == nil || res.Delegation.Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") || w.claims(889)[64] != 1 {
+		t.Fatalf("a maybe start that landed with an error: exit %d, %+v, result %+v: %s%s", code, w.state(64), res.Delegation, out, errOut)
+	}
+}
+
 // Criterion 4: the start of #64 sends its request and the host gives no
 // answer before the timeout, and a codex task for #64 exists with no PR. The
 // record marks #64 maybe started; recover says so and starts nothing; the

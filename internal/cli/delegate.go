@@ -546,10 +546,7 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 				d.hostFU = nil // a follow-up the ledger does not record is not the host's to send
 			}
 			if r := d.res; r != nil && r.Delegation != nil {
-				d.fill(r.Delegation)
-				if d.held.Receiver != "" { // a refused switch of receiver reports the receiver the ledger names
-					r.Delegation.Receiver, r.Delegation.Mode, r.Delegation.Reason = d.held.Receiver, d.held.Mode, d.held.Reason
-				}
+				d.fill(r.Delegation) // a refused switch of receiver reports the receiver the ledger names
 				r.Delegation.Host, r.Next = nil, ""
 				r.Delegation.FollowUp = r.Delegation.FollowUp && !unsent
 			}
@@ -665,18 +662,16 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
+			// Only a maybe start on the ledger holds the story for recover; one only in memory would hold it with nothing
+			// to check it, so it fails as a start. saveDelegation keeps the maybe-started record only when the ledger
+			// holds it (a write or comment error after it landed), so its outcome decides, with no second read.
 			serr := e.saveDelegation(rctx, d)
-			if serr != nil {
-				// Only a maybe start on the ledger holds the story for recover; one only
-				// in memory would hold it with nothing to check it, so it fails as a start.
-				var saved delegate.State
-				if _, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
-					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
-					return nil, true, serr
-				}
-				d.state, d.held = saved, cloneState(saved) // the record landed after all; serr still goes with the result
-				d.fill(res.Delegation)
+			if serr != nil && d.state.Status != dlgMaybe {
+				d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
+				report()
+				return nil, true, serr
 			}
+			report()
 			if !d.c.DryRun() {
 				if _, perr := writePlan(rctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
 					p.storyState(d.story).State = stateMaybe
@@ -700,7 +695,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		// The host has the work: its record must land even after a cancel, and when it does not, the error names the task.
 		err = e.saveDelegation(rctx, d)
 		if err != nil && d.state.Task != task.ID {
-			err = Errorf(ExitExternal, "build #%d --delegate %s: %s has #%d as task %s, and aayu did not record it: %w", d.story, d.receiver, delegate.Names[d.receiver], d.story, orDefault(task.URL, task.ID), err)
+			err = Errorf(ExitExternal, "build #%d --delegate %s: %s has #%d as task %s, and its record may not be on the ledger: %w", d.story, d.receiver, delegate.Names[d.receiver], d.story, orDefault(task.URL, task.ID), err)
 		}
 		return nil, true, err
 	}
@@ -891,6 +886,9 @@ func (d *delegation) model() string {
 
 func (d *delegation) fill(r *Delegation) {
 	r.Status, r.Task, r.TaskURL, r.PR, r.Proved, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state.Proved, d.state
+	if d.state.Receiver != "" { // the record names its receiver, also after a refused save restores an earlier one (Bug #1264)
+		r.Receiver, r.Mode, r.Reason = d.state.Receiver, d.state.Mode, d.state.Reason
+	}
 }
 
 // findDelegatedPR finds the receiver's PR: the receiver's own PR URL, an open
@@ -1093,16 +1091,16 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 }
 
 // saveFollowUp saves the record of a follow-up the receiver already has. When
-// the ledger refuses it, the error names the task the follow-up made, which the
-// ledger does not hold, and says that a sync sends the follow-up again
-// (Bug #1264). A host follow-up was not sent yet, so it needs no such note.
+// the save fails, the error names the task that has the follow-up, a new one or
+// the same, and says that the next sync may send it again (Bug #1264). A host
+// follow-up was not sent yet, so it needs no such note.
 func (e *Env) saveFollowUp(ctx context.Context, d *delegation) error {
 	task, host := d.state.Task, d.hostFU != nil
 	err := e.saveDelegation(ctx, d)
-	if err == nil || host || d.state.Task == task {
+	if err == nil || host {
 		return err
 	}
-	return withSaveErr(Errorf(ExitExternal, "build #%d: %s has the follow-up as task %s, and its record did not land, so the next sync may send it again", d.story, delegate.Names[d.receiver], task), err)
+	return withSaveErr(Errorf(ExitExternal, "build #%d: %s has the follow-up on task %s, and its record may not be on the ledger, so the next sync may send it again", d.story, delegate.Names[d.receiver], task), err)
 }
 
 // outside refuses a follow-up for a PR built outside the mission that

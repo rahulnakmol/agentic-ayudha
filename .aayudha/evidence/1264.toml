@@ -10,7 +10,7 @@ tests = ["internal/cli:TestAmpHostThreadRecordFails"]
 
 [[criterion]]
 id = 3 # any other delegateStep or reviewLoop step whose ledger write fails reports the record the ledger holds and says so
-tests = ["internal/cli:TestDelegateLedgerRefusedReportsHeld", "internal/cli:TestDelegateCIRepair", "internal/cli:TestDelegateLocalUsageLimitPause", "internal/cli:TestMissionMaybeStartedCommentFails"]
+tests = ["internal/cli:TestDelegateLedgerRefusedReportsHeld", "internal/cli:TestDelegateCIRepair", "internal/cli:TestDelegateLocalUsageLimitPause", "internal/cli:TestMissionMaybeStartedCommentFails", "internal/cli:TestMissionMaybeStartedLandedWithError"]
 
 [[criterion]]
 id = 4 # a delegation record with a type error after a usable receiver is no record for inspect and counsel
