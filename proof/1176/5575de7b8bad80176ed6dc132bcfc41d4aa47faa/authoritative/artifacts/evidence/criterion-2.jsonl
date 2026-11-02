@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningAcceptRecordsReview"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningAcceptRecordsReview","Output":"=== RUN   TestEveningAcceptRecordsReview\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningAcceptRecordsReview","Output":"--- PASS: TestEveningAcceptRecordsReview (2.62s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningAcceptRecordsReview"}

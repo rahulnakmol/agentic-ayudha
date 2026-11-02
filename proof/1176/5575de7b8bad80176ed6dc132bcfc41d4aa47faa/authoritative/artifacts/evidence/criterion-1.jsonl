@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCardsShowEvidence"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCardsShowEvidence","Output":"=== RUN   TestEveningCardsShowEvidence\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCardsShowEvidence","Output":"--- PASS: TestEveningCardsShowEvidence (2.41s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCardsShowEvidence"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningEvidenceIsSafeText"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningEvidenceIsSafeText","Output":"=== RUN   TestEveningEvidenceIsSafeText\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningEvidenceIsSafeText","Output":"--- PASS: TestEveningEvidenceIsSafeText (1.85s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningEvidenceIsSafeText"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningListHasNoAccept"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningListHasNoAccept","Output":"=== RUN   TestEveningListHasNoAccept\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningListHasNoAccept","Output":"--- PASS: TestEveningListHasNoAccept (1.79s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningListHasNoAccept"}

@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCommentIsFeedback"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCommentIsFeedback","Output":"=== RUN   TestEveningCommentIsFeedback\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCommentIsFeedback","Output":"--- PASS: TestEveningCommentIsFeedback (2.03s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestEveningCommentIsFeedback"}
