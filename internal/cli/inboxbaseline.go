@@ -12,6 +12,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -222,21 +223,31 @@ func featureMoved(was, now InboxItem) string {
 	if len(now.Parts) != len(was.Parts) {
 		return fmt.Sprintf("Another part of #%d was drafted after you read it.", f)
 	}
-	if (was.Build == nil) != (now.Build == nil) || was.Build != nil && was.Build.Hash != now.Build.Hash {
+	switch {
+	case (was.Build == nil) != (now.Build == nil) || was.Build != nil && was.Build.Hash != now.Build.Hash:
 		return approveChanged(f)
+	case was.Build != nil && !slices.Equal(was.Build.Lines, now.Build.Lines): // its budget, agents, or milestones
+		return fmt.Sprintf("The Approve to build of #%d changed while you read it: its budget, agents, or milestones.", f)
 	}
 	return ""
 }
 
 // approveFeature is Approve and start (start) or Approve only on Feature
-// card shown (Bug #1253). The ledger and every part are read again before
-// the device code and after it: when a part or the stories are not the
-// card's, nothing is written for the Feature. Then every part's approval goes
-// on the ledger in one commit, pinned to the hash the card showed, then
-// Approve to build (approveToBuild, pinned to the card's stories), then the
-// mission start. One device code covers them all.
+// card shown (Bug #1253). The ledger, every part, and the Approve to build
+// are read again before the one device code and after it, and the start's
+// own refusals that need no write are checked before the code: when one
+// fails, nothing is written for the Feature. Then every part's approval,
+// pinned to the hash the card showed, goes on the ledger in one commit with
+// the Approve to build and its mission plan (approveRun.parts), which
+// approve checks once more just before it writes; then the mission starts.
+// The last check and the commit are not one transaction with GitHub: a pin
+// edited on GitHub between them is drift on the approved parts, as with
+// `aayu ready --part`.
 func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, start bool) error {
-	f := shown.Number
+	f, build := shown.Number, shown.Build != nil && shown.Build.Hash != ""
+	if err := e.approveRefusal(); err != nil {
+		return err
+	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return err
@@ -245,7 +256,7 @@ func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, 
 	if err != nil {
 		return err
 	}
-	// read is the ledger tip and the drafts the card shows at it, or the refusal that says which part is not the card's.
+	// read is the ledger tip and the drafts the card shows at it, or the refusal that says what is not the card's.
 	read := func() (string, []ready.Baseline, error) {
 		t, err := w.Read(ctx)
 		if err != nil {
@@ -279,15 +290,31 @@ func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, 
 	if _, _, err := read(); err != nil {
 		return err
 	}
+	tool := ""
+	if start { // what would stop the start, known now, stops it all before anything is written
+		if !build {
+			return Errorf(ExitUsage, "inbox: #%d has no Approve to build on its card, so it cannot start; nothing was written", f)
+		}
+		if tool, err = e.repoTool(ctx, repo); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		why := e.kanhaCanStart(tool)
+		if tool == "" {
+			why = fmt.Sprintf("no entry in [hosts] repos names %s, so Start has no tool to record", repo)
+		}
+		if why != "" {
+			return Errorf(ExitBlocked, "The mission of #%d cannot start here: %s. Nothing was written for #%d; Approve only approves it without the start.", f, why, f)
+		}
+	}
 	var effect []string
 	for _, p := range shown.Parts {
 		effect = append(effect, fmt.Sprintf("Baselines %s v%d of #%d at hash %s; a later edit shows as drift.", ready.Label(p.Ask), p.Version, f, p.Hash[:12]))
 	}
-	if shown.Build != nil && shown.Build.Hash != "" {
-		effect = append(effect, fmt.Sprintf("Then approves #%d to build, as its card shows.", f))
-		if start {
-			effect = append(effect, fmt.Sprintf("Then starts the mission of #%d, which locks its issues until the last milestone.", f))
-		}
+	if build {
+		effect = append(effect, fmt.Sprintf("Approves #%d to build, as its card shows, in the same ledger commit as its parts.", f))
+	}
+	if start {
+		effect = append(effect, fmt.Sprintf("Then starts the mission of #%d on %s, which locks its issues until the last milestone.", f, tool))
 	}
 	what := "approve and start"
 	if !start {
@@ -297,25 +324,52 @@ func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, 
 	if err != nil {
 		return err
 	}
-	// A part, its pins, or the stories can change while the code waits: read it all again.
+	// A part, its pins, or the Approve to build can change while the code waits: read it all again.
 	tip, drafts, err := read()
 	if err != nil {
 		return err
 	}
-	files := map[string][]byte{}
+	files, approved := map[string][]byte{}, map[string]*ready.Baseline{}
 	for i := range drafts {
 		b := &drafts[i] // what the person saw: the hash covers the pins, changes, and fixes
+		d := *b
+		approved[b.Part] = &d
 		b.ApprovedBy, b.ApprovedAt, b.Presence = p.Login, e.Now().UTC().Format(time.RFC3339), p.Via
 		data, _ := json.MarshalIndent(b, "", "  ")
 		files[ready.BaselinePath(f, b.Part, b.Version, false)] = append(data, '\n')
 	}
-	if !c.DryRun() { // every part in one commit, on the tip read after the code: all of them or none
+	switch {
+	case build: // the parts, Approve to build, and its plan in one commit, after one more check of every pin and story
+		cat, err := e.grillCatalog()
+		if err != nil {
+			return err
+		}
+		r := &ready.Ready{Repo: repo, TechnicalOwner: e.technicalOwner(), GH: c, Concrete: func(it workitems.Item) []workitems.Problem { return grill.Check(cat, it) }}
+		a := &approveRun{e: e, c: c, w: w, r: r, n: f, shown: shown.Build.Hash, drafts: approved, parts: files, check: func(plan MissionPlan) error {
+			if line := agentsLine(plan); !slices.Contains(shown.Build.Lines, line) {
+				return Errorf(ExitBlocked, "The Approve to build of #%d changed while you read it: %s. Nothing was written for #%d.", f, strings.TrimSpace(strings.TrimPrefix(line, "Agents")), f)
+			}
+			for _, m := range plan.Missions {
+				if start && m.Estimate.over() {
+					return Errorf(ExitBlocked, "The mission of #%d cannot start here: mission %d's estimate is %s working hours, %s, so it starts only from its Mission start card with a reason. Nothing was written for #%d; Approve only approves it without the start.",
+						f, m.Number, hrs(m.Estimate.Hours), m.Estimate.Mark, f)
+				}
+			}
+			return nil
+		}}
+		if err := a.approve(ctx); err != nil {
+			return err
+		}
+	case !c.DryRun(): // no Approve to build follows: the parts alone, in one commit on the tip read after the code
 		_, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: %d baselines of #%d, approved by @%s", len(drafts), f, p.Login), Files: files, Base: tip})
 		if errors.Is(err, ledger.ErrMoved) {
 			return Errorf(ExitBlocked, "The ledger changed while aayu wrote the parts of #%d. Nothing was written for #%d. Run it again.", f, f)
 		}
 		if err != nil {
 			return Wrap(ExitExternal, err)
+		}
+		if work, ok := ctx.Value(inboxWorkKey{}).(*inboxWork); ok { // a later step that fails says this landed
+			work.record(fmt.Sprintf("approved %d %s of #%d on the ledger", len(drafts), plural(len(drafts), "part", "parts"), f))
 		}
 	}
 	for _, b := range drafts {
@@ -325,13 +379,19 @@ func (e *Env) approveFeature(ctx context.Context, repo string, shown InboxItem, 
 		}
 		fmt.Fprintln(e.Out, strings.ReplaceAll(ready.Baselined(b), "`", ""))
 	}
-	if shown.Build == nil || shown.Build.Hash == "" {
+	switch {
+	case !start:
 		return nil
-	}
-	if err := handlers["ready"](ctx, e, Values{"issue": strconv.Itoa(f), readyExpectHash: shown.Build.Hash}); err != nil || !start {
+	case c.DryRun(): // the start reads the approval the dry run did not write
+		_, err := fmt.Fprintf(e.Out, "  --dry-run: the mission start of #%d is planned, not run\n", f)
 		return err
 	}
 	return handlers["mission"](ctx, e, Values{"action": "start", "feature": strconv.Itoa(f)})
+}
+
+// agentsLine is the line an Approve to build card says the agents of plan in (approveItem).
+func agentsLine(plan MissionPlan) string {
+	return fmt.Sprintf("Agents   up to %d at once (%s)", plan.Agents, plan.AgentsSource)
 }
 
 // baselineCard is the card of draft d, whose part's pins now hold (or not),

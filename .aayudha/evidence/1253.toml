@@ -6,7 +6,7 @@ tests = ["internal/cli:TestFeatureCard"]
 
 [[criterion]]
 id = 2 # Approve and start: each part pinned to the card's hash, then Approve to build, then the mission start, one device code
-tests = ["internal/cli:TestFeatureApproveAndStart", "internal/cli:TestDayIsSet"]
+tests = ["internal/cli:TestFeatureApproveAndStart", "internal/cli:TestDayIsSet", "internal/cli:TestFeatureApproveFailsAfterTheCommit"]
 
 [[criterion]]
 id = 3 # a part's pins move after the card is shown: nothing is written for the Feature, and the card says which part changed

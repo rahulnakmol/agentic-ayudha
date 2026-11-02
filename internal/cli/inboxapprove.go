@@ -130,7 +130,7 @@ func approveItem(f int, rec ready.Approval, p MissionPlan, refusal error) InboxI
 	}
 	it.Lines = append(append([]string{"Stories  " + what + ", each as it is now"}, lines...),
 		fmt.Sprintf("Budget   up to %s (%d %s × %s, [budget] per_story_usd)", ready.USD(rec.Budget.TotalUSD), rec.Budget.Stories, plural(rec.Budget.Stories, "story", "stories"), ready.USD(rec.Budget.PerStoryUSD)),
-		fmt.Sprintf("Agents   up to %d at once (%s)", p.Agents, p.AgentsSource),
+		agentsLine(p),
 		fmt.Sprintf("Milestones %s; complete when %s", strings.Join(ms, " · "), p.CompleteWhen),
 		"High-risk entries by story: none shown. They come with #1029, which has not merged, so the card cannot read them yet.",
 		"Baselines "+strings.Join(parts, ", "))

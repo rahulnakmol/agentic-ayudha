@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -82,9 +83,15 @@ type approveRun struct {
 	agents int
 	// shown is the hash of the stories and Bugs an inbox card showed (approveStories): approve only those (Story #1173).
 	shown string
-	// drafts are parts that count as approved at their waiting draft: a
-	// Feature card's preview of the Approve to build that follows (Bug #1253).
+	// drafts are parts that count as approved at their waiting draft, which
+	// must still be the part's draft: a Feature card's Approve to build
+	// (Bug #1253). parts are those drafts' approval records, by ledger path,
+	// written in the approval's own commit, so a refusal writes none of them;
+	// check, when set, refuses the plan read again after the device code
+	// before anything is written.
 	drafts map[string]*ready.Baseline
+	parts  map[string][]byte
+	check  func(MissionPlan) error
 }
 
 // approveToBuild is `aayu ready <feature>` (Feature #877, Decision #903): a
@@ -103,7 +110,12 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		return err
 	}
 	r.GH = c
-	a := &approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones, agents: agents, shown: shown}
+	return (&approveRun{e: e, c: c, w: w, r: r, n: n, milestones: milestones, agents: agents, shown: shown}).approve(ctx)
+}
+
+// approve is Approve to build of a.n, as approveToBuild says.
+func (a *approveRun) approve(ctx context.Context) error {
+	e, c, w, r, n := a.e, a.c, a.w, a.r, a.n
 	want, effect, prev, _, err := a.prepare(ctx)
 	if err != nil {
 		return err
@@ -144,6 +156,11 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		(old == nil) != (old2 == nil) || old != nil && missionJSON(old) != missionJSON(old2) {
 		return Errorf(ExitBlocked, "The approval of #%d changed while the code was waiting; nothing was approved.", n)
 	}
+	if a.check != nil {
+		if err := a.check(plan2); err != nil {
+			return err
+		}
+	}
 	got.Version, got.By, got.At = version(prev)+1, p.Login, e.Now().UTC().Format(time.RFC3339)
 	got.Presence = ready.Presence{Login: p.Login, Via: p.Via, Permission: p.Permission, ActionsRecord: e.presenceRecord(p.Login)}
 	plan.Approval, plan.ApprovedBy, plan.ApprovedAt = got.Version, got.By, got.At
@@ -171,13 +188,21 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 	if !c.DryRun() {
 		data, _ := json.MarshalIndent(got, "", "  ")
 		pdata, _ := json.MarshalIndent(plan, "", "  ")
-		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: Approve to build of #%d, approval %d, by @%s, and its mission plan", n, got.Version, p.Login),
-			Files: map[string][]byte{rep.LedgerPath: append(data, '\n'), MissionPlanPath(n): append(pdata, '\n')}, Base: tip})
+		msg := fmt.Sprintf("specs: Approve to build of #%d, approval %d, by @%s, and its mission plan", n, got.Version, p.Login)
+		files := map[string][]byte{rep.LedgerPath: append(data, '\n'), MissionPlanPath(n): append(pdata, '\n')}
+		if len(a.parts) > 0 { // the Feature card's parts go in the same commit: all of them and the approval, or nothing
+			msg = fmt.Sprintf("specs: %d baselines and Approve to build of #%d, approval %d, by @%s, and its mission plan", len(a.parts), n, got.Version, p.Login)
+			maps.Copy(files, a.parts)
+		}
+		rep.LedgerCommit, err = w.Write(ctx, ledger.Commit{Message: msg, Files: files, Base: tip})
 		if errors.Is(err, ledger.ErrMoved) {
 			return Errorf(ExitBlocked, "The ledger changed while aayu wrote the approval of #%d. Nothing was approved. Run it again.", n)
 		}
 		if err != nil {
 			return Wrap(ExitExternal, err)
+		}
+		if work, ok := ctx.Value(inboxWorkKey{}).(*inboxWork); ok && len(a.parts) > 0 { // a later step that fails says this landed
+			work.record(fmt.Sprintf("approved %d %s and Approve to build of #%d on the ledger", len(a.parts), plural(len(a.parts), "part", "parts"), n))
 		}
 	}
 	return a.ready(ctx, rep)
@@ -251,6 +276,9 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 			return rec, nil, nil, "", err
 		}
 		if d := a.drafts[part]; d != nil {
+			if draft == nil || draft.Hash != d.Hash { // approved or drafted again since the card was read
+				return rec, nil, nil, "", Errorf(ExitBlocked, "%s v%d of #%d was drafted again after you read it. Nothing was written for #%d.", ready.Title(part), d.Version, a.n, a.n)
+			}
 			base = d
 		}
 		if base == nil {
@@ -269,7 +297,9 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 		} else if err != nil {
 			return rec, nil, nil, "", err
 		}
-		if drift := ready.Diff(base.Pins, pins); len(drift) > 0 {
+		if drift := ready.Diff(base.Pins, pins); len(drift) > 0 && a.drafts[part] != nil { // a Feature card's draft whose pins moved
+			return rec, nil, nil, "", Errorf(ExitBlocked, "%s Nothing was written for #%d.", baselineChanged(part, a.n), a.n)
+		} else if len(drift) > 0 {
 			ds := make([]string, len(drift))
 			for i, d := range drift {
 				ds[i] = d.String()

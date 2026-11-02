@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -479,9 +480,10 @@ func TestFeatureCard(t *testing.T) {
 }
 
 // Bug #1253 criterion 2: Approve and start on #889's card, after one device
-// code, writes an approval of each part pinned to the hash the card showed,
-// then #889's Approve to build, then its mission start, in that order on the
-// ledger; the session ends with the day it set.
+// code, writes an approval of each part pinned to the hash the card showed
+// and #889's Approve to build in one ledger commit, then its mission start;
+// the session ends with the day it set. The full-screen inbox does the same,
+// and --dry-run plans every step and writes nothing.
 func TestFeatureApproveAndStart(t *testing.T) {
 	m := approveWorld(t)
 	_, items := m.listed(m.person)
@@ -505,16 +507,61 @@ func TestFeatureApproveAndStart(t *testing.T) {
 	if !ok || a.By != "rahulnakmol" || len(a.Baselines) != 3 || p.StartedBy != "rahulnakmol" || p.Lock == nil {
 		t.Fatalf("approval %v %+v, plan started by %q", ok, a, p.StartedBy)
 	}
-	// The ledger has the parts, then Approve to build, then the start: newest first.
+	// The ledger has the parts and Approve to build in one commit, then the start: newest first.
 	log := strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n")
 	log = log[:len(log)-before]
-	parts := slices.Index(log, "specs: 3 baselines of #889, approved by @rahulnakmol")
-	build := slices.IndexFunc(log, func(s string) bool { return strings.HasPrefix(s, "specs: Approve to build of #889, approval 1") })
-	if parts < 0 || build < 0 || build >= parts || build == 0 {
+	build := slices.Index(log, "specs: 3 baselines and Approve to build of #889, approval 1, by @rahulnakmol, and its mission plan")
+	started := slices.Index(log, "missions: @rahulnakmol started the mission of #889 on cursor")
+	if build < 0 || started < 0 || started >= build || slices.ContainsFunc(log, func(s string) bool { return strings.Contains(s, "baselines of #889, approved") }) {
 		t.Fatalf("the ledger's new commits, newest first: %q", log)
 	}
 	if keys, _ := m.listed(m.person); len(keys) != 0 {
 		t.Errorf("after Approve and start the inbox has %v", keys)
+	}
+
+	t.Run("full screen", func(t *testing.T) {
+		m := approveWorld(t)
+		opts := m.opts
+		opts.TUI = func(tm tea.Model) error {
+			im := tm.(*inboxModel)
+			teaDrive(im, im.Init())
+			teaKeys(im, "1", "enter", "enter", "q") // not a recommendation: the second Enter confirms it
+			return nil
+		}
+		m.device("rahulnakmol")
+		code, out, errOut := runIn(t, m.person, opts, "", "inbox", "--repo", "o/r")
+		a, p, ok := m.approvalRecords()
+		if code != 0 || m.codes() != 1 || !ok || a.By != "rahulnakmol" || p.StartedBy != "rahulnakmol" || !strings.Contains(out, "\n"+dayIsSet+"\n  #889 · today MS1: ") {
+			t.Fatalf("full-screen inbox: exit %d, device codes %d, approved %v, started by %q:\n%s%s", code, m.codes(), ok, p.StartedBy, out, errOut)
+		}
+		for _, part := range []string{"intent", "spec", "tech"} {
+			if b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part)); !ok || b.ApprovedBy != "rahulnakmol" {
+				t.Errorf("%s-v1.json: written %v: %+v", part, ok, b)
+			}
+		}
+	})
+	t.Run("dry run", func(t *testing.T) {
+		m := approveWorld(t)
+		n := m.commits()
+		m.device("rahulnakmol")
+		m.g.Reset()
+		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--dry-run", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "--dry-run: the mission start of #889 is planned, not run") || strings.Contains(out, "✗") ||
+			m.commits() != n || slices.ContainsFunc(m.g.Writes(), func(w fake.Request) bool { return !strings.HasPrefix(w.Path, "/login/") }) {
+			t.Fatalf("inbox --dry-run 1 y: exit %d, %s commits (was %s), writes %v:\n%s%s", code, m.commits(), n, m.g.Writes(), out, errOut)
+		}
+	})
+}
+
+// A step that fails after the parts and Approve to build of #889 are on the
+// ledger says they are there, never that nothing changed.
+func TestFeatureApproveFailsAfterTheCommit(t *testing.T) {
+	m := approveWorld(t)
+	m.device("rahulnakmol")
+	m.edit(func() { m.g.Fail = "POST /repos/o/r/issues/889/comments" })
+	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+	if _, _, ok := m.approvalRecords(); code != 0 || !ok || !strings.Contains(out, "Already on GitHub: it approved 3 parts and Approve to build of #889 on the ledger") || strings.Contains(out, "Nothing was changed on GitHub") {
+		t.Fatalf("inbox 1 y, a comment fails: exit %d, approved %v:\n%s%s", code, ok, out, errOut)
 	}
 }
 
@@ -566,6 +613,59 @@ func TestFeatureApprovePinMoved(t *testing.T) {
 		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
 		if code != 0 || m.codes() != 1 || !strings.Contains(out, "✗ "+said+"\n  Nothing was changed on GitHub.\n") {
 			t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+		}
+		nothing(t, m, n)
+	})
+	t.Run("at the check just before the commit", func(t *testing.T) { // the Approve to build run that writes the parts reads every pin once more
+		m := approveWorld(t)
+		m.edit(func() { retitle(m.g) })
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		_, tok, err := e.HumanGitHub(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := e.Ledger(t.Context(), tok, "human", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		drafts, parts := map[string]*ready.Baseline{}, map[string][]byte{}
+		for _, part := range []string{"intent", "spec", "tech"} {
+			d := m.draftOf(part, 1)
+			drafts[part], parts[ready.BaselinePath(889, part, 1, false)] = &d, []byte("{}")
+		}
+		a := &approveRun{e: e, c: c, w: w, r: &ready.Ready{Repo: "o/r", TechnicalOwner: e.technicalOwner(), GH: c}, n: 889, drafts: drafts, parts: parts}
+		if err := a.approve(t.Context()); CodeOf(err) != ExitBlocked || fmt.Sprint(err) != said+" Nothing was written for #889." {
+			t.Fatalf("approve with the spec moved: %v", err)
+		}
+		nothing(t, m, n)
+	})
+	t.Run("its agents moved", func(t *testing.T) { // [build] agents on dev 4 → 20: the Approve to build is not the card's
+		m := approveWorld(t)
+		_, items := m.listed(m.person)
+		commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 20\n")
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		l, err := e.Config()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+		if want := "The Approve to build of #889 changed while you read it: its budget, agents, or milestones. Nothing was written for #889."; CodeOf(err) != ExitBlocked || fmt.Sprint(err) != want || m.codes() != 0 {
+			t.Fatalf("approve and start: %v, device codes %d", err, m.codes())
+		}
+		nothing(t, m, n)
+	})
+	t.Run("the start cannot run here", func(t *testing.T) { // no tool for the repository: nothing is approved either
+		m := approveWorld(t)
+		m.opts.RepoTool = func(context.Context, string) (string, error) { return "", nil }
+		n := m.commits()
+		m.device("rahulnakmol")
+		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || m.codes() != 0 || !strings.Contains(out, "The mission of #889 cannot start here: no entry in [hosts] repos names o/r") {
+			t.Fatalf("inbox 1 y with no tool: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 		}
 		nothing(t, m, n)
 	})
