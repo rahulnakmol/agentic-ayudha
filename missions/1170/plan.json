@@ -2030,6 +2030,15 @@
       "tool": "amp",
       "at": "2026-11-02T09:47:43Z",
       "presence": "none"
+    },
+    {
+      "control": "extend",
+      "by": "rahulnakmol",
+      "at": "2026-11-02T15:18:52Z",
+      "presence": "device-flow",
+      "reason": "MS2 and BUGS still building after the MS1 gate fixes",
+      "mission": 1,
+      "hours": 48
     }
   ],
   "gate_fixes": [
