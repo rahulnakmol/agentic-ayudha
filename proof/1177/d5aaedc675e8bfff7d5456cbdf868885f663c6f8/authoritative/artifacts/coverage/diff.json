@@ -1,0 +1,21 @@
+{
+  "covered": 106,
+  "executable": 113,
+  "percent": 93.80530973451327,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inboxevening.go": [
+      432,
+      433
+    ],
+    "internal/cli/look.go": [
+      155,
+      171,
+      172,
+      177,
+      178
+    ]
+  },
+  "format": "go coverprofile"
+}

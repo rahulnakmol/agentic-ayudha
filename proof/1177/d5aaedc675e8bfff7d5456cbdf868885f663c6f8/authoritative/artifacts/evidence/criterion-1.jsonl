@@ -1,0 +1,16 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven","Output":"=== RUN   TestDayIsProven\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/line_by_line"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/line_by_line","Output":"=== RUN   TestDayIsProven/line_by_line\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/line_by_line","Output":"--- PASS: TestDayIsProven/line_by_line (1.89s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/line_by_line"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/full_screen"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/full_screen","Output":"=== RUN   TestDayIsProven/full_screen\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/full_screen","Output":"--- PASS: TestDayIsProven/full_screen (1.76s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven/full_screen"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven","Output":"--- PASS: TestDayIsProven (3.65s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsProven"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayProvenKeepsUnreadableMilestones"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayProvenKeepsUnreadableMilestones","Output":"=== RUN   TestDayProvenKeepsUnreadableMilestones\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayProvenKeepsUnreadableMilestones","Output":"--- PASS: TestDayProvenKeepsUnreadableMilestones (1.76s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayProvenKeepsUnreadableMilestones"}
