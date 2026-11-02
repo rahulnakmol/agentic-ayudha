@@ -117,9 +117,14 @@ const (
 )
 
 // hostLapsed reports whether st is a host hand-off that got no thread within
-// pickLockTTL, the life of the claim that started it (Bug #1208).
+// pickLockTTL, the life of the claim that started it (Bug #1208): from its
+// mission claim when it has one, which a late hand-off does not extend (Bug
+// #1266).
 func (e *Env) hostLapsed(st delegate.State) bool {
 	at, err := time.Parse(time.RFC3339, st.StartedAt)
+	if claimed, cerr := time.Parse(time.RFC3339, st.ClaimedAt); cerr == nil && claimed.Before(at) {
+		at = claimed
+	}
 	return st.Status == dlgHost && st.Task == "" && (err != nil || e.Now().Sub(at) > pickLockTTL)
 }
 
@@ -701,12 +706,23 @@ func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, 
 	if err := writeHostFile(path, d.brief); err != nil {
 		return Errorf(ExitExternal, "build #%d --delegate amp: the brief for the host was not written: %v", d.story, err)
 	}
+	if d.feature != 0 { // the hand-off lives as long as the mission claim that started it (Bug #1266)
+		claims, err := e.claimLines(ctx, d.w, MissionClaimsPath(d.feature), nil)
+		if err != nil {
+			return err
+		}
+		for _, cl := range claims {
+			if cl.Story == d.story {
+				d.state.ClaimedAt = cl.At
+			}
+		}
+	}
 	title := delegate.AmpTitle(delegate.Handoff{Story: d.story, Title: d.title})
 	d.event(now, dlgHost, "the host creates the thread: "+title)
 	d.fill(res.Delegation)
 	res.Delegation.Host = &HostHandoff{Title: title, Brief: path, Record: fmt.Sprintf("aayu build %d --delegate amp --thread <T-id>", d.story)}
 	res.Next = fmt.Sprintf("create one Amp thread titled %q, with the text of %s as its prompt. Then run `aayu build %d --delegate amp --thread <its T-id>`. "+
-		"After %d minutes with no thread, the hand-off lapses", title, path, d.story, int(pickLockTTL.Minutes()))
+		"With no thread %d minutes after the story's claim, the hand-off lapses", title, path, d.story, int(pickLockTTL.Minutes()))
 	return e.saveDelegation(ctx, d)
 }
 

@@ -174,7 +174,9 @@ func TestMissionShowUnreadableDelegation(t *testing.T) {
 func TestAmpHostThreadNotAmpRefused(t *testing.T) {
 	m := newMissionWorld(t)
 	m.hostHandedOff()
-	for _, bad := range []string{"T-1", "task_e_20", "https://ampcode.com/threads/" + hostThread, hostThread + "0"} {
+	// The last three are as long as an Amp thread ID and use its characters, but are not T- and an 8-4-4-4-12 UUID (Bug #1266).
+	for _, bad := range []string{"T-1", "task_e_20", "https://ampcode.com/threads/" + hostThread, hostThread + "0",
+		"T-" + strings.Repeat("-", 36), "T-" + strings.Repeat("a", 36), "T-01a1c0d-e0000-7000-8000-000000001208"} {
 		n := m.commits()
 		m.g.Reset()
 		code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", bad, "--repo", "o/r")
@@ -254,6 +256,33 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 	// The next build hands #20 off afresh, on a new branch.
 	if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil || !strings.HasSuffix(res.Delegation.Host.Brief, "brief-2.md") || m.state(20).Handoffs != 2 {
 		t.Fatalf("the build after the lapse: %+v, state %+v", res.Delegation, m.state(20))
+	}
+}
+
+// Bug #1266, criterion 1: a host hand-off lives as long as the mission claim
+// that started it. A build that hands #20 off 14 minutes after the claim gets
+// no 15 minutes more: 16 minutes after the claim, mission next releases #20
+// and lists it start.
+func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
+	m := newMissionWorld(t)
+	m.hostMission(20)
+	clk := m.withClock()
+	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+		t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
+	}
+	clk.add(14 * time.Minute)
+	if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil {
+		t.Fatalf("no host hand-off: %+v", res.Delegation)
+	}
+	clk.add(2 * time.Minute)
+	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+		t.Fatalf("mission next 16 minutes after the claim: exit %d: %q%s", code, out, errOut)
+	}
+	if got := m.labels(20); !slices.Contains(got, "status:ready") || slices.Contains(got, "status:in-progress") || slices.Contains(got, LeaseLabel) {
+		t.Fatalf("#20's labels after the lapse: %v", got)
+	}
+	if st := m.state(20); st.Status != dlgLapsed || st.Task != "" {
+		t.Fatalf("delegate/20/state.json after the lapse: %+v", st)
 	}
 }
 

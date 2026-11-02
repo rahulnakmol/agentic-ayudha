@@ -255,7 +255,7 @@ type AmpCLI struct {
 	Env     []string
 }
 
-var ampThread = regexp.MustCompile(`https://ampcode\.com/threads/(T-[0-9a-f-]{36})`)
+var ampThread = regexp.MustCompile(`https://ampcode\.com/threads/(T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`)
 
 // AmpTitle is the title of the Amp thread of hand-off h: the CLI's, and the
 // one a host hand-off asks the host to give the thread it creates (Bug #1208).
