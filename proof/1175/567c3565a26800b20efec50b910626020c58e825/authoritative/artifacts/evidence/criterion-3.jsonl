@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart","Output":"=== RUN   TestDayNotSetBeforeStart\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/quit"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/quit","Output":"=== RUN   TestDayNotSetBeforeStart/quit\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/quit","Output":"--- PASS: TestDayNotSetBeforeStart/quit (2.88s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/quit"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/not_now"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/not_now","Output":"=== RUN   TestDayNotSetBeforeStart/not_now\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/not_now","Output":"--- PASS: TestDayNotSetBeforeStart/not_now (2.87s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart/not_now"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart","Output":"--- PASS: TestDayNotSetBeforeStart (5.75s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayNotSetBeforeStart"}
