@@ -537,14 +537,15 @@ func (e *Env) eveningAct(ctx context.Context, c *github.Client, repo, login stri
 }
 
 // withoutAccept is the evening card as `aayu inbox --list` shows it: with no
-// accept, which only a person gives, in `aayu inbox`.
+// accept, which only a person gives, in `aayu inbox`. An Overnight card shows
+// no approval there either (Story #1178).
 func withoutAccept(it InboxItem) InboxItem {
-	if it.Kind != InboxEvening {
+	if it.Kind != InboxEvening && it.Kind != InboxOvernight {
 		return it
 	}
 	var opts []InboxAction
 	for _, o := range it.Options {
-		if o.Command != eveningAccept {
+		if o.Command != eveningAccept && o.Command != overnightApprove {
 			opts = append(opts, o)
 		}
 	}

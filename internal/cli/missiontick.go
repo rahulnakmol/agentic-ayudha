@@ -74,7 +74,9 @@ type TickReport struct {
 	Held   []TickHeld `json:"held"`   // started missions whose Kanha it did not wake, each with why
 	Synced []TickSync `json:"synced"` // the cloud delegations it synced
 	Ship   []LoopItem `json:"ship"`   // the synced pull requests at merge-ready, for `aayu ship`
-	DryRun bool       `json:"dry_run,omitempty"`
+	// Overnight are the runs of the overnight plans a person set that the tick started, measured, or stopped (Story #1178).
+	Overnight []TickOvernight `json:"overnight,omitempty"`
+	DryRun    bool            `json:"dry_run,omitempty"`
 }
 
 // TickWake is one Kanha the tick woke.
@@ -122,6 +124,9 @@ func missionTick(ctx context.Context, e *Env) error {
 		}
 	}
 	e.tickSync(ctx, c, w, repo, states, &rep)
+	if err := e.tickOvernight(ctx, w, c.DryRun(), &rep); err != nil { // shown, never skipped silently: no run of it starts
+		rep.Overnight = append(rep.Overnight, TickOvernight{Action: "unreadable", Detail: oneLineErr(err)})
+	}
 	return e.Emit(rep, func(w io.Writer) error {
 		for _, k := range rep.Woken {
 			fmt.Fprintf(w, "woke the Kanha of #%d (%s): %s\n", k.Feature, k.Status, k.Event)
@@ -135,7 +140,19 @@ func missionTick(ctx context.Context, e *Env) error {
 		for _, p := range rep.Ship {
 			fmt.Fprintf(w, "ship PR #%d (#%d): run aayu ship %d\n", p.PR, p.Story, p.PR)
 		}
-		if len(rep.Woken)+len(rep.Held)+len(rep.Synced) == 0 {
+		for _, o := range rep.Overnight {
+			switch o.Action {
+			case "start":
+				fmt.Fprintf(w, "overnight %s: start %s: %s, %s\n", o.Date, o.Run, o.Does, o.Detail)
+			case "stop":
+				fmt.Fprintf(w, "overnight %s: stopped %s at %s\n", o.Date, o.Run, o.Detail)
+			case "unreadable":
+				fmt.Fprintf(w, "overnight: unreadable, nothing starts: %s\n", o.Detail)
+			default:
+				fmt.Fprintf(w, "overnight %s: %s runs: %s\n", o.Date, o.Run, o.Detail)
+			}
+		}
+		if len(rep.Woken)+len(rep.Held)+len(rep.Synced)+len(rep.Overnight) == 0 {
 			fmt.Fprintln(w, "nothing to wake or sync: no mission runs and no cloud pull request is open")
 		}
 		return nil
