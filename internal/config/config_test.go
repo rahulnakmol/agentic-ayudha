@@ -658,7 +658,7 @@ func TestMissionKeysDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Mission{MaxNoGo: 3, RetryMax: 2, RetryBackoffMinutes: 10, CheckMinutes: 5, WarnHours: 24, MaxHours: 48}); l.Config.Build.Agents != 5 || l.Config.Mission != want {
+	if want := (Mission{MaxNoGo: 3, RetryMax: 2, RetryBackoffMinutes: 10, CheckMinutes: 5, WarnHours: 24, MaxHours: 48, ExtendWindowHours: 6}); l.Config.Build.Agents != 5 || l.Config.Mission != want {
 		t.Fatalf("defaults: [build] agents %d, [mission] %+v", l.Config.Build.Agents, l.Config.Mission)
 	}
 }

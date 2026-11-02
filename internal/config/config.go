@@ -119,6 +119,7 @@ type Mission struct {
 	CheckMinutes        int `koanf:"check_minutes" jsonschema:"minimum=1" jsonschema_description:"Minutes between a local Kanha's checks of its missions."`
 	WarnHours           int `koanf:"warn_hours" jsonschema:"minimum=1" jsonschema_description:"Working hours of a mission's estimate past which Approve to build warns."`
 	MaxHours            int `koanf:"max_hours" jsonschema:"minimum=1" jsonschema_description:"Working hours a mission may use before it starts no new story until a person extends it; running stories finish."`
+	ExtendWindowHours   int `koanf:"extend_window_hours" jsonschema:"minimum=0" jsonschema_description:"Working hours before a mission's time limit in which a person may already extend it; the extension counts from the limit. 0: only at the limit. A value above max_hours counts as max_hours."`
 }
 
 // Delegate is [delegate] (WP5.5b).
