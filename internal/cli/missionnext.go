@@ -127,7 +127,7 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err != nil {
 		return err
 	}
-	warn, maxH := missionLimits(&l.Config)
+	_, maxH := missionLimits(&l.Config)
 	clocks, err := e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
 	if err != nil {
 		return err
@@ -135,11 +135,15 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.recordWorking(ctx, c, w, f, clocks); err != nil {
 		return err
 	}
-	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity); err != nil {
-		return err
-	}
 	subs, err := featureItems(ctx, c, repo, f, "story", "bug") // in sub-issue order: the slice order
 	if err != nil {
+		return err
+	}
+	open := map[int]bool{}
+	for _, si := range subs {
+		open[si.GetNumber()] = si.GetState() == "open"
+	}
+	if err := e.missionCards(ctx, c, repo, f, plan, clocks, open, l.Config.Mission, l.Config.Identity); err != nil {
 		return err
 	}
 	list := WorkList{Schema: WorkSchema, Scope: WorkScope{Kind: "feature", ID: strconv.Itoa(f)}, Items: []WorkListItem{}}

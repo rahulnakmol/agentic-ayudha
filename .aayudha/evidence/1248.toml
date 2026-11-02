@@ -1,0 +1,21 @@
+# Which tests prove Bug #1248's Completion Goal.
+
+[[criterion]]
+id = 1 # at 45 h of 48 with a 6 h window: extend asks for the device code, records the control, and the next limit is 96 h
+tests = ["./internal/cli:TestExtendInWindow"]
+
+[[criterion]]
+id = 2 # at 30 h of 48: extend refuses and names when the window opens
+tests = ["./internal/cli:TestExtendInWindow", "./internal/cli:TestMissionTimeRefusals"]
+
+[[criterion]]
+id = 3 # at 48 h or more: extend works as before
+tests = ["./internal/cli:TestMissionExtend", "./internal/cli:TestMissionCardsInInbox"]
+
+[[criterion]]
+id = 4 # in the window the inbox shows an Extend card with the hours used, what runs and waits, and the command; none outside it
+tests = ["./internal/cli:TestExtendInWindow"]
+
+[[criterion]]
+id = 5 # an agent lane's extend is refused
+tests = ["./internal/cli:TestExtendInWindow", "./internal/cli:TestMissionExtend"]
