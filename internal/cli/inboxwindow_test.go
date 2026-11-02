@@ -45,7 +45,7 @@ func TestWindowInboxHoldsEveryRequest(t *testing.T) {
 	m.edit(func() {
 		m.g.Issues[910].Comments = append(m.g.Issues[910].Comments,
 			by(&fake.Comment{ID: 9101, Body: missionCard(1, "limit", 48, 48, "limit")}),
-			by(&fake.Comment{ID: 9102, Body: MissionAskMarker + mustJSON(t, startsAsk(910, 660, 60)) + " -->\n**budget**\n"}))
+			by(&fake.Comment{ID: 9102, Body: MissionAskMarker + mustJSON(t, startsAsk(910, 660, 60, 720)) + " -->\n**budget**\n"}))
 		m.g.Issues[ready.Number].Comments = append(m.g.Issues[ready.Number].Comments, by(&fake.Comment{ID: 9103, Body: ReadyToShipMarker + " head=" + sha("1") + " -->\n**Ready to ship**"}))
 		m.g.Issues[review.Number].Comments = append(m.g.Issues[review.Number].Comments, gateComment(9104, inspect.Marker+"\n<!-- aayudha:inspect-state "+string(human)+" -->\n"))
 		m.g.Issues[finding.Number].Comments = append(m.g.Issues[finding.Number].Comments, gateComment(9105, inspect.Marker+"\n<!-- aayudha:inspect-state "+string(p1)+" -->\n"))

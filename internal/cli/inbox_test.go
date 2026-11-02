@@ -565,6 +565,16 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	}
 	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"rahulnakmol\"\n"
 	g.Mu.Unlock()
+	// Outside a person's window, ship comments nothing and says when the window opens (Story #1254, Goldfish round 1).
+	windowed, outside := maps.Clone(agent), opts
+	windowed[windowsKey] = defaultWindows
+	outside.Now = func() time.Time { return time.Date(2026, 10, 22, 13, 0, 0, 0, time.UTC) } // 14:00 London: between the windows
+	g.Reset()
+	if code, _, errOut := run(t, windowed, outside, "ship", strconv.Itoa(prA), "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "its Ready to ship comment for @rahulnakmol asks a person to act") || !strings.Contains(errOut, "it waits for the window at Thu 22 Oct 18:30 BST") ||
+		len(g.Writes()) != 0 {
+		t.Fatalf("agent ship #%d outside a window: %d %s", prA, code, errOut)
+	}
 	for _, pr := range []int{prA, prB} {
 		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
 		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {

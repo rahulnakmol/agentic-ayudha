@@ -416,6 +416,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 				review = fmt.Sprintf(", or posts a comment starting %q that names the head and runs `aayu ship %d --solo-bypass`", SoloBypassPrefix, n)
 				bypass = review
 			}
+			if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window (Story #1254)
+				return e.waitsForWindow(fmt.Sprintf("%s; its Ready to ship comment for %s", refusal, who), next)
+			}
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
 				"%s ships it from `aayu inbox`%s.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), review)
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {

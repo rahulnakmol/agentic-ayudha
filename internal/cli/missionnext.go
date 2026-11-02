@@ -135,10 +135,6 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.recordWorking(ctx, c, w, f, clocks); err != nil {
 		return err
 	}
-	// Inside a person's window, the requests queued since the last one go out first, as one message (Story #1254).
-	if !c.DryRun() {
-		e.flushRequests(ctx)
-	}
 	win, _ := l.Config.PersonWindows() // a config that loaded has windows (config.Validate)
 	if err := e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, true); err != nil {
 		return err
@@ -152,6 +148,9 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 		return err
 	}
 	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun() || e.keepEvents) // after the list and its claims: the cursor moves only now
+	if !c.DryRun() {                                                       // in a person's window, after its cards are shown: the window's one message (Story #1254)
+		e.windowMessage(ctx, w)
+	}
 	return emitWorkList(e, list)
 }
 
@@ -355,8 +354,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 	if err != nil {
 		return err
 	}
-	win, _ := l.Config.PersonWindows() // a config that loaded has windows (config.Validate)
-	budget := &budgetCard{e: e, c: c, repo: repo, f: f, budget: plan.Budget, per: per, win: win, now: now, preview: !claim || c.DryRun()}
+	win, _ := l.Config.PersonWindows()                                                                                          // a config that loaded has windows (config.Validate)
+	budget := &budgetCard{e: e, c: c, repo: repo, f: f, budget: plan.Budget, per: per, win: win, now: now, preview: c.DryRun()} // the tick's list claims nothing, and shows a due card too
 	for i := range entries {
 		en := &entries[i]
 		if !en.free {
@@ -403,8 +402,11 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason, busy[lost] = "no free agent", true
 		}
 	}
+	// The starts this run claimed stand whatever becomes of the card: a card that cannot be shown now is asked
+	// again on the next run.
+	budget.spent = spent
 	if err := budget.ask(ctx); err != nil {
-		return err
+		fmt.Fprintf(e.Err, "aayu: the budget card of #%d was not shown (%v); the next run asks again\n", f, oneLineErr(err))
 	}
 	for _, en := range entries {
 		if en.item.Reason == "no free agent" {

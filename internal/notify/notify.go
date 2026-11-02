@@ -17,6 +17,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -97,7 +98,21 @@ func (s *Sender) save(st state) error {
 	if err := os.MkdirAll(filepath.Dir(s.State), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(s.State, b, 0o644)
+	// Write and rename: a reader never sees half a queue of waiting requests.
+	tmp, err := os.CreateTemp(filepath.Dir(s.State), ".notify-*.json")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), s.State)
 }
 
 func (s *Sender) dayKey(key string, t time.Time) string {
@@ -129,9 +144,17 @@ func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 		return Deduped, nil
 	}
 	for _, q := range st.Pending {
-		if q.Key == p.Key {
+		if q.Key != p.Key {
+			continue
+		}
+		if !s.open(now) {
 			return Deduped, nil
 		}
+		// In a window, the same request asked again sends what waited, itself once among them.
+		if _, _, err := s.flush(ctx, &st, now); err != nil {
+			return "", err
+		}
+		return Sent, s.save(st)
 	}
 	if !p.Urgent && !s.open(now) {
 		st.Pending = append(st.Pending, p)
@@ -171,6 +194,37 @@ func (s *Sender) Flush(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return n, s.save(st)
+}
+
+// Window sends, inside a person's window, one message under key that lists
+// items (what waits for the person now) and then every page that waited for
+// the window, and reports how many it listed. Outside a window, or with
+// nothing to list, it sends nothing.
+func (s *Sender) Window(ctx context.Context, key string, items []Page) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	if !s.open(now) {
+		return 0, nil
+	}
+	st, err := s.load()
+	if err != nil {
+		return 0, err
+	}
+	all := append(slices.Clone(items), st.Pending...)
+	if len(all) == 0 {
+		return 0, nil
+	}
+	msg := WindowMessage(all, now)
+	msg.Key = key
+	if _, err := s.deliver(ctx, msg); err != nil {
+		return 0, err
+	}
+	for _, p := range st.Pending {
+		st.Sent[s.dayKey(p.Key, now)] = now
+	}
+	st.Pending = nil
+	return len(all), s.save(st)
 }
 
 // flush delivers st's waiting pages as one message, and on success marks

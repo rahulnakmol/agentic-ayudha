@@ -116,15 +116,15 @@ func missionTick(ctx context.Context, e *Env) error {
 		return err
 	}
 	rep := TickReport{Repo: repo, Woken: []TickWake{}, Held: []TickHeld{}, Synced: []TickSync{}, Ship: []LoopItem{}, DryRun: c.DryRun()}
-	if !rep.DryRun { // inside a person's window, the requests queued since the last one go out as one message (Story #1254)
-		e.flushRequests(ctx)
-	}
 	for _, f := range features {
 		if why := e.tickMission(ctx, c, w, repo, f, states, &rep); why != "" {
 			rep.Held = append(rep.Held, TickHeld{Feature: f, Why: why})
 		}
 	}
 	e.tickSync(ctx, c, w, repo, states, &rep)
+	if !rep.DryRun { // in a person's window, after the cards that came due are shown: the window's one message (Story #1254)
+		e.windowMessage(ctx, w)
+	}
 	return e.Emit(rep, func(w io.Writer) error {
 		for _, k := range rep.Woken {
 			fmt.Fprintf(w, "woke the Kanha of #%d (%s): %s\n", k.Feature, k.Status, k.Event)
@@ -199,6 +199,21 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	case appr.Parent.Mode == "local":
 		return fmt.Sprintf("its Kanha is local, on %s, and takes events at its own next check (#1012)", appr.Parent.Machine)
 	}
+	// In a person's window the tick shows each due time card itself, before it decides whether to wake the Kanha,
+	// so the card is in the inbox even when no story can start (Story #1254).
+	l, err := e.Config()
+	if err != nil {
+		return "unreadable: " + oneLineErr(err)
+	}
+	warn, maxH := missionLimits(&l.Config)
+	clocks, err := e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
+	if err == nil {
+		win, _ := l.Config.PersonWindows()
+		err = e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, true)
+	}
+	if err != nil {
+		return "unreadable: " + oneLineErr(err)
+	}
 	now := e.Now()
 	told := lastTold(f, plan, appr, states)
 	due := dueRetries(plan, told, now)
@@ -212,15 +227,7 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	list := WorkList{}
 	if err == nil {
 		var subs []*gh.Issue
-		var clocks []MissionClock // a story past its mission's time limit cannot start, so it wakes nobody (Story #1015)
-		var l *config.Loaded
-		if l, err = e.Config(); err == nil {
-			warn, maxH := missionLimits(&l.Config)
-			if clocks, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity); err == nil {
-				win, _ := l.Config.PersonWindows()
-				err = e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, false) // reads when a hold starts; posts nothing
-			}
-		}
+		// clocks above: a story past its mission's time limit and a window's end cannot start, so it wakes nobody (Story #1015)
 		if err == nil {
 			if subs, err = featureItems(ctx, c, repo, f, "story", "bug"); err == nil {
 				err = e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, false)
@@ -278,7 +285,7 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	case !ok:
 		return held
 	}
-	l, _ := e.Config() // loaded and checked by the GitHub client
+	// l: loaded above
 	ad := e.receiverAdapter(l.Config.Delegate, p.Host, c, repo, config.RepoRoot(e.Dir))
 	log, err := e.Actions()
 	if err == nil {

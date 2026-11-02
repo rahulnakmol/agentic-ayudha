@@ -716,8 +716,8 @@ func trustedBy(ctx context.Context, c *github.Client, owner, name string, id con
 
 // missionCards posts each mission's time card once, inside a person's window
 // (Story #1254): when its clock reaches warn_hours, and when it reaches its
-// limit. Outside a window the card waits for the next one, and the request is
-// queued for that window's one message. A card a person saw, or an extension,
+// limit. Outside a window the card waits for the next one: the clock gives it
+// again then, and the window's one message lists it. A card a person saw, or an extension,
 // is not posted again until the next limit. It sets each limited clock's
 // heldFrom: the end of the window its limit card was shown in. With post
 // false (a preview, or a dry run) it posts and queues nothing, and a card it
@@ -753,30 +753,32 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 		if state == "limit" {
 			hours = mc.Limit
 		}
-		posted, shown := false, time.Time{}
+		posted, shown, newest := false, time.Time{}, time.Time{}
 		for _, cm := range comments {
 			// A warning only when the mission has no card yet, and a limit card once per limit; only a card by an
-			// account with write access counts, as the inbox reads it.
+			// account with write access counts, and the newest written card is the mission's state, as the inbox
+			// reads it (missionItem): another account's older card never overrides it.
 			mm := missionTimeRE.FindStringSubmatch(cm.GetBody())
 			if mm == nil || mm[1] != strconv.Itoa(mc.Mission) {
+				continue
+			}
+			at := cmp.Or(cm.GetUpdatedAt().Time, cm.GetCreatedAt().Time)
+			if at.Before(newest) {
 				continue
 			}
 			if ok, err := trustedBy(ctx, c, owner, name, id, cm.GetUser()); err != nil {
 				return Wrap(ExitExternal, err)
 			} else if ok {
-				posted = state == "warn" || mm[2] == "limit" && mm[3] == hrs(hours)
+				newest = at
+				posted, shown = state == "warn" || mm[2] == "limit" && mm[3] == hrs(hours), time.Time{}
 				if posted && state == "limit" { // the limit card was shown when it was written
-					shown = cmp.Or(cm.GetUpdatedAt().Time, cm.GetCreatedAt().Time)
+					shown = at
 				}
 			}
 		}
 		switch {
 		case posted:
-		case !win.Within(now): // it waits for the next window, queued for its one message
-			if post {
-				e.askLater(ctx, fmt.Sprintf("mission-time:%s#%d/%d:%s:%s", repo, f, mc.Mission, state, hrs(hours)), fmt.Sprintf("#%d: mission %d's time card (%s h, %s)", f, mc.Mission, hrs(hours), state),
-					fmt.Sprintf("The card waits in aayu inbox from %s: %s", win.Next(now).Format("Mon 2 Jan 15:04 MST"), strings.ReplaceAll(line, "**", "")))
-			}
+		case !win.Within(now): // it waits for the next window, whose first run shows it and lists it in the window's message
 			continue
 		case !post:
 			shown = now

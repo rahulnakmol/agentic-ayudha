@@ -500,10 +500,10 @@ func TestInstallLoopsWritesHourlyTick(t *testing.T) {
 	tickPrompt := []string{"Run `AAYU_AGENT=1 aayu mission tick`.", "Never build, claim, or start a story in this run", "never run `aayu build` or `aayu mission next` yourself",
 		"Never pass --solo-bypass or --admin"}
 	for host, want := range map[string][]string{
-		"amp":    {"loops/amp/build-ready.json", "RRULE:FREQ=HOURLY;BYMINUTE=0", "Every hour at :00"},
-		"cursor": {"loops/cursor/aayudha-loops.tf", "# build-ready: Every hour at :00", `trigger = [` + "\n" + `    { cron = { schedule = "0 * * * *" } },` + "\n" + `  ]`},
-		"claude": {"loops/claude/routines.md", "on the cron schedule `0 * * * *` in the time zone Europe/London"},
-		"codex":  {"loops/codex/scheduled-tasks.md", "with the custom schedule RRULE:FREQ=HOURLY;BYMINUTE=0 in the time zone Europe/London"},
+		"amp":    {"loops/amp/build-ready.json", "RRULE:FREQ=HOURLY;BYMINUTE=30", "Every hour at :30"},
+		"cursor": {"loops/cursor/aayudha-loops.tf", "# build-ready: Every hour at :30", `trigger = [` + "\n" + `    { cron = { schedule = "30 * * * *" } },` + "\n" + `  ]`},
+		"claude": {"loops/claude/routines.md", "on the cron schedule `30 * * * *` in the time zone Europe/London"},
+		"codex":  {"loops/codex/scheduled-tasks.md", "with the custom schedule RRULE:FREQ=HOURLY;BYMINUTE=30 in the time zone Europe/London"},
 	} {
 		code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", host, "--json")
 		var r loopsReport

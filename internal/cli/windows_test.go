@@ -71,14 +71,15 @@ func TestRequestsWaitForAWindow(t *testing.T) {
 	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 {
 		t.Fatalf("the tick at 10:30: exit %d: %s%s", code, out, errOut)
 	}
-	if len(sink.Pages) != 1 || sink.Pages[0].Subject != "aayudha: 2 requests for your window" ||
-		!strings.Contains(sink.Pages[0].Body, "1. #889: mission 1's time card (48 h, limit)") || !strings.Contains(sink.Pages[0].Body, "2. #5 waits for your approval\n   1. Accepts option 1 (A) of Decision #5") {
+	// The message is the inbox, from GitHub and the ledger, then the requests that waited in this checkout.
+	if len(sink.Pages) != 1 || sink.Pages[0].Subject != "aayudha: 3 requests for your window" ||
+		!strings.Contains(sink.Pages[0].Body, "1. Decision #5: Choose the rules engine\n") ||
+		!strings.Contains(sink.Pages[0].Body, "2. Mission time #889: #889 reached its 48 h time limit\n") ||
+		!strings.Contains(sink.Pages[0].Body, "3. #5 waits for your approval\n   1. Accepts option 1 (A) of Decision #5") {
 		t.Fatalf("the window's one message: %+v", sink.Pages)
 	}
-	if code, _, errOut := m.next(889); code != 0 || m.timeComments(889) != 1 || len(sink.Pages) != 1 {
-		t.Fatalf("mission next in the window: exit %d, %d time cards, %d messages: %s", code, m.timeComments(889), len(sink.Pages), errOut)
-	}
-	if keys, _ := m.listed(m.person); !slices.Contains(keys, "decision#5") || !slices.Contains(keys, "mission-time#889") {
-		t.Fatalf("the window's inbox: %v", keys)
+	// The tick itself shows the time card: it is in the window's inbox with no mission next (Goldfish round 1, finding 4).
+	if keys, _ := m.listed(m.person); m.timeComments(889) != 1 || !slices.Contains(keys, "decision#5") || !slices.Contains(keys, "mission-time#889") {
+		t.Fatalf("the window's inbox after the tick: %d time cards, %v", m.timeComments(889), keys)
 	}
 }

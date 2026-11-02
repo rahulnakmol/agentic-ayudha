@@ -248,3 +248,13 @@ func (w Windows) End(t time.Time) time.Time {
 	_, end := w.window(t)
 	return end
 }
+
+// Start is the start of the window t is in, else of the next window. With no
+// windows it is t.
+func (w Windows) Start(t time.Time) time.Time {
+	if len(w.Spans) == 0 {
+		return t
+	}
+	start, _ := w.window(t)
+	return start
+}

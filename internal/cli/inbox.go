@@ -1866,17 +1866,15 @@ const inboxHow = "A person acts on these, never an agent. In a terminal in this 
 // phone gets about a screen, under 60 lines, and the rest is a count.
 const inboxListCardLines, inboxListLines = 44, 6
 
-// listInbox is `aayu inbox --list`: the inbox, read-only, as the same cards
-// in Markdown for a chat, or as JSON. It writes nothing and asks for
-// nothing, so an agent may run it and show it; acting on it stays a person's.
-func (e *Env) listInbox(ctx context.Context) error {
+// inboxItems is every card of the repository's inbox, as --list reads it.
+func (e *Env) inboxItems(ctx context.Context) (string, []InboxItem, error) {
 	repo, err := e.RepoName(ctx)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 	c, _, err := e.HumanGitHub(ctx)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 	var id config.Identity
 	if l, err := e.Config(); err == nil {
@@ -1886,7 +1884,18 @@ func (e *Env) listInbox(ctx context.Context) error {
 	src.pendingAudits, src.missions, src.baselines, src.evening = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories
 	items, err := src.gather(ctx)
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return "", nil, Wrap(ExitExternal, err)
+	}
+	return repo, items, nil
+}
+
+// listInbox is `aayu inbox --list`: the inbox, read-only, as the same cards
+// in Markdown for a chat, or as JSON. It writes nothing and asks for
+// nothing, so an agent may run it and show it; acting on it stays a person's.
+func (e *Env) listInbox(ctx context.Context) error {
+	repo, items, err := e.inboxItems(ctx)
+	if err != nil {
+		return err
 	}
 	if e.agentSignal() != "" { // an agent lane reads a baseline or Approve to build card and never approves it (Stories #1172, #1173)
 		for i := range items {

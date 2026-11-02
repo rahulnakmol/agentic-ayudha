@@ -90,10 +90,12 @@ func budgetAsk(f, n int, budget float64, used SourcedNumber, est float64, fixes 
 func startsAskID(budget float64) string { return "starts-" + usd(budget) }
 
 // startsAsk is the budget card of Feature f's mission, whose next story, at
-// its per-story cap, would pass budget: raise it, or stop the mission. It
-// gives no recommendation, and says the same on every run.
-func startsAsk(f int, budget, per float64) missionAsk {
-	raise := math.Ceil((budget+per)/10) * 10
+// its per-story cap, would pass budget: raise it, or stop the mission. The
+// raise it offers covers what the mission committed when the card is shown
+// (spent, which may pass budget after starts outside a window) and one more
+// story. It gives no recommendation.
+func startsAsk(f int, budget, per, spent float64) missionAsk {
+	raise := math.Ceil((max(budget, spent)+per)/10) * 10
 	return missionAsk{ID: startsAskID(budget), Title: fmt.Sprintf("#%d's next story would pass its %s budget", f, ready.USD(budget)),
 		Why: fmt.Sprintf("Each story counts at its %s cap, so the next start would pass the approved budget of #%d's mission. "+
 			"Outside your windows stories still start; from the end of the window this card is shown in, new starts wait for you. Running stories keep going.",
@@ -116,9 +118,10 @@ type budgetCard struct {
 	f       int
 	budget  float64
 	per     float64
+	spent   float64 // what the mission committed after this run's starts
 	win     config.Windows
 	now     time.Time
-	preview bool      // a list that claims nothing, or a dry run: it posts and queues nothing
+	preview bool      // a dry run: it posts and queues nothing
 	over    bool      // a story that could start would pass the budget
 	read    bool      // the Feature's open asks were read
 	shown   time.Time // when its open card was shown; zero when none is open
@@ -154,24 +157,21 @@ func (b *budgetCard) holds(ctx context.Context) (bool, error) {
 	return !b.now.Before(b.win.End(shown)), nil
 }
 
-// ask shows the budget card once a story would pass the budget: inside a
-// window on the Feature, for the inbox; outside one, queued for the next
-// window's one message, and posted by the first run inside it.
+// ask shows the budget card once a story would pass the budget, inside a
+// window, on the Feature, for the inbox. Outside one it waits: the first run
+// in the next window shows it, and the window's one message lists it.
 func (b *budgetCard) ask(ctx context.Context) error {
-	if !b.over || b.preview || !b.shown.IsZero() {
+	if !b.over || b.preview || !b.shown.IsZero() || !b.win.Within(b.now) {
 		return nil
 	}
-	a := startsAsk(b.f, b.budget, b.per)
-	if b.win.Within(b.now) {
-		return b.e.postAsk(ctx, b.c, b.repo, b.f, a)
-	}
-	b.e.askLater(ctx, fmt.Sprintf("mission-budget:%s#%d:%s", b.repo, b.f, usd(b.budget)), a.Title,
-		fmt.Sprintf("The card waits in aayu inbox from %s. %s", b.win.Next(b.now).Format("Mon 2 Jan 15:04 MST"), a.Why))
-	return nil
+	return b.e.postAsk(ctx, b.c, b.repo, b.f, startsAsk(b.f, b.budget, b.per, b.spent))
 }
 
 // postAsk posts ask on Feature f, unless an open ask of its ID says the same.
 func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
+	if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window (Story #1254)
+		return e.waitsForWindow(fmt.Sprintf("%q on #%d", a.Title, f), next)
+	}
 	owner, name, _ := github.SplitRepo(repo)
 	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))
 	if err != nil {

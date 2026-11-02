@@ -66,4 +66,13 @@ func TestPagesWaitForAWindow(t *testing.T) {
 		!strings.Contains(sink.Pages[2].Body, "1. first\n") || !strings.Contains(sink.Pages[2].Body, "2. second\n") {
 		t.Fatalf("a request in a window with one waiting: %q, %v, sent %+v", st, err, sink.Pages)
 	}
+	// The same request asked again in the window sends what waited, itself once among them.
+	now = time.Date(2026, 11, 3, 12, 0, 0, 0, w.Loc)
+	_, _ = s.Page(ctx, Page{Key: "c", Subject: "third"})
+	_, _ = s.Page(ctx, Page{Key: "d", Subject: "fourth"})
+	now = time.Date(2026, 11, 3, 18, 31, 0, 0, w.Loc)
+	if st, err := s.Page(ctx, Page{Key: "c", Subject: "third"}); err != nil || st != Sent || len(sink.Pages) != 4 ||
+		!strings.Contains(sink.Pages[3].Body, "1. third\n") || !strings.Contains(sink.Pages[3].Body, "2. fourth\n") || strings.Count(sink.Pages[3].Body, "third") != 1 {
+		t.Fatalf("a waiting request asked again in a window: %q, %v, sent %+v", st, err, sink.Pages)
+	}
 }
