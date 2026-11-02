@@ -1,0 +1,21 @@
+{
+  "story": 1250,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1250-builders-iterate-on-a-draft-pr-locally-a",
+  "status": "host-handoff",
+  "brief_sha256": "ffead30318c93471226c64f007626670fa49fdc6295790559be9b2a6dd062198",
+  "started_at": "2026-11-02T17:48:28Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-02T17:48:28Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1250: Builders iterate on a draft PR locally, and GitHub runs CI, the merge gate, and the paid review once the PR is ready"
+    }
+  ]
+}
