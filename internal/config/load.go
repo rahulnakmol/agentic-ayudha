@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -178,7 +179,7 @@ func Load(src Sources) (*Loaded, error) {
 		if name == LayerRepo || name == LayerLocal {
 			for _, p := range k.MapKeys("integrations") {
 				if u := k.String("integrations." + p + ".url"); u != "" && !providerHost(p, u) {
-					errs = append(errs, fmt.Errorf("%s: [integrations.%s] url = %q: a checkout names only the provider's cloud host; any other url is read only from the user config, AAYU_INTEGRATIONS__%s__URL, or --set", source, p, u, strings.ToUpper(p)))
+					errs = append(errs, fmt.Errorf("%s: [integrations.%s] url: a checkout names only the provider's cloud host; any other url is read only from the user config, AAYU_INTEGRATIONS__%s__URL, or --set. %s", source, p, strings.ToUpper(p), notShown))
 					return
 				}
 			}
@@ -243,7 +244,11 @@ func Load(src Sources) (*Loaded, error) {
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			add(LayerFlag, "--set "+strings.Join(src.Sets, " --set "), m)
+			keys := make([]string, len(src.Sets)) // keys only: a --set value can be a secret (Bug #1198)
+			for i, s := range src.Sets {
+				keys[i], _, _ = strings.Cut(s, "=")
+			}
+			add(LayerFlag, "--set "+strings.Join(keys, " --set "), m)
 		}
 	}
 	if len(errs) > 0 {
@@ -265,7 +270,7 @@ func Load(src Sources) (*Loaded, error) {
 			}
 		}
 		if approved == "" || strings.TrimRight(env.URL, "/") != strings.TrimRight(approved, "/") {
-			return nil, fmt.Errorf("[verify.environments.%s] url %q: active_scan = true approves only the url .aayudha/config.toml, a protected path, names (%q); set the url there, or drop active_scan", name, env.URL, approved)
+			return nil, fmt.Errorf("[verify.environments.%s] url: active_scan = true approves only the url .aayudha/config.toml, a protected path, names, and this url is another; set the url there, or drop active_scan. %s", name, notShown)
 		}
 	}
 	if err := l.Config.Validate(); err != nil {
@@ -402,12 +407,28 @@ func envMap(environ []string) (map[string]any, []string) {
 	return unflatten(flat), names
 }
 
+// sections are Config's top-level keys. A --set key starts with one, so a
+// pasted token (a JWT, a base64 or hex key) is refused by position, never
+// shown (Bug #1198). Below the section a map key may hold any character, as
+// it may from an AAYU_ variable.
+var sections = func() map[string]bool {
+	m := map[string]bool{}
+	t := reflect.TypeFor[Config]()
+	for i := range t.NumField() {
+		if k, _, _ := strings.Cut(t.Field(i).Tag.Get("koanf"), ","); k != "" {
+			m[k] = true
+		}
+	}
+	return m
+}()
+
 func setMap(sets []string) (map[string]any, error) {
 	flat := map[string]any{}
-	for _, s := range sets {
+	for i, s := range sets {
 		key, value, ok := strings.Cut(s, "=")
-		if !ok || key == "" {
-			return nil, fmt.Errorf("--set %q: want key=value, e.g. budget.per_day_usd=20", s)
+		section, rest, dotted := strings.Cut(key, ".")
+		if !ok || key != "version" && (!dotted || rest == "" || !sections[section]) {
+			return nil, fmt.Errorf("--set entry %d: want key=value, e.g. budget.per_day_usd=20", i+1)
 		}
 		flat[key] = value
 	}
