@@ -1300,12 +1300,19 @@ func TestCIRunsOnReadyPRs(t *testing.T) {
 		if err := yaml.Unmarshal(b, &wf); err != nil {
 			t.Fatal(err)
 		}
+		checkouts := 0
 		for id, j := range wf.Jobs {
 			for _, st := range j.Steps {
+				if strings.HasPrefix(st.Uses, "actions/checkout@") {
+					checkouts++
+				}
 				if ref, ok := st.With["ref"]; ok && strings.HasPrefix(st.Uses, "actions/checkout@") && ref != "${{ github.event.pull_request.head.sha }}" {
 					t.Errorf("ci.yml job %s checks out ref %v, neither the event's commit nor the PR's head", id, ref)
 				}
 			}
+		}
+		if checkouts < len(prSuite) {
+			t.Errorf("ci.yml has %d checkout steps; each of its %d PR jobs checks out the code", checkouts, len(prSuite))
 		}
 	})
 	// Criterion 3: a ready PR's push, open, or reopen runs ci.yml, with its path filters, and the merge gate as today;
