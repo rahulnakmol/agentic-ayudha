@@ -1,0 +1,80 @@
+{
+  "schema": "aayudha.feature.approved/v1",
+  "feature": 874,
+  "version": 1,
+  "by": "rahulnakmol",
+  "at": "2026-11-02T17:27:21Z",
+  "presence": {
+    "login": "rahulnakmol",
+    "via": "device-flow",
+    "permission": "admin",
+    "actions_record": "f7d6e066a6b8dbabadd2be8a3d7e36318c1486ab55b06daec5eea20320b6ea59"
+  },
+  "baselines": [
+    {
+      "part": "intent",
+      "version": 1,
+      "hash": "914c5edd93d52be1e72c69aa130e3acb6dec7f1b089cd92ec0a6bba7eee69526"
+    },
+    {
+      "part": "spec",
+      "version": 1,
+      "hash": "387053ead9e2ede8821e1b50a02b784437fa67e6975af7570828f2c11d3369a6"
+    },
+    {
+      "part": "tech",
+      "version": 1,
+      "hash": "4d3ec93eeb656838231f406556f9414fcdac06556fc764fac802f7c59ac4729c"
+    }
+  ],
+  "stories": [
+    {
+      "number": 990,
+      "title": "An agent drafts a Feature baseline, and only a person approves it at the hash they saw",
+      "effort": "L",
+      "completion_goal_hash": "ba8fe3e1c170a4dd8eeb2aab193b8f72f399f1fd8fa223735142096193bb05df"
+    },
+    {
+      "number": 991,
+      "title": "aayu plan writes a Feature's technical design, and each story plan stays inside it",
+      "effort": "M",
+      "completion_goal_hash": "724722654670495defcfdfaad82c9edfa24ae003067f5a26c1737cb6d8961ec8"
+    },
+    {
+      "number": 992,
+      "title": "Each baseline part pins what it owns: the spec's stories, the technical design, and the UX stages",
+      "effort": "M",
+      "completion_goal_hash": "13b2adcc3f4736017b796436c47fe8015af8f13ba1ac211477f77bde8a5476cf"
+    },
+    {
+      "number": 993,
+      "title": "A drift after a baseline shows at once, and a new version says what changed, why it matters, and the need behind it",
+      "effort": "M",
+      "completion_goal_hash": "96d5ae311f5ae7475c7c60d78639160e2b591080747dab5837a9ae762a9a6625"
+    },
+    {
+      "number": 994,
+      "title": "A person approves one early build before Approve to build, and sees its budget",
+      "effort": "S",
+      "completion_goal_hash": "d8aab46337227b586969d8d19b300fefa21a6ce5def5effbbdaa56ceef4f8c17"
+    },
+    {
+      "number": 1028,
+      "title": "Each story plan lists its high-risk changes in a risk register",
+      "effort": "M",
+      "completion_goal_hash": "5899aaa071cb9c90fb2ce6aa6207e9cf0f58f6e6deefa380c20a39af602c5778"
+    },
+    {
+      "number": 1106,
+      "title": "A state-changing high-risk story plans its failure modes, and its open questions age like asks",
+      "effort": "M",
+      "completion_goal_hash": "b22812bd6370cb5da99b9c25df75e70d005ff55bffe87a1b270823d9bf3f56ad"
+    }
+  ],
+  "budget": {
+    "per_story_usd": 60,
+    "stories": 7,
+    "total_usd": 420
+  },
+  "dismissals": []
+}

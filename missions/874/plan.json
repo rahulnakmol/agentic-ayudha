@@ -1,0 +1,148 @@
+{
+  "schema": "aayudha.mission.plan/v1",
+  "feature": 874,
+  "approval": 1,
+  "approved_by": "rahulnakmol",
+  "approved_at": "2026-11-02T17:27:21Z",
+  "graph": [
+    {
+      "number": 990,
+      "kind": "story",
+      "title": "An agent drafts a Feature baseline, and only a person approves it at the hash they saw",
+      "milestone": "MS1",
+      "effort": "L",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 991,
+      "kind": "story",
+      "title": "aayu plan writes a Feature's technical design, and each story plan stays inside it",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 992,
+      "kind": "story",
+      "title": "Each baseline part pins what it owns: the spec's stories, the technical design, and the UX stages",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [
+        990,
+        991
+      ],
+      "outside": []
+    },
+    {
+      "number": 993,
+      "kind": "story",
+      "title": "A drift after a baseline shows at once, and a new version says what changed, why it matters, and the need behind it",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [
+        992
+      ],
+      "outside": []
+    },
+    {
+      "number": 994,
+      "kind": "story",
+      "title": "A person approves one early build before Approve to build, and sees its budget",
+      "milestone": "MS1",
+      "effort": "S",
+      "depends_on": [
+        990
+      ],
+      "outside": []
+    },
+    {
+      "number": 1028,
+      "kind": "story",
+      "title": "Each story plan lists its high-risk changes in a risk register",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1106,
+      "kind": "story",
+      "title": "A state-changing high-risk story plans its failure modes, and its open questions age like asks",
+      "milestone": "MS1",
+      "effort": "M",
+      "depends_on": [
+        1028
+      ],
+      "outside": [
+        {
+          "number": 883,
+          "feature": 883
+        }
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "name": "MS1",
+      "stories": [
+        990,
+        991,
+        992,
+        993,
+        994,
+        1028,
+        1106
+      ],
+      "gate": {
+        "state": "waits"
+      }
+    }
+  ],
+  "feature_done": "MS1",
+  "complete_when": "MS1 passes its gate",
+  "agents": 5,
+  "agents_source": "[build] agents on dev",
+  "estimate": {
+    "runs": 9,
+    "stories": 7,
+    "milestones": 1,
+    "basis": "runs ≥ 7 stories + 2 × 1 milestones = 9"
+  },
+  "missions": [
+    {
+      "number": 1,
+      "stories": [
+        {
+          "number": 990
+        },
+        {
+          "number": 991
+        },
+        {
+          "number": 992
+        },
+        {
+          "number": 993
+        },
+        {
+          "number": 994
+        },
+        {
+          "number": 1028
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "stories": [
+        {
+          "number": 1106,
+          "waits": "waits on #883"
+        }
+      ]
+    }
+  ],
+  "controls": []
+}
