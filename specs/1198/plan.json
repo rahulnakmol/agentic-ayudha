@@ -1,0 +1,39 @@
+{
+  "story": 1198,
+  "body_hash": "f12561d8648afbd5128447a8f81da064df67e96d1ce94986ade86ae0e26d672b",
+  "footprint": [
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "A config error names a rejected secret field and its rule, never the value",
+      "contracts": [
+        "internal/config/config.go: Validate checks a non-empty [models.gateway] secret, [integrations.\u003cname\u003e] secret, and [identity] machine_user_secret against the secret-name rule even when the consumer is unset; secretRule names the field and the rule, never the value; URL refusals for base_url and integration url show no URL",
+        "internal/config/load.go: the checkout integration-host refusal and the active_scan url mismatch show no URL; the --set layer reports keys only, and setMap refuses an entry outside a known Config section as --set entry N without its value"
+      ],
+      "tests": [
+        "internal/config:TestRejects",
+        "internal/config:TestIntegrationURLFromCheckout",
+        "internal/config:TestActiveScanKey"
+      ],
+      "instrumentation": [
+        "each refusal names the config field and the rule it breaks"
+      ],
+      "rollback": "Revert the squash commit; config errors quote the value again, and no stored config needs a change.",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-11-02T20:30:29Z",
+  "planned_by": "human-fallback"
+}
