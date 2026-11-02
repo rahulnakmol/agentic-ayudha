@@ -100,3 +100,8 @@ always_person = [
   "loops/build-ready.toml",
 ]
 always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]
+
+# The founder works in India and acts only in two windows a day, 10:30-11:30 and 18:30-19:30 IST (Story #1254): the
+# default [time] windows, in this zone. Business hours, decision SLAs, and the loops' crons follow it too.
+[time]
+tz = "Asia/Kolkata"

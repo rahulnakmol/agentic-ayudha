@@ -477,6 +477,8 @@ type MaxCriticalHigh struct {
 type Time struct {
 	TZ            string `koanf:"tz" jsonschema_description:"IANA time zone for business hours."`
 	BusinessHours string `koanf:"business_hours" jsonschema_description:"Business days and hours, e.g. Mon-Fri 09:00-18:00."`
+	// Windows are a person's windows (Story #1254): the only times aayu asks a person to act.
+	Windows []string `koanf:"windows" jsonschema_description:"A person's windows each day in tz, e.g. 10:30-11:30: the only times aayu asks a person to act. Outside them no work waits for a person. Empty: any time."`
 }
 
 // Identity is [identity] (WP1.4). With neither an App nor a machine user, every
@@ -504,6 +506,9 @@ type Fleet struct {
 
 // Clock returns the business-hours clock for [time].
 func (c *Config) Clock() (Clock, error) { return NewClock(c.Time.TZ, c.Time.BusinessHours) }
+
+// PersonWindows returns a person's windows for [time] (Story #1254).
+func (c *Config) PersonWindows() (Windows, error) { return NewWindows(c.Time.TZ, c.Time.Windows) }
 
 var (
 	secretName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
@@ -694,6 +699,9 @@ func (c *Config) Validate() error {
 		}
 	}
 	if _, err := c.Clock(); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := c.PersonWindows(); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

@@ -675,3 +675,71 @@ func TestMissionCheckMinutesDefault(t *testing.T) {
 		t.Fatalf("check_minutes = 2: got %d, err %v", l.Config.Mission.CheckMinutes, err)
 	}
 }
+
+// TestPersonWindows (Story #1254): two windows a day by default, every day, in [time] tz; this repository's zone is
+// Asia/Kolkata. Each window is [start, end): its start is inside, its end is not. A request at the end of one window
+// waits for the next, which may be the next day.
+func TestPersonWindows(t *testing.T) {
+	def, err := Load(Sources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(def.Config.Time.Windows, []string{"10:30-11:30", "18:30-19:30"}) {
+		t.Fatalf("default [time] windows: %v", def.Config.Time.Windows)
+	}
+	repo, err := Load(Sources{RepoDir: "../.."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := repo.Config.PersonWindows()
+	if err != nil || repo.Config.Time.TZ != "Asia/Kolkata" || w.String() != "10:30-11:30 and 18:30-19:30 Asia/Kolkata" {
+		t.Fatalf("this repository's windows: %v, %q, %v", w, repo.Config.Time.TZ, err)
+	}
+	ist := w.Loc
+	at := func(d, h, m int) time.Time { return time.Date(2026, 11, d, h, m, 0, 0, ist) }
+	for _, tt := range []struct {
+		name      string
+		t         time.Time
+		within    bool
+		next, end time.Time
+	}{
+		{"before the morning window", at(2, 10, 29), false, at(2, 10, 30), at(2, 11, 30)},
+		{"the morning window's start", at(2, 10, 30), true, at(2, 10, 30), at(2, 11, 30)},
+		{"the last minute of the morning window", at(2, 11, 29), true, at(2, 11, 29), at(2, 11, 30)},
+		{"the morning window's end", at(2, 11, 30), false, at(2, 18, 30), at(2, 19, 30)},
+		{"the afternoon", at(2, 14, 0), false, at(2, 18, 30), at(2, 19, 30)},
+		{"the evening window", at(2, 19, 0), true, at(2, 19, 0), at(2, 19, 30)},
+		{"the night waits for the next morning", at(2, 23, 0), false, at(3, 10, 30), at(3, 11, 30)},
+		{"a Saturday has windows too", at(7, 18, 45), true, at(7, 18, 45), at(7, 19, 30)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.Within(tt.t); got != tt.within {
+				t.Fatalf("Within = %v", got)
+			}
+			if got := w.Next(tt.t); !got.Equal(tt.next) {
+				t.Fatalf("Next = %s, want %s", got.In(ist), tt.next)
+			}
+			if got := w.End(tt.t); !got.Equal(tt.end) {
+				t.Fatalf("End = %s, want %s", got.In(ist), tt.end)
+			}
+		})
+	}
+	// Windows are wall-clock times: across London's October clock change the morning window stays 10:30 local.
+	lw, err := NewWindows("Europe/London", []string{"18:30-19:30", "10:30-11:30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := lw.Next(time.Date(2026, 10, 24, 22, 0, 0, 0, time.UTC)); got.UTC() != time.Date(2026, 10, 25, 10, 30, 0, 0, time.UTC) {
+		t.Fatalf("the window after the clock change starts %s, want 10:30 GMT", got.UTC())
+	}
+	// No windows: a person may be asked at any time, so nothing waits.
+	none, err := NewWindows("Asia/Kolkata", nil)
+	if now := at(2, 3, 0); err != nil || !none.Within(now) || !none.Next(now).Equal(now) || !none.End(now).Equal(now) {
+		t.Fatalf("no windows: %v", err)
+	}
+	for _, bad := range [][]string{{"11:30-10:30"}, {"10:30"}, {"10:30-25:00"}, {"10:00-11:00", "10:30-12:00"}, {"22:00-24:00"}} {
+		if _, err := Load(Sources{Sets: []string{"time.windows=" + strings.Join(bad, ",")}}); err == nil || !strings.Contains(err.Error(), "[time] windows") {
+			t.Fatalf("windows %q: err = %v", bad, err)
+		}
+	}
+}
