@@ -123,6 +123,96 @@
       "effort": "S",
       "depends_on": [],
       "outside": []
+    },
+    {
+      "number": 1201,
+      "kind": "bug",
+      "title": "A Decision superseded through an accepted successor's chain stays open and asks to be accepted",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1206,
+      "kind": "bug",
+      "title": "ship asks for the device code before checks that need no person, so a refused ship wastes the code",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1207,
+      "kind": "bug",
+      "title": "The mission starts a story that already has an open Refs PR built outside it",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1208,
+      "kind": "bug",
+      "title": "fix(delegate): an Amp mission needs the amp CLI signed in to start a story",
+      "milestone": "BUGS",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1210,
+      "kind": "bug",
+      "title": "fix(slice): a directory in Expected paths covers no file under it, and internal/inspect and internal/delegate fall in no layer",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1211,
+      "kind": "bug",
+      "title": "fix(env): a stale amp environment record stops every Amp mission start, and only Docker can verify it again",
+      "milestone": "BUGS",
+      "effort": "M",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1226,
+      "kind": "bug",
+      "title": "fix(verify): the gate cannot find a pnpm-installed Playwright, so its browser checks fail and list a fix",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1230,
+      "kind": "bug",
+      "title": "fix(mission): a gate fix PR records only its first failed check, so a fix for several checks leaves the gate waiting",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1234,
+      "kind": "bug",
+      "title": "fix(ship): ship merges a PR proven on an older dev, so two green PRs can break dev together",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1248,
+      "kind": "bug",
+      "title": "fix(mission): extend refuses before the time limit, so a person who checks in early cannot extend the mission",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
     }
   ],
   "milestones": [
@@ -158,7 +248,17 @@
       "stories": [
         1191,
         1192,
-        1193
+        1193,
+        1201,
+        1206,
+        1207,
+        1208,
+        1210,
+        1211,
+        1226,
+        1230,
+        1234,
+        1248
       ],
       "gate": {
         "state": "waits"
@@ -1821,6 +1921,36 @@
         },
         {
           "number": 1193
+        },
+        {
+          "number": 1201
+        },
+        {
+          "number": 1206
+        },
+        {
+          "number": 1207
+        },
+        {
+          "number": 1208
+        },
+        {
+          "number": 1210
+        },
+        {
+          "number": 1211
+        },
+        {
+          "number": 1226
+        },
+        {
+          "number": 1230
+        },
+        {
+          "number": 1234
+        },
+        {
+          "number": 1248
         }
       ]
     }
