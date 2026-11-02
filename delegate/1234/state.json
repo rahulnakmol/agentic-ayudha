@@ -1,0 +1,21 @@
+{
+  "story": 1234,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1234-fix-ship-ship-merges-a-pr-proven-on-an-o",
+  "status": "host-handoff",
+  "brief_sha256": "2dd91da42f8e78ac1332cdf4ef13aa851bf22a24f924f2b0272c9f0522b91a44",
+  "started_at": "2026-11-02T06:04:51Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-02T06:04:51Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1234: fix(ship): ship merges a PR proven on an older dev, so two green PRs can break dev together"
+    }
+  ]
+}
