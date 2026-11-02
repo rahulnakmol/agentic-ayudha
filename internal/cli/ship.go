@@ -159,6 +159,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if pr.GetMerged() || pr.GetState() != "open" {
 		return Errorf(ExitUsage, "ship #%d: the PR is %s", n, map[bool]string{true: "already merged", false: "closed"}[pr.GetMerged()])
 	}
+	// A draft iterates on the local gate; GitHub runs its required checks and the merge gate once it is ready (Story #1250).
+	if pr.GetDraft() {
+		return Errorf(ExitBlocked, "ship #%d is a draft: mark it ready after the local gate passes", n)
+	}
 	head := pr.GetHead().GetSHA()
 	if want := in.String(shipExpectHead); want != "" && want != head {
 		return headMoved(n, want, head)

@@ -1,0 +1,25 @@
+# Which tests prove Story #1250's Completion Goal.
+
+[[criterion]]
+id = 1 # a draft PR to dev gets a push: no ci.yml job, no aayudha/merge-gate or aayudha/inspect job
+tests = [".:TestCIRunsOnReadyPRs/draft"]
+
+[[criterion]]
+id = 2 # the draft is marked ready: every required ci.yml job runs on the head, and the merge gate once
+tests = [".:TestCIRunsOnReadyPRs/ready_for_review"]
+
+[[criterion]]
+id = 3 # a non-draft PR gets a push: ci.yml and the merge gate run as today
+tests = [".:TestCIRunsOnReadyPRs/ready"]
+
+[[criterion]]
+id = 4 # a push to dev, rolling, or main, or a workflow_dispatch: ci.yml runs as today
+tests = [".:TestCIRunsOnReadyPRs/push_and_dispatch"]
+
+[[criterion]]
+id = 5 # aayu build <n> --delegate amp: the brief says draft, local gate and review, then ready once
+tests = ["internal/cli:TestAmpBriefIsDraftFirst", "internal/delegate:TestBriefShipsOnProof"]
+
+[[criterion]]
+id = 6 # aayu ship <pr> on a draft: #<pr> is a draft: mark it ready after the local gate passes
+tests = ["internal/cli:TestShipRefusals"]

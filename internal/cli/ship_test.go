@@ -65,7 +65,7 @@ func gateArtifact(g *fake.GitHub, pr int, head string, arts ...fake.ArtifactZip)
 
 // WP4.10/WP5.5 and S-4.2b: ship refuses, before landing or merging anything:
 // without the human's token; a PR that does not exist, is already merged or
-// closed, or serves no story; no pack from the merge gate for the head: no
+// closed, is a draft, or serves no story; no pack from the merge gate for the head: no
 // run, a run of the pull request's own copy of the workflow (a pull_request
 // run, however green its jobs look), a successful run on another head, a
 // failed run, no aayudha-pack artifact, an artifact that is not a zip or has
@@ -96,6 +96,14 @@ func TestShipRefusals(t *testing.T) {
 	}
 	if code, out := ship(closed.Number); code != ExitUsage || !strings.Contains(out, "the PR is closed") {
 		t.Fatalf("ship of a closed PR: %d %s", code, out)
+	}
+	// Story #1250, criterion 6: a draft PR is refused before ship reads its gate run.
+	draft := g.AddPR("feat: draft", "Refs #2", "founder", "story/2-draft", head, "dev")
+	g.Mu.Lock()
+	draft.Draft = true
+	g.Mu.Unlock()
+	if code, out := ship(draft.Number); code != ExitBlocked || !strings.Contains(out, "#"+strconv.Itoa(draft.Number)+" is a draft: mark it ready after the local gate passes") {
+		t.Fatalf("ship of a draft PR: %d %s", code, out)
 	}
 	if code, out := ship(chore.Number); code != ExitBlocked || !strings.Contains(out, "no story (Refs #n in the PR body)") {
 		t.Fatalf("ship of a PR without Refs: %d %s", code, out)
