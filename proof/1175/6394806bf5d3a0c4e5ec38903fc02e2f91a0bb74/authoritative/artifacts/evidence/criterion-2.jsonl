@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet","Output":"=== RUN   TestDayIsSet\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/line_by_line"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/line_by_line","Output":"=== RUN   TestDayIsSet/line_by_line\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/line_by_line","Output":"--- PASS: TestDayIsSet/line_by_line (3.61s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/line_by_line"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/full_screen"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/full_screen","Output":"=== RUN   TestDayIsSet/full_screen\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/full_screen","Output":"--- PASS: TestDayIsSet/full_screen (1.31s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet/full_screen"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet","Output":"--- PASS: TestDayIsSet (4.92s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDayIsSet"}
