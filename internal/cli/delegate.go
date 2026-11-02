@@ -690,10 +690,8 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		}
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
-			if serr := e.saveDelegation(rctx, d); serr != nil {
-				return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v; and its failed record was not saved: %v", d.story, d.receiver, err, serr)
-			}
-			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err)
+			report()
+			return nil, true, e.saveWith(rctx, d, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err))
 		}
 		d.state.Task, d.state.TaskURL = task.ID, task.URL
 		d.event(now, dlgHandedOff, "brief sent")
@@ -1018,7 +1016,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 		}
 		res.Next = fmt.Sprintf("%s failed; sent to %s; sync again after its new commits", strings.Join(names, ", "), d.receiver)
-		return nil, true, e.saveDelegation(ctx, d)
+		return nil, true, e.saveFollowUp(ctx, d)
 	}
 	switch {
 	case st.Stopped != "" && st.Stopped == head || r != nil && r.Head == head && r.Disposition == inspect.StepBack:
@@ -1091,7 +1089,20 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 	}
 	res.Next = fmt.Sprintf("%d finding(s) sent to %s; sync again after its new commits", len(ids), d.receiver)
-	return nil, true, e.saveDelegation(ctx, d)
+	return nil, true, e.saveFollowUp(ctx, d)
+}
+
+// saveFollowUp saves the record of a follow-up the receiver already has. When
+// the ledger refuses it, the error names the task the follow-up made, which the
+// ledger does not hold, and says that a sync sends the follow-up again
+// (Bug #1264). A host follow-up was not sent yet, so it needs no such note.
+func (e *Env) saveFollowUp(ctx context.Context, d *delegation) error {
+	task, host := d.state.Task, d.hostFU != nil
+	err := e.saveDelegation(ctx, d)
+	if err == nil || host || d.state.Task == task {
+		return err
+	}
+	return withSaveErr(Errorf(ExitExternal, "build #%d: %s has the follow-up as task %s, and its record did not land, so the next sync may send it again", d.story, delegate.Names[d.receiver], task), err)
 }
 
 // outside refuses a follow-up for a PR built outside the mission that
