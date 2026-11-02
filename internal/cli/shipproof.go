@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	gh "github.com/google/go-github/v90/github"
@@ -167,12 +168,15 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 		return nil, "", Wrap(ExitExternal, err)
 	}
 	// A draft runs no CI (Story #1250): every job of its Actions run reports
-	// skipped, which counts as success below. A run in which nothing ran
-	// proves nothing, so once the PR was marked ready, its skips do not
-	// count: the run of the ready event must stand in, and with none the
-	// check is missing. A run in which a job ran keeps its path-filter
-	// skips, other apps' checks count as before, and so does every check of
-	// a PR that was never marked ready.
+	// skipped, which counts as success below. Such a run proves nothing: an
+	// Actions run of a pull request event in which every job skipped, made
+	// before the PR was last marked ready, does not count, so the run of the
+	// ready event must stand in, and with none the check is missing. The
+	// run's own creation time decides, never a job's: GitHub can write a
+	// skipped job's started_at seconds late. A run in which a job ran keeps
+	// its path-filter skips, a run made after the ready event counts however
+	// it skipped, and other apps' checks count as before, as does every
+	// check of a PR that was never marked ready.
 	idle := map[int64]bool{} // Actions check suites in which every run skipped
 	for _, r := range runs {
 		if id := r.GetCheckSuite().GetID(); id != 0 && r.GetApp().GetSlug() == "github-actions" {
@@ -189,9 +193,28 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name, verb str
 		if err != nil {
 			return nil, "", Wrap(ExitExternal, err)
 		}
-		if slices.ContainsFunc(events, func(t *gh.Timeline) bool { return t.GetEvent() == "ready_for_review" }) {
+		var ready time.Time
+		for _, ev := range events {
+			if ev.GetEvent() == "ready_for_review" && ev.GetCreatedAt().After(ready) {
+				ready = ev.GetCreatedAt().Time
+			}
+		}
+		if !ready.IsZero() {
+			wfs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.WorkflowRun, *gh.Response, error) {
+				r, resp, err := c.REST.Actions.ListRepositoryWorkflowRuns(ctx, owner, name, &gh.ListWorkflowRunsOptions{HeadSHA: head, ListOptions: o})
+				return r.GetWorkflowRuns(), resp, err
+			})
+			if err != nil {
+				return nil, "", Wrap(ExitExternal, err)
+			}
+			draft := map[int64]bool{} // a run in the same second as the event counts as before it
+			for _, w := range wfs {
+				if ev := w.GetEvent(); idle[w.GetCheckSuiteID()] && (ev == "pull_request" || ev == "pull_request_target") && !w.GetCreatedAt().After(ready) {
+					draft[w.GetCheckSuiteID()] = true
+				}
+			}
 			runs = slices.DeleteFunc(slices.Clone(runs), func(r *gh.CheckRun) bool {
-				return idle[r.GetCheckSuite().GetID()] && r.GetApp().GetSlug() == "github-actions"
+				return draft[r.GetCheckSuite().GetID()] && r.GetApp().GetSlug() == "github-actions"
 			})
 		}
 	}
