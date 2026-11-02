@@ -913,9 +913,9 @@ func TestShipOnProof(t *testing.T) {
 	// The policy is the base branch's tip now, not the PR's base revision: a
 	// narrow set that tightened on dev since the PR was cut applies.
 	tip := strings.Repeat("c", 40)
-	g.Refs["heads/dev"] = tip
 	g.RefFiles[tip] = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n", ".aayudha/config.toml": strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", "skills/"]`, 1)}
 	g.Mu.Unlock()
+	devAt(g, tip, head, base, true) // the head has the tip: it was proven on the code it lands on (Bug #1234)
 	refused("no merge on proof: it touches skills/build/SKILL.md, in the narrow set that always needs a person ([autonomy] always_person: skills/)")
 	// And dev moving while ship runs stops the merge: GitHub's merge guards
 	// only the head, so ship checks the tip it judged against again.
@@ -1811,6 +1811,63 @@ func TestShipSendsNothingOnRefusal(t *testing.T) {
 	defer s.g.Mu.Unlock()
 	if s.g.Pulls[s.prN].Merged {
 		t.Fatal("merged although inspect says fix")
+	}
+}
+
+// devAt moves dev to tip and says by ancestry what GitHub's comparison of
+// tip and head answers: "ahead" when head contains tip, else "diverged" from
+// their merge base.
+func devAt(g *fake.GitHub, tip, head, base string, contains bool) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	if g.Static == nil {
+		g.Static = map[string]any{}
+	}
+	g.Refs["heads/dev"] = tip
+	cmp := map[string]any{"status": "diverged", "ahead_by": 1, "behind_by": 1, "merge_base_commit": map[string]any{"sha": base}}
+	if contains {
+		cmp = map[string]any{"status": "ahead", "ahead_by": 1, "behind_by": 0, "merge_base_commit": map[string]any{"sha": tip}}
+	}
+	g.Static["/repos/o/r/compare/"+tip+"..."+head] = cmp
+}
+
+// Bug #1234, criteria 1 to 3: PR A merged into dev after PR B was proven,
+// so B's head lacks dev's tip, and ship refuses B and merges nothing; a
+// docs-only commit on dev refuses it the same. Once B's head contains the
+// tip and its gate ran there, ship merges it as before.
+func TestShipNeedsDevTipInHead(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+	base := g.Pulls[prN].Base.SHA
+	g.Mu.Unlock()
+	// Criterion 1: A's merge is a commit after B's base. The gate on B's head is green, and its pack verifies.
+	withA := strings.Repeat("a", 40)
+	devAt(g, withA, head, base, false)
+	shipRefused(t, g, env, opts, bare, prN, fmt.Sprintf("ship #%d: #%d was proven on %s, not on dev %s: rebase it and let the gate run; nothing was merged", prN, prN, short(base), short(withA)))
+	// Criterion 3: dev moved only by a docs-only commit after B's base: ship cannot tell which change matters.
+	docs := strings.Repeat("e", 40)
+	devAt(g, docs, head, base, false)
+	g.Mu.Lock()
+	g.Static["/repos/o/r/compare/"+base+"..."+docs] = map[string]any{"status": "ahead", "ahead_by": 1, "files": []map[string]any{{"filename": "docs/guide/how-ship.md", "status": "modified"}}}
+	g.Mu.Unlock()
+	shipRefused(t, g, env, opts, bare, prN, fmt.Sprintf("ship #%d: #%d was proven on %s, not on dev %s: rebase it", prN, prN, short(base), short(docs)))
+	// Criterion 2: B rebased onto the tip. Its old head's gate proves nothing there; once the gate passes on the new head, ship merges.
+	rebased := strings.Repeat("9", 40)
+	g.Mu.Lock()
+	g.Pulls[prN].Head.SHA = rebased
+	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", rebased)}
+	g.Mu.Unlock()
+	devAt(g, docs, rebased, base, true)
+	shipRefused(t, g, env, opts, bare, prN, "no merge gate pack for the head "+short(rebased))
+	gateRun(t, g, dir, prN, rebased, coverageHolds)
+	code, out := shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != 0 || !merged || !strings.Contains(out, fmt.Sprintf("ship #%d: merged as", prN)) {
+		t.Fatalf("ship of the rebased head: exit %d, merged %t: %s", code, merged, out)
 	}
 }
 

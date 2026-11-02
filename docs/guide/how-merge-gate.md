@@ -298,6 +298,10 @@ checks the newest `aayudha/merge-gate`, `aayudha/inspect`, and `aayudha/pack` ch
 `success`), verifies the pack against the Ready snapshot, and requires the floors to hold. Only then does it look at
 the human pass, and only after that does it land `pack.json` on the ledger, under the human's identity, and merge.
 
+The gate proves the head alone, so `ship` first checks that the head contains the base branch's tip.
+Ancestry decides, never timestamps or files: a docs-only commit on dev refuses the head too. Two pull requests proven
+on one base can each pass and still break dev together. The builder rebases, and the gate runs again on the new head.
+
 > **Honest status:** the repository runs in solo mode, with one human, so every `aayu ship` here runs under the
 > founder's identity with a recorded bypass.
 
@@ -458,7 +462,8 @@ fixed head, returned `merge`, and the spend covers both calls.
    `TestCoverageManifest`.
 7. `ship` merges only with the three gate checks green on the head and the pack from this workflow's own
    `pull_request_target` run on that head, every hash matching, verifying against the Ready snapshot. Enforced in
-   [internal/cli/ship.go](../../internal/cli/ship.go), `TestShipRefusals`.
+   [internal/cli/ship.go](../../internal/cli/ship.go), `TestShipRefusals`. The head must contain the base branch's
+   tip: `TestShipNeedsDevTipInHead`.
 8. The pack job uses only the workflow token, writes nothing to the ledger, and fails on a pack that does not verify
    or a floor that does not hold. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
    `TestProofCommentInMergeGate`.

@@ -202,6 +202,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "ship #%d: the human pass is judged by %s's committed .aayudha/config.toml at %s, and this run's config (the checkout, the user config, AAYU_* variables, or --set) would loosen it: %s; commit a policy change to %s through a reviewed PR instead",
 			n, pr.GetBase().GetRef(), short(pol.Tip), strings.Join(loose, "; "), pr.GetBase().GetRef())
 	}
+	// The gate and the pack prove the head alone, so a head without the
+	// base branch's tip was proven on older code: two PRs proven on one base
+	// can each pass and break dev together (Bug #1234). Ancestry decides,
+	// never timestamps or which files the tip changed: ship cannot tell
+	// which change matters. The tip is checked again just before the merge.
+	if err := onTip(ctx, c, owner, name, pr, pol.Tip); err != nil {
+		return err
+	}
 
 	// 1. The pack the merge gate built for this head, from the artifact of a
 	// run of the base branch's workflow (S-4.2b): never a pack on the ledger,
@@ -989,6 +997,23 @@ const shipBypassNote = "bypass-note"
 // headMoved refuses a ship whose PR was pushed after the person chose it.
 func headMoved(n int, chose, now string) error {
 	return WithNext(Errorf(ExitBlocked, "ship #%d: the head moved to %s after you chose to ship %s; nothing was merged", n, short(now), short(chose)), "aayu inbox")
+}
+
+// onTip refuses PR pr unless its head contains tip, its base branch's tip
+// (Bug #1234): GitHub's comparison of the tip and the head is "ahead" or
+// "identical" only when the tip is an ancestor of the head.
+func onTip(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, tip string) error {
+	head := pr.GetHead().GetSHA()
+	cp, _, err := c.REST.Repositories.CompareCommits(ctx, owner, name, tip, head, &gh.ListOptions{PerPage: 1})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if s := cp.GetStatus(); s == "ahead" || s == "identical" {
+		return nil
+	}
+	n, base := pr.GetNumber(), or(cp.GetMergeBaseCommit().GetSHA(), pr.GetBase().GetSHA())
+	return WithNext(Errorf(ExitBlocked, "ship #%d: #%d was proven on %s, not on %s %s: rebase it and let the gate run; nothing was merged", n, n, short(base), pr.GetBase().GetRef(), short(tip)),
+		fmt.Sprintf("rebase %s onto %s, push it, and run aayu ship %d once the merge gate passes on the new head", pr.GetHead().GetRef(), pr.GetBase().GetRef(), n))
 }
 
 // upsertOwnComment replaces login's own comment on issue or PR n that carries
