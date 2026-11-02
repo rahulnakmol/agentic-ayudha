@@ -265,9 +265,10 @@ func TestReadyApproveToBuild(t *testing.T) {
 	edit(func() { feature.Subs = nil })
 	off("Approve to build is off: #840 has no stories. Next: aayu slice 840")
 	edit(func() { feature.Subs = subs })
-	// --dry-run asks for the code, shows the effect, and writes nothing.
+	// --dry-run shows the effect, asks for no code (Bug #1252), and writes nothing.
 	nothing("--dry-run", n, func() {
-		if code, out, errOut := readyRun(person, "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: ledger specs/840/approved.json") || started() != 1 {
+		if code, out, errOut := readyRun(person, "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: ledger specs/840/approved.json") || started() != 0 ||
+			!strings.Contains(out, "Approving: Approves #840 to build: 6 stories (#851-#856)") {
 			t.Fatalf("--dry-run: exit %d: %s%s", code, out, errOut)
 		}
 	})
