@@ -704,6 +704,7 @@ func (s *inboxSource) lockItems(ms []missionFacts) []InboxItem {
 					{N: 3, Label: "Read the issues first", Command: "open"},
 				}}
 			it.f.problem = fmt.Sprintf("%d %s", len(locked), plural(len(locked), "issue", "issues"))
+			it.plan = p
 			out = append(out, it)
 		}
 		if p.Lock == nil || p.Lock.State != LockActive {

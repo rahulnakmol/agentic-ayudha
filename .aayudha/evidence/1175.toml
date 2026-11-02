@@ -1,0 +1,13 @@
+# Which tests prove Story #1175's Completion Goal.
+
+[[criterion]]
+id = 1 # a Decision, #889's three Baseline cards, its Approve to build, and Mission start wait: decisions, baselines, Approve to build, mission start, then the other cards
+tests = ["internal/cli:TestMorningCardOrder"]
+
+[[criterion]]
+id = 2 # he approved #889 and started its mission in the session: the last card says The day is set, one line per started Feature: milestone today, its stories, evening review
+tests = ["internal/cli:TestDayIsSet"]
+
+[[criterion]]
+id = 3 # he leaves before the Mission start card: no The day is set line, and the cards wait for the next session
+tests = ["internal/cli:TestDayNotSetBeforeStart"]

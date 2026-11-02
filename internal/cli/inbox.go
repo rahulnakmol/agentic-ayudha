@@ -61,7 +61,10 @@ const (
 	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 )
 
-var inboxOrder = []string{InboxDecision, InboxScope, InboxBaseline, InboxApprove, InboxMission, InboxMissionTime, InboxStart, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+// inboxOrder is the order a person decides the cards in: the morning's
+// decisions, baselines, Approve to build, and mission start first, then the
+// other cards (Story #1175).
+var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -264,6 +267,7 @@ type InboxItem struct {
 	labels      []string
 	mergeSHA    string
 	f           inboxFacts
+	plan        *MissionPlan // a Mission start card's plan: the day it sets (Story #1175)
 }
 
 // InboxCheck is one check on a card's checklist: what it checks, whether it
@@ -1364,11 +1368,26 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			say("    ", "Next: "+it.Next)
 		}
 	}
-	items = append(needs, house...)
+	items = append(slices.Clone(needs), house...)
 	done, skipped, handled := 0, 0, 0
 	left := func() int { return len(items) - handled }
-	failed := 0        // writes that did not land: no celebration after one
-	baselined := false // a Baseline card was approved: a Feature may now wait for Approve to build
+	failed := 0 // writes that did not land: no celebration after one
+	// A done Baseline card may bring its Feature's Approve to build card, and a
+	// done Approve to build its Mission start card: the session reads them
+	// (Stories #1173, #1175).
+	follow := map[string]string{InboxBaseline: InboxApprove, InboxApprove: InboxStart}
+	want := map[string]bool{}
+	var started []InboxItem // the Mission start cards done in this session
+	// The session ends with the day it set, once it started a mission (Story #1175).
+	finish := func() error {
+		if lines := e.daySet(cfg, started); len(lines) > 0 {
+			fmt.Fprintf(w, "\n%s\n", dayIsSet)
+			for _, l := range lines {
+				say("  ", l)
+			}
+		}
+		return finishInbox(w, done, skipped, left())
+	}
 	key := func() (byte, error) {
 		fmt.Fprint(w, "  > ")
 		k, err := e.readKey()
@@ -1424,7 +1443,12 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			say("    ", "Detail: "+strings.Join(why.Detail, "; "))
 		default:
 			done++
-			baselined = baselined || it.Kind == InboxBaseline
+			if k, ok := follow[it.Kind]; ok {
+				want[k] = true
+			}
+			if it.Kind == InboxStart && !e.DryRun {
+				started = append(started, fresh) // read again before the write: its plan is the one that started
+			}
 		}
 		handled++
 		return it, false
@@ -1575,30 +1599,52 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			}
 		}
 	}
-	for _, it := range needs {
-		pos++
-		if quit, err := card(it); err != nil || quit {
-			fmt.Fprintln(w)
-			return finishInbox(w, done, skipped, left())
+	// more reads the inbox again before card next when the session reaches a
+	// kind that its writes may have brought, and puts each new card of it in
+	// its place among the cards left. So Approve to build follows its
+	// baselines, and Mission start its Approve to build, in the same session,
+	// and the one device code covers them (Stories #1173, #1175).
+	rank := func(kind string) int { return slices.Index(inboxOrder, kind) }
+	more := func(next int) error {
+		due := false
+		for k := range want {
+			due = due || next == len(needs) || rank(needs[next].Kind) >= rank(k)
 		}
-	}
-	// Approve to build follows its baselines in the same session, so the code
-	// that approved them covers it too (Story #1173).
-	if baselined {
-		more, err := src.gather(ctx)
+		if !due {
+			return nil
+		}
+		got, err := src.gather(ctx)
 		if err != nil {
+			return err
+		}
+		var add []InboxItem
+		for _, it := range got {
+			if want[it.Kind] && !slices.ContainsFunc(items, func(x InboxItem) bool { return x.key() == it.key() }) {
+				add = append(add, it)
+			}
+		}
+		clear(want)
+		rest := append(slices.Clone(needs[next:]), add...)
+		slices.SortStableFunc(rest, func(a, b InboxItem) int { // as items sorts them: by kind, then by number
+			if d := rank(a.Kind) - rank(b.Kind); d != 0 {
+				return d
+			}
+			return a.Number - b.Number
+		})
+		needs, items, total = append(needs[:next], rest...), append(items, add...), total+len(add)
+		return nil
+	}
+	for i := 0; ; i++ {
+		if err := more(i); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		for _, it := range more {
-			if it.Kind != InboxApprove || slices.ContainsFunc(items, func(x InboxItem) bool { return x.key() == it.key() }) {
-				continue
-			}
-			items = append(items, it)
-			pos, total = pos+1, total+1
-			if quit, err := card(it); err != nil || quit {
-				fmt.Fprintln(w)
-				return finishInbox(w, done, skipped, left())
-			}
+		if i == len(needs) {
+			break
+		}
+		pos++
+		if quit, err := card(needs[i]); err != nil || quit {
+			fmt.Fprintln(w)
+			return finish()
 		}
 	}
 	if len(house) > 0 && !tidied {
@@ -1617,11 +1663,11 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 			ch, err := key()
 			if err != nil {
 				fmt.Fprintln(w)
-				return finishInbox(w, done, skipped, left())
+				return finish()
 			}
 			switch ch {
 			case 'q', 3:
-				return finishInbox(w, done, skipped, left())
+				return finish()
 			case '?':
 				say("  ", inboxTidy.Explain)
 			case 's':
@@ -1639,7 +1685,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 					total = len(house)
 					if quit, err := card(it); err != nil || quit {
 						fmt.Fprintln(w)
-						return finishInbox(w, done, skipped, left())
+						return finish()
 					}
 				}
 				break tidy
@@ -1651,7 +1697,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	if left() == 0 && done > 0 && failed == 0 && skipped == 0 {
 		e.cheer(w, cheerFor(0, true))
 	}
-	return finishInbox(w, done, skipped, left())
+	return finish()
 }
 
 // cheer prints a celebration as words: the line-by-line inbox has no motion.
