@@ -108,7 +108,7 @@ func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *
 		p.Stopped = append(p.Stopped, MissionStopped{Number: 1104, Reason: "the payment sandbox is down", By: "rahulnakmol", At: "2026-11-02T11:00:00Z"})
 	})
 	m.mu.Lock()
-	now = time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC) // the end of [time] business_hours (Mon-Fri 09:00-18:00, Europe/London)
+	now = time.Date(2026, 11, 2, 18, 30, 0, 0, time.UTC) // the evening window's start ([time] windows 18:30-19:30, Europe/London; Story #1254)
 	m.mu.Unlock()
 	return m, &now
 }
@@ -158,22 +158,22 @@ func (m *missionWorld) reviews() []StoryReview {
 	return out
 }
 
-// Criterion 1: at the end of business hours, `aayu inbox` shows one Evening
+// Criterion 1: in the evening window, `aayu inbox` shows one Evening
 // card per story of the milestone that started this morning, with each
 // criterion, its evidence kind, and its evidence from the pack at the merged
 // head: the image where the terminal shows images, else its path and link.
 // A criterion with no evidence is shown too, and nothing comes from a pack of
-// another head. Before the end of business hours there is no Evening card.
+// another head. Before the evening window there is no Evening card.
 func TestEveningCardsShowEvidence(t *testing.T) {
 	m, now := eveningWorld(t)
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 2, 17, 59, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 2, 18, 29, 0, 0, time.UTC)
 	m.mu.Unlock()
 	if cards := eveningList(t, m, m.person); len(cards) != 0 {
-		t.Fatalf("Evening cards at 17:59: %+v", cards)
+		t.Fatalf("Evening cards at 18:29: %+v", cards)
 	}
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 2, 18, 30, 0, 0, time.UTC)
 	m.mu.Unlock()
 	var nums []int
 	for _, it := range eveningList(t, m, m.person) {
@@ -213,7 +213,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 
 	// The next evening, Monday's stories were not agreed that morning; MS2 starts when MS1's gate passes, at 10:00.
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 3, 18, 0, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 3, 18, 30, 0, 0, time.UTC)
 	m.mu.Unlock()
 	if cards := eveningList(t, m, m.person); len(cards) != 0 {
 		t.Fatalf("Evening cards on Tuesday before MS2 starts: %+v", cards)
@@ -271,7 +271,7 @@ func TestEveningAcceptRecordsReview(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "done: @rahulnakmol accepted #1010 at 1010101, recorded in missions/889/reviews.jsonl") {
 		t.Fatalf("inbox 1 Accept: exit %d:\n%s%s", code, out, errOut)
 	}
-	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Pack: pack, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:00:00Z"}
+	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Pack: pack, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:30:00Z"}
 	if got := m.reviews(); !slices.Equal(got, []StoryReview{want}) {
 		t.Fatalf("reviews.jsonl: %+v, want %+v", got, want)
 	}

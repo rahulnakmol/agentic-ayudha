@@ -91,7 +91,7 @@ func TestDayIsProven(t *testing.T) {
 		if code != 0 || accepted < 0 || proven < accepted || strings.Count(out, "The day is proven") != 1 || strings.Contains(out, "Inbox zero") {
 			t.Fatalf("the last accept: exit %d:\n%s%s", code, out, errOut)
 		}
-		if got := m.milestones(); len(got) != 1 || got["day-proven:2026-11-02"] != "2026-11-02T18:00:00Z" {
+		if got := m.milestones(); len(got) != 1 || got["day-proven:2026-11-02"] != "2026-11-02T18:30:00Z" {
 			t.Fatalf("milestones: %v", got)
 		}
 	})
@@ -224,7 +224,7 @@ func TestNoDayToProve(t *testing.T) {
 		t.Fatalf("Monday's inbox: exit %d:\n%s%s", code, out, errOut)
 	}
 	m.mu.Lock()
-	m.opts.Now = func() time.Time { return time.Date(2026, 11, 3, 18, 0, 0, 0, time.UTC) } // Tuesday: MS2 waits for MS1's gate
+	m.opts.Now = func() time.Time { return time.Date(2026, 11, 3, 18, 30, 0, 0, time.UTC) } // Tuesday: MS2 waits for MS1's gate
 	m.mu.Unlock()
 	if cards := eveningList(t, m, m.person); len(cards) != 0 {
 		t.Fatalf("Evening cards on Tuesday: %+v", cards)

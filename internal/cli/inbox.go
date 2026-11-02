@@ -128,12 +128,12 @@ var inboxKinds = map[string]inboxKind{
 	InboxMissionTime: {Icon: "⌛", Word: "Mission time", Seat: verbs.EngineeringManager,
 		Line: "A mission's clock passed one of its limits; past the last one, only a person lets it start new stories.",
 		Explain: "Each mission of a Feature has a clock that runs while at least one of its story threads works, and pauses while every running " +
-			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours it starts no new story, " +
-			"and the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
+			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours the card waits for your next window, " +
+			"and if you leave it to the window's end the mission starts no new story; the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
 		Terms: []string{"Work item"}},
 	InboxEvening: {Icon: "🌇", Word: "Evening review", Seat: verbs.EngineeringManager,
 		Line: "A story you agreed this morning, each criterion next to its evidence; only you accept it or say what is wrong.",
-		Explain: "Each story of a mission milestone that started today comes back at the end of business hours with every criterion of its " +
+		Explain: "Each story of a mission milestone that started today comes back in the evening window, the last of [time] windows, with every criterion of its " +
 			"Completion Goal and the evidence its proof pack on the ledger holds for the head that merged. Accepting it records your login, the time, " +
 			"and the story in the mission's reviews.jsonl on the ledger; a comment says what is wrong, stays on the story, and is an input of the " +
 			"mission's feedback pass (#1014). If you leave it, nothing is written and the card stays until the day ends.",
