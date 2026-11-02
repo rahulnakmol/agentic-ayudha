@@ -281,7 +281,9 @@
         1182
       ],
       "gate": {
-        "state": "waits"
+        "state": "stopped",
+        "dev_sha": "ab8ab07669fb7755296fe4055ad1f64eeeed512f",
+        "at": "2026-11-02T21:05:29Z"
       }
     },
     {
@@ -2438,6 +2440,11 @@
   "tool_source": "the user config of @rahulnakmol for rahulnakmol/agentic-ayudha",
   "budget": 660,
   "budget_basis": "raised from $480 to $660 by @rahulnakmol at 2026-10-31T23:35:00Z: Bugs #1206, #1207 and #1210 join BUGS; before: the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
+  "pause": {
+    "reason": "MS1 of #1170 failed its gate 3 times: its stories wait",
+    "by": "the gate of MS1",
+    "at": "2026-11-02T21:05:43Z"
+  },
   "controls": [
     {
       "control": "start",
