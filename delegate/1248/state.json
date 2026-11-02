@@ -1,0 +1,21 @@
+{
+  "story": 1248,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "branch": "story/1248-fix-mission-extend-refuses-before-the-ti",
+  "status": "host-handoff",
+  "brief_sha256": "7db565ebb027f7eed3c1c0b0f84a3df3953bf41e648aecfa2dba2acb6e641255",
+  "started_at": "2026-11-02T15:54:31Z",
+  "handoffs": 1,
+  "events": [
+    {
+      "at": "2026-11-02T15:54:31Z",
+      "status": "host-handoff",
+      "detail": "the host creates the thread: aayu #1248: fix(mission): extend refuses before the time limit, so a person who checks in early cannot extend the mission"
+    }
+  ]
+}
