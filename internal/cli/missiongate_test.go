@@ -793,6 +793,13 @@ func TestGateFixCountsAgainstBudget(t *testing.T) {
 		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") {
 		t.Fatalf("budget --dry-run: exit %d, device codes %d, GitHub writes %v: %s%s", code, g.codes(), g.g.Writes(), out, errOut)
 	}
+	// The dry run reads what the real run reads to count the spend: a story it cannot read fails it, still with no code.
+	g.edit(func() { g.g.Fail = "GET /repos/o/r/issues/30" })
+	if code, out, errOut := g.mission(g.person, "rahulnakmol", "budget", 889, "--to", "720", "--reason", "the fix is needed for MS1", "--dry-run"); code != ExitExternal ||
+		g.codes() != 0 || g.commits() != n || len(g.g.Writes()) != 0 {
+		t.Fatalf("budget --dry-run with #30 unreadable: exit %d, device codes %d, GitHub writes %v: %s%s", code, g.codes(), g.g.Writes(), out, errOut)
+	}
+	g.edit(func() { g.g.Fail = "" })
 	g.eachRequestFails(func() (int, string, string) {
 		return g.mission(g.person, "rahulnakmol", "budget", 889, "--to", "720", "--reason", "the fix is needed for MS1")
 	})

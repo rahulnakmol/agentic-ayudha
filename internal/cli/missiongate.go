@@ -1567,7 +1567,10 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 		fmt.Sprintf("Raises the budget of #%d from %s to %s: %s", f, ready.USD(plan.Budget), ready.USD(to), reason),
 		"Each gate fix PR that waits for the budget and now fits goes on",
 	}}
-	if c.DryRun() { // before the device code (Bug #1252)
+	if c.DryRun() { // before the device code (Bug #1252), with the reads a real run makes after it
+		if _, _, err := e.committed(ctx, c, w, repo, f, plan, appr); err != nil {
+			return err
+		}
 		return e.dryPending(pending, fmt.Sprintf("ledger %s planned, not written; no card closed", MissionPlanPath(f)),
 			map[string]any{"feature": f, "budget": to, "effect": pending.Effect, "dry_run": true})
 	}
