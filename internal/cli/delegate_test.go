@@ -328,6 +328,26 @@ func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
 	if code, res, errOut := delegateRun(t, env, opts, set...); code != 0 || res.Delegation.Status != dlgHandedOff || held().Status != dlgHandedOff {
 		t.Fatalf("hand-off: exit %d %+v: %s", code, res.Delegation, errOut)
 	}
+	// A switch to Claude whose record the ledger refuses reports the Cursor hand-off that the ledger holds.
+	claude := opts
+	claude.LookPath = func(name string) (string, error) {
+		if name == "claude" {
+			return "/bin/claude", nil
+		}
+		return "", os.ErrNotExist
+	}
+	claude.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		b, err := os.ReadFile(filepath.Join("..", "delegate", "testdata", "claude", "cloud.txt"))
+		return string(b), err
+	}
+	before := held()
+	refuseLedger(t, bare, refuse)
+	code, res, errOut = delegateRun(t, env, claude, "--delegate", "claude")
+	refuseLedger(t, bare, "")
+	if code != ExitExternal || res.Delegation.Receiver != delegate.Cursor || res.Delegation.Mode != "cloud" || res.Delegation.Status != dlgHandedOff ||
+		res.Delegation.Task != before.Task || held().Receiver != delegate.Cursor || !strings.Contains(errOut, "Claude Code has #2 as task") {
+		t.Fatalf("a refused switch to Claude: exit %d %+v: %s", code, res.Delegation, errOut)
+	}
 	pr := g.AddPR("feat: show empty list", "Refs #2", "founder", "cursor/x", strings.Repeat("e", 40), "dev")
 	cur.finished = pr.Number
 	// A sync that would record the PR and wait for inspect.
@@ -793,6 +813,19 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	if code != 0 || runs != 2 || res.PR == 0 || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") ||
 		ds.Receiver != delegate.Codex || ds.Mode != "local" || ds.Story != 2 || ds.Branch == "" || ds.BriefHash == "" || ds.PR != res.PR || ds.Status != dlgPROpen {
 		t.Fatalf("a pause whose record the ledger refused: exit %d runs %d, ledger %+v: %s", code, runs, ds, errOut)
+	}
+
+	// A pause with no reset time whose delegation record and build state the ledger both refuse names both failures.
+	_, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		refuseLedger(t, bare, "true")
+		return "ERROR: You’ve hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits.", errors.New("codex: exit status 1")
+	}
+	code, _, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	refuseLedger(t, bare, "")
+	if code == 0 || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") || strings.Count(errOut, "the ledger refuses this push") < 2 {
+		t.Fatalf("a pause whose two saves the ledger refused: exit %d: %s", code, errOut)
 	}
 
 	// A reset already a few minutes past still waits a minute before the rerun.

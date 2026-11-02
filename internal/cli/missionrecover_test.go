@@ -550,6 +550,29 @@ func TestMissionRecoverMarksUnreadable(t *testing.T) {
 	}
 }
 
+// Bug #1264: a start that got no answer, whose maybe-started record lands and whose state comment fails, keeps
+// its slot and reports both the timeout and the comment's failure.
+func TestMissionMaybeStartedCommentFails(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			w.g.Mu.Lock()
+			w.g.Fail = "POST /repos/o/r/issues/64/comments"
+			w.g.Mu.Unlock()
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code != ExitExternal || !strings.Contains(errOut, "Codex gave no answer before the timeout, so #64 may have started there") || !strings.Contains(errOut, "injected failure") ||
+		w.state(64).Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") {
+		t.Fatalf("a maybe start whose comment failed: exit %d, %+v: %s%s", code, w.state(64), out, errOut)
+	}
+}
+
 // Criterion 4: the start of #64 sends its request and the host gives no
 // answer before the timeout, and a codex task for #64 exists with no PR. The
 // record marks #64 maybe started; recover says so and starts nothing; the

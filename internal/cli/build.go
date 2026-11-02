@@ -541,7 +541,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				}
 				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
 				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-					return err
+					return withSaveErr(err, serr)
 				}
 				_ = e.Emit(res, func(w io.Writer) error {
 					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)

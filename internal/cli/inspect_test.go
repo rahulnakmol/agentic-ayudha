@@ -434,6 +434,7 @@ func TestInspectBuilderFamily(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g, env, opts, prN := inspectFixture(t, cleanDiff, "Adds Percent.\n\nRefs #2")
 			env["AAYU_SECRET_XAI"] = "model-key"
+			env["AAYU_INSPECT__MODE"], env["AAYU_INSPECT__DELEGATED_MODE"] = "general", "peer" // no case here has a usable delegation record
 			g.Mu.Lock()
 			g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(prN) + "/commits": []any{map[string]any{"sha": head}}}
 			g.Mu.Unlock()
@@ -455,7 +456,7 @@ func TestInspectBuilderFamily(t *testing.T) {
 			}
 			model := &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}
 			code, res, errOut := inspectRun(t, env, opts, model, prN)
-			if code != 0 || len(model.Requests) != 1 || model.Requests[0].Model != tc.wantModel || string(res.Builder.Family) != tc.wantFamily {
+			if code != 0 || len(model.Requests) != 1 || model.Requests[0].Model != tc.wantModel || string(res.Builder.Family) != tc.wantFamily || res.Mode != "general" {
 				t.Fatalf("exit %d, %d requests, builder %+v; want reviewer %s, builder family %q: %s", code, len(model.Requests), res.Builder, tc.wantModel, tc.wantFamily, errOut)
 			}
 			g.Mu.Lock()

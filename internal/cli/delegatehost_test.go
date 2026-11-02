@@ -165,6 +165,17 @@ func TestAmpHostThreadRecordFails(t *testing.T) {
 		rec.Next != "" || strings.Contains(out, dlgHandedOff) {
 		t.Fatalf("a refused --thread record, --json: exit %d: %s%s", code, out, errOut)
 	}
+	// The ledger refuses the record and then cannot be read back either: build says it may not have landed, and
+	// shows the last record this run confirmed.
+	refuseLedger(t, m.bare, `chmod 000 .`)
+	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r")
+	if err := os.Chmod(m.bare, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitExternal || strings.Contains(out, dlgHandedOff) || !strings.HasPrefix(out, "#20 delegated to amp (cloud): host-handoff\n") ||
+		!strings.Contains(errOut, "the new delegation record of #20 may not have reached the ledger") || !strings.Contains(errOut, "the ledger could not be read back") {
+		t.Fatalf("a --thread record the ledger refused and could not be read back: exit %d: %s%s", code, out, errOut)
+	}
 	refuseLedger(t, m.bare, "")
 	m.g.Mu.Lock()
 	var id int64

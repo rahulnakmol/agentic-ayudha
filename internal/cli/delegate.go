@@ -534,15 +534,28 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 		_, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &back)
 		cancel()
 		if bb, _ := json.MarshalIndent(back, "", "  "); rerr != nil || !bytes.Equal(bb, b) {
-			if rerr == nil {
+			// Build reports the record the ledger holds: the one read back, or, when that read fails too, the last
+			// one this run confirmed. Only a record shown not to have landed drops a host follow-up (Bug #1264).
+			confirmed := rerr == nil
+			if confirmed {
 				d.held = back
 			}
-			unsent := d.hostFU != nil
-			d.state, d.hostFU = cloneState(d.held), nil // a follow-up the ledger does not record is not the host's to send
-			if d.res != nil && d.res.Delegation != nil {
-				d.fill(d.res.Delegation)
-				d.res.Delegation.Host, d.res.Next = nil, ""
-				d.res.Delegation.FollowUp = d.res.Delegation.FollowUp && !unsent
+			unsent := confirmed && d.hostFU != nil
+			d.state = cloneState(d.held)
+			if confirmed {
+				d.hostFU = nil // a follow-up the ledger does not record is not the host's to send
+			}
+			if r := d.res; r != nil && r.Delegation != nil {
+				d.fill(r.Delegation)
+				if d.held.Receiver != "" { // a refused switch of receiver reports the receiver the ledger names
+					r.Delegation.Receiver, r.Delegation.Mode, r.Delegation.Reason = d.held.Receiver, d.held.Mode, d.held.Reason
+				}
+				r.Delegation.Host, r.Next = nil, ""
+				r.Delegation.FollowUp = r.Delegation.FollowUp && !unsent
+			}
+			if !confirmed {
+				return Wrap(ExitExternal, fmt.Errorf("the new delegation record of #%d may not have reached the ledger: the write failed (%w), and the ledger could not be read back (%w); the last record this run confirmed is %s",
+					d.story, werr, rerr, orDefault(d.held.Status, "no record")))
 			}
 			return Wrap(ExitExternal, fmt.Errorf("the new delegation record of #%d did not reach the ledger, which holds %s: %w", d.story, orDefault(d.held.Status, "no record"), werr))
 		}
@@ -652,7 +665,8 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
-			if serr := e.saveDelegation(rctx, d); serr != nil {
+			serr := e.saveDelegation(rctx, d)
+			if serr != nil {
 				// Only a maybe start on the ledger holds the story for recover; one only
 				// in memory would hold it with nothing to check it, so it fails as a start.
 				var saved delegate.State
@@ -660,7 +674,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
 					return nil, true, serr
 				}
-				d.state, d.held = saved, cloneState(saved) // the record landed after all
+				d.state, d.held = saved, cloneState(saved) // the record landed after all; serr still goes with the result
 				d.fill(res.Delegation)
 			}
 			if !d.c.DryRun() {
@@ -668,11 +682,11 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 					p.storyState(d.story).State = stateMaybe
 					return nil
 				}); perr != nil {
-					return nil, true, perr
+					return nil, true, withSaveErr(perr, serr)
 				}
 			}
-			return nil, true, WithNext(Errorf(ExitExternal, "build #%d --delegate %s: %s gave no answer before the timeout, so #%d may have started there: %v", d.story, d.receiver, delegate.Names[d.receiver], d.story, err),
-				fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d before it starts it again", d.feature, delegate.Names[d.receiver], d.story))
+			return nil, true, withSaveErr(WithNext(Errorf(ExitExternal, "build #%d --delegate %s: %s gave no answer before the timeout, so #%d may have started there: %v", d.story, d.receiver, delegate.Names[d.receiver], d.story, err),
+				fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d before it starts it again", d.feature, delegate.Names[d.receiver], d.story)), serr)
 		}
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
