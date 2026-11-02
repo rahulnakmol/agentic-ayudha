@@ -12,7 +12,7 @@ name: aayudha-loops
 
 on:
   schedule:
-    - cron: "35 3 * * 1-5" # digest: Mon–Fri at 09:05 Asia/Kolkata, while the zone is UTC+5:30
+    - cron: "5 5 * * 1-5" # digest: Mon–Fri at 10:35 Asia/Kolkata, while the zone is UTC+5:30
     - cron: "0 21 * * *" # verify-sweep: Daily at 02:30 Asia/Kolkata, while the zone is UTC+5:30
   workflow_dispatch:
     inputs:
@@ -37,7 +37,7 @@ concurrency:
 jobs:
   digest:
     name: aayudha/loop-digest
-    if: (github.event_name == 'workflow_dispatch' && inputs.loop == 'digest') || github.event.schedule == '35 3 * * 1-5'
+    if: (github.event_name == 'workflow_dispatch' && inputs.loop == 'digest') || github.event.schedule == '5 5 * * 1-5'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

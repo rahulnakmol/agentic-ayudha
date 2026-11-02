@@ -507,6 +507,18 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		}
 		return nil
 	}
+	if next := e.outsideWindow(); agentRun && !next.IsZero() {
+		// Outside a person's window nobody is asked to act (Story #1254): no batch and no code. The request is queued
+		// for the next window's one message, and the Decisions wait in the inbox.
+		var body strings.Builder
+		for i, it := range b.Items {
+			fmt.Fprintf(&body, "%d. %s %s\n", i+1, it.Effect, it.Door)
+		}
+		fmt.Fprintf(&body, "An agent asked: %s", b.Command)
+		status := e.askLater(ctx, fmt.Sprintf("batch:%s:%v:%v", repo, nums, options), fmt.Sprintf("%s %s for your approval", issueRefs(nums), plural(len(nums), "waits", "wait")), body.String())
+		return WithNext(Errorf(ExitBlocked, "decide --accept: outside the person's windows ([time] windows), nobody is asked to act: no batch was posted, and the request waits for the window at %s (%s)",
+			next.Format("Mon 2 Jan 15:04 MST"), status), "run the same command again in the window, or the person accepts in aayu inbox")
+	}
 	if agentRun {
 		if berr == nil {
 			writer = bc

@@ -1,6 +1,8 @@
 // Package notify sends pages through the [notify] channel (WP1.6): a Slack
 // webhook, email over SMTP, or a GitHub mention comment. Pages are deduplicated
-// per key per local day, and non-urgent pages wait for business hours ([time]).
+// per key per local day, and non-urgent pages wait for a person's window
+// ([time] windows, Story #1254): the next window's first page or Flush sends
+// one message that lists every page that waited.
 // Later WPs (2.8 digest, 5.5 blocked stories, 5.6 decision SLAs, 5.7 streaks)
 // only call Sender.Page.
 package notify
@@ -26,7 +28,7 @@ import (
 // Page is one notification.
 type Page struct {
 	Key     string `json:"key"`    // dedupe key, e.g. budget:per_day; one page per key per local day
-	Urgent  bool   `json:"urgent"` // Sev0/Sev1: ignores business hours
+	Urgent  bool   `json:"urgent"` // Sev0/Sev1, a halt: ignores a person's windows
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
 }
@@ -41,14 +43,15 @@ type Sink interface {
 const (
 	Sent     = "sent"
 	Deduped  = "deduped"  // already paged today under this key
-	Deferred = "deferred" // outside business hours; delivered by the next Flush in hours
+	Deferred = "deferred" // outside a person's window; listed in the next window's one message
 	NoSink   = "no-channel"
 )
 
-// Sender pages through a sink with dedupe and business-hours gating.
+// Sender pages through a sink with dedupe and gating on a person's windows.
 type Sender struct {
-	Sink    Sink         // nil when [notify] is not configured: pages are logged, not sent
-	Clock   config.Clock // business hours and the local day for dedupe
+	Sink    Sink            // nil when [notify] is not configured: pages are logged, not sent
+	Clock   config.Clock    // the local day for dedupe; business hours gate pages when Windows is unset
+	Windows *config.Windows // a person's windows ([time] windows): outside them a non-urgent page waits
 	Now     func() time.Time
 	State   string       // JSON file holding sent keys and deferred pages
 	Actions *actions.Log // every delivery is an external write (ground rule 6); nil skips logging
@@ -101,8 +104,18 @@ func (s *Sender) dayKey(key string, t time.Time) string {
 	return key + "@" + t.In(s.Clock.Loc).Format("2006-01-02")
 }
 
-// Page sends p once per key per local day. Outside business hours a
-// non-urgent page is deferred to the next Flush inside business hours.
+// open reports whether a person may be asked now: inside a window, or in
+// business hours when the Sender has no windows.
+func (s *Sender) open(now time.Time) bool {
+	if s.Windows != nil {
+		return s.Windows.Within(now)
+	}
+	return s.Clock.Within(now)
+}
+
+// Page sends p once per key per local day. Outside a person's window a
+// non-urgent page waits; inside one, a page with others waiting goes out with
+// them, as one message that lists them all.
 func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -120,9 +133,17 @@ func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 			return Deduped, nil
 		}
 	}
-	if !p.Urgent && !s.Clock.Within(now) {
+	if !p.Urgent && !s.open(now) {
 		st.Pending = append(st.Pending, p)
 		return Deferred, s.save(st)
+	}
+	if !p.Urgent && len(st.Pending) > 0 {
+		st.Pending = append(st.Pending, p)
+		_, status, err := s.flush(ctx, &st, now)
+		if err != nil {
+			return "", err
+		}
+		return status, s.save(st)
 	}
 	status, err := s.deliver(ctx, p)
 	if err != nil {
@@ -132,30 +153,63 @@ func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 	return status, s.save(st)
 }
 
-// Flush delivers deferred pages when inside business hours.
+// Flush sends, inside a person's window, one message that lists every page
+// that waited, and reports how many it listed.
 func (s *Sender) Flush(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	if !s.Clock.Within(now) {
+	if !s.open(now) {
 		return 0, nil
 	}
 	st, err := s.load()
 	if err != nil {
 		return 0, err
 	}
-	n := 0
-	var keep []Page
-	for _, p := range st.Pending {
-		if _, err := s.deliver(ctx, p); err != nil {
-			keep = append(keep, p)
-			continue
-		}
-		st.Sent[s.dayKey(p.Key, now)] = now
-		n++
+	n, _, err := s.flush(ctx, &st, now)
+	if err != nil {
+		return 0, err
 	}
-	st.Pending = keep
 	return n, s.save(st)
+}
+
+// flush delivers st's waiting pages as one message, and on success marks
+// each sent today. A failed delivery keeps them all waiting.
+func (s *Sender) flush(ctx context.Context, st *state, now time.Time) (int, string, error) {
+	if len(st.Pending) == 0 {
+		return 0, "", nil
+	}
+	status, err := s.deliver(ctx, WindowMessage(st.Pending, now))
+	if err != nil {
+		return 0, "", err
+	}
+	for _, p := range st.Pending {
+		st.Sent[s.dayKey(p.Key, now)] = now
+	}
+	n := len(st.Pending)
+	st.Pending = nil
+	return n, status, nil
+}
+
+// WindowMessage is the one message that lists every page that waited for a
+// person's window, in the order they waited.
+func WindowMessage(pages []Page, now time.Time) Page {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d %s waited for your window. Open `aayu inbox` to act on them:\n", len(pages), plural(len(pages), "request", "requests"))
+	for i, p := range pages {
+		fmt.Fprintf(&b, "\n%d. %s\n", i+1, p.Subject)
+		if body := strings.TrimSpace(p.Body); body != "" {
+			fmt.Fprintf(&b, "   %s\n", strings.ReplaceAll(body, "\n", "\n   "))
+		}
+	}
+	return Page{Key: "window:" + now.UTC().Format(time.RFC3339), Subject: fmt.Sprintf("aayudha: %d %s for your window", len(pages), plural(len(pages), "request", "requests")), Body: b.String()}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func (s *Sender) deliver(ctx context.Context, p Page) (string, error) {

@@ -94,6 +94,7 @@ const dayLine889 = "  #889 · today MS1: #20, #21, #22 · evening review Sun 1 N
 func TestDayIsSet(t *testing.T) {
 	t.Run("line by line", func(t *testing.T) {
 		m, pr := morningWorld(t)
+		m.windows()
 		m.device("rahulnakmol")
 		code, out, errOut := runIn(t, m.person, m.opts, "aaaaa1y2s", "inbox", "--repo", "o/r")
 		last := strings.LastIndex(out, "At the review cap #"+strconv.Itoa(pr))
@@ -104,6 +105,7 @@ func TestDayIsSet(t *testing.T) {
 	})
 	t.Run("full screen", func(t *testing.T) {
 		m := lockWorld(t, "cursor")
+		m.windows()
 		// Monday 19:30 in UTC is Tuesday 01:00 in Kolkata, after Monday's evening window there: the review is Tuesday's.
 		m.opts.Now = func() time.Time { return time.Date(2026, 11, 2, 19, 30, 0, 0, time.UTC) }
 		m.person["AAYU_TIME__TZ"] = "Asia/Kolkata"

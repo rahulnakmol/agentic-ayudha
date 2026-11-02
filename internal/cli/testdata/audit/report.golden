@@ -18,10 +18,10 @@ aayu audit --repo o/r --since 2026-10-11T00:00:00Z --until 2026-10-12T04:00:00Z 
 | Repository | `o/r` |
 | Window | 2026-10-11T00:00:00Z to 2026-10-12T04:00:00Z (half-open) |
 | GitHub event cursor | until 2026-10-12T04:00:00Z; newest rule suite 4474099541 |
-| GitHub inputs snapshot | `audit/2026-10-12/audit-20261012T040000Z.inputs.json` (SHA-256 `a4b7deaa49c404dbedca1e76bc417893ecf8e384586a50e71636ad2f886a2984`) |
+| GitHub inputs snapshot | `audit/2026-10-12/audit-20261012T040000Z.inputs.json` (SHA-256 `dc86ba97397a003ecfa084a4e1280abf6a26becf565799d2360b750b73efe31e`) |
 | Ledger commit | `400b3e03532757bb74a5fa17ac5b6aa5011cd487` |
 | Code commit (licence scan) | `c0dec0dec0dec0dec0dec0dec0dec0dec0dec0de` |
-| Config hash | `audit-config:sha256:5ebbf6ff12b63426ba8554b80ef3cc4c75776df6154a23d75924fc3cd2d06313` |
+| Config hash | `audit-config:sha256:f6398a3118527231f66ddb724e85c5a0cdf3a2f98153287ca3895ffa25a2a3a8` |
 | Actions segments | 1 |
 
 | Segment | SHA-256 | Records |

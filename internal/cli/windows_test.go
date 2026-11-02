@@ -24,7 +24,7 @@ func TestConfigShowListsPersonWindows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	code, out, errOut := run(t, map[string]string{}, Options{Dir: dir}, "config", "show")
+	code, out, errOut := run(t, map[string]string{windowsKey: defaultWindows}, Options{Dir: dir}, "config", "show")
 	want := "[time]\nbusiness_hours = 'Mon-Fri 09:00-18:00'\ntz = 'Asia/Kolkata'\nwindows = ['10:30-11:30', '18:30-19:30']\n"
 	if code != ExitOK || !strings.Contains(out, want) {
 		t.Fatalf("config show: exit %d, want %q in:\n%s%s", code, want, out, errOut)

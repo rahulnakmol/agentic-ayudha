@@ -40,6 +40,7 @@ func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *
 	m := newMissionWorld(t)
 	now := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 	m.opts.Now = func() time.Time { m.mu.Lock(); defer m.mu.Unlock(); return now }
+	m.windows() // the evening review comes in the evening window (Story #1254)
 	m.mu.Lock()
 	m.tool = "amp"
 	m.mu.Unlock()

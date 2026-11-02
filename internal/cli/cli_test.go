@@ -35,7 +35,15 @@ func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Optio
 	var out, errb bytes.Buffer
 	opts.Getenv = func(k string) string { return env[k] }
 	for k, v := range env {
+		if k == windowsKey && v == defaultWindows {
+			continue
+		}
 		opts.Environ = append(opts.Environ, k+"="+v)
+	}
+	// A person's windows (Story #1254) gate every request for a person on the clock. A test has none unless it sets
+	// [time] windows itself, so a test that reads the real clock never lands outside a window.
+	if _, ok := env[windowsKey]; !ok {
+		opts.Environ = append(opts.Environ, windowsKey+"=")
 	}
 	if env["HOME"] == "" { // never read the developer's real user config
 		home := t.TempDir()
@@ -67,6 +75,14 @@ func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Optio
 	code = Run(ctx, args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
 }
+
+// windowsKey sets [time] windows from the environment. Set to
+// defaultWindows, a test runs with the built-in default windows, 10:30-11:30
+// and 18:30-19:30 in [time] tz; unset, runCtx gives it none.
+const (
+	windowsKey     = "AAYU_TIME__WINDOWS"
+	defaultWindows = "default"
+)
 
 // stdinTTY makes run's stdin a person's interactive terminal, as a human-only
 // action needs when no agent marker is set (Bug #170); stdout and stderr stay
