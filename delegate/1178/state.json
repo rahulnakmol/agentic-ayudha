@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19b2e-50de-7106-8cbd-e33670a0f900",
+  "task_url": "https://ampcode.com/threads/T-01a19b2e-50de-7106-8cbd-e33670a0f900",
   "branch": "story/1178-the-overnight-card-the-person-sets-what",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "2bfc3185e9c075a7867d6f22d922748dd4923e71d35319be5f179c273b7c28ed",
   "started_at": "2026-11-02T07:33:38Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-02T07:33:38Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1178: The overnight card: the person sets what runs overnight, bounded in hours and cost"
+    },
+    {
+      "at": "2026-11-02T07:34:50Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
