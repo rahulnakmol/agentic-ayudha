@@ -1375,6 +1375,17 @@
         "sha256": "20fd1b85846793d6930d9d2643a17e2ecbe250b1e082df239ff14b08ac627332"
       },
       "at": "2026-11-01T20:11:12Z"
+    },
+    {
+      "pr": 1233,
+      "milestone": "MS1",
+      "check": "eval:retro/em-scaleup",
+      "dev_sha": "0c4abee6d960609bcfffba73182baf920a9c0dae",
+      "approval": {
+        "record": "specs/1170/approved.json",
+        "sha256": "20fd1b85846793d6930d9d2643a17e2ecbe250b1e082df239ff14b08ac627332"
+      },
+      "at": "2026-11-02T00:45:38Z"
     }
   ],
   "events_cursor": "2026-11-01T20:10:06Z"
