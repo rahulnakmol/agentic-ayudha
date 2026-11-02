@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -262,27 +263,59 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 // Bug #1266, criterion 1: a host hand-off lives as long as the mission claim
 // that started it. A build that hands #20 off 14 minutes after the claim gets
 // no 15 minutes more: 16 minutes after the claim, mission next releases #20
-// and lists it start.
+// and lists it start. That holds when the claim expires during the build's
+// environment setup too. A --thread recorded before mission next marks the
+// lapse is kept (criterion 2); one recorded after it is refused.
 func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
-	m := newMissionWorld(t)
-	m.hostMission(20)
-	clk := m.withClock()
-	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
-		t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
-	}
-	clk.add(14 * time.Minute)
-	if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil {
-		t.Fatalf("no host hand-off: %+v", res.Delegation)
-	}
-	clk.add(2 * time.Minute)
-	if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
-		t.Fatalf("mission next 16 minutes after the claim: exit %d: %q%s", code, out, errOut)
-	}
-	if got := m.labels(20); !slices.Contains(got, "status:ready") || slices.Contains(got, "status:in-progress") || slices.Contains(got, LeaseLabel) {
-		t.Fatalf("#20's labels after the lapse: %v", got)
-	}
-	if st := m.state(20); st.Status != dlgLapsed || st.Task != "" {
-		t.Fatalf("delegate/20/state.json after the lapse: %+v", st)
+	for _, tc := range []struct {
+		name         string
+		setup        time.Duration // the clock moves this much while build verifies the environment
+		recordBefore bool          // --thread runs before mission next
+	}{
+		{name: "late build"},
+		{name: "claim expires during setup", setup: 2 * time.Minute},
+		{name: "thread recorded before the lapse is marked", recordBefore: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMissionWorld(t)
+			m.hostMission(20)
+			clk := m.withClock()
+			if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+				t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
+			}
+			clk.add(14 * time.Minute)
+			ensure := m.opts.EnsureEnv
+			m.opts.EnsureEnv = func(ctx context.Context, root, host string) (agentenv.HostStatus, error) {
+				clk.add(tc.setup)
+				return ensure(ctx, root, host)
+			}
+			if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil {
+				t.Fatalf("no host hand-off: %+v", res.Delegation)
+			}
+			clk.add(2*time.Minute - tc.setup)
+			if tc.recordBefore {
+				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != 0 {
+					t.Fatalf("--thread 16 minutes after the claim, before mission next: exit %d: %s", code, errOut)
+				}
+				if st := m.state(20); st.Status != dlgHandedOff || st.Task != hostThread {
+					t.Fatalf("delegate/20/state.json after the record: %+v", st)
+				}
+				return
+			}
+			if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+				t.Fatalf("mission next 16 minutes after the claim: exit %d: %q%s", code, out, errOut)
+			}
+			if got := m.labels(20); !slices.Contains(got, "status:ready") || slices.Contains(got, "status:in-progress") || slices.Contains(got, LeaseLabel) {
+				t.Fatalf("#20's labels after the lapse: %v", got)
+			}
+			if st := m.state(20); st.Status != dlgLapsed || st.Task != "" {
+				t.Fatalf("delegate/20/state.json after the lapse: %+v", st)
+			}
+			n := m.commits()
+			if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != ExitBlocked || m.commits() != n {
+				t.Fatalf("--thread after the lapse is marked: exit %d: %s", code, errOut)
+			}
+		})
 	}
 }
 

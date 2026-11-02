@@ -707,11 +707,16 @@ func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, 
 		return Errorf(ExitExternal, "build #%d --delegate amp: the brief for the host was not written: %v", d.story, err)
 	}
 	if d.feature != 0 { // the hand-off lives as long as the mission claim that started it (Bug #1266)
-		claims, err := e.claimLines(ctx, d.w, MissionClaimsPath(d.feature), nil)
+		t, err := d.w.Read(ctx)
 		if err != nil {
-			return err
+			return Wrap(ExitExternal, ignoreMissing(err))
 		}
-		for _, cl := range claims {
+		raw, err := t.File(ctx, MissionClaimsPath(d.feature))
+		t.Close()
+		if err := ignoreMissing(err); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		for _, cl := range e.allClaims(raw) { // however old: a claim that expired during setup still sets the deadline
 			if cl.Story == d.story {
 				d.state.ClaimedAt = cl.At
 			}
