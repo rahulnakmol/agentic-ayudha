@@ -53,11 +53,19 @@ type Sender struct {
 	Sink    Sink            // nil when [notify] is not configured: pages are logged, not sent
 	Clock   config.Clock    // the local day for dedupe; business hours gate pages when Windows is unset
 	Windows *config.Windows // a person's windows ([time] windows): outside them a non-urgent page waits
+	Queue   Queue           // where a page waits for a window, seen from every checkout; nil keeps it in State
 	Now     func() time.Time
 	State   string       // JSON file holding sent keys and deferred pages
 	Actions *actions.Log // every delivery is an external write (ground rule 6); nil skips logging
 
 	mu sync.Mutex
+}
+
+// Queue holds the pages that wait for a person's window where every checkout
+// and runner reads them (the ledger), so the window's one message lists them
+// whichever run sends it. Add keeps one page per key.
+type Queue interface {
+	Add(ctx context.Context, p Page) error
 }
 
 type state struct {
@@ -147,7 +155,7 @@ func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 		if q.Key != p.Key {
 			continue
 		}
-		if !s.open(now) {
+		if !s.open(now) || s.Queue != nil { // with a Queue, only the window's one message sends what waited
 			return Deduped, nil
 		}
 		// In a window, the same request asked again sends what waited, itself once among them.
@@ -157,10 +165,19 @@ func (s *Sender) Page(ctx context.Context, p Page) (string, error) {
 		return Sent, s.save(st)
 	}
 	if !p.Urgent && !s.open(now) {
+		if s.Queue != nil {
+			qerr := s.Queue.Add(ctx, p)
+			if qerr == nil {
+				return Deferred, nil
+			}
+			// Kept here, so it is not lost: this checkout's next window message lists it.
+			st.Pending = append(st.Pending, p)
+			return Deferred, errors.Join(fmt.Errorf("it waits on this machine only: %w", qerr), s.save(st))
+		}
 		st.Pending = append(st.Pending, p)
 		return Deferred, s.save(st)
 	}
-	if !p.Urgent && len(st.Pending) > 0 {
+	if !p.Urgent && len(st.Pending) > 0 && s.Queue == nil {
 		st.Pending = append(st.Pending, p)
 		_, status, err := s.flush(ctx, &st, now)
 		if err != nil {

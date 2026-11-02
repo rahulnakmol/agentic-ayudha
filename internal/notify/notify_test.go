@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,5 +75,39 @@ func TestPagesWaitForAWindow(t *testing.T) {
 	if st, err := s.Page(ctx, Page{Key: "c", Subject: "third"}); err != nil || st != Sent || len(sink.Pages) != 4 ||
 		!strings.Contains(sink.Pages[3].Body, "1. third\n") || !strings.Contains(sink.Pages[3].Body, "2. fourth\n") || strings.Count(sink.Pages[3].Body, "third") != 1 {
 		t.Fatalf("a waiting request asked again in a window: %q, %v, sent %+v", st, err, sink.Pages)
+	}
+}
+
+// queueFunc is a Queue for tests.
+type queueFunc func(Page) error
+
+func (f queueFunc) Add(_ context.Context, p Page) error { return f(p) }
+
+// Goldfish review, round 2, findings 3 and 11: with a Queue (the ledger's
+// outbox), a page outside a window waits there, not in this machine's state.
+// A queue that cannot take it keeps it here and says so; the next window's
+// message sends it.
+func TestPagesWaitInTheQueue(t *testing.T) {
+	w, err := config.NewWindows("Asia/Kolkata", []string{"10:30-11:30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 2, 14, 0, 0, 0, w.Loc)
+	var queued []Page
+	var qerr error
+	sink := &Fake{}
+	s := &Sender{Sink: sink, Clock: config.Clock{Loc: w.Loc}, Windows: &w, Now: func() time.Time { return now }, State: filepath.Join(t.TempDir(), "notify.json"),
+		Queue: queueFunc(func(p Page) error { queued = append(queued, p); return qerr })}
+	ctx := context.Background()
+	if st, err := s.Page(ctx, Page{Key: "a", Subject: "first"}); err != nil || st != Deferred || len(queued) != 1 {
+		t.Fatalf("a page at 14:00: %q, %v, queued %+v", st, err, queued)
+	}
+	qerr = errors.New("the ledger is not reachable")
+	if st, err := s.Page(ctx, Page{Key: "b", Subject: "second"}); st != Deferred || err == nil || !strings.Contains(err.Error(), "on this machine only") {
+		t.Fatalf("a page the queue refused: %q, %v", st, err)
+	}
+	now = time.Date(2026, 11, 3, 10, 30, 0, 0, w.Loc)
+	if n, err := s.Window(ctx, "window:x", nil); err != nil || n != 1 || len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "1. second\n") || strings.Contains(sink.Pages[0].Body, "first") {
+		t.Fatalf("the window's message: %d, %v, %+v", n, err, sink.Pages)
 	}
 }
