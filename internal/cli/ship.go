@@ -416,11 +416,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 				review = fmt.Sprintf(", or posts a comment starting %q that names the head and runs `aayu ship %d --solo-bypass`", SoloBypassPrefix, n)
 				bypass = review
 			}
-			if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window (Story #1254)
-				return e.waitsForWindow(fmt.Sprintf("%s; its Ready to ship comment for %s", refusal, who), next)
-			}
 			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
 				"%s ships it from `aayu inbox`%s.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), review)
+			if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window: the comment waits in the outbox (Story #1254)
+				q := queued{Key: fmt.Sprintf("ship:%s#%d@%s", repo, n, head), Comment: &queuedComment{PR: n, Head: head, Story: story, Kind: "github.comment.ready-to-ship", Marker: ReadyToShipMarker, Body: body}}
+				if err := e.enqueueHere(ctx, q); err != nil {
+					return Errorf(ExitBlocked, "%s; its Ready to ship comment did not reach the outbox for the next window: %v", refusal, err)
+				}
+				return WithNext(Errorf(ExitBlocked, "%s; its Ready to ship comment for %s waits for the window at %s, and then the PR waits in the `aayu inbox`%s",
+					refusal, who, next.Format("Mon 2 Jan 15:04 MST"), bypass), "the next window's first aayu mission tick posts it")
+			}
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 )
 
 // Story #1254, criterion 1: in a repository whose config sets no [time]
@@ -81,5 +83,26 @@ func TestRequestsWaitForAWindow(t *testing.T) {
 	// The tick itself shows the time card: it is in the window's inbox with no mission next (Goldfish round 1, finding 4).
 	if keys, _ := m.listed(m.person); m.timeComments(889) != 1 || !slices.Contains(keys, "decision#5") || !slices.Contains(keys, "mission-time#889") {
 		t.Fatalf("the window's inbox after the tick: %d time cards, %v", m.timeComments(889), keys)
+	}
+}
+
+// Goldfish review, round 2, finding 8: a write to the window records or the
+// outbox that another ledger write moved reads the tip again and lands; it
+// never takes the move for another run's claim.
+func TestNotifyEditsReadAgainWhenTheLedgerMoved(t *testing.T) {
+	dir, bare := ledgerCheckout(t)
+	pushed := false
+	w := &ledger.Writer{Dir: dir, OnAttempt: func(int, string) {
+		if !pushed {
+			pushed = true
+			putLedger(t, bare, "specs/1/other.json", "{}")
+		}
+	}}
+	err := editNotify(context.Background(), w, "notify: a test", func(ws *[]windowSent, _ *[]queued) bool {
+		*ws = append(*ws, windowSent{Window: "2026-10-22T09:30:00Z", State: "claimed"})
+		return true
+	})
+	if got := ledgerFile(t, bare, WindowsPath); err != nil || !pushed || !strings.Contains(got, `"state":"claimed"`) || ledgerFile(t, bare, "specs/1/other.json") == "" {
+		t.Fatalf("after a moved ledger: err %v, pushed %v, %s = %q", err, pushed, WindowsPath, got)
 	}
 }

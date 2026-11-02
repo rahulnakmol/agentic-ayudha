@@ -130,7 +130,7 @@ Exit codes:
 	pf.StringArrayVar(&e.Set, "set", nil, "override a config value for this run, as key=value (repeatable)")
 	pf.BoolVar(&e.Plain, "plain", false, "words only on a terminal: no colour, motion, emoji, or box drawing (also [ui] plain = true, AAYU_PLAIN=1)")
 
-	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		e.startTrace(cmd)
 		if sig := e.agentSignal(); e.Yes && sig != "" {
 			return Errorf(ExitBlocked, "--yes is for humans only and is refused for an agent lane (%s)", sig)
@@ -139,7 +139,9 @@ Exit codes:
 			return Errorf(ExitUsage, "--repo %q: want owner/name", e.Repo)
 		}
 		c, ok := verbs.Find(cmd.Name())
-		if ok && e.Agent() && cmd.GroupID == "verbs" {
+		// mission tick checks the pause itself: paused, it sends only a person's window message (Story #1254).
+		tick := cmd.Name() == "mission" && len(args) > 0 && args[0] == "tick"
+		if ok && e.Agent() && cmd.GroupID == "verbs" && !tick {
 			if _, err := os.Stat(e.PauseFile()); err == nil {
 				return Errorf(ExitBudget, "agent lanes are paused by the [budget] breaker (%s); a human must clear it", e.PauseFile())
 			}

@@ -247,6 +247,12 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			}
 			return nil
 		}
+		if next := e.outsideWindow(); c.App == "" && !next.IsZero() {
+			// A person's review: nobody is asked outside a person's window (Story #1254). The inbox holds the PR from
+			// this head's state, and the window's one message lists it.
+			notes = append(notes, "the request for a human review waits for the person's window at "+next.Format("Mon 2 Jan 15:04 MST")+": aayu inbox holds it, and the window's message lists it")
+			return nil
+		}
 		hc, _, err := e.HumanGitHub(ctx)
 		if err != nil {
 			return err

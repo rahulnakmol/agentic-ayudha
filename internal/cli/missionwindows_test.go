@@ -1,9 +1,10 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
 
 // london is a time on 22 October 2026 in London, in summer time (UTC+1): the
@@ -78,6 +80,39 @@ func TestTimeLimitWaitsForAWindow(t *testing.T) {
 	}
 	if m.timeComments(889) != 1 || len(sink.Pages) != 1 {
 		t.Fatalf("after the window: %d time cards, pages %+v", m.timeComments(889), sink.Pages)
+	}
+	// An edit of the unanswered card at 14:00 does not move its window: the hold stands (Goldfish round 2, finding 13).
+	m.edit(func() {
+		for _, c := range m.g.Issues[889].Comments {
+			if strings.HasPrefix(c.Body, MissionTimeMarker) {
+				c.UpdatedAt = london(14, 0)
+			}
+		}
+	})
+	at(london(14, 0))
+	next("14:00", "waits #28: #889 reached max_hours (48 h)\n")
+}
+
+// Goldfish review, round 2, finding 9: the tick shows a due time card in a
+// window for a mission whose Kanha is local, which it never wakes.
+func TestTickShowsTheCardsOfALocalKanha(t *testing.T) {
+	m := startedTwo(t, 25)
+	m.windows()
+	var a ready.Approval
+	if err := json.Unmarshal([]byte(git(t, m.bare, "show", "ledger:"+ready.ApprovalPath(889))), &a); err != nil {
+		t.Fatal(err)
+	}
+	a.Parent.Mode, a.Parent.Machine = "local", "rahulnakmol@laptop"
+	b, _ := json.Marshal(a)
+	putLedger(t, m.bare, ready.ApprovalPath(889), string(b))
+	t0 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	for _, n := range []int{20, 21} {
+		m.status(n, "in-progress", "")
+		m.delegation(n, t0, 0)
+	}
+	m.opts.Now = func() time.Time { return london(10, 30) }
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || m.timeComments(889) != 1 {
+		t.Fatalf("the tick at 10:30: exit %d, %d time cards: %s%s", code, m.timeComments(889), out, errOut)
 	}
 }
 
@@ -151,6 +186,29 @@ func TestBudgetWaitsForAWindow(t *testing.T) {
 	}
 }
 
+// Goldfish review, round 2, finding 10: past the budget with no story that
+// can start (one runs, one is not Ready), the window still shows the budget
+// card, so the story that becomes Ready after the window waits for it.
+func TestBudgetCardWithNothingToStart(t *testing.T) {
+	m := budgetWorld(t, 26)
+	m.windows()
+	at := func(t time.Time) { m.opts.Now = func() time.Time { return t } }
+	at(london(14, 0))
+	if code, out, errOut := m.next(889); code != 0 || out != "start #25\nwaits #26: not Ready (open)\n" {
+		t.Fatalf("over the budget at 14:00: exit %d: %q%s", code, out, errOut)
+	}
+	m.status(25, "in-progress", "")
+	at(london(18, 30))
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || len(m.budgetCards()) != 1 {
+		t.Fatalf("the tick at 18:30 with nothing to start: exit %d, cards %+v: %s%s", code, m.budgetCards(), out, errOut)
+	}
+	m.status(26, "ready", "")
+	at(london(20, 0))
+	if code, out, errOut := m.next(889); code != 0 || out != "waits #26: would pass #889's approved budget (660 + 60 > 660 USD)\n" {
+		t.Fatalf("a story Ready after the window: exit %d: %q%s", code, out, errOut)
+	}
+}
+
 // Goldfish review, round 1, finding 1: the newest trusted card is the
 // mission's state. An account's limit card, edited in a window after another
 // account marked an older warning seen, still holds new starts from that
@@ -183,10 +241,10 @@ func TestTimeHoldReadsTheNewestCard(t *testing.T) {
 	}
 }
 
-// Goldfish review, round 1, finding 3: a gate that fails [mission] max_no_go
-// times outside a window asks nobody: its ask is not posted and its run is
-// not recorded. The first gate run in the window records the stop and posts
-// the ask.
+// Goldfish review, round 1, finding 3, and round 2, finding 2: a gate that
+// fails [mission] max_no_go times outside a window asks nobody: it records
+// the stop, and its ask waits in the ledger's outbox. The window's first tick
+// posts the ask, with no second gate run.
 func TestGateAskWaitsForAWindow(t *testing.T) {
 	g := newGateWorld(t, "MS1=#20 MS2=#22", 20, 22)
 	g.windows()
@@ -211,22 +269,24 @@ func TestGateAskWaitsForAWindow(t *testing.T) {
 	g.vfail = []string{"mission.stays"}
 	g.tip(strings.Repeat("3", 40), "success")
 	g.opts.Now = func() time.Time { return london(14, 0) }
-	if code, _, errOut := g.gate(); code != ExitBlocked || !strings.Contains(errOut, "outside the person's windows ([time] windows) nobody is asked: it waits for the window at Thu 22 Oct 18:30 BST") ||
-		len(g.runs()) != 2 || asks() != 0 {
+	if code, _, errOut := g.gate(); code != 0 || len(g.runs()) != 3 || asks() != 0 {
 		t.Fatalf("the third failed gate at 14:00: exit %d, runs %d, asks %d: %s", code, len(g.runs()), asks(), errOut)
 	}
 	g.opts.Now = func() time.Time { return london(18, 30) }
-	if rep := g.gateJSON(); rep.Milestones[0].State != GateStopped || len(g.runs()) != 3 || asks() != 1 {
-		t.Fatalf("the gate at 18:30: %+v, runs %d, asks %d", rep.Milestones[0], len(g.runs()), asks())
+	if code, out, errOut := run(t, g.lane, g.opts, "mission", "tick", "--repo", "o/r"); code != 0 || asks() != 1 || len(g.runs()) != 3 {
+		t.Fatalf("the tick at 18:30: exit %d, runs %d, asks %d: %s%s", code, len(g.runs()), asks(), out, errOut)
 	}
 }
 
-// Goldfish review, round 1, finding 2: the window's one message comes from
-// the inbox on GitHub and the ledger, so a run in a fresh checkout (another
-// state directory, no local queue) sends it, once per window whichever run
-// sends it, and again in the next window.
+// Goldfish review, round 1, finding 2, and round 2, findings 3, 6, 12 and 14:
+// a request made outside a window waits in the ledger's outbox, so a run in
+// another clone sends the window's one message with it after the first clone
+// is gone. A run that claimed the window and stopped gives it to the next run
+// once its claim lapses; each window has one message, and the next has its own.
 func TestWindowMessageFromAnyCheckout(t *testing.T) {
 	m := startedTwo(t, 25)
+	m.issue(5, "Choose the rules engine", "decision", 0, "")
+	m.edit(func() { m.g.Issues[5].Body = decisionBody("true", "") })
 	sink := m.windows()
 	t0 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	for _, n := range []int{20, 21} {
@@ -234,25 +294,78 @@ func TestWindowMessageFromAnyCheckout(t *testing.T) {
 		m.delegation(n, t0, 0)
 	}
 	m.opts.Now = func() time.Time { return t0.Add(48*time.Hour + time.Minute) } // 01:01: the limit, outside a window
-	if code, _, errOut := m.next(889); code != 0 || len(sink.Pages) != 0 {
-		t.Fatalf("mission next at 01:01: exit %d, pages %+v: %s", code, sink.Pages, errOut)
+	if code, _, errOut := run(t, m.agent, m.opts, "decide", "5", "--accept", "1", "--repo", "o/r"); code != ExitBlocked || len(sink.Pages) != 0 {
+		t.Fatalf("an agent's batch at 01:01 in clone A: exit %d, pages %+v: %s", code, sink.Pages, errOut)
 	}
+	// Clone A is gone: its state with it. Clone B has its own state directory, and only the ledger is shared.
+	if err := os.RemoveAll(filepath.Join(m.dir, ".aayudha")); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(t.TempDir(), "clone-b")
+	git(t, filepath.Dir(other), "clone", "--quiet", "--branch", "dev", m.bare, other)
+	b := m.opts
+	b.Dir = other
 	tick := func(when time.Time) {
 		t.Helper()
-		m.opts.Now = func() time.Time { return when }
-		env := maps.Clone(m.lane)
-		env["XDG_STATE_HOME"] = t.TempDir() // a fresh checkout: no local queue
-		if code, out, errOut := run(t, env, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 {
-			t.Fatalf("the tick at %s: exit %d: %s%s", when, code, out, errOut)
+		b.Now = func() time.Time { return when }
+		if code, out, errOut := run(t, m.lane, b, "mission", "tick", "--repo", "o/r"); code != 0 {
+			t.Fatalf("the tick at %s in clone B: exit %d: %s%s", when, code, out, errOut)
 		}
 	}
-	tick(london(10, 30))
+	// A run that claimed the morning window and stopped before it sent: the next run waits for the claim to lapse.
+	putLedger(t, m.bare, WindowsPath, `{"window":"2026-10-22T09:30:00Z","state":"claimed","at":"2026-10-22T09:30:00Z","until":"2026-10-22T09:40:00Z"}`+"\n")
+	tick(london(10, 35))
+	if len(sink.Pages) != 0 {
+		t.Fatalf("a message while another run's claim holds: %+v", sink.Pages)
+	}
+	tick(london(10, 41))
 	tick(london(11, 0))
-	if len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "1. Mission time #889: #889 reached its 48 h time limit\n") {
-		t.Fatalf("the morning window's messages: %+v", sink.Pages)
+	if len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "Mission time #889: #889 reached its 48 h time limit\n") ||
+		!strings.Contains(sink.Pages[0].Body, "#5 waits for your approval\n   1. Accepts option 1 (A) of Decision #5") {
+		t.Fatalf("the morning window's messages from clone B: %+v", sink.Pages)
+	}
+	if out := ledgerFile(t, m.bare, OutboxPath); strings.TrimSpace(out) != "" {
+		t.Fatalf("the outbox after the window's message: %q", out)
 	}
 	tick(london(18, 30))
-	if len(sink.Pages) != 2 || !strings.Contains(sink.Pages[1].Body, "Mission time #889") {
+	if len(sink.Pages) != 2 || !strings.Contains(sink.Pages[1].Body, "Mission time #889") || strings.Contains(sink.Pages[1].Body, "waits for your approval") {
 		t.Fatalf("the evening window's message: %+v", sink.Pages)
 	}
+}
+
+// Goldfish review, round 2, finding 5: the [budget] breaker pauses every
+// agent lane, and the tick starts and wakes nothing, but the window's one
+// message still goes out: the person it reaches is the one who clears it.
+func TestPausedTickSendsTheWindowMessage(t *testing.T) {
+	m := startedTwo(t, 25)
+	m.issue(5, "Choose the rules engine", "decision", 0, "")
+	m.edit(func() { m.g.Issues[5].Body = decisionBody("true", "") })
+	sink := m.windows()
+	m.opts.Now = func() time.Time { return london(14, 0) }
+	if code, _, errOut := run(t, m.agent, m.opts, "decide", "5", "--accept", "1", "--repo", "o/r"); code != ExitBlocked || len(sink.Pages) != 0 {
+		t.Fatalf("an agent's batch at 14:00: exit %d, pages %+v: %s", code, sink.Pages, errOut)
+	}
+	pause := filepath.Join(m.dir, ".aayudha", "state", "paused")
+	if err := os.MkdirAll(filepath.Dir(pause), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pause, []byte("per_day_usd"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.opts.Now = func() time.Time { return london(18, 30) }
+	code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r")
+	if code != ExitBudget || !strings.Contains(errOut, "paused by the [budget] breaker") || len(sink.Pages) != 1 ||
+		!strings.Contains(sink.Pages[0].Body, "#5 waits for your approval") || strings.Contains(out, "woke") {
+		t.Fatalf("the paused tick at 18:30: exit %d, pages %+v: %s%s", code, sink.Pages, out, errOut)
+	}
+}
+
+// ledgerFile is path on the ledger branch of bare, or "" when it is absent.
+func ledgerFile(t *testing.T, bare, path string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", bare, "show", "ledger:"+path).Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }

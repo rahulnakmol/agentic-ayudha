@@ -6,7 +6,7 @@ tests = ["internal/cli:TestConfigShowListsPersonWindows", "internal/config:TestP
 
 [[criterion]]
 id = 2 # past max_hours outside a window: mission next still starts stories, and the time card waits for the next window
-tests = ["internal/cli:TestTimeLimitWaitsForAWindow"]
+tests = ["internal/cli:TestTimeLimitWaitsForAWindow", "internal/cli:TestTickShowsTheCardsOfALocalKanha"]
 
 [[criterion]]
 id = 3 # the card unanswered to a window's end: new starts wait from that end; running stories go on
@@ -14,12 +14,13 @@ tests = ["internal/cli:TestTimeLimitWaitsForAWindow", "internal/cli:TestTimeHold
 
 [[criterion]]
 id = 4 # the mission's budget used up outside a window: starts go on, the budget card waits; the [budget] breaker still stops every lane
-tests = ["internal/cli:TestBudgetWaitsForAWindow"]
+tests = ["internal/cli:TestBudgetWaitsForAWindow", "internal/cli:TestBudgetCardWithNothingToStart", "internal/cli:TestPausedTickSendsTheWindowMessage"]
 
 [[criterion]]
 id = 5 # a page, a comment approval batch, or a card outside a window: nothing is sent; one message at the next window lists them all
-tests = ["internal/notify:TestPagesWaitForAWindow", "internal/cli:TestRequestsWaitForAWindow", "internal/cli:TestWindowMessageFromAnyCheckout",
-  "internal/cli:TestGateAskWaitsForAWindow", "internal/cli:TestInboxShipsReadyPRs"]
+tests = ["internal/notify:TestPagesWaitForAWindow", "internal/notify:TestPagesWaitInTheQueue", "internal/cli:TestRequestsWaitForAWindow",
+  "internal/cli:TestWindowMessageFromAnyCheckout", "internal/cli:TestNotifyEditsReadAgainWhenTheLedgerMoved", "internal/cli:TestPausedTickSendsTheWindowMessage",
+  "internal/cli:TestGateAskWaitsForAWindow", "internal/cli:TestInboxShipsReadyPRs", "internal/cli:TestInspectReviewTools"]
 
 [[criterion]]
 id = 6 # in a window: aayu inbox holds every item that needs a person, in decision order, under one device code

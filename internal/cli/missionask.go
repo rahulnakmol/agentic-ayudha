@@ -161,7 +161,13 @@ func (b *budgetCard) holds(ctx context.Context) (bool, error) {
 // window, on the Feature, for the inbox. Outside one it waits: the first run
 // in the next window shows it, and the window's one message lists it.
 func (b *budgetCard) ask(ctx context.Context) error {
-	if !b.over || b.preview || !b.shown.IsZero() || !b.win.Within(b.now) {
+	if !b.over || b.preview || !b.win.Within(b.now) {
+		return nil
+	}
+	if _, err := b.holds(ctx); err != nil { // reads the open card, if any
+		return err
+	}
+	if !b.shown.IsZero() {
 		return nil
 	}
 	return b.e.postAsk(ctx, b.c, b.repo, b.f, startsAsk(b.f, b.budget, b.per, b.spent))
@@ -169,8 +175,11 @@ func (b *budgetCard) ask(ctx context.Context) error {
 
 // postAsk posts ask on Feature f, unless an open ask of its ID says the same.
 func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
-	if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window (Story #1254)
-		return e.waitsForWindow(fmt.Sprintf("%q on #%d", a.Title, f), next)
+	if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window: the ask waits in the outbox (Story #1254)
+		if c.DryRun() {
+			return nil
+		}
+		return e.enqueueHere(ctx, queued{Key: fmt.Sprintf("ask:%s#%d:%s", repo, f, a.ID), Ask: &queuedAsk{Feature: f, Ask: a}})
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))

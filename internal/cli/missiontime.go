@@ -676,6 +676,15 @@ const MissionTimeMarker = "<!-- aayudha:mission-time"
 
 var missionTimeRE = regexp.MustCompile(regexp.QuoteMeta(MissionTimeMarker) + ` mission=([0-9]+) state=([a-z]+) hours=([0-9.]+) add=([0-9.]+) -->`)
 
+// cardShownRE is the time a limit card was first shown, written into it: the
+// hold counts from the end of that window, and a later edit of the comment
+// (its updated_at) does not move it (Story #1254).
+var cardShownRE = regexp.MustCompile(`<!-- aayudha:shown ([0-9TZ:+-]+) -->`)
+
+func cardShown(at time.Time) string {
+	return "<!-- aayudha:shown " + at.UTC().Format(time.RFC3339) + " -->\n"
+}
+
 func missionTimeMarker(m int) string { return fmt.Sprintf("%s mission=%d ", MissionTimeMarker, m) }
 
 // missionCard is the body of mission m's time card in a state: warn (it ran
@@ -771,8 +780,13 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 			} else if ok {
 				newest = at
 				posted, shown = state == "warn" || mm[2] == "limit" && mm[3] == hrs(hours), time.Time{}
-				if posted && state == "limit" { // the limit card was shown when it was written
+				if posted && state == "limit" { // the limit card was shown when it was first written
 					shown = at
+					if sm := cardShownRE.FindStringSubmatch(cm.GetBody()); sm != nil {
+						if t, err := time.Parse(time.RFC3339, sm[1]); err == nil {
+							shown = t
+						}
+					}
 				}
 			}
 		}
@@ -783,7 +797,11 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 		case !post:
 			shown = now
 		default:
-			if err := upsertCard(ctx, c, repo, f, mc.Mission, state, missionCard(mc.Mission, state, hours, float64(maxH), line)); err != nil {
+			body := missionCard(mc.Mission, state, hours, float64(maxH), line)
+			if state == "limit" {
+				body += cardShown(now)
+			}
+			if err := upsertCard(ctx, c, repo, f, mc.Mission, state, body); err != nil {
 				return err
 			}
 			shown = now

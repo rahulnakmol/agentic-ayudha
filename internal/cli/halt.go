@@ -259,7 +259,10 @@ func (e *Env) page(ctx context.Context, p notify.Page) string {
 		return "not sent: " + err.Error()
 	}
 	st, err := n.Page(ctx, p)
-	if err != nil {
+	switch {
+	case err != nil && st != "": // it waits, but not where every checkout reads it
+		return st + " (" + oneLineErr(err) + ")"
+	case err != nil:
 		return "failed: " + err.Error()
 	}
 	return st

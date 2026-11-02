@@ -149,7 +149,7 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	}
 	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun() || e.keepEvents) // after the list and its claims: the cursor moves only now
 	if !c.DryRun() {                                                       // in a person's window, after its cards are shown: the window's one message (Story #1254)
-		e.windowMessage(ctx, w)
+		e.windowMessage(ctx, c, w, repo)
 	}
 	return emitWorkList(e, list)
 }
@@ -403,8 +403,11 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		}
 	}
 	// The starts this run claimed stand whatever becomes of the card: a card that cannot be shown now is asked
-	// again on the next run.
+	// again on the next run. Past the budget with no story that can start now, the card is due too while a story
+	// waits to become Ready: when it does, it would pass the budget.
 	budget.spent = spent
+	waiting := slices.ContainsFunc(entries, func(en nextEntry) bool { return !en.free })
+	budget.over = budget.over || waiting && plan.Budget > 0 && spent+per > plan.Budget
 	if err := budget.ask(ctx); err != nil {
 		fmt.Fprintf(e.Err, "aayu: the budget card of #%d was not shown (%v); the next run asks again\n", f, oneLineErr(err))
 	}
