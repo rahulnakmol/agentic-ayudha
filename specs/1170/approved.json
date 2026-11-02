@@ -1,14 +1,14 @@
 {
   "schema": "aayudha.feature.approved/v1",
   "feature": 1170,
-  "version": 2,
+  "version": 3,
   "by": "rahulnakmol",
-  "at": "2026-10-31T11:33:03Z",
+  "at": "2026-11-02T17:45:16Z",
   "presence": {
     "login": "rahulnakmol",
     "via": "device-flow",
     "permission": "admin",
-    "actions_record": "49df81158f94ac58453aee2e25b4bc3709ae6c93758caea4926aceff1b4835c7"
+    "actions_record": "a52510596dc672ab291fd159697c7264d39294f83e3fdc584475ed97877009a3"
   },
   "baselines": [
     {
@@ -18,8 +18,8 @@
     },
     {
       "part": "spec",
-      "version": 1,
-      "hash": "4b5eb1153bdae7aad9ab67fbf7177d40eee0e5ba6102c2d09aade96aff53bc2f"
+      "version": 3,
+      "hash": "8304000033436937394667ad5263c4fa1f874f31e99258cba4c8520e5420ee87"
     },
     {
       "part": "tech",
@@ -75,12 +75,24 @@
       "title": "aayu grill edits a filed body before Ready, and checks link targets as Ready does",
       "effort": "M",
       "completion_goal_hash": "655c09a3b029d46d39cc074268de030c21445e23fde8801cbb4b76080bec898f"
+    },
+    {
+      "number": 1250,
+      "title": "Builders iterate on a draft PR locally, and GitHub runs CI, the merge gate, and the paid review once the PR is ready",
+      "effort": "S",
+      "completion_goal_hash": "844484bc3b7941f719b2766e9760e6f5fa774108c4c388faf6d42b2ce56c58c7"
+    },
+    {
+      "number": 1254,
+      "title": "Two person windows a day: outside them no work waits for a person and nobody is asked to act",
+      "effort": "M",
+      "completion_goal_hash": "39aa091505baf8ce09aeee6e6988692f0d204825ae461de8d4248efa96cf018c"
     }
   ],
   "budget": {
     "per_story_usd": 60,
-    "stories": 8,
-    "total_usd": 480
+    "stories": 10,
+    "total_usd": 600
   },
   "dismissals": [],
   "agents": 10,
