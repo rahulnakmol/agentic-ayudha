@@ -163,6 +163,8 @@ func inboxFailures() []struct {
 			"GitHub is still working out whether it can merge", "Enter tries again in a minute.", none, false, true},
 		{"ship: the bypass note did not post", InboxReady, Errorf(ExitExternal, "ship #661: not merged: your Solo-mode bypass comment was not posted: %v", ghRefusal("POST", "/repos/o/r/issues/661/comments", 403, "Resource not accessible")), "writing to GitHub", nil,
 			"aayu couldn't post your Solo-mode bypass note, so nothing was merged", "Enter tries again", none, false, true},
+		{"feature: the ledger raced", InboxFeature, Errorf(ExitBlocked, "The ledger changed while aayu wrote the parts of #661. Nothing was written for #661. Run it again."), "reading it again from GitHub", nil,
+			"aayu couldn't read or write its records (the ledger branch)", "Enter tries once more", none, false, false},
 		{"ship: the ledger", InboxReady, Errorf(ExitExternal, "ledger: fetch origin ledger: exit status 128"), "reading GitHub", nil,
 			"aayu couldn't read or write its records (the ledger branch)", "an agent runs aayu doctor", none, false, true},
 		// Merged, then a later step stopped: done, with a warning.

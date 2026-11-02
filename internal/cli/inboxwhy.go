@@ -360,7 +360,7 @@ func refusalWords(it InboxItem, a InboxAction, m, dev string, k inboxKeyWords) (
 		return baselineChanged(it.Ask, n), "nothing for you yet; the card comes back when the new draft waits."
 	case (it.Kind == InboxApprove || it.Kind == InboxFeature) && reStoriesRead.MatchString(m): // ready read the stories again: they are not the card's
 		return approveChanged(n), "you read the card again with the stories as they are now; nothing was approved."
-	case it.Kind == InboxFeature && reFeatureMoved.MatchString(m): // a part or the stories, read again after the code, are not the card's
+	case it.Kind == InboxFeature && reFeatureMoved.MatchString(m) && !reLedger.MatchString(m): // a part or the stories, read again after the code, are not the card's; a ledger race is retried below
 		return m[:reFeatureMoved.FindStringIndex(m)[0]-1], "you read the card again as it is now; nothing was written for #" + fmt.Sprint(n) + "."
 	case reLedger.MatchString(m):
 		return fmt.Sprintf("#%d %s: aayu couldn't read or write its records (the ledger branch).", n, not), k.enter + " tries once more; if it fails again, an agent runs aayu doctor."

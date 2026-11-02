@@ -622,6 +622,9 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 // that names the earlier write.
 func (m *inboxModel) relist(fresh []InboxItem, at time.Time) {
 	changed := false
+	for _, it := range fresh { // and each part opened from its Feature card, drafted again after it was approved
+		fresh = append(fresh, it.Parts...)
+	}
 	for _, it := range fresh {
 		k := it.key()
 		if d, ok := m.done[k]; ok && m.state[k] == "done" && !at.IsZero() && at.After(d.At) {
@@ -1053,6 +1056,9 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 		}
 		if job.it.Kind == InboxFeature && job.a.Command == featureStart && msg.fresh.Build != nil {
 			m.started = append(m.started, *msg.fresh.Build) // the Approve to build it started, read again before the write
+		}
+		if job.it.Kind == InboxFeature || job.it.Kind == InboxBaseline { // its Feature card, Approve to build, or Mission start card is next: read them now
+			m.readAfter = true
 		}
 		if job.it.Kind == InboxEvening && job.a.Command == eveningAccept {
 			if m.accepted == nil {

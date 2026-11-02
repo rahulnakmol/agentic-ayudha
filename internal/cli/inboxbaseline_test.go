@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -20,6 +21,7 @@ import (
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -623,6 +625,47 @@ func TestFeatureApproveWithoutBuild(t *testing.T) {
 	}
 	if _, _, ok := m.approvalRecords(); ok {
 		t.Error("#889 was approved to build")
+	}
+}
+
+// The full-screen inbox reads GitHub again after a part opened from its
+// Feature card is approved, so the Feature card it comes from shows it no
+// more; and a part done in the session that an agent drafts again is offered
+// again, after an Enter that names the earlier write.
+func TestFeaturePartInTheFullScreenInbox(t *testing.T) {
+	clock := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	part := InboxItem{Kind: InboxBaseline, Number: 889, Ask: "spec", Version: 1, Hash: "h1", Title: "Spec v1", Seat: verbs.ProductStrategist,
+		Options: []InboxAction{{N: 1, Label: "approve spec v1", Command: "aayu ready 889 --part spec", Recommended: true}}}
+	feature := func(p InboxItem) InboxItem {
+		return InboxItem{Kind: InboxFeature, Number: 889, Title: "Agents pull the next story", Seat: verbs.ProductStrategist, Parts: []InboxItem{p},
+			Options: []InboxAction{{N: 1, Label: "approve spec", Command: featureApprove}, {N: 2, Label: "open the spec", Command: inboxPart + "spec"}}}
+	}
+	m := newInboxModel("o/r", "o", "auto", false)
+	m.now = func() time.Time { return clock }
+	ran, gathers := 0, 0
+	var now []InboxItem // what GitHub lists now
+	m.act = func(it InboxItem, a InboxAction, _ *inboxWork) (InboxItem, string, error) { ran++; return it, "", nil }
+	m.gather = func() inboxGatheredMsg { gathers++; return inboxGatheredMsg{items: now, changed: true, at: m.now()} }
+	m.Update(inboxGatheredMsg{items: []InboxItem{feature(part)}, changed: true, at: clock.Add(-time.Hour)})
+	m.cur = slices.Index(m.rows, 0)
+	teaKeys(m, "2", "enter") // open the spec: its card is under the Feature card
+	if i := m.item(); i < 0 || m.items[i].key() != part.key() {
+		t.Fatalf("opening the spec: the cursor is on %+v", m.items)
+	}
+	now = nil // approved: nothing of #889 waits
+	if teaKeys(m, "enter"); ran != 1 || gathers != 1 || slices.ContainsFunc(m.items, func(it InboxItem) bool { return it.Kind == InboxFeature && m.state[it.key()] != "gone" }) {
+		t.Fatalf("approving the spec: ran %d, read again %d times, items %+v, states %v", ran, gathers, m.items, m.state)
+	}
+	again := part // an agent drafts the spec again: v2 waits on the Feature card
+	again.Version, again.Hash, again.Title = 2, "h2", "Spec v2"
+	clock = clock.Add(time.Minute)
+	m.Update(inboxGatheredMsg{items: []InboxItem{feature(again)}, changed: true, at: clock})
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].key() == part.key() })
+	if teaKeys(m, "enter"); ran != 1 || m.state[part.key()] != "relisted" || !strings.Contains(m.status, "You already did this") {
+		t.Fatalf("the spec drafted again, first Enter: ran %d, state %q, status %q", ran, m.state[part.key()], m.status)
+	}
+	if teaKeys(m, "enter"); ran != 2 {
+		t.Errorf("the spec drafted again, second Enter: ran %d", ran)
 	}
 }
 
