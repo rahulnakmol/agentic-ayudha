@@ -72,7 +72,11 @@ func TestReadyApproveToBuild(t *testing.T) {
 		}}
 	readyRun := func(env map[string]string, args ...string) (int, string, string) {
 		t.Helper()
-		return run(t, env, opts, append([]string{"ready", "840", "--repo", "o/r"}, args...)...)
+		code, out, errOut := run(t, env, opts, append([]string{"ready", "840", "--repo", "o/r"}, args...)...)
+		for _, fault := range emittedCommandFaults(t, out+errOut) { // Bug #1251 criterion 3
+			t.Errorf("ready 840 printed %s", fault)
+		}
+		return code, out, errOut
 	}
 	commits := func() string { return git(t, bare, "rev-list", "--count", "ledger") }
 	approved := func() (ready.Approval, string) {

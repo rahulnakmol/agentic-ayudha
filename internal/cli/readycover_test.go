@@ -68,6 +68,9 @@ func TestReadyStoryCoverage(t *testing.T) {
 	readyRun := func(n int) (int, string) {
 		t.Helper()
 		code, out, errOut := run(t, arjun, opts, "ready", strconv.Itoa(n), "--repo", "o/r")
+		for _, fault := range emittedCommandFaults(t, out+errOut) {
+			t.Errorf("ready %d printed %s", n, fault)
+		}
 		return code, out + errOut
 	}
 	commits := func() string { return git(t, bare, "rev-list", "--count", "ledger") }
@@ -315,15 +318,83 @@ func TestReadyStoryCoverage(t *testing.T) {
 	}
 }
 
+// readyProse lists the words after "aayu" that make prose ("aayu wrote …"), not a command.
+var readyProse = []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only", "acts"}
+
+// readyTrim removes the quotes, brackets, and punctuation around a word.
+func readyTrim(w string) string {
+	return strings.TrimRight(strings.TrimLeft(w, "(\x60'\""), ".,;:)\x60'\"")
+}
+
+// readySentenceEnds says if word ends its sentence: it ends in "." or ";"
+// and no word follows, or the next word starts with a capital letter. A
+// value such as "." or "./x." before more flags does not end it.
+func readySentenceEnds(words []string, i int) bool {
+	w := words[i]
+	if !strings.HasSuffix(w, ".") && !strings.HasSuffix(w, ";") {
+		return false
+	}
+	if i+1 == len(words) {
+		return true
+	}
+	next := readyTrim(words[i+1])
+	return next != "" && next[0] >= 'A' && next[0] <= 'Z'
+}
+
+// emittedCommandFaults lists what is wrong with each command that text, as
+// aayu printed it, names: "aayu", a verb, and its words to the end of the
+// sentence. The real command tree resolves the verb, and the verb's own flag
+// set parses the words; no handler runs. So an unknown command, an unknown
+// flag, or a bad value is a fault wherever it is in the command.
+func emittedCommandFaults(t *testing.T, text string) []string {
+	t.Helper()
+	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Getenv: func(string) string { return "" }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		words := strings.Fields(line)
+		for i := range words {
+			// "aayu:" starts an error line; it names no command.
+			if readyTrim(words[i]) != "aayu" || strings.HasSuffix(words[i], ":") || i+1 == len(words) || slices.Contains(readyProse, readyTrim(words[i+1])) {
+				continue
+			}
+			var args []string
+			for j := i + 1; j < len(words) && readyTrim(words[j]) != "aayu"; j++ {
+				args = append(args, readyTrim(words[j]))
+				if readySentenceEnds(words, j) {
+					break
+				}
+			}
+			root := newRoot(e) // a new tree for each command, so no flag value stays set
+			cmd, rest, err := root.Find(args)
+			if err != nil || cmd == root {
+				out = append(out, fmt.Sprintf("`aayu %s`: no command", strings.Join(args, " ")))
+				continue
+			}
+			if err := cmd.ParseFlags(rest); err != nil {
+				out = append(out, fmt.Sprintf("`aayu %s`: %v", strings.Join(args, " "), err))
+			}
+		}
+	}
+	return out
+}
+
 // Bug #1251 criterion 3: every command that a message of `aayu ready` names
-// (each string literal in internal/cli/ready*.go and internal/ready, which
-// ready prints) has a real verb, and each flag it gives, to the end of its
-// sentence, is a flag of that verb. Each flag is looked up on its own, so a
-// value before it (a path, a bad number, an uppercase word) hides nothing. A
-// literal that names no command, such as a suffix " --request" that code
-// joins to a command, is checked against the last command named before it
-// in the same function, else against ready. A verb that is prose
-// ("aayu wrote …") is not a command.
+// is a real command, and each flag it gives is a flag of that command. Two
+// checks prove it. First, every message that the ready tests make aayu print
+// goes through emittedCommandFaults (readyRun here and in
+// readyapprove_test.go), so the commands that people get, as code assembles
+// them, are parsed with the real flag sets. Second, this test scans each
+// string in internal/cli/ready*.go and internal/ready, which ready prints, so
+// a message that no test prints is checked too. A sum of strings is checked
+// as one string. A string that ends in "aayu" or in a bare "--" splits a
+// command across strings and is a fault, because only the printed command can
+// show it. Each flag, to the end of its sentence, is looked up on its own, so
+// a value before it hides nothing. A string that names no command, such as a
+// suffix " --request" that code joins to a command, is checked against the
+// last command named before it in the same function, else against ready.
 func TestReadyNamesOnlyRealCommands(t *testing.T) {
 	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Getenv: func(string) string { return "" }})
 	if err != nil {
@@ -332,7 +403,6 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 	root := newRoot(e)
 	ready, _, _ := root.Find([]string{"ready"})
 	commands := 0
-	prose := []string{"wrote", "did", "read", "reads", "writes", "refuses", "records", "never", "does", "cannot", "can", "keeps", "is", "has", "will", "asks", "checks", "takes", "only"}
 	has := func(c *cobra.Command, f string) bool {
 		if name, ok := strings.CutPrefix(f, "--"); ok {
 			name, _, _ = strings.Cut(name, "=")
@@ -344,7 +414,7 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 		w, ok := strings.CutPrefix(w, "-")
 		return ok && len(w) > 0 && (w[0] >= 'a' && w[0] <= 'z' || len(w) > 1 && w[0] == '-' && w[1] >= 'a' && w[1] <= 'z')
 	}
-	trim := func(w string) string { return strings.TrimRight(strings.TrimLeft(w, "(\x60'\""), ".,;:)\x60'\"") }
+	trim := readyTrim
 	// check lists what is wrong with the commands that the Go source src names.
 	check := func(name string, src any) []string {
 		fset := token.NewFileSet()
@@ -359,16 +429,15 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 			if _, ok := n.(*ast.FuncDecl); ok {
 				last = nil
 			}
-			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
+			s, ok := constString(n)
+			if !ok {
 				return true
 			}
-			s, err := strconv.Unquote(lit.Value)
-			if err != nil {
-				return true
-			}
-			at := fset.Position(lit.Pos())
+			at := fset.Position(n.Pos())
 			words := strings.Fields(s)
+			if len(words) > 0 && slices.Contains([]string{"aayu", "--"}, trim(words[len(words)-1])) {
+				out = append(out, fmt.Sprintf("%s: %q splits a command across strings", at, s))
+			}
 			named := false
 			for i := 0; i < len(words); i++ {
 				if trim(words[i]) != "aayu" || i+1 == len(words) {
@@ -377,21 +446,18 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 				verb := trim(words[i+1])
 				cmd, _, err := root.Find([]string{verb})
 				if err != nil || cmd == root {
-					if !slices.Contains(prose, verb) {
+					if !slices.Contains(readyProse, verb) {
 						out = append(out, fmt.Sprintf("%s: `aayu %s`: no command", at, verb))
 					}
 					continue
 				}
 				named, last = true, cmd
 				spans++
-				for _, w := range words[i+2:] { // to the end of the sentence, or the next command
-					if trim(w) == "aayu" {
-						break
-					}
-					if f := trim(w); isFlag(f) && !has(cmd, f) {
+				for j := i + 2; j < len(words) && trim(words[j]) != "aayu"; j++ { // to the end of the sentence, or the next command
+					if f := trim(words[j]); isFlag(f) && !has(cmd, f) {
 						out = append(out, fmt.Sprintf("%s: `aayu %s`: %s is no flag of it", at, verb, f))
 					}
-					if strings.HasSuffix(w, ".") || strings.HasSuffix(w, ";") {
+					if readySentenceEnds(words, j) {
 						break
 					}
 				}
@@ -404,7 +470,8 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 					}
 				}
 			}
-			return true
+			_, sum := n.(*ast.BinaryExpr)
+			return !sum // the parts of a sum are checked in it
 		})
 		commands += spans
 		return out
@@ -419,10 +486,29 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 		`n := "aayu ready %d --part %s"; n += " --list"`:                                                   true,
 		`_ = " --ack"`:       true,
 		`_ = "aayu ack 853"`: true,
-		`_ = "aayu grill feature 840 --findings"`: true,
+		`_ = "aayu grill feature 840 --findings"`:              true,
+		`_ = "aayu " + "does-not-exist 840"`:                   true,
+		`_ = "aayu " + "ready 840 --part spec"`:                false,
+		`n := "aayu ready 840 --"; n += "ack 853"`:             true,
+		`_ = "aayu ready 840 --changes . --ack 853"`:           true,
+		`_ = "aayu ready 840 --check. Then --ack is refused."`: false,
 	} {
 		if got := check("control.go", "package x\nfunc f() {\nvar n string\n_ = n\n"+src+"\n}\n"); (len(got) > 0) != bad {
 			t.Errorf("control %s: faults %q", src, got)
+		}
+	}
+	for text, bad := range map[string]bool{ // controls for the printed commands
+		"next: aayu ready 840 --part spec --request --changes <file>. A person approves it in aayu inbox, then runs aayu ready 840.": false,
+		"`aayu mission start 840 --reason \"…\"`":              false,
+		"next: aayu ready 840 --changes /tmp/c.json --ack 853": true,
+		"next: aayu ready 840 --changes . --ack 853":           true,
+		"next: aayu ready 840 --part spec --list":              true,
+		"next: aayu ready 840 --agents invalid":                true,
+		"next: aayu does-not-exist 840":                        true,
+		"next: aayu grill feature 840 --findings":              true,
+	} {
+		if got := emittedCommandFaults(t, text); (len(got) > 0) != bad {
+			t.Errorf("printed control %q: faults %q", text, got)
 		}
 	}
 	files, _ := filepath.Glob("ready*.go")
@@ -440,4 +526,26 @@ func TestReadyNamesOnlyRealCommands(t *testing.T) {
 	if commands < 20 {
 		t.Fatalf("found only %d named commands: the scan is broken", commands)
 	}
+}
+
+// constString gives the value of n when it is a string literal or a sum of them.
+func constString(n ast.Node) (string, bool) {
+	switch n := n.(type) {
+	case *ast.BasicLit:
+		if n.Kind != token.STRING {
+			return "", false
+		}
+		s, err := strconv.Unquote(n.Value)
+		return s, err == nil
+	case *ast.BinaryExpr:
+		if n.Op != token.ADD {
+			return "", false
+		}
+		x, ok := constString(n.X)
+		y, ok2 := constString(n.Y)
+		return x + y, ok && ok2
+	case *ast.ParenExpr:
+		return constString(n.X)
+	}
+	return "", false
 }
