@@ -6,8 +6,10 @@
   "receiver": "amp",
   "mode": "cloud",
   "family": "host-managed",
+  "task": "T-01a19dc4-fe4e-71f4-a8df-05ed523ae27e",
+  "task_url": "https://ampcode.com/threads/T-01a19dc4-fe4e-71f4-a8df-05ed523ae27e",
   "branch": "story/1254-two-person-windows-a-day-outside-them-no",
-  "status": "host-handoff",
+  "status": "handed-off",
   "brief_sha256": "4f709ddbd52e021a3315b9b44af3e79b386c052b3d7beaf2d26001baadfa4b8f",
   "started_at": "2026-11-02T19:37:43Z",
   "handoffs": 1,
@@ -16,6 +18,11 @@
       "at": "2026-11-02T19:37:43Z",
       "status": "host-handoff",
       "detail": "the host creates the thread: aayu #1254: Two person windows a day: outside them no work waits for a person and nobody is asked to act"
+    },
+    {
+      "at": "2026-11-02T19:38:28Z",
+      "status": "handed-off",
+      "detail": "brief sent: the host created the thread"
     }
   ]
 }
