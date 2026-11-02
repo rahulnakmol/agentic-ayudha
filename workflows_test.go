@@ -3,6 +3,7 @@ package aayudha
 import (
 	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1076,4 +1077,167 @@ func TestWorkflowGoTestsOfWholePackagesSetTimeout(t *testing.T) {
 	if n < 3 {
 		t.Fatalf("found only %d go test commands with no -run filter", n)
 	}
+}
+
+// ghJobsRun simulates GitHub's run of workflow file f for one event. The event triggers the file when its on: names
+// the event, lists the action among its types (GitHub's default for pull_request and pull_request_target is
+// opened, synchronize, and reopened), and lists the branch (a PR's base, or the pushed branch) among its branches.
+// Then a job runs when every job it needs ran and its if holds; a job that ran gives each of its outputs 'true'.
+// It returns the names of the jobs that ran (a job's id when its name is an expression), of only the jobs named in
+// only when only is not empty, sorted.
+func ghJobsRun(t *testing.T, f, event, action, branch string, ctx map[string]any, only ...string) []string {
+	t.Helper()
+	b, err := os.ReadFile(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type job struct {
+		Name    string            `yaml:"name"`
+		If      string            `yaml:"if"`
+		Needs   any               `yaml:"needs"`
+		Outputs map[string]string `yaml:"outputs"`
+	}
+	var wf struct {
+		On map[string]struct {
+			Types    []string `yaml:"types"`
+			Branches []string `yaml:"branches"`
+		} `yaml:"on"`
+		Jobs map[string]job `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(b, &wf); err != nil {
+		t.Fatalf("%s: %v", f, err)
+	}
+	on, ok := wf.On[event]
+	types := on.Types
+	if types == nil && strings.HasPrefix(event, "pull_request") {
+		types = []string{"opened", "synchronize", "reopened"}
+	}
+	if !ok || types != nil && !slices.Contains(types, action) || on.Branches != nil && !slices.Contains(on.Branches, branch) {
+		return nil
+	}
+	needs := map[string]any{}
+	ran := map[string]bool{}
+	var decide func(id string) bool
+	decide = func(id string) bool {
+		if r, done := ran[id]; done {
+			return r
+		}
+		j, ok := wf.Jobs[id]
+		if !ok {
+			t.Fatalf("%s: no job %s", f, id)
+		}
+		var deps []string
+		switch n := j.Needs.(type) {
+		case string:
+			deps = []string{n}
+		case []any:
+			for _, d := range n {
+				deps = append(deps, d.(string))
+			}
+		}
+		run := true
+		for _, d := range deps {
+			run = decide(d) && run
+		}
+		if run && j.If != "" {
+			c := map[string]any{"needs": needs}
+			maps.Copy(c, ctx)
+			run = ghTruthy(ghEval(t, strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(j.If), "${{"), "}}"), c))
+		}
+		out, result := map[string]any{}, "skipped"
+		if run {
+			result = "success"
+			for k := range j.Outputs {
+				out[k] = "true"
+			}
+		}
+		needs[id] = map[string]any{"result": result, "outputs": out}
+		ran[id] = run
+		return run
+	}
+	var names []string
+	for id, j := range wf.Jobs {
+		if len(only) > 0 && !slices.Contains(only, j.Name) {
+			continue
+		}
+		if decide(id) {
+			name := j.Name
+			if name == "" || strings.Contains(name, "${{") { // a matrix job's name is its id here
+				name = id
+			}
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// Story #1250: a draft PR iterates on the local gate, and GitHub runs ci.yml and the merge gate once the PR is ready.
+// Each case is a GitHub event: the jobs of ci.yml and the merge gate's gate and inspect jobs that run for it.
+func TestCIRunsOnReadyPRs(t *testing.T) {
+	prSuite := []string{"build", "changes", "commits", "docs", "generate-drift", "lint", "release-snapshot", "security"}
+	pushSuite := slices.DeleteFunc(slices.Clone(prSuite), func(j string) bool { return j == "commits" })
+	gated := []string{"aayudha/inspect", "aayudha/merge-gate"}
+	pr := func(event, action string, draft bool) map[string]any {
+		return map[string]any{"github": map[string]any{"event_name": event, "repository": "o/r",
+			"event": map[string]any{"action": action, "pull_request": map[string]any{"number": 7.0, "draft": draft,
+				"head": map[string]any{"sha": "s1", "repo": map[string]any{"full_name": "o/r"}}}}}}
+	}
+	type want struct{ ci, gate []string }
+	check := func(t *testing.T, action string, draft bool, w want) {
+		t.Helper()
+		if got := ghJobsRun(t, ".github/workflows/ci.yml", "pull_request", action, "dev", pr("pull_request", action, draft)); !slices.Equal(got, w.ci) {
+			t.Errorf("ci.yml on a pull_request %s (draft %t) runs %v; want %v", action, draft, got, w.ci)
+		}
+		if got := ghJobsRun(t, ".github/workflows/aayudha-merge-gate.yml", "pull_request_target", action, "dev", pr("pull_request_target", action, draft), gated...); !slices.Equal(got, w.gate) {
+			t.Errorf("the merge gate on a pull_request_target %s (draft %t) runs %v; want %v", action, draft, got, w.gate)
+		}
+	}
+
+	// Criterion 1: a push to a draft PR, or a draft opened or reopened, runs no job of ci.yml and no merge gate job.
+	t.Run("draft", func(t *testing.T) {
+		for _, action := range []string{"synchronize", "opened", "reopened"} {
+			check(t, action, true, want{})
+		}
+		check(t, "converted_to_draft", true, want{}) // no run at all
+	})
+	// Criterion 2: marking the draft ready runs every required job of ci.yml on the head, and the merge gate once.
+	t.Run("ready_for_review", func(t *testing.T) {
+		check(t, "ready_for_review", false, want{prSuite, gated})
+	})
+	// Criterion 3: a ready PR's push, open, or reopen runs ci.yml and the merge gate as today; an edit runs only the gate.
+	t.Run("ready", func(t *testing.T) {
+		for _, action := range []string{"synchronize", "opened", "reopened"} {
+			check(t, action, false, want{prSuite, gated})
+		}
+		check(t, "edited", false, want{nil, gated})
+		// A fork's PR cannot mint an OIDC token, so it skips release-snapshot, as today.
+		fork := pr("pull_request", "synchronize", false)
+		fork["github"].(map[string]any)["event"].(map[string]any)["pull_request"].(map[string]any)["head"].(map[string]any)["repo"] = map[string]any{"full_name": "fork/r"}
+		if got, w := ghJobsRun(t, ".github/workflows/ci.yml", "pull_request", "synchronize", "dev", fork), slices.DeleteFunc(slices.Clone(prSuite), func(j string) bool { return j == "release-snapshot" }); !slices.Equal(got, w) {
+			t.Errorf("ci.yml on a fork's PR runs %v; want %v", got, w)
+		}
+	})
+	// Criterion 4: a push to dev, rolling, or main, and a workflow_dispatch, run ci.yml as today.
+	t.Run("push_and_dispatch", func(t *testing.T) {
+		push := map[string]any{"github": map[string]any{"event_name": "push", "repository": "o/r", "event": map[string]any{}}}
+		for _, branch := range []string{"dev", "rolling", "main"} {
+			if got := ghJobsRun(t, ".github/workflows/ci.yml", "push", "", branch, push); !slices.Equal(got, pushSuite) {
+				t.Errorf("ci.yml on a push to %s runs %v; want %v", branch, got, pushSuite)
+			}
+		}
+		if got := ghJobsRun(t, ".github/workflows/ci.yml", "push", "", "story/7-x", push); got != nil {
+			t.Errorf("ci.yml on a push to a story branch runs %v; want no run", got)
+		}
+		rolling := append(slices.Clone(pushSuite), "benchmarks", "evals-gate", "integration")
+		stable := append(slices.Clone(rolling), "extended-integration", "smoke")
+		for gate, w := range map[string][]string{"none": pushSuite, "": pushSuite, "rolling": rolling, "stable": stable} {
+			slices.Sort(w)
+			ctx := map[string]any{"github": map[string]any{"event_name": "workflow_dispatch", "repository": "o/r", "event": map[string]any{}},
+				"inputs": map[string]any{"gate": gate}}
+			if got := ghJobsRun(t, ".github/workflows/ci.yml", "workflow_dispatch", "", "", ctx); !slices.Equal(got, w) {
+				t.Errorf("ci.yml on a workflow_dispatch with gate %q runs %v; want %v", gate, got, w)
+			}
+		}
+	})
 }
