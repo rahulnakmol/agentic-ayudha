@@ -395,10 +395,13 @@ func TestMissionStartWritesPlan(t *testing.T) {
 		!strings.Contains(errOut, "The ledger changed while aayu wrote the start of #889. Nothing was started. Run it again.") {
 		t.Fatalf("a ledger write during the start: exit %d: %s%s", code, out, errOut)
 	}
-	n = m.commits()
-	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--dry-run"); code != 0 || m.commits() != n ||
-		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") {
-		t.Fatalf("start --dry-run: exit %d: %s%s", code, out, errOut)
+	// --dry-run shows the effect and asks for no device code (Bug #1252).
+	n, calls := m.commits(), len(m.callLog())
+	m.g.Reset()
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--dry-run"); code != 0 || m.commits() != n || m.codes() != 0 || len(m.g.Writes()) != 0 ||
+		!strings.Contains(out, "Approving: Starts the mission of #889, approval 1") || !strings.Contains(out, "Approving: BUDGET $240") ||
+		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") || len(m.callLog()) != calls {
+		t.Fatalf("start --dry-run: exit %d, device codes %d, GitHub writes %v, calls %v: %s%s", code, m.codes(), m.g.Writes(), m.callLog(), out, errOut)
 	}
 	if p, _ := m.plan(889); p.StartedBy != "" {
 		t.Fatalf("a refused start wrote the plan: %+v", p)

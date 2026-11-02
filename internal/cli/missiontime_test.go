@@ -492,6 +492,13 @@ func TestMissionExtend(t *testing.T) {
 	if code, _, errOut := m.mission(m.person, "rahulnakmol", "extend", 889); code != ExitUsage || m.codes() != 0 {
 		t.Fatalf("extend with no reason: exit %d: %s", code, errOut)
 	}
+	// --dry-run shows the effect, asks for no device code, and writes nothing (Bug #1252).
+	m.g.Reset()
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "two stories left", "--dry-run"); code != 0 || m.codes() != 0 ||
+		m.commits() != n || len(m.g.Writes()) != 0 || !strings.Contains(out, "Approving: Extends mission 1 of #889 by 48 h") ||
+		!strings.Contains(out, `Approving: REASON "two stories left"`) || !strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") {
+		t.Fatalf("extend --dry-run: exit %d, device codes %d, GitHub writes %v: %s%s", code, m.codes(), m.g.Writes(), out, errOut)
+	}
 	code, out, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "two stories left")
 	if code != 0 || m.codes() != 1 || !strings.Contains(out, "@rahulnakmol extended mission 1 of #889 to 96 h: new starts resume. Reason: two stories left") ||
 		strings.Index(errOut, `REASON "two stories left"`) > strings.Index(errOut, "/login/device") {

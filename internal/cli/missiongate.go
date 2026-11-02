@@ -1563,10 +1563,15 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 	case reason == "":
 		return Errorf(ExitUsage, "mission budget --to needs --reason: a raise is a person's decision with a reason")
 	}
-	p, err := e.presenceCheck(ctx, Pending{What: "mission budget", Effect: []string{
+	pending := Pending{What: "mission budget", Effect: []string{
 		fmt.Sprintf("Raises the budget of #%d from %s to %s: %s", f, ready.USD(plan.Budget), ready.USD(to), reason),
 		"Each gate fix PR that waits for the budget and now fits goes on",
-	}}, AccessWrite, e.personOnly("mission budget"))
+	}}
+	if c.DryRun() { // before the device code (Bug #1252)
+		return e.dryPending(pending, fmt.Sprintf("ledger %s planned, not written; no card closed", MissionPlanPath(f)),
+			map[string]any{"feature": f, "budget": to, "effect": pending.Effect, "dry_run": true})
+	}
+	p, err := e.presenceCheck(ctx, pending, AccessWrite, e.personOnly("mission budget"))
 	if err != nil {
 		return err
 	}

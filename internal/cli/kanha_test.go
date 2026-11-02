@@ -654,7 +654,8 @@ func TestTatkalStoryStartRefusals(t *testing.T) {
 	}
 	m.setTool("cursor")
 	n := m.commits()
-	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 930, "--dry-run"); code != 0 || m.commits() != n ||
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 930, "--dry-run"); code != 0 || m.commits() != n || m.codes() != 0 ||
+		!strings.Contains(out, "Approving: Starts #930 of Tatkal Feature #920 on cursor") ||
 		!strings.Contains(out, "--dry-run: ledger missions/920/plan.json planned, not written; nothing handed off") {
 		t.Fatalf("start 930 --dry-run: exit %d: %s%s", code, out, errOut)
 	}
