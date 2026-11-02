@@ -1,0 +1,21 @@
+# Which tests prove Story #1178's Completion Goal.
+
+[[criterion]]
+id = 1 # the evening review is done and #982 is next in the release order: the Overnight card proposes author #982, the verify sweep, and the evals, each with its hours and cost bound
+tests = ["./internal/cli:TestOvernightCardProposesAndRecords"]
+
+[[criterion]]
+id = 2 # he approves it: missions/overnight/<date>.json records each run, its bounds, and its end at the next start of business_hours, under the session's code
+tests = ["./internal/cli:TestOvernightCardProposesAndRecords"]
+
+[[criterion]]
+id = 3 # after the end of business_hours a mission has a startable story: aayu mission next starts nothing and says outside the day: starts at <time>
+tests = ["./internal/cli:TestMissionNextOutsideTheDay"]
+
+[[criterion]]
+id = 4 # an overnight run reaches its hour or cost bound: it stops, and the morning inbox names it
+tests = ["./internal/cli:TestOvernightRunStopsAtBound"]
+
+[[criterion]]
+id = 5 # he leaves the Overnight card: no overnight run starts except loops scheduled before
+tests = ["./internal/cli:TestOvernightLeftStartsNothing"]
