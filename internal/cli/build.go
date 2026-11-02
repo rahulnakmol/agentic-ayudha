@@ -532,12 +532,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			if errors.As(err, &pause) {
 				dlg.event(e.Now(), dlgPaused, pause.why)
 				dlg.fill(res.Delegation)
-				_ = e.saveDelegation(ctx, dlg)
+				serr := e.saveDelegation(ctx, dlg)
 				// The wall clock would run out during the wait: that is the budget
 				// ending, so the story is blocked (no attempt counted), and
 				// `aayu ready` gives the build a fresh budget once the limit resets.
 				if pause.afterWall {
-					return block("wall-time budget: " + pause.why)
+					return withSaveErr(block("wall-time budget: "+pause.why), serr)
 				}
 				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
 				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
@@ -547,16 +547,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)
 					return err
 				})
-				return WithNext(Errorf(ExitBlocked, "build #%d paused: %s", n, pause.why), res.Next)
+				return withSaveErr(WithNext(Errorf(ExitBlocked, "build #%d paused: %s", n, pause.why), res.Next), serr)
 			}
 			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
-			_ = e.saveDelegation(ctx, dlg)
+			serr := e.saveDelegation(ctx, dlg)
 			// A receiver stopped at the wall-time deadline is the budget running
 			// out, so the story is blocked and its owner paged, as at a checkpoint.
 			if !dlg.wallEnd.IsZero() && !e.Now().Before(dlg.wallEnd) {
-				return block(fmt.Sprintf("wall-time budget breached: %s was still running when the %g h budget ended", delegate.Names[dlg.receiver], b.WallHours))
+				return withSaveErr(block(fmt.Sprintf("wall-time budget breached: %s was still running when the %g h budget ended", delegate.Names[dlg.receiver], b.WallHours)), serr)
 			}
-			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
+			return withSaveErr(Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err), serr)
 		}
 		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body
 	}

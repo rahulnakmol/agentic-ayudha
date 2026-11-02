@@ -300,6 +300,58 @@ func TestDelegateCycleCapPages(t *testing.T) {
 	}
 }
 
+// Bug #1264, criterion 3: a step whose delegation record the ledger refuses
+// reports the record the ledger holds, and says the record was not written,
+// whether the step ends there or ends in its own error. A hand-off that the
+// receiver took names its task.
+func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
+	g, env, opts, _, bare := delegateFixture(t)
+	cur := &fakeCursor{}
+	srv := httptest.NewServer(cur)
+	defer srv.Close()
+	env["AAYU_SECRET_CURSOR_API_KEY"] = "k"
+	set := []string{"--delegate", "cursor", "--set", "delegate.cursor_api=" + srv.URL}
+	held := func() delegate.State {
+		var st delegate.State
+		_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &st)
+		return st
+	}
+	refuse := `git diff --name-only "$old" "$new" | grep -q delegate/2/`
+	refuseLedger(t, bare, refuse)
+	code, res, errOut := delegateRun(t, env, opts, set...)
+	if code != ExitExternal || res.Delegation == nil || res.Delegation.Status != "" || res.Delegation.Task != "" || res.Next != "" ||
+		!strings.Contains(errOut, "Cursor has #2 as task https://cursor.com/agents?id=bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f, and aayu did not record it") ||
+		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds no record") {
+		t.Fatalf("a hand-off whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
+	}
+	refuseLedger(t, bare, "")
+	if code, res, errOut := delegateRun(t, env, opts, set...); code != 0 || res.Delegation.Status != dlgHandedOff || held().Status != dlgHandedOff {
+		t.Fatalf("hand-off: exit %d %+v: %s", code, res.Delegation, errOut)
+	}
+	pr := g.AddPR("feat: show empty list", "Refs #2", "founder", "cursor/x", strings.Repeat("e", 40), "dev")
+	cur.finished = pr.Number
+	// A sync that would record the PR and wait for inspect.
+	refuseLedger(t, bare, refuse)
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	if code != ExitExternal || res.Delegation.Status != dlgHandedOff || res.Delegation.PR != 0 || res.Next != "" ||
+		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds handed-off") || held().PR != 0 {
+		t.Fatalf("a sync whose record the ledger refused: exit %d %+v next %q: %s", code, res.Delegation, res.Next, errOut)
+	}
+	// A sync that stops at the cycle cap keeps its own error, and says the record was not written.
+	st := inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Head: strings.Repeat("0", 40), Disposition: inspect.Fix}}
+	j, _ := json.Marshal(st)
+	g.Mu.Lock()
+	gate := &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
+	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate)
+	g.Mu.Unlock()
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	if code != ExitBlocked || res.Delegation.Status != dlgHandedOff || !strings.Contains(errOut, "2-cycle cap") ||
+		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds handed-off") || held().Status != dlgHandedOff {
+		t.Fatalf("a capped sync whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
+	}
+}
+
 // P3: a failed required check goes back to the receiver with its log tail,
 // redacted and quoted as data, once per head; protected-paths and inspect do
 // not; the rounds share the cap, then a human is paged.
@@ -716,6 +768,31 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	}
 	if !paused {
 		t.Fatalf("no pause event: %+v", ds.Events)
+	}
+
+	// Bug #1264: the ledger refuses the pause's record. The wait goes on with a warning, and the record that lands
+	// after the rerun is the whole hand-off, not the record the ledger held before it.
+	_, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	now = opts.Now()
+	opts.Now = func() time.Time { return now }
+	opts.Sleep = func(_ context.Context, d time.Duration) error { now = now.Add(d); return nil }
+	refuseLedger(t, bare, `git diff --name-only "$old" "$new" | grep -q delegate/2/`)
+	runs = 0
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
+		runs++
+		if runs == 1 {
+			return limit(now.Add(time.Hour)), errors.New("codex: exit status 1")
+		}
+		refuseLedger(t, bare, "")
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	ds = delegate.State{}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &ds)
+	if code != 0 || runs != 2 || res.PR == 0 || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") ||
+		ds.Receiver != delegate.Codex || ds.Mode != "local" || ds.Story != 2 || ds.Branch == "" || ds.BriefHash == "" || ds.PR != res.PR || ds.Status != dlgPROpen {
+		t.Fatalf("a pause whose record the ledger refused: exit %d runs %d, ledger %+v: %s", code, runs, ds, errOut)
 	}
 
 	// A reset already a few minutes past still waits a minute before the rerun.

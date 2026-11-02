@@ -428,7 +428,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 					}
 				}
 				if b, err := t.File(ctx, delegate.LedgerPath(ins.Story)); err == nil {
-					_ = json.Unmarshal(b, &deleg)
+					if json.Unmarshal(b, &deleg) != nil {
+						deleg = delegate.State{} // a type error keeps the fields decoded before it; none of them counts (Bug #1264)
+					}
 				}
 				var st BuildState
 				if b, err := t.File(ctx, BuildLedgerPath(ins.Story)); err == nil && json.Unmarshal(b, &st) == nil {

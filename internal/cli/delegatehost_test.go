@@ -145,6 +145,44 @@ func TestAmpHostThreadRecorded(t *testing.T) {
 	}
 }
 
+// Bug #1264, criteria 1 and 2: a --thread record whose ledger write fails for
+// a reason other than a moved tip exits 5 and reports the hand-off that still
+// waits, with no task and no handed-off. A record that lands on the ledger
+// keeps its thread when the state comment fails after it.
+func TestAmpHostThreadRecordFails(t *testing.T) {
+	m := newMissionWorld(t)
+	m.hostHandedOff()
+	refuseLedger(t, m.bare, `git diff --name-only "$old" "$new" | grep -q delegate/20/`)
+	code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r")
+	if code != ExitExternal || strings.Contains(out, dlgHandedOff) || strings.Contains(out, hostThread) || !strings.HasPrefix(out, "#20 delegated to amp (cloud): host-handoff\n") ||
+		strings.Contains(out, "next:") || !strings.Contains(errOut, "the new delegation record of #20 did not reach the ledger, which holds host-handoff") ||
+		m.state(20).Task != "" || m.state(20).Status != dlgHost {
+		t.Fatalf("a refused --thread record: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r", "--json")
+	var rec BuildResult
+	if code != ExitExternal || json.NewDecoder(strings.NewReader(out)).Decode(&rec) != nil || rec.Delegation == nil || rec.Delegation.Status != dlgHost || rec.Delegation.Task != "" ||
+		rec.Next != "" || strings.Contains(out, dlgHandedOff) {
+		t.Fatalf("a refused --thread record, --json: exit %d: %s%s", code, out, errOut)
+	}
+	refuseLedger(t, m.bare, "")
+	m.g.Mu.Lock()
+	var id int64
+	for _, c := range m.g.Issues[20].Comments {
+		if strings.HasPrefix(c.Body, delegateMarker) {
+			id = c.ID
+		}
+	}
+	m.g.Fail = "PATCH /repos/o/r/issues/comments/" + strconv.FormatInt(id, 10)
+	m.g.Mu.Unlock()
+	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r", "--json")
+	rec = BuildResult{}
+	if id == 0 || code != ExitExternal || json.NewDecoder(strings.NewReader(out)).Decode(&rec) != nil || rec.Delegation == nil || rec.Delegation.Status != dlgHandedOff || rec.Delegation.Task != hostThread ||
+		m.state(20).Task != hostThread || m.state(20).Status != dlgHandedOff {
+		t.Fatalf("a recorded thread whose state comment failed: comment %d, exit %d: %s%s", id, code, out, errOut)
+	}
+}
+
 // mission show names no thread for a delegation record that does not parse,
 // and fails on one git cannot read, never showing the story with no thread.
 // The mission is not started, so the show's clock reads no record.

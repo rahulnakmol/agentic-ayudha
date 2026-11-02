@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -413,19 +414,22 @@ func putLedger(t *testing.T, bare, path, content string) {
 // Aayudha-Model trailer alone. A trailer that contradicts the record makes the family unknown, and the reviewer is
 // of a family different from every candidate; with no record the verdict says the family is unknown and why; an
 // honest PR is reviewed as before. Each verdict names the builder family, its source, and that a build record is
-// attributed, not verified.
+// attributed, not verified. A delegation record that does not parse names no family (Bug #1264).
 func TestInspectBuilderFamily(t *testing.T) {
 	head := strings.Repeat("c", 40)
 	for _, tc := range []struct {
 		name, recorded, claim, wantModel, wantFamily string
 		wantSource                                   []string
+		deleg                                        string // delegate/2/state.json
 	}{
 		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
-			[]string{"the records say openai", "declarations claim [anthropic] (self-reported, unverified)", "none of [openai anthropic]"}},
+			[]string{"the records say openai", "declarations claim [anthropic] (self-reported, unverified)", "none of [openai anthropic]"}, ""},
 		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
-			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
+			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}, ""},
+		{"a delegation record with a type error after usable fields", "", "", "gpt-6.1-sol", "",
+			[]string{"no build or delegation record on the ledger names a model family"}, `{"receiver":"codex","family":"openai","story":"2"}`},
 		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
-			[]string{"builder family anthropic (the build record on the ledger names it for all 1 commit(s)", "attributed, not verified"}},
+			[]string{"builder family anthropic (the build record on the ledger names it for all 1 commit(s)", "attributed, not verified"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g, env, opts, prN := inspectFixture(t, cleanDiff, "Adds Percent.\n\nRefs #2")
@@ -436,6 +440,9 @@ func TestInspectBuilderFamily(t *testing.T) {
 			if tc.recorded != "" {
 				st, _ := json.Marshal(BuildState{Story: 2, Checkpoints: []CheckpointRecord{{K: 1, N: 1, Attempt: 1, Commit: head, Verify: "hold", Model: tc.recorded}}})
 				putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(st)) // ledgerCheckout's bare origin
+			}
+			if tc.deleg != "" {
+				putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), delegate.LedgerPath(2), tc.deleg)
 			}
 			pk, _ := proof.LoadLocal(proof.LocalDir(opts.Dir, 2))
 			pk.Model = tc.claim
