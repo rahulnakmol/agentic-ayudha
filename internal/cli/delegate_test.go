@@ -1005,6 +1005,12 @@ func TestReceiverCLIWaitIsBounded(t *testing.T) {
 	if took := time.Since(start); err != nil || strings.TrimSpace(out) != "started" || took > 5*time.Second {
 		t.Fatalf("a CLI that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
 	}
+	// The same for a command run2 runs, as git with its helper (Bug #1137).
+	start = time.Now()
+	out, err = run2(context.Background(), "", "sh", "-c", "sleep 20 & echo started")
+	if took := time.Since(start); err != nil || out != "started" || took > 5*time.Second {
+		t.Fatalf("run2 with a command that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
+	}
 }
 
 // Bug #1124: a story's Amp receiver whose CLI never answers. stall names the
