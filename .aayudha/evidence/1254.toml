@@ -21,7 +21,8 @@ id = 5 # a page, a comment approval batch, or a card outside a window: nothing i
 tests = ["internal/notify:TestPagesWaitForAWindow", "internal/notify:TestPagesWaitInTheQueue", "internal/cli:TestRequestsWaitForAWindow",
   "internal/cli:TestWindowMessageFromAnyCheckout", "internal/cli:TestNotifyEditsReadAgainWhenTheLedgerMoved", "internal/cli:TestPausedTickSendsTheWindowMessage",
   "internal/cli:TestGateAskWaitsForAWindow", "internal/cli:TestInboxShipsReadyPRs", "internal/cli:TestInspectReviewTools",
-  "internal/cli:TestOutboxWaitsWhenTheWindowEnds", "internal/cli:TestEscalationWaitsForAWindow", "internal/cli:TestOutboxDrainsWithNoWindows"]
+  "internal/cli:TestOutboxWaitsWhenTheWindowEnds", "internal/cli:TestEscalationWaitsForAWindow", "internal/cli:TestOutboxDrainsWithNoWindows",
+  "internal/cli:TestWindowClaimHasAnOwner"]
 
 [[criterion]]
 id = 6 # in a window: aayu inbox holds every item that needs a person, in decision order, under one device code

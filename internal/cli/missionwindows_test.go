@@ -488,3 +488,28 @@ func TestOutboxDrainsWithNoWindows(t *testing.T) {
 		t.Fatalf("the tick with no windows: exit %d, asks %d, pages %+v, outbox %q: %s%s", code, asks, sink.Pages, ledgerFile(t, m.bare, OutboxPath), out, errOut)
 	}
 }
+
+// Goldfish review, round 3, finding 6: run A claims the window, and while it
+// reads the inbox its claim lapses and run B claims the window. A sends no
+// message and leaves B's claim in place, so B alone sends it.
+func TestWindowClaimHasAnOwner(t *testing.T) {
+	m := startedTwo(t)
+	m.issue(5, "Choose the rules engine", "decision", 0, "")
+	m.edit(func() { m.g.Issues[5].Body = decisionBody("true", "") })
+	sink := m.windows()
+	m.opts.Now = func() time.Time { return london(10, 30) }
+	theirs := `{"window":"2026-10-22T09:30:00Z","state":"claimed","owner":"run-b","at":"2026-10-22T09:41:00Z","until":"2026-10-22T09:51:00Z"}` + "\n"
+	taken := false
+	m.g.Hook = func(method, _ string) { // A reads the inbox after its claim: B's claim lands meanwhile
+		if !taken && method == "GET" && strings.Contains(ledgerFile(t, m.bare, WindowsPath), `"state":"claimed"`) {
+			taken = true
+			putLedger(t, m.bare, WindowsPath, theirs)
+		}
+	}
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || !taken || len(sink.Pages) != 0 {
+		t.Fatalf("run A after B took the window: exit %d, taken %v, pages %+v: %s%s", code, taken, sink.Pages, out, errOut)
+	}
+	if got := ledgerFile(t, m.bare, WindowsPath); got != theirs {
+		t.Fatalf("run A changed B's claim: %q", got)
+	}
+}

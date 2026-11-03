@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,9 +33,10 @@ import (
 // half past (config.Windows), so the tick opens each window.
 
 // WindowsPath is the ledger file that records each window's one message: a
-// run claims the window for windowLease, sends, and records it sent, so each
-// window has one message, whichever run sends it, and a run that stops
-// half-way leaves the window to the next run.
+// run claims the window for windowLease under its own owner token, renews
+// the claim just before it sends, and records it sent, so each window has
+// one message, whichever run sends it. A run that stops half-way leaves the
+// window to the next run, and a run that lost its claim sends nothing.
 const WindowsPath = "notify/windows.jsonl"
 
 // OutboxPath is the ledger file of the requests for a person's action that
@@ -45,10 +48,19 @@ const OutboxPath = "notify/outbox.jsonl"
 // to the next run after it.
 const windowLease = 10 * time.Minute
 
+// windowOwner names one run's claim on a window: random, so two runs never
+// share it.
+func windowOwner() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // windowSent is one line of WindowsPath.
 type windowSent struct {
 	Window string `json:"window"`          // the window's start, RFC 3339 UTC
 	State  string `json:"state,omitempty"` // "claimed" until Until, then "sent"
+	Owner  string `json:"owner,omitempty"` // the run that claimed it: only that run renews, sends, and finalizes it
 	At     string `json:"at"`
 	Until  string `json:"until,omitempty"`
 	Items  int    `json:"items,omitempty"`
@@ -271,7 +283,8 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 	// Claim the window on the ledger first: of two runs, only the one whose claim lands sends, and a claim
 	// whose run stopped lapses.
 	var waiting []queued
-	claimed := false
+	claimed, owner := false, windowOwner()
+	mine := func(s windowSent) bool { return s.Window == key && s.State == "claimed" && s.Owner == owner }
 	if err := editNotify(ctx, w, "notify: a run claims the message of the window at "+key, func(ws *[]windowSent, out *[]queued) bool {
 		claimed, waiting = false, *out
 		for _, s := range *ws {
@@ -283,7 +296,7 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 			}
 		}
 		*ws = slices.DeleteFunc(*ws, func(s windowSent) bool { return s.Window == key })
-		*ws = append(*ws, windowSent{Window: key, State: "claimed", At: now.UTC().Format(time.RFC3339), Until: now.Add(windowLease).UTC().Format(time.RFC3339)})
+		*ws = append(*ws, windowSent{Window: key, State: "claimed", Owner: owner, At: now.UTC().Format(time.RFC3339), Until: now.Add(windowLease).UTC().Format(time.RFC3339)})
 		claimed = true
 		return true
 	}); err != nil || !claimed {
@@ -294,7 +307,7 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 	defer func() { // record what this run did: the requests it handled leave the outbox, and the window is sent or free again
 		if ferr := editNotify(ctx, w, "notify: the message of the window at "+key, func(ws *[]windowSent, out *[]queued) bool {
 			*out = slices.DeleteFunc(*out, func(q queued) bool { return slices.Contains(done, q.Key) })
-			*ws = slices.DeleteFunc(*ws, func(s windowSent) bool { return s.Window == key })
+			*ws = slices.DeleteFunc(*ws, mine) // only this run's claim: another run's claim or record stays
 			if sent {
 				*ws = append(*ws, windowSent{Window: key, State: "sent", At: e.Now().UTC().Format(time.RFC3339), Items: items})
 			}
@@ -319,6 +332,18 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 	}
 	if !win.Within(e.Now()) { // the window ended while this run read: what waits, waits for the next one
 		return nil
+	}
+	// The claim is still this run's: renew it on the ledger just before the send. A run whose claim lapsed and
+	// another run took sends nothing (Goldfish round 3, finding 6).
+	held := false
+	if err = editNotify(ctx, w, "notify: a run renews its claim on the message of the window at "+key, func(ws *[]windowSent, _ *[]queued) bool {
+		i := slices.IndexFunc(*ws, mine)
+		if held = i >= 0; held {
+			(*ws)[i].Until = e.Now().Add(windowLease).UTC().Format(time.RFC3339)
+		}
+		return held
+	}); err != nil || !held {
+		return err
 	}
 	if items, err = n.Window(ctx, "window:"+key, append(list, pages...)); err != nil {
 		return err
