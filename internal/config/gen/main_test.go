@@ -24,7 +24,7 @@ func TestConstraintsRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key, v := range map[string]string{"build.agents": "5", "mission.max_no_go": "3", "mission.retry_max": "2", "mission.retry_backoff_minutes": "10",
-		"mission.check_minutes": "5", "mission.warn_hours": "24", "mission.max_hours": "48"} {
+		"mission.check_minutes": "5", "mission.warn_hours": "24", "mission.max_hours": "48", "mission.extend_window_hours": "6"} {
 		if row := "| `" + key + "` | `" + v + "` |"; !strings.Contains(out, row) {
 			t.Errorf("CONSTRAINTS.md has no row %q", row)
 		}

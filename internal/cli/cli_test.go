@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,6 +32,12 @@ func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args
 
 // runCtx is runIn on ctx, which a test may cancel as a person's Ctrl-C does.
 func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Options, stdin string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	return runReader(t, ctx, env, opts, strings.NewReader(stdin), args...)
+}
+
+// runReader is runCtx with stdin as a reader, such as onRead.
+func runReader(t *testing.T, ctx context.Context, env map[string]string, opts Options, stdin io.Reader, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errb bytes.Buffer
 	opts.Getenv = func(k string) string { return env[k] }
@@ -64,8 +71,23 @@ func runCtx(t *testing.T, ctx context.Context, env map[string]string, opts Optio
 			return "", errors.New("git credentials disabled in tests")
 		}
 	}
-	code = Run(ctx, args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
+	code = Run(ctx, args, IO{In: stdin, Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
+}
+
+// onRead is a stdin that calls do once, at its first read: after the command
+// showed what it shows, before it reads the person's answer.
+type onRead struct {
+	r  io.Reader
+	do func()
+}
+
+func (o *onRead) Read(p []byte) (int, error) {
+	if o.do != nil {
+		o.do()
+		o.do = nil
+	}
+	return o.r.Read(p)
 }
 
 // stdinTTY makes run's stdin a person's interactive terminal, as a human-only

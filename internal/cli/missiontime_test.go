@@ -537,6 +537,165 @@ func TestMissionExtend(t *testing.T) {
 	}
 }
 
+// Bug #1248: in the [mission] extend_window_hours (6) before the limit, a
+// person may extend the mission, and the new limit counts from the old one.
+// Before the window, extend refuses and names when it opens; an agent lane is
+// refused in it. The inbox shows an Extend card only inside the window.
+func TestExtendInWindow(t *testing.T) {
+	m := startedTwo(t, 25, 26)
+	t0 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	for _, n := range []int{20, 21} {
+		m.status(n, "in-progress", "")
+		m.delegation(n, t0, 0)
+	}
+	m.closedAt(26, t0) // closed before it started: it does not wait
+	windowCards := func() []InboxItem {
+		return slices.DeleteFunc(missionCards(m.inboxList()), func(it InboxItem) bool { return !strings.Contains(it.Title, "may extend") })
+	}
+	// A 48 h window opens the card at 10 h, below warn_hours; back at 6 h the card closes.
+	m.opts.Now = func() time.Time { return t0.Add(10 * time.Hour) }
+	if code, _, errOut := m.next(889, "--set", "mission.extend_window_hours=48"); code != 0 || len(windowCards()) != 1 {
+		t.Fatalf("at 10 h with a 48 h window: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 10 h with a 6 h window: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	// Criterion 2: at 30 h of 48 extend refuses and names when the window opens: 42 h, at 18:00 UTC at the earliest.
+	m.opts.Now = func() time.Time { return t0.Add(30 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 30 h: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	n := m.commits()
+	code, _, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "early")
+	if want := "No mission of #889 is in its extend window or reached its time limit: nothing to extend (mission 1 30 h of 48; its extend window opens at 42 h, " +
+		"12 working hours from now: 2026-10-21 18:00 UTC at the earliest)."; code != ExitBlocked || !strings.Contains(errOut, want) || m.codes() != 0 || m.commits() != n {
+		t.Fatalf("extend at 30 h: exit %d: %s", code, errOut)
+	}
+
+	// Criterion 4: the card comes at 42 h, not a moment before.
+	m.opts.Now = func() time.Time { return t0.Add(42*time.Hour - time.Minute) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 41.98 h: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	m.opts.Now = func() time.Time { return t0.Add(42 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 1 {
+		t.Fatalf("at 42 h: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	// At 45.5 h the Extend card shows the hours used, what runs, what waits and on what, what has not started, and the command.
+	m.delegation(21, t0, 0, fmt.Sprintf(`{"at": %q, "status": "paused", "detail": "Amp's usage limit", "until": %q}`,
+		t0.Add(45*time.Hour).Format(time.RFC3339), t0.Add(50*time.Hour).Format(time.RFC3339)))
+	m.opts.Now = func() time.Time { return t0.Add(45*time.Hour + 30*time.Minute) }
+	if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "max_hours") {
+		t.Fatalf("at 45 h: exit %d: %q%s", code, out, errOut)
+	}
+	n = m.commits() // the later runs of next and the new delegation wrote the ledger
+	cards := windowCards()
+	if len(cards) != 1 || m.timeComments(889) != 1 {
+		t.Fatalf("cards at 45 h: %d comments, %+v", m.timeComments(889), cards)
+	}
+	c := cards[0]
+	for _, want := range []string{"It used 45 of its 48 working hours", "Runs: #20. Waits: #21 on usage limit. Not started: #25.", "`aayu mission extend 889 --reason \"…\"`", "to 96 h"} {
+		if !strings.Contains(c.Why, want) {
+			t.Fatalf("the Extend card has no %q: %+v", want, c)
+		}
+	}
+	if c.Title != "#889 may extend before its 48 h time limit" || len(c.Options) != 2 || c.Options[0].Command != "aayu mission extend 889 --reason" ||
+		c.Options[1].Label != "mark it seen" || c.recommended() != nil {
+		t.Fatalf("the Extend card: %+v", c)
+	}
+
+	// Criterion 5: an agent lane is refused in the window, with nothing written.
+	code, _, errOut = m.mission(m.lane, "rahulnakmol", "extend", 889, "--reason", "two stories left")
+	if code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") || m.commits() != n || m.codes() != 0 {
+		t.Fatalf("agent extend in the window: exit %d: %s", code, errOut)
+	}
+	// A narrower window from config refuses at 45.5 h and names its own opening.
+	code, _, errOut = run(t, m.person, m.opts, "mission", "extend", "889", "--repo", "o/r", "--reason", "r", "--set", "mission.extend_window_hours=2")
+	if code != ExitBlocked || !strings.Contains(errOut, "its extend window opens at 46 h, 0.5 working hours from now") || m.commits() != n {
+		t.Fatalf("extend with a 2 h window: exit %d: %s", code, errOut)
+	}
+	code, _, errOut = run(t, m.person, m.opts, "mission", "extend", "889", "--repo", "o/r", "--reason", "r", "--set", "mission.extend_window_hours=0")
+	if code != ExitBlocked || !strings.Contains(errOut, "its extend window opens at 48 h, 2.5 working hours from now") || m.commits() != n {
+		t.Fatalf("extend with no window: exit %d: %s", code, errOut)
+	}
+	// A person who marks the card seen clears it until the limit.
+	m.opts.IsTerminal = func(any) bool { return true }
+	if code, out, errOut := runIn(t, m.person, m.opts, "2 y q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "done: mark it seen") {
+		t.Fatalf("mark the Extend card seen: exit %d: %s%s", code, out, errOut)
+	}
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 || m.timeComments(889) != 1 {
+		t.Fatalf("after seen: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+
+	// Criterion 1: the person's extend at 45.5 h asks for the device code, records the control, and the limit is 96 h, from the 48 h limit.
+	code, out, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "MS2 still building")
+	if code != 0 || m.codes() != 1 || !strings.Contains(out, "@rahulnakmol extended mission 1 of #889 to 96 h: new starts go on. Reason: MS2 still building") ||
+		!strings.Contains(errOut, "from its 48 h limit") || strings.Index(errOut, `REASON "MS2 still building"`) > strings.Index(errOut, "/login/device") {
+		t.Fatalf("extend at 45.5 h: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
+	}
+	p, raw := m.plan(889)
+	if last := p.Controls[len(p.Controls)-1]; last.Action != "extend" || last.Mission != 1 || last.Hours != 48 || last.Reason != "MS2 still building" ||
+		last.By != "rahulnakmol" || last.Presence != "device-flow" {
+		t.Fatalf("plan.json after extend:\n%s", raw)
+	}
+	if lim := m.show(889).Clock[0].Limit; lim != 96 {
+		t.Fatalf("limit after an early extend: %v, want 96", lim)
+	}
+	// A window wider than max_hours counts as max_hours: no second extend before the 48 h limit just passed on.
+	code, _, errOut = run(t, m.person, m.opts, "mission", "extend", "889", "--repo", "o/r", "--reason", "again", "--set", "mission.extend_window_hours=100")
+	if code != ExitBlocked || !strings.Contains(errOut, "its extend window opens at 48 h, 2.5 working hours from now") || m.codes() != 1 {
+		t.Fatalf("a second extend with a 100 h window: exit %d: %s", code, errOut)
+	}
+	if cards := windowCards(); len(cards) != 0 {
+		t.Fatalf("an Extend card after the extend: %+v", cards)
+	}
+
+	// Outside the next window (90 h to 96 h) there is no card; inside it the card is back, and it follows the hours used.
+	m.opts.Now = func() time.Time { return t0.Add(89 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 89 h: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	m.opts.Now = func() time.Time { return t0.Add(91 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 1 {
+		t.Fatalf("at 91 h: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	// A window narrowed to 2 h closes the card at 91 h; at 92 h, under 6 h again, it is back and follows the hours used.
+	if code, _, errOut := m.next(889, "--set", "mission.extend_window_hours=2"); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 91 h with a 2 h window: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	m.opts.Now = func() time.Time { return t0.Add(92 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 {
+		t.Fatalf("at 92 h: exit %d: %s", code, errOut)
+	}
+	if cards := windowCards(); len(cards) != 1 || m.timeComments(889) != 1 || !strings.Contains(cards[0].Why, "It used 92 of its 96 working hours") ||
+		!strings.Contains(cards[0].Why, "to 144 h") {
+		t.Fatalf("cards at 92 h: %d comments, %+v", m.timeComments(889), cards)
+	}
+	// Another account with write access marks it seen in its own, older comment, edited last (the fake dates an edit 1 s ahead):
+	// the newest card wins, so aayu does not post it again.
+	m.edit(func() {
+		c := &fake.Comment{ID: 7200, CreatedAt: time.Now().Add(-time.Hour), UpdatedAt: time.Now().Add(time.Second), Body: missionCard(1, "seen", 96, 0, "Seen.")}
+		c.User.Login = "maintainer"
+		if m.g.Permissions == nil {
+			m.g.Permissions = map[string]string{}
+		}
+		m.g.Permissions["maintainer"] = "write"
+		m.g.Issues[889].Comments = append([]*fake.Comment{c}, m.g.Issues[889].Comments...)
+	})
+	m.opts.Now = func() time.Time { return t0.Add(93 * time.Hour) }
+	if code, _, errOut := m.next(889); code != 0 || len(windowCards()) != 0 {
+		t.Fatalf("at 93 h after another account's seen: exit %d: %s, cards %+v", code, errOut, windowCards())
+	}
+	// At the limit the Extend card gives way to the limit card.
+	m.opts.Now = func() time.Time { return t0.Add(96*time.Hour + time.Minute) }
+	if code, _, errOut := m.next(889); code != 0 {
+		t.Fatalf("at 96 h: exit %d: %s", code, errOut)
+	}
+	if cards := missionCards(m.inboxList()); len(cards) != 1 || cards[0].Title != "#889 reached its 96 h time limit" {
+		t.Fatalf("cards at 96 h: %+v", cards)
+	}
+}
+
 // The 48 h card's choices from the person's inbox: Stop waits for #1002 and
 // changes nothing; Extend asks for the reason, then the device code, and
 // extends; the 24 h card is marked seen and leaves the inbox.
@@ -598,7 +757,8 @@ func TestMissionTimeRefusals(t *testing.T) {
 	m.opts.Now = func() time.Time { return t0.Add(10 * time.Hour) }
 	n := m.commits()
 	if code, _, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "early"); code != ExitBlocked || m.codes() != 0 ||
-		!strings.Contains(errOut, "No mission of #889 reached its time limit: nothing to extend (mission 1 9 h of 48 (1 h not counted: 1 h CI))") {
+		!strings.Contains(errOut, "No mission of #889 is in its extend window or reached its time limit: nothing to extend (mission 1 9 h of 48 (1 h not counted: 1 h CI); "+
+			"its extend window opens at 42 h, 33 working hours from now: 2026-10-21 19:00 UTC at the earliest)") {
 		t.Fatalf("extend before the limit: exit %d: %s", code, errOut)
 	}
 	for _, path := range []string{"GET /repos/o/r/issues/20", fmt.Sprintf("GET /repos/o/r/issues/%d/comments", pr.Number),
@@ -716,6 +876,51 @@ func TestMissionTimeEdges(t *testing.T) {
 	if code, out, _ := run(t, r.person, r.opts, "mission", "show", "889", "--repo", "o/r"); code != 0 ||
 		!strings.Contains(out, "          mission 1: about 1 working hours (1 × 1 h; source: #886 history)\n") {
 		t.Fatalf("show: %s", out)
+	}
+}
+
+// Bug #1248: when both missions are in their extend windows, the card is
+// mission 1's, the mission the printed extend command extends.
+func TestWindowCardNamesTheMissionExtendPicks(t *testing.T) {
+	m := newMissionWorld(t)
+	m.hours(map[string]float64{"S": 1}, nil)
+	m.issue(874, "Feature baselines", "feature", 0, "")
+	m.issue(950, "Story 950", "story", 874, "")
+	m.feature1015(889, story1015{n: 20, effort: "S"}, story1015{n: 30, effort: "S", links: "depends-on #950"})
+	m.approved(889)
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889); code != 0 {
+		t.Fatalf("start: exit %d: %s%s", code, out, errOut)
+	}
+	t0 := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	m.delegation(20, t0, 0)
+	m.delegation(30, t0, 0)
+	m.opts.Now = func() time.Time { return t0.Add(45 * time.Hour) }
+	if code, out, errOut := m.next(889); code != 0 {
+		t.Fatalf("next: exit %d: %s%s", code, out, errOut)
+	}
+	cards := missionCards(m.inboxList())
+	if len(cards) != 1 || cards[0].f.mission != 0 && cards[0].f.mission != 1 || !strings.Contains(cards[0].Why, "Mission 1 of #889") {
+		t.Fatalf("cards: %+v", cards)
+	}
+	// Another account marks mission 1's window seen while the person answers: the card is now mission 2's, so the
+	// person's Extend writes nothing; it acts only on the mission the person saw.
+	m.opts.IsTerminal = func(any) bool { return true }
+	m.device("rahulnakmol")
+	in := &onRead{r: strings.NewReader("1two stories left\nq"), do: func() {
+		m.edit(func() {
+			c := &fake.Comment{ID: 7300, CreatedAt: time.Now(), UpdatedAt: time.Now().Add(time.Second), Body: missionCard(1, "seen", 48, 0, "Seen.")}
+			c.User.Login = "maintainer"
+			m.g.Permissions = map[string]string{"maintainer": "write"}
+			m.g.Issues[889].Comments = append(m.g.Issues[889].Comments, c)
+			m.g.Issues[889].UpdatedAt = "2026-10-12T10:00:00Z" // a new comment moves the issue's updated_at, as on GitHub
+		})
+	}}
+	code, out, errOut := runReader(t, context.Background(), m.person, m.opts, in, "inbox", "--repo", "o/r")
+	if p, _ := m.plan(889); code != 0 || !strings.Contains(out+errOut, "it is now mission 2's card at 48") || slices.ContainsFunc(p.Controls, func(c MissionControl) bool { return c.Action == "extend" }) {
+		t.Fatalf("extend from a card that changed to mission 2: exit %d: %s%s", code, out, errOut)
+	}
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "extend", 889, "--reason", "r"); code != 0 || !strings.Contains(out, "extended mission 1 of #889") {
+		t.Fatalf("the printed command: exit %d: %s%s", code, out, errOut)
 	}
 }
 

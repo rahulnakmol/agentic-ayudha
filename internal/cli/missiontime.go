@@ -334,6 +334,17 @@ func recordedRun(n int, rec *StoryRunRecord) (storyRun, bool) {
 // reached reports whether the mission used its time: new starts wait.
 func (c MissionClock) reached() bool { return c.Limit > 0 && c.Hours >= c.Limit }
 
+// extendWindow is [mission] extend_window_hours, at most max_hours: then an
+// early extend never opens the next window at once. An extend long after
+// the limit still can; each extend needs a person's code and reason.
+func extendWindow(c *config.Config) int { return min(c.Mission.ExtendWindowHours, c.Mission.MaxHours) }
+
+// inWindow reports whether the mission is in its extend window (Bug #1248):
+// within [mission] extend_window_hours before its limit, and not at it yet.
+func (c MissionClock) inWindow(window int) bool {
+	return window > 0 && c.Limit > 0 && !c.reached() && c.Hours >= c.Limit-float64(window)
+}
+
 // String is "19 h of 48 (11 h not counted: 5 h person, 2 h usage limit, 4 h CI)".
 func (c MissionClock) String() string {
 	s := fmt.Sprintf("%s h of %s", hrs(c.Hours), hrs(c.Limit))
@@ -669,8 +680,9 @@ var missionTimeRE = regexp.MustCompile(regexp.QuoteMeta(MissionTimeMarker) + ` m
 func missionTimeMarker(m int) string { return fmt.Sprintf("%s mission=%d ", MissionTimeMarker, m) }
 
 // missionCard is the body of mission m's time card in a state: warn (it ran
-// warn_hours), limit (it reached its limit; an extension adds add hours),
-// seen (a person saw the warning), or extended (a person extended it).
+// warn_hours), window (it is in its extend window, Bug #1248), limit (it
+// reached its limit; an extension adds add hours), seen (a person saw the
+// warning), or extended (a person extended it).
 func missionCard(m int, state string, hours, add float64, line string) string {
 	return fmt.Sprintf("%sstate=%s hours=%s add=%s -->\n%s\n", missionTimeMarker(m), state, hrs(hours), hrs(add), line)
 }
@@ -705,13 +717,20 @@ func trustedBy(ctx context.Context, c *github.Client, owner, name string, id con
 }
 
 // missionCards posts each mission's time card once: when its clock reaches
-// warn_hours, and when it reaches its limit. A card a person saw, or an
-// extension, is not posted again until the next limit.
-func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f int, clocks []MissionClock, warn, maxH int, id config.Identity) error {
+// warn_hours, when it enters its extend window, and when it reaches its
+// limit. A card a person saw, or an extension, is not posted again until the
+// next limit; a window card a person saw stays seen until its limit. The
+// window card is edited while what it says changes: the hours used, and what
+// runs, waits, and has not started; once the mission leaves its window any
+// other way (its limit or window changed), the card closes. The mission's
+// state is its newest trusted card, as the inbox reads it. open are the
+// mission's open stories and Bugs.
+func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f int, plan *MissionPlan, clocks []MissionClock, open map[int]bool, lim config.Mission, id config.Identity) error {
 	if c.DryRun() {
 		return nil
 	}
 	owner, name, _ := github.SplitRepo(repo)
+	warn, maxH := lim.WarnHours, lim.MaxHours
 	var comments []*gh.IssueComment
 	read := false
 	for _, mc := range clocks {
@@ -720,10 +739,10 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 		case mc.reached():
 			state, line = "limit", fmt.Sprintf("**#%d reached its %s h time limit.** new starts wait: the mission of #%d used its %s working hours. Running stories keep going. "+
 				"No recommendation: the mission gives none. A person extends it with `aayu mission extend %d --reason \"…\"`, or stops it.", f, hrs(mc.Limit), f, hrs(mc.Limit), f)
+		case mc.inWindow(min(lim.ExtendWindowHours, maxH)):
+			state, line = "window", windowLine(f, plan, mc, open, maxH)
 		case warn > 0 && mc.Hours >= float64(warn) && mc.Extended == 0:
 			state, line = "warn", fmt.Sprintf("**#%d has run %d h.** Mission %d's clock reached [mission] warn_hours; nothing stops. No recommendation: the mission gives none.", f, warn, mc.Mission)
-		default:
-			continue
 		}
 		if !read {
 			var err error
@@ -734,32 +753,79 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 			}
 			read = true
 		}
-		hours := float64(warn)
-		if state == "limit" {
-			hours = mc.Limit
-		}
-		posted := false
+		// The newest card of this mission by an account with write access, whoever wrote it.
+		var newest []string
+		newestBody, newestAt := "", time.Time{}
 		for _, cm := range comments {
-			// A warning only when the mission has no card yet, and a limit card once per limit; only a card by an
-			// account with write access counts, as the inbox reads it.
 			mm := missionTimeRE.FindStringSubmatch(cm.GetBody())
 			if mm == nil || mm[1] != strconv.Itoa(mc.Mission) {
 				continue
 			}
 			if ok, err := trustedBy(ctx, c, owner, name, id, cm.GetUser()); err != nil {
 				return Wrap(ExitExternal, err)
-			} else if ok {
-				posted = state == "warn" || mm[2] == "limit" && mm[3] == hrs(hours)
+			} else if at := cmp.Or(cm.GetUpdatedAt().Time, cm.GetCreatedAt().Time); ok && (newest == nil || !at.Before(newestAt)) {
+				newest, newestBody, newestAt = mm, cm.GetBody(), at
 			}
 		}
-		if posted {
+		if state != "limit" && state != "window" && newest != nil && newest[2] == "window" {
+			state, line = "closed", fmt.Sprintf("Closed: mission %d of #%d is no longer in its extend window.", mc.Mission, f)
+		}
+		if state == "" {
 			continue
 		}
-		if err := upsertCard(ctx, c, repo, f, mc.Mission, state, missionCard(mc.Mission, state, hours, float64(maxH), line)); err != nil {
+		hours := float64(warn)
+		if state != "warn" {
+			hours = mc.Limit
+		}
+		body := missionCard(mc.Mission, state, hours, float64(maxH), line)
+		// A warning only when the mission has no card yet, a limit card once per limit, and a window card while
+		// it changes, unless a person saw it at this limit.
+		if newest != nil && (state == "warn" || newest[2] == "limit" && newest[3] == hrs(hours) ||
+			state == "window" && (newestBody == body || newest[2] == "seen" && newest[3] == hrs(hours))) {
+			continue
+		}
+		if err := upsertCard(ctx, c, repo, f, mc.Mission, state, body); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// windowLine is the window card's text: the hours mission mc used, which of
+// its stories run, which wait and on what, which open ones have not started,
+// and the extend command. Whole hours, so the card changes at most once an
+// hour.
+func windowLine(f int, plan *MissionPlan, mc MissionClock, open map[int]bool, maxH int) string {
+	var runs, waits, not []string
+	started := map[int]bool{}
+	for _, s := range mc.Stories {
+		started[s.Number] = true
+		if s.Ended {
+			continue
+		}
+		kind := "" // what the story waits on now: a wait that lasts to the run's end, now
+		for _, w := range s.run.waits {
+			if !w.from.After(s.run.end) && !w.to.Before(s.run.end) && (kind == "" || slices.Index(waitOrder, w.kind) < slices.Index(waitOrder, kind)) {
+				kind = w.kind
+			}
+		}
+		if kind == "" {
+			runs = append(runs, "#"+strconv.Itoa(s.Number))
+		} else {
+			waits = append(waits, fmt.Sprintf("#%d on %s", s.Number, kind))
+		}
+	}
+	for _, m := range plan.Missions {
+		for _, s := range m.Stories {
+			if m.Number == mc.Mission && !started[s.Number] && open[s.Number] {
+				not = append(not, "#"+strconv.Itoa(s.Number))
+			}
+		}
+	}
+	return fmt.Sprintf("**Mission %d of #%d can be extended now.** It used %d of its %s working hours; at %s h new starts wait. Runs: %s. Waits: %s. Not started: %s. "+
+		"No recommendation: the mission gives none. A person extends it with `aayu mission extend %d --reason \"…\"`: it adds %d h from the limit, to %s h.",
+		mc.Mission, f, int(mc.Hours), hrs(mc.Limit), hrs(mc.Limit), or(strings.Join(runs, ", "), "none"), or(strings.Join(waits, ", "), "none"),
+		or(strings.Join(not, ", "), "none"), f, maxH, hrs(mc.Limit+float64(maxH)))
 }
 
 // recordWorking writes each ended story's working total into the plan, once
@@ -816,10 +882,11 @@ type MissionExtendReport struct {
 }
 
 // missionExtend is `aayu mission extend <f> --reason "…"`: a person, after
-// the presence check, gives a mission that reached its time limit another
-// [mission] max_hours, and the plan records the reason and them. The inbox
-// card names its mission; on the command line it is the first one held (0).
-// An agent lane is refused before anything is read.
+// the presence check, gives a mission that reached its time limit, or is in
+// its extend window before it (Bug #1248), another [mission] max_hours from
+// the limit, and the plan records the reason and them. The inbox card names
+// its mission; on the command line it is the first one held (0), else the
+// first one in its window. An agent lane is refused before anything is read.
 func missionExtend(ctx context.Context, e *Env, f int, reason string, mission int) error {
 	if err := e.laneRefusal("mission extend"); err != nil {
 		return err
@@ -836,6 +903,7 @@ func missionExtend(ctx context.Context, e *Env, f int, reason string, mission in
 		return err
 	}
 	_, maxH := missionLimits(&l.Config)
+	window := extendWindow(&l.Config)
 	held := func() (*MissionPlan, MissionClock, string, error) {
 		plan, _, tip, err := readMission(ctx, w, f)
 		switch {
@@ -848,24 +916,41 @@ func missionExtend(ctx context.Context, e *Env, f int, reason string, mission in
 		if err != nil {
 			return nil, MissionClock{}, "", err
 		}
+		var early *MissionClock
 		for _, mc := range clocks {
-			if mc.reached() && (mission == 0 || mc.Mission == mission) {
+			switch {
+			case mission != 0 && mc.Mission != mission:
+			case mc.reached():
 				return plan, mc, tip, nil
+			case early == nil && mc.inWindow(window):
+				early = &mc
 			}
+		}
+		if early != nil {
+			return plan, *early, tip, nil
 		}
 		var now []string
 		for _, mc := range clocks {
-			now = append(now, fmt.Sprintf("mission %d %s", mc.Mission, mc))
+			if mission != 0 && mc.Mission != mission {
+				continue
+			}
+			open := mc.Limit - float64(window)
+			now = append(now, fmt.Sprintf("mission %d %s; its extend window opens at %s h, %s working hours from now: %s at the earliest", mc.Mission, mc, hrs(open),
+				hrs(open-mc.Hours), e.Now().UTC().Add(time.Duration((open-mc.Hours)*float64(time.Hour))).Format("2006-01-02 15:04 UTC")))
 		}
-		return nil, MissionClock{}, "", Errorf(ExitBlocked, "No mission of #%d reached its time limit: nothing to extend (%s).", f, strings.Join(now, "; "))
+		return nil, MissionClock{}, "", Errorf(ExitBlocked, "No mission of #%d is in its extend window or reached its time limit: nothing to extend (%s).", f, strings.Join(now, "; "))
 	}
 	_, mc, _, err := held()
 	if err != nil {
 		return err
 	}
-	limit := mc.Limit + float64(maxH)
+	limit := mc.Limit + float64(maxH) // from the limit, never from now: an early extension gives no extra time
+	starts := "new starts resume"
+	if !mc.reached() {
+		starts = "new starts go on"
+	}
 	effect := []string{
-		fmt.Sprintf("Extends mission %d of #%d by %d h ([mission] max_hours): it used %s, and new starts resume until %s h", mc.Mission, f, maxH, mc, hrs(limit)),
+		fmt.Sprintf("Extends mission %d of #%d by %d h ([mission] max_hours) from its %s h limit: it used %s, and %s until %s h", mc.Mission, f, maxH, hrs(mc.Limit), mc, starts, hrs(limit)),
 		fmt.Sprintf("REASON %q", reason),
 	}
 	p, err := e.presenceCheck(ctx, Pending{What: "mission extend", Effect: effect}, AccessWrite, e.personOnly("mission extend"))
@@ -900,7 +985,7 @@ func missionExtend(ctx context.Context, e *Env, f int, reason string, mission in
 		}
 	}
 	return e.Emit(rep, func(w io.Writer) error {
-		fmt.Fprintf(w, "@%s extended mission %d of #%d to %s h: new starts resume. Reason: %s\n", p.Login, mc.Mission, f, hrs(limit), reason)
+		fmt.Fprintf(w, "@%s extended mission %d of #%d to %s h: %s. Reason: %s\n", p.Login, mc.Mission, f, hrs(limit), starts, reason)
 		if rep.DryRun {
 			_, err := fmt.Fprintf(w, "  --dry-run: ledger %s planned, not written\n", rep.LedgerPath)
 			return err
@@ -911,8 +996,9 @@ func missionExtend(ctx context.Context, e *Env, f int, reason string, mission in
 }
 
 // missionItem makes Feature it's mission time card from aayu's newest time
-// comment on it, by an account with write access: a limit card, else a
-// warning nobody marked seen. A Feature with neither has no card.
+// comment on it, by an account with write access: a limit card, else an open
+// extend window, else a warning nobody marked seen. A Feature with none has
+// no card.
 func (s *inboxSource) missionItem(ctx context.Context, it *InboxItem) (bool, error) {
 	comments, err := s.commentsOf(ctx, it.Number)
 	if err != nil {
@@ -921,9 +1007,9 @@ func (s *inboxSource) missionItem(ctx context.Context, it *InboxItem) (bool, err
 	// A mission's state is its newest trusted card, whoever wrote it: a person who extends, stops, or marks it
 	// seen may write as another account than the one that posted the card.
 	type card struct {
-		mm  []string
-		url string
-		at  time.Time
+		mm        []string
+		url, body string
+		at        time.Time
 	}
 	newest := map[int]card{}
 	for _, cm := range comments {
@@ -938,18 +1024,22 @@ func (s *inboxSource) missionItem(ctx context.Context, it *InboxItem) (bool, err
 		}
 		at := cmp.Or(cm.GetUpdatedAt().Time, cm.GetCreatedAt().Time)
 		if m, _ := strconv.Atoi(mm[1]); !at.Before(newest[m].at) {
-			newest[m] = card{mm, cm.GetHTMLURL(), at}
+			newest[m] = card{mm, cm.GetHTMLURL(), cm.GetBody(), at}
 		}
 	}
-	var limit, warn []string
-	url := ""
+	byState := map[string]card{} // the last mission's card in each state; the first one in its window, as extend picks it
 	for _, m := range slices.Sorted(maps.Keys(newest)) {
-		switch cd := newest[m]; {
-		case cd.mm[2] == "limit":
-			limit, url = cd.mm, cd.url
-		case cd.mm[2] == "warn" && limit == nil:
-			warn, url = cd.mm, cd.url
+		if st := newest[m].mm[2]; st != "window" || byState[st].mm == nil {
+			byState[st] = newest[m]
 		}
+	}
+	limit, window, warn := byState["limit"].mm, byState["window"].mm, byState["warn"].mm
+	url := byState["warn"].url
+	switch {
+	case limit != nil:
+		url = byState["limit"].url
+	case window != nil:
+		url = byState["window"].url
 	}
 	f := it.Number
 	it.Kind, it.Seat, it.Evidence, it.CounselFrom = InboxMissionTime, verbs.EngineeringManager, or(url, it.URL), "facts"
@@ -966,6 +1056,16 @@ func (s *inboxSource) missionItem(ctx context.Context, it *InboxItem) (bool, err
 			{N: 2, Label: "Stop the mission", Command: fmt.Sprintf("aayu mission stop %d --reason", f),
 				Ask: fmt.Sprintf("Why do you stop the mission of #%d? It asks for GitHub's device code next.", f)},
 		}
+	case window != nil: // Bug #1248: the card says what it used, what runs and has not started, and the command
+		m, _ := strconv.Atoi(window[1])
+		_, line, _ := strings.Cut(byState["window"].body, "\n")
+		it.Title, it.f.problem, it.f.mission, it.f.missionHours = fmt.Sprintf("#%d may extend before its %s h time limit", f, window[3]), "extend window open", m, window[3]
+		it.Why = termText(strings.TrimSpace(strings.ReplaceAll(line, "**", "")))
+		it.Counsel = it.Why
+		it.Options = []InboxAction{{N: 1, Label: fmt.Sprintf("Extend for %s h from the limit, with a reason", window[4]), Command: fmt.Sprintf("aayu mission extend %d --reason", f),
+			Ask: fmt.Sprintf("Why may mission %d of #%d run another %s h after its limit? It asks for GitHub's device code next.", m, f, window[4])},
+			{N: 2, Label: "mark it seen", Command: "inbox: mark the mission card seen"}} // it stays seen until the limit card
+
 	case warn != nil:
 		m, _ := strconv.Atoi(warn[1])
 		it.Title, it.f.problem, it.f.mission = fmt.Sprintf("#%d has run %s h", f, warn[3]), "ran "+warn[3]+" h", m
@@ -988,13 +1088,17 @@ func (e *Env) missionTimeAct(ctx context.Context, c *github.Client, repo string,
 		return missionExtend(ctx, e, it.Number, strings.TrimSpace(a.Answer), it.f.mission) // the card's mission, not the first one held
 	}
 	m, state, line := it.f.mission, "seen", fmt.Sprintf("Seen: the warning of mission %d of #%d.", it.f.mission, it.Number)
+	hours, _ := strconv.ParseFloat(it.f.missionHours, 64) // a window card's limit: seen until that limit; a warning's is 0
+	if hours > 0 {
+		line = fmt.Sprintf("Seen: the extend window of mission %d of #%d before its %s h limit.", m, it.Number, it.f.missionHours)
+	}
 	if strings.HasPrefix(a.Command, "aayu mission stop") { // #1002's stop, with the person's reason; then the card's choice is made
 		if err := missionStop(ctx, e, it.Number, Values{"reason": a.Answer}); err != nil {
 			return err
 		}
 		state, line = "stopped", fmt.Sprintf("**Stopped.** The mission of #%d was stopped at its time limit: %s", it.Number, strings.TrimSpace(a.Answer))
 	}
-	if err := upsertCard(ctx, c, repo, it.Number, m, state, missionCard(m, state, 0, 0, line)); err != nil {
+	if err := upsertCard(ctx, c, repo, it.Number, m, state, missionCard(m, state, hours, 0, line)); err != nil {
 		return err
 	}
 	if state == "seen" {

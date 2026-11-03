@@ -105,6 +105,7 @@ Approve to build is a person's decision, through GitHub's device flow every time
 | `mission.check_minutes` | `5` | Minutes between a local Kanha's checks of its missions. | Feature #889 |
 | `mission.warn_hours` | `24` | Working hours of a mission's estimate past which Approve to build warns. It refuses nothing. | Feature #889 |
 | `mission.max_hours` | `48` | Working hours a mission may use. After them it starts no new story until a person extends it; running stories finish. | Feature #889 |
+| `mission.extend_window_hours` | `6` | Working hours before a mission's time limit in which a person may already extend it, and the inbox says so. The extension adds `mission.max_hours` from the limit, never from now. 0: only at the limit; a value above `mission.max_hours` counts as `mission.max_hours`. | Feature #889 |
 
 A mission reads every limit from config, never from a prompt. How many stories it runs at once is `build.agents`.
 

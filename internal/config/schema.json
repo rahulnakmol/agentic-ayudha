@@ -1055,6 +1055,11 @@
           "type": "integer",
           "minimum": 1,
           "description": "Working hours a mission may use before it starts no new story until a person extends it; running stories finish."
+        },
+        "extend_window_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Working hours before a mission's time limit in which a person may already extend it; the extension counts from the limit. 0: only at the limit. A value above max_hours counts as max_hours."
         }
       },
       "additionalProperties": false,

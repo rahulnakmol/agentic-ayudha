@@ -129,7 +129,8 @@ var inboxKinds = map[string]inboxKind{
 		Line: "A mission's clock passed one of its limits; past the last one, only a person lets it start new stories.",
 		Explain: "Each mission of a Feature has a clock that runs while at least one of its story threads works, and pauses while every running " +
 			"story waits on a person, a usage limit, or GitHub CI. At [mission] warn_hours it only tells you; at [mission] max_hours it starts no new story, " +
-			"and the running ones finish. Extending it gives it another max_hours and records your reason; stopping it is aayu mission stop (#1002).",
+			"and the running ones finish. Extending it gives it another max_hours from the limit and records your reason; you may extend it in the " +
+			"[mission] extend_window_hours before the limit too, and the card says so then. Stopping it is aayu mission stop (#1002).",
 		Terms: []string{"Work item"}},
 	InboxEvening: {Icon: "🌇", Word: "Evening review", Seat: verbs.EngineeringManager,
 		Line: "A story you agreed this morning, each criterion next to its evidence; only you accept it or say what is wrong.",
@@ -297,7 +298,8 @@ type inboxFacts struct {
 	head, status, disp, by string
 	problem                string
 	devBr                  string
-	mission                int // a mission card's mission
+	mission                int    // a mission card's mission
+	missionHours           string // a mission window card's limit, in hours (Bug #1248)
 }
 
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
@@ -1234,6 +1236,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	}
 	if was.Kind == InboxEvening && (was.Pack != now.Pack || !slices.Equal(was.Lines, now.Lines)) { // an accept accepts the evidence the person read
 		out = append(out, "its evidence changed")
+	}
+	if was.Kind == InboxMissionTime && (was.f.mission != now.f.mission || was.f.missionHours != now.f.missionHours) { // its choice acts on that mission at that limit
+		out = append(out, fmt.Sprintf("it is now mission %d's card at %s", now.f.mission, or(now.f.missionHours, "its limit")))
 	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")
