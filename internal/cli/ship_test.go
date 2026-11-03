@@ -1972,8 +1972,10 @@ func TestProofLand(t *testing.T) {
 	setRun(nil, branch, "O/R", ran)
 	twin := g.AddPR("Show empty list again", "Refs #2", "founder", branch, head, "rolling")
 	missing("a second PR from the branch at the head")
+	// Bug #1204: one from the branch at the head that opened after the PR
+	// merged was never open with it, so the PR's own run still counts.
 	g.Mu.Lock()
-	twin.Head.SHA = strings.Repeat("f", 40)
+	twin.CreatedAt = time.Now().UTC().Add(time.Hour)
 	g.Mu.Unlock()
 	// A newer green gate run with its own pack, started by an event after the
 	// merge (an edit of the body): it ran the base branch that now holds the
@@ -2006,11 +2008,25 @@ func TestProofLand(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "proof coverage 1/1; merged without proof: pre-gate 0, post-gate 0") {
 		t.Fatalf("audit after proof land: %d %s %s", code, out, errOut)
 	}
-	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
 	c, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Nor does one at the head that closed before the PR opened (Bug #1204).
+	g.Mu.Lock()
+	twin.CreatedAt, twin.ClosedAt = opened.Add(-2*time.Hour), opened.Add(-time.Minute)
+	g.Mu.Unlock()
+	if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err != nil || !suites[good.CheckSuiteID] {
+		t.Errorf("gateSuites with a PR from the branch at the head that closed before the PR opened: %v %v", suites, err)
+	}
+	// One at the head that closed while the PR was open was open with it.
+	g.Mu.Lock()
+	twin.ClosedAt = opened.Add(time.Minute)
+	g.Mu.Unlock()
+	if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err != nil || suites[good.CheckSuiteID] {
+		t.Errorf("gateSuites with a PR from the branch at the head that closed while the PR was open: %v %v", suites, err)
+	}
+	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
 	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls"} {
 		g.Mu.Lock()
 		g.Fail, g.FailAfter = fail, 0
