@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path"
@@ -121,7 +122,10 @@ type ShipResult struct {
 // rule, and the streak state) beside the pack, the lease released, and
 // cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
-	if in.Bool("solo-bypass") {
+	// An agent lane or CI can never give the bypass, so it is refused before
+	// anything is read; a person's device code is asked for only once every
+	// check that needs no person holds, just before the first write (Story #1206).
+	if in.Bool("solo-bypass") && (e.Getenv("AAYU_AGENT") == "1" || e.CI) {
 		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
 			return err
 		}
@@ -434,6 +438,32 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		rec.HumanPass = hp
 	}
+	// Every check that needs no person holds: now the person approves the
+	// bypass, before any write. Entering the code takes minutes, so ship then
+	// runs every check again from the start, on the same head, with what
+	// GitHub and the ledger say now; the approval covers that pass.
+	// A PR that changed, is a draft, or conflicts with its base is known to
+	// refuse below, so it is read before the code too.
+	if in.Bool("solo-bypass") && !in.Bool(shipApproved) {
+		p, err := pullMergeable(ctx, c, owner, name, n)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if err := prChanged(n, pr, p); err != nil {
+			return err
+		}
+		if err := conflicts(n, pr.GetBase().GetRef(), p); err != nil {
+			return err
+		}
+		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
+			return err
+		}
+		// This pass's deferred checkpoint stays: the second pass flushes the
+		// log, so it is a no-op unless the second pass stops before its own.
+		again := maps.Clone(in)
+		again[shipApproved], again[shipExpectHead] = true, head
+		return runShip(ctx, e, again)
+	}
 
 	// 4. Land the gate's pack (pack.json and data, never media unless the
 	// opt-in bucket is set) under the human's identity, merge, then the
@@ -476,14 +506,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if now.GetState() != "open" || now.GetHead().GetSHA() != head || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
-		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	if err := prChanged(n, pr, now); err != nil {
+		return err
 	}
 	// GitHub would refuse the merge of a PR that conflicts with its base:
 	// refuse it here, before the bypass below is posted.
-	if now.Mergeable != nil && !now.GetMergeable() || now.GetMergeableState() == "dirty" {
-		base := pr.GetBase().GetRef()
-		return WithNext(Errorf(ExitBlocked, "ship #%d: it conflicts with %s, so GitHub cannot merge it; nothing was merged", n, base), fmt.Sprintf("rebase it onto %s, then aayu ship %d", base, n))
+	if err := conflicts(n, pr.GetBase().GetRef(), now); err != nil {
+		return err
 	}
 	// Nor is a bypass posted while GitHub has not said whether it can merge:
 	// a refused merge would leave it on a PR that never merged.
@@ -982,9 +1011,34 @@ func soloModeComment(ctx context.Context, c *github.Client, owner, name string, 
 // a flag, so only the inbox sets it.
 const shipExpectHead = "expect-head"
 
+// shipApproved marks ship's second pass, after the person approved a
+// --solo-bypass ship; it is not a flag, so only ship sets it.
+const shipApproved = "approved"
+
 // shipBypassNote is the Solo-mode bypass comment the inbox asks ship to post
 // for the person, once ship's checks pass on the head; it is not a flag.
 const shipBypassNote = "bypass-note"
+
+// prChanged refuses PR n when now is not the PR ship judged (pr): closed,
+// pushed, or retargeted since.
+func prChanged(n int, pr, now *gh.PullRequest) error {
+	if now.GetState() != "open" || now.GetHead().GetSHA() != pr.GetHead().GetSHA() || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
+		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	}
+	return nil
+}
+
+// conflicts refuses PR n when GitHub cannot merge it: a draft, or one that
+// conflicts with base.
+func conflicts(n int, base string, p *gh.PullRequest) error {
+	if p.GetDraft() {
+		return WithNext(Errorf(ExitBlocked, "ship #%d: it is a draft, so GitHub cannot merge it; nothing was merged", n), fmt.Sprintf("mark it ready for review, then aayu ship %d", n))
+	}
+	if p.Mergeable != nil && !p.GetMergeable() || p.GetMergeableState() == "dirty" {
+		return WithNext(Errorf(ExitBlocked, "ship #%d: it conflicts with %s, so GitHub cannot merge it; nothing was merged", n, base), fmt.Sprintf("rebase it onto %s, then aayu ship %d", base, n))
+	}
+	return nil
+}
 
 // headMoved refuses a ship whose PR was pushed after the person chose it.
 func headMoved(n int, chose, now string) error {

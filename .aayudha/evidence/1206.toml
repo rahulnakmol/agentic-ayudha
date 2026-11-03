@@ -1,0 +1,17 @@
+# Which tests prove Story #1206's Completion Goal.
+
+[[criterion]]
+id = 1 # no plan-time review for a never layer: refuses with `aayu plan <story> --solo-bypass`, asks for no device code
+tests = ["./internal/cli:TestShipSoloBypassChecksBeforeDeviceCode/no_plan_review"]
+
+[[criterion]]
+id = 2 # no "Solo-mode bypass:" comment that names the head: refuses before the device flow and names the comment
+tests = ["./internal/cli:TestShipSoloBypassChecksBeforeDeviceCode/no_bypass_comment"]
+
+[[criterion]]
+id = 3 # every precondition holds: one device code, then the merge
+tests = ["./internal/cli:TestShipSoloBypassChecksBeforeDeviceCode/one_code_merges"]
+
+[[criterion]]
+id = 4 # an agent lane: refused as before
+tests = ["./internal/cli:TestShipSoloBypassChecksBeforeDeviceCode/agent_lane", "./internal/cli:TestShipMobileWaiverAndSoloBypass"]
