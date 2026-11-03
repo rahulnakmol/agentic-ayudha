@@ -9,10 +9,12 @@
   "task": "T-01a19d62-c3a8-761f-9c6d-06746c4527b6",
   "task_url": "https://ampcode.com/threads/T-01a19d62-c3a8-761f-9c6d-06746c4527b6",
   "branch": "story/1250-builders-iterate-on-a-draft-pr-locally-a",
-  "status": "handed-off",
+  "pr": 1261,
+  "status": "merge-ready",
   "brief_sha256": "ffead30318c93471226c64f007626670fa49fdc6295790559be9b2a6dd062198",
   "started_at": "2026-11-02T17:48:28Z",
   "handoffs": 1,
+  "proved": "1. proved: `TestCIRunsOnReadyPRs/draft` passes, and it fails on `dev`'s `ci.yml`. On GitHub, the draft pushes of #1261 ran no job. See ci runs 41501983232 and 41503465053, and merge gate runs 41501983085 and 41503462035: every job is skipped.\n2. proved: #1261 was marked ready at 19:34:36Z on head `d369ee6e`. Ci run 41511214559 (`pull_request`, created 19:34:39Z) started all seven required jobs on that head. Changes, commits, docs, generate-drift, and lint passed. Build, security, and release-snapshot were running when the rebase push cancelled the run. Merge gate run 41511215210 was the only gate run on the ready event. `TestCIRunsOnReadyPRs/ready_for_review` passes, and it fails on `dev`'s `ci.yml`.\n3. proved: the rebase push to the ready PR (`4fb58ed2`) started ci run 41511925570 and merge gate run 41511917689. `TestCIRunsOnReadyPRs/ready` passes on this branch and on `dev`'s `ci.yml`.\n4. proved in simulation: `TestCIRunsOnReadyPRs/push_and_dispatch` passes on this branch and on `dev`'s `ci.yml`. A push to `dev` runs only after the merge.\n5. proved: `TestAmpBriefIsDraftFirst` passes. The brief that `aayu build 20 --delegate amp` writes says draft, then the local gate and review, then ready once. `TestBriefShipsOnProof` checks the same lines.\n6. proved: `TestShipRefusals` passes. `aayu ship` on a draft exits 4 (blocked) with `#\u003cpr\u003e is a draft: mark it ready after the local gate passes`. It fails without the fix.",
   "events": [
     {
       "at": "2026-11-02T17:48:28Z",
@@ -28,6 +30,16 @@
       "at": "2026-11-03T05:57:06Z",
       "status": "handed-off",
       "detail": "delegate.mission-resume"
+    },
+    {
+      "at": "2026-11-03T09:47:13Z",
+      "status": "pr-open",
+      "detail": "PR #1261"
+    },
+    {
+      "at": "2026-11-03T09:47:14Z",
+      "status": "merge-ready",
+      "detail": "inspect merge on 4fb58ed"
     }
   ]
 }
