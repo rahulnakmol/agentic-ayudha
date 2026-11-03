@@ -667,7 +667,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// holds it (a write or comment error after it landed), so its outcome decides, with no second read.
 			serr := e.saveDelegation(rctx, d)
 			if serr != nil && d.state.Status != dlgMaybe { // the result is the record saveDelegation found on the ledger
-				return nil, true, Wrap(ExitExternal, fmt.Errorf("build #%d --delegate %s: %s gave no answer, and the maybe-started record was not saved, so the start fails: %w", d.story, d.receiver, delegate.Names[d.receiver], serr))
+				return nil, true, Wrap(ExitExternal, fmt.Errorf("build #%d --delegate %s: %s gave no answer, and the ledger does not confirm the maybe-started record, so the start fails: %w", d.story, d.receiver, delegate.Names[d.receiver], serr))
 			}
 			report()
 			if !d.c.DryRun() {

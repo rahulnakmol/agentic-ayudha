@@ -894,8 +894,29 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
 	refuseLedger(t, bare, "")
 	if code != ExitExternal || res.Next != "" || (res.Delegation != nil && res.Delegation.Status == dlgPaused) || strings.Contains(errOut, "paused") ||
-		!strings.Contains(errOut, "Codex stopped at a usage limit, and the ledger has no record of the pause") || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") {
+		!strings.Contains(errOut, "Codex stopped at a usage limit, and the ledger does not confirm a record of the pause") || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") {
 		t.Fatalf("a pause whose record the ledger refused: exit %d, next %q, %+v: %s", code, res.Next, res.Delegation, errOut)
+	}
+	// The ledger refuses the pause's record and then cannot be read back (the hook breaks the remote's HEAD): build
+	// does not say the ledger has no record of the pause, since the write may have landed.
+	_, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	head, err := os.ReadFile(filepath.Join(bare, "HEAD"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		refuseLedger(t, bare, `git diff --name-only "$old" "$new" | grep -q delegate/2/state.json && echo broken > HEAD`)
+		return "ERROR: You’ve hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits.", errors.New("codex: exit status 1")
+	}
+	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if err := os.WriteFile(filepath.Join(bare, "HEAD"), head, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuseLedger(t, bare, "")
+	if code != ExitExternal || res.Next != "" || !strings.Contains(errOut, "the ledger does not confirm a record of the pause") ||
+		!strings.Contains(errOut, "may not have reached the ledger") || strings.Contains(errOut, "has no record") {
+		t.Fatalf("a pause the ledger refused and could not be read back: exit %d, next %q: %s", code, res.Next, errOut)
 	}
 
 	// A pause with no reset time whose delegation record and build state the ledger both refuse names both failures.
