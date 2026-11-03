@@ -305,6 +305,15 @@
       "effort": "S",
       "depends_on": [],
       "outside": []
+    },
+    {
+      "number": 1283,
+      "kind": "bug",
+      "title": "Retro eval cases fix their dates in the past, so scores move with the real date",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
     }
   ],
   "milestones": [
@@ -360,7 +369,8 @@
         1267,
         1268,
         1274,
-        1280
+        1280,
+        1283
       ],
       "gate": {
         "state": "waits"
@@ -2482,6 +2492,9 @@
         },
         {
           "number": 1280
+        },
+        {
+          "number": 1283
         }
       ]
     }
