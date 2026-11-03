@@ -905,6 +905,15 @@ func TestMissionRetryBackoffAndMax(t *testing.T) {
 		t.Fatalf("tick before the retry is due: exit %d, woken %+v: %s", code, r.Woken, errOut)
 	}
 	clk.add(5 * time.Minute) // +10: the first retry
+	// Outside the day the due retry wakes no Kanha, and recover hands nothing off afresh (Story #1178).
+	m.agent["AAYU_TIME__BUSINESS_HOURS"] = "Mon-Sun 00:00-00:01"
+	if code, r, errOut := m.tick(clk.now()); code != 0 || len(r.Woken) != 0 {
+		t.Fatalf("tick outside the day when the retry is due: exit %d, woken %+v: %s", code, r.Woken, errOut)
+	}
+	if code, out, errOut := m.recover(889, ""); code != 0 || !strings.Contains(out, "#63  ") || !strings.Contains(out, ": outside the day: restarts at ") || m.handoffs(63) != 1 {
+		t.Fatalf("recover outside the day: exit %d, hand-offs %d: %s%s", code, m.handoffs(63), out, errOut)
+	}
+	m.agent["AAYU_TIME__BUSINESS_HOURS"] = allDay
 	wake := "tick: the retry of #63 is due, and no event reached the Kanha since: run aayu mission recover 889, then aayu mission next 889"
 	if code, r, errOut := m.tick(clk.now()); code != 0 || len(r.Woken) != 1 || r.Woken[0].Event != wake || r.Woken[0].Status != wakeSent {
 		t.Fatalf("tick when the retry is due: exit %d, woken %+v, held %+v: %s", code, r.Woken, r.Held, errOut)

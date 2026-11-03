@@ -38,6 +38,7 @@ var (
 func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *time.Time) {
 	t.Helper()
 	m := newMissionWorld(t)
+	m.workday()
 	now := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 	m.opts.Now = func() time.Time { m.mu.Lock(); defer m.mu.Unlock(); return now }
 	m.mu.Lock()
