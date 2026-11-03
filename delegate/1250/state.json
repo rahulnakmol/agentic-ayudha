@@ -40,6 +40,11 @@
       "at": "2026-11-03T09:47:14Z",
       "status": "merge-ready",
       "detail": "inspect merge on 4fb58ed"
+    },
+    {
+      "at": "2026-11-03T11:37:35Z",
+      "status": "merge-ready",
+      "detail": "delegate.mission-resume"
     }
   ]
 }
