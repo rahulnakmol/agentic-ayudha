@@ -1,0 +1,24 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls","Output":"=== RUN   TestDelegateSyncStalls\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex","Output":"=== RUN   TestDelegateSyncStalls/codex\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex","Output":"--- PASS: TestDelegateSyncStalls/codex (0.61s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex-diff"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex-diff","Output":"=== RUN   TestDelegateSyncStalls/codex-diff\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex-diff","Output":"--- PASS: TestDelegateSyncStalls/codex-diff (0.99s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/codex-diff"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor","Output":"=== RUN   TestDelegateSyncStalls/cursor\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor","Output":"--- PASS: TestDelegateSyncStalls/cursor (0.60s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor-body"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor-body","Output":"=== RUN   TestDelegateSyncStalls/cursor-body\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor-body","Output":"--- PASS: TestDelegateSyncStalls/cursor-body (0.69s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/cursor-body"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/claude"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/claude","Output":"=== RUN   TestDelegateSyncStalls/claude\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/claude","Output":"--- PASS: TestDelegateSyncStalls/claude (0.83s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls/claude"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls","Output":"--- PASS: TestDelegateSyncStalls (3.71s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateSyncStalls"}
