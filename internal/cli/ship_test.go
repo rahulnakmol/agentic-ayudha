@@ -2027,7 +2027,7 @@ func TestProofLand(t *testing.T) {
 // ship that refuses; a ship that passes them asks for one code and merges,
 // and an agent lane is refused as before, before anything is read.
 func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
-	g, env, opts, dir, _, prN, head := thinFixture(t)
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	gateRun(t, g, dir, prN, head, coverageHolds, "L07") // L07 is a never layer
 	g.Mu.Lock()
 	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
@@ -2091,6 +2091,19 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
 	g.Mu.Unlock()
 
+	t.Run("conflicts_before_code", func(t *testing.T) {
+		g.Mu.Lock()
+		g.Pulls[prN].MergeableState = "dirty"
+		g.Mu.Unlock()
+		code, out := ship(marked)
+		g.Mu.Lock()
+		g.Pulls[prN].MergeableState = ""
+		g.Mu.Unlock()
+		if code != ExitBlocked || !strings.Contains(out, "it conflicts with dev") || codes() != 0 || len(writes()) != 0 || merged() {
+			t.Fatalf("ship of a PR that conflicts with its base: %d, %d code(s), writes %v, merged %v: %s", code, codes(), writes(), merged(), out)
+		}
+	})
+
 	t.Run("agent_lane", func(t *testing.T) {
 		agent := maps.Clone(env)
 		agent["AAYU_AGENT"] = "1"
@@ -2138,6 +2151,9 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 			{"plan-time review replaced", "the Engineering Manager's plan-time review is required", func() {},
 				func() { writePlan(noReview) },
 				func() { writePlan(plan) }},
+			{"head pushed", "the head moved to 0000000", func() {},
+				func() { g.Pulls[prN].Head.SHA = strings.Repeat("0", 40) },
+				func() { g.Pulls[prN].Head.SHA = head }},
 			{"story put on hold as an early build", ready.EarlyBuildHold(2), func() {},
 				func() { g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: ready.EarlyBuildLabel}) },
 				func() { g.Issues[2].Labels = g.Issues[2].Labels[:len(g.Issues[2].Labels)-1] }},
@@ -2171,10 +2187,14 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 	})
 
 	t.Run("one_code_merges", func(t *testing.T) {
-		// Nothing is written while the person enters the code.
+		// Nothing is written while the person enters the code, to GitHub or the ledger.
 		var early []string
+		tip := git(t, bare, "rev-parse", "ledger")
 		g.Mu.Lock()
 		g.Device.OnPoll = func(int) {
+			if now := git(t, bare, "rev-parse", "ledger"); now != tip {
+				early = append(early, "ledger "+now)
+			}
 			for _, r := range g.Requests {
 				if r.Method != "GET" && !strings.HasPrefix(r.Path, "/login/") {
 					early = append(early, r.Method+" "+r.Path)
