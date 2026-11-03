@@ -1,0 +1,13 @@
+# Which tests prove Bug #1267's Completion Goal.
+
+[[criterion]]
+id = 1 # Approve to build again with MS1's name and stories unchanged: its passed gate, commit, time, and gate fixes stay, and MS2's PRs are not held
+tests = ["internal/cli:TestApproveAgainKeepsPassedGate"]
+
+[[criterion]]
+id = 2 # MS1 gains or loses a story: its gate waits, and the approval lines say it runs again and why
+tests = ["internal/cli:TestApproveAgainKeepsPassedGate"]
+
+[[criterion]]
+id = 3 # Approve to build again with no --milestones: every gate is kept
+tests = ["internal/cli:TestApproveAgainKeepsPassedGate"]

@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -975,6 +977,82 @@ func TestGateStopOptionStopsTheMission(t *testing.T) {
 	}
 	if code, out, errOut := g.mission(g.person, "rahulnakmol", "resume", 889); code != 0 || !strings.Contains(out, "start #22") {
 		t.Fatalf("resume (it starts what can start): exit %d: %s%s", code, out, errOut)
+	}
+}
+
+// Bug #1267: Approve to build again keeps the gate of a milestone that keeps
+// its name and its stories. MS1 passed; moving #21 out of MS2 keeps MS1
+// passed, with its commit, time, and gate fixes, so ship holds no MS2 PR on
+// MS1 (criterion 1). Approving with no --milestones keeps every gate
+// (criterion 3). A story added to MS1, dropped from it, or swapped for
+// another makes its gate wait, and the approval says why (criterion 2).
+func TestApproveAgainKeepsPassedGate(t *testing.T) {
+	g := newGateWorld(t, "MS1=#20 MS2=#21,#22", 20, 21, 22)
+	g.closeIssue(20)
+	if ms := g.gateJSON().Milestones[0]; ms.State != GatePassed {
+		t.Fatalf("MS1's gate: %+v", ms)
+	}
+	g.fixPR(981, "verify:inbox.ship-once", "Refs #889")
+	fix := GateFix{PR: 981, Milestone: "MS1", Check: "verify:inbox.ship-once", DevSHA: g.sha, At: "2026-11-02T04:00:00Z"}
+	g.setPlan(889, func(p *MissionPlan) { p.GateFixes = []GateFix{fix} })
+	before, _ := g.plan(889)
+	passed := before.Milestones[0].Gate
+	c, err := github.New(github.Options{Token: "t", BaseURL: g.g.URL(), WriteGap: -1, ServerRetries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hold := func() error { // ship's mission hold of a PR of #22, a story of MS2
+		t.Helper()
+		is, _, err := c.REST.Issues.Get(t.Context(), "o", "r", 22)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = missionHold(t.Context(), c, &ledger.Writer{Dir: g.dir}, "o/r", 990, 22, is)
+		return err
+	}
+	gates := func() []MilestoneGate {
+		p, _ := g.plan(889)
+		out := []MilestoneGate{}
+		for _, m := range p.Milestones {
+			out = append(out, m.Gate)
+		}
+		return out
+	}
+	if code, out, errOut := g.approve(889, "--milestones", "MS1=#20 MS2=#22 MS3=#21"); code != 0 || strings.Contains(errOut, "gate runs again") {
+		t.Fatalf("approve again with MS1 kept: exit %d: %s%s", code, out, errOut)
+	}
+	if p, _ := g.plan(889); p.Milestones[0].Gate != passed || len(p.GateFixes) != 1 || p.GateFixes[0] != fix {
+		t.Fatalf("MS1 after an approval that keeps it: gate %+v, was %+v; fixes %+v", p.Milestones[0].Gate, passed, p.GateFixes)
+	}
+	if err := hold(); err != nil {
+		t.Fatalf("ship's hold of an MS2 PR after an approval that keeps MS1: %v", err)
+	}
+	// A later milestone's gate that is not the default is kept too.
+	failed := MilestoneGate{State: GateFailed, DevSHA: strings.Repeat("c", 40), At: "2026-11-02T05:00:00Z"}
+	g.setPlan(889, func(p *MissionPlan) { p.Milestones[2].Gate = failed })
+	want := gates()
+	if code, out, errOut := g.approve(889, "--agents", "3"); code != 0 {
+		t.Fatalf("approve again with no --milestones: exit %d: %s%s", code, out, errOut)
+	}
+	if got := gates(); !slices.Equal(got, want) {
+		t.Fatalf("the gates after an approval with no --milestones: %+v, were %+v", got, want)
+	}
+	for _, tc := range []struct{ spec, why string }{
+		{"MS1=#20,#21 MS2=#22", "adds #21"},
+		{"MS1=#20 MS2=#22,#21", "drops #21"},
+		{"MS1=#21 MS2=#20,#22", "adds #21; drops #20"},
+	} {
+		g.setPlan(889, func(p *MissionPlan) { p.Milestones[0].Gate = passed })
+		if code, out, errOut := g.approve(889, "--milestones", tc.spec); code != 0 ||
+			!strings.Contains(errOut, "MS1's gate runs again: its stories changed ("+tc.why+")") {
+			t.Fatalf("approve again with %s: exit %d: %s%s", tc.spec, code, out, errOut)
+		}
+		if p, _ := g.plan(889); p.Milestones[0].Gate != (MilestoneGate{State: GateWaits}) {
+			t.Fatalf("MS1 after %s: %+v", tc.spec, p.Milestones[0].Gate)
+		}
+		if err := hold(); err == nil || !strings.Contains(err.Error(), "it merges after MS1's gate passes") {
+			t.Fatalf("ship's hold of an MS2 PR after %s: %v", tc.spec, err)
+		}
 	}
 }
 
