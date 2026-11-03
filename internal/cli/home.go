@@ -265,7 +265,7 @@ func hadHead(ctx context.Context, c *github.Client, owner, name string, n int, h
 	if err != nil {
 		return false, err
 	}
-	return cmp.GetStatus() == "ahead" || cmp.GetStatus() == "identical", nil
+	return cmp.GetStatus() == "ahead" || cmp.GetStatus() == "identical", nil // identical when last is head, which mergedRunOf has refused already
 }
 
 // mergedRunOf reports, for a gate run on head that lists no pull request,

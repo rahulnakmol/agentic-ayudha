@@ -1897,15 +1897,11 @@ func TestProofLand(t *testing.T) {
 		{"a PR from the branch force-pushed at no stated time", ran, shas(twin.Head.SHA), []map[string]any{{"event": "head_ref_force_pushed"}}},
 		{"a PR from the branch with 250 commits", ran, shas(capped...), []any{}},
 		{"a PR from the branch whose history holds the head, which its commits leave out", ran, shas(twin.Head.SHA), []any{}},
-		{"a PR from the branch whose last head is the head", ran, shas(twin.Head.SHA), []any{}},
 	} {
 		g.Mu.Lock()
 		twin.CreatedAt, twin.ClosedAt = opened.Add(time.Second), c.closed
 		g.Static[twinCommits], g.Static[twinTimeline] = c.commits, c.timeline
 		g.Static[twinCompare] = compared("ahead")
-		if strings.Contains(c.what, "last head is the head") {
-			g.Static[twinCompare] = compared("identical")
-		}
 		g.Mu.Unlock()
 		missing(c.what)
 	}
@@ -1983,6 +1979,15 @@ func TestProofLand(t *testing.T) {
 		if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err != nil || !suites[good.CheckSuiteID] {
 			t.Errorf("gateSuites with a PR from the branch %s: %v %v", k.what, suites, err)
 		}
+	}
+	// One closed while the PR was open whose last head is behind the head
+	// never had it either (Bug #1203).
+	g.Mu.Lock()
+	twin.CreatedAt, twin.ClosedAt = opened.Add(time.Second), ran
+	g.Static[twinCommits], g.Static[twinTimeline], g.Static[twinCompare] = shas(twin.Head.SHA), []any{}, compared("behind")
+	g.Mu.Unlock()
+	if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err != nil || !suites[good.CheckSuiteID] {
+		t.Errorf("gateSuites with a PR from the branch whose last head is behind the head: %v %v", suites, err)
 	}
 	// A failed read of the PR, of the PRs from its branch, or of the commits,
 	// the timeline, or the comparison of a PR from the branch closed while the
