@@ -1,36 +1,13 @@
 # Protected paths (docs/BUILD-PLAN.md §0.1 Trust model). Every change here needs a human CODEOWNER review.
+# Decision #1255 (option 2, accepted 2026-11-02): only the policy keys stay protected, the same paths as
+# [autonomy] always_person and always_person_config in .aayudha/config.toml. Every other path merges on proof.
 # Solo mode: rahulnakmol is the only human today, so these PRs merge through the recorded solo-mode
 # bypass described in CONTRIBUTING.md. `aayu seat add` (WP5.1) adds second humans per seat layer.
 # Order matters: the last matching pattern wins, so keep this list flat and specific.
 
-/.github/                @rahulnakmol
-/skills/                 @rahulnakmol
-/ops/                    @rahulnakmol
-/seats/                  @rahulnakmol
-/CONSTRAINTS.md          @rahulnakmol
+/.github/CODEOWNERS      @rahulnakmol
 /internal/config/defaults.toml  @rahulnakmol
 /.aayudha/config.toml    @rahulnakmol
 /.aayudha/config.json    @rahulnakmol
 /.aayudha/config.local.toml  @rahulnakmol
 /.aayudha/config.local.json  @rahulnakmol
-/.agents/                @rahulnakmol
-/.claude/                @rahulnakmol
-# The plugin bundle this repository's marketplaces ship: its manifests, hooks, and the Amp plugin run on the
-# machines that install it. The host config a checkout runs is the aayudha:host-config block below.
-/.claude-plugin/         @rahulnakmol
-/.codex-plugin/          @rahulnakmol
-/.cursor-plugin/         @rahulnakmol
-/hosts/claude/hooks.json @rahulnakmol
-/hosts/codex/hooks.json  @rahulnakmol
-/hosts/cursor/hooks.json @rahulnakmol
-/hosts/amp/aayudha.ts    @rahulnakmol
-
-# BEGIN aayudha:host-config (written by `aayu init --gates`: the hooks, MCP servers, and plugins a host runs from this repository)
-/.mcp.json  @rahulnakmol
-/.claude/  @rahulnakmol
-/.cursor/  @rahulnakmol
-/.codex/  @rahulnakmol
-/.amp/plugins/  @rahulnakmol
-/.github/hooks/  @rahulnakmol
-/.agents/  @rahulnakmol
-# END aayudha:host-config

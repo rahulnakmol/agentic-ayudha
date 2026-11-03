@@ -17,8 +17,8 @@ AI key, the code-review environment's, and no job writes the ledger.*
 
 The workflow triggers on `pull_request_target`. GitHub then runs the workflow file as it is on the repository's
 default branch, not the copy in the pull request (since 2025-12-08; before that, the base branch's). A pull request that edits the gate, lowers a threshold in the workflow, or swaps
-a tool version has no effect on its own run. Its changes apply only after they merge. In this repository,
-`.github/` is also a protected path in `.github/CODEOWNERS`, so a change to the gate needs a CODEOWNER review.
+a tool version has no effect on its own run. Its changes apply only after they merge. In this repository, the gate
+holds a credential, so `aayu ship` waits for a person on a change to it.
 
 That trigger has a known risk: the job runs in the base repository's context, and checking out untrusted code there
 can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing. The

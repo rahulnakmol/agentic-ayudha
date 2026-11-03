@@ -69,6 +69,8 @@ per_pr_inspect_max = 15.0
 # without a person (always_person_sections in the always_person_config files, and the config's other files, which
 # load into the same layers). A workflow that holds a credential (a secret, the token, an environment, a write
 # permission) needs a person too, by rule. The embedded defaults wait for a person on any change, as before.
+# .github/CODEOWNERS protects the same paths, so protected-paths fails only for them. The freed paths need a
+# review by another model family (cross_family below).
 # This holds only while the gate's code holds it: an agent PR that changes that code merges on proof, and only its
 # audit card shows a person that it may have widened what merges without a person.
 [autonomy]
@@ -88,3 +90,24 @@ always_person = [
   ".aayudha/config.local.json",
 ]
 always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]
+# The paths Decision #1255 took out of always_person: the gate's own code, releases, and dependencies. They merge on
+# proof only after a review by another model family (rung A or B), never at the same-family rung C.
+cross_family = [
+  "internal/cli/ship.go",
+  "internal/cli/shippass.go",
+  "internal/cli/shipproof.go",
+  "internal/cli/presence.go",
+  "internal/identity/",
+  "internal/autonomy/",
+  "internal/config/",
+  ".github/workflows/aayudha-merge-gate.yml",
+  ".github/workflows/protected-paths*.yml",
+  ".github/workflows/release.yml",
+  ".github/workflows/aayudha-approve.yml",
+  ".github/workflows/aayudha-token.yml",
+  ".goreleaser.yaml",
+  "install.sh",
+  "go.mod",
+  "go.sum",
+  "loops/build-ready.toml",
+]

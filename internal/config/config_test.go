@@ -429,7 +429,7 @@ func TestLoadRepoTOML(t *testing.T) {
 
 // TestRepositoryMergesOnProof keeps Decision #593 (option 1, accepted 2026-10-18) for this repository: ship merges
 // into dev on proof, and rung C counts. Decision #1255 (option 2, accepted 2026-11-02) frees the gate's own code,
-// releases, and dependencies: only the policy keys stay in the narrow set. The built-in defaults leave proof off,
+// releases, and dependencies: only the policy keys stay in the narrow set, and the freed paths need rung A or B. The built-in defaults leave proof off,
 // so a repository opts in.
 func TestRepositoryMergesOnProof(t *testing.T) {
 	def, err := Load(Sources{})
@@ -448,7 +448,11 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 		t.Fatalf("default narrow set: %v", def.Config.Autonomy.AlwaysPerson)
 	}
 	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||
-		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) ||
+		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) || len(def.Config.Autonomy.CrossFamily) != 0 ||
+		!slices.Equal(a.CrossFamily, []string{"internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go", "internal/cli/presence.go",
+			"internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml", ".github/workflows/protected-paths*.yml",
+			".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml", ".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh",
+			"go.mod", "go.sum", "loops/build-ready.toml"}) ||
 		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof",
 			"delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget", "scope", "build", "mission", "baselines", "critique"}) {
 		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)

@@ -1424,7 +1424,7 @@ func TestShipOnProof(t *testing.T) {
 // (the policy sections of .aayudha/config.toml, any change to the embedded
 // defaults, CODEOWNERS, the config's other files) and a workflow that holds a
 // credential still post Ready to ship; and
-// rung C counts only while proof_rungs lists it.
+// rung C counts only while proof_rungs lists it, and never for a freed path.
 func TestShipFreedPathsOnProof(t *testing.T) {
 	ours, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml"))
 	if err != nil {
@@ -1455,8 +1455,12 @@ func TestShipFreedPathsOnProof(t *testing.T) {
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
 		fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "success"})
 	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{}
-	g.Files = map[string]string{".github/CODEOWNERS": "/.github/ @founder\n", ".aayudha/config.toml": string(ours)}
-	g.RefFiles = map[string]map[string]string{base: {".github/CODEOWNERS": "/.github/ @founder\n", ".aayudha/config.toml": string(ours),
+	owners, err := os.ReadFile(filepath.Join("..", "..", ".github", "CODEOWNERS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Files = map[string]string{".github/CODEOWNERS": string(owners), ".aayudha/config.toml": string(ours)}
+	g.RefFiles = map[string]map[string]string{base: {".github/CODEOWNERS": string(owners), ".aayudha/config.toml": string(ours),
 		"internal/config/defaults.toml": string(defaults)}, head: {".aayudha/config.toml": string(ours), "internal/config/defaults.toml": string(defaults)}}
 	for _, wf := range append(workflows, "protected-paths-review.yml") {
 		b, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", wf))
@@ -1546,6 +1550,27 @@ func TestShipFreedPathsOnProof(t *testing.T) {
 	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = noC, noC, noC
 	g.Mu.Unlock()
 	waits("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)", freed...)
+	// While proof_rungs lists C, a path Decision #1255 freed still needs
+	// rung A or B; any other path merges on proof at C (a dry run here).
+	g.Mu.Lock()
+	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = string(ours), string(ours), string(ours)
+	g.Mu.Unlock()
+	for _, f := range freed {
+		pat := f
+		switch {
+		case strings.HasPrefix(f, ".github/workflows/protected-paths"):
+			pat = ".github/workflows/protected-paths*.yml"
+		case strings.Count(f, "/") > 1 && !strings.HasPrefix(f, "internal/cli/"):
+			pat = f[:strings.Index(f[len("internal/"):], "/")+len("internal/")+1]
+		}
+		waits("no merge on proof: the review rung at the head is C, and it touches "+f+" ([autonomy] cross_family: "+pat+"), which merges on proof only after a review by another model family (rung A or B)", "skills/build/SKILL.md", f)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files, g.Issues[prN].Comments = []string{"skills/build/SKILL.md", "internal/cli/inbox.go"}, nil
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: merge") {
+		t.Fatalf("dry-run ship at rung C of paths outside cross_family: %d %s", code, out)
+	}
 
 	// Criterion 2: at rung A, a PR that changes the gate's own code, a
 	// release file, and the dependencies merges on proof with no Ready to ship.
