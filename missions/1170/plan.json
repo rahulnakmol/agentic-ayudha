@@ -269,6 +269,42 @@
         1250
       ],
       "outside": []
+    },
+    {
+      "number": 1267,
+      "kind": "bug",
+      "title": "Approve to build again resets a milestone gate that already passed, so every later PR waits for that gate again",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1268,
+      "kind": "bug",
+      "title": "A milestone's gate failures from before its last pass still count toward max_no_go, so one new failure stops the mission",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1274,
+      "kind": "bug",
+      "title": "Every other human-only verb still starts the device flow in a dry run",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
+    },
+    {
+      "number": 1280,
+      "kind": "bug",
+      "title": "mission resume moves the events cursor past events no one read",
+      "milestone": "BUGS",
+      "effort": "S",
+      "depends_on": [],
+      "outside": []
     }
   ],
   "milestones": [
@@ -320,7 +356,11 @@
         1251,
         1253,
         1256,
-        1252
+        1252,
+        1267,
+        1268,
+        1274,
+        1280
       ],
       "gate": {
         "state": "waits"
@@ -2430,6 +2470,18 @@
         },
         {
           "number": 1256
+        },
+        {
+          "number": 1267
+        },
+        {
+          "number": 1268
+        },
+        {
+          "number": 1274
+        },
+        {
+          "number": 1280
         }
       ]
     }
