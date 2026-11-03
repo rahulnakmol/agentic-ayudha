@@ -235,9 +235,10 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 // hadHead reports whether pull request n, closed since, may have had head as
 // its head: it is among n's commits, or n's branch was force-pushed at or
 // after since (or at no stated time), which can drop a head from that list. A list GitHub cut at its
-// 250-commit cap may have dropped it too. Each says yes, so a run it may own
-// fails closed.
-func hadHead(ctx context.Context, c *github.Client, owner, name string, n int, head string, since time.Time) (bool, error) {
+// 250-commit cap may have dropped it too. So may a merge that put head on n's
+// base, so head that is an ancestor of n's last head, last, counts too (Bug
+// #1203). Each says yes, so a run it may own fails closed.
+func hadHead(ctx context.Context, c *github.Client, owner, name string, n int, head, last string, since time.Time) (bool, error) {
 	const commitCap = 250
 	commits, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
 		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
@@ -254,10 +255,17 @@ func hadHead(ctx context.Context, c *github.Client, owner, name string, n int, h
 	if err != nil {
 		return false, err
 	}
-	return slices.ContainsFunc(events, func(ev *gh.Timeline) bool {
+	if slices.ContainsFunc(events, func(ev *gh.Timeline) bool {
 		at := ev.GetCreatedAt()
 		return ev.GetEvent() == "head_ref_force_pushed" && (at.IsZero() || !at.Before(since))
-	}), nil
+	}) {
+		return true, nil
+	}
+	cmp, _, err := c.REST.Repositories.CompareCommits(ctx, owner, name, head, last, &gh.ListOptions{PerPage: 1})
+	if err != nil {
+		return false, err
+	}
+	return cmp.GetStatus() == "ahead" || cmp.GetStatus() == "identical", nil
 }
 
 // mergedRunOf reports, for a gate run on head that lists no pull request,
@@ -307,7 +315,7 @@ func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string
 		if closed.IsZero() || !closed.Before(merged) {
 			return none, nil
 		}
-		had, err := hadHead(ctx, c, owner, name, o.GetNumber(), head, opened)
+		had, err := hadHead(ctx, c, owner, name, o.GetNumber(), head, o.GetHead().GetSHA(), opened)
 		if err != nil {
 			return nil, err
 		}

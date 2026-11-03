@@ -1867,6 +1867,11 @@ func TestProofLand(t *testing.T) {
 	// dropped it from them, and so may GitHub's cut of the list at 250.
 	twinCommits := "/repos/o/r/pulls/" + strconv.Itoa(twin.Number) + "/commits"
 	twinTimeline := "/repos/o/r/issues/" + strconv.Itoa(twin.Number) + "/timeline"
+	// Bug #1203: once head reaches the base of the PR from the branch, its
+	// commits leave head out. The comparison of head with its last head says
+	// whether head is in its history.
+	twinCompare := "/repos/o/r/compare/" + head + "..." + twin.Head.SHA
+	compared := func(status string) any { return map[string]any{"status": status, "files": []any{}} }
 	shas := func(s ...string) any {
 		out := []map[string]any{}
 		for _, x := range s {
@@ -1891,10 +1896,16 @@ func TestProofLand(t *testing.T) {
 		{"a PR from the branch force-pushed while the PR was open", ran, shas(twin.Head.SHA), forcePushed(opened.Add(time.Minute))},
 		{"a PR from the branch force-pushed at no stated time", ran, shas(twin.Head.SHA), []map[string]any{{"event": "head_ref_force_pushed"}}},
 		{"a PR from the branch with 250 commits", ran, shas(capped...), []any{}},
+		{"a PR from the branch whose history holds the head, which its commits leave out", ran, shas(twin.Head.SHA), []any{}},
+		{"a PR from the branch whose last head is the head", ran, shas(twin.Head.SHA), []any{}},
 	} {
 		g.Mu.Lock()
 		twin.CreatedAt, twin.ClosedAt = opened.Add(time.Second), c.closed
 		g.Static[twinCommits], g.Static[twinTimeline] = c.commits, c.timeline
+		g.Static[twinCompare] = compared("ahead")
+		if strings.Contains(c.what, "last head is the head") {
+			g.Static[twinCompare] = compared("identical")
+		}
 		g.Mu.Unlock()
 		missing(c.what)
 	}
@@ -1908,10 +1919,11 @@ func TestProofLand(t *testing.T) {
 	g.Mu.Unlock()
 	missing("a PR from the branch with no created_at, closed while the PR was open, that had the head")
 	// The PR from the branch closed while the PR was open and never had the
-	// head; its only force-push came before the PR opened. The run is the
-	// PR's own.
+	// head; its only force-push came before the PR opened, and its history
+	// does not hold the head. The run is the PR's own.
 	g.Mu.Lock()
 	g.Static[twinCommits], g.Static[twinTimeline] = shas(twin.Head.SHA), forcePushed(opened.Add(-time.Minute))
+	g.Static[twinCompare] = compared("diverged")
 	g.Mu.Unlock()
 	// A newer green gate run with its own pack, started by an event after the
 	// merge (an edit of the body): it ran the base branch that now holds the
@@ -1929,6 +1941,13 @@ func TestProofLand(t *testing.T) {
 	g.Mu.Unlock()
 	// The repository's name compares without case, as GitHub's does.
 	before := git(t, bare, "rev-list", "--count", "ledger")
+	// A failed read of the comparison fails proof land, and lands nothing (Bug #1203).
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET "+twinCompare, 0
+	g.Mu.Unlock()
+	if code, out := land(); code != ExitExternal || git(t, bare, "rev-list", "--count", "ledger") != before {
+		t.Fatalf("proof land with the comparison failing: %d %s", code, out)
+	}
 	if code, out := land(); code != 0 || !strings.Contains(out, fmt.Sprintf("from artifact %d of run %d", arts[0].ID, good.ID)) {
 		t.Fatalf("proof land: %d %s", code, out)
 	}
@@ -1965,15 +1984,19 @@ func TestProofLand(t *testing.T) {
 			t.Errorf("gateSuites with a PR from the branch %s: %v %v", k.what, suites, err)
 		}
 	}
-	// A failed read of the PR, of the PRs from its branch, or of the commits
-	// or the timeline of a PR from the branch closed while the PR was open, is
-	// an error, never a gate.
+	// A failed read of the PR, of the PRs from its branch, or of the commits,
+	// the timeline, or the comparison of a PR from the branch closed while the
+	// PR was open, is an error, never a gate.
 	g.Mu.Lock()
 	twin.CreatedAt, twin.ClosedAt = opened, ran
-	delete(g.Static, twinCommits)
-	delete(g.Static, twinTimeline)
+	g.Static[twinCommits], g.Static[twinTimeline] = shas(twin.Head.SHA), forcePushed(opened.Add(-time.Minute))
+	g.Static[twinCompare] = compared("diverged")
 	g.Mu.Unlock()
-	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls", fmt.Sprintf("GET /repos/o/r/pulls/%d/commits", twin.Number), fmt.Sprintf("GET /repos/o/r/issues/%d/timeline", twin.Number)} {
+	if suites, err := gateSuites(context.Background(), c, "o", "r", head, prN); err != nil || !suites[good.CheckSuiteID] {
+		t.Fatalf("gateSuites with every read answered: %v %v", suites, err)
+	}
+	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls", fmt.Sprintf("GET /repos/o/r/pulls/%d/commits", twin.Number),
+		fmt.Sprintf("GET /repos/o/r/issues/%d/timeline", twin.Number), "GET /repos/o/r/compare/" + head + "..." + twin.Head.SHA} {
 		g.Mu.Lock()
 		g.Fail, g.FailAfter = fail, 0
 		g.Mu.Unlock()
