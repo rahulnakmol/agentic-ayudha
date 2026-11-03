@@ -9,7 +9,8 @@
   "task": "T-01a19d63-8097-7643-90e0-3fe5d2143b05",
   "task_url": "https://ampcode.com/threads/T-01a19d63-8097-7643-90e0-3fe5d2143b05",
   "branch": "story/1253-aayu-inbox-asks-up-to-five-decisions-to",
-  "status": "handed-off",
+  "pr": 1265,
+  "status": "pr-open",
   "brief_sha256": "0334eea4e44972e4a9f9cb871a3154282688543daf5bf8d92ce60f9e407c8ff9",
   "started_at": "2026-11-02T17:48:46Z",
   "handoffs": 1,
@@ -33,6 +34,11 @@
       "at": "2026-11-03T11:37:35Z",
       "status": "handed-off",
       "detail": "delegate.mission-resume"
+    },
+    {
+      "at": "2026-11-03T16:56:38Z",
+      "status": "pr-open",
+      "detail": "PR #1265 found by aayu mission recover"
     }
   ]
 }
