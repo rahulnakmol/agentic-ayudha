@@ -550,6 +550,86 @@ func TestMissionRecoverMarksUnreadable(t *testing.T) {
 	}
 }
 
+// Bug #1264: a start that got no answer, whose maybe-started record lands and whose state comment fails, keeps
+// its slot and reports both the timeout and the comment's failure.
+func TestMissionMaybeStartedCommentFails(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			w.g.Mu.Lock()
+			w.g.Fail = "POST /repos/o/r/issues/64/comments"
+			w.g.Mu.Unlock()
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if code != ExitExternal || !strings.Contains(errOut, "Codex gave no answer before the timeout, so #64 may have started there") || !strings.Contains(errOut, "injected failure") ||
+		w.state(64).Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") {
+		t.Fatalf("a maybe start whose comment failed: exit %d, %+v: %s%s", code, w.state(64), out, errOut)
+	}
+}
+
+// Bug #1264: the ledger refuses the maybe-started record. The start fails, and
+// build reports the record the ledger holds, never a failed status it did not
+// write.
+func TestMissionMaybeStartedRefused(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			refuseLedger(t, w.bare, `git diff --name-only "$old" "$new" | grep -q delegate/64/state.json`)
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	onLedger := exec.Command("git", "cat-file", "-e", "ledger:"+delegate.LedgerPath(64))
+	onLedger.Dir = w.bare
+	if code != ExitExternal || !strings.Contains(errOut, "the maybe-started record was not saved, so the start fails") || onLedger.Run() == nil ||
+		res.Delegation == nil || res.Delegation.Status != "" || w.claims(889)[64] != 0 || // the ledger holds no record of #64
+		!slices.Contains(w.g.LabelNames(64), "status:ready") || slices.Contains(w.g.LabelNames(64), "status:in-progress") {
+		t.Fatalf("a refused maybe start: exit %d, result %+v, claims %v, labels %v: %s%s", code, res.Delegation, w.claims(889), w.g.LabelNames(64), out, errOut)
+	}
+}
+
+// Bug #1264: the maybe-started record lands, and the write still fails after it (here the actions log refuses
+// its entry). Build keeps the story's slot and reports the maybe-started record the ledger holds.
+func TestMissionMaybeStartedLandedWithError(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	log := filepath.Join(w.opts.Dir, ".aayudha", "telemetry", "actions.jsonl")
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			// The push lands, then the actions log's path becomes a directory, so its next entry fails for any user.
+			hook := filepath.Join(w.bare, "hooks", "post-receive")
+			if err := os.WriteFile(hook, []byte("#!/bin/sh\nrm -f '"+log+"' && mkdir '"+log+"'\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			git(t, w.bare, "config", "core.hooksPath", "hooks") // over any global hooks path
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != ExitExternal || !strings.Contains(errOut, "actions log") || // later writes fail on the log too, so their error leads
+
+		w.state(64).Status != dlgMaybe || res.Delegation == nil || res.Delegation.Status != dlgMaybe || !slices.Contains(w.g.LabelNames(64), "status:in-progress") || w.claims(889)[64] != 1 {
+		t.Fatalf("a maybe start that landed with an error: exit %d, %+v, result %+v: %s%s", code, w.state(64), res.Delegation, out, errOut)
+	}
+}
+
 // Criterion 4: the start of #64 sends its request and the host gives no
 // answer before the timeout, and a codex task for #64 exists with no PR. The
 // record marks #64 maybe started; recover says so and starts nothing; the

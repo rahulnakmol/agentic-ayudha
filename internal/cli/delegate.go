@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -98,6 +99,9 @@ type delegation struct {
 	hostDir  string        // where build writes text for the host to send (git-ignored runtime state)
 	hostFU   *HostHandoff  // a follow-up this run wrote for the host to send
 	base     string        // when set, the ledger tip the next saveDelegation must land on (ledger.Commit.Base)
+
+	held delegate.State // the record the ledger holds, as this run last read or wrote it
+	res  *BuildResult   // what build reports: a failed ledger write refills it from held (Bug #1264)
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -278,6 +282,7 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &d.state); err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
+	d.held = cloneState(d.state)
 	// A story of a started mission runs on the mission's tool, whatever --delegate or its brief asks: a mission
 	// never mixes agent tools. Its thread names the Feature and the Kanha (Story #1004).
 	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
@@ -511,15 +516,48 @@ func (d *delegation) event(now time.Time, status, detail string) {
 }
 
 // saveDelegation writes delegate/<n>/state.json and the story's
-// replace-in-place delegation comment.
+// replace-in-place delegation comment. When the ledger write fails and the
+// record is not on the ledger, d goes back to the record the ledger holds, and
+// so does what build reports, with no next step for the record that was not
+// written (Bug #1264). A write that failed but landed (a push that timed out
+// after the remote took it, or an actions-log append that failed after the
+// push) keeps the new record, as does a comment that fails after the write.
 func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 	if d.c.DryRun() {
 		return nil
 	}
 	b, _ := json.MarshalIndent(d.state, "", "  ")
-	if _, err := d.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: state of #%d (%s)", d.story, d.state.Status), Files: map[string][]byte{delegate.LedgerPath(d.story): append(b, '\n')}, Base: d.base}); err != nil {
-		return Wrap(ExitExternal, err)
+	_, werr := d.w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("delegate: state of #%d (%s)", d.story, d.state.Status), Files: map[string][]byte{delegate.LedgerPath(d.story): append(b, '\n')}, Base: d.base})
+	if werr != nil {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		var back delegate.State
+		_, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &back)
+		cancel()
+		if bb, _ := json.MarshalIndent(back, "", "  "); rerr != nil || !bytes.Equal(bb, b) {
+			// Build reports the record the ledger holds: the one read back, or, when that read fails too, the last
+			// one this run confirmed. Only a record shown not to have landed drops a host follow-up (Bug #1264).
+			confirmed := rerr == nil
+			if confirmed {
+				d.held = back
+			}
+			unsent := confirmed && d.hostFU != nil
+			d.state = cloneState(d.held)
+			if confirmed {
+				d.hostFU = nil // a follow-up the ledger does not record is not the host's to send
+			}
+			if r := d.res; r != nil && r.Delegation != nil {
+				d.fill(r.Delegation) // a refused switch of receiver reports the receiver the ledger names
+				r.Delegation.Host, r.Next = nil, ""
+				r.Delegation.FollowUp = r.Delegation.FollowUp && !unsent
+			}
+			if !confirmed {
+				return Wrap(ExitExternal, fmt.Errorf("the new delegation record of #%d may not have reached the ledger: the write failed (%w), and the ledger could not be read back (%w); the last record this run confirmed is %s",
+					d.story, werr, rerr, orDefault(d.held.Status, "no record")))
+			}
+			return Wrap(ExitExternal, fmt.Errorf("the new delegation record of #%d did not reach the ledger, which holds %s: %w", d.story, orDefault(d.held.Status, "no record"), werr))
+		}
 	}
+	d.held = cloneState(d.state)
 	var body strings.Builder
 	fmt.Fprintf(&body, "%s\n**Delegated to %s** (%s, `aayu build --delegate`): %s", delegateMarker, d.state.Receiver, d.state.Mode, d.state.Status)
 	if d.state.TaskURL != "" {
@@ -536,7 +574,34 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 		fmt.Fprintf(&body, "| %s | %s | %s |\n", ev.At, ev.Status, strings.ReplaceAll(ev.Detail, "|", `\|`))
 	}
 	fmt.Fprintf(&body, "\nBrief SHA-256 `%s`. The receiver has no merge rights: the merge gate and inspect review its PR, and `aayu ship` merges it with every gate (or it waits in a person's `aayu inbox`).", short(d.state.BriefHash))
-	return e.replaceComment(ctx, d.c, d.repo, d.story, delegateMarker, body.String())
+	return wrapExternal(errors.Join(werr, e.replaceComment(ctx, d.c, d.repo, d.story, delegateMarker, body.String())))
+}
+
+// saveWith saves d's record for a step that ends in err, so no step drops the
+// save's error (withSaveErr).
+func (e *Env) saveWith(ctx context.Context, d *delegation, err error) error {
+	return withSaveErr(err, e.saveDelegation(ctx, d))
+}
+
+// withSaveErr adds serr, the error of saving the delegation record, to err, the
+// step's own error, whose exit code and next step it keeps. The CLI prints one
+// coded error, so both messages go in it.
+func withSaveErr(err, serr error) error {
+	if serr == nil {
+		return err
+	}
+	var ce *Error
+	next := ""
+	if errors.As(err, &ce) {
+		next = ce.Next
+	}
+	return &Error{Code: CodeOf(err), Err: fmt.Errorf("%w; and %w", err, serr), Next: next}
+}
+
+// cloneState copies s, so events appended to one copy never show in the other.
+func cloneState(s delegate.State) delegate.State {
+	s.Events, s.FollowUps = slices.Clone(s.Events), slices.Clone(s.FollowUps)
+	return s
 }
 
 // delegateStep runs one step of a delegated build. A first run hands off (the
@@ -550,6 +615,7 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result, res *BuildResult) (write func(context.Context, string) error, done bool, err error) {
 	now := e.Now()
 	res.Delegation = &Delegation{Receiver: d.receiver, Mode: mode(d.local), Reason: d.reason}
+	d.res = res
 	report := func() { d.fill(res.Delegation) }
 	if d.thread != "" {
 		return nil, true, e.recordThread(ctx, d, res, now)
@@ -596,38 +662,40 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// The request may have reached the host: the story may run there now, so
 			// nothing starts it again until mission recover checks the host and GitHub.
 			d.event(now, dlgMaybe, "no answer before the timeout: "+clipText(err.Error(), 200))
-			if serr := e.saveDelegation(rctx, d); serr != nil {
-				// Only a maybe start on the ledger holds the story for recover; one only
-				// in memory would hold it with nothing to check it, so it fails as a start.
-				var saved delegate.State
-				if _, rerr := readLedgerJSON(rctx, d.w, delegate.LedgerPath(d.story), &saved); rerr != nil || saved.Status != dlgMaybe {
-					d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
-					return nil, true, serr
-				}
+			// Only a maybe start on the ledger holds the story for recover; one only in memory would hold it with nothing
+			// to check it, so it fails as a start. saveDelegation keeps the maybe-started record only when the ledger
+			// holds it (a write or comment error after it landed), so its outcome decides, with no second read.
+			serr := e.saveDelegation(rctx, d)
+			if serr != nil && d.state.Status != dlgMaybe { // the result is the record saveDelegation found on the ledger
+				return nil, true, Wrap(ExitExternal, fmt.Errorf("build #%d --delegate %s: %s gave no answer, and the maybe-started record was not saved, so the start fails: %w", d.story, d.receiver, delegate.Names[d.receiver], serr))
 			}
+			report()
 			if !d.c.DryRun() {
 				if _, perr := writePlan(rctx, d.w, d.feature, fmt.Sprintf("missions: #%d maybe started on %s", d.story, d.receiver), func(p *MissionPlan) error {
 					p.storyState(d.story).State = stateMaybe
 					return nil
 				}); perr != nil {
-					return nil, true, perr
+					return nil, true, withSaveErr(perr, serr)
 				}
 			}
-			return nil, true, WithNext(Errorf(ExitExternal, "build #%d --delegate %s: %s gave no answer before the timeout, so #%d may have started there: %v", d.story, d.receiver, delegate.Names[d.receiver], d.story, err),
-				fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d before it starts it again", d.feature, delegate.Names[d.receiver], d.story))
+			return nil, true, withSaveErr(WithNext(Errorf(ExitExternal, "build #%d --delegate %s: %s gave no answer before the timeout, so #%d may have started there: %v", d.story, d.receiver, delegate.Names[d.receiver], d.story, err),
+				fmt.Sprintf("aayu mission recover %d checks %s and GitHub for #%d before it starts it again", d.feature, delegate.Names[d.receiver], d.story)), serr)
 		}
 		if err != nil {
 			d.event(now, dlgFailed, "hand-off failed: "+clipText(err.Error(), 200))
-			if serr := e.saveDelegation(rctx, d); serr != nil {
-				return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v; and its failed record was not saved: %v", d.story, d.receiver, err, serr)
-			}
-			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err)
+			report()
+			return nil, true, e.saveWith(rctx, d, Errorf(ExitExternal, "build #%d --delegate %s: %v", d.story, d.receiver, err))
 		}
 		d.state.Task, d.state.TaskURL = task.ID, task.URL
 		d.event(now, dlgHandedOff, "brief sent")
 		report()
 		res.Next = fmt.Sprintf("%s works on #%d; `aayu build %d --delegate %s` again to sync: it finds the PR (Refs #%d) and forwards inspect's findings", d.receiver, d.story, d.story, d.receiver, d.story)
-		return nil, true, e.saveDelegation(rctx, d) // the host has the work: its record must land even after a cancel
+		// The host has the work: its record must land even after a cancel, and when it does not, the error names the task.
+		err = e.saveDelegation(rctx, d)
+		if err != nil && d.state.Task != task.ID {
+			err = Errorf(ExitExternal, "build #%d --delegate %s: %s has #%d as task %s, and its record may not be on the ledger: %w", d.story, d.receiver, delegate.Names[d.receiver], d.story, orDefault(task.URL, task.ID), err)
+		}
+		return nil, true, err
 	}
 
 	// Sync.
@@ -649,8 +717,7 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 		if task.Status == delegate.TaskFailed && d.state.PR == 0 {
 			d.event(now, dlgFailed, "the receiver's task failed: "+task.Detail)
 			report()
-			_ = e.saveDelegation(ctx, d)
-			return nil, true, Errorf(ExitBlocked, "build #%d: %s's task failed (%s); `aayu build %d --delegate <receiver>` hands it off again", d.story, d.receiver, task.Detail, d.story)
+			return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: %s's task failed (%s); `aayu build %d --delegate <receiver>` hands it off again", d.story, d.receiver, task.Detail, d.story))
 		}
 	}
 	if task.Diff != "" && d.state.PR != 0 && d.state.Applied != task.ID {
@@ -754,7 +821,7 @@ func (e *Env) recordThread(ctx context.Context, d *delegation, res *BuildResult,
 		return err
 	}
 	url, _ := delegate.AmpThread(d.thread)
-	d.state = cur
+	d.state, d.held = cur, cloneState(cur)
 	d.state.Task, d.state.TaskURL = d.thread, url
 	d.event(now, dlgHandedOff, "brief sent: the host created the thread")
 	d.fill(res.Delegation)
@@ -762,10 +829,7 @@ func (e *Env) recordThread(ctx context.Context, d *delegation, res *BuildResult,
 	d.base = tip
 	defer func() { d.base = "" }()
 	err = e.saveDelegation(ctx, d)
-	if errors.Is(err, ledger.ErrMoved) { // the ledger write failed before the state comment, so nothing landed
-		d.state = cur // build reports the hand-off that still waits, not the record that did not land
-		d.fill(res.Delegation)
-		res.Next = ""
+	if errors.Is(err, ledger.ErrMoved) { // nothing landed, and build reports the hand-off that still waits (saveDelegation)
 		return WithNext(Errorf(ExitBlocked, "build #%d --thread: the ledger changed while aayu recorded the thread. Nothing was recorded; run the same --thread command again.", d.story),
 			fmt.Sprintf("aayu build %d --delegate %s --thread %s", d.story, d.receiver, d.thread))
 	}
@@ -820,6 +884,9 @@ func (d *delegation) model() string {
 
 func (d *delegation) fill(r *Delegation) {
 	r.Status, r.Task, r.TaskURL, r.PR, r.Proved, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state.Proved, d.state
+	if d.state.Receiver != "" { // the record names its receiver, also after a refused save restores an earlier one (Bug #1264)
+		r.Receiver, r.Mode, r.Reason = d.state.Receiver, d.state.Mode, d.state.Reason
+	}
 }
 
 // findDelegatedPR finds the receiver's PR: the receiver's own PR URL, an open
@@ -888,8 +955,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	case pr.GetState() == "closed":
 		d.event(now, dlgFailed, fmt.Sprintf("PR #%d was closed unmerged", d.state.PR))
 		report()
-		_ = e.saveDelegation(ctx, d)
-		return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d was closed unmerged", d.story, d.state.PR)
+		return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: PR #%d was closed unmerged", d.story, d.state.PR))
 	}
 	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 		return d.c.REST.Issues.ListComments(ctx, owner, name, d.state.PR, &gh.IssueListCommentsOptions{ListOptions: o})
@@ -927,8 +993,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			d.event(now, dlgCapped, fmt.Sprintf("%d follow-up rounds; %s failed on %s", round, strings.Join(names, ", "), short(head)))
 			page(fmt.Sprintf("%d follow-up rounds reached the cap and %s still failed", round, strings.Join(names, ", ")))
 			report()
-			_ = e.saveDelegation(ctx, d)
-			return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap with %s failing; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles, strings.Join(names, ", "))
+			return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap with %s failing; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles, strings.Join(names, ", ")))
 		}
 		msg := delegate.CIFollowUpMessage(d.story, d.state.PR, round+1, inspect.MaxCycles, fails)
 		d.state.FollowUps = append(d.state.FollowUps, delegate.FollowUp{At: now.UTC().Format(time.RFC3339), Head: head, Cycle: round, Findings: []string{}, Checks: names})
@@ -947,7 +1012,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 		}
 		res.Next = fmt.Sprintf("%s failed; sent to %s; sync again after its new commits", strings.Join(names, ", "), d.receiver)
-		return nil, true, e.saveDelegation(ctx, d)
+		return nil, true, e.saveFollowUp(ctx, d)
 	}
 	switch {
 	case st.Stopped != "" && st.Stopped == head || r != nil && r.Head == head && r.Disposition == inspect.StepBack:
@@ -956,15 +1021,13 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		d.event(now, dlgCapped, fmt.Sprintf("the review stopped after %d rounds at %s (step-back)", inspect.MaxRounds, short(head)))
 		page(fmt.Sprintf("the review stopped after %d rounds (step-back)", inspect.MaxRounds))
 		report()
-		_ = e.saveDelegation(ctx, d)
-		return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d's review stopped after %d rounds; a person reviews it or comments `%s` (paged)", d.story, d.state.PR, inspect.MaxRounds, inspect.ReopenCommand)
+		return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: PR #%d's review stopped after %d rounds; a person reviews it or comments `%s` (paged)", d.story, d.state.PR, inspect.MaxRounds, inspect.ReopenCommand))
 	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
 		// inspect stops at its cap and will not review this head: a human takes over.
 		d.event(now, dlgCapped, fmt.Sprintf("%d fix cycles; inspect will not review %s", st.Cycles, short(head)))
 		page(fmt.Sprintf("%d fix cycles reached the cap", st.Cycles))
 		report()
-		_ = e.saveDelegation(ctx, d)
-		return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles)
+		return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles))
 	case r == nil || r.Head != head:
 		d.event(now, dlgPROpen, "")
 		report()
@@ -988,8 +1051,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		d.event(now, dlgCapped, "inspect asked for a rebuild: the story or plan needs rework")
 		page("inspect asked for a rebuild")
 		report()
-		_ = e.saveDelegation(ctx, d)
-		return nil, true, Errorf(ExitBlocked, "build #%d: inspect asked for a rebuild of PR #%d; a human reviews the story and plan", d.story, d.state.PR)
+		return nil, true, e.saveWith(ctx, d, Errorf(ExitBlocked, "build #%d: inspect asked for a rebuild of PR #%d; a human reviews the story and plan", d.story, d.state.PR))
 	case sentFor:
 		report()
 		res.Next = fmt.Sprintf("the findings on %s were sent to %s; waiting for its new commits on PR #%d", short(head), d.receiver, d.state.PR)
@@ -1023,7 +1085,21 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
 	}
 	res.Next = fmt.Sprintf("%d finding(s) sent to %s; sync again after its new commits", len(ids), d.receiver)
-	return nil, true, e.saveDelegation(ctx, d)
+	return nil, true, e.saveFollowUp(ctx, d)
+}
+
+// saveFollowUp saves the record of a follow-up the receiver already has. When
+// the record may not be on the ledger, the error names the task that has the
+// follow-up, a new one or the same, and says that the next sync may send it
+// again (Bug #1264). A host follow-up was not sent yet, so it needs no such
+// note, and a record that landed (only its comment failed) needs none either.
+func (e *Env) saveFollowUp(ctx context.Context, d *delegation) error {
+	task, host, followUps := d.state.Task, d.hostFU != nil, len(d.state.FollowUps)
+	err := e.saveDelegation(ctx, d)
+	if err == nil || host || len(d.state.FollowUps) == followUps {
+		return err
+	}
+	return withSaveErr(Errorf(ExitExternal, "build #%d: %s has the follow-up on task %s, and its record may not be on the ledger, so the next sync may send it again", d.story, delegate.Names[d.receiver], task), err)
 }
 
 // outside refuses a follow-up for a PR built outside the mission that
@@ -1120,7 +1196,11 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			}
 			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
 			d.state.Events[len(d.state.Events)-1].Until = resets.UTC().Format(time.RFC3339) // mission next waits on it (Story #998)
-			_ = e.saveDelegation(ctx, d)
+			keep := cloneState(d.state)
+			if err := e.saveDelegation(ctx, d); err != nil { // the wait goes on, though mission next cannot see the pause
+				d.state = keep // the run continues, and its later save writes the whole record (Bug #1264)
+				fmt.Fprintf(e.Err, "aayu: warning: #%d: %v\n", d.story, err)
+			}
 			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
 			// The story's lease is renewed before each stretch of the wait, so it
 			// never lapses to another builder while this one is paused.

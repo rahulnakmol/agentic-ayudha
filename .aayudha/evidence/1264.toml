@@ -1,0 +1,17 @@
+# Which tests prove Bug #1264's Completion Goal.
+
+[[criterion]]
+id = 1 # a --thread record whose ledger write fails (not a moved tip): exit 5, the waiting hand-off with no task, no handed-off on stdout
+tests = ["internal/cli:TestAmpHostThreadRecordFails"]
+
+[[criterion]]
+id = 2 # the ledger write lands and the state comment fails: exit 5, the recorded thread
+tests = ["internal/cli:TestAmpHostThreadRecordFails"]
+
+[[criterion]]
+id = 3 # any other delegateStep or reviewLoop step whose ledger write fails reports the record the ledger holds and says so
+tests = ["internal/cli:TestDelegateLedgerRefusedReportsHeld", "internal/cli:TestDelegateCIRepair", "internal/cli:TestDelegateLocalUsageLimitPause", "internal/cli:TestMissionMaybeStartedCommentFails", "internal/cli:TestMissionMaybeStartedLandedWithError", "internal/cli:TestMissionMaybeStartedRefused"]
+
+[[criterion]]
+id = 4 # a delegation record with a type error after a usable receiver is no record for inspect and counsel
+tests = ["internal/cli:TestInspectBuilderFamily", "internal/cli:TestCounsel"]

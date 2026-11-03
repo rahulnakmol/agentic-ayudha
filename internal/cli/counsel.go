@@ -438,7 +438,9 @@ func (e *Env) prBuilder(ctx context.Context, c *github.Client, owner, name strin
 			if w, err := e.Ledger(ctx, tok, "human", ""); err == nil {
 				if t, err := w.Read(ctx); err == nil {
 					if b, err := t.File(ctx, delegate.LedgerPath(story)); err == nil {
-						_ = json.Unmarshal(b, &deleg)
+						if json.Unmarshal(b, &deleg) != nil {
+							deleg = delegate.State{} // a type error keeps the fields decoded before it; none of them counts (Bug #1264)
+						}
 					}
 					var st BuildState
 					if b, err := t.File(ctx, BuildLedgerPath(story)); err == nil && json.Unmarshal(b, &st) == nil {
