@@ -2626,6 +2626,13 @@
       "by": "rahulnakmol",
       "at": "2026-11-03T16:52:38Z",
       "presence": "device-flow"
+    },
+    {
+      "control": "recover",
+      "by": "rahulnakmol",
+      "tool": "amp",
+      "at": "2026-11-03T16:56:38Z",
+      "presence": "none"
     }
   ],
   "gate_fixes": [
