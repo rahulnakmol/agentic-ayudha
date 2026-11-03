@@ -2438,8 +2438,8 @@
   "started_at": "2026-10-31T14:24:15Z",
   "tool": "amp",
   "tool_source": "the user config of @rahulnakmol for rahulnakmol/agentic-ayudha",
-  "budget": 660,
-  "budget_basis": "raised from $480 to $660 by @rahulnakmol at 2026-10-31T23:35:00Z: Bugs #1206, #1207 and #1210 join BUGS; before: the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
+  "budget": 2500,
+  "budget_basis": "raised from $660 to $2500 by @rahulnakmol at 2026-11-03T05:53:50Z: aayu counts $1500 used; 13 open stories and Bugs and about 3 gate fixes at the $60 cap; before: raised from $480 to $660 by @rahulnakmol at 2026-10-31T23:35:00Z: Bugs #1206, #1207 and #1210 join BUGS; before: the approved budget, 8 x $60 ([budget] per_story_usd): no cost estimate from #886 yet",
   "pause": {
     "reason": "MS1 of #1170 failed its gate 3 times: its stories wait",
     "by": "the gate of MS1",
@@ -2533,6 +2533,13 @@
       "tool": "amp",
       "at": "2026-11-02T17:55:23Z",
       "presence": "none"
+    },
+    {
+      "control": "budget",
+      "by": "rahulnakmol",
+      "at": "2026-11-03T05:53:50Z",
+      "presence": "device-flow",
+      "reason": "aayu counts $1500 used; 13 open stories and Bugs and about 3 gate fixes at the $60 cap"
     }
   ],
   "gate_fixes": [
@@ -2589,8 +2596,7 @@
         "record": "specs/1170/approved.json",
         "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
       },
-      "at": "2026-11-02T21:28:43Z",
-      "waits": "budget"
+      "at": "2026-11-02T21:28:43Z"
     },
     {
       "pr": 1271,
@@ -2601,8 +2607,7 @@
         "record": "specs/1170/approved.json",
         "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
       },
-      "at": "2026-11-02T21:28:43Z",
-      "waits": "budget"
+      "at": "2026-11-02T21:28:43Z"
     }
   ],
   "events_cursor": "2026-11-02T19:38:28Z"
