@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -913,9 +914,9 @@ func TestShipOnProof(t *testing.T) {
 	// The policy is the base branch's tip now, not the PR's base revision: a
 	// narrow set that tightened on dev since the PR was cut applies.
 	tip := strings.Repeat("c", 40)
-	g.Refs["heads/dev"] = tip
 	g.RefFiles[tip] = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n", ".aayudha/config.toml": strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", "skills/"]`, 1)}
 	g.Mu.Unlock()
+	devAt(g, tip, head, base, true) // the head has the tip: it was proven on the code it lands on (Bug #1234)
 	refused("no merge on proof: it touches skills/build/SKILL.md, in the narrow set that always needs a person ([autonomy] always_person: skills/)")
 	// And dev moving while ship runs stops the merge: GitHub's merge guards
 	// only the head, so ship checks the tip it judged against again.
@@ -1811,6 +1812,137 @@ func TestShipSendsNothingOnRefusal(t *testing.T) {
 	defer s.g.Mu.Unlock()
 	if s.g.Pulls[s.prN].Merged {
 		t.Fatal("merged although inspect says fix")
+	}
+}
+
+// devAt moves dev to tip and says by ancestry what GitHub's comparison of
+// tip and head answers: "ahead" when head contains tip, else "diverged" from
+// their merge base.
+func devAt(g *fake.GitHub, tip, head, base string, contains bool) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	if g.Static == nil {
+		g.Static = map[string]any{}
+	}
+	g.Refs["heads/dev"] = tip
+	cmp := map[string]any{"status": "diverged", "ahead_by": 1, "behind_by": 1, "merge_base_commit": map[string]any{"sha": base}}
+	if contains {
+		cmp = map[string]any{"status": "ahead", "ahead_by": 1, "behind_by": 0, "merge_base_commit": map[string]any{"sha": tip}}
+	}
+	g.Static["/repos/o/r/compare/"+tip+"..."+head] = cmp
+}
+
+// Bug #1234, criteria 1 to 3: PR A merged into dev after PR B was proven,
+// so B's head lacks dev's tip, and ship refuses B and merges nothing; a
+// docs-only commit on dev refuses it the same. Once B's head contains the
+// tip and its gate ran there, ship merges it as before.
+func TestShipNeedsDevTipInHead(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	g.Mu.Lock()
+	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+	base := g.Pulls[prN].Base.SHA
+	g.Mu.Unlock()
+	// Criterion 1: A's merge is a commit after B's base. The gate on B's head is green, and its pack verifies.
+	withA := strings.Repeat("a", 40)
+	devAt(g, withA, head, base, false)
+	// A comparison GitHub fails is an error, never a pass.
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/compare/" + withA + "..." + head
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "/compare/"+withA+"...") {
+		t.Fatalf("ship when the comparison fails: exit %d: %s", code, out)
+	}
+	shipRefused(t, g, env, opts, bare, prN, fmt.Sprintf("ship #%d: #%d was proven on %s, not on dev %s: rebase it and let the gate run; nothing was merged", prN, prN, short(base), short(withA)))
+	// Criterion 3: dev moved only by a docs-only commit after B's base: ship cannot tell which change matters.
+	docs := strings.Repeat("e", 40)
+	devAt(g, docs, head, base, false)
+	g.Mu.Lock()
+	g.Static["/repos/o/r/compare/"+base+"..."+docs] = map[string]any{"status": "ahead", "ahead_by": 1, "files": []map[string]any{{"filename": "docs/guide/how-ship.md", "status": "modified"}}}
+	g.Mu.Unlock()
+	shipRefused(t, g, env, opts, bare, prN, fmt.Sprintf("ship #%d: #%d was proven on %s, not on dev %s: rebase it", prN, prN, short(base), short(docs)))
+	// Criterion 2: B rebased onto the tip. Its old head's gate proves nothing there; once the gate passes on the new head, ship merges.
+	rebased := strings.Repeat("9", 40)
+	g.Mu.Lock()
+	g.Pulls[prN].Head.SHA = rebased
+	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", rebased)}
+	g.Mu.Unlock()
+	devAt(g, docs, rebased, base, true)
+	shipRefused(t, g, env, opts, bare, prN, "no merge gate pack for the head "+short(rebased))
+	gateRun(t, g, dir, prN, rebased, coverageHolds)
+	code, out := shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != 0 || !merged || !strings.Contains(out, fmt.Sprintf("ship #%d: merged as", prN)) {
+		t.Fatalf("ship of the rebased head: exit %d, merged %t: %s", code, merged, out)
+	}
+}
+
+// Bug #1234, criterion 4: the mission of #1 lists #2, and ship refuses
+// #2's PR for a head without dev's tip: `aayu mission next 1` shows #2
+// waits on a rebase, and #2's builder thread is told until it is reached,
+// not at each refusal of the same head. Once the head moves, the wait ends.
+func TestShipRebaseWaitsInMission(t *testing.T) {
+	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
+	shipMission(t, s.bare, func(*MissionPlan) {})
+	const builder = "T-01a17000-0000-7000-8000-000000000002"
+	s.g.Mu.Lock()
+	base := s.g.Pulls[s.prN].Base.SHA
+	branch := s.g.Pulls[s.prN].Head.Ref
+	s.g.Mu.Unlock()
+	tip := strings.Repeat("a", 40)
+	devAt(s.g, tip, s.head, base, false)
+	notOnDev := fmt.Sprintf("not on dev %s: rebase it and let the gate run; nothing was merged", short(tip))
+	// A mission ship cannot read after its hold is named; ship refuses all the same.
+	s.g.Mu.Lock()
+	s.g.Fail, s.g.FailAfter = "GET /repos/o/r/issues/2/parent", 1
+	s.g.Mu.Unlock()
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, notOnDev+"; the mission does not show the wait: ")
+	refused := notOnDev + "; the mission of #1 shows #2 waits on a rebase"
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+", and no builder thread is recorded to tell")
+	st, _ := json.Marshal(delegate.State{Story: 2, Feature: 1, Receiver: "amp", Mode: "cloud", Task: builder, Status: dlgReady, PR: s.prN, StartedAt: "2026-11-02T04:00:00Z"})
+	putLedger(t, s.bare, delegate.LedgerPath(2), string(st))
+	// The first tell does not reach the builder, so the next refusal of the same head tells it again;
+	// once it is reached, a refusal tells it nothing more.
+	s.send = func() error { return fmt.Errorf("amp: exit status 1: thread %s not found", builder) }
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+"; not reached: "+builder)
+	s.send = func() error { return nil }
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused+"; its builder was told to rebase")
+	shipRefused(t, s.g, s.env, s.opts, s.bare, s.prN, refused)
+	msg := fmt.Sprintf("aayu: ship refused PR #%d: its head %s was proven on a dev without %s, the tip now. Rebase %s onto the latest dev, push it with --force-with-lease, and let the merge gate run on the new head. Ship runs again once it passes.",
+		s.prN, short(s.head), short(tip), branch)
+	tell := "amp threads continue " + builder + " -ox " + msg
+	if calls, _ := s.sent(); !slices.Equal(calls, []string{tell, tell}) {
+		t.Fatalf("ship told %q, want the builder until it is reached", calls)
+	}
+	next := func() string {
+		t.Helper()
+		env := maps.Clone(s.env)
+		env["AMP_THREAD_ID"] = shipKanhaThread
+		code, out, errOut := run(t, env, s.opts, "mission", "next", "1", "--repo", "o/r")
+		if code != 0 {
+			t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+		}
+		return out
+	}
+	if out, want := next(), fmt.Sprintf("waits #2: waits on a rebase: PR #%d was proven on a dev without %s · subthread %s\n", s.prN, short(tip), builder); !strings.Contains(out, want) {
+		t.Fatalf("mission next does not show the wait %q:\n%s", want, out)
+	}
+	// A PR mission next cannot read is an error, never a start.
+	s.g.Mu.Lock()
+	s.g.Fail = fmt.Sprintf("GET /repos/o/r/pulls/%d", s.prN)
+	s.g.Mu.Unlock()
+	env := maps.Clone(s.env)
+	env["AMP_THREAD_ID"] = shipKanhaThread
+	if code, out, errOut := run(t, env, s.opts, "mission", "next", "1", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("mission next when the PR cannot be read: exit %d: %s%s", code, out, errOut)
+	}
+	s.g.Mu.Lock()
+	s.g.Pulls[s.prN].Head.SHA = strings.Repeat("9", 40)
+	s.g.Mu.Unlock()
+	if out := next(); strings.Contains(out, "waits on a rebase") {
+		t.Fatalf("mission next shows the wait after the head moved:\n%s", out)
 	}
 }
 

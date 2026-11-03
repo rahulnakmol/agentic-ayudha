@@ -280,6 +280,17 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 		if running || claimed[n] {
 			held[n] = true
 		}
+		// A PR ship refused for a head without dev's tip waits on a rebase (Bug #1234) until its head moves.
+		wait := plan.rebase(n)
+		if wait != nil {
+			pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, wait.PR)
+			if err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			if pr.GetState() != "open" || pr.GetHead().GetSHA() != wait.Head {
+				wait = nil
+			}
+		}
 		switch {
 		case contains(labels, "status:blocked"):
 			en.item.Reason = "blocked"
@@ -287,6 +298,8 @@ func (e *Env) listNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			en.item.Reason = usagePaused(st, now)
 		case plan.stopped(n) != nil: // a person stopped it alone (#1002): it keeps its slot while it runs
 			en.item.Reason = fmt.Sprintf("stopped (%s)", plan.stopped(n).Reason)
+		case wait != nil: // it holds its slot while it runs
+			en.item.Reason = fmt.Sprintf("waits on a rebase: PR #%d was proven on a dev without %s", wait.PR, short(wait.Dev))
 		case plan.stateOf(n) != nil && plan.stateOf(n).State != "": // recover's record (#1003): a story that may run holds its slot
 			ss := plan.stateOf(n)
 			en.item.Reason = ss.summary()

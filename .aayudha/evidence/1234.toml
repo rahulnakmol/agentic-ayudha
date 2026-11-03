@@ -1,0 +1,17 @@
+# Which tests prove Bug #1234's Completion Goal.
+
+[[criterion]]
+id = 1 # B's head lacks the dev tip, which has a commit after B's base: ship refuses B and merges nothing
+tests = ["./internal/cli:TestShipNeedsDevTipInHead"]
+
+[[criterion]]
+id = 2 # B's head contains the dev tip, and its pack and gate are on that head: ship merges as today
+tests = ["./internal/cli:TestShipNeedsDevTipInHead"]
+
+[[criterion]]
+id = 3 # the dev tip moved only by a docs-only commit: ship still refuses
+tests = ["./internal/cli:TestShipNeedsDevTipInHead"]
+
+[[criterion]]
+id = 4 # the mission lists B: mission next shows "waits on a rebase" for B, and the builder is told
+tests = ["./internal/cli:TestShipRebaseWaitsInMission"]
