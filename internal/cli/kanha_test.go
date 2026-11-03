@@ -396,7 +396,7 @@ func TestDelegateBriefForMissionStory(t *testing.T) {
 	for _, want := range []string{
 		"You own story #50 to its merge, in your own worktree on a new branch `" + m.state(50).Branch + "` from `dev`",
 		"You may use subagents",
-		"After each push, run `aayu inspect <pr>` and act on its findings",
+		"After each push to the ready PR, run `aayu inspect <pr>` and act on its findings",
 		"Before you ship, rebase the branch on the latest `origin/dev`",
 		"run `aayu ship <pr>`: ship decides, and merges on proof",
 		"Never merge another way: never `gh pr merge`, never `--admin`",

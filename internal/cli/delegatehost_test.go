@@ -452,3 +452,22 @@ func TestAmpHostLateRecordReleasesLease(t *testing.T) {
 		}
 	}
 }
+
+// Story #1250, criterion 5: `aayu build 20 --delegate amp` writes a brief that opens the PR as a draft, iterates
+// with the local gate and a local review, and marks the PR ready once, after both pass.
+func TestAmpBriefIsDraftFirst(t *testing.T) {
+	m := newMissionWorld(t)
+	path, _ := m.hostHandedOff()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	brief := string(b)
+	draft := strings.Index(brief, "Open the PR as a draft")
+	gate := strings.Index(brief, "Iterate on it with `bash .agents/check --full` and a local review")
+	ready := strings.Index(brief, "Mark it ready once (`gh pr ready <pr>`), after both pass")
+	inspect := strings.Index(brief, "After each push to the ready PR, run `aayu inspect <pr>`")
+	if draft < 0 || gate < draft || ready < gate || inspect < ready {
+		t.Fatalf("the brief of #20 does not say draft, then the local gate and review, then ready once, then inspect:\n%s", brief)
+	}
+}

@@ -65,7 +65,7 @@ func gateArtifact(g *fake.GitHub, pr int, head string, arts ...fake.ArtifactZip)
 
 // WP4.10/WP5.5 and S-4.2b: ship refuses, before landing or merging anything:
 // without the human's token; a PR that does not exist, is already merged or
-// closed, or serves no story; no pack from the merge gate for the head: no
+// closed, is a draft, or serves no story; no pack from the merge gate for the head: no
 // run, a run of the pull request's own copy of the workflow (a pull_request
 // run, however green its jobs look), a successful run on another head, a
 // failed run, no aayudha-pack artifact, an artifact that is not a zip or has
@@ -96,6 +96,14 @@ func TestShipRefusals(t *testing.T) {
 	}
 	if code, out := ship(closed.Number); code != ExitUsage || !strings.Contains(out, "the PR is closed") {
 		t.Fatalf("ship of a closed PR: %d %s", code, out)
+	}
+	// Story #1250, criterion 6: a draft PR is refused before ship reads its gate run.
+	draft := g.AddPR("feat: draft", "Refs #2", "founder", "story/2-draft", head, "dev")
+	g.Mu.Lock()
+	draft.Draft = true
+	g.Mu.Unlock()
+	if code, out := ship(draft.Number); code != ExitBlocked || !strings.Contains(out, "#"+strconv.Itoa(draft.Number)+" is a draft: mark it ready after the local gate passes") {
+		t.Fatalf("ship of a draft PR: %d %s", code, out)
 	}
 	if code, out := ship(chore.Number); code != ExitBlocked || !strings.Contains(out, "no story (Refs #n in the PR body)") {
 		t.Fatalf("ship of a PR without Refs: %d %s", code, out)
@@ -1180,6 +1188,68 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Fail = ""
 	g.CheckRuns[head] = append([]fake.CheckRun{same, cancelled}, runsBefore...)
+	g.Mu.Unlock()
+
+	// Story #1250: a draft's CI skips every job, and a skip counts as
+	// success. Once the PR was marked ready (14:00), an Actions run of the
+	// pull request in which nothing ran, made before then, proves nothing,
+	// whatever its jobs' times: build's and docs' only runs are the draft's
+	// (suite 60, made 13:58), so build is missing. The ready run (suite 61)
+	// counts, an external app's skip (lint, suite 70) counts, and so does a
+	// run made after the event in which every job skipped (docs.yml, suite
+	// 80): the required checks pass, and ship goes on to the audit label
+	// (made to fail here, so nothing merges). A PR never marked ready reads
+	// the draft's skips as before.
+	passing, wfBefore := slices.Clone(g.CheckRuns[head]), slices.Clone(g.Runs)
+	gha := &fake.App{ID: 15368, Slug: "github-actions"}
+	at := func(s string) time.Time { tm, _ := time.Parse(time.RFC3339, s); return tm }
+	draftRun := []fake.CheckRun{
+		{ID: 121613900001, Name: "changes", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"},
+		{ID: 121613900002, Name: "build", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"},
+		{ID: 121613900003, Name: "docs", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 60}, StartedAt: "2026-10-27T14:00:10Z"}}
+	external := fake.CheckRun{ID: 121613900004, Name: "lint", Status: "completed", Conclusion: "skipped", App: &fake.App{ID: 777, Slug: "circleci"}, Suite: &fake.Suite{ID: 70}}
+	others := slices.DeleteFunc(slices.Clone(runsBefore), func(r fake.CheckRun) bool { return r.Name == "build" || r.Name == "docs" || r.Name == "lint" })
+	readyRun := []fake.CheckRun{
+		{ID: 121613900005, Name: "changes", Status: "completed", Conclusion: "success", App: gha, Suite: &fake.Suite{ID: 61}},
+		{ID: 121613900006, Name: "build", Status: "completed", Conclusion: "success", App: gha, Suite: &fake.Suite{ID: 61}}}
+	docsRun := fake.CheckRun{ID: 121613900007, Name: "docs", Status: "completed", Conclusion: "skipped", App: gha, Suite: &fake.Suite{ID: 80}}
+	withRuns := func(rs ...[]fake.CheckRun) {
+		g.Mu.Lock()
+		g.CheckRuns[head] = append(slices.Concat(rs...), append([]fake.CheckRun{external}, others...)...)
+		g.Mu.Unlock()
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = []string{"convert_to_draft", "ready_for_review"}, []string{"2026-10-27T13:57:00Z", "2026-10-27T14:00:00Z"}
+	g.Runs = append(g.Runs,
+		fake.WorkflowRun{ID: 7060, Path: ".github/workflows/ci.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "skipped", CheckSuiteID: 60, CreatedAt: at("2026-10-27T13:58:00Z")},
+		fake.WorkflowRun{ID: 7061, Path: ".github/workflows/ci.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success", CheckSuiteID: 61, CreatedAt: at("2026-10-27T14:00:00Z")},
+		fake.WorkflowRun{ID: 7080, Path: ".github/workflows/docs.yml", HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "skipped", CheckSuiteID: 80, CreatedAt: at("2026-10-27T14:00:05Z")})
+	g.Mu.Unlock()
+	withRuns(draftRun)
+	refused("required check build is missing on " + short(head))
+	withRuns(readyRun, draftRun)
+	refused("required check docs is missing on " + short(head))
+	auditFails := func(why string) {
+		t.Helper()
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0
+		g.Mu.Unlock()
+		if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || !strings.Contains(out, "not merged: the aayu:audit label") {
+			t.Fatalf("ship of %s: %d %s", why, code, out)
+		}
+		g.Mu.Lock()
+		g.Fail = ""
+		g.Mu.Unlock()
+	}
+	withRuns(readyRun, []fake.CheckRun{docsRun}, draftRun)
+	auditFails("a ready PR with a run after ready in which every job skipped")
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline, g.Pulls[prN].TimelineAt = nil, nil
+	g.Mu.Unlock()
+	withRuns(draftRun)
+	auditFails("a PR never marked ready, with its skips")
+	g.Mu.Lock()
+	g.CheckRuns[head], g.Runs = passing, wfBefore
 	g.Mu.Unlock()
 
 	// The audit's label goes on before the merge: when it cannot, nothing
