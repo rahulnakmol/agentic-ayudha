@@ -1,7 +1,7 @@
 # Which tests prove Bug #1137's Completion Goal.
 
 [[criterion]]
-id = 1 # build syncs a story handed to codex, and codex cloud status never returns: exit 5 with status: codex: context deadline exceeded
+id = 1 # build syncs a story handed to codex, and codex cloud status, or cloud diff after a done status, never returns: exit 5 with status: codex: context deadline exceeded
 tests = ["internal/cli:TestDelegateSyncStalls"]
 
 [[criterion]]

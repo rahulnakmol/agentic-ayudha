@@ -134,9 +134,9 @@ func writeHostFile(path, text string) error {
 
 const delegateMarker = "<!-- aayudha:delegate -->"
 
-// receiverWaitDelay is how long a receiver CLI that its context ended may
-// keep its output open, through a child process, before aayu stops waiting
-// (Bug #1118). A variable so tests can shorten it.
+// receiverWaitDelay is how long a receiver CLI, or a command run2 runs, may
+// keep its output open through a child process before aayu stops waiting
+// (Bugs #1118, #1137). A variable so tests can shorten it.
 var receiverWaitDelay = 10 * time.Second
 
 func (e *Env) delegateExec() delegate.Exec {

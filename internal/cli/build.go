@@ -156,7 +156,11 @@ func BuildWorktree(root string, n int) string {
 func run2(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = dir
+	cmd.WaitDelay = receiverWaitDelay // a helper git starts (git remote-http, ssh) never holds a killed git's caller (Bug #1137)
 	out, err := cmd.CombinedOutput()
+	if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil {
+		err = nil // it exited 0, and only a child it left keeps the output open
+	}
 	if err != nil {
 		return "", fmt.Errorf("%s: %w: %s", strings.Join(args[:2], " "), err, strings.TrimSpace(string(out)))
 	}
