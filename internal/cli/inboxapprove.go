@@ -50,13 +50,16 @@ func approveStories(rec ready.Approval, p MissionPlan) string {
 
 // approveCard is Feature f's Approve to build card, read from the ledger tree
 // t, or nil when f has an approval already, or a part it needs has no
-// approved version (unapproved names the parts with none): its Baseline cards
-// come first. A Feature that Approve to build refuses has a card that says
-// the command's refusal and offers no approval. It writes nothing.
-func (e *Env) approveCard(ctx context.Context, c *github.Client, w *ledger.Writer, t *ledger.Tree, repo string, f int, unapproved []string) (*InboxItem, error) {
+// approved version (unapproved names the parts with none) and no draft in
+// drafts. A part in drafts counts as approved at its draft: the card is the
+// Approve to build that approving the drafts leads to (Bug #1253). A Feature
+// that Approve to build refuses has a card that says the command's refusal
+// and offers no approval. It writes nothing.
+func (e *Env) approveCard(ctx context.Context, c *github.Client, w *ledger.Writer, t *ledger.Tree, repo string, f int, unapproved []string, drafts map[string]*ready.Baseline) (*InboxItem, error) {
 	if b, err := t.File(ctx, ready.ApprovalPath(f)); b != nil || ignoreMissing(err) != nil {
 		return nil, ignoreMissing(err)
 	}
+	unapproved = slices.DeleteFunc(slices.Clone(unapproved), func(p string) bool { return drafts[p] != nil })
 	if slices.ContainsFunc(unapproved, func(p string) bool { return p != "ux" }) {
 		return nil, nil
 	}
@@ -76,7 +79,7 @@ func (e *Env) approveCard(ctx context.Context, c *github.Client, w *ledger.Write
 		return nil, err
 	}
 	r := &ready.Ready{Repo: repo, TechnicalOwner: e.technicalOwner(), GH: c, Concrete: func(it workitems.Item) []workitems.Problem { return grill.Check(cat, it) }}
-	a := &approveRun{e: e, c: c, w: w, r: r, n: f}
+	a := &approveRun{e: e, c: c, w: w, r: r, n: f, drafts: drafts}
 	rec, _, _, _, err := a.prepare(ctx)
 	var plan MissionPlan
 	if err == nil {
@@ -101,7 +104,7 @@ func approveItem(f int, rec ready.Approval, p MissionPlan, refusal error) InboxI
 			"who acts. The card offers no approval until it holds. You decide; I only advise.", f, f)
 		return it
 	}
-	it.Hash = approveStories(rec, p)
+	it.Hash, it.plan = approveStories(rec, p), &p
 	stories, bugs := 0, 0
 	var lines []string
 	for _, g := range p.Graph {
@@ -127,7 +130,7 @@ func approveItem(f int, rec ready.Approval, p MissionPlan, refusal error) InboxI
 	}
 	it.Lines = append(append([]string{"Stories  " + what + ", each as it is now"}, lines...),
 		fmt.Sprintf("Budget   up to %s (%d %s × %s, [budget] per_story_usd)", ready.USD(rec.Budget.TotalUSD), rec.Budget.Stories, plural(rec.Budget.Stories, "story", "stories"), ready.USD(rec.Budget.PerStoryUSD)),
-		fmt.Sprintf("Agents   up to %d at once (%s)", p.Agents, p.AgentsSource),
+		agentsLine(p),
 		fmt.Sprintf("Milestones %s; complete when %s", strings.Join(ms, " · "), p.CompleteWhen),
 		"High-risk entries by story: none shown. They come with #1029, which has not merged, so the card cannot read them yet.",
 		"Baselines "+strings.Join(parts, ", "))

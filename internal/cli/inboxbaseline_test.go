@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -18,11 +21,13 @@ import (
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
-// Story #1172: each waiting baseline draft of a Feature is an inbox card,
-// approved under the session's one device code.
+// Story #1172 and Bug #1253: the waiting baseline drafts of a Feature are
+// one inbox card, and each part opens as its own Baseline card, approved
+// under the session's one device code.
 
 const baselineDesign = `{"feature": 889, "layers": ["L02"], "story_order": [20, 21, 22]}`
 
@@ -90,14 +95,16 @@ func (m *missionWorld) draftOf(part string, v int) ready.Baseline {
 	return b
 }
 
-// Criterion 1: with the intent, spec, and tech v1 drafts of #889 waiting,
-// aayu inbox shows three Baseline cards, one per part, each with the part,
-// its version, what it pins, and the counsel of the part's owner seat. Opening
-// them asks for no code, and a Feature with no L01 has no UX card.
+// Bug #1253 criterion 4 (Story #1172's card): with the intent, spec, and
+// tech v1 drafts of #889 waiting, the inbox has one Feature card, and opening
+// each part shows the Baseline card of today: the part, its version, what it
+// pins, and the counsel of the part's owner seat. Opening them asks for no
+// code, and a Feature with no L01 has no UX part.
 func TestBaselineCards(t *testing.T) {
 	m := baselineWorld(t, nil)
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--plain", "--repo", "o/r")
+	// #889 has no Initiative parent here, so its card approves the parts only: 2-4 open them.
+	code, out, errOut := runIn(t, m.person, m.opts, "2s3s4ss", "inbox", "--plain", "--repo", "o/r")
 	if code != 0 || m.codes() != 0 {
 		t.Fatalf("inbox: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
@@ -107,19 +114,21 @@ func TestBaselineCards(t *testing.T) {
 	design := sha256.Sum256([]byte(baselineDesign))
 	intent, spec, tech := m.draftOf("intent", 1), m.draftOf("spec", 1), m.draftOf("tech", 1)
 	for _, want := range []string{
-		"o/r: 3 need you, @rahulnakmol.\n", // the header counts them
-		"[1/3] Baseline #889: Intent v1: Agents pull the next story\n  " + inboxKinds[InboxBaseline].Line + "\n",
+		"o/r: 1 needs you, @rahulnakmol.\n", // one card for the Feature
+		"[1/1] Feature #889: Agents pull the next story\n",
+		"  2. Open the intent v1 on its own\n  3. Open the spec v1 on its own\n  4. Open the technical design v1 on its own\n",
+		"Baseline #889: Intent v1: Agents pull the next story\n  " + inboxKinds[InboxBaseline].Line + "\n",
 		"  Part     intent v1, drafted by ",
 		"  Hash     " + intent.Hash[:12] + " is what you approve\n",
 		"  Pins\n    #889 body · " + workitems.BodyHash(body)[:12] + "\n",
 		"  Arjun (Product Strategist), counsel, not approval: What you agree to: the problem #889 says it solves",
 		"  1. Approve intent v1 of #889 at hash " + intent.Hash[:12] + " (recommended)\n  2. Leave it waiting: nothing is frozen\n  3. Open #889 on GitHub\n",
-		"[2/3] Baseline #889: Spec v1: Agents pull the next story\n",
+		"Baseline #889: Spec v1: Agents pull the next story\n",
 		"  Part     spec v1, drafted by ",
 		"  Stories  3, each pinned by its title, Completion Goal, effort, layers, and depends-on; and the set of stories\n",
 		"  Arjun (Product Strategist), counsel, not approval: What you agree to: 3 stories of #889",
 		"  1. Approve spec v1 of #889 at hash " + spec.Hash[:12] + " (recommended)\n",
-		"[3/3] Baseline #889: Tech v1: Agents pull the next story\n",
+		"Baseline #889: Tech v1: Agents pull the next story\n",
 		"  Part     tech v1, drafted by ",
 		"  Pins\n    specs/889/design.json · " + hex.EncodeToString(design[:])[:12] + "\n",
 		"  Vishwa (Code Architect), counsel, not approval: The contract you freeze: 1 pin of #889, with specs/889/design.json first, at hash " + tech.Hash[:12],
@@ -129,22 +138,29 @@ func TestBaselineCards(t *testing.T) {
 			t.Errorf("inbox lacks %q", want)
 		}
 	}
-	if strings.Contains(out, "UX v") || strings.Contains(out, "[4/") {
-		t.Errorf("a UX card for a Feature with no L01 in its footprint")
+	if strings.Contains(out, "UX v") || strings.Contains(out, "UX design") {
+		t.Errorf("a UX part for a Feature with no L01 in its footprint")
 	}
 	if t.Failed() {
 		t.Logf("inbox:\n%s%s", out, errOut)
 	}
-	// The full-screen inbox lists the same three cards, each with what waits.
+	// The full-screen inbox lists the one Feature card; opening a part puts its card under it.
 	tui := m.opts
 	tui.TUI = func(tm tea.Model) error {
 		im := tm.(*inboxModel)
 		teaDrive(im, im.Init())
 		im.Update(tea.WindowSizeMsg{Width: 110, Height: 44})
-		view := ansi.Strip(im.View().Content)
-		for _, part := range []string{"intent", "spec", "tech"} {
-			if !strings.Contains(view, part+" v1 to approve") {
-				t.Errorf("the full-screen inbox lacks the %s card:\n%s", part, view)
+		if view := ansi.Strip(im.View().Content); !strings.Contains(view, "3 parts to approve") || strings.Contains(view, "v1 to approve") {
+			t.Errorf("the full-screen inbox lacks the Feature card:\n%s", view)
+		}
+		for n, part := range map[string]string{"2": "intent", "3": "spec", "4": "tech"} {
+			im.cur = slices.IndexFunc(im.rows, func(i int) bool { return im.items[i].Kind == InboxFeature })
+			teaKeys(im, n, "enter")
+			if i := im.item(); i < 0 || im.items[i].key() != "baseline#889/"+part {
+				t.Errorf("opening %s: the cursor is on %+v", part, im.items[max(i, 0)])
+			}
+			if view := ansi.Strip(im.View().Content); !strings.Contains(view, part+" v1 to approve") {
+				t.Errorf("the full-screen inbox lacks the opened %s card:\n%s", part, view)
 			}
 		}
 		return nil
@@ -159,10 +175,10 @@ func TestBaselineCards(t *testing.T) {
 	}
 }
 
-// The UX part has a card only when the Feature's footprint has L01 (the
-// story's notes): with its design stages on the ledger and a UI path, the UX
-// draft is a fourth card with Hanu's counsel; once the Feature's paths leave
-// L01, it has none.
+// The UX part is on the Feature card only when the Feature's footprint has
+// L01 (the story's notes): with its design stages on the ledger and a UI
+// path, the UX draft is a fourth part that opens with Hanu's counsel; once the
+// Feature's paths leave L01, it is not on the card.
 func TestBaselineUXCard(t *testing.T) {
 	paths := func(globs string) func(g *fake.GitHub) {
 		return func(g *fake.GitHub) { g.Issues[889].Body = setSection(g.Issues[889].Body, "Expected paths", globs) }
@@ -171,24 +187,25 @@ func TestBaselineUXCard(t *testing.T) {
 	putLedger(t, m.bare, "design/889/research/manifest.json", `{"stage": "research"}`)
 	m.draftPart("ux", "")
 	ux := m.draftOf("ux", 1)
-	code, out, errOut := runIn(t, m.person, m.opts, "ssss", "inbox", "--plain", "--repo", "o/r")
-	if code != 0 || !strings.Contains(out, "[4/4] Baseline #889: UX v1: Agents pull the next story\n") ||
+	code, out, errOut := runIn(t, m.person, m.opts, "5ss", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "  5. Open the UX design v1 on its own\n") || !strings.Contains(out, "] Baseline #889: UX v1: Agents pull the next story\n") ||
 		!strings.Contains(out, "  Pins\n    design/889/research/manifest.json · "+ux.Pins[0].Hash[:12]+"\n") ||
 		!strings.Contains(out, "  Hanu (UX Researcher & Evolutionist), counsel, not approval: What you freeze: 1 design record of #889") ||
 		!strings.Contains(out, "  1. Approve UX v1 of #889 at hash "+ux.Hash[:12]+" (recommended)\n") {
 		t.Fatalf("inbox with a UX draft: exit %d:\n%s%s", code, out, errOut)
 	}
 	m.edit(func() { paths("- `internal/cli/**`")(m.g) })
-	code, out, errOut = runIn(t, m.person, m.opts, "sss", "inbox", "--plain", "--repo", "o/r")
-	if code != 0 || strings.Contains(out, "UX v1") || !strings.Contains(out, "[3/3] Baseline #889: Tech v1") {
+	code, out, errOut = runIn(t, m.person, m.opts, "s", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || strings.Contains(out, "UX v1") || strings.Contains(out, "UX design") || !strings.Contains(out, "  Tech v1 · hash ") {
 		t.Fatalf("inbox after the paths left L01: exit %d:\n%s%s", code, out, errOut)
 	}
 }
 
-// Criterion 2: approving the three cards in one inbox session asks GitHub's
-// device flow for one code, and writes intent-v1.json, spec-v1.json, and
-// tech-v1.json approved by rahulnakmol, as `aayu ready 889 --part <part>`
-// writes them: the draft the person saw, with the approval added.
+// Bug #1253 criterion 4: opening each part of the Feature card and approving
+// it there, in one inbox session, asks GitHub's device flow for one code, and
+// writes intent-v1.json, spec-v1.json, and tech-v1.json approved by
+// rahulnakmol, as `aayu ready 889 --part <part>` writes them: the draft the
+// person saw, with the approval added. Approving one part writes only it.
 func TestBaselineApproveOneCode(t *testing.T) {
 	m := baselineWorld(t, nil)
 	drafts := map[string]ready.Baseline{}
@@ -196,10 +213,24 @@ func TestBaselineApproveOneCode(t *testing.T) {
 		drafts[part] = m.draftOf(part, 1)
 	}
 	m.device("rahulnakmol")
-	// Then #889's Approve to build card says the command's refusal (it has no Initiative parent here), and s leaves it (Story #1173).
-	code, out, errOut := runIn(t, m.person, m.opts, "aaas", "inbox", "--plain", "--repo", "o/r")
-	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "inbox: 3 done, 1 skipped, 0 left") {
-		t.Fatalf("inbox a a a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+	// Open the spec and leave it (2), which writes nothing; open it again and approve it, then quit: only the spec is written.
+	code, first, errOut := runIn(t, m.person, m.opts, "323aq", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || !strings.Contains(first, "\n    Intent v1 · hash ") || strings.Contains(first[strings.LastIndex(first, "Feature #889"):], "Spec v1 · hash") {
+		t.Fatalf("inbox 3 a: exit %d:\n%s%s", code, first, errOut)
+	}
+	for part, want := range map[string]bool{"intent": false, "spec": true, "tech": false} {
+		if _, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part)); ok != want {
+			t.Fatalf("after approving the spec alone, %s-v1.json written: %v", part, ok)
+		}
+	}
+	// The intent (2) and then the tech (2 again, the only part left); then
+	// #889's Approve to build card says the command's refusal (it has no
+	// Initiative parent here), and s leaves it (Story #1173).
+	m.device("rahulnakmol")
+	code, out, errOut := runIn(t, m.person, m.opts, "2a2as", "inbox", "--plain", "--repo", "o/r")
+	out = first + out
+	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "] Approve to build #889: ") {
+		t.Fatalf("inbox 2 a 2 a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
 	for _, part := range []string{"intent", "spec", "tech"} {
 		b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part))
@@ -243,7 +274,7 @@ func TestBaselineApprovesTheHashShown(t *testing.T) {
 		}
 	})
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "sa", "inbox", "--plain", "--repo", "o/r")
+	code, out, errOut := runIn(t, m.person, m.opts, "3a", "inbox", "--plain", "--repo", "o/r")
 	if code != 0 || m.codes() != 0 || !strings.Contains(out, "#889 changed on GitHub since you opened it: it was drafted again. Nothing was written; here it is as it is now.") ||
 		!strings.Contains(out, "  Hash     "+again.Hash[:12]+" is what you approve\n") {
 		t.Fatalf("inbox s a, drafted again: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
@@ -281,7 +312,7 @@ func TestBaselineRecommendationChanged(t *testing.T) {
 		}
 	})
 	m.device("rahulnakmol")
-	code, out, errOut := runIn(t, m.person, m.opts, "sa", "inbox", "--plain", "--repo", "o/r")
+	code, out, errOut := runIn(t, m.person, m.opts, "3a", "inbox", "--plain", "--repo", "o/r")
 	if code != 0 || m.codes() != 0 || !strings.Contains(out, "#889 changed on GitHub since you opened it: its choices were edited. Nothing was written; here it is as it is now.") {
 		t.Fatalf("inbox s a, the recommendation turned off: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 	}
@@ -310,7 +341,7 @@ func TestBaselineSpecChanged(t *testing.T) {
 				}
 			}
 		})
-		code, out, errOut := runIn(t, m.person, m.opts, "sa", "inbox", "--plain", "--repo", "o/r")
+		code, out, errOut := runIn(t, m.person, m.opts, "3a", "inbox", "--plain", "--repo", "o/r")
 		if code != 0 || lists < 2 || m.codes() != 0 ||
 			!strings.Contains(out, "#889 changed on GitHub since you opened it: its spec changed after the draft. Nothing was written; here it is as it is now.") ||
 			!strings.Contains(out, "\n  "+said+"\n") || !strings.Contains(out, "✗ nothing it pins changed since the draft: an agent drafts it again") ||
@@ -324,8 +355,10 @@ func TestBaselineSpecChanged(t *testing.T) {
 	t.Run("its stories are gone", func(t *testing.T) { // the part has nothing to pin now
 		m := baselineWorld(t, nil)
 		m.edit(func() { m.g.Issues[889].Subs = nil })
-		code, out, errOut := runIn(t, m.person, m.opts, "ss", "inbox", "--plain", "--repo", "o/r")
-		if code != 0 || !strings.Contains(out, "  "+inboxKinds[InboxBaseline].Line+"\n  "+said+"\n") || strings.Contains(out, "Approve spec") {
+		// The Feature card says it and approves nothing; the spec's own card says it too (2 opens it: no approval comes first).
+		code, out, errOut := runIn(t, m.person, m.opts, "2ss", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "\n      "+said+"\n") || strings.Contains(out, "Approve intent") ||
+			!strings.Contains(out, "  "+inboxKinds[InboxBaseline].Line+"\n  "+said+"\n") || strings.Contains(out, "Approve spec") {
 			t.Fatalf("inbox with no stories: exit %d:\n%s%s", code, out, errOut)
 		}
 	})
@@ -335,67 +368,528 @@ func TestBaselineSpecChanged(t *testing.T) {
 		m.edit(func() {
 			m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve", OnPoll: func(int) { retitle(m.g) }}
 		})
-		code, out, errOut := runIn(t, m.person, m.opts, "sa", "inbox", "--plain", "--repo", "o/r")
+		code, out, errOut := runIn(t, m.person, m.opts, "3a", "inbox", "--plain", "--repo", "o/r")
 		if code != 0 || m.codes() != 1 || !strings.Contains(out, "✗ "+said+"\n  Nothing was changed on GitHub.\n") {
 			t.Fatalf("inbox s a: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
 		}
 		if _, ok := m.record("specs/889/baselines/spec-v1.json"); ok || m.commits() != n {
 			t.Fatalf("a spec changed during the code was baselined: %s commits, was %s", m.commits(), n)
 		}
-		// The next session's card says it, and offers no approval.
-		code, out, errOut = runIn(t, m.person, m.opts, "ss", "inbox", "--plain", "--repo", "o/r")
-		if code != 0 || !strings.Contains(out, "[2/3] Baseline #889: Spec v1: Agents pull the next story\n  "+inboxKinds[InboxBaseline].Line+"\n  "+said+"\n") ||
+		// The next session's card says it, and offers no approval; the spec's own card (2 opens it now) neither.
+		code, out, errOut = runIn(t, m.person, m.opts, "2ss", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "] Baseline #889: Spec v1: Agents pull the next story\n  "+inboxKinds[InboxBaseline].Line+"\n  "+said+"\n") ||
 			!strings.Contains(out, "  1. Leave it for the agent's new draft (preselected)\n  2. Open #889 on GitHub\n") || strings.Contains(out, "Approve spec") {
 			t.Fatalf("inbox after the change: exit %d:\n%s%s", code, out, errOut)
 		}
 	})
 }
 
-// Criterion 4: an agent lane's `aayu inbox --list --json` has the three
-// Baseline cards with their checklists, and no approve action; a person's
-// list has it. The lane cannot approve another way either.
-func TestBaselineAgentLane(t *testing.T) {
-	m := baselineWorld(t, nil)
+// approves reports whether card it, or a card inside it, offers an approval.
+func approves(it InboxItem) bool {
+	cards := append([]InboxItem{it}, it.Parts...)
+	if it.Build != nil {
+		cards = append(cards, *it.Build)
+	}
+	return slices.ContainsFunc(cards, func(c InboxItem) bool {
+		return slices.ContainsFunc(c.choices(), func(a InboxAction) bool { return a.Command != inboxLeave && a.Command != "open" })
+	})
+}
+
+// Bug #1253 criterion 5: an agent lane's `aayu inbox --list`, as JSON and
+// as Markdown, has the one Feature card of #889 with each part and its
+// checklist, and no approve action on it or on any card inside it; a
+// person's list has Approve and start. The lane cannot approve another way.
+func TestFeatureCardAgentLane(t *testing.T) {
+	m := approveWorld(t)
 	n := m.commits()
-	list := func(env map[string]string) []InboxItem {
-		t.Helper()
-		code, out, errOut := run(t, env, m.opts, "inbox", "--list", "--json", "--repo", "o/r")
-		var l inboxList
-		if code != 0 || json.Unmarshal([]byte(out), &l) != nil {
-			t.Fatalf("inbox --list --json: exit %d: %s%s", code, out, errOut)
-		}
-		return slices.DeleteFunc(l.Items, func(it InboxItem) bool { return it.Kind != InboxBaseline })
-	}
-	approves := func(it InboxItem) bool {
-		return slices.ContainsFunc(it.choices(), func(a InboxAction) bool { return strings.HasPrefix(a.Command, "aayu ready") })
-	}
 	for name, env := range map[string]map[string]string{"AAYU_AGENT=1": m.lane, "an agent marker": m.agent} {
-		cards := list(env)
-		var parts []string
-		for _, it := range cards {
-			parts = append(parts, it.Ask)
-			if len(it.Checklist) == 0 || approves(it) {
-				t.Errorf("%s: the %s card: checklist %v, choices %v", name, it.Ask, it.Checklist, it.choices())
-			}
+		keys, items := m.listed(env)
+		if !slices.Equal(keys, []string{"feature#889"}) || approves(items[0]) {
+			t.Fatalf("%s: cards %v, the Feature card's choices %+v", name, keys, items)
 		}
-		if !slices.Equal(parts, []string{"intent", "spec", "tech"}) || len(cards[1].Checklist) != 4 {
-			t.Errorf("%s: cards %v, spec checklist %v", name, parts, cards[1].Checklist)
+		var parts []string
+		for _, p := range items[0].Parts {
+			parts = append(parts, p.Ask)
+		}
+		if !slices.Equal(parts, []string{"intent", "spec", "tech"}) || len(items[0].Parts[1].Checklist) != 4 || items[0].Build == nil {
+			t.Errorf("%s: parts %v, spec checklist %v, build %v", name, parts, items[0].Parts[1].Checklist, items[0].Build)
+		}
+		code, out, errOut := run(t, env, m.opts, "inbox", "--list", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "**🧱 Feature [#889](") || !strings.Contains(out, "  Spec v1 · hash ") ||
+			regexp.MustCompile(`(?m)^- \*\*\d.*(Approve|Open the)`).MatchString(out) || !strings.Contains(out, "- **6** · Not now: nothing is written\n") {
+			t.Errorf("%s: inbox --list: exit %d:\n%s%s", name, code, out, errOut)
 		}
 	}
-	for _, it := range list(m.person) {
-		if !approves(it) {
-			t.Errorf("a person's list: the %s card has no approve action: %v", it.Ask, it.choices())
-		}
+	_, items := m.listed(m.person)
+	if len(items) != 1 || !approves(items[0]) || items[0].choice(1).Command != featureStart {
+		t.Errorf("a person's list: %+v", items)
 	}
 	m.device("rahulnakmol")
-	for _, args := range [][]string{{"inbox", "--repo", "o/r"}, {"ready", "889", "--part", "spec", "--repo", "o/r"}} {
-		if code, out, errOut := runIn(t, m.lane, m.opts, "a", args...); code != ExitBlocked {
+	for _, args := range [][]string{{"inbox", "--repo", "o/r"}, {"ready", "889", "--part", "spec", "--repo", "o/r"}, {"ready", "889", "--repo", "o/r"}} {
+		if code, out, errOut := runIn(t, m.lane, m.opts, "1y", args...); code != ExitBlocked {
 			t.Errorf("the lane's %v: exit %d: %s%s", args, code, out, errOut)
 		}
 	}
 	if m.codes() != 0 || m.commits() != n {
 		t.Fatalf("the agent lane: device codes %d, %s commits, was %s", m.codes(), m.commits(), n)
 	}
+}
+
+// Bug #1253 criterion 1: with the intent, spec, and tech drafts of #889
+// waiting and no Approve to build, `aayu inbox --list --json` has one card
+// for #889: each part with the version and hash it was drafted at, and the
+// Approve to build it leads to: its stories, budget, agents, and baselines.
+// That Approve to build is the one the inbox shows once the parts are
+// approved. Reading it asks for no device code.
+func TestFeatureCard(t *testing.T) {
+	m := approveWorld(t)
+	m.device("rahulnakmol")
+	keys, items := m.listed(m.person)
+	if !slices.Equal(keys, []string{"feature#889"}) {
+		t.Fatalf("inbox --list: %v, want one card for #889", keys)
+	}
+	it := items[0]
+	for i, part := range []string{"intent", "spec", "tech"} {
+		d := m.draftOf(part, 1)
+		if p := it.Parts[i]; p.Kind != InboxBaseline || p.Ask != part || p.Version != 1 || p.Hash != d.Hash || len(it.Parts) != 3 {
+			t.Errorf("part %d: %s v%d at %s, want %s v1 at %s", i, p.Ask, p.Version, p.Hash, part, d.Hash)
+		}
+		if line := fmt.Sprintf("  %s v1 · hash %s · ", ready.Title(part), d.Hash[:12]); !slices.ContainsFunc(it.Lines, func(l string) bool { return strings.HasPrefix(l, line) }) {
+			t.Errorf("the card lacks %q: %q", line, it.Lines)
+		}
+	}
+	b := it.Build
+	if b == nil || b.Kind != InboxApprove || b.Hash == "" {
+		t.Fatalf("the card's Approve to build: %+v", b)
+	}
+	for _, want := range []string{"Stories  3 stories and 1 Bug, each as it is now", "  #21 Story 21 · story · effort S · MS1",
+		"Budget   up to $75 (3 stories × $25, [budget] per_story_usd)", "Agents   up to 4 at once ([build] agents on dev)",
+		"Baselines intent v1, spec v1, technical design v1"} {
+		if !slices.Contains(b.Lines, want) || !slices.Contains(it.Lines, want) {
+			t.Errorf("the Approve to build on the card lacks %q: %q", want, b.Lines)
+		}
+	}
+	if a, o := it.choice(1), it.choice(2); a.Command != featureStart || o.Command != featureApprove || it.recommended() != nil {
+		t.Errorf("the card's choices: %+v", it.choices())
+	}
+	m.approveDrafts("intent", "spec", "tech")
+	if keys, after := m.listed(m.person); !slices.Equal(keys, []string{"approve#889"}) || after[0].Hash != b.Hash || !slices.Equal(after[0].Lines, b.Lines) {
+		t.Errorf("after the parts are approved: %v, the Approve to build card %+v, the Feature card showed %+v", keys, after, b)
+	}
+	if m.codes() != 0 {
+		t.Errorf("reading the card asked for %d device codes", m.codes())
+	}
+}
+
+// Bug #1253 criterion 2: Approve and start on #889's card, after one device
+// code, writes an approval of each part pinned to the hash the card showed
+// and #889's Approve to build in one ledger commit, then its mission start;
+// the session ends with the day it set. The full-screen inbox does the same,
+// and --dry-run plans every step and writes nothing.
+func TestFeatureApproveAndStart(t *testing.T) {
+	m := approveWorld(t)
+	_, items := m.listed(m.person)
+	shown := items[0]
+	before := strings.Count(git(t, m.bare, "log", "--format=%s", "ledger"), "\n")
+	m.device("rahulnakmol")
+	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || strings.Count(errOut, "/login/device") != 1 || !strings.Contains(out, "Approved #889 to build as @rahulnakmol, approval 1.") ||
+		!strings.Contains(out, "\n"+dayIsSet+"\n  #889 · today MS1: #20, #21, #22 · evening review ") || !strings.Contains(out, "inbox: 1 done, 0 skipped, 0 left") {
+		t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+	}
+	for i, part := range []string{"intent", "spec", "tech"} {
+		b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part))
+		was := b
+		was.ApprovedBy, was.ApprovedAt, was.Presence = "", "", ""
+		if !ok || b.ApprovedBy != "rahulnakmol" || b.Presence != "device-flow" || b.Hash != shown.Parts[i].Hash || !reflect.DeepEqual(was, m.draftOf(part, 1)) {
+			t.Errorf("%s-v1.json: written %v: %+v, the card showed %s", part, ok, b, shown.Parts[i].Hash)
+		}
+	}
+	a, p, ok := m.approvalRecords()
+	if !ok || a.By != "rahulnakmol" || len(a.Baselines) != 3 || p.StartedBy != "rahulnakmol" || p.Lock == nil {
+		t.Fatalf("approval %v %+v, plan started by %q", ok, a, p.StartedBy)
+	}
+	// The ledger has the parts and Approve to build in one commit, then the start: newest first.
+	log := strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n")
+	log = log[:len(log)-before]
+	build := slices.Index(log, "specs: 3 baselines and Approve to build of #889, approval 1, by @rahulnakmol, and its mission plan")
+	started := slices.Index(log, "missions: @rahulnakmol started the mission of #889 on cursor")
+	if build < 0 || started < 0 || started >= build || slices.ContainsFunc(log, func(s string) bool { return strings.Contains(s, "baselines of #889, approved") }) {
+		t.Fatalf("the ledger's new commits, newest first: %q", log)
+	}
+	if keys, _ := m.listed(m.person); len(keys) != 0 {
+		t.Errorf("after Approve and start the inbox has %v", keys)
+	}
+
+	t.Run("full screen", func(t *testing.T) {
+		m := approveWorld(t)
+		opts := m.opts
+		opts.TUI = func(tm tea.Model) error {
+			im := tm.(*inboxModel)
+			teaDrive(im, im.Init())
+			teaKeys(im, "1", "enter", "enter", "q") // not a recommendation: the second Enter confirms it
+			return nil
+		}
+		m.device("rahulnakmol")
+		code, out, errOut := runIn(t, m.person, opts, "", "inbox", "--repo", "o/r")
+		a, p, ok := m.approvalRecords()
+		if code != 0 || m.codes() != 1 || !ok || a.By != "rahulnakmol" || p.StartedBy != "rahulnakmol" || !strings.Contains(out, "\n"+dayIsSet+"\n  #889 · today MS1: ") {
+			t.Fatalf("full-screen inbox: exit %d, device codes %d, approved %v, started by %q:\n%s%s", code, m.codes(), ok, p.StartedBy, out, errOut)
+		}
+		for _, part := range []string{"intent", "spec", "tech"} {
+			if b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part)); !ok || b.ApprovedBy != "rahulnakmol" {
+				t.Errorf("%s-v1.json: written %v: %+v", part, ok, b)
+			}
+		}
+	})
+	t.Run("dry run", func(t *testing.T) {
+		m := approveWorld(t)
+		n := m.commits()
+		m.device("rahulnakmol")
+		m.g.Reset()
+		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--dry-run", "--repo", "o/r")
+		if code != 0 || !strings.Contains(out, "--dry-run: the mission start of #889 is planned, not run") || strings.Contains(out, "✗") ||
+			m.commits() != n || slices.ContainsFunc(m.g.Writes(), func(w fake.Request) bool { return !strings.HasPrefix(w.Path, "/login/") }) {
+			t.Fatalf("inbox --dry-run 1 y: exit %d, %s commits (was %s), writes %v:\n%s%s", code, m.commits(), n, m.g.Writes(), out, errOut)
+		}
+	})
+}
+
+// Bug #1253 criterion 4: a read that fails when the Feature card comes back
+// after an opened part ends the inbox with the error, never a silent exit.
+func TestFeatureOpenPartRefreshFails(t *testing.T) {
+	m := baselineWorld(t, nil)
+	lists := 0
+	m.edit(func() {
+		m.g.Hook = func(method, p string) {
+			if method == "GET" && p == "/repos/o/r/issues" {
+				if lists++; lists >= 2 { // the read again after the part's card
+					m.g.Fail, m.g.FailAfter = "GET /repos/o/r/issues", 0
+				}
+			}
+		}
+	})
+	code, out, errOut := runIn(t, m.person, m.opts, "32s", "inbox", "--plain", "--repo", "o/r")
+	if code == 0 || lists < 2 || !strings.Contains(errOut, "injected failure") {
+		t.Fatalf("inbox 3 2, the refresh fails: exit %d, %d issue lists:\n%s%s", code, lists, out, errOut)
+	}
+}
+
+// With no Approve to build on its card (#889 has no Initiative parent here),
+// the Feature card approves its parts alone: all three in one ledger commit,
+// at the hashes shown, under one device code. It offers no start, and a start
+// asked for anyway writes nothing.
+func TestFeatureApproveWithoutBuild(t *testing.T) {
+	m := baselineWorld(t, nil)
+	_, items := m.listed(m.person)
+	if len(items) != 1 || items[0].Build == nil || items[0].Build.Hash != "" || items[0].choice(1).Command != featureApprove ||
+		slices.ContainsFunc(items[0].Options, func(a InboxAction) bool { return a.Command == featureStart }) {
+		t.Fatalf("the card with no Approve to build: %+v", items)
+	}
+	m.device("rahulnakmol")
+	n := m.commits()
+	e, c := m.client(m.person)
+	l, err := e.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []InboxAction{{N: 1, Label: "approve and start", Command: featureStart}, *items[0].choice(2)} { // a start, and opening a part, approve nothing
+		if err := e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], a); CodeOf(err) != ExitUsage || m.codes() != 0 || m.commits() != n {
+			t.Fatalf("%s: %v, device codes %d, %s commits (was %s)", a.Label, err, m.codes(), m.commits(), n)
+		}
+	}
+	// The person declines the device code: nothing is written.
+	m.edit(func() {
+		m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "deny"}
+	})
+	if err := e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1)); err == nil || m.codes() != 1 || m.commits() != n {
+		t.Fatalf("a declined code: %v, device codes %d, %s commits (was %s)", err, m.codes(), m.commits(), n)
+	}
+	m.device("rahulnakmol")
+	before := len(strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n"))
+	code, out, errOut := runIn(t, m.person, m.opts, "1ys", "inbox", "--plain", "--repo", "o/r")
+	if code != 0 || m.codes() != 1 || !strings.Contains(out, "] Approve to build #889: ") {
+		t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+	}
+	for _, part := range []string{"intent", "spec", "tech"} {
+		b, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part))
+		was := b
+		was.ApprovedBy, was.ApprovedAt, was.Presence = "", "", ""
+		if !ok || b.ApprovedBy != "rahulnakmol" || !reflect.DeepEqual(was, m.draftOf(part, 1)) {
+			t.Errorf("%s-v1.json: written %v: %+v", part, ok, b)
+		}
+	}
+	log := strings.Split(strings.TrimSpace(git(t, m.bare, "log", "--format=%s", "ledger")), "\n")
+	if log = log[:len(log)-before]; !slices.Equal(log, []string{"specs: 3 baselines of #889, approved by @rahulnakmol"}) {
+		t.Errorf("the ledger's new commits: %q", log)
+	}
+	if _, _, ok := m.approvalRecords(); ok {
+		t.Error("#889 was approved to build")
+	}
+}
+
+// The full-screen inbox reads GitHub again after a part opened from its
+// Feature card is approved, so the Feature card it comes from shows it no
+// more; and a part done in the session that an agent drafts again is offered
+// again, after an Enter that names the earlier write.
+func TestFeaturePartInTheFullScreenInbox(t *testing.T) {
+	clock := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	part := InboxItem{Kind: InboxBaseline, Number: 889, Ask: "spec", Version: 1, Hash: "h1", Title: "Spec v1", Seat: verbs.ProductStrategist,
+		Options: []InboxAction{{N: 1, Label: "approve spec v1", Command: "aayu ready 889 --part spec", Recommended: true}}}
+	feature := func(p InboxItem) InboxItem {
+		return InboxItem{Kind: InboxFeature, Number: 889, Title: "Agents pull the next story", Seat: verbs.ProductStrategist, Parts: []InboxItem{p},
+			Options: []InboxAction{{N: 1, Label: "approve spec", Command: featureApprove}, {N: 2, Label: "open the spec", Command: inboxPart + "spec"}}}
+	}
+	m := newInboxModel("o/r", "o", "auto", false)
+	m.now = func() time.Time { return clock }
+	ran, gathers := 0, 0
+	var now []InboxItem // what GitHub lists now
+	m.act = func(it InboxItem, a InboxAction, _ *inboxWork) (InboxItem, string, error) { ran++; return it, "", nil }
+	m.gather = func() inboxGatheredMsg { gathers++; return inboxGatheredMsg{items: now, changed: true, at: m.now()} }
+	m.Update(inboxGatheredMsg{items: []InboxItem{feature(part)}, changed: true, at: clock.Add(-time.Hour)})
+	m.cur = slices.Index(m.rows, 0)
+	teaKeys(m, "2", "enter") // open the spec: its card is under the Feature card
+	if i := m.item(); i < 0 || m.items[i].key() != part.key() {
+		t.Fatalf("opening the spec: the cursor is on %+v", m.items)
+	}
+	now = nil // approved: nothing of #889 waits
+	if teaKeys(m, "enter"); ran != 1 || gathers != 1 || slices.ContainsFunc(m.items, func(it InboxItem) bool { return it.Kind == InboxFeature && m.state[it.key()] != "gone" }) {
+		t.Fatalf("approving the spec: ran %d, read again %d times, items %+v, states %v", ran, gathers, m.items, m.state)
+	}
+	again := part // an agent drafts the spec again: v2 waits on the Feature card
+	again.Version, again.Hash, again.Title = 2, "h2", "Spec v2"
+	clock = clock.Add(time.Minute)
+	m.Update(inboxGatheredMsg{items: []InboxItem{feature(again)}, changed: true, at: clock})
+	m.cur = slices.IndexFunc(m.rows, func(i int) bool { return i >= 0 && m.items[i].key() == part.key() })
+	if teaKeys(m, "enter"); ran != 1 || m.state[part.key()] != "relisted" || !strings.Contains(m.status, "You already did this") {
+		t.Fatalf("the spec drafted again, first Enter: ran %d, state %q, status %q", ran, m.state[part.key()], m.status)
+	}
+	if teaKeys(m, "enter"); ran != 2 {
+		t.Errorf("the spec drafted again, second Enter: ran %d", ran)
+	}
+}
+
+// A step that fails after the parts and Approve to build of #889 are on the
+// ledger says they are there, never that nothing changed.
+func TestFeatureApproveFailsAfterTheCommit(t *testing.T) {
+	m := approveWorld(t)
+	m.device("rahulnakmol")
+	m.edit(func() { m.g.Fail = "POST /repos/o/r/issues/889/comments" })
+	code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+	if _, _, ok := m.approvalRecords(); code != 0 || !ok || !strings.Contains(out, "Already on GitHub: it approved 3 parts and Approve to build of #889 on the ledger") || strings.Contains(out, "Nothing was changed on GitHub") {
+		t.Fatalf("inbox 1 y, a comment fails: exit %d, approved %v:\n%s%s", code, ok, out, errOut)
+	}
+}
+
+// Bug #1253 criterion 3: a part's pins move after the card is shown, and the
+// person chooses Approve and start: nothing is written for #889, no part and
+// no approval, and the card says which part changed.
+func TestFeatureApprovePinMoved(t *testing.T) {
+	const said = "The spec of #889 changed after the draft. An agent drafts it again."
+	retitle := func(g *fake.GitHub) { g.Issues[21].Title = "Story 21, renamed" } // a pinned field of the spec
+	nothing := func(t *testing.T, m *missionWorld, n string) {
+		t.Helper()
+		for _, part := range []string{"intent", "spec", "tech"} {
+			if _, ok := m.record(fmt.Sprintf("specs/889/baselines/%s-v1.json", part)); ok {
+				t.Errorf("%s v1 was approved", part)
+			}
+		}
+		if _, _, ok := m.approvalRecords(); ok || m.commits() != n {
+			t.Errorf("approved %v; %s ledger commits, was %s", ok, m.commits(), n)
+		}
+	}
+	t.Run("after the card was read", func(t *testing.T) {
+		m := approveWorld(t)
+		n := m.commits()
+		m.device("rahulnakmol")
+		lists := 0
+		m.edit(func() {
+			m.g.Hook = func(method, p string) {
+				if method == "GET" && p == "/repos/o/r/issues" {
+					if lists++; lists == 2 { // the read again before the write
+						retitle(m.g)
+					}
+				}
+			}
+		})
+		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+		fresh := out[strings.Index(out, said+" Nothing was written; here it is as it is now.")+1:]
+		if code != 0 || lists < 2 || m.codes() != 0 || !strings.Contains(out, "\n  "+said+" Nothing was written; here it is as it is now.\n") ||
+			!strings.Contains(fresh, "  Spec v1 · hash ") || !strings.Contains(fresh, "\n      "+said+"\n") || strings.Contains(fresh, "Approve and start") {
+			t.Fatalf("inbox 1 y: exit %d, %d issue lists, device codes %d:\n%s%s", code, lists, m.codes(), out, errOut)
+		}
+		nothing(t, m, n)
+	})
+	t.Run("while the code waited", func(t *testing.T) {
+		m := approveWorld(t)
+		n := m.commits()
+		m.edit(func() {
+			m.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "rahulnakmol", Outcome: "approve", OnPoll: func(int) { retitle(m.g) }}
+		})
+		code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+		if code != 0 || m.codes() != 1 || !strings.Contains(out, "✗ "+said+"\n  Nothing was changed on GitHub.\n") {
+			t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+		}
+		nothing(t, m, n)
+	})
+	// The Approve to build run that writes the parts refuses, itself, a moved pin, a part drafted again, and its own check.
+	for name, c := range map[string]struct {
+		move  func(m *missionWorld, drafts map[string]*ready.Baseline)
+		check func(MissionPlan) error
+		want  string
+	}{
+		"in the run that writes the parts": {move: func(m *missionWorld, _ map[string]*ready.Baseline) { m.edit(func() { retitle(m.g) }) },
+			want: said + " Nothing was written for #889."},
+		"a part drafted again before that run": {move: func(_ *missionWorld, drafts map[string]*ready.Baseline) { drafts["spec"].Version = 2 },
+			want: "Spec v2 of #889 was drafted again after you read it. Nothing was written for #889."},
+		"that run's own check": {check: func(MissionPlan) error { return Errorf(ExitBlocked, "The plan is not the card's.") },
+			want: "The plan is not the card's."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			drafts, parts := map[string]*ready.Baseline{}, map[string][]byte{}
+			for _, part := range []string{"intent", "spec", "tech"} {
+				d := m.draftOf(part, 1)
+				drafts[part], parts[ready.BaselinePath(889, part, 1, false)] = &d, []byte("{}")
+			}
+			if c.move != nil {
+				c.move(m, drafts)
+			}
+			n := m.commits()
+			m.device("rahulnakmol")
+			e, cl := m.client(m.person)
+			_, tok, err := e.HumanGitHub(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			w, err := e.Ledger(t.Context(), tok, "human", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &approveRun{e: e, c: cl, w: w, r: &ready.Ready{Repo: "o/r", TechnicalOwner: e.technicalOwner(), GH: cl}, n: 889, drafts: drafts, parts: parts, check: c.check}
+			if err := a.approve(t.Context()); CodeOf(err) != ExitBlocked || fmt.Sprint(err) != c.want {
+				t.Fatalf("approve: %v", err)
+			}
+			nothing(t, m, n)
+		})
+	}
+	t.Run("its agents moved", func(t *testing.T) { // [build] agents on dev 4 → 20: the Approve to build is not the card's
+		m := approveWorld(t)
+		_, items := m.listed(m.person)
+		commitOnDev(m.g, ".aayudha/config.toml", "[build]\nagents = 20\n")
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		l, err := e.Config()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+		if want := "The Approve to build of #889 changed while you read it: its budget, agents, or milestones. Nothing was written for #889."; CodeOf(err) != ExitBlocked || fmt.Sprint(err) != want || m.codes() != 0 {
+			t.Fatalf("approve and start: %v, device codes %d", err, m.codes())
+		}
+		nothing(t, m, n)
+	})
+	// The start cannot run here: nothing is approved either. With no tool it says so before the code;
+	// an estimate over [mission] max_hours needs a reason, which only the Mission start card takes.
+	for name, c := range map[string]struct {
+		set   func(m *missionWorld)
+		codes int
+		want  string
+	}{
+		"no tool for the repository": {func(m *missionWorld) {
+			m.opts.RepoTool = func(context.Context, string) (string, error) { return "", nil }
+		}, 0,
+			"The mission of #889 cannot start here: no entry in [hosts] repos names o/r"},
+		"an estimate over max_hours": {func(m *missionWorld) { m.hours(map[string]float64{"S": 60}, map[string]float64{"S": 60}) }, 1,
+			"The mission of #889 cannot start here: mission 1's estimate is 60 working hours, over 48 h, so it starts only from its Mission start card with a reason. Nothing was written for #889"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			c.set(m)
+			n := m.commits()
+			m.device("rahulnakmol")
+			code, out, errOut := runIn(t, m.person, m.opts, "1y", "inbox", "--plain", "--repo", "o/r")
+			if code != 0 || m.codes() != c.codes || !strings.Contains(out, c.want) {
+				t.Fatalf("inbox 1 y: exit %d, device codes %d:\n%s%s", code, m.codes(), out, errOut)
+			}
+			nothing(t, m, n)
+		})
+	}
+	// Another person's write after the card was read: a part approved on its own, or a Bug added to #889.
+	for name, c := range map[string]struct {
+		move func(m *missionWorld)
+		want string
+	}{
+		"a part approved on its own": {func(m *missionWorld) { m.approveDrafts("spec") },
+			"Spec v1 of #889 no longer waits: it was approved or drafted again after you read it. Nothing was written for #889."},
+		"a Bug added": {func(m *missionWorld) { m.issue(31, "Bug 31", "bug", 889, "") },
+			"The stories of #889 changed while you read it. Nothing was written for #889."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := approveWorld(t)
+			_, items := m.listed(m.person)
+			c.move(m)
+			n := m.commits()
+			m.device("rahulnakmol")
+			e, cl := m.client(m.person)
+			l, err := e.Config()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = e.inboxAct(t.Context(), &l.Config, cl, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+			if CodeOf(err) != ExitBlocked || fmt.Sprint(err) != c.want || m.codes() != 0 || m.commits() != n {
+				t.Fatalf("approve and start: %v, device codes %d, %s commits (was %s)", err, m.codes(), m.commits(), n)
+			}
+			if _, _, ok := m.approvalRecords(); ok {
+				t.Fatal("#889 was approved to build")
+			}
+		})
+	}
+	t.Run("drafted again at the same hash", func(t *testing.T) { // the spec is approved at v1 and drafted again as v2 with v1's hash
+		m := approveWorld(t)
+		_, items := m.listed(m.person)
+		m.approveDrafts("spec")
+		was, _ := m.record(ready.BaselinePath(889, "spec", 1, false))
+		v2 := m.draftOf("spec", 1)
+		v2.Version = 2
+		data, _ := json.Marshal(v2)
+		putLedger(t, m.bare, ready.BaselinePath(889, "spec", 2, true), string(data))
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		l, err := e.Config()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+		if want := "Spec v1 of #889 was drafted again after you read it. Nothing was written for #889."; CodeOf(err) != ExitBlocked || fmt.Sprint(err) != want || m.codes() != 0 {
+			t.Fatalf("approve and start: %v, device codes %d", err, m.codes())
+		}
+		if now, _ := m.record(ready.BaselinePath(889, "spec", 1, false)); !reflect.DeepEqual(now, was) || m.commits() != n {
+			t.Fatalf("spec-v1.json is now %+v, was %+v; %s commits, was %s", now, was, m.commits(), n)
+		}
+		if _, _, ok := m.approvalRecords(); ok {
+			t.Fatal("#889 was approved to build")
+		}
+	})
+	t.Run("the tech design moved", func(t *testing.T) {
+		m := approveWorld(t)
+		_, items := m.listed(m.person)
+		putLedger(t, m.bare, "specs/889/design.json", `{"feature": 889, "layers": ["L02", "L04"], "story_order": [20, 21, 22]}`)
+		n := m.commits()
+		m.device("rahulnakmol")
+		e, c := m.client(m.person)
+		l, err := e.Config()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = e.inboxAct(t.Context(), &l.Config, c, "o/r", "rahulnakmol", items[0], *items[0].choice(1))
+		if want := "The tech of #889 changed after the draft. An agent drafts it again. Nothing was written for #889."; CodeOf(err) != ExitBlocked || fmt.Sprint(err) != want || m.codes() != 0 {
+			t.Fatalf("approve and start: %v, device codes %d", err, m.codes())
+		}
+		nothing(t, m, n)
+	})
 }
 
 // Criterion 5: the spec card in `aayu inbox --plain` has one line per story
@@ -405,8 +899,8 @@ func TestBaselineAgentLane(t *testing.T) {
 func TestBaselineSpecCard(t *testing.T) {
 	spec := func(t *testing.T, edit func(g *fake.GitHub)) string {
 		m := baselineWorld(t, edit)
-		code, out, errOut := runIn(t, m.person, m.opts, "s", "inbox", "--plain", "--repo", "o/r")
-		i := strings.Index(out, "[2/3] Baseline #889: Spec v1")
+		code, out, errOut := runIn(t, m.person, m.opts, "3s", "inbox", "--plain", "--repo", "o/r")
+		i := strings.Index(out, "] Baseline #889: Spec v1")
 		if code != 0 || i < 0 {
 			t.Fatalf("inbox: exit %d:\n%s%s", code, out, errOut)
 		}
@@ -461,7 +955,7 @@ func TestBaselineSpecCard(t *testing.T) {
 func TestBaselineChangesSinceV1(t *testing.T) {
 	m := baselineWorld(t, nil)
 	m.device("rahulnakmol")
-	if code, out, errOut := runIn(t, m.person, m.opts, "ssa", "inbox", "--plain", "--repo", "o/r"); code != 0 {
+	if code, out, errOut := runIn(t, m.person, m.opts, "4a", "inbox", "--plain", "--repo", "o/r"); code != 0 {
 		t.Fatalf("approve tech v1: exit %d:\n%s%s", code, out, errOut)
 	}
 	if _, ok := m.record("specs/889/baselines/tech-v1.json"); !ok {
@@ -474,8 +968,15 @@ func TestBaselineChangesSinceV1(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.draftPart("tech", changes)
-	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--plain", "--repo", "o/r")
-	i := strings.Index(out, "[3/3] Baseline #889: Tech v2: Agents pull the next story\n")
+	code, out, errOut := runIn(t, m.person, m.opts, "4ss", "inbox", "--plain", "--repo", "o/r")
+	// The Feature card says each change too, with its why and need, before any choice (Bug #1253).
+	if want := "  Tech v2 · hash " + m.draftOf("tech", 2).Hash[:12] + " · 2 of 2 checks hold\n" +
+		"      Changes since v1:\n        specs/889/design.json: The design adds the L04 test layer.\n" +
+		"          Why: Each story's checks need a home in the test layer.\n          Need: A person sees each story proven before it merges.\n"; !strings.Contains(out, want) ||
+		strings.Index(out, want) > strings.Index(out, "  1. Approve ") {
+		t.Errorf("the Feature card lacks %q before its choices:\n%s", want, out)
+	}
+	i := strings.Index(out, "] Baseline #889: Tech v2: Agents pull the next story\n")
 	want := "  Changes since v1:\n" +
 		"    specs/889/design.json: The design adds the L04 test layer.\n" +
 		"      Why: Each story's checks need a home in the test layer.\n" +

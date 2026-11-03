@@ -102,6 +102,16 @@ func (w *inboxWork) answered(req *http.Request, resp *http.Response, err error) 
 	}
 }
 
+// record records what a step that is not a GitHub request wrote, such as
+// a ledger commit, so a later step that fails says it landed.
+func (w *inboxWork) record(wrote string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.key != "" && !slices.Contains(w.wrote, wrote) {
+		w.wrote = append(w.wrote, wrote)
+	}
+}
+
 // inboxWorkKey carries a write's work in the context of its requests, so
 // that writes running at once each hear only their own.
 type inboxWorkKey struct{}
