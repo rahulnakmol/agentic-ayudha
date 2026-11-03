@@ -30,7 +30,8 @@ import (
 // merge with an accepted rung, and the PR touches nothing in the narrow set
 // ([autonomy] always_person): who may approve or bypass, the gate itself, and
 // releases and secrets. The streak, the never layers and the plan review stop
-// blocking it; they are left to the sampled audit after merge.
+// blocking it; the audit after merge looks at every such merge, never a
+// sample of them (Decision #1255).
 
 // ProofPass records what a merge on proof rested on.
 type ProofPass struct {

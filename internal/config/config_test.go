@@ -428,8 +428,9 @@ func TestLoadRepoTOML(t *testing.T) {
 }
 
 // TestRepositoryMergesOnProof keeps Decision #593 (option 1, accepted 2026-10-18) for this repository: ship merges
-// into dev on proof, rung C counts until rung B is live, and the narrow set of the Decision always needs a person.
-// The built-in defaults leave proof off, so a repository opts in.
+// into dev on proof, and rung C counts. Decision #1255 (option 2, accepted 2026-11-02) frees the gate's own code,
+// releases, and dependencies: only the policy keys stay in the narrow set. The built-in defaults leave proof off,
+// so a repository opts in.
 func TestRepositoryMergesOnProof(t *testing.T) {
 	def, err := Load(Sources{})
 	if err != nil {
@@ -440,14 +441,9 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := l.Config.Autonomy
-	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
-		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml",
-		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
-		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh", "go.mod", "go.sum",
+	narrow := []string{".github/CODEOWNERS",
 		// The config's other files load into the same layers, so they can change the policy too.
-		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json",
-		// The build-ready loop's definition is the standing ask build --next acts on.
-		"loops/build-ready.toml"}
+		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
 	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"}) {
 		t.Fatalf("default narrow set: %v", def.Config.Autonomy.AlwaysPerson)
 	}

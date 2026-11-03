@@ -62,9 +62,13 @@ paid_effort = "high"
 per_pr_inspect_max = 15.0
 
 # Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rungs A, B, and C count, as the default now
-# says (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"] this should be default"). The narrow set always needs a person per PR, because a
-# change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
-# A workflow that holds a credential (a secret, the token, an environment, a write permission) is in it too, by rule.
+# says (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"] this should be default").
+# Decision #1255 (option 2, accepted 2026-11-02): every agent PR into dev merges on proof at any risk and any hour, the
+# gate's own code, releases, and dependencies included; each such merge gets an audit card in `aayu inbox`. Only the
+# policy keys need a person per PR: who may approve or bypass (CODEOWNERS, [autonomy] approver), and what merges
+# without a person (always_person_sections in the always_person_config files, and the config's other files, which
+# load into the same layers). A workflow that holds a credential (a secret, the token, an environment, a write
+# permission) needs a person too, by rule.
 [autonomy]
 # The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
 # account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
@@ -73,30 +77,11 @@ approver = "rahulnakmol"
 proof = true
 proof_rungs = ["A", "B", "C"]
 always_person = [
+  # CODEOWNERS says who must approve a protected path; protected-paths, the only check on a PR that does not merge
+  # through ship, reads it.
   ".github/CODEOWNERS",
-  "internal/cli/ship.go",
-  "internal/cli/shippass.go",
-  "internal/cli/shipproof.go",
-  "internal/cli/presence.go",
-  "internal/identity/",
-  "internal/autonomy/",
-  "internal/config/",
-  ".github/workflows/aayudha-merge-gate.yml",
-  ".github/workflows/protected-paths*.yml",
-  ".github/workflows/release.yml",
-  ".github/workflows/aayudha-approve.yml",
-  ".github/workflows/aayudha-token.yml",
-  ".goreleaser.yaml",
-  "install.sh",
-  # go.mod and go.sum pin the modules the code above builds with: config.Load parses with
-  # github.com/knadh/koanf/v2 (go.mod, internal/config/load.go). So a dependency change needs a
-  # person too (@rahulnakmol, 2026-10-18; TestShipOnProof covers it).
-  "go.mod",
-  "go.sum",
   ".aayudha/config.json",
   ".aayudha/config.local.toml",
   ".aayudha/config.local.json",
-  # The build-ready loop's definition is a person's standing ask to build Ready work (aayu build --next).
-  "loops/build-ready.toml",
 ]
 always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]

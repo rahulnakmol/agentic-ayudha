@@ -1,0 +1,21 @@
+# Which tests prove Story #1281's Completion Goal (Decision #1255, option 2).
+
+[[criterion]]
+id = 1 # .aayudha/config.toml: [autonomy] always_person lists no path the Decision frees; always_person_config still lists .aayudha/config.toml and internal/config/defaults.toml
+tests = ["internal/config:TestRepositoryMergesOnProof"]
+
+[[criterion]]
+id = 2 # ship of a proven PR that changes internal/cli/ship.go, checks green, inspect at merge on rung A: merges on proof, no Ready to ship
+tests = ["internal/cli:TestShipFreedPathsOnProof"]
+
+[[criterion]]
+id = 3 # ship of a proven PR that changes .aayudha/config.toml, internal/config/defaults.toml, or a workflow that reads a secret or names an environment: Ready to ship, waits for a person
+tests = ["internal/cli:TestShipFreedPathsOnProof", "internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 4 # a PR that changed a freed path merged on proof: aayu inbox shows its audit card, every time
+tests = ["internal/cli:TestShipFreedPathsOnProof", "internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 5 # a proven PR on rung C only: ship merges only when [autonomy] proof_rungs lists C
+tests = ["internal/cli:TestShipFreedPathsOnProof", "internal/cli:TestShipOnProof"]

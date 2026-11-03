@@ -97,8 +97,8 @@ run is a paid agent turn, 24 a day. On the hour, the cron is one UTC cron in eve
 Cursor gets one trigger and no run twice an hour. A Kanha reads its events from the plan's `events_cursor`, not a
 fixed window, so a late wake misses none.
 
-The loop's definition in the repository is the person's standing ask. The file is in the narrow set
-(`[autonomy] always_person`), so only a person adds or changes it. To undo the tick, revert the change, then run
+The loop's definition in the repository is the person's standing ask. The file is in the default narrow set
+(`[autonomy] always_person`), so only a person adds or changes it, unless the repository takes it out of that list. To undo the tick, revert the change, then run
 `aayu install --loops --apply` so each tool's installed schedule goes back. `aayu build --next` stays for a person who
 runs the old pick by hand; it still runs only where `loops/build-ready.toml` exists.
 
