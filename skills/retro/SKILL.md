@@ -208,6 +208,12 @@ Hold every sentence to what the record shows:
   change names the layer, type, floor, or code it is about, so it carries its own citation in the same sentence (the
   source of the gap it closes: "… the layer of every type a criterion needs (`internal/ledger/tombstone.go:12-16`,
   `LAYERS.md`)"); a "Why" line under it does not cite it.
+- The record gives no "today", so a retro has no "now" to compare a date with. Never state today's date or the
+  current day or week. Never say that a date in the record is past, overdue, missed, upcoming, near, or still ahead,
+  and never guess whether a dated event has happened yet, by tense, by an "if" ("if the next report does not yet
+  exist"), or by a question. Never ask to set, move, or confirm a date. Name the record's check date as the record
+  gives it ("the next retro report is due on", then the date the record gives), and say nothing about where that
+  date falls.
 - When a check reports an uncited claim, add the citation to that very sentence, or cut the sentence; rewording it
   does not fix the finding.
 - Say what changes and who owns it; do not describe aayu's own mechanics (how Feedback is accepted, which command
@@ -227,5 +233,7 @@ Before you reply, check the draft against the record, one item at a time: each n
 to the extra work?); each "so" and "suggests" (which cited lines lead a reader to it?); each "would have", "could
 have", and "will" about an effect (which record states it?); each label and table cell (which source fills it?); each
 sentence that sums up, such as the opening, a summary, what went well, or "only", "both", or "all" (do its cited lines
-cover all of it?); and each open question (does it assume anything the record does not show?). Cut each item that
-fails, or rewrite it as what the record shows.
+cover all of it?); each open question (does it assume anything the record does not show?); and each date and each
+claim of time, such as "today", "past", "overdue", "not yet", "if … does not exist", "set a new date", an order of
+events, a duration, or the date of an action (does the record give that date, that order, and that link, not only the
+same words?). Cut each item that fails, or rewrite it as what the record shows.
