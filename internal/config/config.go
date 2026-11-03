@@ -329,6 +329,9 @@ type Autonomy struct {
 	AlwaysPerson         []string `koanf:"always_person" jsonschema_description:"The narrow set: paths (a trailing / for a directory, else a glob) whose change always needs a person per PR."`
 	AlwaysPersonConfig   []string `koanf:"always_person_config" jsonschema_description:"TOML config files whose always_person_sections need a person when they change."`
 	AlwaysPersonSections []string `koanf:"always_person_sections" jsonschema_description:"Config tables (by first key) that decide who may approve or bypass."`
+	// CrossFamily are paths whose change merges on proof only after a
+	// review by another model family (Decision #1255): never at rung C.
+	CrossFamily []string `koanf:"cross_family" jsonschema_description:"Paths (as always_person) whose change merges on proof only at review rung A or B, never C."`
 }
 
 // AutonomyBudget is [autonomy.budget], the per-story build budget (WP5.5).

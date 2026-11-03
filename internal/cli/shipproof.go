@@ -20,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
@@ -27,10 +28,12 @@ import (
 // Merge on proof (Decision #593): a PR into the integration branch merges
 // with no human pass when every required check is green, the merge gate's
 // pack verifies with its floors holding, inspect's disposition at the head is
-// merge with an accepted rung, and the PR touches nothing in the narrow set
-// ([autonomy] always_person): who may approve or bypass, the gate itself, and
-// releases and secrets. The streak, the never layers and the plan review stop
-// blocking it; they are left to the sampled audit after merge.
+// merge with an accepted rung, and the PR touches nothing in the narrow set:
+// the paths in [autonomy] always_person, the policy sections of an
+// always_person_config file, a workflow that holds a credential, an action's
+// manifest, or a symbolic link. The streak, the never layers and the plan review stop
+// blocking it; the audit after merge looks at every such merge, never a
+// sample of them (Decision #1255).
 
 // ProofPass records what a merge on proof rested on.
 type ProofPass struct {
@@ -381,6 +384,15 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	for _, r := range reviews {
 		rv = append(rv, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
 	}
+	// A path Decision #1255 freed from the narrow set merges on proof only
+	// after a review by another model family, whatever proof_rungs lists.
+	cross := ""
+	for _, p := range changed {
+		if cross = alwaysPerson(a.CrossFamily, p); cross != "" {
+			cross = p + " ([autonomy] cross_family: " + cross + ")"
+			break
+		}
+	}
 	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", policy), Changed: changed,
 		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: cfg.Identity.BotLogins}).Unapproved
 	switch {
@@ -390,6 +402,8 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), false, nil
 	case !slices.Contains(a.ProofRungs, rung):
 		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), false, nil
+	case cross != "" && rung != inspect.RungA && rung != inspect.RungB:
+		return nil, fmt.Sprintf("the review rung at the head is %s, and it touches %s, which merges on proof only after a review by another model family (rung A or B)", rung, cross), false, nil
 	case gate != "" && gate != "success" && gate != "failure":
 		return nil, fmt.Sprintf("required check %s is %s; only its failure for the CODEOWNERS paths a PR touches is accepted", seats.GateCheck, gate), false, nil
 	case gate == "failure" && len(pp.Protected) == 0:

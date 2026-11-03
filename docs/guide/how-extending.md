@@ -152,20 +152,17 @@ Integrations are read-only adapters to outside services, used for baselines, des
 when a pull request touches one without that review.
 
 ```text
-/.github/                @rahulnakmol
-/skills/                 @rahulnakmol
-/ops/                    @rahulnakmol
-/seats/                  @rahulnakmol
-/CONSTRAINTS.md          @rahulnakmol
+/.github/CODEOWNERS      @rahulnakmol
 /internal/config/defaults.toml  @rahulnakmol
 /.aayudha/config.toml    @rahulnakmol
-/.agents/                @rahulnakmol
-/.claude/                @rahulnakmol
+/.aayudha/config.json    @rahulnakmol
+/.aayudha/config.local.toml  @rahulnakmol
+/.aayudha/config.local.json  @rahulnakmol
 ```
 
-*From `.github/CODEOWNERS`.* So a new verb (its `skills/` body), a new floor (`defaults.toml`, `CONSTRAINTS.md`,
-the workflow), and a new host whose files land in `.agents/` or `.claude/` all need a human review. A new
-integration needs one when it touches `.aayudha/config.toml` or a workflow.
+*From `.github/CODEOWNERS`.* Only the policy keys are protected paths. So a new floor
+(`defaults.toml`) and a new integration that touches `.aayudha/config.toml` need a human review. A new verb, a new
+host, and a workflow merge on proof. `aayu ship` still waits for a person on a workflow that holds a credential.
 
 > **Honest status:** this repository runs in solo mode (one human). A protected-path pull request merges only
 > through the founder's recorded admin bypass, after a PR comment starting `Solo-mode bypass:`, and only when every

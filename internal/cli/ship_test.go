@@ -24,6 +24,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
@@ -736,19 +737,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/protected-paths-review.yml"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it touches .github/workflows/protected-paths-review.yml, in the narrow set that always needs a person ([autonomy] always_person: .github/workflows/protected-paths*.yml)")
-	// This repository's own policy: a dependency change alone needs a person,
-	// since it can change the code of everything in the narrow set.
-	ours, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range []string{"go.sum", "go.mod"} {
-		g.Mu.Lock()
-		g.RefFiles[base][".aayudha/config.toml"] = string(ours)
-		g.Pulls[prN].Files = []string{f}
-		g.Mu.Unlock()
-		refused("no merge on proof: it touches " + f + ", in the narrow set that always needs a person ([autonomy] always_person: " + f + ")")
-	}
+	// This repository's own policy is TestShipFreedPathsOnProof's.
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the listing's 3,000 files
@@ -1429,6 +1418,188 @@ func TestShipOnProof(t *testing.T) {
 	}
 }
 
+// Decision #1255 (option 2), Story #1281, under this repository's own
+// .aayudha/config.toml as the base policy: the gate's own code, releases, and
+// dependencies merge on proof with an audit card each time; the policy keys
+// (the policy sections of .aayudha/config.toml, any change to the embedded
+// defaults, CODEOWNERS, the config's other files) and a workflow that holds a
+// credential still post Ready to ship; and
+// rung C counts only while proof_rungs lists it, and never for a freed path.
+func TestShipFreedPathsOnProof(t *testing.T) {
+	ours, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults, err := os.ReadFile(filepath.Join("..", "config", "defaults.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	base := strings.Repeat("b", 40)
+	freed := []string{"internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go", "internal/cli/presence.go",
+		"internal/identity/gate.go", "internal/autonomy/streak.go", "internal/config/load.go", ".goreleaser.yaml", "install.sh",
+		"go.mod", "go.sum", "loops/build-ready.toml",
+		// The review signal runs with no token (permissions: {}), so the credential rule does not hold it.
+		".github/workflows/protected-paths-review.yml"}
+	workflows := []string{"aayudha-merge-gate.yml", "protected-paths.yml", "protected-paths-rerun.yml",
+		"release.yml", "aayudha-approve.yml", "aayudha-token.yml"}
+	g.Mu.Lock()
+	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
+	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
+	logA := "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (reviewed by claude)\n" +
+		"2026-10-17T23:00:00.0000000Z   review: different-family review (A): claude (anthropic), builder openai\n"
+	logC := strings.Replace(logA, "different-family review (A): claude (anthropic)", "same-family review (C): codex (openai)", 1)
+	g.JobLogs = map[int64]string{7701: logC}
+	g.RequiredChecks = []string{"build", "protected-paths"}
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
+		fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "success"})
+	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{}
+	owners, err := os.ReadFile(filepath.Join("..", "..", ".github", "CODEOWNERS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Files = map[string]string{".github/CODEOWNERS": string(owners), ".aayudha/config.toml": string(ours)}
+	g.RefFiles = map[string]map[string]string{base: {".github/CODEOWNERS": string(owners), ".aayudha/config.toml": string(ours),
+		"internal/config/defaults.toml": string(defaults)}, head: {".aayudha/config.toml": string(ours), "internal/config/defaults.toml": string(defaults)}}
+	for _, wf := range append(workflows, "protected-paths-review.yml") {
+		b, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", wf))
+		if err != nil {
+			t.Fatal(err)
+		}
+		g.RefFiles[base][".github/workflows/"+wf], g.RefFiles[head][".github/workflows/"+wf] = string(b), string(b)+"# a comment\n"
+	}
+	g.RefFiles[head][".github/workflows/notify.yml"] = "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.SLACK }}\n"
+	g.RefFiles[head][".github/workflows/deploy.yml"] = "on: push\npermissions: {contents: read}\njobs:\n  x:\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+	g.Mu.Unlock()
+	readyToShip := func() string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		for _, c := range g.Issues[prN].Comments {
+			if strings.HasPrefix(c.Body, ReadyToShipMarker) {
+				return c.Body
+			}
+		}
+		return ""
+	}
+	waits := func(want string, files ...string) {
+		t.Helper()
+		g.Mu.Lock()
+		g.Pulls[prN].Files, g.Issues[prN].Comments = files, nil
+		g.Mu.Unlock()
+		code, out := shipCmd(t, env, opts, prN)
+		g.Mu.Lock()
+		merged := g.Pulls[prN].Merged
+		g.Mu.Unlock()
+		if code != ExitBlocked || merged || !strings.Contains(out, "commented Ready to ship") || !strings.Contains(readyToShip(), want) {
+			t.Fatalf("ship of %v, want Ready to ship for %q: %d merged %t %s\ncomment: %s", files, want, code, merged, out, readyToShip())
+		}
+	}
+	// Criterion 3: the policy keys and a workflow that holds a credential
+	// wait for a person. The embedded defaults are a never layer's (L07):
+	// with no plan review on the ledger, ship asks for that review first and
+	// merges nothing.
+	g.Mu.Lock()
+	g.JobLogs[7701] = logA
+	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `tz = "Europe/London"`, `tz = "Asia/Kolkata"`, 1)
+	g.Pulls[prN].Files = []string{"internal/config/defaults.toml"}
+	g.Mu.Unlock()
+	code, out := shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != ExitBlocked || merged || !strings.Contains(out, "plan-time review is required") ||
+		!strings.Contains(out, "no merge on proof: it touches internal/config/defaults.toml, in the narrow set") {
+		t.Fatalf("ship of a defaults change with no plan review: %d merged %t %s", code, merged, out)
+	}
+	// With the plan review on the ledger, only the human pass stops ship.
+	plan, _ := json.Marshal(PlanRecord{Story: 2, Review: planning.Review{Required: true, Layers: []string{"L04", "L07", "L09"},
+		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Note: "solo mode"}}})
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): plan}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Mu.Lock()
+	g.JobLogs[7701] = logA
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(string(ours), `always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]`, "always_person_config = []", 1)
+	g.Mu.Unlock()
+	waits("it changes [autonomy] in .aayudha/config.toml", ".aayudha/config.toml")
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = string(ours)
+	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `always_person_config = [".aayudha/config.toml"]`, "always_person_config = []", 1)
+	g.Mu.Unlock()
+	waits("it touches internal/config/defaults.toml, in the narrow set", "internal/config/defaults.toml")
+	// Any change to the embedded defaults waits, a section outside the
+	// policy sections too, as it did when internal/config/ was in the list.
+	g.Mu.Lock()
+	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `tz = "Europe/London"`, `tz = "Asia/Kolkata"`, 1)
+	g.Mu.Unlock()
+	waits("it touches internal/config/defaults.toml, in the narrow set", "internal/config/defaults.toml")
+	g.Mu.Lock()
+	g.RefFiles[head]["internal/config/defaults.toml"] = string(defaults)
+	g.Mu.Unlock()
+	for _, f := range []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"} {
+		waits("it touches "+f+", in the narrow set", "internal/cli/ship.go", f)
+	}
+	for _, wf := range append(workflows, "notify.yml", "deploy.yml") {
+		waits("it touches .github/workflows/"+wf+", a workflow that holds a credential", "internal/cli/ship.go", ".github/workflows/"+wf)
+	}
+	// Criterion 5: rung C merges on proof only while proof_rungs lists it.
+	g.Mu.Lock()
+	g.JobLogs[7701] = logC
+	noC := strings.Replace(string(ours), "\nproof_rungs = [\"A\", \"B\", \"C\"]\n", "\nproof_rungs = [\"A\", \"B\"]\n", 1)
+	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = noC, noC, noC
+	g.Mu.Unlock()
+	waits("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)", freed...)
+	// While proof_rungs lists C, a path Decision #1255 freed still needs
+	// rung A or B; any other path merges on proof at C (a dry run here).
+	g.Mu.Lock()
+	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = string(ours), string(ours), string(ours)
+	g.Mu.Unlock()
+	for _, f := range freed {
+		pat := f
+		switch {
+		case strings.HasPrefix(f, ".github/workflows/protected-paths"):
+			pat = ".github/workflows/protected-paths*.yml"
+		case strings.Count(f, "/") > 1 && !strings.HasPrefix(f, "internal/cli/"):
+			pat = f[:strings.Index(f[len("internal/"):], "/")+len("internal/")+1]
+		}
+		waits("no merge on proof: the review rung at the head is C, and it touches "+f+" ([autonomy] cross_family: "+pat+"), which merges on proof only after a review by another model family (rung A or B)", "skills/build/SKILL.md", f)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files, g.Issues[prN].Comments = []string{"skills/build/SKILL.md", "internal/cli/inbox.go"}, nil
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: merge") {
+		t.Fatalf("dry-run ship at rung C of paths outside cross_family: %d %s", code, out)
+	}
+
+	// Criterion 2: at rung A, a PR that changes the gate's own code, a
+	// release file, and the dependencies merges on proof with no Ready to ship.
+	g.Mu.Lock()
+	g.JobLogs[7701] = logA
+	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = string(ours), string(ours), string(ours)
+	g.Pulls[prN].Files, g.Issues[prN].Comments = freed, nil
+	g.Mu.Unlock()
+	code, out = shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged = g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != 0 || !merged || !strings.Contains(out, "human pass: proof by founder") || readyToShip() != "" {
+		t.Fatalf("ship of the freed paths on proof: %d merged %t %s\nReady to ship: %s", code, merged, out, readyToShip())
+	}
+	// Criterion 4: the merge waits for a person's look, every time: the
+	// label, the ledger entry, and the inbox's audit card.
+	var entry AuditEntry
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+AuditLedgerPath(prN))), &entry)
+	if entry.PR != prN || entry.Head != head || entry.Pass != "proof" || !slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("audit entry %+v, labels %v", entry, g.LabelNames(prN))
+	}
+	var l inboxList
+	if code, out, errOut := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &l) != nil ||
+		!slices.ContainsFunc(l.Items[:l.NeedsYou], func(it InboxItem) bool { return it.Kind == InboxAudit && it.Number == prN }) {
+		t.Fatalf("no audit card for #%d: %d %s %s", prN, code, out, errOut)
+	}
+}
+
 // pullCount is how many pull requests g holds.
 func pullCount(g *fake.GitHub) int {
 	g.Mu.Lock()
@@ -1598,7 +1769,7 @@ func TestShipLoosens(t *testing.T) {
 		return l
 	}
 	base := load(t, config.Sources{RepoTOML: []byte("version = 1\n[identity]\nbot_logins = [\"Agent-Alt\"]\napp_id = 42\napp_slug = \"aayudha-bot\"\n" +
-		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nproof_rungs = [\"A\", \"B\"]\nalways_person = [\"internal/identity/\"]\n" +
+		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nproof_rungs = [\"A\", \"B\"]\nalways_person = [\"internal/identity/\"]\ncross_family = [\"internal/cli/ship.go\"]\n" +
 		"[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"), RepoSource: "base"}).Config
 	for _, c := range []struct {
 		why  string
@@ -1609,10 +1780,10 @@ func TestShipLoosens(t *testing.T) {
 		{"the same values, in another case", []string{"identity.bot_logins=agent-alt", "autonomy.approver=lead", "seats.engineering-manager.human=EM-Lead"}, nil},
 		{"tighter values", []string{"autonomy.streak=40", "autonomy.correction_days=30", "autonomy.never=L04,L07,L09"}, nil},
 		{"every loosening", []string{"identity.bot_logins=", "identity.app_id=0", "identity.app_slug=", "autonomy.approver=agent-alt", "autonomy.never=L04",
-			"autonomy.streak=0", "autonomy.correction_days=1", "autonomy.proof=true", "autonomy.proof_rungs=A,B,C", "autonomy.always_person=", "seats.engineering-manager.mode=solo"},
+			"autonomy.streak=0", "autonomy.correction_days=1", "autonomy.proof=true", "autonomy.proof_rungs=A,B,C", "autonomy.always_person=", "autonomy.cross_family=", "seats.engineering-manager.mode=solo"},
 			[]string{"[identity] bot_logins drops Agent-Alt", "[identity] has no bot identity", `[autonomy] approver is "agent-alt", not "Lead"`, "[autonomy] never drops L07",
 				"[autonomy] streak is 0, below 20", "[autonomy] correction_days is 1, below 14", "[autonomy] proof is on", "[autonomy] proof_rungs adds C",
-				"[autonomy] always_person drops internal/identity/", "[seats.engineering-manager] is not paired with em-lead"}},
+				"[autonomy] always_person drops internal/identity/", "[autonomy] cross_family drops internal/cli/ship.go", "[seats.engineering-manager] is not paired with em-lead"}},
 	} {
 		if got := loosens(load(t, config.Sources{Sets: c.sets}), &base); !slices.Equal(got, c.want) {
 			t.Errorf("%s: loosens = %q, want %q", c.why, got, c.want)

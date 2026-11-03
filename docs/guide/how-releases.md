@@ -245,7 +245,7 @@ Story 70 was referenced by a pull request in the range but had not merged, so it
    its signed checksum (the `release-snapshot` job in `.github/workflows/ci.yml`, on every pull request that
    touches Go or the installer, and on every gate).
 6. Every action is pinned by full commit SHA and every downloaded tool by SHA-256 (convention in every workflow;
-   `.github/` is a protected path in `.github/CODEOWNERS`).
+   `aayu ship` waits for a person on a change to a workflow that holds a credential).
 
 ## Where it lives in the code
 

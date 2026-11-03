@@ -25,10 +25,10 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
-// The sampled audit after merge (Decision #593): a PR ship merged with no
-// person's pass (on proof, or an autonomous footprint) waits, as an audit
-// entry on the ledger and the AuditLabel on its PR, for a
-// person to look at in `aayu inbox`. Their answer is a Sample in
+// The audit after merge (Decision #593): every PR ship merged with no
+// person's pass (on proof, or an autonomous footprint), never a sample of
+// them (Decision #1255), waits, as an audit entry on the ledger and the
+// AuditLabel on its PR, for a person to look at in `aayu inbox`. Their answer is a Sample in
 // SamplesLedgerPath; a correction also labels it aayu:correction, which resets
 // the streak of the layers an agent's PR touched (a person's own PR has no
 // streak: autonomy.Rules.Agent), and opens a PR that reverts it. The look never blocks the merge.

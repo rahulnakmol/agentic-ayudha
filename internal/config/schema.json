@@ -205,6 +205,13 @@
           },
           "type": "array",
           "description": "Config tables (by first key) that decide who may approve or bypass."
+        },
+        "cross_family": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Paths (as always_person) whose change merges on proof only at review rung A or B, never C."
         }
       },
       "additionalProperties": false,

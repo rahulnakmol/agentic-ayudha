@@ -1,6 +1,9 @@
 package identity
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -60,5 +63,31 @@ func TestProtectedPathsGate(t *testing.T) {
 				t.Fatalf("pass = %v, want %v; output:\n%s\nwant it to contain %q", res.Pass, tt.pass, out, tt.want)
 			}
 		})
+	}
+}
+
+// Decision #1255: this repository's CODEOWNERS protects only the policy keys.
+// A change to skills, the host config, the gate's code, or a workflow passes
+// the gate with no review; a change to CODEOWNERS or a config file still
+// needs a CODEOWNER's approval.
+func TestRepositoryCodeownersProtectOnlyPolicyKeys(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", ".github", "CODEOWNERS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := func(p string) GateResult {
+		return ProtectedPathsGate(GateInput{Codeowners: string(b), Changed: []string{p}, Author: "aayudha-agent", HeadSHA: "abc"})
+	}
+	for _, p := range []string{"skills/build/SKILL.md", "seats/founder/persona.toml", "ops/catalog.toml", "CONSTRAINTS.md", ".agents/setup",
+		".claude/settings.json", ".mcp.json", "hosts/amp/aayudha.ts", "internal/cli/ship.go", ".github/workflows/ci.yml", ".github/pull_request_template.md"} {
+		if r := gate(p); !r.Pass {
+			t.Errorf("%s is protected: %v", p, r.Lines)
+		}
+	}
+	for _, p := range []string{".github/CODEOWNERS", ".aayudha/config.toml", "internal/config/defaults.toml", ".aayudha/config.json",
+		".aayudha/config.local.toml", ".aayudha/config.local.json"} {
+		if r := gate(p); r.Pass || !slices.Equal(r.Unapproved, []string{p}) {
+			t.Errorf("%s passes the gate unreviewed: %+v", p, r)
+		}
 	}
 }

@@ -191,7 +191,7 @@ func loosens(run *config.Loaded, base *config.Config) []string {
 		key        string
 		run, based []string
 	}{{"always_person", r.Autonomy.AlwaysPerson, base.Autonomy.AlwaysPerson}, {"always_person_config", r.Autonomy.AlwaysPersonConfig, base.Autonomy.AlwaysPersonConfig},
-		{"always_person_sections", r.Autonomy.AlwaysPersonSections, base.Autonomy.AlwaysPersonSections}} {
+		{"always_person_sections", r.Autonomy.AlwaysPersonSections, base.Autonomy.AlwaysPersonSections}, {"cross_family", r.Autonomy.CrossFamily, base.Autonomy.CrossFamily}} {
 		if m := missing(k.run, k.based); len(m) > 0 && set("autonomy."+k.key) {
 			out = append(out, fmt.Sprintf("[autonomy] %s drops %s", k.key, strings.Join(m, ", ")))
 		}

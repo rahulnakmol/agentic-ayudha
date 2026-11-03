@@ -12,8 +12,8 @@ aayudha: what it protects, who acts, where trust changes, and which control answ
 ## What it protects, and from whom
 
 The assets are the product source on `dev`, `rolling`, and `main`; the proof packs and Ready snapshots on the
-`ledger` branch; the protected paths that define the gates (`.github/`, `skills/`, `ops/`, `seats/`,
-`CONSTRAINTS.md`, the config and defaults); tokens and keys; release artifacts; proof media that may contain
+`ledger` branch; the protected paths that set the policy (`.github/CODEOWNERS`, `.aayudha/config.toml` and its
+other files, and `internal/config/defaults.toml`); tokens and keys; release artifacts; proof media that may contain
 personal data; and the model and CI budget.
 
 Four principals act on them:
@@ -146,7 +146,7 @@ release, pull a bad skill, open an advisory. Report a vulnerability privately as
 From [docs/threat-model.md](../threat-model.md), trimmed to two rows:
 
 ```text
-| T2 | A PR changes the gates, skills, or thresholds that judge it | CODEOWNERS on protected paths; `protected-paths` check runs from the base branch (`pull_request_target`, never checks out PR code); solo-mode merges only through the recorded admin bypass (Appendix B D2) | In place (WP0.1) |
+| T2 | A PR changes the gates, skills, or thresholds that judge it | CODEOWNERS on the policy keys; `protected-paths` check runs from the base branch (`pull_request_target`, never checks out PR code); solo-mode merges only through the recorded admin bypass (Appendix B D2). The gate's code merges on proof with a cross-family review and an audit card, so a merged change to it judges later PRs | In place (WP0.1); accepted risk |
 …
 | T10 | A tampered or substituted release | goreleaser builds in `release.yml` only for an annotated `v*` tag whose commit is on `main` (`verify-tag`, Appendix B D4); `checksums.txt` signed keylessly with cosign; SLSA build provenance; SBOM per archive; `install.sh` verifies the signature against `release.yml@refs/tags/<exact tag>` and then the archive checksum; CI proves it refuses a flipped byte, a rewritten checksum, and a non-release signer | In place (WP0.4); `self-update` replaces the binary only with a signed, newer release and refuses agents (WP1.1) |
 ```
