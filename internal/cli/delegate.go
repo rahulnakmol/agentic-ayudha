@@ -666,10 +666,8 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			// to check it, so it fails as a start. saveDelegation keeps the maybe-started record only when the ledger
 			// holds it (a write or comment error after it landed), so its outcome decides, with no second read.
 			serr := e.saveDelegation(rctx, d)
-			if serr != nil && d.state.Status != dlgMaybe {
-				d.event(now, dlgFailed, "hand-off got no answer, and its maybe-started record was not saved: "+clipText(oneLineErr(serr), 200))
-				report()
-				return nil, true, serr
+			if serr != nil && d.state.Status != dlgMaybe { // the result is the record saveDelegation found on the ledger
+				return nil, true, Wrap(ExitExternal, fmt.Errorf("build #%d --delegate %s: %s gave no answer, and the maybe-started record was not saved, so the start fails: %w", d.story, d.receiver, delegate.Names[d.receiver], serr))
 			}
 			report()
 			if !d.c.DryRun() {

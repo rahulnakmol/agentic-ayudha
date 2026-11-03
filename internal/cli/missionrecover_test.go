@@ -573,6 +573,32 @@ func TestMissionMaybeStartedCommentFails(t *testing.T) {
 	}
 }
 
+// Bug #1264: the ledger refuses the maybe-started record. The start fails, and
+// build reports the record the ledger holds, never a failed status it did not
+// write.
+func TestMissionMaybeStartedRefused(t *testing.T) {
+	w := newCodexWorld(t, 889, 64)
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			refuseLedger(t, w.bare, `git diff --name-only "$old" "$new" | grep -q delegate/64/state.json`)
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut := run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	onLedger := exec.Command("git", "cat-file", "-e", "ledger:"+delegate.LedgerPath(64))
+	onLedger.Dir = w.bare
+	if code != ExitExternal || !strings.Contains(errOut, "the maybe-started record was not saved, so the start fails") || onLedger.Run() == nil ||
+		res.Delegation == nil || res.Delegation.Status != "" || w.claims(889)[64] != 0 { // the ledger holds no record of #64
+		t.Fatalf("a refused maybe start: exit %d, result %+v, claims %v: %s%s", code, res.Delegation, w.claims(889), out, errOut)
+	}
+}
+
 // Bug #1264: the maybe-started record lands, and the write still fails after it (here the actions log refuses
 // its entry). Build keeps the story's slot and reports the maybe-started record the ledger holds.
 func TestMissionMaybeStartedLandedWithError(t *testing.T) {
