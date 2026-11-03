@@ -1,0 +1,23 @@
+# Which tests prove Story #1192's Completion Goal. One journey proves all five:
+# refusals first (5, 2, 3), then the approver's `aayu inspect --approve`, then
+# the narrow-set refusal (4) and the merge on the approval (1).
+
+[[criterion]]
+id = 1 # outside the narrow set, the head approved with inspect --approve, the gate passed: ship merges with no device code, and the ship record names the approval
+tests = ["internal/cli:TestShipOnApproval"]
+
+[[criterion]]
+id = 2 # the approval names an older head: ship refuses as today
+tests = ["internal/cli:TestShipOnApproval"]
+
+[[criterion]]
+id = 3 # the approval is by a login that is not [autonomy] approver: ship refuses as today
+tests = ["internal/cli:TestShipOnApproval"]
+
+[[criterion]]
+id = 4 # the PR touches the narrow set: ship still needs --solo-bypass or the inbox
+tests = ["internal/cli:TestShipOnApproval"]
+
+[[criterion]]
+id = 5 # no approval, rung human: ship refuses as today
+tests = ["internal/cli:TestShipOnApproval"]

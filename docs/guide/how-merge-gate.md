@@ -152,7 +152,7 @@ The review the gate records, and shows as the first line of the inspect comment,
 | Different-family (rung A) | The reviewer's model is of a family outside every family the builder may be | yes | where `proof_rungs` lists A (the default) |
 | Different-family, paid (rung B) | `reviewer = "ci"`, or no installed app can review the head, and the code-review environment names a model of another family | yes | where `proof_rungs` lists B (the default) |
 | Same-family (rung C) | The reviewer is of the builder's family, or the builder's family is unknown | never | where `proof_rungs` lists C (the default); otherwise never layers and protected paths still need a person |
-| Human | A person reviewed | a person's review | a person's review |
+| Human | A person reviewed | a person's review | when the `[autonomy] approver` recorded `aayu inspect <pr> --approve` of the exact head; then that approval is the human pass |
 
 Merge on proof is off until a repository sets `[autonomy] proof = true`. Then, with the default `proof_rungs`, a
 same-family review is enough: that includes a pull request whose builder's family is unknown. Set

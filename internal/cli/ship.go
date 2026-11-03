@@ -55,7 +55,7 @@ var readyHead = regexp.MustCompile(regexp.QuoteMeta(ReadyToShipMarker) + ` head=
 
 // HumanPass records how the human pass was met.
 type HumanPass struct {
-	Kind     string `json:"kind"` // review, autonomous, or solo-bypass
+	Kind     string `json:"kind"` // review, approval, proof, autonomous, or solo-bypass
 	Login    string `json:"login"`
 	ReviewID int64  `json:"review_id,omitempty"`
 	Comment  string `json:"comment_url,omitempty"`
@@ -81,7 +81,8 @@ type ShipRecord struct {
 	// GateFix is the gate_fixes entry of a fix PR (Story #1002): the PR refers
 	// to its Feature, and the entry, not a Ready snapshot, authorises it.
 	GateFix *GateFix `json:"gate_fix,omitempty"`
-	// Proof is what a merge on proof rested on (human pass kind proof).
+	// Proof is what a merge on proof rested on (human pass kind proof, or
+	// approval when it rested on a recorded `aayu inspect --approve`).
 	Proof *ProofPass `json:"proof,omitempty"`
 	// The review ladder's rung of the PR's review at the head (Decision
 	// #469), from the merge gate's own inspect log (autonomy.GateRung): A,
@@ -327,10 +328,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.Proof = proofOK
 		note := fmt.Sprintf("merged on proof (Decision #593): required checks %s green, the pack verified with its floors holding, inspect at merge with review rung %s, and nothing in the narrow set",
 			strings.Join(or2(required, "(none listed)"), ", "), rec.Review)
+		kind, login := "proof", me.Login
+		if ap := proofOK.Approval; ap != nil { // Story #1192: the person's recorded approval of this head is the human pass
+			kind, login = "approval", ap.By
+			note = fmt.Sprintf("@%s approved `%s` with `aayu inspect %d --approve` at %s (%q), recorded on the ledger (`%s`); required checks %s green, the pack verified with its floors holding, and nothing in the narrow set",
+				ap.By, short(head), n, ap.At, ap.Reason, ApprovedPath, strings.Join(or2(required, "(none listed)"), ", "))
+		}
 		if len(proofOK.Protected) > 0 {
 			note += fmt.Sprintf("; CODEOWNERS paths %s merged with no code owner's review", strings.Join(proofOK.Protected, ", "))
 		}
-		rec.HumanPass = HumanPass{Kind: "proof", Login: me.Login, Commit: head, Note: note}
+		rec.HumanPass = HumanPass{Kind: kind, Login: login, Commit: head, Note: note}
 	} else if rec.HumanPass.Kind == "" && proofWhy != "" && pol.Config.Autonomy.Proof {
 		why = append(why, "no merge on proof: "+proofWhy)
 	} else if rec.HumanPass.Kind == "" && proofWhy != "" { // proof off: the narrow set still holds the streak back (#680)
@@ -1086,6 +1093,8 @@ func (e *Env) completeStory(ctx context.Context, c *github.Client, repo string, 
 		fmt.Fprintf(&out, "- Human pass: not needed, autonomous footprint: %s\n", rec.HumanPass.Note)
 	case "proof":
 		fmt.Fprintf(&out, "- Human pass: not needed, %s\n", rec.HumanPass.Note)
+	case "approval":
+		fmt.Fprintf(&out, "- Human pass: %s\n", rec.HumanPass.Note)
 	default:
 		fmt.Fprintf(&out, "- Human pass: none possible; %s merged under a recorded solo-mode bypass (%s): %s\n", rec.HumanPass.Login, rec.HumanPass.Comment, rec.HumanPass.Note)
 	}
