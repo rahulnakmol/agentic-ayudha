@@ -10,10 +10,11 @@
   "task_url": "https://ampcode.com/threads/T-01a19cf8-f8a3-7324-a3ff-40a4d73ae4a7",
   "branch": "story/1248-fix-mission-extend-refuses-before-the-ti",
   "pr": 1249,
-  "status": "pr-open",
+  "status": "merge-ready",
   "brief_sha256": "7db565ebb027f7eed3c1c0b0f84a3df3953bf41e648aecfa2dba2acb6e641255",
   "started_at": "2026-11-02T15:54:31Z",
   "handoffs": 1,
+  "proved": "1. proved: `TestExtendInWindow` at 45.5 h of 48 with a 6 h window. Extend asks for one device code and records `extend`, mission 1, 48 h, the reason, `rahulnakmol`, `device-flow` in the plan's controls. `mission show` gives the limit 96 h, not 93.5 h.\n2. proved: `TestExtendInWindow` at 30 h of 48. Extend exits 4 with no device code and no ledger write. It says `its extend window opens at 42 h, 12 working hours from now: 2026-10-21 18:00 UTC at the earliest`. `TestMissionTimeRefusals` checks the same at 9 h.\n3. proved: `TestMissionExtend` and `TestMissionCardsInInbox` pass unchanged at 48 h and 96 h. Extend gives 96 h, then 144 h, from the command line and from the inbox.\n4. proved: `TestExtendInWindow`, `TestWindowCardNamesTheMissionExtendPicks`, and a terminal capture of `aayu inbox`. At 41.98 h there is no card; at 42 h there is. At 45.5 h the card reads `#889 may extend before its 48 h time limit`. It says `It used 45 of its 48 working hours`, `Runs: #20. Waits: #21 on usage limit. Not started: #25.`, and the extend command. A closed story is not listed. At 30 h, 89 h, and after the extend or `mark it seen` there is no Extend card. At 92 h the card is back with `92 of its 96`.\n5. proved: `TestExtendInWindow` runs extend from an agent lane inside the window. It exits 4 with `refused for an agent lane`, no device code, and no ledger write. `TestMissionExtend` checks the same at the limit.",
   "events": [
     {
       "at": "2026-11-02T15:54:31Z",
@@ -34,6 +35,11 @@
       "at": "2026-11-03T05:57:06Z",
       "status": "pr-open",
       "detail": "delegate.mission-resume"
+    },
+    {
+      "at": "2026-11-03T09:47:01Z",
+      "status": "merge-ready",
+      "detail": "inspect merge on ec32cdc"
     }
   ]
 }
