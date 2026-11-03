@@ -9,10 +9,12 @@
   "task": "T-01a19dc4-fe4e-71f4-a8df-05ed523ae27e",
   "task_url": "https://ampcode.com/threads/T-01a19dc4-fe4e-71f4-a8df-05ed523ae27e",
   "branch": "story/1254-two-person-windows-a-day-outside-them-no",
-  "status": "handed-off",
+  "pr": 1270,
+  "status": "pr-open",
   "brief_sha256": "4f709ddbd52e021a3315b9b44af3e79b386c052b3d7beaf2d26001baadfa4b8f",
   "started_at": "2026-11-02T19:37:43Z",
   "handoffs": 1,
+  "proved": "1. proved. Tests: `internal/cli:TestConfigShowListsPersonWindows`, `internal/config:TestPersonWindows`. Config show lists both windows with their zone. This repository's zone is `Asia/Kolkata`.\n2. proved. Tests: `internal/cli:TestTimeLimitWaitsForAWindow`, `internal/cli:TestTickShowsTheCardsOfALocalKanha`. At 01:01, past 48 h, `mission next` starts #25. No time card is posted, and nothing is sent. In the window, the tick shows the card, also for a local Kanha.\n3. proved. Tests: `internal/cli:TestTimeLimitWaitsForAWindow`, `internal/cli:TestTimeHoldReadsTheNewestCard`. The card is shown at 10:30. Starts go on until 11:29. At 11:30, #28 waits with \"reached max_hours\", and the running stories keep their claims. A card edited by one account after another account's \"seen\" still holds. An edit of the card at 14:00 does not move the hold.\n4. proved. Tests: `internal/cli:TestBudgetWaitsForAWindow`, `internal/cli:TestBudgetCardWithNothingToStart`, `internal/cli:TestPausedTickSendsTheWindowMessage`. At 14:00 past the budget, #25 starts with no card. At 18:30 the card is shown, and its raise covers the 720 USD committed. At 19:30 the next story waits. The breaker pause exits 6 at 14:00 and at 18:45. With one story running and one not Ready, the window still shows the card. That story waits once it is Ready. The paused tick exits 6 and wakes nothing.\n5. proved. Tests: `internal/notify:TestPagesWaitForAWindow`, `internal/notify:TestPagesWaitInTheQueue`, `internal/cli:TestRequestsWaitForAWindow`, `internal/cli:TestWindowMessageFromAnyCheckout`, `internal/cli:TestNotifyEditsReadAgainWhenTheLedgerMoved`, `internal/cli:TestPausedTickSendsTheWindowMessage`, `internal/cli:TestGateAskWaitsForAWindow`, `internal/cli:TestInboxShipsReadyPRs`, `internal/cli:TestInspectReviewTools`, `internal/cli:TestOutboxWaitsWhenTheWindowEnds`, `internal/cli:TestEscalationWaitsForAWindow`, `internal/cli:TestOutboxDrainsWithNoWindows`, `internal/cli:TestWindowClaimHasAnOwner`. Outside a window, no page, b\n… (abridged)",
   "events": [
     {
       "at": "2026-11-02T19:37:43Z",
@@ -28,6 +30,11 @@
       "at": "2026-11-03T05:57:06Z",
       "status": "handed-off",
       "detail": "delegate.mission-resume"
+    },
+    {
+      "at": "2026-11-03T09:47:25Z",
+      "status": "pr-open",
+      "detail": "PR #1270"
     }
   ]
 }
