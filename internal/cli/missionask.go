@@ -181,6 +181,11 @@ func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int,
 		}
 		return e.enqueueHere(ctx, queued{Key: fmt.Sprintf("ask:%s#%d:%s", repo, f, a.ID), Ask: &queuedAsk{Feature: f, Ask: a}})
 	}
+	return e.postAskNow(ctx, c, repo, f, a)
+}
+
+// postAskNow posts ask on Feature f now, unless an open ask of its ID says the same.
+func (e *Env) postAskNow(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
 	owner, name, _ := github.SplitRepo(repo)
 	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))
 	if err != nil {

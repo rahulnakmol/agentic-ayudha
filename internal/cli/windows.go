@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
+
+	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -21,10 +24,10 @@ import (
 // for the next window. A request for action made outside a window (a page, a
 // comment approval request, a mission's ask, a Ready to ship comment) is not
 // sent: it waits in the ledger's outbox, which every checkout and runner
-// reads. In the window, the first `aayu mission tick` or `aayu mission next`
-// posts the comments that waited and shows the cards that came due, then
-// sends one message that lists every card of the inbox and every page that
-// waited. The safety tick runs at half past each hour, and a window starts at
+// reads. In the window, the first `aayu mission tick` shows every mission's
+// cards that came due, posts the comments that waited while the window is
+// open, then sends one message that lists every card of the inbox and every
+// page that waited. With no windows, the tick sends what waited at once. The safety tick runs at half past each hour, and a window starts at
 // half past (config.Windows), so the tick opens each window.
 
 // WindowsPath is the ledger file that records each window's one message: a
@@ -65,11 +68,11 @@ type queuedAsk struct {
 	Ask     missionAsk `json:"ask"`
 }
 
-// queuedComment is a comment for pull request PR at Head: a PR that closed or
-// moved on since has nothing to ask, and is dropped.
+// queuedComment is a comment on issue or pull request PR. With Head, a PR
+// that closed or moved on since has nothing to ask, and is dropped.
 type queuedComment struct {
 	PR     int    `json:"pr"`
-	Head   string `json:"head"`
+	Head   string `json:"head,omitempty"`
 	Story  int    `json:"story,omitempty"`
 	Kind   string `json:"kind"`
 	Marker string `json:"marker"`
@@ -88,6 +91,16 @@ func (e *Env) outsideWindow() time.Time {
 		return w.Next(now)
 	}
 	return time.Time{}
+}
+
+// inWindow reports whether [time] windows are set and now is inside one.
+func (e *Env) inWindow() bool {
+	l, err := e.Config()
+	if err != nil {
+		return false
+	}
+	w, err := l.Config.PersonWindows()
+	return err == nil && len(w.Spans) > 0 && w.Within(e.Now())
 }
 
 // askLater queues a request for a person's action for the next window's one
@@ -225,11 +238,33 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 		return err
 	}
 	now := e.Now()
-	if len(win.Spans) == 0 {
-		_, err := n.Flush(ctx)
-		return err
+	if c.DryRun() {
+		return nil
 	}
-	if !win.Within(now) || c.DryRun() {
+	if len(win.Spans) == 0 { // a person may be asked at any time: what waited goes out now, the outbox's too
+		if _, err := n.Flush(ctx); err != nil {
+			return err
+		}
+		_, waiting, _, err := readNotify(ctx, w)
+		if err != nil || len(waiting) == 0 {
+			return err
+		}
+		done, pages, err := e.postWaiting(ctx, c, repo, waiting)
+		if err == nil && len(pages) > 0 {
+			if _, err = n.Window(ctx, "outbox:"+now.UTC().Format(time.RFC3339), pages); err == nil {
+				for _, q := range waiting {
+					if q.Page != nil {
+						done = append(done, q.Key)
+					}
+				}
+			}
+		}
+		return errors.Join(err, editNotify(ctx, w, "notify: the outbox is sent", func(_ *[]windowSent, out *[]queued) bool {
+			*out = slices.DeleteFunc(*out, func(q queued) bool { return slices.Contains(done, q.Key) })
+			return len(done) > 0
+		}))
+	}
+	if !win.Within(now) {
 		return nil
 	}
 	key := win.Start(now).UTC().Format(time.RFC3339)
@@ -305,21 +340,27 @@ func (e *Env) sendWindow(ctx context.Context, c *github.Client, w *ledger.Writer
 func (e *Env) postWaiting(ctx context.Context, c *github.Client, repo string, waiting []queued) (done []string, pages []notify.Page, err error) {
 	owner, name, _ := github.SplitRepo(repo)
 	for _, q := range waiting {
-		switch {
-		case q.Page != nil:
+		if q.Page != nil {
 			pages = append(pages, *q.Page)
 			continue
+		}
+		if !e.outsideWindow().IsZero() { // the window ended while this run posted: the rest waits for the next one
+			return done, pages, nil
+		}
+		switch {
 		case q.Ask != nil:
-			err = e.postAsk(ctx, c, repo, q.Ask.Feature, q.Ask.Ask)
+			err = e.postAskNow(ctx, c, repo, q.Ask.Feature, q.Ask.Ask)
 		case q.Comment != nil:
 			cm := q.Comment
-			pr, _, perr := c.REST.PullRequests.Get(ctx, owner, name, cm.PR)
-			if err = perr; err != nil {
-				err = Wrap(ExitExternal, err)
-				break
-			}
-			if pr.GetState() != "open" || pr.GetHead().GetSHA() != cm.Head {
-				break // closed, or moved on since: it asks for nothing now
+			if cm.Head != "" {
+				pr, _, perr := c.REST.PullRequests.Get(ctx, owner, name, cm.PR)
+				if err = perr; err != nil {
+					err = Wrap(ExitExternal, err)
+					break
+				}
+				if pr.GetState() != "open" || pr.GetHead().GetSHA() != cm.Head {
+					break // closed, or moved on since: it asks for nothing now
+				}
 			}
 			me, _, uerr := c.REST.Users.Get(ctx, "")
 			if err = uerr; err != nil {
@@ -327,6 +368,10 @@ func (e *Env) postWaiting(ctx context.Context, c *github.Client, repo string, wa
 				break
 			}
 			err = upsertOwnComment(ctx, c, repo, cm.PR, me.GetLogin(), cm.Marker, cm.Body, actions.Action{Kind: cm.Kind, Story: fmt.Sprintf("#%d", cm.Story)})
+		}
+		var ge *gh.ErrorResponse
+		if errors.As(err, &ge) && ge.Response != nil && (ge.Response.StatusCode == http.StatusNotFound || ge.Response.StatusCode == http.StatusGone) {
+			err = nil // its issue or pull request is gone: it asks for nothing now, and must not hold the rest
 		}
 		if err != nil {
 			return done, pages, err

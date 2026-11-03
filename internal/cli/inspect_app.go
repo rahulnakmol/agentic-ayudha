@@ -247,17 +247,21 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			}
 			return nil
 		}
+		marker := fmt.Sprintf(`%s{"head":%q,"reviewer":%q}`, inspect.RequestMarker, head, c.Kind())
 		if next := e.outsideWindow(); c.App == "" && !next.IsZero() {
-			// A person's review: nobody is asked outside a person's window (Story #1254). The inbox holds the PR from
-			// this head's state, and the window's one message lists it.
-			notes = append(notes, "the request for a human review waits for the person's window at "+next.Format("Mon 2 Jan 15:04 MST")+": aayu inbox holds it, and the window's message lists it")
+			// A person's review: nobody is asked outside a person's window (Story #1254). The request for this head
+			// waits in the ledger's outbox, and the window's first tick posts it.
+			q := queued{Key: fmt.Sprintf("review:%s#%d@%s", a.repo, n, head), Comment: &queuedComment{PR: n, Head: head, Kind: "github.comment.review-request", Marker: marker, Body: inspect.Request(c, a.in, head, a.prev)}}
+			if err := e.enqueueHere(ctx, q); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			notes = append(notes, "the request for a human review waits for the person's window at "+next.Format("Mon 2 Jan 15:04 MST")+": the window's first tick posts it")
 			return nil
 		}
 		hc, _, err := e.HumanGitHub(ctx)
 		if err != nil {
 			return err
 		}
-		marker := fmt.Sprintf(`%s{"head":%q,"reviewer":%q}`, inspect.RequestMarker, head, c.Kind())
 		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(c, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
 			Payload: map[string]any{"head": head, "reviewer": c.Kind()}}); err != nil {
 			return Wrap(ExitExternal, err)

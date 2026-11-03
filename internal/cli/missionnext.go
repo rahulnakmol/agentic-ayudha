@@ -147,10 +147,9 @@ func missionNext(ctx context.Context, e *Env, f int) error {
 	if err := e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, true); err != nil {
 		return err
 	}
-	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun() || e.keepEvents) // after the list and its claims: the cursor moves only now
-	if !c.DryRun() {                                                       // in a person's window, after its cards are shown: the window's one message (Story #1254)
-		e.windowMessage(ctx, c, w, repo)
-	}
+	// after the list and its claims: the cursor moves only now. The window's one message is the tick's: it shows every
+	// mission's due cards first (Story #1254).
+	e.readEvents(ctx, w, f, plan, subs, &list, c.DryRun() || e.keepEvents)
 	return emitWorkList(e, list)
 }
 

@@ -222,13 +222,23 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 				return Wrap(ExitExternal, err)
 			}
 			st.Did = append(st.Did, "page "+page.Key+": "+sent)
-			wrote, err := c.UpsertComment(ctx, repo, d.Number, decide.EscalationMarker, decide.EscalationComment(d, pol, st.Authority, st.Login),
-				actions.Action{Kind: "github.comment.decision-escalation", Payload: map[string]any{"tag": bot.Tag, "escalate_to": pol.EscalateTo}})
-			if err != nil {
-				return err
-			}
-			if wrote {
-				st.Did = append(st.Did, "escalation comment")
+			body := decide.EscalationComment(d, pol, st.Authority, st.Login)
+			if next := e.outsideWindow(); !next.IsZero() && !c.DryRun() {
+				// The comment mentions the person, so it asks them to act: outside a window it waits in the outbox (Story #1254).
+				q := queued{Key: fmt.Sprintf("escalation:%s#%d", repo, d.Number), Comment: &queuedComment{PR: d.Number, Kind: "github.comment.decision-escalation", Marker: decide.EscalationMarker, Body: body}}
+				if err := e.enqueueHere(ctx, q); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+				st.Did = append(st.Did, "escalation comment waits for the window at "+next.Format("Mon 2 Jan 15:04 MST"))
+			} else {
+				wrote, err := c.UpsertComment(ctx, repo, d.Number, decide.EscalationMarker, body,
+					actions.Action{Kind: "github.comment.decision-escalation", Payload: map[string]any{"tag": bot.Tag, "escalate_to": pol.EscalateTo}})
+				if err != nil {
+					return err
+				}
+				if wrote {
+					st.Did = append(st.Did, "escalation comment")
+				}
 			}
 		}
 		if st.Apply {

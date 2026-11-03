@@ -790,21 +790,22 @@ func (e *Env) missionCards(ctx context.Context, c *github.Client, repo string, f
 				}
 			}
 		}
+		at := e.Now() // after the reads: a card is shown in the window open when it is written, never one that ended
 		switch {
 		case posted:
-		case !win.Within(now): // it waits for the next window, whose first run shows it and lists it in the window's message
+		case !win.Within(at): // it waits for the next window, whose first run shows it and lists it in the window's message
 			continue
 		case !post:
-			shown = now
+			shown = at
 		default:
 			body := missionCard(mc.Mission, state, hours, float64(maxH), line)
 			if state == "limit" {
-				body += cardShown(now)
+				body += cardShown(at)
 			}
 			if err := upsertCard(ctx, c, repo, f, mc.Mission, state, body); err != nil {
 				return err
 			}
-			shown = now
+			shown = at
 		}
 		switch {
 		case state != "limit" || shown.IsZero():

@@ -51,7 +51,9 @@ func runLoopGuard(ctx context.Context, e *Env, name string) error {
 	if err := e.checkHalt(ctx); err != nil {
 		return err
 	}
-	if _, err := os.Stat(e.PauseFile()); err == nil {
+	// In a person's window the paused tick still sends the window's one message, and does nothing else (Story #1254).
+	windowTick := name == BuildLoop && e.inWindow()
+	if _, err := os.Stat(e.PauseFile()); err == nil && !windowTick {
 		return Errorf(ExitBudget, "loop %s: agent lanes are paused by the [budget] breaker (%s); a human clears it with `aayu resume`", name, e.PauseFile())
 	}
 	cfg, err := e.Config()

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
 
@@ -60,6 +62,12 @@ func TestTimeLimitWaitsForAWindow(t *testing.T) {
 	m.status(27, "ready", "")
 	at(london(10, 30))
 	next("10:30", "start #27\nwaits #28: not Ready (open)\n")
+	if len(sink.Pages) != 0 { // mission next sends no window message: the tick does, after every mission's cards (Goldfish round 3, finding 8)
+		t.Fatalf("mission next at 10:30 sent %+v", sink.Pages)
+	}
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 { // the window's one message is the tick's
+		t.Fatalf("the tick at 10:30: exit %d: %s%s", code, out, errOut)
+	}
 	if m.timeComments(889) != 1 || len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "1. Mission time #889: #889 reached its 48 h time limit\n") {
 		t.Fatalf("at the window's start: %d time cards, pages %+v", m.timeComments(889), sink.Pages)
 	}
@@ -156,6 +164,9 @@ func TestBudgetWaitsForAWindow(t *testing.T) {
 	at(london(18, 30))
 	if code, out, errOut := m.next(889); code != 0 || out != "start #26\nwaits #27: not Ready (open)\n" {
 		t.Fatalf("over the budget at 18:30: exit %d: %q%s", code, out, errOut)
+	}
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 { // the window's one message is the tick's
+		t.Fatalf("the tick at 18:30: exit %d: %s%s", code, out, errOut)
 	}
 	cards := m.budgetCards()
 	// The raise covers what the mission committed, 720, and one more story: 780, not 660 + 60.
@@ -352,7 +363,24 @@ func TestPausedTickSendsTheWindowMessage(t *testing.T) {
 	if err := os.WriteFile(pause, []byte("per_day_usd"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The scheduled loop's guard lets the build-ready tick through only in a window, and every other loop never.
+	build, err := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(m.dir, "loops"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(m.dir, "loops", BuildLoop+".toml"), build, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := run(t, m.lane, m.opts, "hook", "loop:"+BuildLoop, "--repo", "o/r"); code != ExitBudget {
+		t.Fatalf("the paused loop's guard at 14:00: exit %d: %s", code, errOut)
+	}
 	m.opts.Now = func() time.Time { return london(18, 30) }
+	if code, out, errOut := run(t, m.lane, m.opts, "hook", "loop:"+BuildLoop, "--repo", "o/r"); code != 0 {
+		t.Fatalf("the paused loop's guard at 18:30: exit %d: %s%s", code, out, errOut)
+	}
 	code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r")
 	if code != ExitBudget || !strings.Contains(errOut, "paused by the [budget] breaker") || len(sink.Pages) != 1 ||
 		!strings.Contains(sink.Pages[0].Body, "#5 waits for your approval") || strings.Contains(out, "woke") {
@@ -368,4 +396,95 @@ func ledgerFile(t *testing.T, bare, path string) string {
 		return ""
 	}
 	return string(out)
+}
+
+// Goldfish review, round 3, findings 3 and 4: the window ends while the tick
+// posts what waited. The ask it posted leaves the outbox; the next ask is not
+// posted after the window's end and is not lost: the next window posts it,
+// and sends the message.
+func TestOutboxWaitsWhenTheWindowEnds(t *testing.T) {
+	m := startedTwo(t)
+	sink := m.windows()
+	var lines strings.Builder
+	for _, id := range []string{"one", "two"} {
+		b, _ := json.Marshal(queued{Key: "ask:o/r#889:" + id, At: "2026-10-22T01:00:00Z", Ask: &queuedAsk{Feature: 889,
+			Ask: missionAsk{ID: id, Title: "Ask " + id, Why: "why " + id, Options: []InboxAction{{N: 1, Label: "stop", Command: "aayu mission stop 889 --reason"}}}}})
+		lines.Write(append(b, '\n'))
+	}
+	putLedger(t, m.bare, OutboxPath, lines.String())
+	asks := func() int {
+		m.g.Mu.Lock()
+		defer m.g.Mu.Unlock()
+		return len(slices.DeleteFunc(slices.Clone(m.g.Issues[889].Comments), func(c *fake.Comment) bool { return !strings.Contains(c.Body, MissionAskMarker) }))
+	}
+	var posted atomic.Bool // the first comment takes the clock past the window's end
+	m.g.Clock = func() time.Time { posted.Store(true); return london(11, 29) }
+	m.opts.Now = func() time.Time {
+		if posted.Load() {
+			return london(11, 30)
+		}
+		return london(11, 29)
+	}
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || asks() != 1 || len(sink.Pages) != 0 {
+		t.Fatalf("the tick across the window's end: exit %d, asks %d, pages %+v: %s%s", code, asks(), sink.Pages, out, errOut)
+	}
+	if out := ledgerFile(t, m.bare, OutboxPath); strings.Contains(out, `"ask:o/r#889:one"`) || !strings.Contains(out, `"ask:o/r#889:two"`) {
+		t.Fatalf("the outbox after the window's end: %q", out)
+	}
+	m.g.Clock = func() time.Time { return london(18, 30) }
+	m.opts.Now = func() time.Time { return london(18, 30) }
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || asks() != 2 || len(sink.Pages) != 1 {
+		t.Fatalf("the tick at 18:30: exit %d, asks %d, pages %+v: %s%s", code, asks(), sink.Pages, out, errOut)
+	}
+}
+
+// Goldfish review, round 3, finding 1: the Decision SLA sweep outside a
+// window posts no escalation comment, which mentions the person: it waits in
+// the outbox, and the window's first tick posts it.
+func TestEscalationWaitsForAWindow(t *testing.T) {
+	m := startedTwo(t)
+	m.issue(5, "Choose the rules engine", "decision", 0, "")
+	m.edit(func() { m.g.Issues[5].Body = decisionBody("true", "") })
+	m.windows()
+	escalations := func() int {
+		m.g.Mu.Lock()
+		defer m.g.Mu.Unlock()
+		return len(slices.DeleteFunc(slices.Clone(m.g.Issues[5].Comments), func(c *fake.Comment) bool { return !strings.Contains(c.Body, "Decision SLA lapsed") }))
+	}
+	m.opts.Now = func() time.Time { return london(14, 0) }
+	if code, out, errOut := run(t, m.person, m.opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b"); code != 0 || escalations() != 0 ||
+		!strings.Contains(ledgerFile(t, m.bare, OutboxPath), `"escalation:o/r#5"`) {
+		t.Fatalf("the sweep at 14:00: exit %d, %d escalations: %s%s", code, escalations(), out, errOut)
+	}
+	m.opts.Now = func() time.Time { return london(18, 30) }
+	if code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r"); code != 0 || escalations() != 1 {
+		t.Fatalf("the tick at 18:30: exit %d, %d escalations: %s%s", code, escalations(), out, errOut)
+	}
+}
+
+// Goldfish review, round 3, findings 10 and 12: with no [time] windows, the
+// tick sends what waited in the outbox at once. A request whose issue is gone
+// leaves the outbox and does not hold the rest.
+func TestOutboxDrainsWithNoWindows(t *testing.T) {
+	m := startedTwo(t)
+	sink := &notify.Fake{}
+	m.opts.NotifySink = sink
+	var lines strings.Builder
+	for _, q := range []queued{
+		{Key: "ask:o/r#999:gone", Ask: &queuedAsk{Feature: 999, Ask: missionAsk{ID: "gone", Title: "Gone", Why: "its Feature was deleted"}}},
+		{Key: "ask:o/r#889:one", Ask: &queuedAsk{Feature: 889, Ask: missionAsk{ID: "one", Title: "Ask one", Why: "why one"}}},
+		{Key: "page:p", Page: &notify.Page{Key: "p", Subject: "a page that waited"}},
+	} {
+		b, _ := json.Marshal(q)
+		lines.Write(append(b, '\n'))
+	}
+	putLedger(t, m.bare, OutboxPath, lines.String())
+	m.opts.Now = func() time.Time { return london(14, 0) }
+	code, out, errOut := run(t, m.lane, m.opts, "mission", "tick", "--repo", "o/r")
+	m.g.Mu.Lock()
+	asks := len(slices.DeleteFunc(slices.Clone(m.g.Issues[889].Comments), func(c *fake.Comment) bool { return !strings.Contains(c.Body, MissionAskMarker) }))
+	m.g.Mu.Unlock()
+	if code != 0 || asks != 1 || len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "a page that waited") || strings.TrimSpace(ledgerFile(t, m.bare, OutboxPath)) != "" {
+		t.Fatalf("the tick with no windows: exit %d, asks %d, pages %+v, outbox %q: %s%s", code, asks, sink.Pages, ledgerFile(t, m.bare, OutboxPath), out, errOut)
+	}
 }

@@ -2258,8 +2258,9 @@ func TestInspectReviewTools(t *testing.T) {
 		g.Mu.Lock()
 		n := len(g.Issues[prN].Comments)
 		g.Mu.Unlock()
-		if n != comments {
-			t.Errorf("reviewer %s at 14:00: exit %d, %d comments, want %d: %s", tool, code, n, comments, errOut)
+		origin := strings.TrimSpace(git(t, opts.Dir, "remote", "get-url", "origin"))
+		if queued := strings.Contains(ledgerFile(t, origin, OutboxPath), `"review:o/r#`); n != comments || code != ExitBlocked || queued != (tool == "human") {
+			t.Errorf("reviewer %s at 14:00: exit %d, %d comments, want %d, in the outbox %v: %s", tool, code, n, comments, queued, errOut)
 		}
 	}
 	// ci, the default: the code-review environment's model reviews, called directly, at fast serving, in its own
