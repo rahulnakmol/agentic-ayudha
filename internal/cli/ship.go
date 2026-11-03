@@ -442,12 +442,15 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// bypass, before any write. Entering the code takes minutes, so ship then
 	// runs every check again from the start, on the same head, with what
 	// GitHub and the ledger say now; the approval covers that pass.
-	// A PR that conflicts with its base is known to refuse below, so it is
-	// read before the code too.
+	// A PR that changed, is a draft, or conflicts with its base is known to
+	// refuse below, so it is read before the code too.
 	if in.Bool("solo-bypass") && !in.Bool(shipApproved) {
 		p, err := pullMergeable(ctx, c, owner, name, n)
 		if err != nil {
 			return Wrap(ExitExternal, err)
+		}
+		if err := prChanged(n, pr, p); err != nil {
+			return err
 		}
 		if err := conflicts(n, pr.GetBase().GetRef(), p); err != nil {
 			return err
@@ -503,8 +506,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if now.GetState() != "open" || now.GetHead().GetSHA() != head || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
-		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	if err := prChanged(n, pr, now); err != nil {
+		return err
 	}
 	// GitHub would refuse the merge of a PR that conflicts with its base:
 	// refuse it here, before the bypass below is posted.
@@ -1016,8 +1019,21 @@ const shipApproved = "approved"
 // for the person, once ship's checks pass on the head; it is not a flag.
 const shipBypassNote = "bypass-note"
 
-// conflicts refuses PR n when GitHub says it conflicts with base.
+// prChanged refuses PR n when now is not the PR ship judged (pr): closed,
+// pushed, or retargeted since.
+func prChanged(n int, pr, now *gh.PullRequest) error {
+	if now.GetState() != "open" || now.GetHead().GetSHA() != pr.GetHead().GetSHA() || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
+		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	}
+	return nil
+}
+
+// conflicts refuses PR n when GitHub cannot merge it: a draft, or one that
+// conflicts with base.
 func conflicts(n int, base string, p *gh.PullRequest) error {
+	if p.GetDraft() {
+		return WithNext(Errorf(ExitBlocked, "ship #%d: it is a draft, so GitHub cannot merge it; nothing was merged", n), fmt.Sprintf("mark it ready for review, then aayu ship %d", n))
+	}
 	if p.Mergeable != nil && !p.GetMergeable() || p.GetMergeableState() == "dirty" {
 		return WithNext(Errorf(ExitBlocked, "ship #%d: it conflicts with %s, so GitHub cannot merge it; nothing was merged", n, base), fmt.Sprintf("rebase it onto %s, then aayu ship %d", base, n))
 	}

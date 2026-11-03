@@ -2036,7 +2036,10 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 	marked := maps.Clone(env)
 	maps.Copy(marked, hostShells["amp"])
 	opts.DevicePoll = time.Millisecond
+	var tip0 string // the ledger's tip as ship starts
+	ledgerMoved := func() bool { return git(t, bare, "rev-parse", "ledger") != tip0 }
 	ship := func(env map[string]string) (int, string) {
+		tip0 = git(t, bare, "rev-parse", "ledger")
 		g.Reset()
 		g.Mu.Lock()
 		g.Device.Started = 0
@@ -2062,8 +2065,8 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 		if code != ExitBlocked || !strings.Contains(out, "the footprint touches never layer(s) L07") || !strings.Contains(out, "`aayu plan 2 --solo-bypass`") {
 			t.Fatalf("ship with no plan-time review: %d %s", code, out)
 		}
-		if n := codes(); n != 0 || len(writes()) != 0 || merged() {
-			t.Fatalf("a ship refused for its plan-time review asked for %d device code(s), wrote %v, merged %v", n, writes(), merged())
+		if n := codes(); n != 0 || len(writes()) != 0 || ledgerMoved() || merged() {
+			t.Fatalf("a ship refused for its plan-time review asked for %d device code(s), wrote %v (ledger moved %v), merged %v", n, writes(), ledgerMoved(), merged())
 		}
 	})
 
@@ -2080,8 +2083,8 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 		if code != ExitBlocked || !strings.Contains(out, "post a Solo-mode bypass for the head "+short(head)+` first: a PR comment starting "Solo-mode bypass:"`) {
 			t.Fatalf("ship with no bypass comment: %d %s", code, out)
 		}
-		if n := codes(); n != 0 || len(writes()) != 0 || merged() {
-			t.Fatalf("a ship refused for its bypass comment asked for %d device code(s), wrote %v, merged %v", n, writes(), merged())
+		if n := codes(); n != 0 || len(writes()) != 0 || ledgerMoved() || merged() {
+			t.Fatalf("a ship refused for its bypass comment asked for %d device code(s), wrote %v (ledger moved %v), merged %v", n, writes(), ledgerMoved(), merged())
 		}
 	})
 
@@ -2091,16 +2094,37 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
 	g.Mu.Unlock()
 
-	t.Run("conflicts_before_code", func(t *testing.T) {
-		g.Mu.Lock()
-		g.Pulls[prN].MergeableState = "dirty"
-		g.Mu.Unlock()
-		code, out := ship(marked)
-		g.Mu.Lock()
-		g.Pulls[prN].MergeableState = ""
-		g.Mu.Unlock()
-		if code != ExitBlocked || !strings.Contains(out, "it conflicts with dev") || codes() != 0 || len(writes()) != 0 || merged() {
-			t.Fatalf("ship of a PR that conflicts with its base: %d, %d code(s), writes %v, merged %v: %s", code, codes(), writes(), merged(), out)
+	// GitHub's own refusals are read before the code too: a PR that
+	// conflicts with its base, a draft, and a PR pushed while ship judged it.
+	t.Run("cannot_merge_before_code", func(t *testing.T) {
+		reviewed := false
+		for _, tc := range []struct {
+			name, want   string
+			change, undo func()
+		}{
+			{"conflicts", "it conflicts with dev", func() { g.Pulls[prN].MergeableState = "dirty" }, func() { g.Pulls[prN].MergeableState = "" }},
+			{"draft", "it is a draft", func() { g.Pulls[prN].Draft = true }, func() { g.Pulls[prN].Draft = false }},
+			{"pushed while judged", "the PR changed while ship judged it", func() {
+				reviewed = false
+				g.Hook = func(method, path string) { // a push lands after ship read the reviews
+					if path == fmt.Sprintf("/repos/o/r/pulls/%d/reviews", prN) {
+						reviewed = true
+					} else if reviewed && path == fmt.Sprintf("/repos/o/r/pulls/%d", prN) {
+						g.Pulls[prN].Head.SHA = strings.Repeat("0", 40)
+					}
+				}
+			}, func() { g.Hook, g.Pulls[prN].Head.SHA = nil, head }},
+		} {
+			g.Mu.Lock()
+			tc.change()
+			g.Mu.Unlock()
+			code, out := ship(marked)
+			g.Mu.Lock()
+			tc.undo()
+			g.Mu.Unlock()
+			if code != ExitBlocked || !strings.Contains(out, tc.want) || codes() != 0 || len(writes()) != 0 || ledgerMoved() || merged() {
+				t.Fatalf("%s: %d, %d code(s), writes %v (ledger moved %v), merged %v: %s", tc.name, code, codes(), writes(), ledgerMoved(), merged(), out)
+			}
 		}
 	})
 
