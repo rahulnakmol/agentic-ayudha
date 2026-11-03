@@ -35,6 +35,11 @@
       "status": "kanha",
       "detail": "merged #1173 (PR #1225): run aayu mission next 1170 (sent)",
       "text": "merged #1173 (PR #1225): run aayu mission next 1170"
+    },
+    {
+      "at": "2026-11-03T05:57:06Z",
+      "status": "pr-open",
+      "detail": "delegate.mission-resume"
     }
   ]
 }

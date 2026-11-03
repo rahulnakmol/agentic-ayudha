@@ -23,6 +23,11 @@
       "at": "2026-11-02T17:52:06Z",
       "status": "handed-off",
       "detail": "brief sent: the host created the thread"
+    },
+    {
+      "at": "2026-11-03T05:57:06Z",
+      "status": "handed-off",
+      "detail": "delegate.mission-resume"
     }
   ]
 }
