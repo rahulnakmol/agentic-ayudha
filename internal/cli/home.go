@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -231,14 +232,43 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 	return out, nil
 }
 
+// hadHead reports whether pull request n, closed since, may have had head as
+// its head: it is among n's commits, or n's branch was force-pushed at or
+// after since (or at no stated time), which can drop a head from that list. A list GitHub cut at its
+// 250-commit cap may have dropped it too. Each says yes, so a run it may own
+// fails closed.
+func hadHead(ctx context.Context, c *github.Client, owner, name string, n int, head string, since time.Time) (bool, error) {
+	const commitCap = 250
+	commits, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
+		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
+	})
+	if err != nil {
+		return false, err
+	}
+	if len(commits) >= commitCap || slices.ContainsFunc(commits, func(rc *gh.RepositoryCommit) bool { return rc.GetSHA() == head }) {
+		return true, nil
+	}
+	events, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Timeline, *gh.Response, error) {
+		return c.REST.Issues.ListIssueTimeline(ctx, owner, name, n, &o)
+	})
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(events, func(ev *gh.Timeline) bool {
+		at := ev.GetCreatedAt()
+		return ev.GetEvent() == "head_ref_force_pushed" && (at.IsZero() || !at.Before(since))
+	}), nil
+}
+
 // mergedRunOf reports, for a gate run on head that lists no pull request,
 // whether it is merged pull request pr's: on pr's head branch in this
 // repository (names compare without case, as GitHub's do), created after pr
 // opened, with its latest attempt (run_started_at) started before pr merged,
-// and no other pull request from that branch has head as its head, as a second
-// pull request open from the same branch would. A run after the merge, from a
-// later pull request on a reused branch, is not pr's; nor is a re-run started
-// after the merge, so a red gate re-run green then reads as missing.
+// and no other pull request from that branch has or may have had head while
+// pr was open: one still open when pr merged shared the branch's tip, head,
+// then; one closed while pr was open is read (hadHead). A run after the merge,
+// from a later pull request on a reused branch, is not pr's; nor is a re-run
+// started after the merge, so a red gate re-run green then reads as missing.
 func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string, pr int) (func(*gh.WorkflowRun) bool, error) {
 	none := func(*gh.WorkflowRun) bool { return false }
 	p, _, err := c.REST.PullRequests.Get(ctx, owner, name, pr)
@@ -256,12 +286,35 @@ func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string
 	if err != nil {
 		return nil, err
 	}
+	opened, merged := p.GetCreatedAt().Time, p.GetMergedAt().Time
 	for _, o := range same {
-		if o.GetNumber() != pr && o.GetHead().GetSHA() == head {
+		if o.GetNumber() == pr {
+			continue
+		}
+		if o.GetHead().GetSHA() == head {
+			return none, nil
+		}
+		// A pull request from the branch that was open while pr was shared
+		// the branch's heads then, so it may have had head and moved on
+		// (Bug #1161). One open only before or after pr cannot own a run in
+		// pr's open window. One still open when pr merged had head then: two
+		// open pull requests from a branch share its tip, and its commit list
+		// can drop head once head reaches its base.
+		created, closed := o.GetCreatedAt().Time, o.GetClosedAt().Time
+		if created.After(merged) || !closed.IsZero() && closed.Before(opened) {
+			continue
+		}
+		if closed.IsZero() || !closed.Before(merged) {
+			return none, nil
+		}
+		had, err := hadHead(ctx, c, owner, name, o.GetNumber(), head, opened)
+		if err != nil {
+			return nil, err
+		}
+		if had {
 			return none, nil
 		}
 	}
-	opened, merged := p.GetCreatedAt().Time, p.GetMergedAt().Time
 	return func(r *gh.WorkflowRun) bool {
 		created, started := r.GetCreatedAt().Time, r.GetRunStartedAt().Time
 		if started.IsZero() {
