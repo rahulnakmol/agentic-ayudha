@@ -237,8 +237,9 @@ func gateSuites(ctx context.Context, c *github.Client, owner, name, head string,
 // opened, with its latest attempt (run_started_at) started before pr merged,
 // and no other pull request from that branch has head as its head, as a second
 // pull request open from the same branch would. One that opened after pr
-// merged, or closed before pr opened, was never open with it, so it holds no
-// run of pr's window (Bug #1204). A run after the merge, from a
+// merged starts its runs after pr's window, so it holds none of them (Bug
+// #1204). One that closed before pr opened still counts: an edit of a closed
+// pull request starts a gate run on its head. A run after the merge, from a
 // later pull request on a reused branch, is not pr's; nor is a re-run started
 // after the merge, so a red gate re-run green then reads as missing.
 func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string, pr int) (func(*gh.WorkflowRun) bool, error) {
@@ -260,8 +261,7 @@ func mergedRunOf(ctx context.Context, c *github.Client, owner, name, head string
 	}
 	opened, merged := p.GetCreatedAt().Time, p.GetMergedAt().Time
 	for _, o := range same {
-		created, closed := o.GetCreatedAt().Time, o.GetClosedAt().Time
-		if o.GetNumber() == pr || created.After(merged) || !closed.IsZero() && closed.Before(opened) {
+		if o.GetNumber() == pr || o.GetCreatedAt().After(merged) {
 			continue
 		}
 		if o.GetHead().GetSHA() == head {
