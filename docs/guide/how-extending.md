@@ -160,7 +160,7 @@ when a pull request touches one without that review.
 /.aayudha/config.local.json  @rahulnakmol
 ```
 
-*From `.github/CODEOWNERS`.* Since Decision #1255, only the policy keys are protected paths. So a new floor
+*From `.github/CODEOWNERS`.* Only the policy keys are protected paths. So a new floor
 (`defaults.toml`) and a new integration that touches `.aayudha/config.toml` need a human review. A new verb, a new
 host, and a workflow merge on proof. `aayu ship` still waits for a person on a workflow that holds a credential.
 
