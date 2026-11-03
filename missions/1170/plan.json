@@ -326,9 +326,9 @@
         1182
       ],
       "gate": {
-        "state": "stopped",
-        "dev_sha": "0cd53b4b249c26bb069545cba5e38e2c26fb8e17",
-        "at": "2026-11-03T10:50:56Z"
+        "state": "passed",
+        "dev_sha": "884d81b28f1312354bd7726f91313e733901baa2",
+        "at": "2026-11-03T16:52:25Z"
       }
     },
     {
@@ -2619,6 +2619,12 @@
       "by": "rahulnakmol",
       "tool": "amp",
       "at": "2026-11-03T11:37:32Z",
+      "presence": "device-flow"
+    },
+    {
+      "control": "gate once more",
+      "by": "rahulnakmol",
+      "at": "2026-11-03T16:52:38Z",
       "presence": "device-flow"
     }
   ],
