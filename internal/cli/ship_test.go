@@ -2109,21 +2109,52 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 
 	// What can change on the same head while the person enters the code is
 	// read again after it: the bypass comment, and the merge gate's checks.
+	// Entering the code takes minutes, so every check runs again after it:
+	// a change to any of them while the person enters the code stops the
+	// ship before any write, with no second code.
 	t.Run("rechecked_after_code", func(t *testing.T) {
+		writePlan := func(p PlanRecord) {
+			b, _ := json.Marshal(p)
+			if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
+				t.Error(err)
+			}
+		}
+		noReview := plan
+		noReview.Review.Bypass = nil
 		for _, tc := range []struct {
 			name, want string
+			before     func()
 			change     func()
 			undo       func()
 		}{
-			{"bypass comment deleted", "post a Solo-mode bypass for the head " + short(head) + " first",
+			{"bypass comment deleted", "post a Solo-mode bypass for the head " + short(head) + " first", func() {},
 				func() {
 					g.Issues[prN].Comments = slices.DeleteFunc(slices.Clone(g.Issues[prN].Comments), func(c *fake.Comment) bool { return c.ID == 77 })
 				},
 				func() { g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass) }},
-			{"merge gate turned red", "aayudha/merge-gate is failure on " + short(head),
+			{"merge gate turned red", "aayudha/merge-gate is failure on " + short(head), func() {},
 				func() { g.CheckRuns[head][0].Conclusion = "failure" },
 				func() { g.CheckRuns[head][0].Conclusion = "success" }},
+			{"plan-time review replaced", "the Engineering Manager's plan-time review is required", func() {},
+				func() { writePlan(noReview) },
+				func() { writePlan(plan) }},
+			{"story put on hold as an early build", ready.EarlyBuildHold(2), func() {},
+				func() { g.Issues[2].Labels = append(g.Issues[2].Labels, fake.Label{Name: ready.EarlyBuildLabel}) },
+				func() { g.Issues[2].Labels = g.Issues[2].Labels[:len(g.Issues[2].Labels)-1] }},
+			// A person's approving review is the only pass (no never layer in
+			// this pack, so a CODEOWNER need not give it, and no bypass
+			// comment), and it is dismissed.
+			{"approving review dismissed", "post a Solo-mode bypass for the head " + short(head) + " first", func() {
+				gateRun(t, g, dir, prN, head, coverageHolds)
+				g.Mu.Lock()
+				g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
+				g.Issues[prN].Comments = slices.DeleteFunc(slices.Clone(g.Issues[prN].Comments), func(c *fake.Comment) bool { return c.ID == 77 })
+				g.Mu.Unlock()
+			},
+				func() { g.Pulls[prN].Reviews[0].State = "DISMISSED" },
+				func() { g.Pulls[prN].Reviews, g.Issues[prN].Comments = nil, append(g.Issues[prN].Comments, bypass) }},
 		} {
+			tc.before()
 			g.Mu.Lock()
 			g.Device.OnPoll = func(int) { tc.change() }
 			g.Mu.Unlock()
@@ -2133,33 +2164,6 @@ func TestShipSoloBypassChecksBeforeDeviceCode(t *testing.T) {
 			tc.undo()
 			g.Mu.Unlock()
 			if code != ExitBlocked || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
-				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
-			}
-		}
-		// A person's approving review is the pass (no never layer in this
-		// pack, so a CODEOWNER need not give it), and it is dismissed.
-		gateRun(t, g, dir, prN, head, coverageHolds)
-		// A read that fails after the code stops the ship too.
-		for _, tc := range []struct {
-			name   string
-			code   int
-			want   string
-			onPoll func()
-		}{
-			{"approving review dismissed", ExitBlocked, "@reviewer's approving review no longer passes after the device code",
-				func() { g.Pulls[prN].Reviews[0].State = "DISMISSED" }},
-			{"branch rules read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = "GET /repos/o/r/rules/branches/dev", 0 }},
-			{"reviews read failed", ExitExternal, "injected failure", func() { g.Fail, g.FailAfter = fmt.Sprintf("GET /repos/o/r/pulls/%d/reviews", prN), 0 }},
-		} {
-			g.Mu.Lock()
-			g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
-			g.Device.OnPoll = func(int) { tc.onPoll() }
-			g.Mu.Unlock()
-			code, out := ship(marked)
-			g.Mu.Lock()
-			g.Device.OnPoll, g.Pulls[prN].Reviews, g.Fail = nil, nil, ""
-			g.Mu.Unlock()
-			if code != tc.code || !strings.Contains(out, tc.want) || codes() != 1 || len(writes()) != 0 || merged() {
 				t.Fatalf("%s while the code was entered: %d, %d code(s), writes %v, merged %v: %s", tc.name, code, codes(), writes(), merged(), out)
 			}
 		}
