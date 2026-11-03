@@ -1769,7 +1769,7 @@ func TestShipLoosens(t *testing.T) {
 		return l
 	}
 	base := load(t, config.Sources{RepoTOML: []byte("version = 1\n[identity]\nbot_logins = [\"Agent-Alt\"]\napp_id = 42\napp_slug = \"aayudha-bot\"\n" +
-		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nproof_rungs = [\"A\", \"B\"]\nalways_person = [\"internal/identity/\"]\n" +
+		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\nproof_rungs = [\"A\", \"B\"]\nalways_person = [\"internal/identity/\"]\ncross_family = [\"internal/cli/ship.go\"]\n" +
 		"[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"), RepoSource: "base"}).Config
 	for _, c := range []struct {
 		why  string
@@ -1780,10 +1780,10 @@ func TestShipLoosens(t *testing.T) {
 		{"the same values, in another case", []string{"identity.bot_logins=agent-alt", "autonomy.approver=lead", "seats.engineering-manager.human=EM-Lead"}, nil},
 		{"tighter values", []string{"autonomy.streak=40", "autonomy.correction_days=30", "autonomy.never=L04,L07,L09"}, nil},
 		{"every loosening", []string{"identity.bot_logins=", "identity.app_id=0", "identity.app_slug=", "autonomy.approver=agent-alt", "autonomy.never=L04",
-			"autonomy.streak=0", "autonomy.correction_days=1", "autonomy.proof=true", "autonomy.proof_rungs=A,B,C", "autonomy.always_person=", "seats.engineering-manager.mode=solo"},
+			"autonomy.streak=0", "autonomy.correction_days=1", "autonomy.proof=true", "autonomy.proof_rungs=A,B,C", "autonomy.always_person=", "autonomy.cross_family=", "seats.engineering-manager.mode=solo"},
 			[]string{"[identity] bot_logins drops Agent-Alt", "[identity] has no bot identity", `[autonomy] approver is "agent-alt", not "Lead"`, "[autonomy] never drops L07",
 				"[autonomy] streak is 0, below 20", "[autonomy] correction_days is 1, below 14", "[autonomy] proof is on", "[autonomy] proof_rungs adds C",
-				"[autonomy] always_person drops internal/identity/", "[seats.engineering-manager] is not paired with em-lead"}},
+				"[autonomy] always_person drops internal/identity/", "[autonomy] cross_family drops internal/cli/ship.go", "[seats.engineering-manager] is not paired with em-lead"}},
 	} {
 		if got := loosens(load(t, config.Sources{Sets: c.sets}), &base); !slices.Equal(got, c.want) {
 			t.Errorf("%s: loosens = %q, want %q", c.why, got, c.want)
