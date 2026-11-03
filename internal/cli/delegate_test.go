@@ -1086,14 +1086,15 @@ func TestDelegateFollowUpStalls(t *testing.T) {
 
 // Bug #1137: build syncs story #2 after its hand-off, and the receiver's
 // status read never answers: codex cloud status, or codex cloud diff after a
-// done status, the Cursor API's read of the run, and git ls-remote for Claude
+// done status, the Cursor API's read of the run, before its headers or in a
+// body that never ends after valid JSON, and git ls-remote for Claude
 // Code's branch. That git leaves a child that holds its output after it is
 // killed, as a transport helper does. Each stub waits until its context ends,
 // with a backstop, so the old code fails instead of hanging. build exits 5
 // within the time limit and names the deadline.
 func TestDelegateSyncStalls(t *testing.T) {
 	const backstop = 20 * time.Second
-	for _, name := range []string{"codex", "codex-diff", "cursor", "claude"} {
+	for _, name := range []string{"codex", "codex-diff", "cursor", "cursor-body", "claude"} {
 		r, call, _ := strings.Cut(name, "-")
 		t.Run(name, func(t *testing.T) {
 			if r == "claude" && runtime.GOOS == "windows" {
@@ -1147,6 +1148,10 @@ func TestDelegateSyncStalls(t *testing.T) {
 				cur := &fakeCursor{}
 				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 					if req.Method == "GET" && stalled.Load() {
+						if call == "body" { // a finished run's JSON, then a body that never ends
+							_, _ = io.WriteString(w, `{"id": "run-01", "status": "FINISHED", "git": {"branches": []}}`)
+							w.(http.Flusher).Flush()
+						}
 						select {
 						case <-req.Context().Done():
 						case <-time.After(backstop):
