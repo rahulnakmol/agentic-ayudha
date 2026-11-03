@@ -1,0 +1,20 @@
+{
+  "story": 1268,
+  "feature": 1170,
+  "kanha": "T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "kanha_url": "https://ampcode.com/threads/T-01a18d24-b36c-7569-aa29-84cf1755c442",
+  "receiver": "amp",
+  "mode": "cloud",
+  "family": "host-managed",
+  "pr": 1275,
+  "status": "pr-open",
+  "brief_sha256": "",
+  "started_at": "2026-11-03T16:56:38Z",
+  "events": [
+    {
+      "at": "2026-11-03T16:56:38Z",
+      "status": "pr-open",
+      "detail": "PR #1275 found by aayu mission recover: built outside the mission, adopted as its delegation"
+    }
+  ]
+}
