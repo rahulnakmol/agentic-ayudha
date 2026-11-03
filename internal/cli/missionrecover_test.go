@@ -580,8 +580,9 @@ func TestMissionMaybeStartedLandedWithError(t *testing.T) {
 	log := filepath.Join(w.opts.Dir, ".aayudha", "telemetry", "actions.jsonl")
 	w.submit = func(brief string) error {
 		if strings.Contains(brief, "# Delegated story #64:") {
-			hook := filepath.Join(w.bare, "hooks", "post-receive") // the push lands, then the actions log refuses its entry
-			if err := os.WriteFile(hook, []byte("#!/bin/sh\nchmod 444 '"+log+"'\n"), 0o755); err != nil {
+			// The push lands, then the actions log's path becomes a directory, so its next entry fails for any user.
+			hook := filepath.Join(w.bare, "hooks", "post-receive")
+			if err := os.WriteFile(hook, []byte("#!/bin/sh\nrm -f '"+log+"' && mkdir '"+log+"'\n"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 			git(t, w.bare, "config", "core.hooksPath", "hooks") // over any global hooks path
@@ -589,7 +590,6 @@ func TestMissionMaybeStartedLandedWithError(t *testing.T) {
 		}
 		return nil
 	}
-	t.Cleanup(func() { _ = os.Chmod(log, 0o644) })
 	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
 		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
 	}

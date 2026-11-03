@@ -167,9 +167,14 @@ func TestAmpHostThreadRecordFails(t *testing.T) {
 	}
 	// The ledger refuses the record and then cannot be read back either: build says it may not have landed, and
 	// shows the last record this run confirmed.
-	refuseLedger(t, m.bare, `chmod 000 .`)
+	// The hook breaks the remote's HEAD as it refuses the push, so git no longer reads it as a repository (for any user).
+	head, err := os.ReadFile(filepath.Join(m.bare, "HEAD"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refuseLedger(t, m.bare, `echo broken > HEAD`)
 	code, out, errOut = run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r")
-	if err := os.Chmod(m.bare, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(m.bare, "HEAD"), head, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if code != ExitExternal || strings.Contains(out, dlgHandedOff) || !strings.HasPrefix(out, "#20 delegated to amp (cloud): host-handoff\n") ||
