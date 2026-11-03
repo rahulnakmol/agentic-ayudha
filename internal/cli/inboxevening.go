@@ -92,6 +92,7 @@ type eveningStory struct {
 	reviewed  bool              // a person reviewed it today at that head and that pack
 	accepted  bool              // and that review, or another of them, accepts it
 	date      string            // today, the day it was agreed, as 2006-01-02
+	when      string            // the evening review's window, in [time] tz (Story #1254)
 	images    map[string][]byte // its screenshots by artifact path, read only where the terminal shows images
 }
 
@@ -196,7 +197,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string, i
 				continue
 			}
 			for _, n := range m.Stories {
-				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p, date: day.Format(time.DateOnly)}
+				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p, date: day.Format(time.DateOnly), when: reviewTime(&l.Config, e.Now())}
 				h := head(n)
 				if h != "" {
 					es, err := packs.Packs(ctx, t, n)
@@ -289,7 +290,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		crit := storyCriteria(is)
 		it := InboxItem{day: day, Kind: InboxEvening, Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Seat: verbs.EngineeringManager,
 			Evidence: is.GetHTMLURL(), Updated: is.GetUpdatedAt().Time, Feature: st.feature, labels: labels, CounselFrom: "facts"}
-		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission.", termText(st.milestone), st.feature))
+		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission, for this review at %s.", termText(st.milestone), st.feature, st.when))
 		pr := delivered(n)
 		shown := 0
 		var missing []string // a merged story's criteria with no evidence in its pack, each on its own line

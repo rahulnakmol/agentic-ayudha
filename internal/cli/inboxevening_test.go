@@ -187,7 +187,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--repo", "o/r")
 	card1010 := "[1/3] Evening review #1010: Story 1010\n" +
 		"  " + inboxKinds[InboxEvening].Line + "\n" +
-		"  Agreed this morning: MS1 of #889's mission.\n" +
+		"  Agreed this morning: MS1 of #889's mission, for this review at Mon 2 Nov 18:30-19:30 Europe/London, the evening window.\n" +
 		"  Merged in #7 at 1010101. Evidence: the authoritative pack proof/1010/" + head1010 + "/authoritative on the ledger.\n" +
 		"  1. [screenshot] state: Story 1010 is empty; expected: the \"Your cart is empty\" message and a Browse button\n" +
 		"     screenshot: media/cart.png · https://github.com/o/r/actions/runs/77\n" +
@@ -222,7 +222,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	m.setPlan(889, func(p *MissionPlan) {
 		p.Milestones[0].Gate = MilestoneGate{State: GatePassed, DevSHA: devTip, At: "2026-11-03T10:00:00Z"}
 	})
-	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 || !slices.Contains(cards[0].Lines, "Agreed this morning: MS2 of #889's mission.") {
+	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 || !slices.Contains(cards[0].Lines, "Agreed this morning: MS2 of #889's mission, for this review at Tue 3 Nov 18:30-19:30 Europe/London, the evening window.") {
 		t.Fatalf("Evening cards on Tuesday after MS2 starts: %+v", cards)
 	}
 	// A milestone that starts after hours, at 19:00, is still today's: it shows at 20:00.
@@ -342,7 +342,7 @@ func TestEveningNotMergedSaysWhy(t *testing.T) {
 	code, out, errOut := runIn(t, m.person, m.opts, "ssq", "inbox", "--repo", "o/r")
 	card := "[3/3] Evening review #1104: Story 1104\n" +
 		"  " + inboxKinds[InboxEvening].Line + "\n" +
-		"  Agreed this morning: MS1 of #889's mission.\n" +
+		"  Agreed this morning: MS1 of #889's mission, for this review at Mon 2 Nov 18:30-19:30 Europe/London, the evening window.\n" +
 		"  not merged: @rahulnakmol stopped it: the payment sandbox is down.\n" +
 		"  Next: `aayu mission resume 889 --story 1104` when it may go on.\n" +
 		"  1. [screenshot] state: Story 1104 is empty; expected: the \"Your cart is empty\" message and a Browse button\n" +
