@@ -594,8 +594,9 @@ func TestMissionMaybeStartedRefused(t *testing.T) {
 	onLedger := exec.Command("git", "cat-file", "-e", "ledger:"+delegate.LedgerPath(64))
 	onLedger.Dir = w.bare
 	if code != ExitExternal || !strings.Contains(errOut, "the maybe-started record was not saved, so the start fails") || onLedger.Run() == nil ||
-		res.Delegation == nil || res.Delegation.Status != "" || w.claims(889)[64] != 0 { // the ledger holds no record of #64
-		t.Fatalf("a refused maybe start: exit %d, result %+v, claims %v: %s%s", code, res.Delegation, w.claims(889), out, errOut)
+		res.Delegation == nil || res.Delegation.Status != "" || w.claims(889)[64] != 0 || // the ledger holds no record of #64
+		!slices.Contains(w.g.LabelNames(64), "status:ready") || slices.Contains(w.g.LabelNames(64), "status:in-progress") {
+		t.Fatalf("a refused maybe start: exit %d, result %+v, claims %v, labels %v: %s%s", code, res.Delegation, w.claims(889), w.g.LabelNames(64), out, errOut)
 	}
 }
 
