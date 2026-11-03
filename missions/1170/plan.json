@@ -2673,6 +2673,28 @@
         "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
       },
       "at": "2026-11-02T21:28:43Z"
+    },
+    {
+      "pr": 1284,
+      "milestone": "MS1",
+      "check": "eval:retro/em-enterprise",
+      "dev_sha": "0cd53b4b249c26bb069545cba5e38e2c26fb8e17",
+      "approval": {
+        "record": "specs/1170/approved.json",
+        "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
+      },
+      "at": "2026-11-03T10:51:45Z"
+    },
+    {
+      "pr": 1284,
+      "milestone": "MS1",
+      "check": "eval:retro/em-scaleup",
+      "dev_sha": "0cd53b4b249c26bb069545cba5e38e2c26fb8e17",
+      "approval": {
+        "record": "specs/1170/approved.json",
+        "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
+      },
+      "at": "2026-11-03T10:51:45Z"
     }
   ],
   "events_cursor": "2026-11-03T05:57:06Z"
