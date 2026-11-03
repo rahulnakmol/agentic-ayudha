@@ -27,9 +27,10 @@ import (
 // Merge on proof (Decision #593): a PR into the integration branch merges
 // with no human pass when every required check is green, the merge gate's
 // pack verifies with its floors holding, inspect's disposition at the head is
-// merge with an accepted rung, and the PR touches nothing in the narrow set
-// ([autonomy] always_person): who may approve or bypass, the gate itself, and
-// releases and secrets. The streak, the never layers and the plan review stop
+// merge with an accepted rung, and the PR touches nothing in the narrow set:
+// the paths in [autonomy] always_person, the policy sections of an
+// always_person_config file, a workflow that holds a credential, an action's
+// manifest, or a symbolic link. The streak, the never layers and the plan review stop
 // blocking it; the audit after merge looks at every such merge, never a
 // sample of them (Decision #1255).
 

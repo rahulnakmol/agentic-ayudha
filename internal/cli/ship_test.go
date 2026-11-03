@@ -1421,8 +1421,9 @@ func TestShipOnProof(t *testing.T) {
 // Decision #1255 (option 2), Story #1281, under this repository's own
 // .aayudha/config.toml as the base policy: the gate's own code, releases, and
 // dependencies merge on proof with an audit card each time; the policy keys
-// (an always_person_config file's sections, CODEOWNERS, the config's other
-// files) and a workflow that holds a credential still post Ready to ship; and
+// (the policy sections of .aayudha/config.toml, any change to the embedded
+// defaults, CODEOWNERS, the config's other files) and a workflow that holds a
+// credential still post Ready to ship; and
 // rung C counts only while proof_rungs lists it.
 func TestShipFreedPathsOnProof(t *testing.T) {
 	ours, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml"))
@@ -1491,8 +1492,23 @@ func TestShipFreedPathsOnProof(t *testing.T) {
 		}
 	}
 	// Criterion 3: the policy keys and a workflow that holds a credential
-	// wait for a person. A never layer's plan review is on the ledger, so
-	// only the human pass stops ship.
+	// wait for a person. The embedded defaults are a never layer's (L07):
+	// with no plan review on the ledger, ship asks for that review first and
+	// merges nothing.
+	g.Mu.Lock()
+	g.JobLogs[7701] = logA
+	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `tz = "Europe/London"`, `tz = "Asia/Kolkata"`, 1)
+	g.Pulls[prN].Files = []string{"internal/config/defaults.toml"}
+	g.Mu.Unlock()
+	code, out := shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != ExitBlocked || merged || !strings.Contains(out, "plan-time review is required") ||
+		!strings.Contains(out, "no merge on proof: it touches internal/config/defaults.toml, in the narrow set") {
+		t.Fatalf("ship of a defaults change with no plan review: %d merged %t %s", code, merged, out)
+	}
+	// With the plan review on the ledger, only the human pass stops ship.
 	plan, _ := json.Marshal(PlanRecord{Story: 2, Review: planning.Review{Required: true, Layers: []string{"L04", "L07", "L09"},
 		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Note: "solo mode"}}})
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): plan}}); err != nil {
@@ -1507,7 +1523,13 @@ func TestShipFreedPathsOnProof(t *testing.T) {
 	g.RefFiles[head][".aayudha/config.toml"] = string(ours)
 	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `always_person_config = [".aayudha/config.toml"]`, "always_person_config = []", 1)
 	g.Mu.Unlock()
-	waits("it changes [autonomy] in internal/config/defaults.toml", "internal/config/defaults.toml")
+	waits("it touches internal/config/defaults.toml, in the narrow set", "internal/config/defaults.toml")
+	// Any change to the embedded defaults waits, a section outside the
+	// policy sections too, as it did when internal/config/ was in the list.
+	g.Mu.Lock()
+	g.RefFiles[head]["internal/config/defaults.toml"] = strings.Replace(string(defaults), `tz = "Europe/London"`, `tz = "Asia/Kolkata"`, 1)
+	g.Mu.Unlock()
+	waits("it touches internal/config/defaults.toml, in the narrow set", "internal/config/defaults.toml")
 	g.Mu.Lock()
 	g.RefFiles[head]["internal/config/defaults.toml"] = string(defaults)
 	g.Mu.Unlock()
@@ -1532,9 +1554,9 @@ func TestShipFreedPathsOnProof(t *testing.T) {
 	g.Files[".aayudha/config.toml"], g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = string(ours), string(ours), string(ours)
 	g.Pulls[prN].Files, g.Issues[prN].Comments = freed, nil
 	g.Mu.Unlock()
-	code, out := shipCmd(t, env, opts, prN)
+	code, out = shipCmd(t, env, opts, prN)
 	g.Mu.Lock()
-	merged := g.Pulls[prN].Merged
+	merged = g.Pulls[prN].Merged
 	g.Mu.Unlock()
 	if code != 0 || !merged || !strings.Contains(out, "human pass: proof by founder") || readyToShip() != "" {
 		t.Fatalf("ship of the freed paths on proof: %d merged %t %s\nReady to ship: %s", code, merged, out, readyToShip())

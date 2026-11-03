@@ -441,7 +441,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := l.Config.Autonomy
-	narrow := []string{".github/CODEOWNERS",
+	narrow := []string{".github/CODEOWNERS", "internal/config/defaults.toml",
 		// The config's other files load into the same layers, so they can change the policy too.
 		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
 	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json", "loops/build-ready.toml"}) {

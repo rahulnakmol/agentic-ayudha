@@ -68,7 +68,9 @@ per_pr_inspect_max = 15.0
 # policy keys need a person per PR: who may approve or bypass (CODEOWNERS, [autonomy] approver), and what merges
 # without a person (always_person_sections in the always_person_config files, and the config's other files, which
 # load into the same layers). A workflow that holds a credential (a secret, the token, an environment, a write
-# permission) needs a person too, by rule.
+# permission) needs a person too, by rule. The embedded defaults wait for a person on any change, as before.
+# This holds only while the gate's code holds it: an agent PR that changes that code merges on proof, and only its
+# audit card shows a person that it may have widened what merges without a person.
 [autonomy]
 # The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
 # account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
@@ -80,6 +82,7 @@ always_person = [
   # CODEOWNERS says who must approve a protected path; protected-paths, the only check on a PR that does not merge
   # through ship, reads it.
   ".github/CODEOWNERS",
+  "internal/config/defaults.toml",
   ".aayudha/config.json",
   ".aayudha/config.local.toml",
   ".aayudha/config.local.json",
