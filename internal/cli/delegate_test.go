@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1078,6 +1081,103 @@ func TestDelegateFollowUpStalls(t *testing.T) {
 	code, _, errOut := delegateRun(t, env, opts, "--delegate", "amp")
 	if code != ExitExternal || time.Since(start) > 30*time.Second || !strings.Contains(errOut, "follow-up to amp: amp: context deadline exceeded") {
 		t.Fatalf("follow-up with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
+	}
+}
+
+// Bug #1137: build syncs story #2 after its hand-off, and the receiver's
+// status read never answers: codex cloud status, the Cursor API's read of the
+// run, and git ls-remote for Claude Code's branch. Each stub waits until its
+// context ends, with a backstop, so the old code fails instead of hanging.
+// build exits 5 within the time limit and names the deadline.
+func TestDelegateSyncStalls(t *testing.T) {
+	const backstop = 20 * time.Second
+	for _, r := range []string{"codex", "cursor", "claude"} {
+		t.Run(r, func(t *testing.T) {
+			if r == "claude" && runtime.GOOS == "windows" {
+				t.Skip("the stalled git is a shell script")
+			}
+			_, env, opts, _, _ := delegateFixture(t)
+			opts.LookPath = func(name string) (string, error) {
+				if name == r {
+					return "/bin/" + r, nil
+				}
+				return "", os.ErrNotExist
+			}
+			args := []string{"--delegate", r}
+			var stall func()
+			switch r {
+			case "codex":
+				stalled := false
+				stall = func() { stalled = true }
+				read := func(p string) string {
+					b, _ := os.ReadFile(filepath.Join("..", "delegate", "testdata", "codex", p))
+					return string(b)
+				}
+				opts.DelegateExec = func(ctx context.Context, _ string, _ []string, _, _ string, a ...string) (string, error) {
+					switch strings.Join(a[:2], " ") {
+					case "cloud exec":
+						return read("exec.txt"), nil
+					case "cloud status":
+						if stalled {
+							select {
+							case <-ctx.Done():
+								return "", errors.New("codex: signal: killed: ")
+							case <-time.After(backstop):
+								return "", errors.New("codex: no answer")
+							}
+						}
+						return read("status-running.txt"), nil
+					}
+					return "", nil
+				}
+				args = append(args, "--set", "delegate.codex_env=env_123")
+			case "cursor":
+				var stalled atomic.Bool
+				stall = func() { stalled.Store(true) }
+				cur := &fakeCursor{}
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					if req.Method == "GET" && stalled.Load() {
+						select {
+						case <-req.Context().Done():
+						case <-time.After(backstop):
+						}
+						return
+					}
+					cur.ServeHTTP(w, req)
+				}))
+				t.Cleanup(srv.Close)
+				env["AAYU_SECRET_CURSOR_API_KEY"] = "cursor-key"
+				args = append(args, "--set", "delegate.cursor_api="+srv.URL)
+			case "claude":
+				opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+					b, err := os.ReadFile(filepath.Join("..", "delegate", "testdata", "claude", "cloud.txt"))
+					return string(b), err
+				}
+				gitPath, err := exec.LookPath("git")
+				if err != nil {
+					t.Fatal(err)
+				}
+				bin := t.TempDir()
+				script := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = ls-remote ]; then exec sleep %d; fi\nexec %q \"$@\"\n", int(backstop.Seconds()), gitPath)
+				if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { // #nosec G306 -- a test's stalled git
+					t.Fatal(err)
+				}
+				stall = func() { t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) }
+			}
+			if code, res, errOut := delegateRun(t, env, opts, args...); code != 0 || res.Delegation.Status != dlgHandedOff {
+				t.Fatalf("hand-off: exit %d %+v: %s", code, res.Delegation, errOut)
+			}
+			was := receiverTimeout
+			receiverTimeout = 200 * time.Millisecond
+			t.Cleanup(func() { receiverTimeout = was })
+			stall()
+			start := time.Now()
+			code, _, errOut := delegateRun(t, env, opts, args...)
+			want := fmt.Sprintf("build #2 --delegate %s: status: %s: context deadline exceeded", r, r)
+			if took := time.Since(start); code != ExitExternal || took > backstop/2 || !strings.Contains(errOut, want) {
+				t.Fatalf("sync with a stalled %s: exit %d after %s: %s", r, code, took, errOut)
+			}
+		})
 	}
 }
 

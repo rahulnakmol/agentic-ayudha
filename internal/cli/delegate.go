@@ -711,7 +711,12 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	}
 	var task delegate.Task
 	if !d.local && (d.state.Task != "" || d.state.PR == 0) { // a PR built outside the mission that recover adopted has no task to read (Story #1207)
-		if task, err = d.adapter.Status(ctx, d.state); err != nil {
+		// A stalled receiver is a status read that failed, never a build that hangs (Bug #1137).
+		if err = withReceiverTimeout(ctx, d.receiver, func(ctx context.Context) error {
+			var err error
+			task, err = d.adapter.Status(ctx, d.state)
+			return err
+		}); err != nil {
 			return nil, true, Errorf(ExitExternal, "build #%d --delegate %s: status: %v", d.story, d.receiver, err)
 		}
 		if task.Status == delegate.TaskFailed && d.state.PR == 0 {
