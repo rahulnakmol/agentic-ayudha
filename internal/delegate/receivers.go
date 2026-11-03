@@ -149,9 +149,12 @@ func (c CursorAPI) do(ctx context.Context, method, path string, in, out any) err
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	b, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("cursor: %s %s: %s: %s", method, path, resp.Status, actions.RedactString(strings.TrimSpace(string(b[:min(len(b), 300)]))))
+	}
+	if readErr != nil { // a body cut off, even after valid JSON, is no answer (Bug #1137)
+		return fmt.Errorf("cursor: %s %s: %w", method, path, readErr)
 	}
 	if out == nil {
 		return nil

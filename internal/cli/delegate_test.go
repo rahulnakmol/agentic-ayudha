@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1002,6 +1005,12 @@ func TestReceiverCLIWaitIsBounded(t *testing.T) {
 	if took := time.Since(start); err != nil || strings.TrimSpace(out) != "started" || took > 5*time.Second {
 		t.Fatalf("a CLI that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
 	}
+	// The same for a command run2 runs, as git with its helper (Bug #1137).
+	start = time.Now()
+	out, err = run2(context.Background(), "", "sh", "-c", "sleep 20 & echo started")
+	if took := time.Since(start); err != nil || out != "started" || took > 5*time.Second {
+		t.Fatalf("run2 with a command that exited 0 with a child holding its output: %q, err %v after %s", out, err, took)
+	}
 }
 
 // Bug #1124: a story's Amp receiver whose CLI never answers. stall names the
@@ -1078,6 +1087,122 @@ func TestDelegateFollowUpStalls(t *testing.T) {
 	code, _, errOut := delegateRun(t, env, opts, "--delegate", "amp")
 	if code != ExitExternal || time.Since(start) > 30*time.Second || !strings.Contains(errOut, "follow-up to amp: amp: context deadline exceeded") {
 		t.Fatalf("follow-up with a stalled amp: exit %d after %s: %s", code, time.Since(start), errOut)
+	}
+}
+
+// Bug #1137: build syncs story #2 after its hand-off, and the receiver's
+// status read never answers: codex cloud status, or codex cloud diff after a
+// done status, the Cursor API's read of the run, before its headers or in a
+// body that never ends after valid JSON, and git ls-remote for Claude
+// Code's branch. That git leaves a child that holds its output after it is
+// killed, as a transport helper does. Each stub waits until its context ends,
+// with a backstop, so the old code fails instead of hanging. build exits 5
+// within the time limit and names the deadline.
+func TestDelegateSyncStalls(t *testing.T) {
+	const backstop = 20 * time.Second
+	for _, name := range []string{"codex", "codex-diff", "cursor", "cursor-body", "claude"} {
+		r, call, _ := strings.Cut(name, "-")
+		t.Run(name, func(t *testing.T) {
+			if r == "claude" && runtime.GOOS == "windows" {
+				t.Skip("the stalled git is a shell script")
+			}
+			_, env, opts, _, _ := delegateFixture(t)
+			opts.LookPath = func(name string) (string, error) {
+				if name == r {
+					return "/bin/" + r, nil
+				}
+				return "", os.ErrNotExist
+			}
+			args := []string{"--delegate", r}
+			var stall func()
+			var deadlines []time.Time // the deadline of each Codex read in the sync
+			switch r {
+			case "codex":
+				stalled := false
+				stall = func() { stalled = true }
+				read := func(p string) string {
+					b, _ := os.ReadFile(filepath.Join("..", "delegate", "testdata", "codex", p))
+					return string(b)
+				}
+				opts.DelegateExec = func(ctx context.Context, _ string, _ []string, _, _ string, a ...string) (string, error) {
+					switch strings.Join(a[:2], " ") {
+					case "cloud exec":
+						return read("exec.txt"), nil
+					case "cloud status", "cloud diff":
+						if dl, ok := ctx.Deadline(); stalled && ok {
+							deadlines = append(deadlines, dl)
+						}
+						if stalled && (a[1] == "status") == (call == "") {
+							select {
+							case <-ctx.Done():
+								return "", errors.New("codex: signal: killed: ")
+							case <-time.After(backstop):
+								return "", errors.New("codex: no answer")
+							}
+						}
+						if stalled {
+							return read("status-done.txt"), nil
+						}
+						return read("status-running.txt"), nil
+					}
+					return "", nil
+				}
+				args = append(args, "--set", "delegate.codex_env=env_123")
+			case "cursor":
+				var stalled atomic.Bool
+				stall = func() { stalled.Store(true) }
+				cur := &fakeCursor{}
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					if req.Method == "GET" && stalled.Load() {
+						if call == "body" { // a finished run's JSON, then a body that never ends
+							_, _ = io.WriteString(w, `{"id": "run-01", "status": "FINISHED", "git": {"branches": []}}`)
+							w.(http.Flusher).Flush()
+						}
+						select {
+						case <-req.Context().Done():
+						case <-time.After(backstop):
+						}
+						return
+					}
+					cur.ServeHTTP(w, req)
+				}))
+				t.Cleanup(srv.Close)
+				env["AAYU_SECRET_CURSOR_API_KEY"] = "cursor-key"
+				args = append(args, "--set", "delegate.cursor_api="+srv.URL)
+			case "claude":
+				opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+					b, err := os.ReadFile(filepath.Join("..", "delegate", "testdata", "claude", "cloud.txt"))
+					return string(b), err
+				}
+				gitPath, err := exec.LookPath("git")
+				if err != nil {
+					t.Fatal(err)
+				}
+				bin := t.TempDir()
+				script := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = ls-remote ]; then sleep %d & wait; fi\nexec %q \"$@\"\n", int(backstop.Seconds()), gitPath)
+				if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { // #nosec G306 -- a test's stalled git
+					t.Fatal(err)
+				}
+				stall = func() { t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) }
+			}
+			if code, res, errOut := delegateRun(t, env, opts, args...); code != 0 || res.Delegation.Status != dlgHandedOff {
+				t.Fatalf("hand-off: exit %d %+v: %s", code, res.Delegation, errOut)
+			}
+			was, wait := receiverTimeout, receiverWaitDelay
+			receiverTimeout, receiverWaitDelay = 200*time.Millisecond, 200*time.Millisecond
+			t.Cleanup(func() { receiverTimeout, receiverWaitDelay = was, wait })
+			stall()
+			start := time.Now()
+			code, _, errOut := delegateRun(t, env, opts, args...)
+			want := fmt.Sprintf("build #2 --delegate %s: status: %s: context deadline exceeded", r, r)
+			if took := time.Since(start); code != ExitExternal || took > backstop/2 || !strings.Contains(errOut, want) {
+				t.Fatalf("sync with a stalled %s: exit %d after %s: %s", r, code, took, errOut)
+			}
+			// The diff gets what is left of the status read's limit, not a limit of its own.
+			if call == "diff" && (len(deadlines) != 2 || !deadlines[0].Equal(deadlines[1])) {
+				t.Fatalf("codex cloud status and cloud diff deadlines: %v", deadlines)
+			}
+		})
 	}
 }
 
