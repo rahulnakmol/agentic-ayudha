@@ -211,7 +211,7 @@ Hold every sentence to what the record shows:
 - The record gives no "today", so a retro has no "now" to compare a date with. Never state today's date or the
   current day or week. Never say that a date in the record is past, overdue, missed, upcoming, near, or still ahead,
   and never ask to set a new date or to move one. Name the record's check date as the record gives it ("the next
-  retro report is due on <the date the record gives>"), and say nothing about where that date falls.
+  retro report is due on", then the date the record gives), and say nothing about where that date falls.
 - When a check reports an uncited claim, add the citation to that very sentence, or cut the sentence; rewording it
   does not fix the finding.
 - Say what changes and who owns it; do not describe aayu's own mechanics (how Feedback is accepted, which command
