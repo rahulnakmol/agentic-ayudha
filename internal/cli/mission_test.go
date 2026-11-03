@@ -395,10 +395,13 @@ func TestMissionStartWritesPlan(t *testing.T) {
 		!strings.Contains(errOut, "The ledger changed while aayu wrote the start of #889. Nothing was started. Run it again.") {
 		t.Fatalf("a ledger write during the start: exit %d: %s%s", code, out, errOut)
 	}
-	n = m.commits()
-	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--dry-run"); code != 0 || m.commits() != n ||
-		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") {
-		t.Fatalf("start --dry-run: exit %d: %s%s", code, out, errOut)
+	// --dry-run shows the effect and asks for no device code (Bug #1252).
+	n, calls := m.commits(), len(m.callLog())
+	m.g.Reset()
+	if code, out, errOut := m.mission(m.person, "rahulnakmol", "start", 889, "--dry-run"); code != 0 || m.commits() != n || m.codes() != 0 || len(m.g.Writes()) != 0 ||
+		!strings.Contains(out, "Approving: Starts the mission of #889, approval 1") || !strings.Contains(out, "Approving: BUDGET $240") ||
+		!strings.Contains(out, "--dry-run: ledger missions/889/plan.json planned, not written") || len(m.callLog()) != calls {
+		t.Fatalf("start --dry-run: exit %d, device codes %d, GitHub writes %v, calls %v: %s%s", code, m.codes(), m.g.Writes(), m.callLog(), out, errOut)
 	}
 	if p, _ := m.plan(889); p.StartedBy != "" {
 		t.Fatalf("a refused start wrote the plan: %+v", p)
@@ -464,6 +467,64 @@ func TestApproveToBuildRefusesStoryWithNoMilestone(t *testing.T) {
 		}
 	}
 
+}
+
+// Bug #1252: `aayu ready <f> --dry-run` for Approve to build shows the
+// approval and the plan, and ends before the presence check: no device-flow
+// request reaches GitHub, and nothing is written. Invalid milestones get the
+// refusal a real run gets. A real run still asks for the device code.
+func TestApproveToBuildDryRunAsksNoDeviceCode(t *testing.T) {
+	m := newMissionWorld(t)
+	m.scenario889(map[int]string{21: "depends-on #20"})
+	m.opts.CostEstimate = nil
+	// dry runs ready 889 with args in env, the device code approved if one is asked for, and fails the test on any
+	// device-flow request, GitHub write, or ledger commit.
+	dry := func(env map[string]string, args ...string) (int, string, string) {
+		t.Helper()
+		n := m.commits()
+		m.g.Reset()
+		m.device("rahulnakmol")
+		code, out, errOut := run(t, env, m.opts, append([]string{"ready", "889", "--repo", "o/r"}, args...)...)
+		if w := m.g.Writes(); m.codes() != 0 || len(w) != 0 || m.commits() != n {
+			t.Fatalf("ready 889 %v: device codes %d, GitHub writes %v, ledger commits %s → %s: %s%s", args, m.codes(), w, n, m.commits(), out, errOut)
+		}
+		return code, out, errOut
+	}
+	const valid = "MS1=#20,#21 MS2=#22,#23"
+	for _, env := range []map[string]string{m.person, m.agent} { // a terminal with no marker, and one with a host's marker
+		code, out, errOut := dry(env, "--dry-run", "--milestones", valid)
+		if code != 0 || strings.Contains(errOut, "/login/device") ||
+			!strings.Contains(out, "Approving: Approves #889 to build: 4 stories (#20-#23)") ||
+			!strings.Contains(out, "Approving: Mission plan: MS1 #20, #21 · MS2 #22, #23; every story and Bug is in one milestone") ||
+			!strings.Contains(out, "Approving: Estimate: runs ≥ 4 stories + 2 × 2 milestones = 8") ||
+			!strings.Contains(out, "--dry-run: ledger specs/889/approved.json and missions/889/plan.json") {
+			t.Fatalf("ready 889 --dry-run: exit %d: %s%s", code, out, errOut)
+		}
+	}
+	code, out, errOut := dry(m.person, "--dry-run", "--json", "--milestones", valid)
+	var rep ApproveReport
+	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || !rep.DryRun || rep.State != "planned" || rep.Plan == nil || len(rep.Plan.Milestones) != 2 ||
+		rep.Approval == nil || len(rep.Approval.Stories) != 4 || rep.Approval.By != "" || len(rep.Effect) == 0 {
+		t.Fatalf("ready 889 --dry-run --json: exit %d, %v: %s%s", code, err, out, errOut)
+	}
+	if ls := git(t, m.bare, "ls-tree", "-r", "--name-only", "ledger"); strings.Contains(ls, ready.ApprovalPath(889)) || strings.Contains(ls, MissionPlanPath(889)) {
+		t.Fatalf("a dry run wrote the approval or the plan:\n%s", ls)
+	}
+	// Criterion 2: each invalid milestones string gets the real run's exit and refusal, with and without --dry-run.
+	for _, spec := range []string{"MS1=#20,#21 MS2=#22", "MS1=#20,#21,#22 MS2=#22,#23", "MS1"} {
+		code, _, errOut := dry(m.person, "--milestones", spec)
+		dcode, dout, derrOut := dry(m.person, "--dry-run", "--milestones", spec)
+		if code == 0 || dcode != code || derrOut != errOut || dout != "" {
+			t.Fatalf("--milestones %q: exit %d, with --dry-run exit %d:\n%s\nwith --dry-run:\n%s%s", spec, code, dcode, errOut, dout, derrOut)
+		}
+	}
+	// A real run still asks for the device code, and writes the approval.
+	if code, out, errOut := m.approve(889, "--milestones", valid); code != 0 || m.codes() != 1 || !strings.Contains(errOut, "/login/device") {
+		t.Fatalf("ready 889 after the dry runs: exit %d, device codes %d: %s%s", code, m.codes(), out, errOut)
+	}
+	if p, _ := m.plan(889); p.ApprovedBy != "rahulnakmol" || len(p.Milestones) != 2 {
+		t.Fatalf("plan after the real run: %+v", p)
+	}
 }
 
 // storiesAndBug is Feature #889 with stories #20 to #24 and Bug #25.

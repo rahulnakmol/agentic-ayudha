@@ -926,6 +926,10 @@ func missionStart(ctx context.Context, e *Env, f int, reason string) error {
 	}
 	effect = append(effect, fmt.Sprintf("Its Kanha starts on %s now, and starts each story on %s", tool, tool))
 	e.warnStaleEnv(tool)
+	if c.DryRun() { // before the device code (Bug #1252)
+		return e.dryPending(Pending{What: "mission start", Effect: effect}, fmt.Sprintf("ledger %s planned, not written; no Kanha started", MissionPlanPath(f)),
+			MissionStartReport{Repo: repo, Feature: f, Effect: effect, Plan: plan, LedgerPath: MissionPlanPath(f), DryRun: true})
+	}
 	p, err := e.presenceCheck(ctx, Pending{What: "mission start", Effect: effect}, AccessWrite, e.personOnly("mission start"))
 	if err != nil {
 		return err
@@ -1042,6 +1046,10 @@ func storyStart(ctx context.Context, e *Env, repo string, c *github.Client, w *l
 	effect := []string{
 		fmt.Sprintf("Starts #%d of Tatkal Feature #%d on %s, the tool you set for this repository", n, f, tool),
 		fmt.Sprintf("The Kanha of #%d orders and tracks it, and does not start it", f),
+	}
+	if c.DryRun() { // before the device code (Bug #1252)
+		return e.dryPending(Pending{What: "mission start", Effect: effect}, fmt.Sprintf("ledger %s planned, not written; nothing handed off", MissionPlanPath(f)),
+			MissionStartReport{Repo: repo, Feature: f, Story: n, Effect: effect, Plan: plan, LedgerPath: MissionPlanPath(f), DryRun: true})
 	}
 	p, err := e.presenceCheck(ctx, Pending{What: "mission start", Effect: effect}, AccessWrite, e.personOnly("mission start"))
 	if err != nil {

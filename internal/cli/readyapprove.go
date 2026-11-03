@@ -26,7 +26,8 @@ import (
 type ApproveReport struct {
 	Repo         string          `json:"repo"`
 	Feature      int             `json:"feature"`
-	State        string          `json:"state"` // approved, or unchanged when the last approval agrees the Feature as it is
+	State        string          `json:"state"`            // approved, unchanged when the last approval agrees the Feature as it is, or planned (--dry-run)
+	Effect       []string        `json:"effect,omitempty"` // what a person approves; set by --dry-run, which asks for no approval
 	Approval     *ready.Approval `json:"approval"`
 	Plan         *MissionPlan    `json:"plan"` // missions/<f>/plan.json, written with the approval (Story #997)
 	LedgerPath   string          `json:"ledger_path"`
@@ -58,6 +59,21 @@ func (e *Env) laneRefusal(what string) error {
 		return nil
 	}
 	return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s)", what, lane)
+}
+
+// dryPending ends a human-only command's --dry-run where its presence check
+// would start (Bug #1252): it shows what approving p does and what the run
+// would write, and starts no device flow. A dry run writes nothing, so there
+// is nothing to approve. rep is the --json report.
+func (e *Env) dryPending(p Pending, planned string, rep any) error {
+	return e.Emit(rep, func(w io.Writer) error {
+		fmt.Fprintf(w, "%s needs a person's approval through GitHub's device flow.\n", p.What)
+		for _, line := range p.Effect {
+			fmt.Fprintf(w, "  Approving: %s\n", termText(line))
+		}
+		_, err := fmt.Fprintf(w, "  --dry-run: %s; no device code was asked for\n", planned)
+		return err
+	})
 }
 
 // critique is #876's critique.State of Feature n. Until #876 merges no
@@ -116,6 +132,14 @@ func (e *Env) approveToBuild(ctx context.Context, r *ready.Ready, n int, milesto
 		return a.ready(ctx, rep)
 	}
 	effect = append(effect, planEffect...)
+	if rep.DryRun { // the dry run ends here, before the device code (Bug #1252), with the inbox card's check a real run makes
+		if a.shown != "" && approveStories(want, plan) != a.shown {
+			return Errorf(ExitBlocked, "%s Nothing was approved.", approveChanged(n))
+		}
+		rep.State, rep.Approval, rep.Plan, rep.Effect = "planned", &want, &plan, effect
+		return e.dryPending(Pending{What: "Approve to build", Effect: effect},
+			fmt.Sprintf("ledger %s and %s, the Ready snapshot, and status:ready planned, not written", rep.LedgerPath, MissionPlanPath(n)), rep)
+	}
 	p, err := e.presenceCheck(ctx, Pending{What: "Approve to build", Effect: effect}, AccessWrite,
 		Errorf(ExitBlocked, "Approve to build needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code"))
 	if err != nil {

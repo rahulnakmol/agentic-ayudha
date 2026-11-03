@@ -868,6 +868,10 @@ func missionExtend(ctx context.Context, e *Env, f int, reason string, mission in
 		fmt.Sprintf("Extends mission %d of #%d by %d h ([mission] max_hours): it used %s, and new starts resume until %s h", mc.Mission, f, maxH, mc, hrs(limit)),
 		fmt.Sprintf("REASON %q", reason),
 	}
+	if c.DryRun() { // before the device code (Bug #1252)
+		return e.dryPending(Pending{What: "mission extend", Effect: effect}, fmt.Sprintf("ledger %s planned, not written", MissionPlanPath(f)),
+			MissionExtendReport{Repo: repo, Feature: f, Mission: mc.Mission, Effect: effect, Limit: limit, LedgerPath: MissionPlanPath(f), DryRun: true})
+	}
 	p, err := e.presenceCheck(ctx, Pending{What: "mission extend", Effect: effect}, AccessWrite, e.personOnly("mission extend"))
 	if err != nil {
 		return err

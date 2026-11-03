@@ -1,0 +1,13 @@
+# Which tests prove Bug #1252's Completion Goal.
+
+[[criterion]]
+id = 1 # ready <f> --dry-run --milestones <valid>: approval lines and plan, exit 0, no device-flow request, no ledger write
+tests = ["internal/cli:TestApproveToBuildDryRunAsksNoDeviceCode", "internal/cli:TestReadyApproveToBuild"]
+
+[[criterion]]
+id = 2 # the same with invalid milestones: the refusal a real run gets, and no device-flow request
+tests = ["internal/cli:TestApproveToBuildDryRunAsksNoDeviceCode"]
+
+[[criterion]]
+id = 3 # --dry-run of mission start, mission budget --to, and mission extend: the effect, no device-flow request, no write
+tests = ["internal/cli:TestMissionStartWritesPlan", "internal/cli:TestTatkalStoryStartRefusals", "internal/cli:TestGateFixCountsAgainstBudget", "internal/cli:TestMissionExtend"]
