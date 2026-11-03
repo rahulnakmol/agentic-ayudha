@@ -1089,13 +1089,14 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 }
 
 // saveFollowUp saves the record of a follow-up the receiver already has. When
-// the save fails, the error names the task that has the follow-up, a new one or
-// the same, and says that the next sync may send it again (Bug #1264). A host
-// follow-up was not sent yet, so it needs no such note.
+// the record may not be on the ledger, the error names the task that has the
+// follow-up, a new one or the same, and says that the next sync may send it
+// again (Bug #1264). A host follow-up was not sent yet, so it needs no such
+// note, and a record that landed (only its comment failed) needs none either.
 func (e *Env) saveFollowUp(ctx context.Context, d *delegation) error {
-	task, host := d.state.Task, d.hostFU != nil
+	task, host, followUps := d.state.Task, d.hostFU != nil, len(d.state.FollowUps)
 	err := e.saveDelegation(ctx, d)
-	if err == nil || host {
+	if err == nil || host || len(d.state.FollowUps) == followUps {
 		return err
 	}
 	return withSaveErr(Errorf(ExitExternal, "build #%d: %s has the follow-up on task %s, and its record may not be on the ledger, so the next sync may send it again", d.story, delegate.Names[d.receiver], task), err)

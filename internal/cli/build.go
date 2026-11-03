@@ -531,6 +531,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			var pause *usagePause
 			if errors.As(err, &pause) {
 				dlg.event(e.Now(), dlgPaused, pause.why)
+				events := len(dlg.state.Events)
 				dlg.fill(res.Delegation)
 				serr := e.saveDelegation(ctx, dlg)
 				// The wall clock would run out during the wait: that is the budget
@@ -539,9 +540,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				if pause.afterWall {
 					return withSaveErr(block("wall-time budget: "+pause.why), serr)
 				}
-				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				// Only a pause on the ledger is reported as one: saveDelegation went back to the held record otherwise (Bug #1264).
+				recorded := len(dlg.state.Events) == events && dlg.state.Status == dlgPaused
+				if recorded {
+					res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				}
 				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 					return withSaveErr(err, serr)
+				}
+				if !recorded {
+					return withSaveErr(Errorf(ExitExternal, "build #%d: %s stopped at a usage limit, and the ledger has no record of the pause: %s", n, delegate.Names[dlg.receiver], pause.why), serr)
 				}
 				_ = e.Emit(res, func(w io.Writer) error {
 					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)

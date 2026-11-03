@@ -377,6 +377,22 @@ func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
 		!strings.Contains(errOut, "Cursor has the follow-up on task bc-7f3a9c2e-1d4b-4e8a-9b6c-0a1b2c3d4e5f/run-01, and its record may not be on the ledger, so the next sync may send it again") {
 		t.Fatalf("a findings follow-up whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
 	}
+	// The follow-up's record lands and only its state comment fails: the error does not say the record may be missing.
+	refuseLedger(t, bare, "")
+	g.Mu.Lock()
+	var dcomment int64
+	for _, c := range g.Issues[2].Comments {
+		if strings.HasPrefix(c.Body, delegateMarker) {
+			dcomment = c.ID
+		}
+	}
+	g.Fail = "PATCH /repos/o/r/issues/comments/" + strconv.FormatInt(dcomment, 10)
+	g.Mu.Unlock()
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	if dcomment == 0 || code != ExitExternal || len(held().FollowUps) != 1 || !strings.Contains(errOut, "injected failure") || strings.Contains(errOut, "may not be on the ledger") {
+		t.Fatalf("a findings follow-up whose state comment failed: comment %d, exit %d %+v, ledger %+v: %s", dcomment, code, res.Delegation, held().FollowUps, errOut)
+	}
+	refuseLedger(t, bare, refuse)
 	// A sync that stops at the cycle cap keeps its own error, and says the record was not written.
 	st := inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Head: strings.Repeat("0", 40), Disposition: inspect.Fix}}
 	j, _ = json.Marshal(st)
@@ -384,8 +400,8 @@ func TestDelegateLedgerRefusedReportsHeld(t *testing.T) {
 	gate.Body = inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"
 	g.Mu.Unlock()
 	code, res, errOut = delegateRun(t, env, opts, set...)
-	if code != ExitBlocked || res.Delegation.Status != dlgHandedOff || !strings.Contains(errOut, "2-cycle cap") ||
-		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds handed-off") || held().Status != dlgHandedOff {
+	if code != ExitBlocked || res.Delegation.Status != dlgFix || !strings.Contains(errOut, "2-cycle cap") ||
+		!strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger, which holds fix-requested") || held().Status != dlgFix {
 		t.Fatalf("a capped sync whose record the ledger refused: exit %d %+v: %s", code, res.Delegation, errOut)
 	}
 	refuseLedger(t, bare, "")
@@ -866,6 +882,20 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		res.Delegation.Receiver != delegate.Codex || res.Delegation.Mode != "local" ||
 		ds.Receiver != delegate.Codex || ds.Mode != "local" || ds.Story != 2 || ds.Branch == "" || ds.BriefHash == "" || ds.PR != res.PR || ds.Status != dlgPROpen {
 		t.Fatalf("a pause whose record the ledger refused: exit %d runs %d, ledger %+v: %s", code, runs, ds, errOut)
+	}
+
+	// A pause with no reset time whose delegation record the ledger refuses is not reported as a pause.
+	_, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		refuseLedger(t, bare, `git diff --name-only "$old" "$new" | grep -q delegate/2/`)
+		return "ERROR: You’ve hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits.", errors.New("codex: exit status 1")
+	}
+	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	refuseLedger(t, bare, "")
+	if code != ExitExternal || res.Next != "" || (res.Delegation != nil && res.Delegation.Status == dlgPaused) || strings.Contains(errOut, "paused") ||
+		!strings.Contains(errOut, "Codex stopped at a usage limit, and the ledger has no record of the pause") || !strings.Contains(errOut, "the new delegation record of #2 did not reach the ledger") {
+		t.Fatalf("a pause whose record the ledger refused: exit %d, next %q, %+v: %s", code, res.Next, res.Delegation, errOut)
 	}
 
 	// A pause with no reset time whose delegation record and build state the ledger both refuse names both failures.
