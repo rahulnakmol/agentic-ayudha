@@ -1,0 +1,24 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily","Output":"=== RUN   TestInspectBuilderFamily\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai","Output":"=== RUN   TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai","Output":"--- PASS: TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai (0.28s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record","Output":"=== RUN   TestInspectBuilderFamily/no_trailer_and_no_build_record\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record","Output":"--- PASS: TestInspectBuilderFamily/no_trailer_and_no_build_record (0.25s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields","Output":"=== RUN   TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields","Output":"--- PASS: TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields (0.28s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/a_delegation_record_with_a_type_error_after_usable_fields"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic","Output":"=== RUN   TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic","Output":"--- PASS: TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic (0.39s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily","Output":"--- PASS: TestInspectBuilderFamily (1.20s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestCounsel"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestCounsel","Output":"=== RUN   TestCounsel\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestCounsel","Output":"--- PASS: TestCounsel (2.62s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestCounsel"}

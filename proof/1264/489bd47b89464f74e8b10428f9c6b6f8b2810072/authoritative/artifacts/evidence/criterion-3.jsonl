@@ -1,0 +1,24 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLedgerRefusedReportsHeld"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLedgerRefusedReportsHeld","Output":"=== RUN   TestDelegateLedgerRefusedReportsHeld\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLedgerRefusedReportsHeld","Output":"--- PASS: TestDelegateLedgerRefusedReportsHeld (1.59s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLedgerRefusedReportsHeld"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateCIRepair"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateCIRepair","Output":"=== RUN   TestDelegateCIRepair\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateCIRepair","Output":"--- PASS: TestDelegateCIRepair (1.18s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateCIRepair"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLocalUsageLimitPause"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLocalUsageLimitPause","Output":"=== RUN   TestDelegateLocalUsageLimitPause\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLocalUsageLimitPause","Output":"--- PASS: TestDelegateLocalUsageLimitPause (5.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestDelegateLocalUsageLimitPause"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCommentFails"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCommentFails","Output":"=== RUN   TestMissionMaybeStartedCommentFails\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCommentFails","Output":"--- PASS: TestMissionMaybeStartedCommentFails (1.72s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedCommentFails"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedLandedWithError"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedLandedWithError","Output":"=== RUN   TestMissionMaybeStartedLandedWithError\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedLandedWithError","Output":"--- PASS: TestMissionMaybeStartedLandedWithError (1.76s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedLandedWithError"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedRefused"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedRefused","Output":"=== RUN   TestMissionMaybeStartedRefused\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedRefused","Output":"--- PASS: TestMissionMaybeStartedRefused (1.76s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestMissionMaybeStartedRefused"}

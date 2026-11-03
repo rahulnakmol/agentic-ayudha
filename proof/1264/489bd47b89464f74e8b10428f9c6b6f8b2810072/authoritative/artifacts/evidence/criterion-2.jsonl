@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadRecordFails"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadRecordFails","Output":"=== RUN   TestAmpHostThreadRecordFails\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadRecordFails","Output":"--- PASS: TestAmpHostThreadRecordFails (2.40s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestAmpHostThreadRecordFails"}
