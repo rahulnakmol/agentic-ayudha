@@ -1,0 +1,64 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 1170,
+  "pr": 1271,
+  "pr_head_sha": "8f9391be273f0a995acf7ac83d62e8e1b369948e",
+  "merge_commit": "fb412a5aea23be7bd59384917bc2aa1ea4d5d89a",
+  "pack": "proof/1170/8f9391be273f0a995acf7ac83d62e8e1b369948e/authoritative/pack.json",
+  "pack_landed": "artifact 13185236664 of run 41534115033 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/41534115033), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 41534115033,
+  "artifact": 13185236664,
+  "pack_sha256": "0f905b06c0fbb47767de6ac4da0250c4baedfdc79098950987e9007aba8df18a",
+  "human_pass": {
+    "kind": "proof",
+    "login": "rahulnakmol",
+    "commit": "8f9391be273f0a995acf7ac83d62e8e1b369948e",
+    "note": "merged on proof (Decision #593): required checks build, generate-drift, lint, commits, security, docs, release-snapshot green, the pack verified with its floors holding, inspect at merge with review rung B, and nothing in the narrow set; CODEOWNERS paths skills/retro/SKILL.md merged with no code owner's review"
+  },
+  "gate_fix": {
+    "pr": 1271,
+    "milestone": "MS1",
+    "check": "eval:retro/em-enterprise",
+    "dev_sha": "ab8ab07669fb7755296fe4055ad1f64eeeed512f",
+    "approval": {
+      "record": "specs/1170/approved.json",
+      "sha256": "880d55d1705ffe29b9d7a4e64f0d3ea0fc014dc6c28f359389428205bf880620"
+    },
+    "at": "2026-11-02T21:28:43Z"
+  },
+  "proof": {
+    "rung": "B",
+    "required_checks": [
+      "build",
+      "generate-drift",
+      "lint",
+      "commits",
+      "security",
+      "docs",
+      "release-snapshot"
+    ],
+    "protected": [
+      "skills/retro/SKILL.md"
+    ],
+    "policy": "6cf3876c6d70bc9cc6d05851d028c7f817d3efb7"
+  },
+  "review_rung": "B",
+  "footprint": [
+    "L03"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {},
+    "autonomous": false,
+    "skipped": "the human pass is settled: proof"
+  },
+  "actions_segment": "actions/2026-11-03/cli-20261103T060159Z.jsonl",
+  "shipped_at": "2026-11-03T06:02:18Z",
+  "shipped_by": "rahulnakmol"
+}
