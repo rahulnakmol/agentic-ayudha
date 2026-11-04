@@ -148,7 +148,7 @@ func TestInFlightReplacedByAgents(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[build]\nagents = 2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, out, errOut := run(t, map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}, Options{Dir: dir}, "config", "validate"); code != ExitUsage || !strings.Contains(errOut, "AAYU_BUILD__IN_FLIGHT: "+want) {
+	if code, out, errOut := run(t, map[string]string{"AAYU_BUILD__IN_FLIGHT": "2", windowsKey: defaultWindows}, Options{Dir: dir}, "config", "validate"); code != ExitUsage || !strings.Contains(errOut, "AAYU_BUILD__IN_FLIGHT: "+want) {
 		t.Fatalf("AAYU_BUILD__IN_FLIGHT: exit %d: %s%s", code, out, errOut)
 	}
 	if code, out, errOut := run(t, nil, Options{Dir: dir}, "config", "validate"); code != ExitOK || !strings.Contains(out, "config is valid") {

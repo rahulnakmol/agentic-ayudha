@@ -2248,6 +2248,21 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Errorf("reviewer %s: exit %d, %d model calls, comments %+v %s", tool, code, len(model.Requests), cs, errOut)
 		}
 	}
+	// Outside a person's window the request for a person's review is not posted: the inbox holds the PR, and the
+	// window's message lists it. A review app is asked as before (Story #1254, Goldfish round 2, finding 4).
+	for tool, comments := range map[string]int{"human": 0, "codex": 1} {
+		g, env, opts, prN, _ := setup(tool)
+		env["AAYU_AUTONOMY__APPROVER"], env[windowsKey] = "founder", defaultWindows
+		opts.Now = func() time.Time { return london(14, 0) }
+		code, _, errOut := inspectApp(t, env, opts, prN)
+		g.Mu.Lock()
+		n := len(g.Issues[prN].Comments)
+		g.Mu.Unlock()
+		origin := strings.TrimSpace(git(t, opts.Dir, "remote", "get-url", "origin"))
+		if queued := strings.Contains(ledgerFile(t, origin, OutboxPath), `"review:o/r#`); n != comments || code != ExitBlocked || queued != (tool == "human") {
+			t.Errorf("reviewer %s at 14:00: exit %d, %d comments, want %d, in the outbox %v: %s", tool, code, n, comments, queued, errOut)
+		}
+	}
 	// ci, the default: the code-review environment's model reviews, called directly, at fast serving, in its own
 	// family's wire format: a wire-format override of another gateway does not carry over.
 	_, env, opts, prN, model := setup("")

@@ -31,7 +31,7 @@ you set them up. To change a loop later, edit its file and run
 | `release-measure` | Mondays 10:30 | Runs `measure` when a release was published that week |
 | `housekeeping` | Fridays 16:00 | Cleans up, then reports setup drift, feature-map drift, and stale Ready issues |
 | `retro`, `evolve` | Mondays, monthly | The retro, and skill evolution, which takes new Feedback |
-| `digest` | Weekdays 09:05, in Actions | The founder digest; it needs no agent |
+| `digest` | Weekdays 10:35, in the morning window, in Actions | The founder digest; it needs no agent |
 | `verify-sweep` | Daily 02:30, in Actions | Runs every behaviour check with no model; a failed check turns the run red |
 
 Times are in `[time] tz` from your config. Every run starts with a guard that stops it while the repository is halted

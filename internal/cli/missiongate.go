@@ -1603,6 +1603,10 @@ func missionBudget(ctx context.Context, e *Env, f int, in Values) error {
 			return err
 		}
 	}
+	// The budget card of new starts (Story #1254) has its answer: a later one asks about the new budget.
+	if err := e.closeAsk(ctx, c, repo, f, startsAskID(plan.Budget), fmt.Sprintf("@%s raised the budget to %s: %s. New starts go on.", p.Login, ready.USD(to), reason)); err != nil {
+		return err
+	}
 	return e.Emit(map[string]any{"feature": f, "budget": to, "freed": freed, "ledger_commit": commit}, func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "@%s raised the budget of #%d to %s; fix PRs that go on: %s\n", p.Login, f, ready.USD(to), issueRefs(freed))
 		return err

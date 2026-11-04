@@ -26,9 +26,9 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
-// The evening review (Story #1176, Decision #1168). At the end of [time]
-// business_hours, `aayu inbox` shows one card for each story agreed this
-// morning: each story of a mission milestone that started today, by its
+// The evening review (Story #1176, Decision #1168). In the evening window,
+// the last of [time] windows (Story #1254), `aayu inbox` shows one card for
+// each story agreed this morning: each story of a mission milestone that started today, by its
 // mission's start or its previous milestone's gate. The card shows each
 // criterion of the story, its evidence kind, and its evidence from the proof
 // pack on the ledger at the head that merged, never from a comment. A person
@@ -92,6 +92,7 @@ type eveningStory struct {
 	reviewed  bool              // a person reviewed it today at that head and that pack
 	accepted  bool              // and that review, or another of them, accepts it
 	date      string            // today, the day it was agreed, as 2006-01-02
+	when      string            // the evening review's window, in [time] tz (Story #1254)
 	images    map[string][]byte // its screenshots by artifact path, read only where the terminal shows images
 }
 
@@ -106,14 +107,22 @@ func (st eveningStory) packID() string {
 	return termText(st.pack.Path) + "@sha256:" + hex.EncodeToString(sum[:])
 }
 
-// eveningDay is today's local day and the end of its business hours, when now
-// is at or past that end on a business day.
-func eveningDay(clock config.Clock, now time.Time) (day, end time.Time, ok bool) {
+// eveningDay is today's local day, when now is at or past the start of its
+// evening window, the last of [time] windows (Story #1254). With no windows it
+// is the end of business hours on a business day.
+func eveningDay(cfg *config.Config, now time.Time) (day time.Time, ok bool) {
+	if w, err := cfg.PersonWindows(); err == nil && len(w.Spans) > 0 {
+		now = now.In(w.Loc)
+		y, m, d := now.Date()
+		last := w.Spans[len(w.Spans)-1]
+		return time.Date(y, m, d, 0, 0, 0, 0, w.Loc), !now.Before(time.Date(y, m, d, last[0]/60, last[0]%60, 0, 0, w.Loc))
+	}
+	clock, _ := cfg.Clock() // a config that loaded has a clock (config.Validate)
 	now = now.In(clock.Loc)
 	y, m, d := now.Date()
 	day = time.Date(y, m, d, 0, 0, 0, 0, clock.Loc)
-	end = time.Date(y, m, d, clock.End/60, clock.End%60, 0, 0, clock.Loc)
-	return day, end, clock.Days[now.Weekday()] && !now.Before(end)
+	end := time.Date(y, m, d, clock.End/60, clock.End%60, 0, 0, clock.Loc)
+	return day, clock.Days[now.Weekday()] && !now.Before(end)
 }
 
 // milestoneStart is when milestone i of p started: the mission's start for
@@ -148,15 +157,14 @@ func inlineImage(name string, b []byte) string {
 
 // eveningStories reads the stories agreed today from the ledger, each with
 // its pack at the head that head says merged ("" when it did not merge), and
-// with images its screenshots. It reads nothing before the end of today's
-// business hours.
+// with images its screenshots. It reads nothing before today's evening
+// window.
 func (e *Env) eveningStories(ctx context.Context, head func(story int) string, images bool) ([]eveningStory, error) {
 	l, err := e.Config()
 	if err != nil { // `aayu inbox` itself refuses such a config; `--list` shows the rest without its clock
 		return nil, nil
 	}
-	clock, _ := l.Config.Clock() // a config that loaded has a clock (config.Validate)
-	day, _, ok := eveningDay(clock, e.Now())
+	day, ok := eveningDay(&l.Config, e.Now())
 	if !ok {
 		return nil, nil
 	}
@@ -189,7 +197,7 @@ func (e *Env) eveningStories(ctx context.Context, head func(story int) string, i
 				continue
 			}
 			for _, n := range m.Stories {
-				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p, date: day.Format(time.DateOnly)}
+				st := eveningStory{feature: p.Feature, milestone: m.Name, number: n, plan: p, date: day.Format(time.DateOnly), when: reviewTime(&l.Config, e.Now())}
 				h := head(n)
 				if h != "" {
 					es, err := packs.Packs(ctx, t, n)
@@ -282,7 +290,7 @@ func (s *inboxSource) eveningItems(ctx context.Context, delivered func(int) *aud
 		crit := storyCriteria(is)
 		it := InboxItem{day: day, Kind: InboxEvening, Number: n, Title: termText(is.GetTitle()), URL: is.GetHTMLURL(), Seat: verbs.EngineeringManager,
 			Evidence: is.GetHTMLURL(), Updated: is.GetUpdatedAt().Time, Feature: st.feature, labels: labels, CounselFrom: "facts"}
-		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission.", termText(st.milestone), st.feature))
+		it.Lines = append(it.Lines, fmt.Sprintf("Agreed this morning: %s of #%d's mission, for this review at %s.", termText(st.milestone), st.feature, st.when))
 		pr := delivered(n)
 		shown := 0
 		var missing []string // a merged story's criteria with no evidence in its pack, each on its own line

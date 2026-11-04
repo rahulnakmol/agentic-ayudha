@@ -565,6 +565,26 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	}
 	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"rahulnakmol\"\n"
 	g.Mu.Unlock()
+	// Outside a person's window, ship comments nothing: its Ready to ship comment waits in the ledger's outbox, and
+	// the window's first tick posts it, with no second ship (Story #1254, Goldfish rounds 1 and 2).
+	windowed, outside := maps.Clone(agent), opts
+	windowed[windowsKey] = defaultWindows
+	outside.Now = func() time.Time { return time.Date(2026, 10, 22, 13, 0, 0, 0, time.UTC) } // 14:00 London: between the windows
+	g.Reset()
+	if code, _, errOut := run(t, windowed, outside, "ship", strconv.Itoa(prA), "--repo", "o/r"); code != ExitBlocked ||
+		!strings.Contains(errOut, "its Ready to ship comment for @rahulnakmol waits for the window at Thu 22 Oct 18:30 BST") ||
+		len(g.Writes()) != 0 {
+		t.Fatalf("agent ship #%d outside a window: %d %s", prA, code, errOut)
+	}
+	readyComment := func(pr int) bool {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		return slices.ContainsFunc(g.Issues[pr].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, ReadyToShipMarker) })
+	}
+	outside.Now = func() time.Time { return time.Date(2026, 10, 22, 17, 30, 0, 0, time.UTC) } // 18:30 London: the evening window opens
+	if code, out, errOut := run(t, windowed, outside, "mission", "tick", "--repo", "o/r"); code != 0 || !readyComment(prA) || readyComment(prB) {
+		t.Fatalf("the tick at 18:30: exit %d, Ready to ship on #%d %v: %s%s", code, prA, readyComment(prA), out, errOut)
+	}
 	for _, pr := range []int{prA, prB} {
 		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
 		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {

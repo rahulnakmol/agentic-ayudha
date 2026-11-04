@@ -94,30 +94,32 @@ func TestDue(t *testing.T) {
 }
 
 // Story #1009, criterion 1: the build-ready loop is the hourly safety tick, on
-// every day. Europe/London is UTC+1 in summer and UTC+0 in winter; on the hour
-// both offsets give the same UTC cron, so a tool with UTC triggers gets one,
-// and it is due each hour of a summer Saturday and a winter Tuesday.
+// every day, at half past the hour, when each default person's window opens
+// (Story #1254). Europe/London is UTC+1 in summer and UTC+0 in winter, and
+// Asia/Kolkata UTC+5:30; at :30 every offset gives one UTC cron, so a tool
+// with UTC triggers gets one, and it is due each hour of a summer Saturday
+// and a winter Tuesday.
 func TestBuildReadyHourlyCronUTC(t *testing.T) {
 	ls, err := Load(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	l, ok := Find(ls, "build-ready")
-	if !ok || l.Cron != "0 * * * *" || !slices.Equal(l.Command, []string{"mission", "tick"}) {
+	if !ok || l.Cron != "30 * * * *" || !slices.Equal(l.Command, []string{"mission", "tick"}) {
 		t.Fatalf("loops/build-ready.toml: cron %q, command %q", l.Cron, l.Command)
 	}
 	london := zone(t, "Europe/London")
-	for _, off := range []int{3600, 0} { // BST, GMT
-		if got, err := l.UTCCron(off); err != nil || !slices.Equal(got, []string{"0 * * * *"}) {
+	for off, want := range map[int]string{3600: "30 * * * *", 0: "30 * * * *", 19800: "0 * * * *"} { // BST, GMT, IST
+		if got, err := l.UTCCron(off); err != nil || !slices.Equal(got, []string{want}) {
 			t.Errorf("offset %d: %v %v", off, got, err)
 		}
 	}
-	if got, err := l.UTCCrons(london); err != nil || !slices.Equal(got, []string{"0 * * * *"}) {
+	if got, err := l.UTCCrons(london); err != nil || !slices.Equal(got, []string{"30 * * * *"}) {
 		t.Errorf("UTCCrons(Europe/London): %v %v, want one cron", got, err)
 	}
-	for _, at := range []string{"2026-07-18T13:00:00Z", "2026-07-18T13:40:00Z", "2026-12-15T02:00:00Z", "2026-12-15T23:05:00Z"} {
+	for _, at := range []string{"2026-07-18T13:30:00Z", "2026-07-18T13:40:00Z", "2026-12-15T02:30:00Z", "2026-12-15T23:35:00Z"} {
 		now, _ := time.Parse(time.RFC3339, at)
-		if !l.Due(london, now, "0 * * * *") || !l.Due(london, now, "") {
+		if !l.Due(london, now, "30 * * * *") || !l.Due(london, now, "") {
 			t.Errorf("%s: not due", at)
 		}
 	}

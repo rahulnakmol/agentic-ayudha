@@ -222,13 +222,23 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 				return Wrap(ExitExternal, err)
 			}
 			st.Did = append(st.Did, "page "+page.Key+": "+sent)
-			wrote, err := c.UpsertComment(ctx, repo, d.Number, decide.EscalationMarker, decide.EscalationComment(d, pol, st.Authority, st.Login),
-				actions.Action{Kind: "github.comment.decision-escalation", Payload: map[string]any{"tag": bot.Tag, "escalate_to": pol.EscalateTo}})
-			if err != nil {
-				return err
-			}
-			if wrote {
-				st.Did = append(st.Did, "escalation comment")
+			body := decide.EscalationComment(d, pol, st.Authority, st.Login)
+			if next := e.outsideWindow(); !next.IsZero() && !c.DryRun() {
+				// The comment mentions the person, so it asks them to act: outside a window it waits in the outbox (Story #1254).
+				q := queued{Key: fmt.Sprintf("escalation:%s#%d", repo, d.Number), Comment: &queuedComment{PR: d.Number, Kind: "github.comment.decision-escalation", Marker: decide.EscalationMarker, Body: body}}
+				if err := e.enqueueHere(ctx, q); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+				st.Did = append(st.Did, "escalation comment waits for the window at "+next.Format("Mon 2 Jan 15:04 MST"))
+			} else {
+				wrote, err := c.UpsertComment(ctx, repo, d.Number, decide.EscalationMarker, body,
+					actions.Action{Kind: "github.comment.decision-escalation", Payload: map[string]any{"tag": bot.Tag, "escalate_to": pol.EscalateTo}})
+				if err != nil {
+					return err
+				}
+				if wrote {
+					st.Did = append(st.Did, "escalation comment")
+				}
 			}
 		}
 		if st.Apply {
@@ -506,6 +516,18 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 			fmt.Fprintf(e.Out, "  %d. %s %s\n", i+1, it.Effect, it.Door)
 		}
 		return nil
+	}
+	if next := e.outsideWindow(); agentRun && !next.IsZero() {
+		// Outside a person's window nobody is asked to act (Story #1254): no batch and no code. The request is queued
+		// for the next window's one message, and the Decisions wait in the inbox.
+		var body strings.Builder
+		for i, it := range b.Items {
+			fmt.Fprintf(&body, "%d. %s %s\n", i+1, it.Effect, it.Door)
+		}
+		fmt.Fprintf(&body, "An agent asked: %s", b.Command)
+		status := e.askLater(ctx, fmt.Sprintf("batch:%s:%v:%v", repo, nums, options), fmt.Sprintf("%s %s for your approval", issueRefs(nums), plural(len(nums), "waits", "wait")), body.String())
+		return WithNext(Errorf(ExitBlocked, "decide --accept: outside the person's windows ([time] windows), nobody is asked to act: no batch was posted, and the request waits for the window at %s (%s)",
+			next.Format("Mon 2 Jan 15:04 MST"), status), "run the same command again in the window, or the person accepts in aayu inbox")
 	}
 	if agentRun {
 		if berr == nil {

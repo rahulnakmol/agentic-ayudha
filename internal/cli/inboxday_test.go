@@ -83,8 +83,9 @@ func TestMorningCardOrder(t *testing.T) {
 
 // dayLine889 is the day line of #889 as approveWorld's Sunday clock reads it:
 // MS1 today, without Bug #30, which waits in the BUGS milestone (#1174), and
-// the review at 18:00 on Monday, the next business day.
-const dayLine889 = "  #889 · today MS1: #20, #21, #22 · evening review Mon 2 Nov 18:00 Europe/London, the end of [time] business_hours\n"
+// the review in Sunday's evening window, the last of [time] windows (Story
+// #1254): a person's windows are every day, and the line names them in [time] tz.
+const dayLine889 = "  #889 · today MS1: #20, #21, #22 · evening review Sun 1 Nov 18:30-19:30 Europe/London, the evening window\n"
 
 // Criterion 2: he approves #889 and starts its mission in the session, and
 // leaves #900 for later: the last card says The day is set, with one line for
@@ -93,6 +94,7 @@ const dayLine889 = "  #889 · today MS1: #20, #21, #22 · evening review Mon 2 N
 func TestDayIsSet(t *testing.T) {
 	t.Run("line by line", func(t *testing.T) {
 		m, pr := morningWorld(t)
+		m.windows()
 		m.device("rahulnakmol")
 		code, out, errOut := runIn(t, m.person, m.opts, "aaaaa1y2s", "inbox", "--repo", "o/r")
 		last := strings.LastIndex(out, "At the review cap #"+strconv.Itoa(pr))
@@ -103,7 +105,8 @@ func TestDayIsSet(t *testing.T) {
 	})
 	t.Run("full screen", func(t *testing.T) {
 		m := lockWorld(t, "cursor")
-		// Monday 19:30 in UTC is Tuesday 01:00 in Kolkata, before its hours: the review is Tuesday at 18:00 there.
+		m.windows()
+		// Monday 19:30 in UTC is Tuesday 01:00 in Kolkata, after Monday's evening window there: the review is Tuesday's.
 		m.opts.Now = func() time.Time { return time.Date(2026, 11, 2, 19, 30, 0, 0, time.UTC) }
 		m.person["AAYU_TIME__TZ"] = "Asia/Kolkata"
 		opts := m.opts
@@ -116,7 +119,7 @@ func TestDayIsSet(t *testing.T) {
 		}
 		m.device("rahulnakmol")
 		code, out, errOut := runIn(t, m.person, opts, "", "inbox", "--repo", "o/r")
-		want := "\n" + dayIsSet + "\n  #889 · today MS1: #20, #21, #22 · evening review Tue 3 Nov 18:00 Asia/Kolkata, the end of [time] business_hours\n\ninbox: 1 done"
+		want := "\n" + dayIsSet + "\n  #889 · today MS1: #20, #21, #22 · evening review Tue 3 Nov 18:30-19:30 Asia/Kolkata, the evening window\n\ninbox: 1 done"
 		if p, _ := m.plan(889); code != 0 || p.StartedBy != "rahulnakmol" || !strings.Contains(out, want) {
 			t.Fatalf("full-screen inbox: exit %d, started by %q:\n%s%s", code, p.StartedBy, out, errOut)
 		}

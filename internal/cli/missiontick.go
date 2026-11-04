@@ -105,6 +105,11 @@ type TickSync struct {
 // missionTick is `aayu mission tick`.
 func missionTick(ctx context.Context, e *Env) error {
 	if _, err := os.Stat(e.PauseFile()); err == nil {
+		// The pause stops every agent lane, but not the window's one message: it starts no model and no story, and
+		// the person it reaches is the one who clears the pause (Story #1254).
+		if repo, c, w, lerr := e.missionLedger(ctx); lerr == nil {
+			e.windowMessage(ctx, c, w, repo)
+		}
 		return Errorf(ExitBudget, "mission tick: agent lanes are paused by the [budget] breaker (%s): nothing is woken or synced; a human clears it with `aayu resume`", e.PauseFile())
 	}
 	repo, c, w, err := e.missionLedger(ctx)
@@ -122,6 +127,9 @@ func missionTick(ctx context.Context, e *Env) error {
 		}
 	}
 	e.tickSync(ctx, c, w, repo, states, &rep)
+	if !rep.DryRun { // in a person's window, after the cards that came due are shown: the window's one message (Story #1254)
+		e.windowMessage(ctx, c, w, repo)
+	}
 	return e.Emit(rep, func(w io.Writer) error {
 		for _, k := range rep.Woken {
 			fmt.Fprintf(w, "woke the Kanha of #%d (%s): %s\n", k.Feature, k.Status, k.Event)
@@ -187,6 +195,33 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 		return "unreadable: " + oneLineErr(err)
 	case plan == nil || plan.StartedBy == "":
 		return ""
+	}
+	// In a person's window the tick shows each due card itself (time and budget), whatever the Kanha and before it
+	// decides whether to wake it, so the card is in the inbox even when no story can start (Story #1254).
+	l, err := e.Config()
+	if err != nil {
+		return "unreadable: " + oneLineErr(err)
+	}
+	var clocks []MissionClock
+	list := WorkList{}
+	if plan.State == "" && plan.Pause == nil {
+		warn, maxH := missionLimits(&l.Config)
+		clocks, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
+		if err == nil {
+			win, _ := l.Config.PersonWindows()
+			err = e.missionCards(ctx, c, repo, f, clocks, warn, maxH, l.Config.Identity, win, true)
+		}
+		if err == nil && appr != nil { // the list claims nothing; its budget card shows when due
+			var subs []*gh.Issue
+			if subs, err = featureItems(ctx, c, repo, f, "story", "bug"); err == nil {
+				err = e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, false)
+			}
+		}
+		if err != nil {
+			return "unreadable: " + oneLineErr(err)
+		}
+	}
+	switch {
 	case appr == nil || appr.Parent == nil:
 		return fmt.Sprintf("no Kanha is recorded: a person runs aayu mission start %d", f)
 	case plan.State != "": // ended by the person who started it (#1002)
@@ -202,24 +237,10 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	if now.Sub(told) < tickPeriod && len(due) == 0 {
 		return fmt.Sprintf("its Kanha was told at %s, since the last tick", told.UTC().Format(time.RFC3339))
 	}
+	// list above: a story past its mission's time limit and a window's end cannot start, so it wakes nobody (Story #1015)
 	changed, err := (&approveRun{e: e, c: c, w: w, n: f}).featureChanges(ctx, repo, *appr)
 	if err == nil && len(changed) > 0 {
 		return "not approved to build: " + strings.Join(changed, "; ")
-	}
-	list := WorkList{}
-	if err == nil {
-		var subs []*gh.Issue
-		var clocks []MissionClock // a story past its mission's time limit cannot start, so it wakes nobody (Story #1015)
-		var l *config.Loaded
-		if l, err = e.Config(); err == nil {
-			_, maxH := missionLimits(&l.Config)
-			clocks, err = e.missionClocks(ctx, c, w, repo, f, plan, maxH, l.Config.Identity)
-		}
-		if err == nil {
-			if subs, err = featureItems(ctx, c, repo, f, "story", "bug"); err == nil {
-				err = e.workList(ctx, c, w, repo, f, plan, appr, subs, clocks, &list, false)
-			}
-		}
 	}
 	if err != nil {
 		return "unreadable: " + oneLineErr(err)
@@ -272,7 +293,7 @@ func (e *Env) tickMission(ctx context.Context, c *github.Client, w *ledger.Write
 	case !ok:
 		return held
 	}
-	l, _ := e.Config() // loaded and checked by the GitHub client
+	// l: loaded above
 	ad := e.receiverAdapter(l.Config.Delegate, p.Host, c, repo, config.RepoRoot(e.Dir))
 	log, err := e.Actions()
 	if err == nil {

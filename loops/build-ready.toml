@@ -4,9 +4,11 @@
 # and syncs each open cloud pull request of Codex, Cursor, or Claude Code with `aayu build <n> --delegate <receiver>`.
 # The agent then hands each pull request at merge-ready to `aayu ship`, which merges on proof or puts a "Ready to ship"
 # card in a person's inbox. The tick never builds, claims, or starts a story: the Kanha starts each one in its own
-# thread. Each run is a paid agent turn, 24 a day. The cron is in [time] tz; on the hour, it is one UTC cron in every
-# zone with whole-hour offsets, summer and winter, so no tool runs it twice an hour.
+# thread. Each run is a paid agent turn, 24 a day. At half past the hour it opens each default person's window
+# ([time] windows, 10:30 and 18:30; Story #1254): it shows the cards that came due and sends the window's one message.
+# The cron is in [time] tz; at :30 it is one UTC cron in every zone with whole-hour or half-hour offsets, summer and
+# winter, so no tool runs it twice an hour.
 description = "Safety tick: wake each mission's Kanha that missed an event, sync the open cloud pull requests, and hand those at merge-ready to aayu ship."
 command = ["mission", "tick"]
-cron = "0 * * * *"
+cron = "30 * * * *"
 prompt = "Report in one line each Kanha it woke and each pull request it synced. Then, for each pull request it lists to ship, oldest first, run `AAYU_AGENT=1 aayu ship <pr>` once and report in one line what ship did: it merges on proof, or it refuses and says why (a pull request that needs a person waits in `aayu inbox`). Never pass --solo-bypass or --admin, never merge in any other way, and never run a human-only step. Never build, claim, or start a story in this run, and never run `aayu build` or `aayu mission next` yourself: each mission's Kanha starts its stories in its own session. When it woke, synced, and listed nothing, stop without reporting."

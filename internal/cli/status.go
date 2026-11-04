@@ -41,11 +41,18 @@ func (e *Env) Notifier(ctx context.Context) (*notify.Sender, error) {
 	if err != nil {
 		return nil, Wrap(ExitUsage, err)
 	}
+	win, err := l.Config.PersonWindows()
+	if err != nil {
+		return nil, Wrap(ExitUsage, err)
+	}
 	log, err := e.Actions()
 	if err != nil {
 		return nil, err
 	}
-	s := &notify.Sender{Clock: clock, Now: e.Now, State: filepath.Join(e.stateDir(), "state", "notify.json"), Actions: log, Sink: e.NotifySink}
+	s := &notify.Sender{Clock: clock, Windows: &win, Now: e.Now, State: filepath.Join(e.stateDir(), "state", "notify.json"), Actions: log, Sink: e.NotifySink}
+	if len(win.Spans) > 0 { // a page that waits for a window waits in the ledger's outbox, which every checkout reads (Story #1254)
+		s.Queue = ledgerQueue{e}
+	}
 	if s.Sink != nil {
 		return s, nil
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
@@ -98,6 +99,20 @@ func (m *missionWorld) callLog() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return slices.Clone(m.calls)
+}
+
+// windows gives the world the default person's windows, 10:30-11:30 and
+// 18:30-19:30 in [time] tz (Story #1254), and a fake [notify] channel whose
+// pages it returns. Every test that calls it sets a fake clock, which stamps
+// the comments the fake GitHub writes too.
+func (m *missionWorld) windows() *notify.Fake {
+	for _, env := range []map[string]string{m.person, m.agent, m.lane} {
+		env[windowsKey] = defaultWindows
+	}
+	sink := &notify.Fake{}
+	m.opts.NotifySink = sink
+	m.g.Clock = func() time.Time { return m.opts.Now() } // a card is shown when the fake clock says
+	return sink
 }
 
 func newMissionWorld(t *testing.T) *missionWorld {

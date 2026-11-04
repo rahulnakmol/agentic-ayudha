@@ -352,12 +352,24 @@ type GitHub struct {
 	Fail string
 	// Hook, when set, runs first on every request with the fake locked: a
 	// test changes state between two of aayu's writes.
-	Hook      func(method, path string)
+	Hook func(method, path string)
+	// Clock, when set, stamps the comments the fake writes in place of the
+	// real clock: a test that reads when a comment was written sets its fake
+	// clock here too.
+	Clock     func() time.Time
 	FailAfter int
 	seq       int64
 	updates   int // writes so far: each advances an issue's UpdatedAt by a second
 	failSeen  int
 	Server    *httptest.Server
+}
+
+// now is the fake's clock: Clock when set, else the real one.
+func (g *GitHub) now() time.Time {
+	if g.Clock != nil {
+		return g.Clock().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // New starts a fake for owner/name and stops it when the test ends.
@@ -1409,7 +1421,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if m == "POST" {
 			g.seq++
-			c := &Comment{ID: g.seq, Body: str("body"), CreatedAt: time.Now().UTC()}
+			c := &Comment{ID: g.seq, Body: str("body"), CreatedAt: g.now()}
 			c.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d", g.Owner, g.Repo, is.Number, c.ID)
 			c.User.Login, c.User.Type = g.Viewer, "User"
 			if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
@@ -1463,7 +1475,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					if m == "PATCH" {
-						c.Body, c.UpdatedAt = str("body"), time.Now().UTC().Add(time.Second)
+						c.Body, c.UpdatedAt = str("body"), g.now().Add(time.Second)
 					}
 					reply(200, c)
 					return

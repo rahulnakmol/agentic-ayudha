@@ -631,6 +631,13 @@
         "business_hours": {
           "type": "string",
           "description": "Business days and hours, e.g. Mon-Fri 09:00-18:00."
+        },
+        "windows": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "A person's windows each day in tz, e.g. 10:30-11:30: the only times aayu asks a person to act. Outside them no work waits for a person. Empty: any time."
         }
       },
       "additionalProperties": false,

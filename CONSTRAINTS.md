@@ -108,6 +108,16 @@ Approve to build is a person's decision, through GitHub's device flow every time
 
 A mission reads every limit from config, never from a prompt. How many stories it runs at once is `build.agents`.
 
+## Person windows
+
+| Key | Default | Meaning | Source |
+|---|---|---|---|
+| `time.tz` | `"Europe/London"` | IANA time zone of business hours, the person's windows, and the loops' crons. | WP1.2 |
+| `time.business_hours` | `"Mon-Fri 09:00-18:00"` | Business days and hours: the clock of Decision SLAs. | WP1.2 |
+| `time.windows` | `["10:30-11:30", "18:30-19:30"]` | A person's windows each day, in `time.tz`: the only times aayu asks a person to act (a page, a comment approval batch, a mission's time or budget card). Outside them no work waits for a person, and every request waits for the next window, where one message lists them all; each starts at half past an hour, when the safety tick sends it. A mission past `mission.max_hours` or its budget holds new starts only from the end of a window in which its card went unanswered. Empty: any time. | 0.4 |
+
+Urgent pages (a halt and its resume) ignore the windows. The `[budget]` breaker is money, not a request: it stops every agent lane at any time.
+
 ## Outcomes
 
 | Key | Default | Meaning | Source |

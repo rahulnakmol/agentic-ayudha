@@ -237,7 +237,7 @@ schedule everywhere:
 | `housekeeping` | Fridays 16:00 | `aayu gc`, then reports doctor drift, feature-map drift, and stale Ready issues |
 | `evolve` | Monthly, day 2 | Skill evolution, which also takes the Feedback filed since |
 | `retro` | Mondays | The retro |
-| `digest` | Weekdays 09:05, in Actions | `aayu status --digest`, paged through `[notify]`; `agent = false` |
+| `digest` | Weekdays 10:35, in the morning window, in Actions | `aayu status --digest`, paged through `[notify]`; `agent = false` |
 | `verify-sweep` | Daily 02:30, in Actions | `aayu verify --check all`, every behaviour check with no model; `agent = false` |
 
 `decisions` (weekdays 09:15), `seat-review`, and `verify-maintain` are agent loops too. Only `digest` and

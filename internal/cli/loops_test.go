@@ -43,7 +43,7 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), cfg, 0o644)
 	event := filepath.Join(t.TempDir(), "event.json")
 	output := filepath.Join(t.TempDir(), "output")
-	now := time.Date(2026, 10, 12, 8, 5, 0, 0, time.UTC) // Monday 09:05 London (BST)
+	now := time.Date(2026, 10, 12, 5, 5, 0, 0, time.UTC) // Monday 10:35 Kolkata, in the morning window (Story #1254)
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Now: func() time.Time { return now }}
 	env := func(halt string) map[string]string {
 		return map[string]string{"GITHUB_TOKEN": "workflow-token", "GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "schedule",
@@ -73,11 +73,11 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	}
 
 	if code, out := guard("5 9 * * 1-5", ""); code != 0 || out != "due=false\n" {
-		t.Errorf("the GMT cron in summer: exit %d, %q", code, out)
+		t.Errorf("a cron of another zone: exit %d, %q", code, out)
 	}
-	code, out := guard("5 8 * * 1-5", "")
+	code, out := guard("5 5 * * 1-5", "")
 	if code != 0 || out != "due=true\n" {
-		t.Fatalf("the BST cron: exit %d, %q", code, out)
+		t.Fatalf("the Kolkata cron: exit %d, %q", code, out)
 	}
 	if code, _, errOut := run(t, env(""), opts, "status", "--digest", "--ci", "--repo", "o/r"); code != 0 || pages() != 1 {
 		t.Fatalf("status --digest: exit %d, %d pages: %s", code, pages(), errOut)
@@ -88,7 +88,7 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 
 	// Halted: the next run exits 4 at the guard, and the verb itself refuses too; nothing is written.
 	g.Reset()
-	if code, _ := guard("5 8 * * 1-5", "founder at 2026-10-12: test"); code != ExitBlocked {
+	if code, _ := guard("5 5 * * 1-5", "founder at 2026-10-12: test"); code != ExitBlocked {
 		t.Errorf("halted guard: exit %d, want %d", code, ExitBlocked)
 	}
 	if code, _, _ := run(t, env("founder at 2026-10-12: test"), opts, "status", "--digest", "--ci", "--repo", "o/r"); code != ExitBlocked {
@@ -108,10 +108,10 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		map[string]any{"id": 2, "status": "completed", "run_started_at": "2026-10-06T08:05:00Z", "updated_at": "2026-10-06T08:10:30Z"},
 	}}}
 	g.Mu.Unlock()
-	if code, out := guard("5 8 * * 1-5", "", "--set", "budget.ci_minutes_month=13"); code != 0 || out != "due=true\n" {
+	if code, out := guard("5 5 * * 1-5", "", "--set", "budget.ci_minutes_month=13"); code != 0 || out != "due=true\n" {
 		t.Errorf("12 minutes used of 13: exit %d %q", code, out)
 	}
-	if code, _ := guard("5 8 * * 1-5", "", "--set", "budget.ci_minutes_month=12"); code != ExitBudget {
+	if code, _ := guard("5 5 * * 1-5", "", "--set", "budget.ci_minutes_month=12"); code != ExitBudget {
 		t.Errorf("12 minutes used of 12: exit %d, want %d", code, ExitBudget)
 	}
 	// The build-ready loop's cap is dev's committed one: a run's larger
@@ -141,7 +141,7 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	// The [budget] breaker's pause file stops every host's run.
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "state"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "paused"), []byte("per_day_usd"), 0o644)
-	if code, _ := guard("5 8 * * 1-5", ""); code != ExitBudget {
+	if code, _ := guard("5 5 * * 1-5", ""); code != ExitBudget {
 		t.Errorf("paused: exit %d, want %d", code, ExitBudget)
 	}
 	if code, _ := eventGuard(""); code != ExitBudget {
@@ -500,10 +500,10 @@ func TestInstallLoopsWritesHourlyTick(t *testing.T) {
 	tickPrompt := []string{"Run `AAYU_AGENT=1 aayu mission tick`.", "Never build, claim, or start a story in this run", "never run `aayu build` or `aayu mission next` yourself",
 		"Never pass --solo-bypass or --admin"}
 	for host, want := range map[string][]string{
-		"amp":    {"loops/amp/build-ready.json", "RRULE:FREQ=HOURLY;BYMINUTE=0", "Every hour at :00"},
-		"cursor": {"loops/cursor/aayudha-loops.tf", "# build-ready: Every hour at :00", `trigger = [` + "\n" + `    { cron = { schedule = "0 * * * *" } },` + "\n" + `  ]`},
-		"claude": {"loops/claude/routines.md", "on the cron schedule `0 * * * *` in the time zone Europe/London"},
-		"codex":  {"loops/codex/scheduled-tasks.md", "with the custom schedule RRULE:FREQ=HOURLY;BYMINUTE=0 in the time zone Europe/London"},
+		"amp":    {"loops/amp/build-ready.json", "RRULE:FREQ=HOURLY;BYMINUTE=30", "Every hour at :30"},
+		"cursor": {"loops/cursor/aayudha-loops.tf", "# build-ready: Every hour at :30", `trigger = [` + "\n" + `    { cron = { schedule = "30 * * * *" } },` + "\n" + `  ]`},
+		"claude": {"loops/claude/routines.md", "on the cron schedule `30 * * * *` in the time zone Europe/London"},
+		"codex":  {"loops/codex/scheduled-tasks.md", "with the custom schedule RRULE:FREQ=HOURLY;BYMINUTE=30 in the time zone Europe/London"},
 	} {
 		code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", host, "--json")
 		var r loopsReport

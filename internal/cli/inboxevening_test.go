@@ -40,6 +40,7 @@ func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *
 	m := newMissionWorld(t)
 	now := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 	m.opts.Now = func() time.Time { m.mu.Lock(); defer m.mu.Unlock(); return now }
+	m.windows() // the evening review comes in the evening window (Story #1254)
 	m.mu.Lock()
 	m.tool = "amp"
 	m.mu.Unlock()
@@ -108,7 +109,7 @@ func eveningWorld(t *testing.T, before ...func(*missionWorld)) (*missionWorld, *
 		p.Stopped = append(p.Stopped, MissionStopped{Number: 1104, Reason: "the payment sandbox is down", By: "rahulnakmol", At: "2026-11-02T11:00:00Z"})
 	})
 	m.mu.Lock()
-	now = time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC) // the end of [time] business_hours (Mon-Fri 09:00-18:00, Europe/London)
+	now = time.Date(2026, 11, 2, 18, 30, 0, 0, time.UTC) // the evening window's start ([time] windows 18:30-19:30, Europe/London; Story #1254)
 	m.mu.Unlock()
 	return m, &now
 }
@@ -158,22 +159,22 @@ func (m *missionWorld) reviews() []StoryReview {
 	return out
 }
 
-// Criterion 1: at the end of business hours, `aayu inbox` shows one Evening
+// Criterion 1: in the evening window, `aayu inbox` shows one Evening
 // card per story of the milestone that started this morning, with each
 // criterion, its evidence kind, and its evidence from the pack at the merged
 // head: the image where the terminal shows images, else its path and link.
 // A criterion with no evidence is shown too, and nothing comes from a pack of
-// another head. Before the end of business hours there is no Evening card.
+// another head. Before the evening window there is no Evening card.
 func TestEveningCardsShowEvidence(t *testing.T) {
 	m, now := eveningWorld(t)
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 2, 17, 59, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 2, 18, 29, 0, 0, time.UTC)
 	m.mu.Unlock()
 	if cards := eveningList(t, m, m.person); len(cards) != 0 {
-		t.Fatalf("Evening cards at 17:59: %+v", cards)
+		t.Fatalf("Evening cards at 18:29: %+v", cards)
 	}
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 2, 18, 30, 0, 0, time.UTC)
 	m.mu.Unlock()
 	var nums []int
 	for _, it := range eveningList(t, m, m.person) {
@@ -186,7 +187,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	code, out, errOut := runIn(t, m.person, m.opts, "sss", "inbox", "--repo", "o/r")
 	card1010 := "[1/3] Evening review #1010: Story 1010\n" +
 		"  " + inboxKinds[InboxEvening].Line + "\n" +
-		"  Agreed this morning: MS1 of #889's mission.\n" +
+		"  Agreed this morning: MS1 of #889's mission, for this review at Mon 2 Nov 18:30-19:30 Europe/London, the evening window.\n" +
 		"  Merged in #7 at 1010101. Evidence: the authoritative pack proof/1010/" + head1010 + "/authoritative on the ledger.\n" +
 		"  1. [screenshot] state: Story 1010 is empty; expected: the \"Your cart is empty\" message and a Browse button\n" +
 		"     screenshot: media/cart.png · https://github.com/o/r/actions/runs/77\n" +
@@ -213,7 +214,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 
 	// The next evening, Monday's stories were not agreed that morning; MS2 starts when MS1's gate passes, at 10:00.
 	m.mu.Lock()
-	*now = time.Date(2026, 11, 3, 18, 0, 0, 0, time.UTC)
+	*now = time.Date(2026, 11, 3, 18, 30, 0, 0, time.UTC)
 	m.mu.Unlock()
 	if cards := eveningList(t, m, m.person); len(cards) != 0 {
 		t.Fatalf("Evening cards on Tuesday before MS2 starts: %+v", cards)
@@ -221,7 +222,7 @@ func TestEveningCardsShowEvidence(t *testing.T) {
 	m.setPlan(889, func(p *MissionPlan) {
 		p.Milestones[0].Gate = MilestoneGate{State: GatePassed, DevSHA: devTip, At: "2026-11-03T10:00:00Z"}
 	})
-	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 || !slices.Contains(cards[0].Lines, "Agreed this morning: MS2 of #889's mission.") {
+	if cards := eveningList(t, m, m.person); len(cards) != 1 || cards[0].Number != 1012 || !slices.Contains(cards[0].Lines, "Agreed this morning: MS2 of #889's mission, for this review at Tue 3 Nov 18:30-19:30 Europe/London, the evening window.") {
 		t.Fatalf("Evening cards on Tuesday after MS2 starts: %+v", cards)
 	}
 	// A milestone that starts after hours, at 19:00, is still today's: it shows at 20:00.
@@ -271,7 +272,7 @@ func TestEveningAcceptRecordsReview(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "done: @rahulnakmol accepted #1010 at 1010101, recorded in missions/889/reviews.jsonl") {
 		t.Fatalf("inbox 1 Accept: exit %d:\n%s%s", code, out, errOut)
 	}
-	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Pack: pack, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:00:00Z"}
+	want := StoryReview{Story: 1010, PR: 7, Head: head1010, Pack: pack, Verdict: ReviewAccepted, By: "rahulnakmol", At: "2026-11-02T18:30:00Z"}
 	if got := m.reviews(); !slices.Equal(got, []StoryReview{want}) {
 		t.Fatalf("reviews.jsonl: %+v, want %+v", got, want)
 	}
@@ -341,7 +342,7 @@ func TestEveningNotMergedSaysWhy(t *testing.T) {
 	code, out, errOut := runIn(t, m.person, m.opts, "ssq", "inbox", "--repo", "o/r")
 	card := "[3/3] Evening review #1104: Story 1104\n" +
 		"  " + inboxKinds[InboxEvening].Line + "\n" +
-		"  Agreed this morning: MS1 of #889's mission.\n" +
+		"  Agreed this morning: MS1 of #889's mission, for this review at Mon 2 Nov 18:30-19:30 Europe/London, the evening window.\n" +
 		"  not merged: @rahulnakmol stopped it: the payment sandbox is down.\n" +
 		"  Next: `aayu mission resume 889 --story 1104` when it may go on.\n" +
 		"  1. [screenshot] state: Story 1104 is empty; expected: the \"Your cart is empty\" message and a Browse button\n" +

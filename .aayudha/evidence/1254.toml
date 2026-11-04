@@ -1,0 +1,33 @@
+# Which tests prove Story #1254's Completion Goal.
+
+[[criterion]]
+id = 1 # no [time] windows: config show lists 10:30-11:30 and 18:30-19:30 in [time] tz; this repository sets tz = "Asia/Kolkata"
+tests = ["internal/cli:TestConfigShowListsPersonWindows", "internal/config:TestPersonWindows"]
+
+[[criterion]]
+id = 2 # past max_hours outside a window: mission next still starts stories, and the time card waits for the next window
+tests = ["internal/cli:TestTimeLimitWaitsForAWindow", "internal/cli:TestTickShowsTheCardsOfALocalKanha"]
+
+[[criterion]]
+id = 3 # the card unanswered to a window's end: new starts wait from that end; running stories go on
+tests = ["internal/cli:TestTimeLimitWaitsForAWindow", "internal/cli:TestTimeHoldReadsTheNewestCard"]
+
+[[criterion]]
+id = 4 # the mission's budget used up outside a window: starts go on, the budget card waits; the [budget] breaker still stops every lane
+tests = ["internal/cli:TestBudgetWaitsForAWindow", "internal/cli:TestBudgetCardWithNothingToStart", "internal/cli:TestPausedTickSendsTheWindowMessage"]
+
+[[criterion]]
+id = 5 # a page, a comment approval batch, or a card outside a window: nothing is sent; one message at the next window lists them all
+tests = ["internal/notify:TestPagesWaitForAWindow", "internal/notify:TestPagesWaitInTheQueue", "internal/cli:TestRequestsWaitForAWindow",
+  "internal/cli:TestWindowMessageFromAnyCheckout", "internal/cli:TestNotifyEditsReadAgainWhenTheLedgerMoved", "internal/cli:TestPausedTickSendsTheWindowMessage",
+  "internal/cli:TestGateAskWaitsForAWindow", "internal/cli:TestInboxShipsReadyPRs", "internal/cli:TestInspectReviewTools",
+  "internal/cli:TestOutboxWaitsWhenTheWindowEnds", "internal/cli:TestEscalationWaitsForAWindow", "internal/cli:TestOutboxDrainsWithNoWindows",
+  "internal/cli:TestWindowClaimHasAnOwner"]
+
+[[criterion]]
+id = 6 # in a window: aayu inbox holds every item that needs a person, in decision order, under one device code
+tests = ["internal/cli:TestWindowInboxHoldsEveryRequest"]
+
+[[criterion]]
+id = 7 # the day plan and the evening review name the windows in [time] tz
+tests = ["internal/cli:TestDayIsSet", "internal/cli:TestEveningCardsShowEvidence", "internal/cli:TestEveningNotMergedSaysWhy"]

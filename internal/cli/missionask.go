@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	gh "github.com/google/go-github/v90/github"
 
@@ -36,6 +37,7 @@ type missionAsk struct {
 	Why     string        `json:"why"`
 	Lines   []string      `json:"lines"`
 	Options []InboxAction `json:"options"`
+	at      time.Time     // when its comment was written: when a person was shown it
 }
 
 func noGoAskID(m string) string  { return "gate-" + m }
@@ -83,8 +85,107 @@ func budgetAsk(f, n int, budget float64, used SourcedNumber, est float64, fixes 
 	return a
 }
 
+// startsAskID is the ID of the budget card of a mission whose next story
+// would pass budget (Story #1254): a raise makes a new budget, and a new card.
+func startsAskID(budget float64) string { return "starts-" + usd(budget) }
+
+// startsAsk is the budget card of Feature f's mission, whose next story, at
+// its per-story cap, would pass budget: raise it, or stop the mission. The
+// raise it offers covers what the mission committed when the card is shown
+// (spent, which may pass budget after starts outside a window) and one more
+// story. It gives no recommendation.
+func startsAsk(f int, budget, per, spent float64) missionAsk {
+	raise := math.Ceil((max(budget, spent)+per)/10) * 10
+	return missionAsk{ID: startsAskID(budget), Title: fmt.Sprintf("#%d's next story would pass its %s budget", f, ready.USD(budget)),
+		Why: fmt.Sprintf("Each story counts at its %s cap, so the next start would pass the approved budget of #%d's mission. "+
+			"Outside your windows stories still start; from the end of the window this card is shown in, new starts wait for you. Running stories keep going.",
+			ready.USD(per), f),
+		Options: []InboxAction{
+			{N: 1, Label: fmt.Sprintf("Raise the budget to %s, with a reason", ready.USD(raise)), Command: missionCmd(f, fmt.Sprintf("budget <f> --to %d --reason", int(raise))),
+				Ask: "Why raise the budget?"},
+			{N: 2, Label: "Stop the mission, with a reason", Command: missionCmd(f, "stop <f> --reason"), Ask: "Why stop the mission?"},
+		}}
+}
+
+// budgetCard is the budget card of one run of mission next (Story #1254).
+// Past the mission's budget the card waits for a person's window; new starts
+// wait only from the end of the window it was shown in, so outside the
+// windows no start waits for a person.
+type budgetCard struct {
+	e       *Env
+	c       *github.Client
+	repo    string
+	f       int
+	budget  float64
+	per     float64
+	spent   float64 // what the mission committed after this run's starts
+	win     config.Windows
+	now     time.Time
+	preview bool      // a dry run: it posts and queues nothing
+	over    bool      // a story that could start would pass the budget
+	read    bool      // the Feature's open asks were read
+	shown   time.Time // when its open card was shown; zero when none is open
+}
+
+// holds reports whether new starts wait for the budget now: its card went
+// unanswered to the end of a window. A card this run would show now counts
+// as shown now.
+func (b *budgetCard) holds(ctx context.Context) (bool, error) {
+	if !b.read {
+		owner, name, _ := github.SplitRepo(b.repo)
+		asks, err := openAsks(ctx, b.c, owner, name, b.f, b.e.askTrusted(ctx, b.c, owner, name))
+		if err != nil {
+			return false, err
+		}
+		for _, a := range asks {
+			if a.ID == startsAskID(b.budget) {
+				b.shown = a.at
+			}
+		}
+		b.read = true
+	}
+	shown := b.shown
+	if len(b.win.Spans) == 0 { // no windows: a person may be asked at any time, so the hold starts with the card
+		return true, nil
+	}
+	if shown.IsZero() {
+		if !b.win.Within(b.now) {
+			return false, nil // the card waits for the next window, and so does any hold
+		}
+		shown = b.now
+	}
+	return !b.now.Before(b.win.End(shown)), nil
+}
+
+// ask shows the budget card once a story would pass the budget, inside a
+// window, on the Feature, for the inbox. Outside one it waits: the first run
+// in the next window shows it, and the window's one message lists it.
+func (b *budgetCard) ask(ctx context.Context) error {
+	if !b.over || b.preview || !b.win.Within(b.now) {
+		return nil
+	}
+	if _, err := b.holds(ctx); err != nil { // reads the open card, if any
+		return err
+	}
+	if !b.shown.IsZero() {
+		return nil
+	}
+	return b.e.postAsk(ctx, b.c, b.repo, b.f, startsAsk(b.f, b.budget, b.per, b.spent))
+}
+
 // postAsk posts ask on Feature f, unless an open ask of its ID says the same.
 func (e *Env) postAsk(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
+	if next := e.outsideWindow(); !next.IsZero() { // nobody is asked outside a person's window: the ask waits in the outbox (Story #1254)
+		if c.DryRun() {
+			return nil
+		}
+		return e.enqueueHere(ctx, queued{Key: fmt.Sprintf("ask:%s#%d:%s", repo, f, a.ID), Ask: &queuedAsk{Feature: f, Ask: a}})
+	}
+	return e.postAskNow(ctx, c, repo, f, a)
+}
+
+// postAskNow posts ask on Feature f now, unless an open ask of its ID says the same.
+func (e *Env) postAskNow(ctx context.Context, c *github.Client, repo string, f int, a missionAsk) error {
 	owner, name, _ := github.SplitRepo(repo)
 	open, err := openAsks(ctx, c, owner, name, f, e.askTrusted(ctx, c, owner, name))
 	if err != nil {
@@ -189,6 +290,7 @@ func asksIn(cs []*gh.IssueComment, trusted func(*gh.User) (bool, error)) ([]miss
 		if _, ok := byID[a.ID]; !ok {
 			order = append(order, a.ID)
 		}
+		a.at = cm.GetCreatedAt().Time
 		byID[a.ID] = a
 	}
 	var out []missionAsk

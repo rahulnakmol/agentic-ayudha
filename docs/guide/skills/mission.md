@@ -50,7 +50,9 @@ Each mission has a time limit. Approve to build estimates each mission in workin
 stories. Past `[mission] warn_hours` it warns. When the learned hours alone pass `[mission] max_hours`, only a
 person starts it, with `aayu mission start <feature> --reason "…"`. The clock runs while at least one story thread
 works. It pauses while every running story waits on a person, a usage limit, or GitHub CI. At `warn_hours` an
-inbox card tells you. At `max_hours` new starts wait, and a person runs `aayu mission extend <feature> --reason "…"`.
+inbox card tells you. At `max_hours` the card waits for your next window (`[time] windows`). If you leave it to the
+window's end, new starts wait until a person runs `aayu mission extend <feature> --reason "…"`. The mission's budget
+works the same way. Outside your windows, no start waits for you.
 
 Events wake the Kanha: a merge, a block, a failed start, an answered ask. Each `aayu mission next` lists every event
 since the `events_cursor` in `missions/<feature>/plan.json`, so a Kanha that wakes 3 hours late misses none. The
