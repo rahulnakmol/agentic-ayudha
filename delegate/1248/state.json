@@ -50,6 +50,11 @@
       "at": "2026-11-04T09:46:37Z",
       "status": "merge-ready",
       "detail": "inspect merge on ec32cdc"
+    },
+    {
+      "at": "2026-11-05T09:46:35Z",
+      "status": "merge-ready",
+      "detail": "inspect merge on ec32cdc"
     }
   ]
 }
