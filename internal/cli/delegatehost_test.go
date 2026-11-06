@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -228,7 +230,9 @@ func TestMissionShowUnreadableDelegation(t *testing.T) {
 func TestAmpHostThreadNotAmpRefused(t *testing.T) {
 	m := newMissionWorld(t)
 	m.hostHandedOff()
-	for _, bad := range []string{"T-1", "task_e_20", "https://ampcode.com/threads/" + hostThread, hostThread + "0"} {
+	// The last three are as long as an Amp thread ID and use its characters, but are not T- and an 8-4-4-4-12 UUID (Bug #1266).
+	for _, bad := range []string{"T-1", "task_e_20", "https://ampcode.com/threads/" + hostThread, hostThread + "0",
+		"T-" + strings.Repeat("-", 36), "T-" + strings.Repeat("a", 36), "T-01a1c0d-e0000-7000-8000-000000001208"} {
 		n := m.commits()
 		m.g.Reset()
 		code, out, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", bad, "--repo", "o/r")
@@ -308,6 +312,107 @@ func TestAmpHostHandoffLapses(t *testing.T) {
 	// The next build hands #20 off afresh, on a new branch.
 	if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil || !strings.HasSuffix(res.Delegation.Host.Brief, "brief-2.md") || m.state(20).Handoffs != 2 {
 		t.Fatalf("the build after the lapse: %+v, state %+v", res.Delegation, m.state(20))
+	}
+}
+
+// Bug #1266, criterion 1: a host hand-off lives as long as the mission claim
+// that started it. A build that hands #20 off 14 minutes after the claim gets
+// no 15 minutes more: 16 minutes after the claim, mission next releases #20
+// and lists it start; at 14m59s it holds #20. That holds when the claim
+// expires while the build takes the lease or sets up the environment too, but
+// a claim of a failed earlier start does not set a retry's deadline. A --thread recorded before
+// mission next marks the lapse is kept (criterion 2); one after it is refused.
+func TestAmpHostLateHandoffLapsesWithItsClaim(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		lease        time.Duration // the clock moves this much while build takes the lease
+		setup        time.Duration // the clock moves this much while build verifies the environment
+		recordBefore bool          // --thread runs before mission next
+		failFirst    bool          // the first build fails its setup at t=16m, and build runs again without mission next
+	}{
+		{name: "late build"},
+		{name: "retry after a failed setup", setup: 2 * time.Minute, failFirst: true},
+		{name: "claim expires during setup", setup: 2 * time.Minute},
+		{name: "claim expires while build takes the lease", lease: 2 * time.Minute},
+		{name: "thread recorded before the lapse is marked", recordBefore: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMissionWorld(t)
+			m.hostMission(20)
+			clk := m.withClock()
+			if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+				t.Fatalf("mission next: exit %d: %q%s", code, out, errOut)
+			}
+			clk.add(14 * time.Minute)
+			ensure := m.opts.EnsureEnv
+			m.opts.EnsureEnv = func(ctx context.Context, root, host string) (agentenv.HostStatus, error) {
+				clk.add(tc.setup)
+				return ensure(ctx, root, host)
+			}
+			if tc.failFirst {
+				m.opts.EnsureEnv = func(context.Context, string, string) (agentenv.HostStatus, error) {
+					clk.add(tc.setup)
+					return agentenv.HostStatus{}, errors.New("no Docker daemon answers")
+				}
+				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--repo", "o/r"); code == 0 {
+					t.Fatalf("build with a failed setup: exit 0: %s", errOut)
+				}
+				m.opts.EnsureEnv = ensure
+			}
+			if tc.lease > 0 {
+				m.g.Hook = func(method, p string) {
+					if method == "POST" && strings.HasSuffix(p, "/issues/20/comments") {
+						clk.add(tc.lease)
+						m.g.Hook = nil
+					}
+				}
+			}
+			from := "the story's claim"
+			if tc.failFirst {
+				from = "this hand-off"
+			}
+			if res := m.kanhaBuild(20, "amp"); res.Delegation.Host == nil || !strings.Contains(res.Next, "15 minutes after "+from+", the hand-off lapses") {
+				t.Fatalf("no host hand-off, or its deadline is not from %s: %+v: %s", from, res.Delegation, res.Next)
+			}
+			if tc.failFirst { // the retry's hand-off lives 15 minutes from its own start
+				clk.add(2 * time.Minute)
+				if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "start #20") || m.state(20).Status != dlgHost {
+					t.Fatalf("mission next 2 minutes after the retry: exit %d, state %+v: %q%s", code, m.state(20), out, errOut)
+				}
+				return
+			}
+			if tc.setup == 0 && tc.lease == 0 && !tc.recordBefore { // a second before the claim's life ends, the claim still holds #20
+				clk.add(time.Minute - time.Second)
+				if code, out, errOut := m.next(889); code != 0 || strings.Contains(out, "start #20") || m.state(20).Status != dlgHost {
+					t.Fatalf("mission next 14m59s after the claim: exit %d, state %+v: %q%s", code, m.state(20), out, errOut)
+				}
+				clk.add(time.Minute + time.Second)
+			} else {
+				clk.add(2*time.Minute - tc.setup - tc.lease)
+			}
+			if tc.recordBefore {
+				if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != 0 {
+					t.Fatalf("--thread 16 minutes after the claim, before mission next: exit %d: %s", code, errOut)
+				}
+				if st := m.state(20); st.Status != dlgHandedOff || st.Task != hostThread {
+					t.Fatalf("delegate/20/state.json after the record: %+v", st)
+				}
+				return
+			}
+			if code, out, errOut := m.next(889); code != 0 || workLines(out) != "start #20\n" {
+				t.Fatalf("mission next 16 minutes after the claim: exit %d: %q%s", code, out, errOut)
+			}
+			if got := m.labels(20); !slices.Contains(got, "status:ready") || slices.Contains(got, "status:in-progress") || slices.Contains(got, LeaseLabel) {
+				t.Fatalf("#20's labels after the lapse: %v", got)
+			}
+			if st := m.state(20); st.Status != dlgLapsed || st.Task != "" {
+				t.Fatalf("delegate/20/state.json after the lapse: %+v", st)
+			}
+			n := m.commits()
+			if code, _, errOut := run(t, m.agent, m.opts, "build", "20", "--delegate", "amp", "--thread", hostThread, "--repo", "o/r"); code != ExitBlocked || m.commits() != n {
+				t.Fatalf("--thread after the lapse is marked: exit %d: %s", code, errOut)
+			}
+		})
 	}
 }
 

@@ -657,8 +657,9 @@ func tatkalBugs(ctx context.Context, c *github.Client, w *ledger.Writer, repo st
 // build already moved to in progress is not a change. A paused or ended
 // mission, or a story stopped alone, is one (Story #1005), and so is a story
 // a person moved out of the mission's Feature (Bug #1129). claimed is set when a live claim of an unpaused mission
-// marks n start; a plan it cannot read leaves it unset.
-func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, chk ready.Result, labels []string, dryRun bool, claimed *bool) error {
+// marks n start; a plan it cannot read leaves it unset. claimAt is set to the
+// time of the live claim n starts under (Bug #1266).
+func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Issue, chk ready.Result, labels []string, dryRun bool, claimed *bool, claimAt *string) error {
 	n := is.GetNumber()
 	t, err := w.Read(ctx)
 	if err != nil {
@@ -761,7 +762,7 @@ func (e *Env) changedSinceList(ctx context.Context, w *ledger.Writer, is *gh.Iss
 		}
 	}
 	if now == "" {
-		*claimed = planOK
+		*claimed, *claimAt = planOK, cur.claim.At
 		return nil
 	}
 	return Errorf(ExitBlocked, "#%d changed since the list: now %s; not started", n, now)
