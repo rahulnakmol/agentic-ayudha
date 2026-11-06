@@ -1,0 +1,13 @@
+# Which tests prove Bug #1268's Completion Goal.
+
+[[criterion]]
+id = 1 # two failed runs, a pass, then one failed run: failure 1 of max_no_go, the mission goes on, and the gate lists a fix
+tests = ["internal/cli:TestGateFailuresCountFromLastPass"]
+
+[[criterion]]
+id = 2 # max_no_go failed runs since the last pass, or since the start: the mission stops, and the stop says the count in a row
+tests = ["internal/cli:TestGateFailuresCountFromLastPass", "internal/cli:TestGateStopsAtMaxNoGo"]
+
+[[criterion]]
+id = 3 # a person's once-more passes: the mission resumes, and a later failure counts from 1
+tests = ["internal/cli:TestGateStopsAtMaxNoGo"]

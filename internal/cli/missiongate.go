@@ -159,7 +159,7 @@ func fixKey(milestone, check, sha string) int {
 
 // noGoTitle is the card and the stop reason after max_no_go failed runs.
 func noGoTitle(m string, f, n int) string {
-	return fmt.Sprintf("%s of #%d failed its gate %d times: its stories wait", m, f, n)
+	return fmt.Sprintf("%s of #%d failed its gate %d times in a row: its stories wait", m, f, n)
 }
 
 // missionGate is `aayu mission gate <f>`: it runs the gate of each milestone
@@ -320,7 +320,9 @@ func missionGate(ctx context.Context, e *Env, f int, in Values) error {
 			} else {
 				fails := gateFailures(runs, m.Name)
 				row.Detail = fmt.Sprintf("failed on dev %s (%d of %d failed runs before the mission stops): %s", short(sha), len(fails), maxNoGo, failedOf(run.Checks))
-				if len(fails) >= maxNoGo {
+				// A person's once-more that fails keeps the stop and asks again, though a stop counted before Bug
+				// #1268 may leave fewer than max_no_go failures since the last pass.
+				if len(fails) >= maxNoGo || once && m.Gate.State == GateStopped {
 					o.gate.State, o.stop, row.State = GateStopped, true, GateStopped
 					row.Detail = noGoTitle(m.Name, f, len(fails))
 					asks = append(asks, noGoAsk(f, m.Name, fails))
@@ -908,11 +910,17 @@ func lastGateRun(runs []GateRun, m string, pending bool) *GateRun {
 	return nil
 }
 
-// gateFailures are the failed gate runs of milestone m, oldest first.
+// gateFailures are the failed gate runs of milestone m since its last pass,
+// oldest first: a pass shows the milestone can pass, so its count starts
+// again (Bug #1268).
 func gateFailures(runs []GateRun, m string) []GateRun {
 	var out []GateRun
 	for _, r := range runs {
-		if r.Milestone == m && r.Result == gateFail {
+		switch {
+		case r.Milestone != m:
+		case r.Result == gatePass:
+			out = nil
+		case r.Result == gateFail:
 			out = append(out, r)
 		}
 	}
