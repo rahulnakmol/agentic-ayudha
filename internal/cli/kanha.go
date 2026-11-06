@@ -119,14 +119,6 @@ func (e *Env) startKanha(ctx context.Context, c *github.Client, w *ledger.Writer
 	return p, words, nil
 }
 
-// tellKanha sends one event line to the Kanha of the started mission story n
-// is in, and records it as one event in delegate/<n>/state.json (Story #1008,
-// Decision #915 M1): every event that changes a story's slot reaches its
-// Kanha. msg gets the mission's Feature. A story in no started mission, or in
-// one with no Kanha recorded, tells nobody. A local Kanha takes the event at
-// its next check (#1012), so the event is recorded and not sent. A send that
-// fails is recorded too, and returned. The note says what happened, for the
-// caller's output.
 // receiverTimeout bounds one call to a receiver (a hand-off or a follow-up,
 // to a story's receiver or to the Kanha): a receiver CLI that stalls is a
 // call that failed, never a ship, build, or Start that hangs (Bugs #1118,
@@ -146,12 +138,38 @@ func withReceiverTimeout(ctx context.Context, tool string, call func(context.Con
 	return err
 }
 
+// tellKanha sends one event line to the Kanha of the started mission story n
+// is in, and records it as one event in delegate/<n>/state.json (Story #1008,
+// Decision #915 M1): every event that changes a story's slot reaches its
+// Kanha. msg gets the mission's Feature. A story in no started mission, or in
+// one with no Kanha recorded, tells nobody. A local Kanha takes the event at
+// its next check (#1012), so the event is recorded and not sent. A send that
+// fails is recorded too, and returned. The note says what happened, for the
+// caller's output.
+// msg's words are aayu's own; an event that quotes other text uses tellKanhaData.
 func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) string) (string, error) {
+	return e.tellKanhaData(ctx, c, w, repo, n, func(f int) (string, string) { return "", msg(f) })
+}
+
+// tellKanhaData is tellKanha for an event that quotes text aayu did not write,
+// such as a receiver CLI's error output or a builder's stop words (Bug #1138,
+// CWE-1427). msg gives that part, data, and aayu's own instruction, own. The
+// event line is "<data>: <own>", as before; a cloud Kanha gets data inside an
+// untrusted block (kanhaPrompt) and own after it, so it still acts on own.
+func (e *Env) tellKanhaData(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, msg func(f int) (data, own string)) (string, error) {
 	f, plan, appr, err := storyMission(ctx, c, w, repo, n)
 	if err != nil || plan == nil || plan.StartedBy == "" || appr.Parent == nil {
 		return "", err
 	}
-	p, text, how := appr.Parent, msg(f), "sent"
+	data, own := msg(f)
+	text, send := own, own
+	if data != "" {
+		text, send = data, kanhaPrompt(data)
+		if own != "" {
+			text, send = data+": "+own, send+"\n"+own
+		}
+	}
+	p, how := appr.Parent, "sent"
 	var sendErr error
 	if p.Mode == "local" {
 		how = "recorded; the local Kanha on " + p.Machine + " takes it at its next check"
@@ -166,7 +184,7 @@ func (e *Env) tellKanha(ctx context.Context, c *github.Client, w *ledger.Writer,
 			Seat: "engineering-manager", Host: e.Host, Identity: c.Identity(), Payload: map[string]any{"session": p.Session, "event": text}},
 			func(ctx context.Context) (actions.Outcome, error) {
 				err := withReceiverTimeout(ctx, p.Host, func(ctx context.Context) error {
-					_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, text)
+					_, err := ad.FollowUp(ctx, delegate.State{Task: p.Session, TaskURL: p.URL}, send)
 					return err
 				})
 				return actions.Outcome{Attempts: 1}, err

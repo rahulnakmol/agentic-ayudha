@@ -20,6 +20,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -1697,11 +1698,16 @@ func (s *kanhaShip) sent() ([]string, []bool) {
 // its own record reaches the ledger.
 func TestShipTellsKanhaAfterMerge(t *testing.T) {
 	s := newKanhaShip(t, ready.Parent{Scope: "feature", Key: "1", Host: "amp", Session: shipKanhaThread, URL: "https://ampcode.com/threads/" + shipKanhaThread, Mode: "cloud", StartedBy: "founder"})
+	putLedger(t, s.bare, delegate.LedgerPath(2), `{"story":2}`) // #2's subthread state, where the event is recorded
 	code, out := shipCmd(t, s.env, s.opts, s.prN)
 	if code != 0 {
 		t.Fatalf("ship: %d %s", code, out)
 	}
 	msg := fmt.Sprintf("merged #2 (PR #%d): run aayu mission next 1", s.prN)
+	var st delegate.State
+	if err := json.Unmarshal([]byte(git(t, s.bare, "show", "ledger:"+delegate.LedgerPath(2))), &st); err != nil || len(st.Events) != 1 || st.Events[0].Detail != msg+" (sent)" || st.Events[0].Text != msg {
+		t.Fatalf("delegate/2/state.json events: %+v (%v)", st.Events, err)
+	}
 	calls, shipped := s.sent()
 	if want := []string{"amp threads continue " + shipKanhaThread + " -ox " + msg}; !slices.Equal(calls, want) {
 		t.Fatalf("ship sent %q, want %q", calls, want)
