@@ -40,13 +40,28 @@ func (e *Env) storyCovered(ctx context.Context, c *github.Client, w *ledger.Writ
 		return "", WithNext(Errorf(ExitBlocked, "#%d changed after Approve to build: %s. Its stories wait until a person approves it again.", f, strings.Join(changed, "; ")),
 			fmt.Sprintf("aayu ready %d --check", f))
 	}
-	// --ack is not built yet: until it is, the next step that runs is a new spec baseline, then Approve to build again.
-	i := slices.IndexFunc(prev.Stories, func(st ready.ApprovedStory) bool { return st.Number == s })
-	if i < 0 {
-		return "", WithNext(Errorf(ExitBlocked, "#%d was added after Approve to build. A person acknowledges it: aayu ready %d --ack %d", s, f, s), fmt.Sprintf("aayu ready %d --part spec --request", f))
+	// A story added or changed after the approval waits for the next spec
+	// version and Approve to build again: an agent drafts the spec, a person
+	// approves it in the inbox, then runs aayu ready <f> again (Bug #1251). The
+	// inbox has no Approve to build card for a Feature approved already.
+	why := ""
+	if i := slices.IndexFunc(prev.Stories, func(st ready.ApprovedStory) bool { return st.Number == s }); i < 0 {
+		why = "was added after Approve to build"
+	} else if changes := ready.StoryChanges(prev.Stories[i], ready.StoryOf(it)); len(changes) > 0 {
+		why = fmt.Sprintf("changed after Approve to build (%s)", strings.Join(changes, ", "))
 	}
-	if changes := ready.StoryChanges(prev.Stories[i], ready.StoryOf(it)); len(changes) > 0 {
-		return "", WithNext(Errorf(ExitBlocked, "#%d changed after Approve to build (%s). A person acknowledges it: aayu ready %d --ack %d", s, strings.Join(changes, ", "), f, s), fmt.Sprintf("aayu ready %d --part spec --request", f))
+	if why != "" {
+		spec, _, _, err := (&partRun{e: e, c: c, w: w, repo: repo, n: f, part: "spec"}).records(ctx)
+		if err != nil {
+			return "", err
+		}
+		k := 0
+		if spec != nil {
+			k = spec.Version
+		}
+		draft := fmt.Sprintf("aayu ready %d --part spec --request --changes <file>", f)
+		return "", WithNext(Errorf(ExitBlocked, "#%d %s. It waits for spec v%d of #%d and Approve to build again. An agent drafts the spec: %s. A person approves it in aayu inbox, then runs aayu ready %d.",
+			s, why, k+1, f, draft, f), draft)
 	}
 	return fmt.Sprintf("#%d approval %d by @%s", f, prev.Version, prev.By), nil
 }
@@ -78,7 +93,7 @@ func (e *Env) earlyCovered(ctx context.Context, w *ledger.Writer, f, s int, body
 // approval: a part approved again ("technical design v1 to v2"), or one that
 // drifted from its pins ("intent v1 drifted (#840 body changed)"). The spec
 // part's drift is left out: a changed or added story is the story's own
-// refusal, and needs only an acknowledgment.
+// refusal, which names the next spec version.
 func (a *approveRun) featureChanges(ctx context.Context, repo string, prev ready.Approval) ([]string, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	is, _, err := a.c.REST.Issues.Get(ctx, owner, name, a.n)

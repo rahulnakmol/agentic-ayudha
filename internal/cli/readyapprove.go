@@ -302,8 +302,11 @@ func (a *approveRun) prepare(ctx context.Context) (rec ready.Approval, effect []
 	if err != nil {
 		return rec, nil, nil, "", err
 	}
-	if len(cs.Open) > 0 {
-		return rec, nil, nil, "", off("%s. Next: aayu grill feature %d --findings", ready.OpenGaps(cs.Open), a.n)
+	if len(cs.Open) > 0 { // the part's next version fixes its open gaps (Bug #1251: a command that exists)
+		part, _, _, _ := ready.Finding(cs.Open[0])
+		first, _, _ := strings.Cut(cs.Open[0], "/") // the IDs OpenGaps lists: the first part-version's
+		ids := slices.DeleteFunc(slices.Clone(cs.Open), func(id string) bool { pv, _, _ := strings.Cut(id, "/"); return pv != first })
+		return rec, nil, nil, "", off("%s. Next: aayu ready %d --part %s --request --changes <file> --fixes %s", ready.OpenGaps(cs.Open), a.n, part, strings.Join(ids, ","))
 	}
 	var waited string
 	if missing := cs.Reviews - cs.In; missing > 0 {
