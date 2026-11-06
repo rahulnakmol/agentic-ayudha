@@ -125,8 +125,10 @@ type PR struct {
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
-	Reviews        []Review  `json:"-"`
-	Files          []string  `json:"-"`
+	// ClosedAt is set by a test that needs when it closed.
+	ClosedAt time.Time `json:"closed_at,omitzero"`
+	Reviews  []Review  `json:"-"`
+	Files    []string  `json:"-"`
 	// Compared, when set, is what the comparison of its base and head SHAs
 	// lists instead of Files (GET /compare/{base}...{head}): the live PR's
 	// files can differ from the revisions a caller captured.
