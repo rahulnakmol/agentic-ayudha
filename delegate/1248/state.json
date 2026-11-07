@@ -55,6 +55,11 @@
       "at": "2026-11-05T09:46:35Z",
       "status": "merge-ready",
       "detail": "inspect merge on ec32cdc"
+    },
+    {
+      "at": "2026-11-07T12:39:23Z",
+      "status": "merge-ready",
+      "detail": "delegate.mission-end"
     }
   ]
 }

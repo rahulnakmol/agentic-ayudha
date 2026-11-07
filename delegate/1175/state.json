@@ -51,6 +51,11 @@
       "at": "2026-11-03T11:37:35Z",
       "status": "pr-open",
       "detail": "delegate.mission-resume"
+    },
+    {
+      "at": "2026-11-07T12:39:23Z",
+      "status": "pr-open",
+      "detail": "delegate.mission-end"
     }
   ]
 }
