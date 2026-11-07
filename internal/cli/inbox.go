@@ -60,12 +60,13 @@ const (
 	InboxAudit       = "audit"         // a PR ship merged with no person's pass, sampled for a person's look after merge
 	InboxMissionTime = "mission-time"  // a Feature's mission ran [mission] warn_hours, or reached its time limit (Story #1015)
 	InboxEvening     = "evening"       // a story agreed this morning, in the evening: each criterion next to its evidence (Story #1176)
+	InboxOvernight   = "overnight"     // what runs tonight, bounded, once the evening review is done; in the morning, a run that stopped at its bound (Story #1178)
 )
 
 // inboxOrder is the order a person decides the cards in: the morning's
 // decisions, baselines, Approve to build, and mission start first, then the
 // other cards (Story #1175).
-var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxBaseline, InboxApprove, InboxStart, InboxScope, InboxMission, InboxMissionTime, InboxEvening, InboxOvernight, InboxLocked, InboxReady, InboxNotReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -138,6 +139,14 @@ var inboxKinds = map[string]inboxKind{
 			"and the story in the mission's reviews.jsonl on the ledger; a comment says what is wrong, stays on the story, and is an input of the " +
 			"mission's feedback pass (#1014). If you leave it, nothing is written and the card stays until the day ends.",
 		Terms: []string{"Completion Goal", "Proof pack"}},
+	InboxOvernight: {Icon: "🌙", Word: "Overnight", Seat: verbs.EngineeringManager,
+		Line: "What runs tonight, each run bounded in hours and cost; nothing runs overnight that you did not set.",
+		Explain: "Once the evening review is done, this card proposes tonight's runs: an agent drafts the next Feature in the release order " +
+			"to the approval line, then the verify sweep and the evals run on the dev tip. Each run stops at the first of its bounds: " +
+			"[autonomy.budget] wall_hours, cost_usd, and the next start of [time] business_hours. Approving it records the runs in " +
+			"missions/overnight/<date>.json on the ledger, under the session's device code. If you leave it, nothing is written and only the " +
+			"loops scheduled before run. In the morning, a run that stopped at its bound is named here.",
+		Terms: []string{"Work item", "Budget breaker"}},
 	InboxStart: {Icon: "🔒", Word: "Mission start", Seat: verbs.EngineeringManager,
 		Line: "A Feature is approved to build; starting its mission locks its issues until the last milestone.",
 		Explain: "A mission builds a Feature's stories and Bugs with agents, in milestones. Starting it is your decision, through GitHub's " +
@@ -275,7 +284,9 @@ type InboxItem struct {
 	Pack        string        `json:"pack,omitempty"`        // the pack an evening card shows, by its ledger path and SHA-256
 	// Criteria are an evening card's criteria, each with its evidence from the pack at the merged head (Story #1176).
 	Criteria []EveningCriterion `json:"criteria,omitempty"`
-	images   map[int][]byte     // an evening card's screenshots, by the line of Lines they follow, where the terminal draws them
+	// Runs are an Overnight card's runs, each with its bounds: what an approval sets (Story #1178).
+	Runs     []OvernightRun `json:"runs,omitempty"`
+	images   map[int][]byte // an evening card's screenshots, by the line of Lines they follow, where the terminal draws them
 	labels   []string
 	mergeSHA string
 	f        inboxFacts
@@ -345,7 +356,7 @@ func (it InboxItem) short() string {
 		return fmt.Sprintf("replaced by #%d", it.ReplacedBy)
 	case InboxAudit:
 		return "merged; look it over"
-	case InboxMissionTime, InboxEvening:
+	case InboxMissionTime, InboxEvening, InboxOvernight:
 		return it.f.problem
 	}
 	return ""
@@ -478,6 +489,10 @@ type inboxSource struct {
 	// evening, when set, reads the stories agreed today, each with its pack
 	// at the head that head says merged (Story #1176).
 	evening func(ctx context.Context, head func(story int) string, images bool) ([]eveningStory, error)
+	// overnight, when set, reads the overnight plans and proposes tonight's
+	// runs for the first of features not yet approved to build, once the
+	// evening review is done (Story #1178).
+	overnight func(ctx context.Context, features []int, reviewDone bool) ([]InboxItem, error)
 	// images is set only by the line-by-line inbox, the one surface that draws
 	// an evening card's screenshots: the others read no media (Story #1176).
 	images bool
@@ -788,6 +803,13 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 	}
 	if s.evening != nil {
 		cards, err := s.eveningItems(ctx, delivered)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, cards...)
+	}
+	if s.overnight != nil {
+		cards, err := s.overnightItems(ctx, !slices.ContainsFunc(out, func(it InboxItem) bool { return it.Kind == InboxEvening }))
 		if err != nil {
 			return nil, err
 		}
@@ -1235,6 +1257,9 @@ func inboxMaterial(was, now InboxItem, a InboxAction) []string {
 	if was.Kind == InboxEvening && (was.Pack != now.Pack || !slices.Equal(was.Lines, now.Lines)) { // an accept accepts the evidence the person read
 		out = append(out, "its evidence changed")
 	}
+	if was.Kind == InboxOvernight && !slices.Equal(was.Lines, now.Lines) { // an approval sets the runs and bounds the person read
+		out = append(out, "its runs changed")
+	}
 	if was.Kind == InboxLocked && was.BodyHash != now.BodyHash { // keeping the edit keeps the body the person read
 		out = append(out, "its body changed again")
 	}
@@ -1321,7 +1346,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 				return nil, "", err
 			}
 			src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-			src.pendingAudits, src.missions, src.baselines, src.evening = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories
+			src.pendingAudits, src.missions, src.baselines, src.evening, src.overnight = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories, e.overnightCards
 			return src, login, nil
 		})
 	}
@@ -1330,7 +1355,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
-	src.pendingAudits, src.missions, src.baselines, src.evening = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories
+	src.pendingAudits, src.missions, src.baselines, src.evening, src.overnight = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories, e.overnightCards
 	src.images = e.showsImages()
 	items, err := src.gather(ctx)
 	if err != nil {
@@ -1405,7 +1430,7 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 	// A done Baseline card may bring its Feature's Approve to build card, and a
 	// done Approve to build its Mission start card: the session reads them
 	// (Stories #1173, #1175).
-	follow := map[string]string{InboxBaseline: InboxApprove, InboxApprove: InboxStart}
+	follow := map[string]string{InboxBaseline: InboxApprove, InboxApprove: InboxStart, InboxEvening: InboxOvernight}
 	want := map[string]bool{}
 	var started []InboxItem    // the Mission start cards done in this session
 	accepted := map[int]bool{} // the stories whose evening accept landed in this session
@@ -1834,7 +1859,7 @@ func (e *Env) listInbox(ctx context.Context) error {
 		id = l.Config.Identity
 	}
 	src := newInboxSource(c, repo, e.devBranch(), id)
-	src.pendingAudits, src.missions, src.baselines, src.evening = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories
+	src.pendingAudits, src.missions, src.baselines, src.evening, src.overnight = e.pendingAudits, e.startAndLockCards, e.baselineCards, e.eveningStories, e.overnightCards
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1990,6 +2015,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return e.missionTimeAct(ctx, c, repo, it, a)
 	case InboxEvening:
 		return e.eveningAct(ctx, c, repo, login, it, a)
+	case InboxOvernight: // the only write is the approval; Not now writes nothing and never gets here
+		return e.overnightAct(ctx, it)
 	}
 	var note, status, reason string
 	switch it.Kind {
