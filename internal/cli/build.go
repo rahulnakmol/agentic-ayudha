@@ -1216,7 +1216,9 @@ func (e *Env) markBlocked(ctx context.Context, c *github.Client, w *ledger.Write
 	// The block frees the story's slot: its mission's Kanha is told, in the builder's own words for a stop, on
 	// one line, clipped.
 	reason := clipText(strings.Join(strings.Fields(strings.TrimPrefix(why, stoppedByBuilder)), " "), 300)
-	note, err := e.tellKanha(ctx, c, w, repo, n, func(f int) string { return fmt.Sprintf("blocked #%d: %s: run aayu mission next %d", n, reason, f) })
+	note, err := e.tellKanhaData(ctx, c, w, repo, n, func(f int) (string, string) {
+		return fmt.Sprintf("blocked #%d: %s", n, reason), fmt.Sprintf("run aayu mission next %d", f)
+	})
 	res.Notes = kanhaNote(res.Notes, note, err)
 	return sent, e.saveBuild(ctx, c, w, repo, n, st, res)
 }
@@ -1234,7 +1236,7 @@ func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Write
 	if err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("%s; and its slot was not released: %w", reason, err))
 	}
-	note, err := e.tellKanha(ctx, c, w, repo, n, func(int) string { return fmt.Sprintf("start of #%d failed: %s", n, reason) })
+	note, err := e.tellKanhaData(ctx, c, w, repo, n, func(int) (string, string) { return fmt.Sprintf("start of #%d failed: %s", n, reason), "" })
 	res.Notes = kanhaNote(res.Notes, note, err)
 	out := &Error{Code: CodeOf(cause), Err: fmt.Errorf("%w; #%d is status:ready again, and its claim and lease are released", cause, n)}
 	if ce := (*Error)(nil); errors.As(cause, &ce) {
