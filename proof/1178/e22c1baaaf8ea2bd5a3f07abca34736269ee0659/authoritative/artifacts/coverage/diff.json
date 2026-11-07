@@ -1,0 +1,47 @@
+{
+  "covered": 349,
+  "executable": 380,
+  "percent": 91.84210526315789,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/inbox.go": [
+      359,
+      1261,
+      1262
+    ],
+    "internal/cli/inboxovernight.go": [
+      223,
+      305,
+      306,
+      311,
+      312,
+      335,
+      336,
+      342,
+      343,
+      351,
+      352,
+      359,
+      360,
+      388,
+      389,
+      391,
+      392,
+      419,
+      422,
+      423,
+      440,
+      441,
+      487,
+      488,
+      490,
+      491
+    ],
+    "internal/cli/missionnext.go": [
+      351,
+      352
+    ]
+  },
+  "format": "go coverprofile"
+}
