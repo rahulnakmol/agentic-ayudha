@@ -94,6 +94,7 @@ type delegation struct {
 	lease    *Lease        // the story's lease as last renewed during a usage-limit wait
 	feature  int           // the Feature whose started mission the story is in
 	kanha    *ready.Parent // that mission's Kanha, when Start recorded one
+	claimAt  string        // when the live mission claim that build started the story under was made (Bug #1266)
 	host     bool          // Amp, in an Amp thread whose amp CLI is not signed in: the host creates the thread (Bug #1208)
 	thread   string        // --thread: the thread the host created for a host hand-off
 	hostDir  string        // where build writes text for the host to send (git-ignored runtime state)
@@ -121,9 +122,14 @@ const (
 )
 
 // hostLapsed reports whether st is a host hand-off that got no thread within
-// pickLockTTL, the life of the claim that started it (Bug #1208).
+// pickLockTTL, the life of the claim that started it (Bug #1208): from its
+// mission claim when it has one, which a late hand-off does not extend (Bug
+// #1266).
 func (e *Env) hostLapsed(st delegate.State) bool {
 	at, err := time.Parse(time.RFC3339, st.StartedAt)
+	if claimed, cerr := time.Parse(time.RFC3339, st.ClaimedAt); cerr == nil && claimed.Before(at) {
+		at = claimed
+	}
 	return st.Status == dlgHost && st.Task == "" && (err != nil || e.Now().Sub(at) > pickLockTTL)
 }
 
@@ -773,12 +779,17 @@ func (e *Env) hostHandoff(ctx context.Context, d *delegation, res *BuildResult, 
 	if err := writeHostFile(path, d.brief); err != nil {
 		return Errorf(ExitExternal, "build #%d --delegate amp: the brief for the host was not written: %v", d.story, err)
 	}
+	d.state.ClaimedAt = d.claimAt // the hand-off lives as long as the mission claim that started it (Bug #1266)
+	from := "the story's claim"
+	if d.claimAt == "" {
+		from = "this hand-off"
+	}
 	title := delegate.AmpTitle(delegate.Handoff{Story: d.story, Title: d.title})
 	d.event(now, dlgHost, "the host creates the thread: "+title)
 	d.fill(res.Delegation)
 	res.Delegation.Host = &HostHandoff{Title: title, Brief: path, Record: fmt.Sprintf("aayu build %d --delegate amp --thread <T-id>", d.story)}
 	res.Next = fmt.Sprintf("create one Amp thread titled %q, with the text of %s as its prompt. Then run `aayu build %d --delegate amp --thread <its T-id>`. "+
-		"After %d minutes with no thread, the hand-off lapses", title, path, d.story, int(pickLockTTL.Minutes()))
+		"With no thread %d minutes after %s, the hand-off lapses", title, path, d.story, int(pickLockTTL.Minutes()), from)
 	return e.saveDelegation(ctx, d)
 }
 

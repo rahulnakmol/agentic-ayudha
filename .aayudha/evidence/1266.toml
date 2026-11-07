@@ -1,0 +1,13 @@
+# Which tests prove Bug #1266's Completion Goal.
+
+[[criterion]]
+id = 1 # mission next claimed #20, the build handed it off 14 minutes later: 16 minutes after the claim, mission next releases #20 and lists it start
+tests = ["internal/cli:TestAmpHostLateHandoffLapsesWithItsClaim"]
+
+[[criterion]]
+id = 2 # a --thread after the lapse time but before mission next marks it is accepted on the ledger tip; one after the lapse is marked is refused
+tests = ["internal/cli:TestAmpHostLapseEdges", "internal/cli:TestAmpHostHandoffLapses", "internal/cli:TestAmpHostLateHandoffLapsesWithItsClaim"]
+
+[[criterion]]
+id = 3 # --thread names a 38-character ID that is not T- and an 8-4-4-4-12 hex UUID: a usage error, and nothing is written
+tests = ["internal/cli:TestAmpHostThreadNotAmpRefused"]
