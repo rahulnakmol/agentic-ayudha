@@ -1972,8 +1972,25 @@ func TestProofLand(t *testing.T) {
 	setRun(nil, branch, "O/R", ran)
 	twin := g.AddPR("Show empty list again", "Refs #2", "founder", branch, head, "rolling")
 	missing("a second PR from the branch at the head")
+	// Bug #1204: one at the head that was open in the PR's window, or that
+	// closed before the PR opened, may own a run there. An edit of a closed
+	// PR starts a gate run on its head.
+	for _, k := range []struct {
+		what, state     string
+		created, closed time.Time
+	}{
+		{"a PR from the branch at the head open in the window", "open", opened.Add(time.Second), time.Time{}},
+		{"a PR from the branch at the head that closed before the PR opened", "closed", opened.Add(-2 * time.Hour), opened.Add(-time.Minute)},
+	} {
+		g.Mu.Lock()
+		twin.State, twin.CreatedAt, twin.ClosedAt = k.state, k.created, k.closed
+		g.Mu.Unlock()
+		missing(k.what)
+	}
+	// One at the head that opened after the PR merged starts its runs after
+	// the window, so the PR's own run still counts.
 	g.Mu.Lock()
-	twin.Head.SHA = strings.Repeat("f", 40)
+	twin.State, twin.CreatedAt, twin.ClosedAt = "open", time.Now().UTC().Add(time.Hour), time.Time{}
 	g.Mu.Unlock()
 	// A newer green gate run with its own pack, started by an event after the
 	// merge (an edit of the body): it ran the base branch that now holds the
@@ -2006,11 +2023,11 @@ func TestProofLand(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "proof coverage 1/1; merged without proof: pre-gate 0, post-gate 0") {
 		t.Fatalf("audit after proof land: %d %s %s", code, out, errOut)
 	}
-	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
 	c, err := github.New(github.Options{Token: "t", BaseURL: g.URL(), WriteGap: -1, ServerRetries: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A failed read of the PR, or of the PRs from its branch, is an error, never a gate.
 	for _, fail := range []string{fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), "GET /repos/o/r/pulls"} {
 		g.Mu.Lock()
 		g.Fail, g.FailAfter = fail, 0
