@@ -1,0 +1,9 @@
+# Which tests prove Bug #1161's Completion Goal.
+
+[[criterion]]
+id = 1 # another PR from the branch had the head while the merged PR was open: no run counts, proof land says missing
+tests = ["internal/cli:TestProofLand"]
+
+[[criterion]]
+id = 2 # no other PR from the branch ever had the head: proof land lands the pack from the PR's own run
+tests = ["internal/cli:TestProofLand"]
