@@ -1,0 +1,184 @@
+1170	v0.4.0	1172	OPEN	type:story,status:merged,effort:M,risk:medium	A waiting baseline draft is an inbox card, approved under the session's one device code
+1170	v0.4.0	1173	OPEN	type:story,status:merged,effort:M,risk:medium	Approve to build is an inbox card, with its stories, budget, agents, milestones, and high-risk entries
+1170	v0.4.0	1174	OPEN	type:story,status:merged,effort:M,risk:medium	Bugs come last: a mission ends with a BUGS milestone, and a Bug filed during the mission joins it
+1170	v0.4.0	1175	OPEN	type:story,status:merged,effort:S,risk:low	The morning is set: the inbox orders the day's cards and ends with the day's plan
+1170	v0.4.0	1176	OPEN	type:story,status:merged,effort:M,risk:medium	The evening review: each story agreed this morning, with each criterion next to its evidence
+1170	v0.4.0	1177	OPEN	type:story,status:merged,effort:S,risk:low	The day is proven: the evening says it only when every agreed criterion has its evidence
+1170	v0.4.0	1178	OPEN	type:story,status:merged,effort:M,risk:medium	The overnight card: the person sets what runs overnight, bounded in hours and cost
+1170	v0.4.0	1179	OPEN	type:story,status:merged,effort:M,risk:medium	aayu grill edits a filed body before Ready, and checks link targets as Ready does
+1170	v0.4.0	1182	OPEN	type:bug,status:merged,effort:S,risk:high	Approve to build and mission start refuse a person in an orb Terminal instead of asking for the device code
+1170	v0.4.0	1191	OPEN	type:bug,status:ready,effort:S,risk:high	aayu's loop agents carry AAYU_AGENT=1 only in their prompt, so a loop command without it reaches the device flow
+1170	v0.4.0	1192	OPEN	type:bug,status:in-progress,effort:S,risk:high	ship asks for a second code after a person approved the head with inspect --approve
+1170	v0.4.0	1193	OPEN	type:bug,status:merged,effort:S,risk:low	aayu mission start always refuses, because no user config key sets the person's tool for a repository
+1170	v0.4.0	1201	OPEN	type:bug,status:in-progress,effort:S,risk:low	A Decision superseded through an accepted successor's chain stays open and asks to be accepted
+1170	v0.4.0	1206	OPEN	type:bug,status:in-progress,effort:S,risk:high	ship asks for the device code before checks that need no person, so a refused ship wastes the code
+1170	v0.4.0	1207	OPEN	type:bug,status:merged,effort:S,risk:medium	The mission starts a story that already has an open Refs PR built outside it
+1170	v0.4.0	1208	OPEN	type:bug,status:merged,effort:M,risk:medium	fix(delegate): an Amp mission needs the amp CLI signed in to start a story
+1170	v0.4.0	1210	OPEN	type:bug,status:merged,effort:S,risk:low	fix(slice): a directory in Expected paths covers no file under it, and internal/inspect and internal/delegate fall in no layer
+1170	v0.4.0	1211	OPEN	type:bug,status:merged,effort:M,risk:medium	fix(env): a stale amp environment record stops every Amp mission start, and only Docker can verify it again
+1170	v0.4.0	1226	OPEN	type:bug,status:merged,effort:S,risk:low	fix(verify): the gate cannot find a pnpm-installed Playwright, so its browser checks fail and list a fix
+1170	v0.4.0	1230	OPEN	type:bug,status:merged,effort:S,risk:low	fix(mission): a gate fix PR records only its first failed check, so a fix for several checks leaves the gate waiting
+1170	v0.4.0	1234	OPEN	type:bug,status:in-progress,effort:S,risk:medium	fix(ship): ship merges a PR proven on an older dev, so two green PRs can break dev together
+1170	v0.4.0	1248	OPEN	type:bug,status:in-progress,effort:S,risk:low	fix(mission): extend refuses before the time limit, so a person who checks in early cannot extend the mission
+1170	v0.4.0	1250	OPEN	type:story,status:in-progress,effort:S,risk:medium	Builders iterate on a draft PR locally, and GitHub runs CI, the merge gate, and the paid review once the PR is ready
+1170	v0.4.0	1251	OPEN	type:bug,status:ready,effort:XS,risk:low	fix(ready): a story added after Approve to build names aayu ready --ack, a flag that does not exist
+1170	v0.4.0	1252	OPEN	type:bug,status:in-progress,effort:S,risk:low	aayu ready --dry-run for Approve to build starts the device flow and waits for a person
+1170	v0.4.0	1253	OPEN	type:bug,status:in-progress,effort:M,risk:medium	aayu inbox asks up to five decisions to start one Feature: a card per baseline part, then Approve to build, then Mission start
+1170	v0.4.0	1254	OPEN	type:story,status:in-progress,effort:M,risk:medium	Two person windows a day: outside them no work waits for a person and nobody is asked to act
+1170	v0.4.0	1256	OPEN	type:bug,status:ready,effort:S,risk:low	The build brief has no Goldfish review: no fresh session of another model family reviews the draft PR before it is ready
+1170	v0.4.0	1267	OPEN	type:bug,status:ready,effort:S,risk:medium	Approve to build again resets a milestone gate that already passed, so every later PR waits for that gate again
+1170	v0.4.0	1268	OPEN	type:bug,status:ready,effort:S,risk:medium	A milestone's gate failures from before its last pass still count toward max_no_go, so one new failure stops the mission
+1170	v0.4.0	1274	OPEN	type:bug,status:ready,effort:S,risk:low	Every other human-only verb still starts the device flow in a dry run
+1170	v0.4.0	1280	OPEN	type:bug,status:planned,effort:S,risk:low	mission resume moves the events cursor past events no one read
+1170	v0.4.0	1283	OPEN	type:bug,status:planned,effort:S,risk:low	Retro eval cases fix their dates in the past, so scores move with the real date
+1170	v0.4.0	1281	OPEN	type:story,status:planned,effort:S,risk:high	Every agent PR into dev merges on proof at any risk and hour, and only the policy keys wait for a person (Decision #1255)
+982	v0.4.0	984	OPEN	type:story,status:planned,effort:M,risk:medium	A Feature names the customer outcome it serves, or says why it has none
+982	v0.4.0	985	OPEN	type:story,status:planned,effort:S,risk:medium	Approve to build shows the Feature's outcome next to its budget, time and cost
+982	v0.4.0	986	OPEN	type:story,status:planned,effort:M,risk:medium	Did it move? An outcome card some days after a Feature ships
+982	v0.4.0	987	OPEN	type:story,status:planned,effort:M,risk:low	Releases and a weekly retro show outcomes beside counts, and the retro ends with a next step
+982	v0.4.0	988	OPEN	type:story,status:planned,effort:S,risk:medium	A Goal states what we do best, and new work is checked against it
+982	v0.4.0	989	OPEN	type:story,status:merged,effort:M,risk:medium	Measure founder minutes per merged PR
+977	v0.4.0	969	OPEN	type:story,status:planned,effort:M,risk:high	Deck: clear an area one card at a time, with swipes that never ship
+977	v0.4.0	970	OPEN	type:story,status:planned,effort:M,risk:high	Pair a phone on your tailnet with a one-time QR code
+977	v0.4.0	971	OPEN	type:story,status:planned,effort:M,risk:medium	The Behaviours view: every behaviour you approved, its source, and its last result
+977	v0.4.0	972	OPEN	type:story,status:planned,effort:S,risk:medium	Ask why on every shipped item
+977	v0.4.0	973	OPEN	type:story,status:planned,effort:S,risk:low	Ask Atri anywhere: counsel on any card or issue, and Atri never acts
+976	v0.4.0	957	OPEN	type:story,status:planned,effort:L,risk:high	Open the web inbox from this computer, an SSH tunnel, or an Amp portal, and sign in once per session
+976	v0.4.0	958	OPEN	type:story,status:planned,effort:L,risk:medium	Every card and state of the terminal inbox shows on the web with the same words
+976	v0.4.0	959	OPEN	type:story,status:planned,effort:M,risk:low	Always live: cards change in place without a reload, and the stream reconnects
+976	v0.4.0	960	OPEN	type:story,status:planned,effort:L,risk:medium	The web Mission page: Sessions, the mission's record, and progress in three columns, with a command bar and Take over
+976	v0.4.0	961	OPEN	type:story,status:planned,effort:L,risk:low	The command center frame: overview tiles, the Team view, a now bar, a detail sheet for everything, a collapsible nav, any screen size
+976	v0.4.0	962	OPEN	type:story,status:planned,effort:M,risk:medium	Read the PR inside the app, with Approve and ship always in reach
+976	v0.4.0	963	OPEN	type:story,status:planned,effort:M,risk:low	Lineage on every card: from Story, Bug, or Feedback to PR, proof, ship, and release
+976	v0.4.0	964	OPEN	type:story,status:planned,effort:L,risk:low	Browse issues, release by release, and by workstream
+976	v0.4.0	965	OPEN	type:story,status:planned,effort:L,risk:medium	Aruna and 20 themes, light and dark, custom themes, and settings on both faces
+976	v0.4.0	966	OPEN	type:story,status:planned,effort:M,risk:medium	Say what to do: a command bar with a fixed grammar and preview cards
+976	v0.4.0	967	OPEN	type:story,status:planned,effort:S,risk:low	Every view has a designed empty state with what happens next
+976	v0.4.0	968	OPEN	type:story,status:planned,effort:M,risk:medium	Everything works with a keyboard and a screen reader, at WCAG 2.2 AA
+976	v0.4.0	983	OPEN	type:story,status:planned,effort:L,risk:medium	See a release whole: its Tree, a slice per type, and Board, List and Gantt views
+975	v0.4.0	937	OPEN	type:story,status:planned,effort:M,risk:low	The day in areas: Now, Overdue, Ship, Answer, Decide, Ready, Housekeeping
+975	v0.4.0	938	OPEN	type:story,status:planned,effort:L,risk:medium	Any seat asks you on an ANSWER card, and your answer reaches its thread
+975	v0.4.0	939	OPEN	type:story,status:planned,effort:M,risk:low	Not now, snooze, and not sure: put a card away and see when it comes back
+975	v0.4.0	940	OPEN	type:story,status:planned,effort:S,risk:medium	Overdue at 24 hours, and a recommendation applies at 48 hours only for a two-way ask
+975	v0.4.0	941	OPEN	type:story,status:planned,effort:L,risk:high	Refine a story to Ready in the inbox: what fails, ask the builder, and Make Ready
+975	v0.4.0	942	OPEN	type:story,status:planned,effort:M,risk:high	Start a mission, and stop, resume, recover, or retry it from its card
+975	v0.4.0	943	OPEN	type:story,status:planned,effort:L,risk:medium	aayu mission and the inbox's mission view: Shape and Deliver, each story's state, and each milestone's gate
+975	v0.4.0	944	OPEN	type:story,status:planned,effort:S,risk:low	One story, end to end, on every card
+975	v0.4.0	945	OPEN	type:story,status:planned,effort:M,risk:high	Review a plan and unblock a build from a card
+975	v0.4.0	946	OPEN	type:story,status:planned,effort:M,risk:high	Ask for the stable release and publish copy from a card
+975	v0.4.0	947	OPEN	type:story,status:planned,effort:M,risk:high	Approve an incident's ops action from its card, with GitHub as the gate
+975	v0.4.0	948	OPEN	type:story,status:planned,effort:S,risk:high	Emergency stop for a tool incident, the budget pause, and resume
+975	v0.4.0	949	OPEN	type:story,status:planned,effort:L,risk:high	A PR that a floor or an eval stops, or that loops, waits for you with three choices: waive, file a Bug and ship, or stop
+975	v0.4.0	950	OPEN	type:story,status:planned,effort:S,risk:low	Accept, decline, or route Feedback from one card
+975	v0.4.0	951	OPEN	type:story,status:planned,effort:M,risk:medium	See each Feature in shaping, baseline its parts, and baseline again on drift
+975	v0.4.0	952	OPEN	type:story,status:planned,effort:S,risk:medium	Resolve the seats' findings on a baseline in a grill session, and see the record
+975	v0.4.0	953	OPEN	type:story,status:planned,effort:S,risk:high	Approve a Feature to build, knowing what it may spend
+975	v0.4.0	954	OPEN	type:story,status:planned,effort:S,risk:medium	Triage a bug from its repro report: hotfix, carve out a Feature, better repro, or not a bug
+975	v0.4.0	955	OPEN	type:story,status:planned,effort:M,risk:high	Acknowledge each story added or changed after Approve to build, or all of them on the record
+975	v0.4.0	956	OPEN	type:story,status:planned,effort:M,risk:low	The delivery plan: waves, the critical path, an indicative time, and actual against estimate
+895	v0.4.0	924	OPEN	type:bug,status:planned,effort:L,risk:medium	A changed card writes nothing and says what changed, and every result shows on its card
+895	v0.4.0	925	OPEN	type:bug,status:planned,effort:L,risk:low	The inbox never shows an empty list before its first read ends, and says when it read, when GitHub is slow, and when it is limited
+895	v0.4.0	926	OPEN	type:story,status:planned,effort:M,risk:medium	A review that cannot finish waits in the inbox, and approve and ship is one choice
+895	v0.4.0	927	OPEN	type:story,status:planned,effort:L,risk:high	Ship a protected-path PR from its card with a one-line reason
+895	v0.4.0	928	OPEN	type:story,status:planned,effort:M,risk:medium	Ship several cards with one check and a hold to stop, and every inbox time is a config key
+895	v0.4.0	929	OPEN	type:story,status:planned,effort:M,risk:low	Links open or copy in any terminal: local, tmux, herdr, and SSH
+895	v0.4.0	930	OPEN	type:story,status:planned,effort:M,risk:low	A card says why you, shows the evidence, and puts the counsel above the choices
+895	v0.4.0	931	OPEN	type:story,status:planned,effort:S,risk:low	You learn that a card needs you without watching, and what changed since you looked
+895	v0.4.0	932	OPEN	type:story,status:planned,effort:S,risk:low	The header and the footer say where you are and what is armed
+895	v0.4.0	933	OPEN	type:story,status:planned,effort:M,risk:low	Leave at any time, see what you did, and continue on another surface
+895	v0.4.0	934	OPEN	type:story,status:planned,effort:M,risk:medium	Learn the keys when you need them, and see only the choices you may take
+895	v0.4.0	935	OPEN	type:story,status:planned,effort:M,risk:high	A code owner approves a protected-path PR from the inbox with a real GitHub review
+895	v0.4.0	936	OPEN	type:story,status:planned,effort:M,risk:high	Dismiss a false finding and waive a floor from the card
+895	v0.4.0	980	OPEN	type:story,status:planned,effort:S,risk:low	Command output wraps at a word, with its continuation indented
+895	v0.4.0	1122	OPEN	type:bug,status:planned,effort:XS,risk:low	aayu inbox fails with exit 5 when a marker's author gets a 404 from GitHub's permission read
+889	v0.4.0	997	OPEN	type:story,status:merged,effort:M,risk:high	Approve to build writes the mission plan, and Start records the starter, the tool, and the budget
+889	v0.4.0	998	OPEN	type:story,status:merged,effort:M,risk:medium	aayu mission next <f> lists the mission's startable stories in order, with no model call
+889	v0.4.0	999	OPEN	type:story,status:merged,effort:S,risk:medium	The runnable list holds back a story whose depends-on target is still open
+889	v0.4.0	1000	OPEN	type:story,status:merged,effort:S,risk:high	[build] agents = 5 per Kanha, and the mission limits are config keys
+889	v0.4.0	1001	OPEN	type:story,status:merged,effort:M,risk:high	A milestone gate checks the dev tip, and each failed check gets one pre-authorised fix PR
+889	v0.4.0	1002	OPEN	type:story,status:merged,effort:L,risk:high	aayu mission stop brings a mission or one story to a safe stop, resume continues it, and ship merges milestones in order
+889	v0.4.0	1003	OPEN	type:story,status:merged,effort:M,risk:medium	aayu mission recover re-attaches what lives, and a failed step retries up to retry_max
+889	v0.4.0	1004	OPEN	type:story,status:merged,effort:M,risk:high	Start on the mission start card starts the mission's Kanha on the tool recorded in the plan
+889	v0.4.0	1005	OPEN	type:story,status:merged,effort:M,risk:high	The mission skill: on each event, Kanha asks aayu what can run and starts one subthread per start
+889	v0.4.0	1006	OPEN	type:story,status:merged,effort:M,risk:high	A story subthread owns one story, may use subagents, and ships it on proof
+889	v0.4.0	1007	OPEN	type:story,status:merged,effort:S,risk:high	ship tells the story's Kanha after each merge, in the same process
+889	v0.4.0	1008	OPEN	type:story,status:merged,effort:S,risk:medium	A stop, a block, a failed start, or an answered ask tells the Kanha
+889	v0.4.0	1009	OPEN	type:story,status:merged,effort:S,risk:high	An hourly safety tick wakes each Kanha that missed an event, and syncs cloud PRs
+889	v0.4.0	1010	OPEN	type:story,status:planned,effort:M,risk:high	Every build event of a Feature goes to delivery/<f>/events.jsonl and one progress comment
+889	v0.4.0	1011	OPEN	type:story,status:planned,effort:S,risk:medium	@rahulnakmol is paged only at a milestone end, a block, and the mission's end
+889	v0.4.0	1012	OPEN	type:story,status:merged,effort:L,risk:high	A stateless wake on GitHub events, and a local Kanha for Codex, Copilot, and OpenCode
+889	v0.4.0	1013	OPEN	type:story,status:merged,effort:M,risk:high	Kanha's lock at mission start: the bodies and the size, risk, and priority labels of the Feature, its stories, and its Bugs become read-only
+889	v0.4.0	1014	OPEN	type:story,status:planned,effort:M,risk:medium	Kanha's feedback pass at mission end turns people's comments into new stories that @rahulnakmol approves once
+889	v0.4.0	1015	OPEN	type:story,status:merged,effort:M,risk:medium	Mission time limits: warn at 24 hours, hold new starts at 48 hours, and a person's reason to start or extend past them
+889	v0.4.0	1030	OPEN	type:story,status:planned,effort:L,risk:high	Inside an approved mission, ship merges on proof and holds only what the person must see
+889	v0.4.0	1031	OPEN	type:bug,status:merged,effort:M,risk:medium	Ship gaps: a nobody-configured inbox, plan layers from labels, the first story line, and no pack after a merge outside ship
+889	v0.4.0	1099	OPEN	type:bug,status:merged,effort:XS,risk:low	Mission start and its Kanha's start record two different times, so TestMissionStartBriefsDraftingThread fails when they cross a second
+889	v0.4.0	1100	OPEN	type:bug,status:merged,effort:S,risk:medium	The merge gate refuses a pre-authorised gate-fix PR, because it needs a Ready snapshot of the Feature the PR refs
+889	v0.4.0	1101	OPEN	type:bug,status:merged,effort:S,risk:medium	aayu halt leaves mission claims in place, so a story claimed just before a halt still counts as claimed after aayu resume
+889	v0.4.0	1104	OPEN	type:story,status:planned,effort:S,risk:medium	The story subthread brief carries the 10-step build loop, and an eval fails when a step is missing
+889	v0.4.0	1109	OPEN	type:story,status:planned,effort:M,risk:medium	Proof packs record the red run of each test, and a missing red run warns
+889	v0.4.0	1110	OPEN	type:story,status:planned,effort:L,risk:high	Real-run journeys on the built binary prove each story, and the milestone gate re-runs them at the dev tip
+889	v0.4.0	1111	OPEN	type:story,status:planned,effort:M,risk:medium	Inspect flags function beyond the story's ask, and each milestone records whether its work will matter
+889	v0.4.0	1112	OPEN	type:story,status:planned,effort:M,risk:medium	Each milestone's findings propose the order of the next milestone's stories
+889	v0.4.0	1118	OPEN	type:bug,status:merged,effort:XS,risk:low	A send to the Kanha has no time limit, so a stalled receiver CLI makes ship or build hang
+889	v0.4.0	1121	CLOSED	type:bug,status:planned,effort:S,risk:low	The safety tick wakes or syncs a mission paused, ended, or stopped during the tick
+889	v0.4.0	1124	OPEN	type:bug,status:merged,effort:S,risk:low	A hand-off or follow-up to a receiver has no time limit, so a stalled receiver CLI makes build or mission start hang
+889	v0.4.0	1126	OPEN	type:story,status:planned,effort:S,risk:low	The local Kanha's machine runs aayu mission wake every check_minutes, set up by aayu install --loops
+889	v0.4.0	1128	OPEN	type:bug,status:planned,effort:S,risk:low	A sync sends a delegation's findings before it records them, so a lost save sends them again
+889	v0.4.0	1129	OPEN	type:bug,status:merged,effort:S,risk:low	A mission claim stays valid after its story moves to another Feature, so the Kanha starts it on the old mission's tool
+889	v0.4.0	1130	OPEN	type:bug,status:ready,effort:S,risk:medium	inspect drops CodeRabbit findings whose severity badge is an icon, so a Major reads as no finding
+889	v0.4.0	1132	OPEN	type:bug,status:merged,effort:XS,risk:low	The Kanha's report restates issue text it did not act on, so mission/stays-in-list scores 3.00 against its 3.50 bar
+889	v0.4.0	1133	OPEN	type:bug,status:ready,effort:S,risk:low	A person's early /aayu review again reopens nothing, and the gate does not say so
+889	v0.4.0	1134	OPEN	type:story,status:planned,effort:S,risk:medium	The mission lock ends when the last milestone's gate passes, not when every story merges
+889	v0.4.0	1137	OPEN	type:bug,status:merged,effort:S,risk:low	build's sync reads a receiver's task with no time limit, so a stalled receiver makes build hang
+889	v0.4.0	1138	OPEN	type:bug,status:ready,effort:S,risk:medium	CWE-1427: tellKanha sends event text to a cloud Kanha's prompt unmarked
+889	v0.4.0	1139	OPEN	type:bug,status:ready,effort:S,risk:medium	CWE-1427: mission next prints delegation events to the Kanha unmarked
+889	v0.4.0	1140	OPEN	type:bug,status:merged,effort:XS,risk:low	Mission tests fix a story's start on 2026-10-26, so the 48-hour mission clock fails them on every branch
+889	v0.4.0	1148	OPEN	type:bug,status:merged,effort:S,risk:low	A maybe-started Codex story whose task is done with no PR stays held for good, because recover never re-attaches the task
+889	v0.4.0	1149	OPEN	type:bug,status:merged,effort:S,risk:medium	aayu mission recover lists the Codex environment the delegation started in
+889	v0.4.0	1150	OPEN	type:bug,status:merged,effort:XS,risk:low	inspect reads a person's /aayu review again comment as their review reply and fails closed
+889	v0.4.0	1151	OPEN	type:bug,status:merged,effort:XS,risk:low	CI build's go test has no timeout, so a slow internal/cli fails it at random
+889	v0.4.0	1154	OPEN	type:story,status:planned,effort:M,risk:low	internal/cli's tests run well below go test's 10-minute default
+889	v0.4.0	1155	OPEN	type:bug,status:merged,effort:XS,risk:low	A person's dismissal never clears a carried finding on a PR with no Story
+889	v0.4.0	1157	CLOSED	type:bug,status:ready,effort:M,risk:medium	A Story whose criteria are tier-2 eval results can never reach merge before it merges
+889	v0.4.0	1159	OPEN	type:bug,status:merged,effort:XS,risk:low	proof land can never land a merged pull request: its gate runs list no pull request
+889	v0.4.0	1161	OPEN	type:bug,status:ready,effort:S,risk:low	A gate run of a pull request that once shared the branch and head can count for a merged pull request
+889	v0.4.0	1162	OPEN	type:bug,status:merged,effort:S,risk:low	ship and proof land can take the pack and the gate checks from two gate runs
+889	v0.4.0	1163	OPEN	type:bug,status:merged,effort:S,risk:medium	A person's recorded approval of a head never clears a rung-B verdict whose only gap is unclear criteria
+889	v0.4.0	1165	OPEN	type:bug,status:merged,effort:S,risk:low	A cached merge from an approval lift is not checked again against the current approver
+889	v0.4.0	1166	OPEN	type:bug,status:ready,effort:S,risk:low	Every mission eval case scores 1 because the case worlds have no answer for aayu mission recover
+889	v0.4.0	1169	OPEN	type:bug,status:merged,effort:S,risk:medium	aayu mission next holds a story whose depends-on target merged but is still open
+889	v0.4.0	1186	OPEN	type:bug,status:merged,effort:XS,risk:low	TestMissionEndOnlyByStarter fails when the minute changes during the test
+889	v0.4.0	1195	OPEN	type:bug,status:ready,effort:S,risk:low	security fails on every PR: glob and minimatch advisories in pnpm-lock.yaml
+889	v0.4.0	1197	OPEN	type:bug,status:planned,effort:S,risk:medium	CWE-1427: build, mission wake, and mission tick print receiver error text to a model unmarked
+889	v0.4.0	1198	OPEN	type:bug,status:ready,effort:XS,risk:low	config validation prints a rejected secret value
+889	v0.4.0	1203	OPEN	type:bug,status:ready,effort:S,risk:low	A closed pull request whose commit list lost the head can still let its gate run count for a merged pull request
+889	v0.4.0	1204	OPEN	type:bug,status:ready,effort:XS,risk:low	A pull request from the branch outside the open window blocks a merged pull request's own gate run
+889	v0.4.0	1264	OPEN	type:bug,status:merged,effort:M,risk:medium	A delegated build reports a state the ledger did not take when the ledger write fails
+889	v0.4.0	1266	OPEN	type:bug,status:ready,effort:S,risk:medium	The Amp host hand-off lapses by the hand-off's age and records a late or malformed thread ID
+887	v0.4.0	1221	OPEN	type:story,status:planned,effort:M,risk:medium	A Story or Bug's Review guidance is parsed and checked at Ready, with the Ignore limits
+887	v0.4.0	1222	OPEN	type:story,status:planned,effort:S,risk:low	The build brief carries the story's Review guidance from the Ready snapshot
+887	v0.4.0	1223	OPEN	type:story,status:planned,effort:M,risk:medium	inspect reads the frozen Review guidance, keeps every limited finding, and re-reviews when it changes
+877	v0.4.0	995	OPEN	type:story,status:merged,effort:M,risk:high	A person approves a Feature to build, and the ledger keeps what was agreed
+877	v0.4.0	996	OPEN	type:story,status:merged,effort:M,risk:high	A story is Ready only while its Feature's approval covers it
+877	v0.4.0	1029	OPEN	type:story,status:planned,effort:M,risk:high	Approve to build shows the high-risk changes by story, and records a choice for each
+877	v0.4.0	1082	OPEN	type:story,status:planned,effort:M,risk:high	A story added or changed after Approve to build needs its own acknowledgment
+877	v0.4.0	1083	OPEN	type:story,status:planned,effort:L,risk:high	An approval record counts only with a receipt that GitHub shows its person wrote (threat T23)
+877	v0.4.0	1086	OPEN	type:bug,status:planned,effort:S,risk:medium	aayu grill story files a Story with no parent Feature, which can never be made Ready
+876	v0.4.0	1114	OPEN	type:story,status:planned,effort:M,risk:high	An open review gap keeps Approve to build off until a later approved baseline fixes it, and grill lists each finding
+876	v0.4.0	1115	OPEN	type:story,status:planned,effort:S,risk:high	A person dismisses a review gap with a reason, and Approve to build ratifies it
+876	v0.4.0	1116	OPEN	type:story,status:planned,effort:S,risk:medium	In the grill session, the agent walks each open gap with the founder, and never dismisses one itself
+875	v0.4.0	919	OPEN	type:story,status:planned,effort:S,risk:high	The reviewer table and one finding type are in the registry, and every review timing is a config key
+875	v0.4.0	920	OPEN	type:story,status:planned,effort:M,risk:high	aayu critique records one review per seat and refuses a review that is not independent
+875	v0.4.0	921	OPEN	type:story,status:planned,effort:M,risk:medium	An approved baseline starts one review session for each reviewing seat on the approver's agent tool
+875	v0.4.0	922	OPEN	type:story,status:planned,effort:S,risk:medium	A slow tick starts each missed review, and the review window closes on time
+875	v0.4.0	923	OPEN	type:story,status:planned,effort:S,risk:high	A local agent CLI runs a review session, and aayu critique records it when the session ends
+874	v0.4.0	990	OPEN	type:story,status:merged,effort:L,risk:medium	An agent drafts a Feature baseline, and only a person approves it at the hash they saw
+874	v0.4.0	991	OPEN	type:story,status:merged,effort:M,risk:medium	aayu plan writes a Feature's technical design, and each story plan stays inside it
+874	v0.4.0	992	OPEN	type:story,status:merged,effort:M,risk:low	Each baseline part pins what it owns: the spec's stories, the technical design, and the UX stages
+874	v0.4.0	993	OPEN	type:story,status:merged,effort:M,risk:high	A drift after a baseline shows at once, and a new version says what changed, why it matters, and the need behind it
+874	v0.4.0	994	OPEN	type:story,status:merged,effort:S,risk:high	A person approves one early build before Approve to build, and sees its budget
+874	v0.4.0	1028	OPEN	type:story,status:planned,effort:M,risk:medium	Each story plan lists its high-risk changes in a risk register
+874	v0.4.0	1106	OPEN	type:story,status:planned,effort:M,risk:low	A state-changing high-risk story plans its failure modes, and its open questions age like asks
+890	v0.4.1	1107	OPEN	type:story,status:planned,effort:M,risk:low	verify fails an undeclared breaking contract change and contract docs that are not generated
+890	v0.4.1	1108	OPEN	type:story,status:planned,effort:M,risk:low	verify fails a forbidden layer import and secrets or personal data in test fixtures

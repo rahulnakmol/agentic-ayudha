@@ -1,0 +1,27 @@
+1282	true	6f2aae7	1281,1255,1281	feat(autonomy): every agent PR into dev merges on proof; only the policy keys wait for a p
+1278	true	ac1daf3		fix(delegate): say the ledger does not confirm a record when it cannot be read back
+1277	true	9c450d7	1204	fix(proof): a PR from the branch opened after the merge holds no run
+1276	false	bcafd0f	1267	fix(mission): Approve to build again keeps an unchanged milestone's gate
+1275	false	9e8b72b	1268	fix(mission): a milestone's gate failures count from its last pass
+1273	false	8193f2f		docs(ready): name the spec, inbox, and ready steps for a story that waits, not --ack
+1270	true	7364899	1254	feat: two person windows a day; outside them no work waits for a person
+1269	true	7b8fc9b	1266	fix(delegate): a host hand-off lapses with its claim, and only a well-formed thread ID is 
+1265	false	306d1a8	1253	fix(inbox): one card per Feature approves every part, then builds and starts it
+1262	false	ac3769a	1252	fix(cli): a dry run of a human-only command asks for no device code
+1261	false	4fb58ed	1250	feat(ci): builders iterate on a draft PR, and CI runs once the PR is ready
+1260	false	9f3033b	1138	fix(mission): a cloud Kanha gets text aayu did not write inside an untrusted block
+1259	false	2e896ac	1251	fix(ready): name only commands that exist when a story waits for Approve to build again
+1249	false	ec32cdc	1248	fix(mission): a person may extend a mission in its extend window before the limit
+1241	false	9fa4958		fix(verify): make the weekly-pass checks prove the claims they skipped
+1238	false	e22c1ba	1178	feat(inbox): the overnight card sets what runs overnight, bounded in hours and cost
+1236	false	cc60811	1234	fix(ship): merge only a PR head that contains the dev tip
+1231	false	fbd909f		fix(verify): a Playwright with an invalid package.json is an error, not a missing one
+1220	false	0fdcfd7	1192,1192	feat(ship): merge on the approver's inspect --approve of the head
+1214	false	b9aad80	1206	fix(ship): ask for the device code only after the checks that need no person
+1202	false	a4ab2d8	1198	fix(config): a config error names a rejected secret field and its rule, never the value
+1199	false	edb25bc	1191	fix(cli): refuse a person's decision in a loop thread before any device code
+1189	false	e5f563e		docs(security): name the halt claim-release invariant and its test
+1183	false	30c9105	1161	fix(proof): a gate run that another PR from the branch may have had is not the merged PR's
+817	false	c8f680e		docs(design): add the aayu iconography: App marks, seat emblems, and verb icons
+604	true	711640d	594	feat: create the owner's aayudha App once from a phone, with its key converted straight in
+546	true	b9c3832		chore(inspect): list the Claude GitHub app as a reviewer app

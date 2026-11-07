@@ -1,0 +1,14 @@
+1199	CLOSED	false	bug-1191-loop-lane	edb25bc	1191	fix(cli): refuse a person's decision in a loop thread before any device code
+1214	CLOSED	false	story/1206-ship-asks-for-the-device-code-before-che	b9aad80	1206	fix(ship): ask for the device code only after the checks that need no person
+1220	CLOSED	false	story/1192-ship-asks-for-a-second-code-after-a-pers	0fdcfd7	1192,1192	feat(ship): merge on the approver's inspect --approve of the head
+1236	CLOSED	false	story/1234-fix-ship-ship-merges-a-pr-proven-on-an-o	cc60811	1234	fix(ship): merge only a PR head that contains the dev tip
+1249	CLOSED	false	story/1248-fix-mission-extend-refuses-before-the-ti	ec32cdc	1248	fix(mission): a person may extend a mission in its extend window before the limi
+1259	CLOSED	false	bug-1251-ready-ack	2e896ac	1251	fix(ready): name only commands that exist when a story waits for Approve to buil
+1261	CLOSED	false	story/1250-builders-iterate-on-a-draft-pr-locally-a	4fb58ed	1250	feat(ci): builders iterate on a draft PR, and CI runs once the PR is ready
+1262	CLOSED	false	story/1252-aayu-ready-dry-run-for-approve-to-build	ac3769a	1252	fix(cli): a dry run of a human-only command asks for no device code
+1265	CLOSED	false	story/1253-aayu-inbox-asks-up-to-five-decisions-to	306d1a8	1253	fix(inbox): one card per Feature approves every part, then builds and starts it
+1270	CLOSED	true	story/1254-two-person-windows-a-day-outside-them-no	7364899	1254	feat: two person windows a day; outside them no work waits for a person
+1275	CLOSED	false	fix/gate-count-since-pass	9e8b72b	1268	fix(mission): a milestone's gate failures count from its last pass
+1276	CLOSED	false	fix/approve-keeps-gate	bcafd0f	1267	fix(mission): Approve to build again keeps an unchanged milestone's gate
+1282	CLOSED	true	feat/1281-auto-merge-on-proof	6f2aae7	1281,1255,1281	feat(autonomy): every agent PR into dev merges on proof; only the policy keys wa
+1238	MERGED	false	story/1178-the-overnight-card-the-person-sets-what	e22c1ba	1178	feat(inbox): the overnight card sets what runs overnight, bounded in hours and c
