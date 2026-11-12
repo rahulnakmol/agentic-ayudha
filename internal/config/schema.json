@@ -650,6 +650,10 @@
           "type": "string",
           "description": "Token broker workflow file in this repo that mints App installation tokens for laptops."
         },
+        "exchange": {
+          "type": "string",
+          "description": "HTTPS origin of the owner's keyless token exchange (Decision #576), e.g. https://sts.example.com; set, init --identity creates or reuses the owner's one App through it and no repository holds an App key. Never from config.local.toml."
+        },
         "machine_user": {
           "type": "string",
           "description": "Machine-user login, the fallback bot identity."
