@@ -575,7 +575,8 @@ func TestMissionMaybeStartedCommentFails(t *testing.T) {
 
 // Bug #1264: the ledger refuses the maybe-started record. The start fails, and
 // build reports the record the ledger holds, never a failed status it did not
-// write.
+// write. When the ledger cannot be read back either, build does not say the
+// record was not saved: the write may have landed.
 func TestMissionMaybeStartedRefused(t *testing.T) {
 	w := newCodexWorld(t, 889, 64)
 	w.submit = func(brief string) error {
@@ -593,10 +594,35 @@ func TestMissionMaybeStartedRefused(t *testing.T) {
 	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
 	onLedger := exec.Command("git", "cat-file", "-e", "ledger:"+delegate.LedgerPath(64))
 	onLedger.Dir = w.bare
-	if code != ExitExternal || !strings.Contains(errOut, "the maybe-started record was not saved, so the start fails") || onLedger.Run() == nil ||
+	if code != ExitExternal || !strings.Contains(errOut, "the ledger does not confirm the maybe-started record, so the start fails") || onLedger.Run() == nil ||
 		res.Delegation == nil || res.Delegation.Status != "" || w.claims(889)[64] != 0 || // the ledger holds no record of #64
 		!slices.Contains(w.g.LabelNames(64), "status:ready") || slices.Contains(w.g.LabelNames(64), "status:in-progress") {
 		t.Fatalf("a refused maybe start: exit %d, result %+v, claims %v, labels %v: %s%s", code, res.Delegation, w.claims(889), w.g.LabelNames(64), out, errOut)
+	}
+
+	// The ledger refuses the record and then cannot be read back (the hook breaks the remote's HEAD).
+	w = newCodexWorld(t, 889, 64)
+	head, err := os.ReadFile(filepath.Join(w.bare, "HEAD"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.submit = func(brief string) error {
+		if strings.Contains(brief, "# Delegated story #64:") {
+			refuseLedger(t, w.bare, `git diff --name-only "$old" "$new" | grep -q delegate/64/state.json && echo broken > HEAD`)
+			return fmt.Errorf("codex: %w", context.DeadlineExceeded)
+		}
+		return nil
+	}
+	if code, out, errOut := run(t, w.agent, w.opts, "mission", "next", "889", "--repo", "o/r", "--host", "codex"); code != 0 || out != "start #64\n" {
+		t.Fatalf("mission next: exit %d: %s%s", code, out, errOut)
+	}
+	code, out, errOut = run(t, w.agent, w.opts, "build", "64", "--delegate", "codex", "--repo", "o/r", "--asked", "aayu mission next marked it start")
+	if err := os.WriteFile(filepath.Join(w.bare, "HEAD"), head, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitExternal || !strings.Contains(errOut, "the ledger does not confirm the maybe-started record") ||
+		!strings.Contains(errOut, "may not have reached the ledger") || strings.Contains(errOut, "not saved") {
+		t.Fatalf("a maybe start the ledger refused and could not be read back: exit %d: %s%s", code, out, errOut)
 	}
 }
 

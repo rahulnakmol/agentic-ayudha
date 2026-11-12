@@ -549,11 +549,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				if recorded {
 					res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
 				}
-				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-					return withSaveErr(err, serr)
+				berr := e.saveBuild(ctx, c, w, repo, n, &st, &res)
+				if !recorded { // the unconfirmed pause leads, even when the build state did not land either
+					return withSaveErr(withSaveErr(Errorf(ExitExternal, "build #%d: %s stopped at a usage limit, and the ledger does not confirm a record of the pause: %s", n, delegate.Names[dlg.receiver], pause.why), serr), berr)
 				}
-				if !recorded {
-					return withSaveErr(Errorf(ExitExternal, "build #%d: %s stopped at a usage limit, and the ledger has no record of the pause: %s", n, delegate.Names[dlg.receiver], pause.why), serr)
+				if berr != nil {
+					return withSaveErr(berr, serr)
 				}
 				_ = e.Emit(res, func(w io.Writer) error {
 					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)
@@ -1231,8 +1232,8 @@ func (e *Env) failedStart(ctx context.Context, c *github.Client, w *ledger.Write
 	if err == nil {
 		err = e.releaseStart(ctx, c, w, repo, f, n, labels, "the start of #%d failed", "the start of its subthread failed")
 	}
-	if err != nil {
-		return Wrap(ExitExternal, fmt.Errorf("%s; and its slot was not released: %w", reason, err))
+	if err != nil { // the whole cause leads: Wrap would keep the release's own coded error, and the CLI would print only that
+		return &Error{Code: ExitExternal, Err: fmt.Errorf("%w; and its slot was not released: %w", cause, err)}
 	}
 	note, err := e.tellKanha(ctx, c, w, repo, n, func(int) string { return fmt.Sprintf("start of #%d failed: %s", n, reason) })
 	res.Notes = kanhaNote(res.Notes, note, err)
