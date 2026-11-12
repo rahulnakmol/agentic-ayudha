@@ -7,7 +7,7 @@ usage error (exit 2) with a message that says what is wrong.
 {"id": "add-and-list", "layers": ["L02"],
  "sources": ["examples/notes/cmd/notes/main.go", "examples/notes/store/store.go"],
  "surfaces": {"command": ["add", "list"], "flag": ["file"]},
- "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
+ "verified_at": "188bbb053f193d24564bb3f67777d5b4b70169f2"}
 ```
 
 ## Sub-features
@@ -16,6 +16,8 @@ usage error (exit 2) with a message that says what is wrong.
 - `empty`: listing with no notes says so.
 - `usage`: no command, an unknown command, or `add` with no text, exits 2.
 - `file`: `-file` and `NOTES_FILE` pick another file; the default `notes.txt` is left alone.
+- `bad-file`: a file with a line that is not a note makes `list` and `add` exit 1 and name the line; the file is left
+  as it was, so the note is not dropped.
 
 ## How to reach it
 
@@ -59,6 +61,18 @@ usage error (exit 2) with a message that says what is wrong.
 ]}
 ```
 
+```check
+{"id": "bad-file", "kind": "cli", "evidence": "api-trace", "steps": [
+  {"build": "./examples/notes/cmd/notes"},
+  {"run": ["sh", "-c", "printf 'buy milk\\n' > notes.txt"], "exit": 0},
+  {"run": ["notes", "list"], "exit": 1, "stderr": ["notes: notes.txt: not a note: \"buy milk\""]},
+  {"run": ["notes", "add", "call Ada"], "exit": 1, "stderr": ["notes: notes.txt: not a note: \"buy milk\""]},
+  {"run": ["sh", "-c", "printf 'buy milk\\n' | cmp - notes.txt"], "exit": 0}
+]}
+```
+
 ## Gotchas
 
 - The words after `add` are joined with one space, so `add buy milk` and `add "buy milk"` add the same note.
+- A text with a line break is added, and then the file cannot be read (Bug #1240). No check drives it until the fix
+  sets the behaviour.

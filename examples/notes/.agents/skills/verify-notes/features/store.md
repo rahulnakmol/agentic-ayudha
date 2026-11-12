@@ -7,7 +7,7 @@ again keeps each note's text, order, and done mark; a missing file holds no note
 {"id": "store", "layers": ["L07"],
  "sources": ["examples/notes/store/store.go", "examples/notes/store/store_test.go"],
  "surfaces": {"func": ["Load", "Save", "MarkDone"]},
- "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
+ "verified_at": "188bbb053f193d24564bb3f67777d5b4b70169f2"}
 ```
 
 ## Sub-features
@@ -28,4 +28,5 @@ again keeps each note's text, order, and done mark; a missing file holds no note
 
 ## Gotchas
 
-- A line that is neither `[ ] text` nor `[x] text` makes `Load` fail rather than drop the note.
+- A line that is neither `[ ] text` nor `[x] text` makes `Load` fail rather than drop the note. `TestRoundTrip` does
+  not cover it; [Add and list](add-and-list.md)'s `bad-file` check proves it through the CLI.

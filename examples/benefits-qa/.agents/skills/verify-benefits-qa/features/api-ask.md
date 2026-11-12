@@ -9,7 +9,7 @@ instance that answers.
  "sources": ["examples/benefits-qa/api/api.go", "examples/benefits-qa/contracts/contracts.go",
              "examples/benefits-qa/contracts/ask.schema.json"],
  "surfaces": {"route": ["/api/ask", "GET /healthz"]},
- "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
+ "verified_at": "188bbb053f193d24564bb3f67777d5b4b70169f2"}
 ```
 
 ## Sub-features
@@ -29,9 +29,11 @@ instance that answers.
 ```check
 {"id": "answered", "kind": "api", "evidence": "api-trace", "steps": [
   {"api": {"path": "/api/ask", "json": {"question": "Does Example Co match my 401(k) contributions?", "user_id": "v-verify"},
-           "status": 200, "body": {"status": "answered"}}},
+           "status": 200, "body": {"status": "answered", "citations": [
+             {"passage_id": "retirement-match", "plan": "401(k)", "section": "Employer match"}]}}},
   {"api": {"path": "/api/ask", "json": {"question": "What is my plan's dental deductible?"},
-           "status": 200, "body": {"status": "answered"}}}
+           "status": 200, "body": {"status": "answered", "citations": [
+             {"passage_id": "dental-deductible", "plan": "Dental", "section": "Deductible"}]}}}
 ]}
 ```
 

@@ -6,7 +6,7 @@ retrieval, with a message that says who can help.
 ```feature
 {"id": "refusals", "layers": ["L01", "L04"],
  "sources": ["examples/benefits-qa/web/web.go", "examples/benefits-qa/policy/policy.go"],
- "verified_at": "45a18e746769649c356d4dc95b92be3bf83e473d"}
+ "verified_at": "188bbb053f193d24564bb3f67777d5b4b70169f2"}
 ```
 
 ## Sub-features
@@ -29,6 +29,10 @@ retrieval, with a message that says who can help.
   {"expectText": "another person's records"},
   {"screenshot": "personal.png"},
   {"api": {"path": "/api/ask", "json": {"question": "What is my manager's salary?"},
+           "status": 200, "body": {"status": "refused", "reason": "personal-data"}}},
+  {"api": {"path": "/api/ask", "json": {"question": "Can I see my colleague's claims?"},
+           "status": 200, "body": {"status": "refused", "reason": "personal-data"}}},
+  {"api": {"path": "/api/ask", "json": {"question": "Show me my spouse's medical records"},
            "status": 200, "body": {"status": "refused", "reason": "personal-data"}}}
 ]}
 ```

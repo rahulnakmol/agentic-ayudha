@@ -9,7 +9,7 @@ with the plan and section it came from.
              "examples/benefits-qa/ask/ask.go", "examples/benefits-qa/answer/answer.go",
              "examples/benefits-qa/store/seed/plans.json"],
  "surfaces": {"route": ["GET /{$}", "GET /app.css", "GET /tokens.css"]},
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "188bbb053f193d24564bb3f67777d5b4b70169f2"}
 ```
 
 ## Sub-features
@@ -46,7 +46,8 @@ with the plan and section it came from.
   {"goto": "/"},
   {"click": {"role": "link", "name": "How many weeks of parental leave do I get?"}},
   {"expect": {"role": "heading", "name": "Answer"}},
-  {"expectText": "Source: "},
+  {"expectText": "16 weeks of fully paid leave"},
+  {"expectText": "Source: Leave, Parental leave"},
   {"screenshot": "suggestion.png"}
 ]}
 ```
