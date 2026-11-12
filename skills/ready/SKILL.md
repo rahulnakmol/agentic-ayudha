@@ -263,10 +263,11 @@ writes nothing, when:
 - the Feature changed after the approval: a part was approved again (`technical design v1 to v2`), or the intent,
   technical design, or UX design drifted from its pins. Its stories wait until a person approves the Feature again;
 - the Story's Completion Goal, effort, or title changed after the approval, or the Story was added after it. aayu
-  names the change and the person's acknowledgment, `--ack`. aayu does not have that flag yet. Until it does, draft a
-  new spec baseline; the person approves it, then approves the Feature again.
+  names the change. The Story waits for the next spec version of the Feature and Approve to build again. Draft the
+  spec with `aayu ready <f> --part spec --request --changes <file>`. The person approves it in `aayu inbox`, then
+  runs `aayu ready <f>`.
 
-Other edits to the Story, such as its Assumptions, need no acknowledgment. The Ready snapshot then has the row
+Other edits to the Story, such as its Assumptions, do not make it wait. The Ready snapshot then has the row
 `Approved to build | #<f> approval <k> by @<login>`.
 
 A Feature with no Approve to build can still have one early build: a person's `specs/<f>/approved-early-<story>.json`
